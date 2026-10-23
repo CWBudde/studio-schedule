@@ -24,8 +24,8 @@ func (uuidSchema) Schema(huma.Registry) *huma.Schema {
 }
 
 // idTypes lists every ID type of internal/domain/id.go. A new ID type must
-// be added here; TestIDSchemaRegisteredForEveryIDType and the OpenAPI walk
-// in TestOpenAPIIDsAreUUIDStrings catch a missing one.
+// be added here; TestIDTypesListsEveryDomainID reads id.go and fails until
+// it is.
 var idTypes = []reflect.Type{
 	reflect.TypeFor[domain.PersonID](),
 	reflect.TypeFor[domain.AccountID](),

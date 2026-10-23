@@ -532,15 +532,8 @@ func (b *builder) class(term domain.TermID, spec classSpec) {
 func (b *builder) workshop(anchor domain.Date, spec workshopSpec) {
 	start := anchor.AddDays(spec.days).At(spec.start, b.loc)
 
-	// Lessons share their ID space with the ones the lesson generator
-	// creates later. Tests generate those from their own ids.Sequence,
-	// which counts from 1 like this one; a marker in the (otherwise zero)
-	// timestamp keeps the demo lessons' IDs apart from them.
-	id := ids.New[domain.LessonID](b.seq)
-	id[5] = 1
-
 	l := domain.Lesson{
-		ID:           id,
+		ID:           ids.New[domain.LessonID](b.seq),
 		CourseTypeID: lookup(b.courseTypes, spec.courseType),
 		RoomID:       lookup(b.rooms, spec.room),
 		InstructorID: lookup(b.staff, spec.instructor),

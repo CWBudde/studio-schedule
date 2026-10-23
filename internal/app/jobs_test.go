@@ -28,9 +28,10 @@ func TestJobsGenerateLessons(t *testing.T) {
 
 	now := time.Date(2026, time.October, 23, 8, 0, 0, 0, time.UTC) // inside the demo term
 	runner := app.Jobs(app.Deps{
-		Store:  st,
-		Clock:  clock.NewFixed(now),
-		IDs:    ids.NewSequence(),
+		Store: st,
+		Clock: clock.NewFixed(now),
+		// As in production: UUIDv7 never collide with the seed's sequence IDs.
+		IDs:    ids.V7{},
 		Logger: slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
 	})
 
