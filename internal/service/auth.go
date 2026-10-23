@@ -1,0 +1,701 @@
+package service
+
+import (
+	"cmp"
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/cwbudde/studio-schedule/internal/clock"
+	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/ids"
+	"github.com/cwbudde/studio-schedule/internal/mail"
+	"github.com/cwbudde/studio-schedule/internal/store"
+)
+
+// Session and token lifetimes (ADR 0004).
+const (
+	// SessionIdleTimeout ends a session that was not used for this long.
+	SessionIdleTimeout = 14 * 24 * time.Hour
+	// SessionMaxAge ends every session this long after the login.
+	SessionMaxAge = 90 * 24 * time.Hour
+	// sessionRefreshAfter limits how often a used session is extended, so
+	// that most requests only read.
+	sessionRefreshAfter = 24 * time.Hour
+	// ConfirmTokenTTL is how long an email confirmation link is valid.
+	ConfirmTokenTTL = 24 * time.Hour
+)
+
+// Password limits. The upper limit bounds the hashing work per request.
+const (
+	MinPasswordLength = 8   // characters
+	MaxPasswordLength = 256 // bytes
+)
+
+// tokenBytes is the entropy of session and email tokens.
+const tokenBytes = 32
+
+var (
+	// ErrInvalidCredentials is the one answer to a failed login, whether the
+	// email is unknown, the password wrong or the account disabled, so that
+	// a login reveals nothing about which accounts exist.
+	ErrInvalidCredentials = fmt.Errorf("%w: invalid email or password", domain.ErrUnauthorized)
+	// ErrEmailNotConfirmed rejects a login with the right password to an
+	// account whose email is not confirmed yet.
+	ErrEmailNotConfirmed = fmt.Errorf("%w: email address not confirmed", domain.ErrForbidden)
+	// ErrInvalidToken reports an unknown, used or expired email link.
+	ErrInvalidToken = fmt.Errorf("%w: the link is invalid or has expired", domain.ErrValidation)
+	// ErrNoSession reports a request without a valid session.
+	ErrNoSession = fmt.Errorf("%w: not signed in", domain.ErrUnauthorized)
+)
+
+// PasswordHasher hashes and verifies passwords; package auth/password
+// implements it with argon2id. Verify reads the parameters from the encoded
+// hash; NeedsRehash reports a hash made with other parameters.
+type PasswordHasher interface {
+	Hash(password string) (string, error)
+	Verify(encoded, password string) (bool, error)
+	NeedsRehash(encoded string) bool
+}
+
+// MailRenderer renders a mail template; *mail.Renderer implements it.
+type MailRenderer interface {
+	Render(locale, name string, data any) (mail.Rendered, error)
+}
+
+// Principal is the signed-in account of a request.
+type Principal struct {
+	AccountID domain.AccountID
+	PersonID  domain.PersonID
+	Email     string
+	Role      domain.Role
+	SessionID domain.SessionID
+}
+
+// SignedIn is a new or extended session together with its secret token,
+// which only the client keeps (in a cookie).
+type SignedIn struct {
+	Token     string
+	Principal Principal
+	ExpiresAt time.Time
+}
+
+// Registration is the input of AuthService.Register.
+type Registration struct {
+	GivenName  string
+	FamilyName string
+	Email      string
+	Password   string
+	// Locale is the language of the confirmation mail (e.g. "de"); empty
+	// means the school's default.
+	Locale string
+}
+
+// AuthService registers accounts, confirms their email and manages
+// sessions.
+type AuthService struct {
+	store  store.Store
+	clock  clock.Clock
+	ids    ids.Source
+	hasher PasswordHasher
+	mails  MailRenderer
+	appURL string
+
+	dummyOnce sync.Once
+	dummyHash string
+	dummyErr  error
+}
+
+// NewAuthService returns an AuthService. appURL is the absolute URL of the
+// web app that mail links point to, ending in "/" (or "#/" with hash
+// routing); a route is appended to it, e.g. appURL + "confirm?token=...".
+func NewAuthService(
+	st store.Store, clk clock.Clock, src ids.Source, hasher PasswordHasher, mails MailRenderer, appURL string,
+) *AuthService {
+	return &AuthService{store: st, clock: clk, ids: src, hasher: hasher, mails: mails, appURL: appURL}
+}
+
+// Register creates a member account with an unconfirmed email and mails a
+// confirmation link to it. To keep account existence private it succeeds
+// without a mail for an email that already has an account, unless that
+// account is itself an unconfirmed registration: then the name and password
+// are replaced and a new link is sent (older links stop working). The latest
+// registration wins, and since confirming needs the password, someone who
+// registered a foreign address first cannot take the account over. Accounts
+// created by the school are never changed here.
+func (s *AuthService) Register(ctx context.Context, r Registration) error {
+	r.Email = strings.TrimSpace(r.Email)
+	r.GivenName, r.FamilyName = strings.TrimSpace(r.GivenName), strings.TrimSpace(r.FamilyName)
+
+	if err := checkPassword(r.Password); err != nil {
+		return err
+	}
+
+	// Hashing is slow; it runs before the transaction, which may be retried.
+	hash, err := s.hasher.Hash(r.Password)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	token, err := newToken()
+	if err != nil {
+		return err
+	}
+
+	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		now := s.clock.Now()
+
+		settings, err := tx.Settings().Get(ctx)
+		if err != nil {
+			return fmt.Errorf("school settings: %w", err)
+		}
+
+		acc, err := tx.Accounts().GetByEmail(ctx, r.Email)
+
+		switch {
+		case err == nil:
+			pending, err := isPendingRegistration(ctx, tx, acc)
+			if err != nil || !pending {
+				return err // an account exists; say nothing
+			}
+
+			if err := s.renewPending(ctx, tx, acc, r); err != nil {
+				return err
+			}
+		case errors.Is(err, domain.ErrNotFound):
+			if acc, err = s.createPending(ctx, tx, r); err != nil {
+				return err
+			}
+		default:
+			return err
+		}
+
+		cred := domain.Credential{AccountID: acc.ID, PasswordHash: hash, ChangedAt: now}
+		if err := tx.Credentials().Put(ctx, cred); err != nil {
+			return err
+		}
+
+		return s.sendConfirmation(ctx, tx, settings, acc, r, token, now)
+	})
+	if err != nil {
+		return fmt.Errorf("register: %w", err)
+	}
+
+	return nil
+}
+
+// createPending creates the person and the unconfirmed account of a new
+// registration.
+func (s *AuthService) createPending(ctx context.Context, tx store.Tx, r Registration) (domain.Account, error) {
+	p := domain.Person{ID: ids.New[domain.PersonID](s.ids), GivenName: r.GivenName, FamilyName: r.FamilyName}
+	acc := domain.Account{ID: ids.New[domain.AccountID](s.ids), PersonID: p.ID, Email: r.Email, Role: domain.RoleMember}
+
+	if err := p.Validate(); err != nil {
+		return domain.Account{}, err
+	}
+
+	if err := acc.Validate(); err != nil {
+		return domain.Account{}, err
+	}
+
+	if err := tx.Persons().Create(ctx, p); err != nil {
+		return domain.Account{}, err
+	}
+
+	return acc, tx.Accounts().Create(ctx, acc)
+}
+
+// isPendingRegistration reports whether acc is an unconfirmed account that
+// was created by a registration (which sets a password).
+func isPendingRegistration(ctx context.Context, tx store.Tx, acc domain.Account) (bool, error) {
+	if !acc.ConfirmedAt.IsZero() {
+		return false, nil
+	}
+
+	_, err := tx.Credentials().Get(ctx, acc.ID)
+
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		return false, nil
+	case err != nil:
+		return false, err
+	}
+
+	return true, nil
+}
+
+// renewPending updates the person of an unconfirmed account to a new
+// registration.
+func (s *AuthService) renewPending(ctx context.Context, tx store.Tx, acc domain.Account, r Registration) error {
+	p, err := tx.Persons().Get(ctx, acc.PersonID)
+	if err != nil {
+		return err
+	}
+
+	p.GivenName, p.FamilyName = r.GivenName, r.FamilyName
+	if err := p.Validate(); err != nil {
+		return err
+	}
+
+	return tx.Persons().Update(ctx, p)
+}
+
+// sendConfirmation replaces the account's confirmation links with a new one
+// and writes the mail to the outbox.
+func (s *AuthService) sendConfirmation(
+	ctx context.Context, tx store.Tx, settings domain.Settings, acc domain.Account, r Registration,
+	token string, now time.Time,
+) error {
+	if err := tx.AccountTokens().DeleteByAccount(ctx, acc.ID, domain.TokenConfirmEmail); err != nil {
+		return err
+	}
+
+	t := domain.AccountToken{
+		Hash: domain.HashToken(token), AccountID: acc.ID, Purpose: domain.TokenConfirmEmail,
+		Email: acc.Email, CreatedAt: now, ExpiresAt: now.Add(ConfirmTokenTTL),
+	}
+	if err := t.Validate(); err != nil {
+		return err
+	}
+
+	if err := tx.AccountTokens().Create(ctx, t); err != nil {
+		return err
+	}
+
+	rendered, err := s.mails.Render(cmp.Or(r.Locale, settings.DefaultLocale), mail.TemplateConfirmEmail, mail.ConfirmEmailData{
+		SchoolName:   settings.SchoolName,
+		GivenName:    r.GivenName,
+		Link:         s.appURL + "confirm?token=" + url.QueryEscape(token),
+		ExpiresHours: int(ConfirmTokenTTL / time.Hour),
+	})
+	if err != nil {
+		// A misconfiguration (school name, app URL), not the user's input:
+		// %v keeps domain.ErrValidation out, so the client gets a 500.
+		return fmt.Errorf("render confirmation mail: %v", err) //nolint:errorlint // see above
+	}
+
+	return enqueueMail(ctx, tx, s.ids, now, acc.Email, mail.TemplateConfirmEmail, rendered)
+}
+
+// Confirm confirms the email of the account a confirmation link was sent
+// for and signs it in. It needs the account's password, so a link alone
+// does not confirm someone else's registration.
+func (s *AuthService) Confirm(ctx context.Context, token, password string) (SignedIn, error) {
+	var (
+		acc  domain.Account
+		cred domain.Credential
+	)
+
+	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		var err error
+
+		acc, cred, err = s.tokenAccount(ctx, tx, token)
+
+		return err
+	})
+	if err != nil {
+		return SignedIn{}, err
+	}
+
+	if err := s.verify(cred, password); err != nil {
+		return SignedIn{}, err
+	}
+
+	if !acc.DisabledAt.IsZero() {
+		return SignedIn{}, ErrInvalidCredentials
+	}
+
+	return s.signIn(ctx, acc, password, cred, func(ctx context.Context, tx store.Tx, now time.Time) error {
+		// The password must still be the one just verified: a registration
+		// in between replaces it and sends a new link.
+		cur, curCred, err := s.tokenAccount(ctx, tx, token)
+		if err != nil {
+			return err
+		}
+
+		if curCred.PasswordHash != cred.PasswordHash {
+			return ErrInvalidToken
+		}
+
+		// The token is used up here; a concurrent use finds it gone.
+		if err := tx.AccountTokens().Delete(ctx, domain.HashToken(token)); err != nil {
+			return mapTokenErr(err)
+		}
+
+		if cur.ConfirmedAt.IsZero() {
+			cur.ConfirmedAt = now
+		}
+
+		return tx.Accounts().Update(ctx, cur)
+	})
+}
+
+// tokenAccount returns the account and credential of a valid confirmation
+// token.
+func (s *AuthService) tokenAccount(
+	ctx context.Context, tx store.Tx, token string,
+) (domain.Account, domain.Credential, error) {
+	t, err := tx.AccountTokens().Get(ctx, domain.HashToken(token))
+	if err != nil {
+		return domain.Account{}, domain.Credential{}, mapTokenErr(err)
+	}
+
+	acc, err := tx.Accounts().Get(ctx, t.AccountID)
+	if err != nil {
+		return domain.Account{}, domain.Credential{}, err
+	}
+
+	if t.Purpose != domain.TokenConfirmEmail || !s.clock.Now().Before(t.ExpiresAt) || t.Email != acc.Email {
+		return domain.Account{}, domain.Credential{}, ErrInvalidToken
+	}
+
+	cred, err := tx.Credentials().Get(ctx, acc.ID)
+	if err != nil {
+		return domain.Account{}, domain.Credential{}, err
+	}
+
+	return acc, cred, nil
+}
+
+func mapTokenErr(err error) error {
+	if errors.Is(err, domain.ErrNotFound) {
+		return ErrInvalidToken
+	}
+
+	return err
+}
+
+// Login signs an account in with its email and password.
+func (s *AuthService) Login(ctx context.Context, email, password string) (SignedIn, error) {
+	if len(password) > MaxPasswordLength {
+		return SignedIn{}, ErrInvalidCredentials
+	}
+
+	var (
+		acc   domain.Account
+		cred  domain.Credential
+		found bool
+	)
+
+	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		var err error
+
+		acc, err = tx.Accounts().GetByEmail(ctx, strings.TrimSpace(email))
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+
+		cred, err = tx.Credentials().Get(ctx, acc.ID)
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil
+		}
+
+		found = err == nil
+
+		return err
+	})
+	if err != nil {
+		return SignedIn{}, fmt.Errorf("login: %w", err)
+	}
+
+	if !found {
+		// Spend the same time as for a wrong password.
+		dummy, err := s.dummy()
+		if err != nil {
+			return SignedIn{}, err
+		}
+
+		_, _ = s.hasher.Verify(dummy, password)
+
+		return SignedIn{}, ErrInvalidCredentials
+	}
+
+	if err := s.verify(cred, password); err != nil {
+		return SignedIn{}, err
+	}
+
+	switch {
+	case !acc.DisabledAt.IsZero():
+		return SignedIn{}, ErrInvalidCredentials
+	case acc.ConfirmedAt.IsZero():
+		return SignedIn{}, ErrEmailNotConfirmed
+	}
+
+	return s.signIn(ctx, acc, password, cred, nil)
+}
+
+// verify checks password against the stored credential.
+func (s *AuthService) verify(cred domain.Credential, password string) error {
+	if len(password) > MaxPasswordLength {
+		return ErrInvalidCredentials
+	}
+
+	ok, err := s.hasher.Verify(cred.PasswordHash, password)
+	if err != nil {
+		return fmt.Errorf("verify password of account %s: %w", cred.AccountID, err)
+	}
+
+	if !ok {
+		return ErrInvalidCredentials
+	}
+
+	return nil
+}
+
+// dummy returns a hash to verify against when the email is unknown, made
+// once with the hasher's current parameters.
+func (s *AuthService) dummy() (string, error) {
+	s.dummyOnce.Do(func() {
+		s.dummyHash, s.dummyErr = s.hasher.Hash("not a password of anyone")
+	})
+
+	if s.dummyErr != nil {
+		return "", fmt.Errorf("dummy password hash: %w", s.dummyErr)
+	}
+
+	return s.dummyHash, nil
+}
+
+// signIn creates a session for acc. If the password hash uses outdated
+// parameters it is replaced. extra runs first in the same transaction.
+func (s *AuthService) signIn(
+	ctx context.Context, acc domain.Account, password string, cred domain.Credential,
+	extra func(ctx context.Context, tx store.Tx, now time.Time) error,
+) (SignedIn, error) {
+	var rehash string
+
+	if s.hasher.NeedsRehash(cred.PasswordHash) {
+		var err error
+		if rehash, err = s.hasher.Hash(password); err != nil {
+			return SignedIn{}, fmt.Errorf("rehash password: %w", err)
+		}
+	}
+
+	token, err := newToken()
+	if err != nil {
+		return SignedIn{}, err
+	}
+
+	var sess domain.Session
+
+	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		now := s.clock.Now()
+
+		if extra != nil {
+			if err := extra(ctx, tx, now); err != nil {
+				return err
+			}
+		}
+
+		if rehash != "" {
+			c := domain.Credential{AccountID: acc.ID, PasswordHash: rehash, ChangedAt: cred.ChangedAt}
+			if err := tx.Credentials().Put(ctx, c); err != nil {
+				return err
+			}
+		}
+
+		sess = domain.Session{
+			ID: ids.New[domain.SessionID](s.ids), AccountID: acc.ID, TokenHash: domain.HashToken(token),
+			CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(SessionIdleTimeout),
+		}
+		if err := sess.Validate(); err != nil {
+			return err
+		}
+
+		return tx.Sessions().Create(ctx, sess)
+	})
+	if err != nil {
+		return SignedIn{}, fmt.Errorf("sign in: %w", err)
+	}
+
+	return SignedIn{Token: token, Principal: principal(acc, sess), ExpiresAt: sess.ExpiresAt}, nil
+}
+
+// Authenticate resolves a session token to its principal. A session that
+// was last extended more than a day ago is extended (sliding expiry, capped
+// by SessionMaxAge); then the returned SignedIn carries the new expiry for
+// the cookie, otherwise it is the zero value.
+func (s *AuthService) Authenticate(ctx context.Context, token string) (Principal, SignedIn, error) {
+	if token == "" {
+		return Principal{}, SignedIn{}, ErrNoSession
+	}
+
+	hash := domain.HashToken(token)
+
+	var (
+		acc  domain.Account
+		sess domain.Session
+	)
+
+	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		var err error
+
+		if sess, err = tx.Sessions().GetByToken(ctx, hash); err != nil {
+			return err
+		}
+
+		acc, err = tx.Accounts().Get(ctx, sess.AccountID)
+
+		return err
+	})
+
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		return Principal{}, SignedIn{}, ErrNoSession
+	case err != nil:
+		return Principal{}, SignedIn{}, fmt.Errorf("authenticate: %w", err)
+	}
+
+	now := s.clock.Now()
+	if !now.Before(sessionEnd(sess)) || !acc.DisabledAt.IsZero() || acc.ConfirmedAt.IsZero() {
+		return Principal{}, SignedIn{}, ErrNoSession
+	}
+
+	p := principal(acc, sess)
+	if now.Sub(sess.LastSeenAt) < sessionRefreshAfter {
+		return p, SignedIn{}, nil
+	}
+
+	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		cur, err := tx.Sessions().GetByToken(ctx, hash)
+		if err != nil {
+			return err
+		}
+
+		cur.LastSeenAt = now
+		cur.ExpiresAt = minTime(now.Add(SessionIdleTimeout), cur.CreatedAt.Add(SessionMaxAge))
+		sess = cur
+
+		return tx.Sessions().Update(ctx, cur)
+	})
+
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		return Principal{}, SignedIn{}, ErrNoSession // logged out meanwhile
+	case err != nil:
+		return Principal{}, SignedIn{}, fmt.Errorf("extend session: %w", err)
+	}
+
+	return p, SignedIn{Token: token, Principal: p, ExpiresAt: sess.ExpiresAt}, nil
+}
+
+// sessionEnd is when sess ends unless it is extended before.
+func sessionEnd(sess domain.Session) time.Time {
+	return minTime(sess.ExpiresAt, sess.CreatedAt.Add(SessionMaxAge))
+}
+
+// Logout ends the session of token. Unknown tokens are ignored.
+func (s *AuthService) Logout(ctx context.Context, token string) error {
+	if token == "" {
+		return nil
+	}
+
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		sess, err := tx.Sessions().GetByToken(ctx, domain.HashToken(token))
+		if err != nil {
+			return err
+		}
+
+		return tx.Sessions().Delete(ctx, sess.ID)
+	})
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+		return fmt.Errorf("logout: %w", err)
+	}
+
+	return nil
+}
+
+// PurgeExpired deletes expired sessions and email tokens and returns how
+// many it deleted.
+func (s *AuthService) PurgeExpired(ctx context.Context) (int, error) {
+	var n int
+
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		now := s.clock.Now()
+
+		sessions, err := tx.Sessions().DeleteExpired(ctx, now)
+		if err != nil {
+			return err
+		}
+
+		tokens, err := tx.AccountTokens().DeleteExpired(ctx, now)
+		n = sessions + tokens
+
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("purge expired sessions and tokens: %w", err)
+	}
+
+	return n, nil
+}
+
+// Me is the signed-in account together with its person.
+type Me struct {
+	Account domain.Account
+	Person  domain.Person
+}
+
+// Me returns the account and person of p.
+func (s *AuthService) Me(ctx context.Context, p Principal) (Me, error) {
+	var me Me
+
+	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		var err error
+
+		if me.Account, err = tx.Accounts().Get(ctx, p.AccountID); err != nil {
+			return err
+		}
+
+		me.Person, err = tx.Persons().Get(ctx, me.Account.PersonID)
+
+		return err
+	})
+	if err != nil {
+		return Me{}, fmt.Errorf("me: %w", err)
+	}
+
+	return me, nil
+}
+
+func principal(acc domain.Account, sess domain.Session) Principal {
+	return Principal{AccountID: acc.ID, PersonID: acc.PersonID, Email: acc.Email, Role: acc.Role, SessionID: sess.ID}
+}
+
+// checkPassword enforces the password length limits.
+func checkPassword(pw string) error {
+	switch {
+	case len([]rune(pw)) < MinPasswordLength:
+		return fmt.Errorf("%w: password must have at least %d characters", domain.ErrValidation, MinPasswordLength)
+	case len(pw) > MaxPasswordLength:
+		return fmt.Errorf("%w: password must have at most %d bytes", domain.ErrValidation, MaxPasswordLength)
+	}
+
+	return nil
+}
+
+// newToken returns a random URL-safe token with 256 bits of entropy.
+func newToken() (string, error) {
+	b := make([]byte, tokenBytes)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("random token: %w", err)
+	}
+
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func minTime(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+
+	return b
+}

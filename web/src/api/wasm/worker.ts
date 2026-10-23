@@ -12,12 +12,15 @@
  * Requests that arrive before the backend is ready are queued. If the Go
  * program exits (or panics) a `{type: 'fatal'}` message is posted.
  */
+import { routerHistory } from '@/lib/env';
 import { createRequestHandler, errorMessage } from './host';
 import type { GoBridgeAPI, MainToWorkerMessage, WorkerToMainMessage } from './protocol';
 
 /** Subset of the `Go` class defined by wasm_exec.js that we rely on. */
 interface GoRuntime {
   importObject: WebAssembly.Imports;
+  /** Environment of the Go program (os.Getenv). */
+  env: Record<string, string>;
   run(instance: WebAssembly.Instance): Promise<void>;
   exit: (code: number) => void;
   exited?: boolean;
@@ -153,6 +156,8 @@ function readinessSignal(): { promise: Promise<GoBridgeAPI>; cancel: (err: Error
 async function boot(): Promise<GoBridgeAPI> {
   const Go = await loadGoRuntime();
   const go = new Go();
+  // Links in mails (shown in the demo mailbox) point to the app's routes.
+  go.env = { ...go.env, APP_URL: assetUrl(routerHistory === 'hash' ? '#/' : '') };
 
   let exitCode: number | null = null;
   go.exit = (code: number) => {

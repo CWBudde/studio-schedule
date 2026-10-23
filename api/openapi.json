@@ -103,6 +103,28 @@
         ],
         "type": "object"
       },
+      "ConfirmEmailInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "description": "The account's password.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "token": {
+            "description": "Token from the confirmation link.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ],
+        "type": "object"
+      },
       "CourseType": {
         "additionalProperties": false,
         "properties": {
@@ -156,6 +178,77 @@
         "required": [
           "id",
           "name"
+        ],
+        "type": "object"
+      },
+      "DemoLogin": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "Email address (login name).",
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "type": "string"
+          },
+          "password": {
+            "description": "Password of the demo account.",
+            "type": "string"
+          },
+          "role": {
+            "description": "Role of the account.",
+            "enum": [
+              "member",
+              "instructor",
+              "office",
+              "admin"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "role",
+          "givenName",
+          "familyName"
+        ],
+        "type": "object"
+      },
+      "DemoLoginsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "logins": {
+            "description": "Demo accounts, from least to most privileged role.",
+            "items": {
+              "$ref": "#/components/schemas/DemoLogin"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "logins"
+        ],
+        "type": "object"
+      },
+      "DemoMailboxOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "mails": {
+            "description": "Mails, newest first.",
+            "items": {
+              "$ref": "#/components/schemas/MailboxMail"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "mails"
         ],
         "type": "object"
       },
@@ -492,6 +585,127 @@
         ],
         "type": "object"
       },
+      "LoginInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "Email address.",
+            "maxLength": 254,
+            "minLength": 1,
+            "type": "string"
+          },
+          "password": {
+            "description": "Password.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "type": "object"
+      },
+      "MailboxMail": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "description": "When the mail was written.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "html": {
+            "description": "HTML body; absent for text-only mails.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Mail ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "description": "Delivery state.",
+            "enum": [
+              "pending",
+              "sent",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "description": "Subject.",
+            "type": "string"
+          },
+          "template": {
+            "description": "Template the mail was rendered from.",
+            "type": "string"
+          },
+          "text": {
+            "description": "Plain text body.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Recipient address.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "to",
+          "subject",
+          "text",
+          "createdAt",
+          "status"
+        ],
+        "type": "object"
+      },
+      "Me": {
+        "additionalProperties": false,
+        "properties": {
+          "accountId": {
+            "description": "Account ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "email": {
+            "description": "Email address (login name).",
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "type": "string"
+          },
+          "personId": {
+            "description": "ID of the account's person.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "role": {
+            "description": "Role of the account.",
+            "enum": [
+              "member",
+              "instructor",
+              "office",
+              "admin"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "accountId",
+          "personId",
+          "email",
+          "role",
+          "givenName",
+          "familyName"
+        ],
+        "type": "object"
+      },
       "PublicSettings": {
         "additionalProperties": false,
         "properties": {
@@ -512,6 +726,47 @@
           "schoolName",
           "timezone",
           "defaultLocale"
+        ],
+        "type": "object"
+      },
+      "RegisterInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "Email address; it becomes the login name.",
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "locale": {
+            "description": "Language of the confirmation mail (BCP 47), e.g. de; defaults to the school's.",
+            "maxLength": 35,
+            "type": "string"
+          },
+          "password": {
+            "description": "Password, at least 8 characters.",
+            "maxLength": 256,
+            "minLength": 8,
+            "type": "string"
+          }
+        },
+        "required": [
+          "givenName",
+          "familyName",
+          "email",
+          "password"
         ],
         "type": "object"
       },
@@ -748,6 +1003,214 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/auth/confirm": {
+      "post": {
+        "description": "Confirms the email address with the token from the confirmation link and the account's password, and signs in. An unknown, used or expired link is a 410.",
+        "operationId": "confirmEmail",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmEmailInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Confirm the email address",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "description": "Signs in with email and password and sets the session cookie. A wrong email or password is a 401; a correct password for an unconfirmed email is a 403.",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Sign in",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "description": "Ends the session and clears the session cookie.",
+        "operationId": "logout",
+        "parameters": [
+          {
+            "description": "Session cookie.",
+            "in": "cookie",
+            "name": "studio_session",
+            "schema": {
+              "description": "Session cookie.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Sign out",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "description": "Returns the signed-in account, or 401 without a valid session.",
+        "operationId": "getMe",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Signed-in account",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "description": "Creates a member account and mails a confirmation link to the email address. The answer is the same whether the address is new or already registered.",
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Register an account",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/course-types": {
       "get": {
         "description": "Returns all course types (dance styles) ordered by name.",
@@ -777,6 +1240,70 @@
         "summary": "List course types",
         "tags": [
           "catalog"
+        ]
+      }
+    },
+    "/api/v1/demo/logins": {
+      "get": {
+        "description": "Lists fictional demo accounts, one per role, with their password. Only in a demo installation; otherwise a 404.",
+        "operationId": "listDemoLogins",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoLoginsOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Demo accounts",
+        "tags": [
+          "demo"
+        ]
+      }
+    },
+    "/api/v1/demo/mailbox": {
+      "get": {
+        "description": "Lists the newest mails of the outbox, so that the demo, which delivers no mail, can show them (e.g. the confirmation link). Only in a demo installation; otherwise a 404.",
+        "operationId": "listDemoMailbox",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoMailboxOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Demo mailbox",
+        "tags": [
+          "demo"
         ]
       }
     },

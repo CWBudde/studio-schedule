@@ -49,7 +49,11 @@ func TestRunOnce(t *testing.T) {
 		order = append(order, "p")
 
 		panic("boom")
-	}}, job("c", errC))
+	}}, job("c", errC), Job{Name: "late", Every: time.Hour, SkipAtStartup: true, Run: func(context.Context) error {
+		order = append(order, "late")
+
+		return nil
+	}})
 
 	err := r.RunOnce(t.Context())
 	if !errors.Is(err, errA) || !errors.Is(err, errC) {
@@ -63,7 +67,7 @@ func TestRunOnce(t *testing.T) {
 	}
 
 	if got := strings.Join(order, ","); got != "a,b,p,c" {
-		t.Fatalf("ran %s, want a,b,p,c in order", got)
+		t.Fatalf("ran %s, want a,b,p,c in order and not the job skipped at startup", got)
 	}
 
 	if err := NewRunner(nil, job("b", nil)).RunOnce(t.Context()); err != nil {

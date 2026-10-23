@@ -443,11 +443,19 @@ func (b *builder) household(h householdSpec) {
 		guardians = append(guardians, p.ID)
 
 		if a.role != "" {
-			b.d.Accounts = append(b.d.Accounts, domain.Account{
-				ID:       ids.New[domain.AccountID](b.seq),
-				PersonID: p.ID,
-				Email:    p.Email,
-				Role:     a.role,
+			// Demo accounts are confirmed when the term starts and sign in
+			// with DemoPassword.
+			confirmed := b.termStart.At(domain.TimeOfDay{Hour: 9}, b.loc)
+			acc := domain.Account{
+				ID:          ids.New[domain.AccountID](b.seq),
+				PersonID:    p.ID,
+				Email:       p.Email,
+				Role:        a.role,
+				ConfirmedAt: confirmed,
+			}
+			b.d.Accounts = append(b.d.Accounts, acc)
+			b.d.Credentials = append(b.d.Credentials, domain.Credential{
+				AccountID: acc.ID, PasswordHash: demoPasswordHash, ChangedAt: confirmed,
 			})
 		}
 	}

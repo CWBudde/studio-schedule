@@ -51,6 +51,11 @@ func main() {
 		Clock:   clk,
 		Version: version,
 		Logger:  logger,
+		// The worker passes the app's URL (with the hash route prefix) for
+		// links in mails, which the demo mailbox shows.
+		AppURL:     os.Getenv("APP_URL"),
+		Demo:       true,
+		DemoLogins: seed.DemoLogins(),
 	}
 	handler, _ := app.New(deps)
 

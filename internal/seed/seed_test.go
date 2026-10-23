@@ -3,10 +3,12 @@ package seed_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/cwbudde/studio-schedule/internal/auth/password"
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/service"
@@ -600,6 +602,17 @@ func TestLoadDemoRoundTrip(t *testing.T) {
 
 		sameSet(t, "accounts", accounts, want.Accounts)
 
+		for _, c := range want.Credentials {
+			got, err := tx.Credentials().Get(ctx, c.AccountID)
+			if err != nil {
+				return err
+			}
+
+			if got != c {
+				t.Errorf("credential: got %+v, want %+v", got, c)
+			}
+		}
+
 		for _, a := range want.Accounts {
 			got, err := tx.Accounts().GetByEmail(ctx, strings.ToUpper(a.Email))
 			if err != nil {
@@ -906,4 +919,50 @@ func exampleEmail(email string) bool {
 	}
 
 	return false
+}
+
+func TestDemoLogins(t *testing.T) {
+	t.Parallel()
+
+	logins := seed.DemoLogins()
+	d := seed.Demo()
+
+	var roles []domain.Role
+	for _, l := range logins {
+		roles = append(roles, l.Role)
+	}
+
+	if want := []domain.Role{domain.RoleMember, domain.RoleInstructor, domain.RoleOffice, domain.RoleAdmin}; !slices.Equal(roles, want) {
+		t.Fatalf("roles %v, want %v", roles, want)
+	}
+
+	hasher := password.New()
+
+	for _, l := range logins {
+		i := slices.IndexFunc(d.Accounts, func(a domain.Account) bool { return a.Email == l.Email })
+		if i < 0 {
+			t.Fatalf("%s is not a demo account", l.Email)
+		}
+
+		acc := d.Accounts[i]
+		if acc.Role != l.Role || acc.ConfirmedAt.IsZero() {
+			t.Errorf("%s: account %+v, want a confirmed %s", l.Email, acc, l.Role)
+		}
+
+		c := slices.IndexFunc(d.Credentials, func(c domain.Credential) bool { return c.AccountID == acc.ID })
+		if c < 0 {
+			t.Fatalf("%s has no password", l.Email)
+		}
+
+		if ok, err := hasher.Verify(d.Credentials[c].PasswordHash, l.Password); !ok || err != nil {
+			t.Errorf("%s: the password does not verify: %v", l.Email, err)
+		}
+	}
+
+	// Every account can sign in.
+	if len(d.Credentials) != len(d.Accounts) {
+		t.Errorf("%d credentials for %d accounts", len(d.Credentials), len(d.Accounts))
+	}
+
+	validAll(t, d.Credentials)
 }

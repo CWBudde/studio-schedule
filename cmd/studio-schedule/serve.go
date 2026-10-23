@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,6 +19,8 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/config"
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/mail"
+	"github.com/cwbudde/studio-schedule/internal/mail/smtp"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/memory"
@@ -105,12 +108,36 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 
 	defer closeStore()
 
+	clk := clock.System{}
+
+	mailer, err := newMailer(cfg, clk, logger)
+	if err != nil {
+		return err
+	}
+
+	// Without a database the server runs on the demo data, like the web demo.
+	demo := cfg.DatabaseURL == ""
+
 	deps := app.Deps{
 		Store:   st,
-		Clock:   clock.System{},
+		Clock:   clk,
 		Version: version,
 		Logger:  logger,
 		UI:      webui.Handler(),
+		AppURL:  appURL(cfg),
+		Mailer:  mailer,
+		Demo:    demo,
+		// Plain HTTP only for local development, where BASE_URL is unset or
+		// http://; browsers drop Secure cookies there.
+		InsecureCookies: !isHTTPS(cfg.BaseURL),
+	}
+	if !demo && !isHTTPS(cfg.BaseURL) {
+		logger.Warn("BASE_URL is not an https:// origin: mail links point to "+deps.AppURL+
+			" and session cookies are not Secure; only acceptable for local development",
+			slog.String("hint", "set "+config.EnvBaseURL+" to the public https origin"))
+	}
+	if demo {
+		deps.DemoLogins = seed.DemoLogins()
 	}
 	handler, _ := app.New(deps)
 
@@ -158,6 +185,48 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	logger.Info("stopped")
 
 	return nil
+}
+
+// isHTTPS reports whether the validated BASE_URL uses https.
+func isHTTPS(baseURL string) bool {
+	u, err := url.Parse(baseURL)
+
+	return err == nil && u.Scheme == "https" // Parse lower-cases the scheme
+}
+
+// appURL is the root of the web app for links in mails: BASE_URL, or the
+// listen address on localhost.
+func appURL(cfg config.Config) string {
+	if cfg.BaseURL != "" {
+		return cfg.BaseURL + "/"
+	}
+
+	_, port, _ := net.SplitHostPort(cfg.HTTPAddr) // validated by config.Load
+
+	return "http://localhost:" + port + "/"
+}
+
+// newMailer returns the SMTP sender of cfg, or nil without SMTP_HOST: then
+// mails stay in the outbox.
+func newMailer(cfg config.Config, clk clock.Clock, logger *slog.Logger) (mail.Mailer, error) {
+	if cfg.SMTP.Host == "" {
+		if cfg.DatabaseURL != "" {
+			logger.Warn("no mail server configured: mails stay in the outbox and are never sent",
+				slog.String("hint", "set "+config.EnvSMTPHost+" and "+config.EnvSMTPFrom))
+		}
+
+		return nil, nil // no mailer is a valid configuration
+	}
+
+	sender, err := smtp.New(smtp.Config{
+		Host: cfg.SMTP.Host, Port: cfg.SMTP.Port, Username: cfg.SMTP.Username, Password: cfg.SMTP.Password,
+		From: cfg.SMTP.From, TLS: smtp.TLSMode(cfg.SMTP.TLS),
+	}, clk)
+	if err != nil {
+		return nil, fmt.Errorf("mail server: %w", err)
+	}
+
+	return sender, nil
 }
 
 // startJobs runs the background jobs once, so that lesson generation is

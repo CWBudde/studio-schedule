@@ -4,6 +4,106 @@
  */
 
 export interface paths {
+    "/api/v1/auth/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm the email address
+         * @description Confirms the email address with the token from the confirmation link and the account's password, and signs in. An unknown, used or expired link is a 410.
+         */
+        post: operations["confirmEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in
+         * @description Signs in with email and password and sets the session cookie. A wrong email or password is a 401; a correct password for an unconfirmed email is a 403.
+         */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign out
+         * @description Ends the session and clears the session cookie.
+         */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Signed-in account
+         * @description Returns the signed-in account, or 401 without a valid session.
+         */
+        get: operations["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register an account
+         * @description Creates a member account and mails a confirmation link to the email address. The answer is the same whether the address is new or already registered.
+         */
+        post: operations["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/course-types": {
         parameters: {
             query?: never;
@@ -16,6 +116,46 @@ export interface paths {
          * @description Returns all course types (dance styles) ordered by name.
          */
         get: operations["listCourseTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/demo/logins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Demo accounts
+         * @description Lists fictional demo accounts, one per role, with their password. Only in a demo installation; otherwise a 404.
+         */
+        get: operations["listDemoLogins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/demo/mailbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Demo mailbox
+         * @description Lists the newest mails of the outbox, so that the demo, which delivers no mail, can show them (e.g. the confirmation link). Only in a demo installation; otherwise a 404.
+         */
+        get: operations["listDemoMailbox"];
         put?: never;
         post?: never;
         delete?: never;
@@ -269,6 +409,12 @@ export interface components {
             /** @description Classes ordered by weekday (Sunday first) and start time. */
             items: components["schemas"]["Class"][];
         };
+        ConfirmEmailInputBody: {
+            /** @description The account's password. */
+            password: string;
+            /** @description Token from the confirmation link. */
+            token: string;
+        };
         CourseType: {
             /** @description Description, if any. */
             description?: string;
@@ -288,6 +434,29 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+        };
+        DemoLogin: {
+            /** @description Email address (login name). */
+            email: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /** @description Password of the demo account. */
+            password: string;
+            /**
+             * @description Role of the account.
+             * @enum {string}
+             */
+            role: "member" | "instructor" | "office" | "admin";
+        };
+        DemoLoginsOutputBody: {
+            /** @description Demo accounts, from least to most privileged role. */
+            logins: components["schemas"]["DemoLogin"][];
+        };
+        DemoMailboxOutputBody: {
+            /** @description Mails, newest first. */
+            mails: components["schemas"]["MailboxMail"][];
         };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
@@ -459,6 +628,62 @@ export interface components {
             id: string;
             name: string;
         };
+        LoginInputBody: {
+            /** @description Email address. */
+            email: string;
+            /** @description Password. */
+            password: string;
+        };
+        MailboxMail: {
+            /**
+             * Format: date-time
+             * @description When the mail was written.
+             */
+            createdAt: string;
+            /** @description HTML body; absent for text-only mails. */
+            html?: string;
+            /**
+             * Format: uuid
+             * @description Mail ID.
+             */
+            id: string;
+            /**
+             * @description Delivery state.
+             * @enum {string}
+             */
+            status: "pending" | "sent" | "failed";
+            /** @description Subject. */
+            subject: string;
+            /** @description Template the mail was rendered from. */
+            template?: string;
+            /** @description Plain text body. */
+            text: string;
+            /** @description Recipient address. */
+            to: string;
+        };
+        Me: {
+            /**
+             * Format: uuid
+             * @description Account ID.
+             */
+            accountId: string;
+            /** @description Email address (login name). */
+            email: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /**
+             * Format: uuid
+             * @description ID of the account's person.
+             */
+            personId: string;
+            /**
+             * @description Role of the account.
+             * @enum {string}
+             */
+            role: "member" | "instructor" | "office" | "admin";
+        };
         PublicSettings: {
             /** @description Default UI locale (BCP 47 tag), e.g. en. */
             defaultLocale: string;
@@ -466,6 +691,21 @@ export interface components {
             schoolName: string;
             /** @description IANA time zone of the school, e.g. Europe/Berlin. */
             timezone: string;
+        };
+        RegisterInputBody: {
+            /**
+             * Format: email
+             * @description Email address; it becomes the login name.
+             */
+            email: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /** @description Language of the confirmation mail (BCP 47), e.g. de; defaults to the school's. */
+            locale?: string;
+            /** @description Password, at least 8 characters. */
+            password: string;
         };
         Room: {
             /**
@@ -581,6 +821,165 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    confirmEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmEmailInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                /** @description Session cookie. */
+                studio_session?: string;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterInputBody"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listCourseTypes: {
         parameters: {
             query?: never;
@@ -597,6 +996,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CourseTypeList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listDemoLogins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoLoginsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listDemoMailbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoMailboxOutputBody"];
                 };
             };
             /** @description Error */

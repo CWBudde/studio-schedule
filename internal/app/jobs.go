@@ -16,8 +16,9 @@ import (
 func Jobs(deps Deps) *jobs.Runner {
 	deps = deps.withDefaults()
 	lessons := service.NewLessonGenerator(deps.Store, deps.Clock, deps.IDs)
+	auth := newAuthService(deps)
 
-	return jobs.NewRunner(deps.Logger, jobs.Job{
+	all := []jobs.Job{{
 		Name:  "generate-lessons",
 		Every: time.Hour,
 		Run: func(ctx context.Context) error {
@@ -43,5 +44,36 @@ func Jobs(deps Deps) *jobs.Runner {
 
 			return nil
 		},
-	})
+	}, {
+		Name:  "purge-sessions",
+		Every: time.Hour,
+		Run: func(ctx context.Context) error {
+			n, err := auth.PurgeExpired(ctx)
+			if n > 0 {
+				deps.Logger.InfoContext(ctx, "expired sessions and links deleted", slog.Int("deleted", n))
+			}
+
+			return err
+		},
+	}}
+
+	if deps.Mailer != nil {
+		outbox := service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer)
+		all = append(all, jobs.Job{
+			Name:  "deliver-mail",
+			Every: time.Minute,
+			// A slow mail server must not delay startup.
+			SkipAtStartup: true,
+			Run: func(ctx context.Context) error {
+				n, err := outbox.Deliver(ctx)
+				if n > 0 {
+					deps.Logger.InfoContext(ctx, "mails sent", slog.Int("sent", n))
+				}
+
+				return err
+			},
+		})
+	}
+
+	return jobs.NewRunner(deps.Logger, all...)
 }

@@ -24,6 +24,15 @@ const (
 	EnvDatabaseURL = "DATABASE_URL"
 	EnvHTTPAddr    = "HTTP_ADDR"
 	EnvBaseURL     = "BASE_URL"
+
+	// Outgoing mail (environment only). Without SMTP_HOST mails stay in the
+	// outbox.
+	EnvSMTPHost     = "SMTP_HOST"
+	EnvSMTPPort     = "SMTP_PORT"
+	EnvSMTPUsername = "SMTP_USERNAME"
+	EnvSMTPPassword = "SMTP_PASSWORD"
+	EnvSMTPFrom     = "SMTP_FROM"
+	EnvSMTPTLS      = "SMTP_TLS"
 )
 
 // DefaultHTTPAddr is the listen address when neither flag nor env sets one.
@@ -47,6 +56,33 @@ type Config struct {
 	// BaseURL is the public origin of the app (scheme://host[:port], no
 	// trailing slash), used to build absolute links. Empty means unset.
 	BaseURL string
+	// SMTP is the mail server; a zero Host means none.
+	SMTP SMTP
+}
+
+// SMTP is the outgoing mail server. Package mail/smtp validates it fully;
+// Load only checks what it parses.
+type SMTP struct {
+	Host     string
+	Port     int // 0: the default port of the TLS mode
+	Username string
+	Password string // secret
+	From     string // sender address, possibly with a display name
+	TLS      string // starttls (default), tls or none
+}
+
+// String implements fmt.Stringer with the password masked.
+func (s SMTP) String() string { return s.GoString() }
+
+// GoString implements fmt.GoStringer (%#v) with the password masked.
+func (s SMTP) GoString() string {
+	if s.Password != "" {
+		s.Password = redactedMask
+	}
+
+	type plain SMTP // no methods, so %+v does not recurse
+
+	return fmt.Sprintf("%+v", plain(s))
 }
 
 // LookupFunc looks up an environment variable; os.LookupEnv satisfies it.
@@ -85,9 +121,33 @@ func Load(lookup LookupFunc, flags Flags) (Config, error) {
 		DatabaseURL: pick(flags.DatabaseURL, EnvDatabaseURL, ""),
 		HTTPAddr:    pick(flags.HTTPAddr, EnvHTTPAddr, DefaultHTTPAddr),
 		BaseURL:     pick(flags.BaseURL, EnvBaseURL, ""),
+		SMTP: SMTP{
+			Host:     pick(nil, EnvSMTPHost, ""),
+			Username: pick(nil, EnvSMTPUsername, ""),
+			Password: pick(nil, EnvSMTPPassword, ""),
+			From:     pick(nil, EnvSMTPFrom, ""),
+			TLS:      pick(nil, EnvSMTPTLS, ""),
+		},
 	}
 
 	var errs []error
+
+	if port := pick(nil, EnvSMTPPort, ""); port != "" {
+		n, err := strconv.ParseUint(port, 10, 16)
+		if err != nil || n == 0 {
+			errs = append(errs, fmt.Errorf("%s: %q is not a port (1-65535)", EnvSMTPPort, port))
+		}
+
+		cfg.SMTP.Port = int(n)
+	}
+
+	if cfg.SMTP.Host == "" && (cfg.SMTP.From != "" || cfg.SMTP.Username != "" || cfg.SMTP.Password != "") {
+		errs = append(errs, fmt.Errorf("%s: required when other SMTP_* variables are set", EnvSMTPHost))
+	}
+
+	if cfg.SMTP.Host != "" && cfg.SMTP.From == "" {
+		errs = append(errs, fmt.Errorf("%s: required with %s", EnvSMTPFrom, EnvSMTPHost))
+	}
 
 	if err := validateDatabaseURL(cfg.DatabaseURL); err != nil {
 		errs = append(errs, err)
@@ -174,9 +234,13 @@ func normalizeBaseURL(s string) (string, error) {
 	return strings.TrimSuffix(s, "/"), nil
 }
 
-// Redacted returns a copy of c with passwords in DatabaseURL masked.
+// Redacted returns a copy of c with passwords in DatabaseURL and SMTP
+// masked.
 func (c Config) Redacted() Config {
 	c.DatabaseURL = redactDatabaseURL(c.DatabaseURL)
+	if c.SMTP.Password != "" {
+		c.SMTP.Password = redactedMask
+	}
 
 	return c
 }
@@ -185,14 +249,15 @@ func (c Config) Redacted() Config {
 func (c Config) String() string {
 	r := c.Redacted()
 
-	return fmt.Sprintf("{DatabaseURL:%s HTTPAddr:%s BaseURL:%s}", r.DatabaseURL, r.HTTPAddr, r.BaseURL)
+	return fmt.Sprintf("{DatabaseURL:%s HTTPAddr:%s BaseURL:%s SMTP:%s}", r.DatabaseURL, r.HTTPAddr, r.BaseURL, r.SMTP)
 }
 
 // GoString implements fmt.GoStringer (%#v) with secrets masked.
 func (c Config) GoString() string {
 	r := c.Redacted()
 
-	return fmt.Sprintf("config.Config{DatabaseURL:%q, HTTPAddr:%q, BaseURL:%q}", r.DatabaseURL, r.HTTPAddr, r.BaseURL)
+	return fmt.Sprintf("config.Config{DatabaseURL:%q, HTTPAddr:%q, BaseURL:%q, SMTP:%s}",
+		r.DatabaseURL, r.HTTPAddr, r.BaseURL, r.SMTP)
 }
 
 // LogValue implements slog.LogValuer with secrets masked.
@@ -203,6 +268,14 @@ func (c Config) LogValue() slog.Value {
 		slog.String("databaseURL", r.DatabaseURL),
 		slog.String("httpAddr", r.HTTPAddr),
 		slog.String("baseURL", r.BaseURL),
+		slog.Group("smtp",
+			slog.String("host", r.SMTP.Host),
+			slog.Int("port", r.SMTP.Port),
+			slog.String("username", r.SMTP.Username),
+			slog.String("password", r.SMTP.Password),
+			slog.String("from", r.SMTP.From),
+			slog.String("tls", r.SMTP.TLS),
+		),
 	)
 }
 

@@ -28,6 +28,9 @@ type Job struct {
 	Every time.Duration
 	// Run does the work. It should return soon after ctx is canceled.
 	Run func(ctx context.Context) error
+	// SkipAtStartup leaves the job out of RunOnce, for jobs that may block
+	// on the network (such as sending mail) and must not delay startup.
+	SkipAtStartup bool
 }
 
 // Runner runs a fixed set of jobs.
@@ -62,13 +65,15 @@ func newTimeTicker(d time.Duration) (<-chan time.Time, func()) {
 	return t.C, t.Stop
 }
 
-// RunOnce runs every job once, one after the other, and returns their
-// errors joined. A failing or panicking job does not stop the others.
+// RunOnce runs every job once (except those with SkipAtStartup), one after
+// the other, and returns their errors joined. A failing or panicking job does not stop the others.
 func (r *Runner) RunOnce(ctx context.Context) error {
 	var errs []error
 
 	for _, j := range r.jobs {
-		errs = append(errs, r.run(ctx, j))
+		if !j.SkipAtStartup {
+			errs = append(errs, r.run(ctx, j))
+		}
 	}
 
 	return errors.Join(errs...)

@@ -42,6 +42,7 @@ type Dataset struct {
 	Persons      []domain.Person
 	Guardians    []domain.Guardian
 	Accounts     []domain.Account
+	Credentials  []domain.Credential
 	ClassMembers []domain.ClassMember
 	Lessons      []domain.Lesson
 }
@@ -98,6 +99,12 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 	for _, a := range d.Accounts {
 		if err := tx.Accounts().Create(ctx, a); err != nil {
 			return fmt.Errorf("account %v: %w", a.ID, err)
+		}
+	}
+
+	for _, c := range d.Credentials {
+		if err := tx.Credentials().Put(ctx, c); err != nil {
+			return fmt.Errorf("credential of account %v: %w", c.AccountID, err)
 		}
 	}
 

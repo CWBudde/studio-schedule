@@ -244,8 +244,12 @@ func TestConfigNeverPrintsSecrets(t *testing.T) {
 	t.Parallel()
 
 	cfg, err := config.Load(env(map[string]string{
-		"DATABASE_URL": "postgres://app:change-me@db.example.test/studio",
-		"BASE_URL":     "https://schedule.example.test",
+		"DATABASE_URL":  "postgres://app:change-me@db.example.test/studio",
+		"BASE_URL":      "https://schedule.example.test",
+		"SMTP_HOST":     "mail.example.test",
+		"SMTP_USERNAME": "schedule",
+		"SMTP_PASSWORD": "smtp-secret",
+		"SMTP_FROM":     "Studio <schedule@example.test>",
 	}), config.Flags{})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -264,9 +268,10 @@ func TestConfigNeverPrintsSecrets(t *testing.T) {
 		"String": cfg.String(),
 		"%#v":    fmt.Sprintf("%#v", cfg),
 		"%v ptr": fmt.Sprintf("%v", &cfg),
+		"SMTP":   fmt.Sprintf("%v %+v %#v %s", cfg.SMTP, cfg.SMTP, cfg.SMTP, cfg.SMTP),
 	} {
-		if strings.Contains(out, "change-me") {
-			t.Errorf("%s output leaks the password: %s", name, out)
+		if strings.Contains(out, "change-me") || strings.Contains(out, "smtp-secret") {
+			t.Errorf("%s output leaks a password: %s", name, out)
 		}
 
 		if !strings.Contains(out, "xxxxx") {
@@ -276,5 +281,38 @@ func TestConfigNeverPrintsSecrets(t *testing.T) {
 
 	if !strings.Contains(text.String(), "config.httpAddr=:8080") {
 		t.Errorf("text log lacks httpAddr: %s", text.String())
+	}
+}
+
+func TestLoadSMTP(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := config.Load(env(map[string]string{
+		"SMTP_HOST": "mail.example.test", "SMTP_PORT": "2525", "SMTP_USERNAME": "u", "SMTP_PASSWORD": "p",
+		"SMTP_FROM": "schedule@example.test", "SMTP_TLS": "none",
+	}), config.Flags{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := config.SMTP{Host: "mail.example.test", Port: 2525, Username: "u", Password: "p", From: "schedule@example.test", TLS: "none"}
+	if cfg.SMTP != want {
+		t.Fatalf("SMTP = %#v, want %#v", cfg.SMTP, want)
+	}
+
+	if cfg, err := config.Load(env(nil), config.Flags{}); err != nil || cfg.SMTP != (config.SMTP{}) {
+		t.Fatalf("no SMTP: %#v, %v", cfg.SMTP, err)
+	}
+
+	for name, vars := range map[string]map[string]string{
+		"bad port":    {"SMTP_HOST": "mail.example.test", "SMTP_FROM": "a@example.test", "SMTP_PORT": "smtp"},
+		"zero port":   {"SMTP_HOST": "mail.example.test", "SMTP_FROM": "a@example.test", "SMTP_PORT": "0"},
+		"no from":     {"SMTP_HOST": "mail.example.test"},
+		"no host":     {"SMTP_FROM": "a@example.test"},
+		"only secret": {"SMTP_PASSWORD": "p"},
+	} {
+		if _, err := config.Load(env(vars), config.Flags{}); !errors.Is(err, config.ErrInvalid) {
+			t.Errorf("%s: want ErrInvalid, got %v", name, err)
+		}
 	}
 }

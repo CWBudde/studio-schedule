@@ -21,7 +21,8 @@ func newSeedCmd(env config.LookupFunc) *cobra.Command {
 		Long: "Load the fictional demo data set (school settings, catalog, timetable, families and " +
 			"accounts) into the database from " + config.EnvDatabaseURL + " or --database-url. " +
 			"The schema must be up to date, and the database must be empty: seed never mixes " +
-			"demo data into a school that is in use.",
+			"demo data into a school that is in use. Every demo account, admin included, signs in " +
+			"with the published password " + seed.DemoPassword + ", so never seed a public installation.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			databaseURL, err := db.load(cmd, env)
@@ -43,7 +44,9 @@ func newSeedCmd(env config.LookupFunc) *cobra.Command {
 				return err
 			}
 
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), "demo data loaded")
+			_, err = fmt.Fprintf(cmd.OutOrStdout(),
+				"demo data loaded\nwarning: every demo account, admin included, signs in with the published password %q\n",
+				seed.DemoPassword)
 
 			return err
 		},

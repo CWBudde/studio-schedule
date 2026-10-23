@@ -16,9 +16,12 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/cwbudde/studio-schedule/internal/auth/password"
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/httpapi"
 	"github.com/cwbudde/studio-schedule/internal/ids"
+	"github.com/cwbudde/studio-schedule/internal/mail"
+	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/service"
 	"github.com/cwbudde/studio-schedule/internal/store"
 )
@@ -39,6 +42,26 @@ type Deps struct {
 	// UI, if set, handles every request that matches no API route
 	// (typically the embedded single-page app).
 	UI http.Handler
+
+	// AppURL is the absolute URL of the web app that links in mails point
+	// to, ending in "/" (or "#/" with hash routing). Registration fails
+	// without it.
+	AppURL string
+	// Hasher hashes passwords; defaults to argon2id with the parameters of
+	// the build target (password.New).
+	Hasher service.PasswordHasher
+	// Mailer delivers the mails of the outbox. Without one, mails stay in
+	// the outbox and the outbox job does not run.
+	Mailer mail.Mailer
+	// Demo marks an installation that serves the fictional demo data (the
+	// web demo, or `serve` without a database). It makes the outbox public
+	// as a mailbox and lists DemoLogins, so visitors can sign in.
+	Demo bool
+	// DemoLogins are the seeded accounts listed when Demo is set.
+	DemoLogins []seed.Login
+	// InsecureCookies leaves the Secure attribute off the session cookie,
+	// for local development over plain HTTP.
+	InsecureCookies bool
 }
 
 // withDefaults fills in the optional dependencies. It panics without a
@@ -64,6 +87,10 @@ func (d Deps) withDefaults() Deps {
 		d.Logger = slog.New(slog.DiscardHandler)
 	}
 
+	if d.Hasher == nil {
+		d.Hasher = password.New()
+	}
+
 	return d
 }
 
@@ -79,12 +106,17 @@ func New(deps Deps) (http.Handler, huma.API) {
 	api := humachi.New(router, httpapi.NewConfig())
 
 	httpapi.Register(api, httpapi.Deps{
-		Settings:  service.NewSettingsService(deps.Store),
-		Catalog:   service.NewCatalogService(deps.Store),
-		Timetable: service.NewTimetableService(deps.Store),
-		Schedule:  service.NewScheduleService(deps.Store, deps.Clock),
-		Version:   deps.Version,
-		Logger:    deps.Logger,
+		Settings:      service.NewSettingsService(deps.Store),
+		Catalog:       service.NewCatalogService(deps.Store),
+		Timetable:     service.NewTimetableService(deps.Store),
+		Schedule:      service.NewScheduleService(deps.Store, deps.Clock),
+		Auth:          newAuthService(deps),
+		Outbox:        service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer),
+		Version:       deps.Version,
+		Logger:        deps.Logger,
+		SecureCookies: !deps.InsecureCookies,
+		Demo:          deps.Demo,
+		DemoLogins:    demoLogins(deps.DemoLogins),
 	})
 
 	router.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
@@ -107,6 +139,28 @@ func New(deps Deps) (http.Handler, huma.API) {
 	h = recoverer(h, deps.Logger)
 
 	return h, api
+}
+
+func demoLogins(logins []seed.Login) []httpapi.DemoLogin {
+	out := make([]httpapi.DemoLogin, len(logins))
+	for i, l := range logins {
+		out[i] = httpapi.DemoLogin{
+			Email: l.Email, Password: l.Password, Role: string(l.Role), GivenName: l.GivenName, FamilyName: l.FamilyName,
+		}
+	}
+
+	return out
+}
+
+// newAuthService builds the AuthService of deps. The mail templates are
+// embedded, so failing to parse them is a bug.
+func newAuthService(deps Deps) *service.AuthService {
+	renderer, err := mail.NewRenderer()
+	if err != nil {
+		panic("app: mail templates: " + err.Error())
+	}
+
+	return service.NewAuthService(deps.Store, deps.Clock, deps.IDs, deps.Hasher, renderer, deps.AppURL)
 }
 
 // isAPIPath reports whether p belongs to the API namespace, which never

@@ -32,8 +32,17 @@ type Deps struct {
 	Catalog   *service.CatalogService
 	Timetable *service.TimetableService
 	Schedule  *service.ScheduleService
+	Auth      *service.AuthService
+	Outbox    *service.OutboxService
 	Version   string
 	Logger    *slog.Logger
+	// SecureCookies sets the Secure attribute on the session cookie; off
+	// only for local development over plain HTTP.
+	SecureCookies bool
+	// Demo enables the demo endpoints: the outbox as a public mailbox and
+	// the list of DemoLogins.
+	Demo       bool
+	DemoLogins []DemoLogin
 }
 
 // NewConfig returns the Huma configuration for the API: OpenAPI document at
@@ -57,11 +66,16 @@ func NewConfig() huma.Config {
 func Register(api huma.API, deps Deps) {
 	h := &handlers{deps: deps}
 
+	// Before any operation: Huma applies the middlewares registered so far.
+	api.UseMiddleware(h.sessionMiddleware(api))
+
 	registerSystem(api, h)
 	registerSettings(api, h)
 	registerCatalog(api, h)
 	registerTimetable(api, h)
 	registerSchedule(api, h)
+	registerAuth(api, h)
+	registerDemo(api, h)
 }
 
 type handlers struct {
@@ -78,6 +92,8 @@ func (h *handlers) toHTTPError(ctx context.Context, err error) error {
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, domain.ErrConflict):
 		return huma.Error409Conflict("conflict")
+	case errors.Is(err, domain.ErrUnauthorized):
+		return huma.Error401Unauthorized("not signed in")
 	case errors.Is(err, domain.ErrForbidden):
 		return huma.Error403Forbidden("forbidden")
 	default:

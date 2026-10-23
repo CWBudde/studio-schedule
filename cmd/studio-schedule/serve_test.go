@@ -77,3 +77,18 @@ func TestStartJobsLogsFailures(t *testing.T) {
 		t.Fatalf("startup failure not logged:\n%s", logs.String())
 	}
 }
+
+func TestIsHTTPS(t *testing.T) {
+	t.Parallel()
+
+	for in, want := range map[string]bool{
+		"":                            false,
+		"http://localhost:8080":       false,
+		"https://school.example.test": true,
+		"HTTPS://school.example.test": true,
+	} {
+		if got := isHTTPS(in); got != want {
+			t.Errorf("isHTTPS(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
