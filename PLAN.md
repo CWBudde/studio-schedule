@@ -288,25 +288,44 @@ Goal: people can sign up and log in; staff can maintain the timetable.
       already have Get/Create/Update/Delete/List; the work is services, write operations and the
       admin UI. Order: decisions and the two foundations first, then the entity slices (each slice
       is backend + UI + tests and can run in parallel; regenerate `api/openapi.json`,
-      `schema.d.ts` and `routeTree.gen.ts` after merging), then demo and e2e
-  - [ ] ADR 0007 "Timetable administration": `office` writes catalogue and timetable (admins
+      `schema.d.ts` and `routeTree.gen.ts` after merging), then demo and e2e (2026-10-24) —
+      partial: ADR 0007, the two foundations (except the parts listed there) and locations and
+      rooms are done; staff, course types, terms, classes, class members, demo and e2e remain
+  - [x] ADR 0007 "Timetable administration": `office` writes catalogue and timetable (admins
         inherit it), what an edit of a class or term does to its generated lessons (proposed:
         future, untouched lessons follow the class; past and individually edited lessons stay),
         retiring instead of deleting what is referenced (staff `active`; a class or term with past
-        lessons), last write wins vs `If-Match`, whether edits go to `audit_events`
+        lessons), last write wins vs `If-Match`, whether edits go to `audit_events` (2026-10-24) —
+        ADR 0007: office writes, retire what is referenced, future untouched lessons follow a
+        class edit, terms may overlap, unique location and room names, last write wins, no audit
+        of timetable edits
   - [ ] Backend foundation: write-operation conventions (`POST` collection → 201 with the entity,
         `PUT /{id}`, `DELETE /{id}` → 204; request bodies without IDs, IDs from `ids.Source`);
         a 409 that says _why_ (stable reason such as `in-use` or `duplicate`, no internals) so the
         UI can explain a refused delete; validation errors per field in the 422; office-only list
         variants that include what the public lists hide (inactive staff, staff person links)
+        (2026-10-24) — partial: the write conventions, the `Conflict` 409 with `reason`
+        (`in-use`, `duplicate`; `domain.ErrInUse`, `domain.ErrDuplicate`, `withConflict`) and
+        per-field 422s (`domain.FieldError` via `on(field, …)` rules, `body.<field>`) are done;
+        the office-only list variants come with the staff slice
   - [ ] Frontend foundation: `/admin` layout with section navigation (office and admin see it in
         the header, everyone else gets the 403 page), shared CRUD kit: data table (sorting,
         search, empty and error states, phone layout as cards), form sheet/dialog with
         react-hook-form + zod built from the generated types, 422 → field errors, delete
         confirmation that shows the 409 reason, toasts; shadcn `dialog`, `alert-dialog`, `form`,
-        `textarea`, `switch`, `popover` + `command` (combobox)
-  - [ ] Locations and rooms: create, rename, delete (refused while rooms or classes use them);
-        rooms listed per location with capacity; `/admin/locations`
+        `textarea`, `switch`, `popover` + `command` (combobox) (2026-10-24) — partial: `/admin`
+        layout with section navigation and an "Administration" menu item for office and admin,
+        no-access and load-error states, `features/admin/crud` (`DataTable` with
+        `@tanstack/react-table`, `FormSheet`, `ConfirmDelete`, 422 field marking, 409 reason
+        sentences, toasts), shadcn `alert-dialog` and `textarea`; `switch` and `popover` +
+        `command` come with the staff and class-member slices that use them (`dialog` and `form`
+        are not needed: forms use the sheet and `TextField`)
+  - [x] Locations and rooms: create, rename, delete (refused while rooms or classes use them);
+        rooms listed per location with capacity; `/admin/locations` (2026-10-24) — six `office`
+        operations (`createLocation` … `deleteRoom`, `service/catalog_admin.go`), unique names
+        (migration 00006, which renames existing case duplicates), 409 `in-use` and `duplicate`,
+        a 422 on `locationId` for an unknown location; `/admin/locations` lists locations with
+        their room count and the rooms with location and capacity; e2e in `admin.spec.ts`
   - [ ] Staff: create, edit name and kind, optional link to a person, deactivate/reactivate
         (inactive staff disappear from the public lists and filters, stay on past lessons);
         `/admin/staff`
@@ -360,8 +379,9 @@ Goal: people can sign up and log in; staff can maintain the timetable.
       admin area with shadcn data tables and forms (react-hook-form + zod, schemas derived from the
       OpenAPI types) (2026-10-23) — partial: login, registration and confirm pages, the signed-in
       header, the admin account list (`/admin/accounts`, with "sign in as"), the reset pages and the
-      account settings for password and email, and the profile's person data, dependents and
-      language are done; the rest of the admin area remains
+      account settings for password and email, the profile's person data, dependents and
+      language, and the `/admin` layout with locations and rooms are done; the rest of the admin
+      area remains
   - [x] Profile: person data card on `/account` (name, phone, birth date) using `getMyFamily`
         (2026-10-23) — `ProfileCard`; the header's name follows a change; editable while
         impersonating

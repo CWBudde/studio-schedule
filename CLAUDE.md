@@ -67,6 +67,12 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `service/impersonation.go`. What a caller _sees_ (e.g. schedule visibility) stays in the services.
 - **Family:** `service.FamilyService` (`/api/v1/family`): own person data and dependents; a guardian
   reaches only their dependents (`dependentOf`, a 404 for anyone else; ADR 0008).
+- **Admin writes:** the office maintains catalogue and timetable (`service/catalog_admin.go`,
+  `httpapi/catalog_admin.go`; ADR 0007). Write operations are `POST` collection → 201, `PUT /{id}`,
+  `DELETE /{id}` → 204, registered with `withConflict` so their 409 is the `Conflict` problem with a
+  `reason` (`domain.ErrInUse` → `in-use`, `domain.ErrDuplicate` → `duplicate`). A domain rule built
+  with `on(field, …)` fails as a `*domain.FieldError`, which `toHTTPError` reports as a 422 on
+  `body.<field>`.
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),

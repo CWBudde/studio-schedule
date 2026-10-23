@@ -11,7 +11,7 @@ where it differs.
 | `Term`             | Term                | Zeitraum / Saison     | Date range for a timetable, e.g. a summer timetable ("Sommertanzplan")  |
 | `CourseType`       | Course type / style | Stilrichtung          | Catalogue entry with description (formerly "Unterrichtsbeschreibung")   |
 | `Level`            | Level               | Niveau                | e.g. beginner, intermediate, advanced, professional, open               |
-| `Location`, `Room` | Location, room      | Standort, Raum        | Rooms have a capacity                                                   |
+| `Location`, `Room` | Location, room      | Standort, Raum        | Rooms have a capacity; names unique (rooms per location; ADR 0007)      |
 | `Staff`            | Instructor          | Lehrkraft             | Kind `instructor` or `accompanist` (musician, "Korrepetition")          |
 | `Person`           | Person              | Person                | Any human: member, child, guest                                         |
 | `Guardian`         | Parent / guardian   | Erziehungsberechtigte | Can manage and book for dependents ("Kinder")                           |
@@ -28,6 +28,8 @@ where it differs.
 | Visible days       | Visible days        | Sichtbare Tage        | Per-account override of how far ahead lessons are visible               |
 | `Message`          | Announcement        | Mitteilung            | In-app and/or email                                                     |
 | Calendar feed      | Calendar feed       | Kalender-Abo          | iCal URL with a secret token                                            |
+| In use             | In use              | In Verwendung         | Still referenced, so it cannot be deleted (409 `in-use`; ADR 0007)      |
+| Retire             | Retire / deactivate | Stilllegen            | Hide from future use instead of deleting what is referenced (ADR 0007)  |
 
 Roles: `guest` (not logged in) · `member` (Mitglied) · `instructor` (Lehrkraft) · `office` (Büro) ·
 `admin` (Administration).
