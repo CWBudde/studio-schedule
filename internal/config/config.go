@@ -13,10 +13,13 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/cwbudde/studio-schedule/internal/clientip"
 )
 
 // Environment variable names.
@@ -33,6 +36,11 @@ const (
 	EnvSMTPPassword = "SMTP_PASSWORD"
 	EnvSMTPFrom     = "SMTP_FROM"
 	EnvSMTPTLS      = "SMTP_TLS"
+
+	// EnvTrustedProxies lists the reverse proxies (CIDR prefixes or
+	// addresses, comma-separated) whose X-Forwarded-For entries name the
+	// client (environment only).
+	EnvTrustedProxies = "TRUSTED_PROXIES"
 )
 
 // DefaultHTTPAddr is the listen address when neither flag nor env sets one.
@@ -58,6 +66,9 @@ type Config struct {
 	BaseURL string
 	// SMTP is the mail server; a zero Host means none.
 	SMTP SMTP
+	// TrustedProxies are the reverse proxies in front of the app; empty
+	// means the connection's address is the client's.
+	TrustedProxies []netip.Prefix
 }
 
 // SMTP is the outgoing mail server. Package mail/smtp validates it fully;
@@ -140,6 +151,13 @@ func Load(lookup LookupFunc, flags Flags) (Config, error) {
 
 		cfg.SMTP.Port = int(n)
 	}
+
+	trusted, err := clientip.ParseTrusted(pick(nil, EnvTrustedProxies, ""))
+	if err != nil {
+		errs = append(errs, fmt.Errorf("%s: %w", EnvTrustedProxies, err))
+	}
+
+	cfg.TrustedProxies = trusted
 
 	if cfg.SMTP.Host == "" && (cfg.SMTP.From != "" || cfg.SMTP.Username != "" || cfg.SMTP.Password != "") {
 		errs = append(errs, fmt.Errorf("%s: required when other SMTP_* variables are set", EnvSMTPHost))

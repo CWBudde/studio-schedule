@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -102,7 +104,7 @@ func TestLoadPrecedence(t *testing.T) {
 				t.Fatalf("Load: %v", err)
 			}
 
-			if got != tt.want {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("Load = %+v, want %+v", got.Redacted(), tt.want.Redacted())
 			}
 		})
@@ -314,5 +316,23 @@ func TestLoadSMTP(t *testing.T) {
 		if _, err := config.Load(env(vars), config.Flags{}); !errors.Is(err, config.ErrInvalid) {
 			t.Errorf("%s: want ErrInvalid, got %v", name, err)
 		}
+	}
+}
+
+func TestLoadTrustedProxies(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := config.Load(env(map[string]string{"TRUSTED_PROXIES": "10.0.0.0/8, 192.0.2.7"}), config.Flags{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8"), netip.MustParsePrefix("192.0.2.7/32")}
+	if !reflect.DeepEqual(cfg.TrustedProxies, want) {
+		t.Errorf("TrustedProxies = %v, want %v", cfg.TrustedProxies, want)
+	}
+
+	if _, err := config.Load(env(map[string]string{"TRUSTED_PROXIES": "proxy.example.test"}), config.Flags{}); !errors.Is(err, config.ErrInvalid) {
+		t.Errorf("a host name: want ErrInvalid, got %v", err)
 	}
 }
