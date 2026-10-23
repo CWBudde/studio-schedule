@@ -15,7 +15,7 @@ import (
 )
 
 // Constraints and unique indexes whose violation has a domain meaning beyond
-// "duplicate key" (see migrations/00001_core.sql).
+// "duplicate key" (see migrations/00001_core.sql and 00006).
 const (
 	constraintAccountEmail     = "accounts_email_key"
 	constraintAccountPerson    = "accounts_person_id_key"
@@ -23,17 +23,26 @@ const (
 	constraintClassMember      = "class_members_pkey"
 	constraintLessonClassStart = "lessons_class_start_key"
 	constraintActiveBooking    = "bookings_one_active_key"
+	constraintLocationName     = "locations_name_key"
+	constraintRoomName         = "rooms_location_name_key"
 )
 
-// conflictMessages describes the unique constraints above. Other unique and
-// foreign key violations get a generic message naming the constraint.
-var conflictMessages = map[string]string{
-	constraintAccountEmail:     "account email is taken",
-	constraintAccountPerson:    "person already has an account",
-	constraintGuardianLink:     "guardian link exists",
-	constraintClassMember:      "person is already a member of the class",
-	constraintLessonClassStart: "class already has a lesson at this start",
-	constraintActiveBooking:    "person already has an active booking for the lesson",
+// conflicts describes the unique constraints above: the message, and the
+// error it wraps (domain.ErrDuplicate for the unique names of ADR 0007).
+// Other unique and foreign key violations get a generic message naming the
+// constraint.
+var conflicts = map[string]struct {
+	msg string
+	err error
+}{
+	constraintAccountEmail:     {"account email is taken", domain.ErrConflict},
+	constraintAccountPerson:    {"person already has an account", domain.ErrConflict},
+	constraintGuardianLink:     {"guardian link exists", domain.ErrConflict},
+	constraintClassMember:      {"person is already a member of the class", domain.ErrConflict},
+	constraintLessonClassStart: {"class already has a lesson at this start", domain.ErrConflict},
+	constraintActiveBooking:    {"person already has an active booking for the lesson", domain.ErrConflict},
+	constraintLocationName:     {"location name is taken", domain.ErrDuplicate},
+	constraintRoomName:         {"room name is taken at the location", domain.ErrDuplicate},
 }
 
 // retryableError reports a serialization failure or deadlock. InTx retries
@@ -123,8 +132,8 @@ func mapErr(err error) error {
 func mapPgError(e *pgconn.PgError) error {
 	switch {
 	case e.Code == pgerrcode.UniqueViolation || e.Code == pgerrcode.ExclusionViolation:
-		if msg, ok := conflictMessages[e.ConstraintName]; ok {
-			return fmt.Errorf("%s: %w", msg, domain.ErrConflict)
+		if c, ok := conflicts[e.ConstraintName]; ok {
+			return fmt.Errorf("%s: %w", c.msg, c.err)
 		}
 
 		return fmt.Errorf("duplicate key (%s): %w", e.ConstraintName, domain.ErrConflict)

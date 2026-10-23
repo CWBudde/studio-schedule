@@ -145,6 +145,7 @@ func TestMapErr(t *testing.T) {
 		want error
 	}{
 		"unique":             {pg(pgerrcode.UniqueViolation, constraintAccountEmail), domain.ErrConflict},
+		"duplicate name":     {pg(pgerrcode.UniqueViolation, constraintRoomName), domain.ErrDuplicate},
 		"foreign key":        {pg(pgerrcode.ForeignKeyViolation, "rooms_location_id_fkey"), domain.ErrConflict},
 		"restrict":           {pg(pgerrcode.RestrictViolation, "rooms_location_id_fkey"), domain.ErrConflict},
 		"check":              {pg(pgerrcode.CheckViolation, "rooms_capacity_check"), domain.ErrValidation},
@@ -204,7 +205,7 @@ func TestConstraintNamesExist(t *testing.T) {
 
 	st := newTestStore(t)
 
-	for name := range conflictMessages {
+	for name := range conflicts {
 		var n int
 
 		err := st.pool.QueryRow(t.Context(), `SELECT
@@ -399,6 +400,59 @@ func TestRetry(t *testing.T) {
 	})
 }
 
+// TestUniqueNamesMigration upgrades a database whose names differ only in
+// case: the first keeps its name, the others get their ID appended.
+func TestUniqueNamesMigration(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	m, err := NewMigrator(newTestDatabase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = m.Close() })
+
+	if res, err := m.Down(ctx); err != nil || res.Name != "00006_catalog_unique_names.sql" {
+		t.Fatalf("down = %+v, %v; want 00006 rolled back", res, err)
+	}
+
+	const (
+		loc1, loc2   = "00000000-0000-7000-8000-000000000001", "00000000-0000-7000-8000-000000000002"
+		room1, room2 = "00000000-0000-7000-8000-000000000011", "00000000-0000-7000-8000-000000000012"
+		room3        = "00000000-0000-7000-8000-000000000013"
+	)
+
+	if _, err := m.db.ExecContext(ctx,
+		`INSERT INTO locations (id, name) VALUES ($1, 'Hall'), ($2, 'HALL')`, loc1, loc2); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := m.db.ExecContext(ctx, `INSERT INTO rooms (id, location_id, name, capacity)
+		VALUES ($1, $4, 'Studio', 5), ($2, $4, 'studio', 5), ($3, $5, 'Studio', 5)`,
+		room1, room2, room3, loc1, loc2); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := m.Up(ctx); err != nil {
+		t.Fatalf("up: %v", err)
+	}
+
+	for id, want := range map[string]string{
+		loc1: "Hall", loc2: "HALL (" + loc2 + ")",
+		room1: "Studio", room2: "studio (" + room2 + ")", room3: "Studio",
+	} {
+		var name string
+
+		err := m.db.QueryRowContext(ctx,
+			`SELECT name FROM locations WHERE id = $1 UNION ALL SELECT name FROM rooms WHERE id = $1`, id).Scan(&name)
+		if err != nil || name != want {
+			t.Errorf("name of %s = %q, %v; want %q", id, name, err, want)
+		}
+	}
+}
+
 // TestRetryAfterDeadlock provokes a real deadlock: two transactions lock two
 // lessons in opposite order. PostgreSQL aborts one of them, InTx retries it,
 // and both succeed.
@@ -506,7 +560,9 @@ func createLesson(t *testing.T, st *Store, seq *ids.Sequence, offset time.Durati
 	t.Helper()
 
 	start := time.Date(2026, time.March, 2, 9, 0, 0, 0, time.UTC).Add(offset)
-	loc := domain.Location{ID: ids.New[domain.LocationID](seq), Name: "North Studio"}
+	// Location names are unique; each lesson gets its own location.
+	locID := ids.New[domain.LocationID](seq)
+	loc := domain.Location{ID: locID, Name: "Studio " + locID.String()}
 	room := domain.Room{ID: ids.New[domain.RoomID](seq), LocationID: loc.ID, Name: "Room A", Capacity: 10}
 	staff := domain.Staff{ID: ids.New[domain.StaffID](seq), DisplayName: "Instructor", Kind: domain.StaffInstructor}
 	ct := domain.CourseType{ID: ids.New[domain.CourseTypeID](seq), Name: "Ballet"}

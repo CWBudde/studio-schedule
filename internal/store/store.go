@@ -208,6 +208,8 @@ type AccountTokenRepo interface {
 // LocationRepo stores locations.
 type LocationRepo interface {
 	Get(ctx context.Context, id domain.LocationID) (domain.Location, error)
+	// Create and Update fail with domain.ErrDuplicate if another location
+	// has the name, ignoring ASCII case.
 	Create(ctx context.Context, l domain.Location) error
 	Update(ctx context.Context, l domain.Location) error
 	// Delete fails with domain.ErrConflict while rooms belong to the
@@ -220,7 +222,9 @@ type LocationRepo interface {
 // RoomRepo stores rooms.
 type RoomRepo interface {
 	Get(ctx context.Context, id domain.RoomID) (domain.Room, error)
-	// Create fails with domain.ErrConflict if the location does not exist.
+	// Create and Update fail with domain.ErrConflict if the location does
+	// not exist, and with domain.ErrDuplicate if another room of the
+	// location has the name, ignoring ASCII case.
 	Create(ctx context.Context, r domain.Room) error
 	Update(ctx context.Context, r domain.Room) error
 	// Delete fails with domain.ErrConflict while classes or lessons use the

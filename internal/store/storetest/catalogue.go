@@ -103,7 +103,7 @@ func testCatalogue(t *testing.T, newStore func(*testing.T) store.Store) {
 
 	cases(t, newStore, map[string]func(e *env){
 		"ListOrder": func(e *env) {
-			lb, la := e.location("b-Studio"), e.location("B-Studio")
+			lb, la := e.location("b-Studio"), e.location("C-Studio")
 			wantSlice(e.t, mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Location, error) {
 				return tx.Locations().List(ctx)
 			}), []domain.Location{la, lb})
@@ -125,6 +125,33 @@ func testCatalogue(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantSlice(e.t, mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.CourseType, error) {
 				return tx.CourseTypes().List(ctx)
 			}), []domain.CourseType{c1, c2})
+		},
+		"DuplicateNames": func(e *env) {
+			main, other := e.location("Main Hall"), e.location("Side Hall")
+
+			dup := domain.Location{ID: newID[domain.LocationID](e), Name: "main HALL"}
+			wantErr(e.t, e.write(func(ctx context.Context, tx store.Tx) error { return tx.Locations().Create(ctx, dup) }), domain.ErrDuplicate)
+
+			other.Name = "MAIN hall"
+			wantErr(e.t, e.write(func(ctx context.Context, tx store.Tx) error { return tx.Locations().Update(ctx, other) }), domain.ErrDuplicate)
+
+			// A location keeps its own name in another case.
+			main.Name = "MAIN HALL"
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Locations().Update(ctx, main) })
+
+			// Room names are unique per location only.
+			room := e.room(main, "Studio 1")
+			e.room(other, "Studio 1")
+
+			dupRoom := domain.Room{ID: newID[domain.RoomID](e), LocationID: main.ID, Name: "studio 1", Capacity: 4}
+			wantErr(e.t, e.write(func(ctx context.Context, tx store.Tx) error { return tx.Rooms().Create(ctx, dupRoom) }), domain.ErrDuplicate)
+
+			moved := e.room(other, "Studio 2")
+			moved.LocationID, moved.Name = main.ID, "STUDIO 1"
+			wantErr(e.t, e.write(func(ctx context.Context, tx store.Tx) error { return tx.Rooms().Update(ctx, moved) }), domain.ErrDuplicate)
+
+			room.Capacity = 30
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Rooms().Update(ctx, room) })
 		},
 		"MissingReferenceIsConflict": func(e *env) {
 			room := domain.Room{ID: newID[domain.RoomID](e), LocationID: newID[domain.LocationID](e), Name: "Nowhere", Capacity: 1}

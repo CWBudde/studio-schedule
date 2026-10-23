@@ -21,10 +21,11 @@ func conflict(format string, args ...any) error {
 // compareID orders IDs by their bytes, like PostgreSQL orders uuid values.
 func compareID[I domain.AnyID](a, b I) int { return uuid.UUID(a).Compare(uuid.UUID(b)) }
 
-// foldEmail lower-cases ASCII letters only, like PostgreSQL's lower() under
-// collation "C" (the collation of the email column). Other letters
-// keep their case, so "Ä" and "ä" are different emails in both stores.
-func foldEmail(s string) string {
+// foldASCII lower-cases ASCII letters only, like PostgreSQL's lower() under
+// collation "C" (the collation of the email and name columns). Other letters
+// keep their case, so "Ä" and "ä" are different emails, or names, in both
+// stores.
+func foldASCII(s string) string {
 	return strings.Map(func(r rune) rune {
 		if 'A' <= r && r <= 'Z' {
 			return r + 'a' - 'A'
@@ -33,6 +34,10 @@ func foldEmail(s string) string {
 		return r
 	}, s)
 }
+
+// sameName reports whether two names are equal ignoring case, like the
+// unique lower(name) indexes of the PostgreSQL store.
+func sameName(a, b string) bool { return foldASCII(a) == foldASCII(b) }
 
 // sorted sorts s in place and returns it.
 func sorted[T any](s []T, cmpFn func(a, b T) int) []T {
@@ -199,7 +204,7 @@ func (r accountRepo) Get(_ context.Context, id domain.AccountID) (domain.Account
 }
 
 func (r accountRepo) GetByEmail(_ context.Context, email string) (domain.Account, error) {
-	found := r.tx.state.accounts.filter(func(a domain.Account) bool { return foldEmail(a.Email) == foldEmail(email) })
+	found := r.tx.state.accounts.filter(func(a domain.Account) bool { return foldASCII(a.Email) == foldASCII(email) })
 	if len(found) == 0 {
 		return domain.Account{}, notFound("account")
 	}
@@ -237,7 +242,7 @@ func (r accountRepo) put(a domain.Account) error {
 	switch {
 	case !s.persons.has(a.PersonID):
 		return conflict("account references a missing person")
-	case s.accounts.exists(func(o domain.Account) bool { return o.ID != a.ID && foldEmail(o.Email) == foldEmail(a.Email) }):
+	case s.accounts.exists(func(o domain.Account) bool { return o.ID != a.ID && foldASCII(o.Email) == foldASCII(a.Email) }):
 		return conflict("account email is taken")
 	case s.accounts.exists(func(o domain.Account) bool { return o.ID != a.ID && o.PersonID == a.PersonID }):
 		return conflict("person already has an account")
@@ -252,7 +257,7 @@ func (r accountRepo) put(a domain.Account) error {
 
 func (r accountRepo) List(context.Context) ([]domain.Account, error) {
 	return sorted(r.tx.state.accounts.filter(all), func(a, b domain.Account) int {
-		return cmp.Or(strings.Compare(foldEmail(a.Email), foldEmail(b.Email)), compareID(a.ID, b.ID))
+		return cmp.Or(strings.Compare(foldASCII(a.Email), foldASCII(b.Email)), compareID(a.ID, b.ID))
 	}), nil
 }
 
@@ -279,28 +284,33 @@ func (r locationRepo) Get(_ context.Context, id domain.LocationID) (domain.Locat
 }
 
 func (r locationRepo) Create(_ context.Context, l domain.Location) error {
-	s := &r.tx.state
 	if err := r.tx.checkWritable(); err != nil {
 		return err
 	}
 
-	if s.locations.has(l.ID) {
+	if r.tx.state.locations.has(l.ID) {
 		return conflict("location %s exists", l.ID)
 	}
 
-	s.locations.put(r.tx.gen, l.ID, l)
-
-	return nil
+	return r.put(l)
 }
 
 func (r locationRepo) Update(_ context.Context, l domain.Location) error {
-	s := &r.tx.state
 	if err := r.tx.checkWritable(); err != nil {
 		return err
 	}
 
-	if !s.locations.has(l.ID) {
+	if !r.tx.state.locations.has(l.ID) {
 		return notFound("location")
+	}
+
+	return r.put(l)
+}
+
+func (r locationRepo) put(l domain.Location) error {
+	s := &r.tx.state
+	if s.locations.exists(func(o domain.Location) bool { return o.ID != l.ID && sameName(o.Name, l.Name) }) {
+		return fmt.Errorf("location name is taken: %w", domain.ErrDuplicate)
 	}
 
 	s.locations.put(r.tx.gen, l.ID, l)
@@ -368,11 +378,18 @@ func (r roomRepo) Update(_ context.Context, rm domain.Room) error {
 }
 
 func (r roomRepo) put(rm domain.Room) error {
-	if !r.tx.state.locations.has(rm.LocationID) {
+	s := &r.tx.state
+	if !s.locations.has(rm.LocationID) {
 		return conflict("room references a missing location")
 	}
 
-	r.tx.state.rooms.put(r.tx.gen, rm.ID, rm)
+	if s.rooms.exists(func(o domain.Room) bool {
+		return o.ID != rm.ID && o.LocationID == rm.LocationID && sameName(o.Name, rm.Name)
+	}) {
+		return fmt.Errorf("room name is taken at the location: %w", domain.ErrDuplicate)
+	}
+
+	s.rooms.put(r.tx.gen, rm.ID, rm)
 
 	return nil
 }
