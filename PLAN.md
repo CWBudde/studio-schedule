@@ -120,6 +120,11 @@ Goal: a production-grade persistence layer with two interchangeable implementati
       `internal/ids`. partial: inject `ids.Source` via `app.Deps` (server: `V7`, demo seed:
       `Sequence`) together with the first service that creates entities
 - [ ] Domain entities and validation for all tables in the domain model (no behaviour yet)
+      (2026-10-23) — plain structs with `Validate()` for every business table, string enums with
+      `Valid()`, value types `Money`/`Date`/`TimeOfDay`, `Settings` extended (currency, receipt
+      prefix, release rule, cutoffs, visible days); conventions in ADR 0002. `sessions`,
+      `password_resets`, `outbox_emails` and `receipt_counters` arrive with Phases 3/6/7.
+      partial: visible in the demo with the seed dataset
 - [ ] `store` interfaces per aggregate. Explicit ordering on every list method, no generic query
       builder
   - [ ] `InTx(ctx, mode, fn)`. Document the "never nest InTx" rule; internal helpers take a `Tx`
