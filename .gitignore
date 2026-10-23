@@ -17,6 +17,8 @@ web/dist/
 .vite/
 playwright-report/
 test-results/
+# Playwright MCP snapshots and screenshots
+.playwright-mcp/
 
 # Env / local
 .env
