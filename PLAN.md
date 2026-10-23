@@ -85,29 +85,29 @@ Goal: the repository, tooling, CI and a live GitHub Pages demo exist. The demo p
 from the React UI through the Web Worker and the WASM bridge to the Go handler, the service and the
 in-memory store.
 
-- [ ] Repository `CWBudde/studio-schedule` (public, MIT), `.gitignore`, `.editorconfig`
-- [ ] PLAN.md, README.md (incl. live-demo note), CLAUDE.md/AGENTS.md, docs/ (architecture, demo mode,
+- [x] Repository `CWBudde/studio-schedule` (public, MIT), `.gitignore`, `.editorconfig`
+- [x] PLAN.md, README.md (incl. live-demo note), CLAUDE.md/AGENTS.md, docs/ (architecture, demo mode,
       glossary, decision records)
-- [ ] Go module `github.com/cwbudde/studio-schedule` with the layout above
-  - [ ] `domain` (Settings, Role, errors), `clock`, `store` interfaces, `storetest`, `store/memory`
-  - [ ] `service.SettingsService`, `httpapi` (chi + Huma): `GET /api/v1/health`,
+- [x] Go module `github.com/cwbudde/studio-schedule` with the layout above
+  - [x] `domain` (Settings, Role, errors), `clock`, `store` interfaces, `storetest`, `store/memory`
+  - [x] `service.SettingsService`, `httpapi` (chi + Huma): `GET /api/v1/health`,
         `GET /api/v1/settings/public`, OpenAPI at `/api/v1/openapi.json`, docs at `/api/v1/docs`
-  - [ ] `app.New` with recover middleware and `http.CrossOriginProtection`
-  - [ ] `cmd/studio-schedule` (serve, openapi, version), `internal/webui` (embedded UI with SPA
+  - [x] `app.New` with recover middleware and `http.CrossOriginProtection`
+  - [x] `cmd/studio-schedule` (serve, openapi, version), `internal/webui` (embedded UI with SPA
         fallback)
-  - [ ] `cmd/wasm` + `internal/wasmbridge`: Promise-based `StudioScheduleAPI.fetch`, a goroutine per
+  - [x] `cmd/wasm` + `internal/wasmbridge`: Promise-based `StudioScheduleAPI.fetch`, a goroutine per
         request, panic recovery, a custom ResponseWriter, `time/tzdata`
-- [ ] Web app `web/`: React 19, Vite, TS strict, Tailwind v4, shadcn/ui, TanStack Router + Query,
+- [x] Web app `web/`: React 19, Vite, TS strict, Tailwind v4, shadcn/ui, TanStack Router + Query,
       react-i18next (en, de), openapi-typescript + openapi-fetch
-  - [ ] Transport abstraction: `http` (dev proxy / same origin) or `wasm` (Web Worker + cookie jar)
-  - [ ] Loading screen, crash screen, demo banner, language switcher, home page with health and
+  - [x] Transport abstraction: `http` (dev proxy / same origin) or `wasm` (Web Worker + cookie jar)
+  - [x] Loading screen, crash screen, demo banner, language switcher, home page with health and
         settings
-  - [ ] ESLint, Prettier, Vitest
-- [ ] Tooling: justfile, treefmt, golangci-lint v2 (incl. forbidigo for `time.Local`), WASM build
+  - [x] ESLint, Prettier, Vitest
+- [x] Tooling: justfile, treefmt, golangci-lint v2 (incl. forbidigo for `time.Local`), WASM build
       script, WASM dependency guard, `error-on-diff` checks (tidy, format, generated)
-- [ ] GitHub Actions: `tests` (lint, format, unit, web + WASM build/size/smoke), PR-title check,
+- [x] GitHub Actions: `tests` (lint, format, unit, web + WASM build/size/smoke), PR-title check,
       release-please, Pages deploy
-- [ ] Live demo at https://cwbudde.github.io/studio-schedule/
+- [x] Live demo at https://cwbudde.github.io/studio-schedule/
 
 ## Phase 1 — Domain & storage foundation
 
