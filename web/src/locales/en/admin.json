@@ -157,7 +157,12 @@
     "notFound": "This staff member no longer exists.",
     "deleteTitle": "Delete {{name}}?",
     "deleteDescription": "The staff member is deleted for good. Staff who teach classes or lessons cannot be deleted; deactivate them instead.",
-    "inUse": "{{name}} still teaches classes or lessons, so they cannot be deleted. Deactivate them instead: they leave the public lists but stay on their lessons."
+    "deleteDescriptionInactive": "The staff member is deleted for good. Staff who teach classes or lessons cannot be deleted.",
+    "inUse": "{{name}} still teaches classes or lessons, so they cannot be deleted. Deactivate them instead: they leave the public lists but stay on their lessons.",
+    "inUseInactive": "{{name}} still teaches classes or lessons, so they cannot be deleted. They are inactive already: they stay on their lessons but not in the public lists.",
+    "deactivate": "Deactivate instead",
+    "deactivating": "Deactivating…",
+    "deactivated": "{{name}} has been deactivated."
   },
   "personField": {
     "none": "No person",

@@ -214,22 +214,22 @@ test('a deactivated instructor leaves the schedule filter', async ({ page }) => 
   await openAdministration(page, office);
   await openSection(page, 'Staff');
 
-  // Staff who teach cannot be deleted; the dialog suggests deactivating them.
+  // Staff who teach cannot be deleted; the dialog deactivates them instead.
   await page.getByRole('button', { name: 'Delete Nina Tapworth' }).click();
   const dialog = page.getByRole('alertdialog', { name: 'Delete Nina Tapworth?' });
   await dialog.getByRole('button', { name: 'Delete' }).click();
   await expect(dialog.getByRole('alert')).toContainText('Deactivate them instead');
-  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await dialog.getByRole('button', { name: 'Deactivate instead' }).click();
   await expect(dialog).toBeHidden();
+  await expect(page.getByText('Nina Tapworth has been deactivated.')).toBeVisible();
 
+  // Only the active flag changed.
   await page.getByRole('button', { name: 'Edit Nina Tapworth' }).click();
   const sheet = page.getByRole('dialog', { name: 'Edit Nina Tapworth' });
   await expect(sheet.getByRole('combobox', { name: 'Role' })).toHaveText('Instructor');
-  await sheet.getByRole('switch', { name: 'Active' }).click();
   await expect(sheet.getByRole('switch', { name: 'Active' })).not.toBeChecked();
-  await sheet.getByRole('button', { name: 'Save changes' }).click();
+  await sheet.getByRole('button', { name: 'Cancel' }).click();
   await expect(sheet).toBeHidden();
-  await expect(page.getByText('Nina Tapworth has been saved.')).toBeVisible();
 
   // The office still lists former staff.
   await page.getByRole('radio', { name: 'Inactive' }).click();

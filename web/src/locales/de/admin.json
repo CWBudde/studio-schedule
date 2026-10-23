@@ -157,7 +157,12 @@
     "notFound": "Dieses Mitglied des Personals gibt es nicht mehr.",
     "deleteTitle": "{{name}} löschen?",
     "deleteDescription": "Der Eintrag wird endgültig gelöscht. Wer Kurse oder Stunden unterrichtet, kann nicht gelöscht werden; deaktiviere den Eintrag stattdessen.",
-    "inUse": "{{name}} unterrichtet noch Kurse oder Stunden und kann daher nicht gelöscht werden. Deaktiviere den Eintrag stattdessen: Er verschwindet dann aus den öffentlichen Listen, bleibt aber bei den Stunden eingetragen."
+    "deleteDescriptionInactive": "Der Eintrag wird endgültig gelöscht. Wer Kurse oder Stunden unterrichtet, kann nicht gelöscht werden.",
+    "inUse": "{{name}} unterrichtet noch Kurse oder Stunden und kann daher nicht gelöscht werden. Deaktiviere den Eintrag stattdessen: Er verschwindet dann aus den öffentlichen Listen, bleibt aber bei den Stunden eingetragen.",
+    "inUseInactive": "{{name}} unterrichtet noch Kurse oder Stunden und kann daher nicht gelöscht werden. Der Eintrag ist bereits inaktiv: Er bleibt bei den Stunden eingetragen, aber nicht in den öffentlichen Listen.",
+    "deactivate": "Stattdessen deaktivieren",
+    "deactivating": "Wird deaktiviert…",
+    "deactivated": "{{name}} wurde deaktiviert."
   },
   "personField": {
     "none": "Keine Person",

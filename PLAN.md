@@ -334,7 +334,7 @@ Goal: people can sign up and log in; staff can maintain the timetable.
         (inactive staff disappear from the public lists and filters, stay on past lessons);
         `/admin/staff` (2026-10-24) — `listAllStaff`, `createStaff`, `updateStaff` (`active` and
         `personId` in the body; an unknown person is a 422 on `personId`), `deleteStaff` only while
-        unused (409 `in-use` suggests deactivating; ADR 0007); deactivating is allowed while they
+        unused (on a 409 `in-use` the dialog deactivates them in one click; ADR 0007); deactivating is allowed while they
         teach, and `listClasses` now names instructor and accompanist itself so the timetable
         still shows them; `/admin/staff` with an active switch, an All/Active/Inactive filter and
         a person combobox; e2e: a deactivated instructor leaves the schedule filter

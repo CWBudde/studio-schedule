@@ -625,6 +625,24 @@ export const updateStaffMutation = (queryClient: QueryClient) =>
     onError: onCatalogueError(queryClient),
   });
 
+/**
+ * Deactivates a staff member (office), keeping their name, kind and person:
+ * the way out when they cannot be deleted because they still teach.
+ */
+export const deactivateStaffMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: async ({ id, displayName, kind, person }: StaffEntry) => {
+      await unwrap(
+        api.PUT('/api/v1/staff/{staffId}', {
+          params: { path: { staffId: id } },
+          body: { displayName, kind, active: false, ...(person ? { personId: person.id } : {}) },
+        }),
+      );
+    },
+    onSuccess: () => refreshCatalogue(queryClient),
+    onError: onCatalogueError(queryClient),
+  });
+
 /** Deletes a staff member (office); one that classes or lessons refer to is a 409 `in-use`. */
 export const deleteStaffMutation = (queryClient: QueryClient) =>
   mutationOptions({

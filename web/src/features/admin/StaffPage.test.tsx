@@ -275,6 +275,71 @@ describe('StaffPage', () => {
     });
   });
 
+  it('deactivates a staff member who still teaches in one click', async () => {
+    let deactivated = false;
+    mockApiGet({
+      ...asOffice,
+      '/api/v1/admin/staff': () => ({
+        body: {
+          items: staffEntries.map((s) =>
+            s.id === ids.staffAlex && deactivated ? { ...s, active: false } : s,
+          ),
+        },
+      }),
+    });
+    mockApiDelete({ '/api/v1/staff/{staffId}': conflict('in-use', 'staff in use') });
+    const put = mockApiPut({
+      '/api/v1/staff/{staffId}': ({ body }) => {
+        deactivated = true;
+        return { body: { id: ids.staffAlex, ...(body as object) } };
+      },
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(
+      (await row('Alex Example')).getByRole('button', { name: 'Delete Alex Example' }),
+    );
+    const dialog = within(await screen.findByRole('alertdialog', { name: 'Delete Alex Example?' }));
+    await user.click(dialog.getByRole('button', { name: 'Delete' }));
+    await user.click(await dialog.findByRole('button', { name: 'Deactivate instead' }));
+
+    expect(await screen.findByText('Alex Example has been deactivated.')).toBeInTheDocument();
+    // The name, role and person stay as they are.
+    expect(put).toHaveBeenCalledWith('/api/v1/staff/{staffId}', {
+      params: { path: { staffId: ids.staffAlex } },
+      body: {
+        displayName: 'Alex Example',
+        kind: 'instructor',
+        personId: ids.personAlex,
+        active: false,
+      },
+    });
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(await (await row('Alex Example')).findByText('Inactive')).toBeInTheDocument();
+  });
+
+  it('offers no deactivation for inactive staff who still teach', async () => {
+    mockApiGet(asOffice);
+    mockApiDelete({ '/api/v1/staff/{staffId}': conflict('in-use', 'staff in use') });
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(
+      (await row('Quinn Former')).getByRole('button', { name: 'Delete Quinn Former' }),
+    );
+    const dialog = within(await screen.findByRole('alertdialog', { name: 'Delete Quinn Former?' }));
+    await user.click(dialog.getByRole('button', { name: 'Delete' }));
+
+    expect(dialog.getByText(/^The staff member is deleted for good\./)).not.toHaveTextContent(
+      'deactivate',
+    );
+    expect(await dialog.findByRole('alert')).toHaveTextContent(
+      'Quinn Former still teaches classes or lessons, so they cannot be deleted. They are inactive already: they stay on their lessons but not in the public lists.',
+    );
+    expect(dialog.queryByRole('button', { name: 'Deactivate instead' })).not.toBeInTheDocument();
+  });
+
   it('deletes a staff member nothing refers to', async () => {
     let deleted = false;
     mockApiGet({

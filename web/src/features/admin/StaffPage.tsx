@@ -2,7 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 import { UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { allStaffQuery, deleteStaffMutation, type StaffEntry } from '@/api/queries';
+import {
+  allStaffQuery,
+  deactivateStaffMutation,
+  deleteStaffMutation,
+  type StaffEntry,
+} from '@/api/queries';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -133,14 +138,24 @@ export function StaffPage() {
         target={deleting}
         id={(s) => s.id}
         mutation={deleteStaffMutation}
-        texts={({ displayName: name }) => ({
+        texts={({ displayName: name, active }) => ({
           title: t('staff.deleteTitle', { name }),
-          description: t('staff.deleteDescription'),
+          description: active ? t('staff.deleteDescription') : t('staff.deleteDescriptionInactive'),
           // Suggests deactivating a staff member who still teaches.
-          inUse: t('staff.inUse', { name }),
+          inUse: active ? t('staff.inUse', { name }) : t('staff.inUseInactive', { name }),
           notFound: t('staff.notFound'),
           deleted: t('staff.deleted', { name }),
         })}
+        inUseAction={({ displayName: name, active }) =>
+          active
+            ? {
+                label: t('staff.deactivate'),
+                pending: t('staff.deactivating'),
+                done: t('staff.deactivated', { name }),
+                mutation: deactivateStaffMutation,
+              }
+            : undefined
+        }
         onClose={() => setDeleting(null)}
       />
     </div>
