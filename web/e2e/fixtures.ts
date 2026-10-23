@@ -19,7 +19,7 @@ export const test = base.extend<{ failOnPageErrors: void }>({
   ],
 });
 
-export { expect };
+export { expect, type Page };
 
 /**
  * Opens a route of the demo (`path` is the hash route, e.g. `/schedule?view=week`,

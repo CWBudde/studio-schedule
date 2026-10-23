@@ -1,15 +1,33 @@
-import { addDays, expect, gotoDemo, hashSearch, lessons, test } from './fixtures';
+import { addDays, expect, gotoDemo, hashSearch, lessons, type Page, test } from './fixtures';
+
+/**
+ * Opens the list on the 14 days before today. How much of the coming days is
+ * released depends on the weekday (on Sunday before the 18:00 release, only
+ * the early workshops are), but the past days of the demo term always are.
+ */
+async function gotoPastFortnight(page: Page): Promise<void> {
+  await gotoDemo(page, '/schedule');
+  await page.getByRole('button', { name: 'Previous 14 days' }).click();
+  await expect(lessons(page.getByRole('main')).first()).toBeVisible();
+}
 
 test.describe('list view', () => {
-  test('shows the released lessons of the next 14 days by day', async ({ page }) => {
+  test('shows the released lessons of the next 14 days', async ({ page }) => {
     await gotoDemo(page, '/schedule');
 
     const main = page.getByRole('main');
     await expect(lessons(main).first()).toBeVisible();
-    // Day headings (h2) group the cards; the page heading is the only h1.
-    expect(await main.getByRole('heading', { level: 2 }).count()).toBeGreaterThan(1);
     await expect(page.getByRole('button', { name: 'Today' })).toBeDisabled();
     await expect(main.getByText(/^Classes are published through /)).toBeVisible();
+  });
+
+  test('groups the lessons by day', async ({ page }) => {
+    await gotoPastFortnight(page);
+
+    // Day headings (h2) group the cards; the page heading is the only h1.
+    const main = page.getByRole('main');
+    expect(await main.getByRole('heading', { level: 2 }).count()).toBeGreaterThan(1);
+    await expect(main.getByText(/^Classes are published through /)).toBeHidden();
   });
 
   test('shows workshops beyond the release window', async ({ page }) => {
@@ -35,18 +53,19 @@ test.describe('list view', () => {
 
     const timer = page.getByRole('timer');
     await expect(timer).toHaveText(/^Next release in /);
-    const before = await timer.textContent();
+    const before = (await timer.textContent()) ?? '';
 
-    // Far from the release it counts in days and hours.
-    await page.clock.fastForward('02:00:00');
+    // Skip one step of the smallest unit shown, so the jump never reaches the
+    // release itself (the backend's clock in the Worker is not faked).
+    const step = /day/.test(before) ? '01:00:00' : /hour/.test(before) ? '01:00' : '00:02';
+    await page.clock.fastForward(step);
 
-    await expect(timer).not.toHaveText(before ?? '');
+    await expect(timer).not.toHaveText(before);
   });
 
   test('filters by course type and resets', async ({ page }) => {
-    await gotoDemo(page, '/schedule');
+    await gotoPastFortnight(page);
     const main = page.getByRole('main');
-    await expect(lessons(main).first()).toBeVisible();
     const all = await lessons(main).count();
 
     // Pick the course type of the first card.
@@ -69,6 +88,7 @@ test.describe('list view', () => {
     await page.getByRole('button', { name: 'Reset filters' }).click();
 
     expect(hashSearch(page).has('courseType')).toBe(false);
+    expect(hashSearch(page).has('from')).toBe(true);
     await expect(lessons(main)).toHaveCount(all);
   });
 
