@@ -170,30 +170,33 @@ Goal: a production-grade persistence layer with two interchangeable implementati
       the PostgreSQL contract tests via testcontainers on the runner's Docker; `test-format` runs
       `just check-sqlc`
 
-## Phase 2 — Public schedule (read-only)
+## Phase 2 — Public schedule (read-only) — ✅ DONE (2026-10-23)
 
 Goal: anyone can browse the published timetable. This is the first real demo value.
 
 - [x] Catalogue services and endpoints (read): locations, rooms, staff, course types (2026-10-23)
       — `listLocations`, `listRooms`, `listStaff` (active, no person), `listCourseTypes`; the
       schedule filters list locations, staff and course types
-- [ ] Terms and classes (read). Lesson generation from class templates for a date range: idempotent
+- [x] Terms and classes (read). Lesson generation from class templates for a date range: idempotent
       (unique `(class_id, starts_at)`), DST-correct, respects term and class validity ranges
       (2026-10-23) — `listTerms`, `listClasses`; `LessonGenerator` at school wall-clock time
       (`Date.At`), reads existing lessons first, inclusive term range (classes have no range of
-      their own, ADR 0003); the demo's schedule shows the generated lessons. partial: `listTerms`
-      and `listClasses` have no UI yet (a term or class overview)
-- [ ] Release window: settings `release_weekday`, `release_time`, `release_weeks_ahead`; lessons
+      their own, ADR 0003); the demo's schedule shows the generated lessons; `/classes` (header
+      link "Classes") lists the terms and the weekly classes of the chosen term (`?term=`, default
+      the current one), Monday first, with time, level, room and staff
+- [x] Release window: settings `release_weekday`, `release_time`, `release_weeks_ahead`; lessons
       beyond the window are invisible to members; special lessons can be published early; per-account
       visible-days override (used later) (2026-10-23) — server-only `ComputeReleaseWindow`: released
       through the release weekday N weeks after the last release (ADR 0003); one-off lessons and
       workshops are published early; the schedule counts down to the next release (server clock)
-      and says up to which day classes are published. partial: the per-account visible-days
-      override with accounts (Phase 3)
-- [ ] Visibility rules: `public | members | hidden`; cancelled lessons stay visible with a status
+      and says up to which day classes are published; visible days are _early access_: members
+      also see lessons up to today + N days (account override, else `DefaultVisibleDays`; never
+      less than released), returned as `visibleUntil`; lesson generation reaches the longest one
+- [x] Visibility rules: `public | members | hidden`; cancelled lessons stay visible with a status
       (2026-10-23) — guests see public, released lessons; invisible lessons are a 404 like unknown
-      ones; the demo shows canceled lessons struck through with their status. partial: members
-      and staff with accounts (Phase 3)
+      ones; the demo shows canceled lessons struck through with their status; members also see
+      `members` lessons, staff every lesson (hidden and unreleased), each with a badge; the demo
+      has one workshop for members and one hidden workshop
 - [x] `GET /api/v1/schedule?from&to&location&instructor&courseType&level`, `GET /api/v1/lessons/{id}`
       (2026-10-23) — `getSchedule` (≤ 42 days, filters, `releasedUntil`/`nextReleaseAt`/`now`) and
       `getLesson`, used by the schedule page and the lesson sheet; the WASM smoke test checks the
@@ -236,8 +239,12 @@ Goal: people can sign up and log in; staff can maintain the timetable.
       account has the pre-hashed password `demo-password`
 - [ ] Password reset (hashed single-use token with expiry); change password; change email with
       re-confirmation
-- [ ] RBAC middleware/helpers on Huma operations; admin impersonation ("login as") with audit and a
-      visible banner
+- [x] RBAC middleware/helpers on Huma operations; admin impersonation ("login as") with audit and a
+      visible banner (2026-10-23) — every operation is registered with an access level (`public`,
+      `signedIn`, `staff`, `office`, `admin`; `x-access` in the OpenAPI document), one middleware
+      answers 401/403, a test pins every level and calls every operation as every role; admins
+      sign in as non-admin accounts for at most an hour from `/admin/accounts`, a banner on every
+      page leads back, start and end go to `audit_events` (ADR 0005)
 - [ ] Login rate limiting, security headers (CSP, HSTS in production), consistent problem+json
       errors without internal details
 - [x] Mail: outbox table, worker, SMTP sender, EN/DE templates (`html/template` + text alternative);
@@ -250,14 +257,16 @@ Goal: people can sign up and log in; staff can maintain the timetable.
       lessons, clone day, clone week
 - [ ] UI: login, registration, confirm, reset; profile (person data, dependents, password, language);
       admin area with shadcn data tables and forms (react-hook-form + zod, schemas derived from the
-      OpenAPI types) (2026-10-23) — partial: login, registration and confirm pages and the signed-in
-      header are done; reset, profile and the admin area remain
+      OpenAPI types) (2026-10-23) — partial: login, registration and confirm pages, the signed-in
+      header and the admin account list (`/admin/accounts`, with "sign in as") are done; reset,
+      profile and the rest of the admin area remain
 - [x] Demo: login page lists demo accounts per role (member, instructor, office, admin)
       (2026-10-23) — `GET /api/v1/demo/logins` in demo installations (WASM demo, `serve` without a
       database); one click signs in
 - [ ] Tests: auth flows, RBAC matrix per endpoint, mail rendering snapshots, e2e (login, admin edits a
-      class) (2026-10-23) — partial: auth flow tests (service and HTTP), mail golden files and e2e
-      sign-in and registration exist; the RBAC matrix and "admin edits a class" remain
+      class) (2026-10-23) — partial: auth flow tests (service and HTTP), mail golden files, the RBAC
+      matrix (`internal/app/access_test.go`) and e2e sign-in, registration and impersonation exist;
+      "admin edits a class" remains
 
 ## Phase 4 — Booking & waiting list
 
