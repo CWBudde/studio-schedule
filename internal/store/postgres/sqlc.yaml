@@ -1,0 +1,15 @@
+# sqlc generates the typed query code in internal/sqlc from queries/ and the
+# goose migrations (only the Up parts are read). Run `just sqlc` after
+# changing either; the generated code is committed.
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: queries
+    gen:
+      go:
+        package: sqlc
+        out: internal/sqlc
+        sql_package: pgx/v5
+        output_db_file_name: db.go
+        output_models_file_name: models.go

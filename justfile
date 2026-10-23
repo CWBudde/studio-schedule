@@ -12,6 +12,7 @@ default:
 setup-deps:
     go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
     go install mvdan.cc/sh/v3/cmd/shfmt@v3.12.0
+    go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
     npm install -g prettier@3.7.4
 
 # Install web dependencies
@@ -55,6 +56,10 @@ check-wasm-deps:
 
 # ---------------------------------------------------------------- codegen
 
+# Regenerate the PostgreSQL query code (internal/store/postgres/internal/sqlc) after changing queries or migrations
+sqlc:
+    cd internal/store/postgres && sqlc generate
+
 # Regenerate api/openapi.json from the Go code and the TypeScript types from it
 gen-api:
     go run ./cmd/studio-schedule openapi > api/openapi.json
@@ -69,6 +74,10 @@ test:
 # Run Go tests with the race detector
 test-race:
     go test -race ./...
+
+# Run the PostgreSQL store tests (Docker container, or STUDIO_TEST_DATABASE_URL)
+test-pg *args:
+    go test -race -count=1 ./internal/store/postgres {{args}}
 
 # Run web checks (eslint, tsc, prettier) and unit tests
 web-check:

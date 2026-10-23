@@ -1,0 +1,424 @@
+package postgres
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/ids"
+	"github.com/cwbudde/studio-schedule/internal/store"
+	"github.com/cwbudde/studio-schedule/internal/store/storetest"
+)
+
+func TestContract(t *testing.T) {
+	t.Parallel()
+
+	storetest.Run(t, func(t *testing.T) store.Store { return newTestStore(t) })
+}
+
+func TestMigrationsRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dbURL := newTestDatabase(t) // already migrated up
+
+	m, err := NewMigrator(dbURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = m.Close() })
+
+	wantStatus := func(applied bool) {
+		t.Helper()
+
+		status, err := m.Status(ctx)
+		if err != nil {
+			t.Fatalf("status: %v", err)
+		}
+
+		if len(status) == 0 {
+			t.Fatal("status lists no migrations")
+		}
+
+		for _, s := range status {
+			if s.Applied != applied || s.Name == "" || s.Version == 0 || s.AppliedAt.IsZero() == applied {
+				t.Errorf("status %+v, want applied=%v", s, applied)
+			}
+		}
+	}
+	tables := func() int {
+		t.Helper()
+
+		var n int
+
+		err := m.db.QueryRowContext(ctx, `SELECT count(*) FROM information_schema.tables
+			WHERE table_schema = 'public' AND table_name <> 'goose_db_version'`).Scan(&n)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return n
+	}
+
+	wantStatus(true)
+
+	if n := tables(); n != 14 {
+		t.Fatalf("%d tables after up, want 14", n)
+	}
+
+	if res, err := m.Up(ctx); err != nil || len(res) != 0 {
+		t.Fatalf("second up = %+v, %v; want nothing to do", res, err)
+	}
+
+	for {
+		res, err := m.Down(ctx)
+		if errors.Is(err, ErrNoMigrationToRollBack) {
+			break
+		}
+
+		if err != nil {
+			t.Fatalf("down: %v", err)
+		}
+
+		if res.Direction != "down" || res.Name == "" {
+			t.Errorf("down result %+v", res)
+		}
+	}
+
+	wantStatus(false)
+
+	if n := tables(); n != 0 {
+		t.Fatalf("%d tables left after down, want 0", n)
+	}
+
+	res, err := m.Up(ctx)
+	if err != nil || len(res) == 0 || res[0].Direction != "up" {
+		t.Fatalf("up after down = %+v, %v", res, err)
+	}
+
+	wantStatus(true)
+
+	// The store works on the re-created schema.
+	st, err := Open(ctx, dbURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer st.Close()
+
+	p := domain.Person{ID: ids.New[domain.PersonID](ids.NewSequence()), GivenName: "Rita", FamilyName: "Roundtrip"}
+	if err := st.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return tx.Persons().Create(ctx, p)
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMapErr(t *testing.T) {
+	t.Parallel()
+
+	pg := func(code, constraint string) error {
+		return &pgconn.PgError{Code: code, ConstraintName: constraint, Message: "message from the server"}
+	}
+
+	for name, tc := range map[string]struct {
+		err  error
+		want error
+	}{
+		"unique":             {pg(pgerrcode.UniqueViolation, constraintAccountEmail), domain.ErrConflict},
+		"foreign key":        {pg(pgerrcode.ForeignKeyViolation, "rooms_location_id_fkey"), domain.ErrConflict},
+		"restrict":           {pg(pgerrcode.RestrictViolation, "rooms_location_id_fkey"), domain.ErrConflict},
+		"check":              {pg(pgerrcode.CheckViolation, "rooms_capacity_check"), domain.ErrValidation},
+		"not null":           {pg(pgerrcode.NotNullViolation, ""), domain.ErrValidation},
+		"out of range":       {pg(pgerrcode.NumericValueOutOfRange, ""), domain.ErrValidation},
+		"read-only":          {pg(pgerrcode.ReadOnlySQLTransaction, ""), store.ErrReadOnly},
+		"serialization":      {pg(pgerrcode.SerializationFailure, ""), domain.ErrConflict},
+		"deadlock":           {pg(pgerrcode.DeadlockDetected, ""), domain.ErrConflict},
+		"no rows":            {pgx.ErrNoRows, domain.ErrNotFound},
+		"other server error": {pg(pgerrcode.UndefinedTable, ""), nil},
+		"other error":        {errors.New("network down"), nil},
+		"context canceled":   {context.Canceled, context.Canceled},
+		"deadline":           {context.DeadlineExceeded, context.DeadlineExceeded},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got := mapErr(tc.err)
+			if got == nil {
+				t.Fatal("mapErr returned nil")
+			}
+
+			if tc.want != nil && !errors.Is(got, tc.want) {
+				t.Errorf("mapErr(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+
+			// Nothing above the store may see a driver error.
+			var pgErr *pgconn.PgError
+			if errors.As(got, &pgErr) || errors.Is(got, pgx.ErrNoRows) {
+				t.Errorf("mapErr(%v) = %v exposes the driver error", tc.err, got)
+			}
+		})
+	}
+
+	if mapErr(nil) != nil {
+		t.Error("mapErr(nil) != nil")
+	}
+
+	if got := mapErr(pg(pgerrcode.UniqueViolation, constraintAccountEmail)).Error(); !strings.Contains(got, "email") {
+		t.Errorf("unique violation of %s = %q, want a message about the email", constraintAccountEmail, got)
+	}
+}
+
+// TestConstraintNamesExist guards the constraint names that errors.go
+// relies on against renames in the migrations.
+func TestConstraintNamesExist(t *testing.T) {
+	t.Parallel()
+
+	st := newTestStore(t)
+
+	for name := range conflictMessages {
+		var n int
+
+		err := st.pool.QueryRow(t.Context(), `SELECT
+			(SELECT count(*) FROM pg_constraint WHERE conname = $1) +
+			(SELECT count(*) FROM pg_indexes WHERE schemaname = 'public' AND indexname = $1)`, name).Scan(&n)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if n == 0 {
+			t.Errorf("constraint or index %q does not exist", name)
+		}
+	}
+}
+
+func TestCheckViolationIsValidation(t *testing.T) {
+	t.Parallel()
+
+	st := newTestStore(t)
+	seq := ids.NewSequence()
+	p := domain.Person{ID: ids.New[domain.PersonID](seq), GivenName: "Selma", FamilyName: "Self"}
+
+	err := st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		if err := tx.Persons().Create(ctx, p); err != nil {
+			return err
+		}
+
+		// Guardian.Validate rejects this; the CHECK constraint is the backstop.
+		return tx.Persons().AddGuardian(ctx, domain.Guardian{GuardianID: p.ID, DependentID: p.ID})
+	})
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("self guardian: got %v, want ErrValidation", err)
+	}
+}
+
+func TestRetry(t *testing.T) {
+	t.Parallel()
+
+	st := newTestStore(t)
+	st.retry.backoff = time.Millisecond
+
+	failing := func(code string, failures int, calls *int) func(context.Context, store.Tx) error {
+		return func(context.Context, store.Tx) error {
+			*calls++
+			if *calls <= failures {
+				return &pgconn.PgError{Code: code, Message: "fake"}
+			}
+
+			return nil
+		}
+	}
+
+	t.Run("RetriesUntilSuccess", func(t *testing.T) {
+		for _, code := range []string{pgerrcode.SerializationFailure, pgerrcode.DeadlockDetected} {
+			calls := 0
+			if err := st.InTx(t.Context(), store.ReadWrite, failing(code, 2, &calls)); err != nil {
+				t.Fatalf("%s: %v", code, err)
+			}
+
+			if calls != 3 {
+				t.Errorf("%s: %d calls, want 3", code, calls)
+			}
+		}
+	})
+
+	t.Run("GivesUpAfterMaxAttempts", func(t *testing.T) {
+		calls := 0
+
+		err := st.InTx(t.Context(), store.ReadWrite, failing(pgerrcode.SerializationFailure, 100, &calls))
+		if err == nil || !retryable(err) {
+			t.Fatalf("got %v, want the serialization failure", err)
+		}
+
+		if calls != st.retry.attempts {
+			t.Errorf("%d calls, want %d", calls, st.retry.attempts)
+		}
+	})
+
+	t.Run("OtherErrorsAreNotRetried", func(t *testing.T) {
+		calls := 0
+
+		err := st.InTx(t.Context(), store.ReadWrite, failing(pgerrcode.UniqueViolation, 100, &calls))
+		if err == nil || calls != 1 {
+			t.Fatalf("got %v after %d calls, want an error after 1", err, calls)
+		}
+	})
+
+	t.Run("StopsWhenCanceled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		calls := 0
+
+		err := st.InTx(ctx, store.ReadWrite, func(context.Context, store.Tx) error {
+			calls++
+			cancel()
+
+			return &pgconn.PgError{Code: pgerrcode.SerializationFailure}
+		})
+		if !errors.Is(err, context.Canceled) || calls != 1 {
+			t.Fatalf("got %v after %d calls, want context.Canceled after 1", err, calls)
+		}
+	})
+}
+
+// TestRetryAfterDeadlock provokes a real deadlock: two transactions lock two
+// lessons in opposite order. PostgreSQL aborts one of them, InTx retries it,
+// and both succeed.
+func TestRetryAfterDeadlock(t *testing.T) {
+	t.Parallel()
+
+	st := newTestStore(t)
+	seq := ids.NewSequence()
+	l1, l2 := createLesson(t, st, seq, 0), createLesson(t, st, seq, time.Hour)
+
+	var (
+		arrived  sync.WaitGroup // both transactions hold their first lock
+		attempts atomic.Int32
+		wg       sync.WaitGroup
+		errs     [2]error
+	)
+
+	arrived.Add(2)
+
+	for i, order := range [2][2]domain.LessonID{{l1, l2}, {l2, l1}} {
+		first := true
+
+		wg.Go(func() {
+			errs[i] = st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+				attempts.Add(1)
+
+				if _, err := tx.Lessons().Lock(ctx, order[0]); err != nil {
+					return err
+				}
+
+				if first {
+					first = false
+
+					arrived.Done()
+					arrived.Wait()
+				}
+
+				_, err := tx.Lessons().Lock(ctx, order[1])
+
+				return err
+			})
+		})
+	}
+
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("transaction %d: %v", i, err)
+		}
+	}
+
+	if n := attempts.Load(); n != 3 {
+		t.Errorf("%d attempts, want 3 (one retry after the deadlock)", n)
+	}
+}
+
+func TestPoolConfigExecMode(t *testing.T) {
+	t.Parallel()
+
+	for dsn, want := range map[string]pgx.QueryExecMode{
+		"postgres://app@db.example.test/studio":                                          pgx.QueryExecModeCacheDescribe,
+		"postgres://app@db.example.test/studio?default_query_exec_mode=exec":             pgx.QueryExecModeExec,
+		"host=db.example.test dbname=studio":                                             pgx.QueryExecModeCacheDescribe,
+		"host=db.example.test dbname=studio default_query_exec_mode=simple_protocol":     pgx.QueryExecModeSimpleProtocol,
+		"host=db.example.test dbname=studio default_query_exec_mode=cache_statement":     pgx.QueryExecModeCacheStatement,
+		"postgres://app@db.example.test/studio?pool_max_conns=2&sslmode=disable":         pgx.QueryExecModeCacheDescribe,
+		"postgresql://app@db.example.test/studio?default_query_exec_mode=cache_describe": pgx.QueryExecModeCacheDescribe,
+	} {
+		cfg, err := poolConfig(dsn)
+		if err != nil {
+			t.Fatalf("%s: %v", dsn, err)
+		}
+
+		if got := cfg.ConnConfig.DefaultQueryExecMode; got != want {
+			t.Errorf("%s: exec mode %v, want %v", dsn, got, want)
+		}
+	}
+}
+
+func TestOpenErrorHidesPassword(t *testing.T) {
+	t.Parallel()
+
+	const password = "change-me-secret"
+
+	for _, dsn := range []string{
+		"postgres://app:" + password + "@127.0.0.1:1/studio?connect_timeout=2",
+		"host=127.0.0.1 port=1 user=app password=" + password + " dbname=studio connect_timeout=2",
+		"postgres://app:" + password + "@127.0.0.1:1/studio?default_query_exec_mode=nonsense",
+	} {
+		st, err := Open(t.Context(), dsn)
+		if err == nil {
+			st.Close()
+			t.Fatalf("Open(%q) succeeded", dsn)
+		}
+
+		if strings.Contains(err.Error(), password) {
+			t.Errorf("Open error leaks the password: %v", err)
+		}
+	}
+}
+
+// createLesson creates a one-off lesson (and what it references) at t0+offset.
+func createLesson(t *testing.T, st *Store, seq *ids.Sequence, offset time.Duration) domain.LessonID {
+	t.Helper()
+
+	start := time.Date(2026, time.March, 2, 9, 0, 0, 0, time.UTC).Add(offset)
+	loc := domain.Location{ID: ids.New[domain.LocationID](seq), Name: "North Studio"}
+	room := domain.Room{ID: ids.New[domain.RoomID](seq), LocationID: loc.ID, Name: "Room A", Capacity: 10}
+	staff := domain.Staff{ID: ids.New[domain.StaffID](seq), DisplayName: "Instructor", Kind: domain.StaffInstructor}
+	ct := domain.CourseType{ID: ids.New[domain.CourseTypeID](seq), Name: "Ballet"}
+	l := domain.Lesson{
+		ID: ids.New[domain.LessonID](seq), CourseTypeID: ct.ID, RoomID: room.ID, InstructorID: staff.ID,
+		StartsAt: start, EndsAt: start.Add(time.Hour), Status: domain.LessonScheduled,
+		Visibility: domain.VisibilityPublic, Kind: domain.LessonRegular, Capacity: 5,
+	}
+
+	err := st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return errors.Join(
+			tx.Locations().Create(ctx, loc),
+			tx.Rooms().Create(ctx, room),
+			tx.Staff().Create(ctx, staff),
+			tx.CourseTypes().Create(ctx, ct),
+			tx.Lessons().Create(ctx, l),
+		)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return l.ID
+}
