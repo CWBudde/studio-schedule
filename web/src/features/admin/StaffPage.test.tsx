@@ -312,7 +312,7 @@ describe('StaffPage', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Personal' })).toBeInTheDocument();
     const sam = await row('Sam Pianist', 'Personal');
-    expect(sam.getByText('Begleitmusik')).toBeInTheDocument();
+    expect(sam.getByText('Korrepetition')).toBeInTheDocument();
     expect(sam.getByText('Aktiv')).toBeInTheDocument();
   });
 });

@@ -122,7 +122,7 @@
   },
   "staff": {
     "title": "Personal",
-    "description": "Die Lehrkräfte und Begleitmusiker der Schule. Inaktives Personal verschwindet aus den öffentlichen Listen und den Filtern des Stundenplans, bleibt aber bei seinen Stunden eingetragen.",
+    "description": "Die Lehrkräfte und die Korrepetition der Schule. Inaktives Personal verschwindet aus den öffentlichen Listen und den Filtern des Stundenplans, bleibt aber bei seinen Stunden eingetragen.",
     "table": "Personal",
     "search": "Personal durchsuchen",
     "empty": "Es gibt noch kein Personal.",
@@ -137,7 +137,7 @@
     "kind": "Rolle",
     "kinds": {
       "instructor": "Lehrkraft",
-      "accompanist": "Begleitmusik"
+      "accompanist": "Korrepetition"
     },
     "person": "Person",
     "personHint": "Der Personendatensatz dieses Mitglieds des Personals, falls es einen gibt.",
@@ -148,7 +148,7 @@
     "add": "Personal hinzufügen",
     "addTitle": "Personal hinzufügen",
     "editTitle": "{{name}} bearbeiten",
-    "sheetDescription": "Lehrkräfte unterrichten Kurse; die Begleitmusik spielt für sie.",
+    "sheetDescription": "Lehrkräfte unterrichten Kurse; die Korrepetition begleitet sie am Instrument.",
     "editLabel": "{{name}} bearbeiten",
     "deleteLabel": "{{name}} löschen",
     "added": "{{name}} wurde hinzugefügt.",

@@ -13,7 +13,7 @@
     "cardLabel": "{{courseType}}, {{day}}, {{time}}",
     "place": "Ort",
     "instructor": "Lehrkraft",
-    "accompaniedBy": "Begleitung: {{name}}",
+    "accompaniedBy": "Korrepetition: {{name}}",
     "unknown": "Unbekannt"
   },
   "loading": "Kurse werden geladen…",

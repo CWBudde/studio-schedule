@@ -31,7 +31,7 @@
     "today": "Heute, {{day}}",
     "tomorrow": "Morgen, {{day}}",
     "instructor": "Lehrkraft",
-    "accompaniedBy": "Begleitung: {{name}}",
+    "accompaniedBy": "Korrepetition: {{name}}",
     "place": "Ort",
     "loading": "Stundenplan wird geladen…",
     "empty": {
@@ -81,7 +81,7 @@
     "room": "Raum",
     "location": "Standort",
     "instructor": "Lehrkraft",
-    "accompanist": "Begleitung",
+    "accompanist": "Korrepetition",
     "capacity": "Plätze",
     "places_one": "{{count}} Platz",
     "places_other": "{{count}} Plätze",

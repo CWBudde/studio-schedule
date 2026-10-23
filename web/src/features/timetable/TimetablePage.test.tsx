@@ -210,6 +210,6 @@ describe('TimetablePage', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Kurse' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Kurszeitraum' })).toBeInTheDocument();
     expect(within(monday).getByText('Anfänger')).toBeInTheDocument();
-    expect(within(monday).getByText('Begleitung: Sam Pianist')).toBeInTheDocument();
+    expect(within(monday).getByText('Korrepetition: Sam Pianist')).toBeInTheDocument();
   });
 });
