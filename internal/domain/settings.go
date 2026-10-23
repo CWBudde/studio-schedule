@@ -20,8 +20,10 @@ type Settings struct {
 	// ReceiptPrefix starts every receipt number, e.g. "SD" in "SD-2026-0001".
 	ReceiptPrefix string
 
-	// The release rule: every ReleaseWeekday at ReleaseTime (school time),
-	// lessons of the next ReleaseWeeksAhead weeks become bookable.
+	// The release rule: every ReleaseWeekday at ReleaseTime (school time)
+	// the schedule is released through the same weekday ReleaseWeeksAhead
+	// weeks later. Lessons are visible (and, from Phase 4, bookable) once
+	// released; see ADR 0003.
 	ReleaseWeekday    time.Weekday
 	ReleaseTime       TimeOfDay
 	ReleaseWeeksAhead int
@@ -31,8 +33,9 @@ type Settings struct {
 	BookingCutoff      time.Duration
 	CancellationCutoff time.Duration
 
-	// DefaultVisibleDays is how many days ahead members see lessons, unless
-	// their account overrides it.
+	// DefaultVisibleDays additionally limits how many days ahead signed-in
+	// members see lessons, unless their account overrides it (applied once
+	// accounts exist, Phase 3).
 	DefaultVisibleDays int
 
 	// LegalNotice is the optional imprint shown in the footer.
