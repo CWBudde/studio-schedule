@@ -1,8 +1,8 @@
 package domain_test
 
 import (
-	"errors"
 	"testing"
+	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
 )
@@ -26,27 +26,29 @@ func TestRoleValid(t *testing.T) {
 func TestSettingsValidate(t *testing.T) {
 	t.Parallel()
 
-	valid := domain.Settings{SchoolName: "Test School", Timezone: "Europe/Berlin", DefaultLocale: "en"}
-	if err := valid.Validate(); err != nil {
-		t.Fatalf("valid settings: unexpected error %v", err)
-	}
-
-	cases := map[string]func(*domain.Settings){
-		"empty name":       func(s *domain.Settings) { s.SchoolName = "  " },
-		"empty timezone":   func(s *domain.Settings) { s.Timezone = "" },
-		"unknown timezone": func(s *domain.Settings) { s.Timezone = "Mars/Olympus" },
-		"empty locale":     func(s *domain.Settings) { s.DefaultLocale = "" },
-	}
-	for name, mutate := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			s := valid
-			mutate(&s)
-
-			if err := s.Validate(); !errors.Is(err, domain.ErrValidation) {
-				t.Fatalf("want ErrValidation, got %v", err)
-			}
-		})
-	}
+	checkValidate(t, func() domain.Settings {
+		return domain.Settings{
+			SchoolName: "Test School", Timezone: "Europe/Berlin", DefaultLocale: "en",
+			Currency: "EUR", ReceiptPrefix: "TS",
+			ReleaseWeekday: time.Sunday, ReleaseTime: domain.TimeOfDay{Hour: 18}, ReleaseWeeksAhead: 1,
+			BookingCutoff: 0, CancellationCutoff: 2 * time.Hour, DefaultVisibleDays: 14,
+		}
+	}, map[string]func(*domain.Settings){
+		"empty name":            func(s *domain.Settings) { s.SchoolName = "  " },
+		"empty timezone":        func(s *domain.Settings) { s.Timezone = "" },
+		"unknown timezone":      func(s *domain.Settings) { s.Timezone = "Mars/Olympus" },
+		"local timezone":        func(s *domain.Settings) { s.Timezone = "Local" },
+		"empty locale":          func(s *domain.Settings) { s.DefaultLocale = "" },
+		"lower-case currency":   func(s *domain.Settings) { s.Currency = "eur" },
+		"long currency":         func(s *domain.Settings) { s.Currency = "EURO" },
+		"empty receipt prefix":  func(s *domain.Settings) { s.ReceiptPrefix = "" },
+		"bad receipt prefix":    func(s *domain.Settings) { s.ReceiptPrefix = "TS 1" },
+		"bad release weekday":   func(s *domain.Settings) { s.ReleaseWeekday = -1 },
+		"bad release time":      func(s *domain.Settings) { s.ReleaseTime = domain.TimeOfDay{Minute: 60} },
+		"zero weeks ahead":      func(s *domain.Settings) { s.ReleaseWeeksAhead = 0 },
+		"negative booking cut":  func(s *domain.Settings) { s.BookingCutoff = -time.Minute },
+		"negative cancel cut":   func(s *domain.Settings) { s.CancellationCutoff = -time.Minute },
+		"zero visible days":     func(s *domain.Settings) { s.DefaultVisibleDays = 0 },
+		"visible days negative": func(s *domain.Settings) { s.DefaultVisibleDays = -7 },
+	})
 }

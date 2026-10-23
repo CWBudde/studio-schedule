@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/store"
@@ -24,7 +25,13 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 func testSettings(t *testing.T, newStore func(t *testing.T) store.Store) {
 	t.Helper()
 
-	want := domain.Settings{SchoolName: "Contract School", Timezone: "Europe/Berlin", DefaultLocale: "en"}
+	want := domain.Settings{
+		SchoolName: "Contract School", Timezone: "Europe/Berlin", DefaultLocale: "en",
+		Currency: "EUR", ReceiptPrefix: "CS-1",
+		ReleaseWeekday: time.Saturday, ReleaseTime: domain.TimeOfDay{Hour: 9, Minute: 30}, ReleaseWeeksAhead: 2,
+		BookingCutoff: 30 * time.Minute, CancellationCutoff: 12 * time.Hour, DefaultVisibleDays: 21,
+		LegalNotice: "Contract School, Example Street 1, 00000 Example Town",
+	}
 
 	t.Run("GetEmptyIsNotFound", func(t *testing.T) {
 		st := newStore(t)

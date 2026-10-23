@@ -5,6 +5,7 @@ package seed
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/store"
@@ -13,9 +14,17 @@ import (
 // DemoSettings returns the settings of the fictional demo school.
 func DemoSettings() domain.Settings {
 	return domain.Settings{
-		SchoolName:    "Studio Demo — Ballet & Dance",
-		Timezone:      "Europe/Berlin",
-		DefaultLocale: "en",
+		SchoolName:         "Studio Demo — Ballet & Dance",
+		Timezone:           "Europe/Berlin",
+		DefaultLocale:      "en",
+		Currency:           "EUR",
+		ReceiptPrefix:      "SD",
+		ReleaseWeekday:     time.Sunday,
+		ReleaseTime:        domain.TimeOfDay{Hour: 18},
+		ReleaseWeeksAhead:  1,
+		BookingCutoff:      0,
+		CancellationCutoff: 2 * time.Hour,
+		DefaultVisibleDays: 14,
 	}
 }
 

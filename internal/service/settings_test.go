@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/service"
 	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/memory"
@@ -21,7 +22,7 @@ func TestSettingsPublic(t *testing.T) {
 		t.Fatalf("empty store: want ErrNotFound, got %v", err)
 	}
 
-	want := domain.Settings{SchoolName: "Test School", Timezone: "UTC", DefaultLocale: "en"}
+	want := seed.DemoSettings()
 
 	err := st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		return tx.Settings().Put(ctx, want)

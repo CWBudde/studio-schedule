@@ -74,6 +74,7 @@ type (
 	classKind         struct{}
 	lessonKind        struct{}
 	bookingKind       struct{}
+	bookingEventKind  struct{}
 	waitlistEntryKind struct{}
 	passTypeKind      struct{}
 	passKind          struct{}
@@ -114,6 +115,9 @@ type (
 
 	// BookingID identifies a booking.
 	BookingID = ID[bookingKind]
+
+	// BookingEventID identifies a booking event.
+	BookingEventID = ID[bookingEventKind]
 
 	// WaitlistEntryID identifies a waitlist entry.
 	WaitlistEntryID = ID[waitlistEntryKind]
