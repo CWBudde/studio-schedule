@@ -51,9 +51,14 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   methods (`Lessons().Lock`), which use `SELECT … FOR UPDATE`. Serialization and deadlock failures
   are retried. Constraints are backstops: a partial unique index for active bookings,
   `visits_remaining >= 0`, and a unique redemption per booking.
-- **Memory:** one mutex per transaction (so all transactions are serialised) plus snapshot-based
-  rollback.
-- `InTx` is never nested. Helpers receive a `store.Tx`.
+- **Memory:** one mutex for all transactions (so they are serialised). Tables are copied on their
+  first write in a transaction; commit swaps the copies in, rollback drops them. The memory store
+  checks the same keys, references and delete restrictions as the PostgreSQL schema.
+- `InTx` is never nested; a nested call fails with `store.ErrNestedTx`. Helpers receive a
+  `store.Tx`. After a failed write the callback must return an error, because PostgreSQL aborts the
+  transaction.
+- Both stores return instants in UTC with microsecond precision and sort text byte-wise (collation
+  `C`), so `storetest` can compare results with `==`.
 
 ## Time
 

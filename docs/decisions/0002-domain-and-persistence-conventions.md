@@ -63,3 +63,18 @@ started, the test fails instead of skipping.
   constraint.
 - Zero-as-absent rules out "set but zero" for optional numbers; where that matters (e.g. a
   visible-days override), zero is defined as "no override".
+
+## Addendum (2026-10-23): store contract details
+
+Settled while writing the first repositories (`internal/store/store.go`):
+
+- A nested `InTx` returns `store.ErrNestedTx` in both stores (detected through the context) instead
+  of deadlocking or escaping the transaction.
+- `domain.ErrConflict` covers duplicate keys, references to missing records and deleting a record
+  that is still referenced; a missing target of Get/Update/Delete is `domain.ErrNotFound`.
+- After a failed write the callback must return an error: PostgreSQL aborts the transaction, so
+  "try insert, then carry on" is not part of the contract.
+- Instants come back in UTC, truncated to microseconds (the `timestamptz` precision); the memory
+  store normalises them the same way. Text ordering is byte-wise (collation `C`); locale-aware
+  sorting belongs in the UI.
+
