@@ -20,8 +20,8 @@ afterEach(() => {
 
 const details: Record<string, object> = {
   [ids.lessonBallet]: lessonBalletDetail,
-  [ids.lessonContemporary]: lessonContemporary,
-  [ids.lessonWorkshop]: lessonWorkshop,
+  [ids.lessonContemporary]: { ...lessonContemporary, visibility: 'members' },
+  [ids.lessonWorkshop]: { ...lessonWorkshop, visibility: 'hidden' },
 };
 
 function mockLessons() {
@@ -55,6 +55,25 @@ describe('LessonSheet', () => {
     // A regular class has no kind badge and is not canceled.
     expect(sheet.queryByText('Class')).not.toBeInTheDocument();
     expect(sheet.queryByText('Canceled')).not.toBeInTheDocument();
+    expect(sheet.queryByText('Members only')).not.toBeInTheDocument();
+  });
+
+  it('marks a lesson for members', async () => {
+    mockLessons();
+
+    renderAtSchedule(<LessonSheet />, { lesson: ids.lessonContemporary });
+
+    const dialog = await screen.findByRole('dialog', { name: 'Contemporary' });
+    expect(within(dialog).getByText('Members only')).toBeInTheDocument();
+  });
+
+  it('marks a hidden lesson', async () => {
+    mockLessons();
+
+    renderAtSchedule(<LessonSheet />, { lesson: ids.lessonWorkshop });
+
+    const dialog = await screen.findByRole('dialog', { name: 'Jazz' });
+    expect(within(dialog).getByText('Hidden – staff only')).toBeInTheDocument();
   });
 
   it('marks a canceled lesson', async () => {

@@ -21,6 +21,11 @@
     "scheduled": "Findet statt",
     "canceled": "Abgesagt"
   },
+  "visibility": {
+    "public": "Öffentlich",
+    "members": "Nur für Mitglieder",
+    "hidden": "Versteckt – nur Team"
+  },
   "list": {
     "cardLabel": "{{courseType}}, {{day}}, {{time}}",
     "instructor": "Lehrkraft",
@@ -99,6 +104,8 @@
     "next_other": "Nächste {{count}} Tage",
     "today": "Heute",
     "range": "{{from}} – {{to}}",
-    "releasedThrough": "Kurse sind bis einschließlich {{day}} veröffentlicht. Die nächsten folgen am {{release}}; Workshops werden früher veröffentlicht."
+    "releasedThrough": "Kurse sind bis einschließlich {{day}} veröffentlicht. Die nächsten folgen am {{release}}; Workshops werden früher veröffentlicht.",
+    "earlyAccess": "Frühzugang: Als Mitglied siehst du Kurse schon bis einschließlich {{visible}}. Für alle sind sie bis einschließlich {{day}} veröffentlicht.",
+    "staffView": "Als Teammitglied siehst du alle Stunden, auch versteckte und noch nicht veröffentlichte Kurse. Für alle sind Kurse bis einschließlich {{day}} veröffentlicht."
   }
 }

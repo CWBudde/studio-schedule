@@ -18,6 +18,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDayHeading, formatTimeRange, schoolDateOf } from '@/lib/schoolTime';
 import { useScheduleSearch } from '../useScheduleSearch';
+import { VisibilityBadge } from '../visibility/VisibilityBadge';
 
 const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
 
@@ -143,13 +144,17 @@ function LessonDetails({ lesson, timeZone }: { lesson: LessonDetail; timeZone: s
             {formatTimeRange(lesson.startsAt, lesson.endsAt, timeZone, lang)}
           </span>
         </SheetDescription>
-        {(canceled || lesson.kind !== 'regular' || lesson.level) && (
+        {(canceled ||
+          lesson.kind !== 'regular' ||
+          lesson.level ||
+          lesson.visibility !== 'public') && (
           <div className="flex flex-wrap gap-1.5 pt-1">
             {canceled && <Badge variant="destructive">{t('status.canceled')}</Badge>}
             {lesson.kind !== 'regular' && (
               <Badge variant="secondary">{t(`kind.${lesson.kind}`)}</Badge>
             )}
             {lesson.level && <Badge variant="outline">{t(`level.${lesson.level}`)}</Badge>}
+            <VisibilityBadge visibility={lesson.visibility} />
           </div>
         )}
       </SheetHeader>

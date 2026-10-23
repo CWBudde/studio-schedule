@@ -1,0 +1,35 @@
+{
+  "title": "Classes",
+  "intro": "The weekly classes of a term. For single dates, cancellations and workshops, see the schedule.",
+  "toSchedule": "Schedule",
+  "term": {
+    "label": "Term",
+    "range": "{{from}} – {{to}}"
+  },
+  "week": {
+    "label": "Weekly classes"
+  },
+  "class": {
+    "cardLabel": "{{courseType}}, {{day}}, {{time}}",
+    "place": "Place",
+    "instructor": "Instructor",
+    "accompaniedBy": "accompanied by {{name}}",
+    "unknown": "Unknown"
+  },
+  "loading": "Loading classes…",
+  "empty": {
+    "noTerms": {
+      "title": "No terms yet",
+      "description": "The school has not planned a term yet."
+    },
+    "noClasses": {
+      "title": "No classes in this term",
+      "description": "No weekly classes have been planned for this term yet."
+    }
+  },
+  "error": {
+    "title": "Could not load the classes.",
+    "description": "Please check your connection and try again.",
+    "retry": "Retry"
+  }
+}

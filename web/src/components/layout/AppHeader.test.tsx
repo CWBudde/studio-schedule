@@ -1,7 +1,14 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { meMember, mockApiGet, mockApiPost, publicSettings, signedOut } from '@/test/mockApi';
+import {
+  meAdmin,
+  meMember,
+  mockApiGet,
+  mockApiPost,
+  publicSettings,
+  signedOut,
+} from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { AppHeader } from './AppHeader';
 
@@ -21,6 +28,16 @@ describe('AppHeader', () => {
     expect(screen.getByRole('button', { name: 'Change language' })).toBeInTheDocument();
   });
 
+  it('links to the schedule and the classes', async () => {
+    mockApiGet({ ...signedOut, ...notDemo });
+
+    renderInRouter(<AppHeader />);
+
+    const nav = within(await screen.findByRole('navigation', { name: 'Main' }));
+    expect(nav.getByRole('link', { name: 'Schedule' })).toHaveAttribute('href', '/schedule');
+    expect(nav.getByRole('link', { name: 'Classes' })).toHaveAttribute('href', '/classes');
+  });
+
   it('shows the signed-in person and signs out from the account menu', async () => {
     mockApiGet({ ...notDemo, '/api/v1/auth/me': { body: meMember } });
     const post = mockApiPost({ '/api/v1/auth/logout': { status: 204 } });
@@ -35,6 +52,29 @@ describe('AppHeader', () => {
     expect(await screen.findByRole('link', { name: 'Sign in' })).toBeInTheDocument();
     expect(post).toHaveBeenCalledWith('/api/v1/auth/logout');
     expect(screen.queryByRole('button', { name: 'Nora Example' })).not.toBeInTheDocument();
+  });
+
+  it('links admins to the accounts from the account menu', async () => {
+    mockApiGet({ ...notDemo, '/api/v1/auth/me': { body: meAdmin } });
+    const user = userEvent.setup();
+
+    const { router } = renderInRouter(<AppHeader />);
+
+    await user.click(await screen.findByRole('button', { name: 'Ada Admin' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Accounts' }));
+
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe('/admin/accounts'));
+  });
+
+  it('has no accounts link for other roles', async () => {
+    mockApiGet({ ...notDemo, '/api/v1/auth/me': { body: meMember } });
+    const user = userEvent.setup();
+
+    renderInRouter(<AppHeader />);
+
+    await user.click(await screen.findByRole('button', { name: 'Nora Example' }));
+    expect(await screen.findByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Accounts' })).not.toBeInTheDocument();
   });
 
   it('has a demo mailbox button only in a demo', async () => {

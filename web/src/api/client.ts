@@ -14,9 +14,12 @@ export type LessonDetail = Schemas['LessonDetail'];
 export type LessonLevel = NonNullable<LessonSummary['level']>;
 export type LessonKind = LessonSummary['kind'];
 export type LessonStatus = LessonSummary['status'];
+export type LessonVisibility = LessonSummary['visibility'];
 
 export type Me = Schemas['Me'];
 export type Role = Me['role'];
+export type Impersonator = Schemas['Impersonator'];
+export type AccountEntry = Schemas['AccountEntry'];
 export type LoginBody = Schemas['LoginInputBody'];
 export type RegisterBody = Schemas['RegisterInputBody'];
 export type ConfirmEmailBody = Schemas['ConfirmEmailInputBody'];

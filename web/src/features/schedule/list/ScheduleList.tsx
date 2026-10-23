@@ -14,6 +14,7 @@ import {
 import { cn } from '@/lib/utils';
 import { clearedFilters, hasActiveFilter } from '../filters/filterParams';
 import { useScheduleSearch } from '../useScheduleSearch';
+import { VisibilityBadge } from '../visibility/VisibilityBadge';
 
 type Day = { date: SchoolDate; lessons: LessonSummary[] };
 
@@ -119,6 +120,7 @@ function LessonCard({
     t('list.cardLabel', { courseType: lesson.courseType.name, day: dayLabel, time }),
     canceled && t('status.canceled'),
     special && t(`kind.${lesson.kind}`),
+    lesson.visibility !== 'public' && t(`visibility.${lesson.visibility}`),
   ]
     .filter(Boolean)
     .join(', ');
@@ -144,6 +146,7 @@ function LessonCard({
         </span>
         {canceled && <Badge variant="destructive">{t('status.canceled')}</Badge>}
         {special && <Badge variant="outline">{t(`kind.${lesson.kind}`)}</Badge>}
+        <VisibilityBadge visibility={lesson.visibility} />
       </span>
 
       <span className="flex flex-wrap items-center gap-2">

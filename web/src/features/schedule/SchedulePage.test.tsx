@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Schedule } from '@/api/client';
 import type { ScheduleParams } from '@/api/queries';
 import {
   catalogFixtures,
@@ -20,14 +21,14 @@ afterEach(() => {
 });
 
 /** Mocks the API and records the query of every schedule request. */
-function mockSchedule() {
+function mockSchedule(answer: Schedule = schedule) {
   const requests: ScheduleParams[] = [];
   mockApiGet({
     ...catalogFixtures,
     '/api/v1/settings/public': { body: publicSettings },
     '/api/v1/schedule': (init: MockRequest) => {
       requests.push(init.params?.query as ScheduleParams);
-      return { body: schedule };
+      return { body: answer };
     },
     '/api/v1/lessons/{lessonId}': { body: lessonBalletDetail },
   });
@@ -63,6 +64,45 @@ describe('SchedulePage', () => {
 
     expect(await screen.findByRole('region', { name: /Mon 19/ })).toBeInTheDocument();
     expect(screen.queryByText(/Classes are published through/)).not.toBeInTheDocument();
+  });
+
+  it('tells a member with early access up to which day they see classes', async () => {
+    // Early access through Friday, November 6; released through November 1.
+    mockSchedule({ ...schedule, visibleUntil: '2026-11-06T23:00:00Z' });
+
+    renderAtSchedule(<SchedulePage />, { from: '2026-10-26' });
+
+    expect(
+      await screen.findByText(
+        'Early access: as a member you already see classes through Friday, November 6. For everyone, they are published through Sunday, November 1.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Classes are published through/)).not.toBeInTheDocument();
+  });
+
+  it('treats a member without early access like a guest', async () => {
+    mockSchedule({ ...schedule, visibleUntil: schedule.releasedUntil });
+
+    renderAtSchedule(<SchedulePage />, { from: '2026-10-26' });
+
+    expect(await screen.findByText(/^Classes are published through/)).toBeInTheDocument();
+    expect(screen.queryByText(/Early access/)).not.toBeInTheDocument();
+  });
+
+  it('tells staff that they see every lesson', async () => {
+    // Staff get no visibleUntil: they see hidden and unreleased lessons too.
+    const staffSchedule: Schedule = { ...schedule };
+    delete staffSchedule.visibleUntil;
+    mockSchedule(staffSchedule);
+
+    renderAtSchedule(<SchedulePage />, { from: '2026-10-19', view: 'week' });
+
+    expect(
+      await screen.findByText(
+        'As staff you see every lesson, including hidden ones and classes that are not published yet. For everyone, classes are published through Sunday, November 1.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Classes are published through/)).not.toBeInTheDocument();
   });
 
   it('switches to the week of the date and asks for that week only', async () => {

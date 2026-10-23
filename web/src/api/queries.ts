@@ -1,4 +1,4 @@
-import { mutationOptions, type QueryClient, queryOptions } from '@tanstack/react-query';
+import { hashKey, mutationOptions, type QueryClient, queryOptions } from '@tanstack/react-query';
 import {
   api,
   type ConfirmEmailBody,
@@ -107,6 +107,33 @@ export const courseTypesQuery = queryOptions({
   staleTime: 5 * 60_000,
 });
 
+/** The rooms of all locations. */
+export const roomsQuery = queryOptions({
+  queryKey: ['rooms'],
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/rooms', { signal }))).items,
+  staleTime: 5 * 60_000,
+});
+
+/** All terms, ordered by start date. */
+export const termsQuery = queryOptions({
+  queryKey: ['terms'],
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/terms', { signal }))).items,
+  staleTime: 5 * 60_000,
+});
+
+/** The weekly classes of a term, ordered by weekday (Sunday first) and start time. */
+export const classesQuery = (termId: string) =>
+  queryOptions({
+    queryKey: ['terms', termId, 'classes'],
+    queryFn: async ({ signal }) =>
+      (
+        await unwrap(
+          api.GET('/api/v1/terms/{termId}/classes', { params: { path: { termId } }, signal }),
+        )
+      ).items,
+    staleTime: 5 * 60_000,
+  });
+
 /**
  * The signed-in account, or null when signed out. The API answers 401 then,
  * which is a normal state here and not an error.
@@ -116,18 +143,37 @@ export const meQuery = queryOptions({
   queryFn: ({ signal }) => unwrapOrNull(401, api.GET('/api/v1/auth/me', { signal })),
 });
 
+/** Prefix of the admin-only query keys (see listAccountsQuery). */
+export const adminQueryKey = ['admin'] as const;
+
+/**
+ * Makes `me` the signed-in account (null: signed out) after a change of
+ * identity, e.g. a sign-in or the start of an impersonation. What the API
+ * answers depends on who asks (the schedule hides lessons from guests, for
+ * example), so every other query is reset: it loses the data of the previous
+ * identity and refetches if it is shown. Admin queries are dropped instead,
+ * so a page that shows one does not ask again with the new identity before
+ * it renders the change.
+ */
+function changeIdentity(queryClient: QueryClient, me: Me | null) {
+  queryClient.removeQueries({ queryKey: adminQueryKey });
+  queryClient.setQueryData(meQuery.queryKey, me);
+  const meHash = hashKey(meQuery.queryKey);
+  void queryClient.resetQueries({ predicate: (query) => query.queryHash !== meHash });
+}
+
 /** Signs in; the account becomes the `me` query's data. */
 export const loginMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (body: LoginBody) => unwrap(api.POST('/api/v1/auth/login', { body })),
-    onSuccess: (me: Me) => queryClient.setQueryData(meQuery.queryKey, me),
+    onSuccess: (me: Me) => changeIdentity(queryClient, me),
   });
 
 /** Confirms an email address with the link's token and the password, and signs in. */
 export const confirmEmailMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (body: ConfirmEmailBody) => unwrap(api.POST('/api/v1/auth/confirm', { body })),
-    onSuccess: (me: Me) => queryClient.setQueryData(meQuery.queryKey, me),
+    onSuccess: (me: Me) => changeIdentity(queryClient, me),
   });
 
 /** Registers an account; the API mails a confirmation link (shown in the demo mailbox). */
@@ -141,7 +187,43 @@ export const registerMutation = (queryClient: QueryClient) =>
 export const logoutMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: () => expectOk(api.POST('/api/v1/auth/logout')),
-    onSuccess: () => queryClient.setQueryData(meQuery.queryKey, null),
+    onSuccess: () => changeIdentity(queryClient, null),
+  });
+
+/** Every account with its person, ordered by email (admins only). */
+export const listAccountsQuery = queryOptions({
+  queryKey: [...adminQueryKey, 'accounts'],
+  queryFn: async ({ signal }) =>
+    (await unwrap(api.GET('/api/v1/admin/accounts', { signal }))).items,
+});
+
+/**
+ * Signs the admin in as another account ("login as"); that account, with
+ * the admin as its impersonator, becomes the `me` query's data.
+ */
+export const impersonateMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (accountId: string) =>
+      unwrap(
+        api.POST('/api/v1/admin/accounts/{accountId}/impersonate', {
+          params: { path: { accountId } },
+        }),
+      ),
+    onSuccess: (me: Me) => changeIdentity(queryClient, me),
+  });
+
+/**
+ * Ends an impersonation; the admin's own account becomes the `me` query's
+ * data again. A 401 means the impersonation is over already (it lasts an
+ * hour): then nobody is signed in any more.
+ */
+export const stopImpersonationMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: () => unwrap(api.POST('/api/v1/auth/impersonation/stop')),
+    onSuccess: (me: Me) => changeIdentity(queryClient, me),
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 401) changeIdentity(queryClient, null);
+    },
   });
 
 /**

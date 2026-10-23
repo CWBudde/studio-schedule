@@ -10,14 +10,21 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ClassesRouteImport } from './routes/classes'
 import { Route as ConfirmRouteImport } from './routes/confirm'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ScheduleRouteImport } from './routes/schedule'
+import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClassesRoute = ClassesRouteImport.update({
+  id: '/classes',
+  path: '/classes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConfirmRoute = ConfirmRouteImport.update({
@@ -40,43 +47,78 @@ const ScheduleRoute = ScheduleRouteImport.update({
   path: '/schedule',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAccountsRoute = AdminAccountsRouteImport.update({
+  id: '/admin/accounts',
+  path: '/admin/accounts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/classes': typeof ClassesRoute
   '/confirm': typeof ConfirmRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/schedule': typeof ScheduleRoute
+  '/admin/accounts': typeof AdminAccountsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/classes': typeof ClassesRoute
   '/confirm': typeof ConfirmRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/schedule': typeof ScheduleRoute
+  '/admin/accounts': typeof AdminAccountsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/classes': typeof ClassesRoute
   '/confirm': typeof ConfirmRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/schedule': typeof ScheduleRoute
+  '/admin/accounts': typeof AdminAccountsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/confirm' | '/login' | '/register' | '/schedule'
+  fullPaths:
+    | '/'
+    | '/classes'
+    | '/confirm'
+    | '/login'
+    | '/register'
+    | '/schedule'
+    | '/admin/accounts'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/confirm' | '/login' | '/register' | '/schedule'
-  id: '__root__' | '/' | '/confirm' | '/login' | '/register' | '/schedule'
+  to:
+    | '/'
+    | '/classes'
+    | '/confirm'
+    | '/login'
+    | '/register'
+    | '/schedule'
+    | '/admin/accounts'
+  id:
+    | '__root__'
+    | '/'
+    | '/classes'
+    | '/confirm'
+    | '/login'
+    | '/register'
+    | '/schedule'
+    | '/admin/accounts'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ClassesRoute: typeof ClassesRoute
   ConfirmRoute: typeof ConfirmRoute
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   ScheduleRoute: typeof ScheduleRoute
+  AdminAccountsRoute: typeof AdminAccountsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -86,6 +128,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/classes': {
+      id: '/classes'
+      path: '/classes'
+      fullPath: '/classes'
+      preLoaderRoute: typeof ClassesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/confirm': {
@@ -116,15 +165,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ScheduleRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/accounts': {
+      id: '/admin/accounts'
+      path: '/admin/accounts'
+      fullPath: '/admin/accounts'
+      preLoaderRoute: typeof AdminAccountsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ClassesRoute: ClassesRoute,
   ConfirmRoute: ConfirmRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   ScheduleRoute: ScheduleRoute,
+  AdminAccountsRoute: AdminAccountsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

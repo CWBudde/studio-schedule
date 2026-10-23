@@ -1,6 +1,8 @@
 import { vi } from 'vitest';
 import { api } from '@/api/client';
+import type { components } from '@/api/schema';
 import type {
+  AccountEntry,
   DemoLogin,
   LessonDetail,
   LessonSummary,
@@ -84,6 +86,11 @@ export const ids = {
   lessonWorkshop: id(103),
   classBallet: id(201),
   classContemporary: id(202),
+  classJazz: id(203),
+  classSpring: id(204),
+  termPast: id(501),
+  termAutumn: id(502),
+  termSpring: id(503),
 };
 
 export const locations = [
@@ -95,6 +102,11 @@ export const staff = [
   { id: ids.staffAlex, displayName: 'Alex Example' },
   { id: ids.staffRiley, displayName: 'Riley Sample' },
   { id: ids.staffSam, displayName: 'Sam Pianist' },
+];
+
+export const rooms = [
+  { id: ids.roomA, locationId: ids.locationNorth, name: 'Room A', capacity: 16 },
+  { id: ids.roomB, locationId: ids.locationSouth, name: 'Room B', capacity: 12 },
 ];
 
 export const courseTypes = [
@@ -118,6 +130,7 @@ export const lessonBallet: LessonSummary = {
   kind: 'regular',
   level: 'beginner',
   capacity: 12,
+  visibility: 'public',
 };
 
 /** Canceled contemporary class, Tuesday 2026-10-27 17:00–18:00 in Berlin. */
@@ -134,6 +147,7 @@ export const lessonContemporary: LessonSummary = {
   kind: 'regular',
   level: 'intermediate',
   capacity: 10,
+  visibility: 'public',
 };
 
 /** One-off jazz workshop, Saturday 2026-11-07 14:00–17:00 in Berlin (no class, no level). */
@@ -148,15 +162,20 @@ export const lessonWorkshop: LessonSummary = {
   status: 'scheduled',
   kind: 'workshop',
   capacity: 20,
+  visibility: 'public',
 };
 
-/** Schedule of 2026-10-26 (Monday) to 2026-11-09, as the API returns it on Friday 2026-10-23. */
+/**
+ * Schedule of 2026-10-26 (Monday) to 2026-11-09, as the API returns it to a
+ * guest on Friday 2026-10-23.
+ */
 export const schedule: Schedule = {
   timezone: 'Europe/Berlin',
   now: '2026-10-23T10:00:00Z',
   from: '2026-10-26',
   to: '2026-11-09',
   releasedUntil: '2026-11-01T23:00:00Z',
+  visibleUntil: '2026-11-01T23:00:00Z',
   nextReleaseAt: '2026-10-25T17:00:00Z',
   lessons: [lessonBallet, lessonContemporary, lessonWorkshop],
 };
@@ -170,9 +189,83 @@ export const lessonBalletDetail: LessonDetail = {
 /** Catalogue fixtures for the filter selects. */
 export const catalogFixtures = {
   '/api/v1/locations': { body: { items: locations } },
+  '/api/v1/rooms': { body: { items: rooms } },
   '/api/v1/staff': { body: { items: staff } },
   '/api/v1/course-types': { body: { items: courseTypes } },
 };
+
+type Term = components['schemas']['Term'];
+type Class = components['schemas']['Class'];
+
+/**
+ * Fictional terms, ordered by start date as the API returns them. Friday
+ * 2026-10-23 (the fixtures' today) falls into the autumn term.
+ */
+export const terms: Term[] = [
+  { id: ids.termPast, name: 'School Year 2025/26', startsOn: '2025-09-01', endsOn: '2026-07-15' },
+  { id: ids.termAutumn, name: 'Autumn 2026', startsOn: '2026-08-31', endsOn: '2027-01-29' },
+  { id: ids.termSpring, name: 'Spring 2027', startsOn: '2027-02-01', endsOn: '2027-07-16' },
+];
+
+/**
+ * Weekly classes of the autumn term in the API's order (Sunday first): a
+ * Sunday jazz class, Monday ballet with an accompanist, Tuesday contemporary.
+ */
+export const autumnClasses: Class[] = [
+  {
+    id: ids.classJazz,
+    termId: ids.termAutumn,
+    courseTypeId: ids.jazz,
+    roomId: ids.roomB,
+    instructorId: ids.staffRiley,
+    level: 'open',
+    weekday: 0,
+    startTime: '11:00',
+    durationMinutes: 90,
+    capacity: 12,
+  },
+  {
+    id: ids.classBallet,
+    termId: ids.termAutumn,
+    courseTypeId: ids.ballet,
+    roomId: ids.roomA,
+    instructorId: ids.staffAlex,
+    accompanistId: ids.staffSam,
+    level: 'beginner',
+    weekday: 1,
+    startTime: '18:00',
+    durationMinutes: 90,
+    capacity: 12,
+  },
+  {
+    id: ids.classContemporary,
+    termId: ids.termAutumn,
+    courseTypeId: ids.contemporary,
+    roomId: ids.roomB,
+    instructorId: ids.staffRiley,
+    level: 'intermediate',
+    weekday: 2,
+    startTime: '17:00',
+    durationMinutes: 60,
+    capacity: 10,
+  },
+];
+
+/** The one weekly class of the spring term: Thursday ballet. */
+export const springClasses: Class[] = [
+  {
+    id: ids.classSpring,
+    termId: ids.termSpring,
+    courseTypeId: ids.ballet,
+    roomId: ids.roomA,
+    instructorId: ids.staffAlex,
+    level: 'advanced',
+    weekday: 4,
+    startTime: '19:15',
+    durationMinutes: 75,
+    capacity: 14,
+  },
+];
 
 /** The fictional member signed in in auth tests. */
 export const meMember: Me = {
@@ -183,6 +276,79 @@ export const meMember: Me = {
   givenName: 'Nora',
   familyName: 'Example',
 };
+
+/** A fictional admin, as GET /auth/me returns them. */
+export const meAdmin: Me = {
+  accountId: id(311),
+  personId: id(312),
+  email: 'ada.admin@example.com',
+  role: 'admin',
+  givenName: 'Ada',
+  familyName: 'Admin',
+};
+
+/** The member as the admin sees them while signed in as them ("login as"). */
+export const meImpersonated: Me = {
+  ...meMember,
+  impersonator: {
+    accountId: meAdmin.accountId,
+    email: meAdmin.email,
+    givenName: meAdmin.givenName,
+    familyName: meAdmin.familyName,
+  },
+};
+
+/**
+ * Fictional accounts as GET /admin/accounts lists them (ordered by email):
+ * the admin, a member, an instructor, an unconfirmed and a disabled member.
+ */
+export const accounts: AccountEntry[] = [
+  {
+    id: meAdmin.accountId,
+    email: meAdmin.email,
+    role: 'admin',
+    givenName: 'Ada',
+    familyName: 'Admin',
+    confirmed: true,
+    disabled: false,
+  },
+  {
+    id: id(321),
+    email: 'alex.example@example.com',
+    role: 'instructor',
+    givenName: 'Alex',
+    familyName: 'Example',
+    confirmed: true,
+    disabled: false,
+  },
+  {
+    id: id(322),
+    email: 'nina.new@example.org',
+    role: 'member',
+    givenName: 'Nina',
+    familyName: 'New',
+    confirmed: false,
+    disabled: false,
+  },
+  {
+    id: meMember.accountId,
+    email: meMember.email,
+    role: 'member',
+    givenName: 'Nora',
+    familyName: 'Example',
+    confirmed: true,
+    disabled: false,
+  },
+  {
+    id: id(323),
+    email: 'olaf.old@example.org',
+    role: 'member',
+    givenName: 'Olaf',
+    familyName: 'Old',
+    confirmed: true,
+    disabled: true,
+  },
+];
 
 /** A problem+json answer, as the API sends it for errors. */
 export const problem = (status: number, detail: string, errors?: { location: string }[]) => ({

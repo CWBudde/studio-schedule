@@ -6,7 +6,8 @@
   },
   "nav": {
     "label": "Hauptnavigation",
-    "schedule": "Stundenplan"
+    "schedule": "Stundenplan",
+    "classes": "Kurse"
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"

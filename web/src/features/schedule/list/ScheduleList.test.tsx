@@ -85,6 +85,34 @@ describe('ScheduleList', () => {
     }
   });
 
+  it('marks lessons for members and hidden lessons', async () => {
+    const restricted: Schedule = {
+      ...schedule,
+      lessons: [
+        { ...lessonBallet, visibility: 'members' },
+        { ...lessonWorkshop, visibility: 'hidden' },
+      ],
+    };
+    renderAtSchedule(<ScheduleList schedule={restricted} />);
+
+    const members = await screen.findByRole('button', {
+      name: 'Ballet, Monday, October 26, 18:00–19:30, Members only',
+    });
+    expect(within(members).getByText('Members only')).toBeInTheDocument();
+    const hidden = screen.getByRole('button', {
+      name: 'Jazz, Saturday, November 7, 14:00–17:00, Workshop, Hidden – staff only',
+    });
+    expect(within(hidden).getByText('Hidden – staff only')).toBeInTheDocument();
+  });
+
+  it('shows no visibility badge on public lessons', async () => {
+    renderAtSchedule(<ScheduleList schedule={schedule} />);
+
+    expect(await screen.findAllByRole('button', { name: /\d{2}:\d{2}–/ })).toHaveLength(3);
+    expect(screen.queryByText('Members only')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Hidden/)).not.toBeInTheDocument();
+  });
+
   it('opens the lesson detail by writing the lesson id into the URL', async () => {
     const user = userEvent.setup();
     const { router } = renderAtSchedule(<ScheduleList schedule={schedule} />, {

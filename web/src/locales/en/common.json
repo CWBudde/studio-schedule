@@ -6,7 +6,8 @@
   },
   "nav": {
     "label": "Main",
-    "schedule": "Schedule"
+    "schedule": "Schedule",
+    "classes": "Classes"
   },
   "a11y": {
     "skipToContent": "Skip to content"

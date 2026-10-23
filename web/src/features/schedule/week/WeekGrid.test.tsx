@@ -163,6 +163,30 @@ describe('WeekGrid', () => {
     expect(block).toHaveAccessibleName(/, Workshop$/);
   });
 
+  it('marks lessons for members and hidden lessons', async () => {
+    const restricted: Schedule = {
+      ...schedule,
+      lessons: [
+        { ...lessonBallet, visibility: 'members' },
+        { ...lessonContemporary, visibility: 'hidden' },
+      ],
+    };
+    renderAtSchedule(
+      <WeekGrid
+        schedule={restricted}
+        today={todayIn('Europe/Berlin', restricted.now)}
+        weekStart="2026-10-26"
+      />,
+    );
+
+    const members = await blockIn('Mon 26', /Ballet/);
+    expect(within(members).getByText('Members only')).toBeInTheDocument();
+    expect(members).toHaveAccessibleName(/, Members only$/);
+    const hidden = await blockIn('Tue 27', /Contemporary/);
+    expect(within(hidden).getByText('Hidden – staff only')).toBeInTheDocument();
+    expect(hidden).toHaveAccessibleName(/, Hidden – staff only$/);
+  });
+
   it('navigates between weeks via the search params', async () => {
     const user = userEvent.setup();
     const { router } = renderAtSchedule(

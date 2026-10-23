@@ -1,0 +1,35 @@
+{
+  "title": "Kurse",
+  "intro": "Die wöchentlichen Kurse eines Kurszeitraums. Einzelne Termine, Ausfälle und Workshops findest du im Stundenplan.",
+  "toSchedule": "Stundenplan",
+  "term": {
+    "label": "Kurszeitraum",
+    "range": "{{from}} – {{to}}"
+  },
+  "week": {
+    "label": "Wöchentliche Kurse"
+  },
+  "class": {
+    "cardLabel": "{{courseType}}, {{day}}, {{time}}",
+    "place": "Ort",
+    "instructor": "Lehrkraft",
+    "accompaniedBy": "Begleitung: {{name}}",
+    "unknown": "Unbekannt"
+  },
+  "loading": "Kurse werden geladen…",
+  "empty": {
+    "noTerms": {
+      "title": "Noch keine Kurszeiträume",
+      "description": "Die Schule hat noch keinen Kurszeitraum geplant."
+    },
+    "noClasses": {
+      "title": "Keine Kurse in diesem Kurszeitraum",
+      "description": "Für diesen Kurszeitraum sind noch keine wöchentlichen Kurse geplant."
+    }
+  },
+  "error": {
+    "title": "Die Kurse konnten nicht geladen werden.",
+    "description": "Bitte prüfe deine Verbindung und versuche es erneut.",
+    "retry": "Erneut versuchen"
+  }
+}

@@ -4,6 +4,7 @@ import { AppFooter } from '@/components/layout/AppFooter';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { BackendGate } from '@/components/layout/BackendGate';
 import { DemoBanner } from '@/components/layout/DemoBanner';
+import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -18,6 +19,7 @@ export function RootLayout() {
         {t('a11y.skipToContent')}
       </a>
       <DemoBanner />
+      <ImpersonationBanner />
       <AppHeader />
       <main
         id="main"

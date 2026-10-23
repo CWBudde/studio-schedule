@@ -158,23 +158,38 @@ function ScheduleView({ timeZone }: { timeZone: string }) {
 }
 
 /**
- * Says up to which day regular classes are released when the shown range
- * goes beyond that day, so the end of the list does not look like the end
- * of the timetable.
+ * Says what of the timetable the viewer sees (ADR 0003). Guests: up to
+ * which day regular classes are released, when the shown range goes beyond
+ * that day, so the end of the list does not look like the end of the
+ * timetable. Members with early access (visibleUntil after releasedUntil):
+ * up to which day they see classes, in the same case. Staff (no
+ * visibleUntil): that they see every lesson, always.
  */
 function ReleaseNote({ schedule, lastDay }: { schedule: Schedule; lastDay: string }) {
   const { t, i18n } = useTranslation('schedule');
   const lang = i18n.resolvedLanguage ?? 'en';
-  // releasedUntil is the school midnight after the last released day.
-  const lastReleased = schoolDateOf(Date.parse(schedule.releasedUntil) - 1, schedule.timezone);
-  if (lastReleased >= lastDay) return null;
+  // releasedUntil and visibleUntil are the school midnight after the last day.
+  const lastDayBefore = (instant: string) =>
+    schoolDateOf(Date.parse(instant) - 1, schedule.timezone);
+  const lastReleased = lastDayBefore(schedule.releasedUntil);
+  const day = formatDayHeading(lastReleased, lang);
 
-  return (
-    <p className="text-sm text-muted-foreground">
-      {t('page.releasedThrough', {
-        day: formatDayHeading(lastReleased, lang),
-        release: formatDateTime(schedule.nextReleaseAt, schedule.timezone, lang),
-      })}
-    </p>
-  );
+  let note: string;
+  if (schedule.visibleUntil === undefined) {
+    note = t('page.staffView', { day });
+  } else if (lastReleased >= lastDay) {
+    return null;
+  } else if (Date.parse(schedule.visibleUntil) > Date.parse(schedule.releasedUntil)) {
+    note = t('page.earlyAccess', {
+      visible: formatDayHeading(lastDayBefore(schedule.visibleUntil), lang),
+      day,
+    });
+  } else {
+    note = t('page.releasedThrough', {
+      day,
+      release: formatDateTime(schedule.nextReleaseAt, schedule.timezone, lang),
+    });
+  }
+
+  return <p className="text-sm text-muted-foreground">{note}</p>;
 }

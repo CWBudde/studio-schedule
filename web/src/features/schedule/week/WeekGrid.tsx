@@ -14,6 +14,7 @@ import {
 } from '@/lib/schoolTime';
 import { cn } from '@/lib/utils';
 import { useScheduleSearch } from '../useScheduleSearch';
+import { VisibilityBadge } from '../visibility/VisibilityBadge';
 import { layoutWeek, MIN_BLOCK_MINUTES, type Placement, type TimeAxis } from './layout';
 
 /** Height of one hour on the time axis. */
@@ -253,6 +254,7 @@ function LessonBlock({
     lesson.room.name,
     canceled && t('status.canceled'),
     workshop && t('kind.workshop'),
+    lesson.visibility !== 'public' && t(`visibility.${lesson.visibility}`),
   ]
     .filter(Boolean)
     .join(', ');
@@ -289,6 +291,7 @@ function LessonBlock({
       <span className="w-full truncate text-muted-foreground">{lesson.room.name}</span>
       {canceled && <Badge variant="destructive">{t('status.canceled')}</Badge>}
       {workshop && <Badge variant="outline">{t('kind.workshop')}</Badge>}
+      <VisibilityBadge visibility={lesson.visibility} />
     </button>
   );
 }

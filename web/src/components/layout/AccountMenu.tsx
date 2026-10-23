@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { LogIn, LogOut, UserRound } from 'lucide-react';
+import { LogIn, LogOut, UserRound, UsersRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useBackendStatus } from '@/api/backendStatus';
@@ -53,6 +53,17 @@ export function AccountMenu() {
           <span className="block truncate text-xs text-muted-foreground">{me.data.email}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {me.data.role === 'admin' && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link to="/admin/accounts">
+                <UsersRound aria-hidden="true" />
+                {t('account.accounts')}
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem
           disabled={logout.isPending}
           onSelect={() =>

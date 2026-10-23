@@ -4,6 +4,46 @@
  */
 
 export interface paths {
+    "/api/v1/admin/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List accounts
+         * @description Returns every account with its person, ordered by email.
+         */
+        get: operations["listAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/accounts/{accountId}/impersonate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in as an account
+         * @description Signs the admin in as another account ("login as") for at most one hour and sets the session cookie; the admin's own session ends. Recorded in the audit log. Admins cannot be impersonated (403); a disabled or unconfirmed account is a 409.
+         */
+        post: operations["impersonateAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/confirm": {
         parameters: {
             query?: never;
@@ -18,6 +58,26 @@ export interface paths {
          * @description Confirms the email address with the token from the confirmation link and the account's password, and signs in. An unknown, used or expired link is a 410.
          */
         post: operations["confirmEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/impersonation/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Return to the admin account
+         * @description Ends an impersonation and signs the admin in again with a new session cookie. A 409 if the session is no impersonation.
+         */
+        post: operations["stopImpersonation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -73,7 +133,7 @@ export interface paths {
         };
         /**
          * Signed-in account
-         * @description Returns the signed-in account, or 401 without a valid session.
+         * @description Returns the signed-in account, or 401 without a valid session. While an admin is signed in as the account, impersonator names the admin.
          */
         get: operations["getMe"];
         put?: never;
@@ -193,7 +253,7 @@ export interface paths {
         };
         /**
          * Published lesson
-         * @description Returns one published lesson. Lessons that do not exist or are not visible are reported alike as not found.
+         * @description Returns one lesson the caller may see (see getSchedule). Lessons that do not exist or are not visible are reported alike as not found.
          */
         get: operations["getLesson"];
         put?: never;
@@ -253,7 +313,7 @@ export interface paths {
         };
         /**
          * Published schedule
-         * @description Returns the published lessons that start in a range of school dates, as a visitor who is not signed in sees them: public lessons that are released, plus one-off lessons and special formats, which are published early. Canceled lessons are included with their status.
+         * @description Returns the lessons that start in a range of school dates, as the caller may see them. Visitors who are not signed in see public lessons that are released, plus one-off lessons and special formats, which are published early. Members also see lessons for members, and regular lessons up to visibleUntil (early access). Staff see every lesson, hidden and unreleased ones included. Canceled lessons are included with their status.
          */
         get: operations["getSchedule"];
         put?: never;
@@ -348,6 +408,32 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AccountEntry: {
+            /** @description Whether the email address is confirmed. */
+            confirmed: boolean;
+            /** @description Whether the account may no longer sign in. */
+            disabled: boolean;
+            /** @description Email address (login name). */
+            email: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /**
+             * Format: uuid
+             * @description Account ID.
+             */
+            id: string;
+            /**
+             * @description Role of the account.
+             * @enum {string}
+             */
+            role: "member" | "instructor" | "office" | "admin";
+        };
+        AccountList: {
+            /** @description Accounts ordered by email. */
+            items: components["schemas"]["AccountEntry"][];
+        };
         Class: {
             /**
              * Format: uuid
@@ -508,6 +594,19 @@ export interface components {
             /** @description Build version of the running service. */
             version: string;
         };
+        Impersonator: {
+            /**
+             * Format: uuid
+             * @description Account ID of the admin.
+             */
+            accountId: string;
+            /** @description Email address of the admin. */
+            email: string;
+            /** @description Family name of the admin. */
+            familyName: string;
+            /** @description Given name of the admin. */
+            givenName: string;
+        };
         LessonDetail: {
             /** @description Accompanist; absent if the lesson has none. */
             accompanist?: components["schemas"]["StaffRef"];
@@ -559,6 +658,11 @@ export interface components {
              * @enum {string}
              */
             status: "scheduled" | "canceled";
+            /**
+             * @description Who may see the lesson: everyone, signed-in members, or staff only.
+             * @enum {string}
+             */
+            visibility: "public" | "members" | "hidden";
         };
         LessonSummary: {
             /** @description Accompanist; absent if the lesson has none. */
@@ -607,6 +711,11 @@ export interface components {
              * @enum {string}
              */
             status: "scheduled" | "canceled";
+            /**
+             * @description Who may see the lesson: everyone, signed-in members, or staff only.
+             * @enum {string}
+             */
+            visibility: "public" | "members" | "hidden";
         };
         Location: {
             /** @description Postal address, if known. */
@@ -673,6 +782,8 @@ export interface components {
             familyName: string;
             /** @description Given name. */
             givenName: string;
+            /** @description The admin signed in as this account ("login as"); absent otherwise. */
+            impersonator?: components["schemas"]["Impersonator"];
             /**
              * Format: uuid
              * @description ID of the account's person.
@@ -765,6 +876,11 @@ export interface components {
              * @description School date after the last day of the range.
              */
             to: string;
+            /**
+             * Format: date-time
+             * @description Regular lessons that start before this instant are visible to the caller: releasedUntil for guests, later for members with early access; absent for staff, who see every lesson.
+             */
+            visibleUntil?: string;
         };
         StaffList: {
             /** @description Active staff ordered by display name. */
@@ -821,6 +937,68 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    impersonateAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Account to sign in as. */
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     confirmEmail: {
         parameters: {
             query?: never;
@@ -833,6 +1011,36 @@ export interface operations {
                 "application/json": components["schemas"]["ConfirmEmailInputBody"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    stopImpersonation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {

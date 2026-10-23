@@ -21,6 +21,11 @@
     "scheduled": "Scheduled",
     "canceled": "Canceled"
   },
+  "visibility": {
+    "public": "Public",
+    "members": "Members only",
+    "hidden": "Hidden – staff only"
+  },
   "list": {
     "cardLabel": "{{courseType}}, {{day}}, {{time}}",
     "instructor": "Instructor",
@@ -99,6 +104,8 @@
     "next_other": "Next {{count}} days",
     "today": "Today",
     "range": "{{from}} – {{to}}",
-    "releasedThrough": "Classes are published through {{day}}. The next ones follow on {{release}}; workshops are published earlier."
+    "releasedThrough": "Classes are published through {{day}}. The next ones follow on {{release}}; workshops are published earlier.",
+    "earlyAccess": "Early access: as a member you already see classes through {{visible}}. For everyone, they are published through {{day}}.",
+    "staffView": "As staff you see every lesson, including hidden ones and classes that are not published yet. For everyone, classes are published through {{day}}."
   }
 }
