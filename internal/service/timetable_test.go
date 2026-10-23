@@ -70,8 +70,18 @@ func TestTimetableClasses(t *testing.T) {
 			return cmp.Or(cmp.Compare(a.Weekday, b.Weekday), a.StartTime.Compare(b.StartTime),
 				slices.Compare(a.ID[:], b.ID[:]))
 		})
-		if len(want) == 0 || !slices.Equal(got, want) {
-			t.Fatalf("Classes() = %+v, want %+v", got, want)
+		classes := make([]domain.Class, 0, len(got))
+		for _, c := range got {
+			classes = append(classes, c.Class)
+
+			// Staff are named from the store, active or not.
+			if c.Instructor.ID != c.InstructorID || c.Instructor.DisplayName == "" || c.Accompanist.ID != c.AccompanistID {
+				t.Errorf("class %s has staff %+v / %+v", c.ID, c.Instructor, c.Accompanist)
+			}
+		}
+
+		if len(want) == 0 || !slices.Equal(classes, want) {
+			t.Fatalf("Classes() = %+v, want %+v", classes, want)
 		}
 	})
 

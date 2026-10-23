@@ -44,6 +44,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/persons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search persons
+         * @description Returns the persons whose given name, family name or email contains every word of `q`, ignoring case, ordered by family and given name; at most 50. For the office's pickers, e.g. linking a staff member to a person.
+         */
+        get: operations["listPersons"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all staff
+         * @description Returns every staff member ordered by display name, including former (inactive) staff and the link to a person, which the public `listStaff` leaves out.
+         */
+        get: operations["listAllStaff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/confirm": {
         parameters: {
             query?: never;
@@ -297,8 +337,36 @@ export interface paths {
          */
         get: operations["listCourseTypes"];
         put?: never;
-        post?: never;
+        /**
+         * Create a course type
+         * @description Adds a course type. A name another course type has (ignoring case) is a 409 `duplicate`.
+         */
+        post: operations["createCourseType"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/course-types/{courseTypeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update a course type
+         * @description Replaces the name and description of a course type; its classes and lessons show the new name. A name another course type has is a 409 `duplicate`.
+         */
+        put: operations["updateCourseType"];
+        post?: never;
+        /**
+         * Delete a course type
+         * @description Deletes a course type that no class or lesson uses; a used one is a 409 `in-use`.
+         */
+        delete: operations["deleteCourseType"];
         options?: never;
         head?: never;
         patch?: never;
@@ -617,8 +685,36 @@ export interface paths {
          */
         get: operations["listStaff"];
         put?: never;
-        post?: never;
+        /**
+         * Create a staff member
+         * @description Adds an instructor or accompanist, optionally linked to a person. An unknown person is a 422 on `personId`.
+         */
+        post: operations["createStaff"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{staffId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update a staff member
+         * @description Replaces the name, kind, person link and active flag of a staff member. Inactive staff leave the public staff list and the schedule filters but stay on their lessons.
+         */
+        put: operations["updateStaff"];
+        post?: never;
+        /**
+         * Delete a staff member
+         * @description Deletes a staff member that no class or lesson refers to; a referenced one is a 409 `in-use` and can be deactivated instead.
+         */
+        delete: operations["deleteStaff"];
         options?: never;
         head?: never;
         patch?: never;
@@ -701,11 +797,8 @@ export interface components {
             newPassword: string;
         };
         Class: {
-            /**
-             * Format: uuid
-             * @description Accompanist, if any.
-             */
-            accompanistId?: string;
+            /** @description Accompanist, if any. */
+            accompanist?: components["schemas"]["StaffRef"];
             /**
              * Format: int64
              * @description Maximum number of participants per lesson.
@@ -726,11 +819,8 @@ export interface components {
              * @description Class ID.
              */
             id: string;
-            /**
-             * Format: uuid
-             * @description Instructor.
-             */
-            instructorId: string;
+            /** @description Instructor, also when no longer active. */
+            instructor: components["schemas"]["StaffRef"];
             /**
              * @description Skill level the class is aimed at.
              * @enum {string}
@@ -820,6 +910,12 @@ export interface components {
              */
             id: string;
             /** @description Display name. */
+            name: string;
+        };
+        CourseTypeData: {
+            /** @description Description, if any. */
+            description?: string;
+            /** @description Display name, unique (ignoring case). */
             name: string;
         };
         CourseTypeList: {
@@ -1179,6 +1275,23 @@ export interface components {
             /** @description Phone number, if any. */
             phone?: string;
         };
+        PersonMatch: {
+            /** @description Email address, if known. */
+            email?: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /**
+             * Format: uuid
+             * @description Person ID.
+             */
+            id: string;
+        };
+        PersonMatchList: {
+            /** @description Matching persons ordered by family and given name. */
+            items: components["schemas"]["PersonMatch"][];
+        };
         PublicSettings: {
             /** @description Default UI locale (BCP 47 tag), e.g. en. */
             defaultLocale: string;
@@ -1303,6 +1416,44 @@ export interface components {
              */
             visibleUntil?: string;
         };
+        StaffData: {
+            /** @description Whether the staff member is listed publicly; former staff are inactive. */
+            active: boolean;
+            /** @description Name shown in the timetable. */
+            displayName: string;
+            /**
+             * @description Role of the staff member.
+             * @enum {string}
+             */
+            kind: "instructor" | "accompanist";
+            /**
+             * Format: uuid
+             * @description Person record of the staff member, if any.
+             */
+            personId?: string;
+        };
+        StaffEntry: {
+            /** @description Whether the staff member is listed publicly. */
+            active: boolean;
+            /** @description Name shown in the timetable. */
+            displayName: string;
+            /**
+             * Format: uuid
+             * @description Staff ID.
+             */
+            id: string;
+            /**
+             * @description Role of the staff member.
+             * @enum {string}
+             */
+            kind: "instructor" | "accompanist";
+            /** @description Person record of the staff member, if any. */
+            person?: components["schemas"]["PersonMatch"];
+        };
+        StaffEntryList: {
+            /** @description All staff ordered by display name. */
+            items: components["schemas"]["StaffEntry"][];
+        };
         StaffList: {
             /** @description Active staff ordered by display name. */
             items: components["schemas"]["StaffMember"][];
@@ -1414,6 +1565,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listPersons: {
+        parameters: {
+            query?: {
+                /** @description Words to look for; empty matches everyone. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonMatchList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listAllStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffEntryList"];
                 };
             };
             /** @description Error */
@@ -1824,6 +2036,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CourseTypeList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createCourseType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseTypeData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseType"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateCourseType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The course type. */
+                courseTypeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseTypeData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseType"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteCourseType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The course type. */
+                courseTypeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
                 };
             };
             /** @description Error */
@@ -2517,6 +2855,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StaffList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffEntry"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The staff member. */
+                staffId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffEntry"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The staff member. */
+                staffId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
                 };
             };
             /** @description Error */

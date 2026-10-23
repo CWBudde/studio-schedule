@@ -36,10 +36,20 @@ func (s *TimetableService) Terms(ctx context.Context) ([]domain.Term, error) {
 	return terms, nil
 }
 
-// Classes returns the weekly classes of a term ordered by weekday (Sunday
-// first) and start time. An unknown term is domain.ErrNotFound.
-func (s *TimetableService) Classes(ctx context.Context, term domain.TermID) ([]domain.Class, error) {
-	var classes []domain.Class
+// TimetableClass is a weekly class with its staff, so the timetable can
+// name them even after they were deactivated (ADR 0007). Accompanist is zero
+// when there is none.
+type TimetableClass struct {
+	domain.Class
+
+	Instructor, Accompanist domain.Staff
+}
+
+// Classes returns the weekly classes of a term with their staff, ordered by
+// weekday (Sunday first) and start time. An unknown term is
+// domain.ErrNotFound.
+func (s *TimetableService) Classes(ctx context.Context, term domain.TermID) ([]TimetableClass, error) {
+	var classes []TimetableClass
 
 	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 		// The class list cannot tell an unknown term from one without
@@ -48,10 +58,31 @@ func (s *TimetableService) Classes(ctx context.Context, term domain.TermID) ([]d
 			return err
 		}
 
-		var err error
-		classes, err = tx.Classes().ListByTerm(ctx, term)
+		list, err := tx.Classes().ListByTerm(ctx, term)
+		if err != nil {
+			return err
+		}
 
-		return err
+		// One list of all staff, former ones included, instead of a lookup
+		// per class.
+		all, err := tx.Staff().List(ctx)
+		if err != nil {
+			return err
+		}
+
+		staff := make(map[domain.StaffID]domain.Staff, len(all))
+		for _, m := range all {
+			staff[m.ID] = m
+		}
+
+		classes = make([]TimetableClass, 0, len(list))
+		for _, c := range list {
+			classes = append(classes, TimetableClass{
+				Class: c, Instructor: staff[c.InstructorID], Accompanist: staff[c.AccompanistID],
+			})
+		}
+
+		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list classes of term %s: %w", term, err)

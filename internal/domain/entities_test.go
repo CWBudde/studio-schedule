@@ -616,6 +616,8 @@ func TestFieldErrors(t *testing.T) {
 		"room name":     {func() domain.Room { r := room; r.Name = " "; return r }(), "name"},
 		"room capacity": {func() domain.Room { r := room; r.Capacity = 0; return r }(), "capacity"},
 		"course type":   {domain.CourseType{ID: newID[domain.CourseTypeID]()}, "name"},
+		"staff name":    {domain.Staff{ID: newID[domain.StaffID](), Kind: domain.StaffInstructor}, "displayName"},
+		"staff kind":    {domain.Staff{ID: newID[domain.StaffID](), DisplayName: "A", Kind: "dancer"}, "kind"},
 	} {
 		err := tc.entity.Validate()
 

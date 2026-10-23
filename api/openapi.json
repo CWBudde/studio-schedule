@@ -92,10 +92,9 @@
       "Class": {
         "additionalProperties": false,
         "properties": {
-          "accompanistId": {
-            "description": "Accompanist, if any.",
-            "format": "uuid",
-            "type": "string"
+          "accompanist": {
+            "$ref": "#/components/schemas/StaffRef",
+            "description": "Accompanist, if any."
           },
           "capacity": {
             "description": "Maximum number of participants per lesson.",
@@ -119,10 +118,9 @@
             "format": "uuid",
             "type": "string"
           },
-          "instructorId": {
-            "description": "Instructor.",
-            "format": "uuid",
-            "type": "string"
+          "instructor": {
+            "$ref": "#/components/schemas/StaffRef",
+            "description": "Instructor, also when no longer active."
           },
           "level": {
             "description": "Skill level the class is aimed at.",
@@ -166,7 +164,7 @@
           "termId",
           "courseTypeId",
           "roomId",
-          "instructorId",
+          "instructor",
           "level",
           "weekday",
           "startTime",
@@ -318,6 +316,26 @@
         },
         "required": [
           "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "CourseTypeData": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "description": "Description, if any.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name, unique (ignoring case).",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
           "name"
         ],
         "type": "object"
@@ -1116,6 +1134,50 @@
         ],
         "type": "object"
       },
+      "PersonMatch": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "Email address, if known.",
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Person ID.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "givenName",
+          "familyName"
+        ],
+        "type": "object"
+      },
+      "PersonMatchList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "Matching persons ordered by family and given name.",
+            "items": {
+              "$ref": "#/components/schemas/PersonMatch"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "PublicSettings": {
         "additionalProperties": false,
         "properties": {
@@ -1399,6 +1461,93 @@
         ],
         "type": "object"
       },
+      "StaffData": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "description": "Whether the staff member is listed publicly; former staff are inactive.",
+            "type": "boolean"
+          },
+          "displayName": {
+            "description": "Name shown in the timetable.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "kind": {
+            "description": "Role of the staff member.",
+            "enum": [
+              "instructor",
+              "accompanist"
+            ],
+            "type": "string"
+          },
+          "personId": {
+            "description": "Person record of the staff member, if any.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "displayName",
+          "kind",
+          "active"
+        ],
+        "type": "object"
+      },
+      "StaffEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "description": "Whether the staff member is listed publicly.",
+            "type": "boolean"
+          },
+          "displayName": {
+            "description": "Name shown in the timetable.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Staff ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "description": "Role of the staff member.",
+            "enum": [
+              "instructor",
+              "accompanist"
+            ],
+            "type": "string"
+          },
+          "person": {
+            "$ref": "#/components/schemas/PersonMatch",
+            "description": "Person record of the staff member, if any."
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "kind",
+          "active"
+        ],
+        "type": "object"
+      },
+      "StaffEntryList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "All staff ordered by display name.",
+            "items": {
+              "$ref": "#/components/schemas/StaffEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "StaffList": {
         "additionalProperties": false,
         "properties": {
@@ -1614,6 +1763,85 @@
           "admin"
         ],
         "x-access": "admin"
+      }
+    },
+    "/api/v1/admin/persons": {
+      "get": {
+        "description": "Returns the persons whose given name, family name or email contains every word of `q`, ignoring case, ordered by family and given name; at most 50. For the office's pickers, e.g. linking a staff member to a person.",
+        "operationId": "listPersons",
+        "parameters": [
+          {
+            "description": "Words to look for; empty matches everyone.",
+            "explode": false,
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "description": "Words to look for; empty matches everyone.",
+              "maxLength": 100,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonMatchList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Search persons",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/staff": {
+      "get": {
+        "description": "Returns every staff member ordered by display name, including former (inactive) staff and the link to a person, which the public `listStaff` leaves out.",
+        "operationId": "listAllStaff",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffEntryList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List all staff",
+        "tags": [
+          "catalog"
+        ],
+        "x-access": "office"
       }
     },
     "/api/v1/auth/confirm": {
@@ -2138,6 +2366,170 @@
           "catalog"
         ],
         "x-access": "public"
+      },
+      "post": {
+        "description": "Adds a course type. A name another course type has (ignoring case) is a 409 `duplicate`.",
+        "operationId": "createCourseType",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseTypeData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourseType"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create a course type",
+        "tags": [
+          "catalog"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/course-types/{courseTypeId}": {
+      "delete": {
+        "description": "Deletes a course type that no class or lesson uses; a used one is a 409 `in-use`.",
+        "operationId": "deleteCourseType",
+        "parameters": [
+          {
+            "description": "The course type.",
+            "in": "path",
+            "name": "courseTypeId",
+            "required": true,
+            "schema": {
+              "description": "The course type.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete a course type",
+        "tags": [
+          "catalog"
+        ],
+        "x-access": "office"
+      },
+      "put": {
+        "description": "Replaces the name and description of a course type; its classes and lessons show the new name. A name another course type has is a 409 `duplicate`.",
+        "operationId": "updateCourseType",
+        "parameters": [
+          {
+            "description": "The course type.",
+            "in": "path",
+            "name": "courseTypeId",
+            "required": true,
+            "schema": {
+              "description": "The course type.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseTypeData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourseType"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update a course type",
+        "tags": [
+          "catalog"
+        ],
+        "x-access": "office"
       }
     },
     "/api/v1/demo/logins": {
@@ -3077,6 +3469,170 @@
           "catalog"
         ],
         "x-access": "public"
+      },
+      "post": {
+        "description": "Adds an instructor or accompanist, optionally linked to a person. An unknown person is a 422 on `personId`.",
+        "operationId": "createStaff",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffEntry"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create a staff member",
+        "tags": [
+          "catalog"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/staff/{staffId}": {
+      "delete": {
+        "description": "Deletes a staff member that no class or lesson refers to; a referenced one is a 409 `in-use` and can be deactivated instead.",
+        "operationId": "deleteStaff",
+        "parameters": [
+          {
+            "description": "The staff member.",
+            "in": "path",
+            "name": "staffId",
+            "required": true,
+            "schema": {
+              "description": "The staff member.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete a staff member",
+        "tags": [
+          "catalog"
+        ],
+        "x-access": "office"
+      },
+      "put": {
+        "description": "Replaces the name, kind, person link and active flag of a staff member. Inactive staff leave the public staff list and the schedule filters but stay on their lessons.",
+        "operationId": "updateStaff",
+        "parameters": [
+          {
+            "description": "The staff member.",
+            "in": "path",
+            "name": "staffId",
+            "required": true,
+            "schema": {
+              "description": "The staff member.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffEntry"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update a staff member",
+        "tags": [
+          "catalog"
+        ],
+        "x-access": "office"
       }
     },
     "/api/v1/terms": {

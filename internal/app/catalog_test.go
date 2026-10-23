@@ -246,6 +246,11 @@ func TestListClasses(t *testing.T) {
 			slices.Compare(a.ID[:], b.ID[:]))
 	})
 
+	staff := map[domain.StaffID]map[string]any{}
+	for _, m := range demo.Staff {
+		staff[m.ID] = map[string]any{"id": m.ID, "displayName": m.DisplayName}
+	}
+
 	var want []map[string]any
 
 	for _, c := range classes {
@@ -255,7 +260,7 @@ func TestListClasses(t *testing.T) {
 			"termId":          c.TermID,
 			"courseTypeId":    c.CourseTypeID,
 			"roomId":          c.RoomID,
-			"instructorId":    c.InstructorID,
+			"instructor":      staff[c.InstructorID],
 			"level":           c.Level,
 			"weekday":         int(c.Weekday),
 			"startTime":       c.StartTime.String(),
@@ -263,7 +268,7 @@ func TestListClasses(t *testing.T) {
 			"capacity":        c.Capacity,
 		}
 		if !c.AccompanistID.IsZero() {
-			item["accompanistId"] = c.AccompanistID
+			item["accompanist"] = staff[c.AccompanistID]
 		}
 
 		want = append(want, item)
@@ -274,7 +279,7 @@ func TestListClasses(t *testing.T) {
 	// The demo data must exercise both shapes of the optional field.
 	var with, without bool
 	for _, item := range want {
-		_, ok := item["accompanistId"]
+		_, ok := item["accompanist"]
 		with, without = with || ok, without || !ok
 	}
 

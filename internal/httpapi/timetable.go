@@ -67,8 +67,8 @@ type Class struct {
 	TermID          domain.TermID       `doc:"Term the class belongs to."                   json:"termId"`
 	CourseTypeID    domain.CourseTypeID `doc:"Course type taught."                          json:"courseTypeId"`
 	RoomID          domain.RoomID       `doc:"Room the class takes place in."               json:"roomId"`
-	InstructorID    domain.StaffID      `doc:"Instructor."                                  json:"instructorId"`
-	AccompanistID   domain.StaffID      `doc:"Accompanist, if any."                         json:"accompanistId,omitzero"`
+	Instructor      StaffRef            `doc:"Instructor, also when no longer active."     json:"instructor"`
+	Accompanist     *StaffRef           `doc:"Accompanist, if any."                         json:"accompanist,omitempty"`
 	Level           domain.Level        `doc:"Skill level the class is aimed at."           enum:"beginner,intermediate,advanced,professional,open" json:"level"`
 	Weekday         int                 `doc:"Day of the week, 0 = Sunday to 6 = Saturday." json:"weekday"                                          maximum:"6"      minimum:"0"`
 	StartTime       domain.TimeOfDay    `doc:"Start time (HH:MM) in the school time zone."  example:"18:00"                                         json:"startTime" pattern:"^[0-2][0-9]:[0-5][0-9]$"`
@@ -104,8 +104,8 @@ func (h *handlers) listClasses(ctx context.Context, in *ClassListInput) (*ClassL
 			TermID:          c.TermID,
 			CourseTypeID:    c.CourseTypeID,
 			RoomID:          c.RoomID,
-			InstructorID:    c.InstructorID,
-			AccompanistID:   c.AccompanistID,
+			Instructor:      StaffRef{ID: c.Instructor.ID, DisplayName: c.Instructor.DisplayName},
+			Accompanist:     accompanistRef(c.Accompanist),
 			Level:           c.Level,
 			Weekday:         int(c.Weekday),
 			StartTime:       c.StartTime,
@@ -115,4 +115,13 @@ func (h *handlers) listClasses(ctx context.Context, in *ClassListInput) (*ClassL
 	}
 
 	return &ClassListOutput{Body: ClassList{Items: items}}, nil
+}
+
+// accompanistRef is the reference to an accompanist, nil for none.
+func accompanistRef(s domain.Staff) *StaffRef {
+	if s.ID.IsZero() {
+		return nil
+	}
+
+	return &StaffRef{ID: s.ID, DisplayName: s.DisplayName}
 }

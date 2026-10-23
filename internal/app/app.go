@@ -124,6 +124,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 		Schedule:       service.NewScheduleService(deps.Store, deps.Clock),
 		Auth:           newAuthService(deps),
 		Family:         service.NewFamilyService(deps.Store, deps.Clock, deps.IDs),
+		Persons:        service.NewPersonService(deps.Store),
 		Outbox:         service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer),
 		Version:        deps.Version,
 		Logger:         deps.Logger,

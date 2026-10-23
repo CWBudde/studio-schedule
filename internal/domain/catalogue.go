@@ -65,8 +65,8 @@ type Staff struct {
 func (s Staff) Validate() error {
 	return validate(
 		rule{!s.ID.IsZero(), "staff id must be set"},
-		rule{!blank(s.DisplayName), "staff display name must not be empty"},
-		rule{s.Kind.Valid(), "invalid staff kind"},
+		on("displayName", !blank(s.DisplayName), "staff display name must not be empty"),
+		on("kind", s.Kind.Valid(), "invalid staff kind"),
 	)
 }
 
