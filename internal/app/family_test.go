@@ -74,8 +74,12 @@ func TestFamilyFlow(t *testing.T) {
 		t.Errorf("me after the update: %v", me)
 	}
 
-	a.expect(http.StatusUnprocessableEntity, http.MethodPut, "/api/v1/family/me",
-		`{"givenName":"Clara","familyName":"Amberly","birthDate":"2099-01-01"}`, clara)
+	// A birth date in the future names the field, so the form can mark it.
+	future := decode(t, a.expect(http.StatusUnprocessableEntity, http.MethodPut, "/api/v1/family/me",
+		`{"givenName":"Clara","familyName":"Amberly","birthDate":"2099-01-01"}`, clara))
+	if errs, _ := future["errors"].([]any); len(errs) != 1 || errs[0].(map[string]any)["location"] != "body.birthDate" {
+		t.Errorf("422 errors %v, want body.birthDate", future["errors"])
+	}
 
 	// A new child, edited and removed again.
 	added := decode(t, a.expect(http.StatusCreated, http.MethodPost, "/api/v1/family/dependents",

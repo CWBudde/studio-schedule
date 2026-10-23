@@ -1,4 +1,4 @@
--- The language of the mails an account receives (ADR 0007).
+-- The language of the mails an account receives (ADR 0008).
 -- Conventions as in 00001_core.sql.
 
 -- +goose Up

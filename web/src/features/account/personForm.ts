@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { FieldError, UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { ApiError, type FamilyPerson, type PersonData, publicSettingsQuery } from '@/api/queries';
+import { type FamilyPerson, type PersonData, publicSettingsQuery } from '@/api/queries';
 import { invalidFields, useFieldErrorText } from '@/features/auth/form';
 import { type SchoolDate, todayIn } from '@/lib/schoolTime';
 
@@ -56,21 +56,17 @@ export function useSchoolToday(): SchoolDate | undefined {
 
 const personFields = ['givenName', 'familyName', 'phone', 'birthDate'] as const;
 
-/** The API's check of the birth date names no field, only the reason in the detail. */
-const isFutureBirthDate = (error: unknown) =>
-  error instanceof ApiError &&
-  error.status === 422 &&
-  /birth date must not be in the future/.test(
-    String((error.body as { detail?: unknown } | undefined)?.detail ?? ''),
-  );
-
-/** Marks the fields a 422 answer of a person operation refuses. */
+/**
+ * Marks the fields a 422 answer of a person operation refuses. The date
+ * input only sends well-formed dates, so a refused birth date is one in the
+ * future.
+ */
 export function showPersonErrors(error: unknown, form: UseFormReturn<PersonValues>) {
   for (const field of invalidFields(error, personFields)) {
-    form.setError(field, { type: 'server', message: 'invalid' });
-  }
-  if (isFutureBirthDate(error)) {
-    form.setError('birthDate', { type: 'server', message: 'birthDateFuture' });
+    form.setError(field, {
+      type: 'server',
+      message: field === 'birthDate' ? 'birthDateFuture' : 'invalid',
+    });
   }
 }
 

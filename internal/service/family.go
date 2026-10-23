@@ -17,6 +17,10 @@ import (
 // is its last guardian and bookings or class memberships still refer to it.
 var ErrDependentInUse = fmt.Errorf("%w: the dependent has bookings or class memberships", domain.ErrConflict)
 
+// ErrFutureBirthDate reports a birth date after today in the school time
+// zone.
+var ErrFutureBirthDate = fmt.Errorf("%w: birth date must not be in the future", domain.ErrValidation)
+
 // PersonData are the fields a guardian edits, for themself or a dependent.
 // Optional fields are empty or zero when absent.
 type PersonData struct {
@@ -221,7 +225,7 @@ func (s *FamilyService) apply(
 		}
 
 		if d.BirthDate.Compare(domain.DateOf(s.clock.Now(), loc)) > 0 {
-			return domain.Person{}, fmt.Errorf("%w: birth date must not be in the future", domain.ErrValidation)
+			return domain.Person{}, ErrFutureBirthDate
 		}
 	}
 

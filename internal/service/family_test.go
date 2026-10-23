@@ -285,6 +285,10 @@ func TestUpdatePerson(t *testing.T) {
 		}
 
 		wantIs(t, err, domain.ErrValidation)
+
+		if name == "future birth" {
+			wantIs(t, err, service.ErrFutureBirthDate)
+		}
 	}
 }
 

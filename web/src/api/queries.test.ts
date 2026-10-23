@@ -1,5 +1,6 @@
 import { MutationObserver, QueryClient, QueryObserver } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Me } from '@/api/client';
 import i18n from '@/i18n';
 import {
   accounts,
@@ -410,7 +411,8 @@ describe('account language', () => {
   ])('saves the language for emails $body', async ({ body, me }) => {
     const put = mockApiPut({ '/api/v1/auth/locale': { status: 204 } });
     const queryClient = new QueryClient();
-    queryClient.setQueryData(meQuery.queryKey, { ...meMember, locale: 'en' });
+    const before: Me = { ...meMember, locale: 'en' };
+    queryClient.setQueryData(meQuery.queryKey, before);
 
     await new MutationObserver(queryClient, updateLocaleMutation(queryClient)).mutate(body);
 
@@ -516,6 +518,17 @@ describe('family', () => {
     expect((error as ApiError).status).toBe(409);
     expect(queryClient.getQueryState(familyQuery.queryKey)?.isInvalidated).toBe(false);
     expect(queryClient.getQueryData(meQuery.queryKey)).toEqual(meMember);
+  });
+
+  it('asks for the family again when the dependent has left it (404)', async () => {
+    mockApiDelete({ '/api/v1/family/dependents/{personId}': problem(404, 'resource not found') });
+    const queryClient = familyClient();
+
+    await expect(
+      new MutationObserver(queryClient, removeDependentMutation(queryClient)).mutate(lina.id),
+    ).rejects.toThrow();
+
+    expect(queryClient.getQueryState(familyQuery.queryKey)?.isInvalidated).toBe(true);
   });
 
   it('signs out locally when the session has ended (401)', async () => {

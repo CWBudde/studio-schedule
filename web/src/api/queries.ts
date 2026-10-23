@@ -213,19 +213,14 @@ export const registerMutation = (queryClient: QueryClient) =>
     onSuccess: () => queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey }),
   });
 
-/** The JSON request body of a POST operation, as the generated schema has it. */
-type PostBody<P extends keyof paths> = paths[P] extends {
-  post: { requestBody: { content: { 'application/json': infer B } } };
+/** The JSON request body of an operation, as the generated schema has it. */
+type JsonBody<P extends keyof paths, M extends 'post' | 'put'> = paths[P] extends {
+  [m in M]: { requestBody: { content: { 'application/json': infer B } } };
 }
   ? B
   : never;
-
-/** The JSON request body of a PUT operation, as the generated schema has it. */
-type PutBody<P extends keyof paths> = paths[P] extends {
-  put: { requestBody: { content: { 'application/json': infer B } } };
-}
-  ? B
-  : never;
+type PostBody<P extends keyof paths> = JsonBody<P, 'post'>;
+type PutBody<P extends keyof paths> = JsonBody<P, 'put'>;
 
 export type RequestPasswordResetBody = PostBody<'/api/v1/auth/password-reset'>;
 export type ResetPasswordBody = PostBody<'/api/v1/auth/password-reset/confirm'>;
@@ -345,6 +340,19 @@ export const familyQuery = queryOptions({
 const refreshFamily = (queryClient: QueryClient) =>
   queryClient.invalidateQueries({ queryKey: familyQuery.queryKey });
 
+/**
+ * The errors of a dependent operation. A 404 means the dependent left the
+ * family meanwhile (another guardian or the office removed the link), so the
+ * family is asked again.
+ */
+function onDependentError(queryClient: QueryClient) {
+  const signedOut = signedOutOn401(queryClient);
+  return (error: Error) => {
+    signedOut(error);
+    if (error instanceof ApiError && error.status === 404) void refreshFamily(queryClient);
+  };
+}
+
 /** Changes the signed-in person's data; the header's name comes from `me`, so it is asked again. */
 export const updateMyPersonMutation = (queryClient: QueryClient) =>
   mutationOptions({
@@ -373,7 +381,7 @@ export const updateDependentMutation = (queryClient: QueryClient) =>
         api.PUT('/api/v1/family/dependents/{personId}', { params: { path: { personId } }, body }),
       ),
     onSuccess: () => refreshFamily(queryClient),
-    onError: signedOutOn401(queryClient),
+    onError: onDependentError(queryClient),
   });
 
 /**
@@ -388,7 +396,7 @@ export const removeDependentMutation = (queryClient: QueryClient) =>
         api.DELETE('/api/v1/family/dependents/{personId}', { params: { path: { personId } } }),
       ),
     onSuccess: () => refreshFamily(queryClient),
-    onError: signedOutOn401(queryClient),
+    onError: onDependentError(queryClient),
   });
 
 /** Signs out; the `me` query becomes null. */

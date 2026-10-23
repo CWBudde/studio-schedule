@@ -66,7 +66,8 @@ describe('ProfileCard', () => {
         birthDate: '1988-06-15',
       },
     });
-    const meRequests = () => get.mock.calls.filter(([path]) => path === '/api/v1/auth/me').length;
+    const meRequests = () =>
+      get.mock.calls.filter((call) => (call as unknown[])[0] === '/api/v1/auth/me').length;
     await waitFor(() => expect(meRequests()).toBe(2));
   });
 
@@ -107,7 +108,7 @@ describe('ProfileCard', () => {
     // Without the settings the school's today is unknown, so the API decides.
     mockApiGet({ ...signedInMember, '/api/v1/settings/public': { status: 500 } });
     mockApiPut({
-      '/api/v1/family/me': problem(422, 'validation failed: birth date must not be in the future'),
+      '/api/v1/family/me': problem(422, 'validation failed', [{ location: 'body.birthDate' }]),
     });
 
     renderAccount();
