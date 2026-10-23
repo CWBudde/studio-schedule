@@ -105,13 +105,17 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 
 	defer closeStore()
 
-	handler, _ := app.New(app.Deps{
+	deps := app.Deps{
 		Store:   st,
 		Clock:   clock.System{},
 		Version: version,
 		Logger:  logger,
 		UI:      webui.Handler(),
-	})
+	}
+	handler, _ := app.New(deps)
+
+	stopJobs := startJobs(ctx, deps, logger)
+	defer stopJobs() // runs before closeStore: no job outlives the store
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -154,6 +158,32 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	logger.Info("stopped")
 
 	return nil
+}
+
+// startJobs runs the background jobs once, so that lesson generation is
+// done before the server listens, and then on their intervals. A failed job
+// is logged and does not prevent startup. The returned function stops the
+// jobs and waits for them; they also stop when ctx is canceled.
+func startJobs(ctx context.Context, deps app.Deps, logger *slog.Logger) (stop func()) {
+	runner := app.Jobs(deps)
+
+	if err := runner.RunOnce(ctx); err != nil {
+		logger.Error("background jobs failed at startup", slog.Any("err", err))
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		runner.Run(ctx)
+	}()
+
+	return func() {
+		cancel()
+		<-done
+	}
 }
 
 // openStore returns the PostgreSQL store if a database is configured.

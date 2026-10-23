@@ -26,18 +26,31 @@ var version = "dev"
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 
+	ctx := context.Background()
+
 	st := memory.New()
-	if err := seed.LoadDemo(context.Background(), st); err != nil {
+	if err := seed.LoadDemo(ctx, st); err != nil {
 		logger.Error("seeding demo data failed", slog.Any("err", err))
 		os.Exit(1)
 	}
 
-	handler, _ := app.New(app.Deps{
+	deps := app.Deps{
 		Store:   st,
 		Clock:   clock.System{},
 		Version: version,
 		Logger:  logger,
-	})
+	}
+	handler, _ := app.New(deps)
+
+	// Run the jobs once before the bridge answers the first request, so the
+	// demo has lessons from the start; Go timers keep them running.
+	runner := app.Jobs(deps)
+
+	if err := runner.RunOnce(ctx); err != nil {
+		logger.Error("background jobs failed", slog.Any("err", err))
+	}
+
+	go runner.Run(ctx)
 
 	wasmbridge.Register(handler, version)
 
