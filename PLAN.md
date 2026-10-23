@@ -225,27 +225,39 @@ Goal: anyone can browse the published timetable. This is the first real demo val
 Goal: people can sign up and log in; staff can maintain the timetable.
 
 - [ ] Persons and family: guardians manage dependents (children without their own login)
-- [ ] Registration with email confirmation; login and logout; server-side sessions (random token in
+- [x] Registration with email confirmation; login and logout; server-side sessions (random token in
       an HttpOnly, Secure, SameSite=Lax cookie; only the token hash is stored); sliding expiry
-- [ ] Password hashing behind `PasswordHasher` (argon2id; cheap parameters via build tag for the
-      demo; pre-hashed seed passwords)
+      (2026-10-23) — `AuthService` and `/api/v1/auth/{register,confirm,login,logout,me}`; confirming
+      needs the link and the password (no pre-registration takeover) and signs in; 14 days idle,
+      90 days at most, extended at most daily; Secure unless `BASE_URL` is not https (ADR 0004)
+- [x] Password hashing behind `PasswordHasher` (argon2id; cheap parameters via build tag for the
+      demo; pre-hashed seed passwords) (2026-10-23) — `internal/auth/password` (PHC strings, OWASP
+      parameters on the server, 1 MiB in `js`, rehash on login, bounded concurrency); every demo
+      account has the pre-hashed password `demo-password`
 - [ ] Password reset (hashed single-use token with expiry); change password; change email with
       re-confirmation
 - [ ] RBAC middleware/helpers on Huma operations; admin impersonation ("login as") with audit and a
       visible banner
 - [ ] Login rate limiting, security headers (CSP, HSTS in production), consistent problem+json
       errors without internal details
-- [ ] Mail: outbox table, worker, SMTP sender, EN/DE templates (`html/template` + text alternative);
-      demo: "Demo mailbox" panel listing outbox mails
+- [x] Mail: outbox table, worker, SMTP sender, EN/DE templates (`html/template` + text alternative);
+      demo: "Demo mailbox" panel listing outbox mails (2026-10-23) — mails go to `outbox_mails` in
+      the causing transaction; the `deliver-mail` job claims one at a time and retries 5 times
+      (`SMTP_*` config, `internal/mail/smtp` server only); the demo's header opens the mailbox, whose
+      confirmation links open in the app
 - [ ] Admin CRUD: locations, rooms, staff, course types, terms, classes, class members
 - [ ] Lesson administration: edit, cancel (notifies booked participants), hide, add one-off/special
       lessons, clone day, clone week
 - [ ] UI: login, registration, confirm, reset; profile (person data, dependents, password, language);
       admin area with shadcn data tables and forms (react-hook-form + zod, schemas derived from the
-      OpenAPI types)
-- [ ] Demo: login page lists demo accounts per role (member, instructor, office, admin)
+      OpenAPI types) (2026-10-23) — partial: login, registration and confirm pages and the signed-in
+      header are done; reset, profile and the admin area remain
+- [x] Demo: login page lists demo accounts per role (member, instructor, office, admin)
+      (2026-10-23) — `GET /api/v1/demo/logins` in demo installations (WASM demo, `serve` without a
+      database); one click signs in
 - [ ] Tests: auth flows, RBAC matrix per endpoint, mail rendering snapshots, e2e (login, admin edits a
-      class)
+      class) (2026-10-23) — partial: auth flow tests (service and HTTP), mail golden files and e2e
+      sign-in and registration exist; the RBAC matrix and "admin edits a class" remain
 
 ## Phase 4 — Booking & waiting list
 
