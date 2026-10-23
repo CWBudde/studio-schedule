@@ -76,5 +76,6 @@ Settled while writing the first repositories (`internal/store/store.go`):
   "try insert, then carry on" is not part of the contract.
 - Instants come back in UTC, truncated to microseconds (the `timestamptz` precision); the memory
   store normalises them the same way. Text ordering is byte-wise (collation `C`); locale-aware
-  sorting belongs in the UI.
-
+  sorting belongs in the UI. Account emails are unique ignoring ASCII case only (`citext` with
+  collation `C`), so both stores agree on non-ASCII addresses.
+- A context canceled before the commit rolls the transaction back in both stores.

@@ -208,6 +208,25 @@ func testAccounts(t *testing.T, newStore func(*testing.T) store.Store) {
 			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Accounts().Create(ctx, other) })
 			wantErr(e.t, err, domain.ErrConflict)
 		},
+		"OnlyASCIICaseIsFolded": func(e *env) {
+			// Like PostgreSQL's lower() under collation "C": "Ä" and "ä" differ.
+			upper := e.account(e.person("Ada", "Upper"), "Äda@example.org")
+			lower := e.account(e.person("Ada", "Lower"), "äda@EXAMPLE.org")
+
+			got, err := getByEmail(e, "äda@example.org")
+			if err != nil {
+				e.t.Fatalf("GetByEmail: %v", err)
+			}
+
+			wantEqual(e.t, got, lower)
+
+			got, err = getByEmail(e, "Äda@Example.org")
+			if err != nil {
+				e.t.Fatalf("GetByEmail: %v", err)
+			}
+
+			wantEqual(e.t, got, upper)
+		},
 		"UpdateToTakenEmailIsConflict": func(e *env) {
 			e.account(e.person("Ada", "Account"), "ada@example.org")
 			b := e.account(e.person("Bea", "Account"), "bea@example.org")

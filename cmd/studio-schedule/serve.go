@@ -26,7 +26,7 @@ const shutdownTimeout = 10 * time.Second
 
 // errNoPostgres is returned while the PostgreSQL store does not exist yet, so
 // that a configured database is never silently replaced by the memory store.
-var errNoPostgres = errors.New("DATABASE_URL is set, but the PostgreSQL store is not available yet")
+var errNoPostgres = errors.New("a database URL is set (DATABASE_URL or --database-url), but the PostgreSQL store is not available yet")
 
 func newServeCmd(env config.LookupFunc) *cobra.Command {
 	var (

@@ -1,13 +1,13 @@
 package memory
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
+	"uuid"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
 )
@@ -19,10 +19,19 @@ func conflict(format string, args ...any) error {
 }
 
 // compareID orders IDs by their bytes, like PostgreSQL orders uuid values.
-func compareID[I domain.AnyID](a, b I) int {
-	x, y := [16]byte(a), [16]byte(b)
+func compareID[I domain.AnyID](a, b I) int { return uuid.UUID(a).Compare(uuid.UUID(b)) }
 
-	return bytes.Compare(x[:], y[:])
+// foldEmail lower-cases ASCII letters only, like PostgreSQL's lower() under
+// collation "C" (the collation of the citext email column). Other letters
+// keep their case, so "Ä" and "ä" are different emails in both stores.
+func foldEmail(s string) string {
+	return strings.Map(func(r rune) rune {
+		if 'A' <= r && r <= 'Z' {
+			return r + 'a' - 'A'
+		}
+
+		return r
+	}, s)
 }
 
 // sorted sorts s in place and returns it.
@@ -190,7 +199,7 @@ func (r accountRepo) Get(_ context.Context, id domain.AccountID) (domain.Account
 }
 
 func (r accountRepo) GetByEmail(_ context.Context, email string) (domain.Account, error) {
-	found := r.tx.state.accounts.filter(func(a domain.Account) bool { return strings.EqualFold(a.Email, email) })
+	found := r.tx.state.accounts.filter(func(a domain.Account) bool { return foldEmail(a.Email) == foldEmail(email) })
 	if len(found) == 0 {
 		return domain.Account{}, notFound("account")
 	}
@@ -228,7 +237,7 @@ func (r accountRepo) put(a domain.Account) error {
 	switch {
 	case !s.persons.has(a.PersonID):
 		return conflict("account references a missing person")
-	case s.accounts.exists(func(o domain.Account) bool { return o.ID != a.ID && strings.EqualFold(o.Email, a.Email) }):
+	case s.accounts.exists(func(o domain.Account) bool { return o.ID != a.ID && foldEmail(o.Email) == foldEmail(a.Email) }):
 		return conflict("account email is taken")
 	case s.accounts.exists(func(o domain.Account) bool { return o.ID != a.ID && o.PersonID == a.PersonID }):
 		return conflict("person already has an account")
@@ -242,7 +251,7 @@ func (r accountRepo) put(a domain.Account) error {
 
 func (r accountRepo) List(context.Context) ([]domain.Account, error) {
 	return sorted(r.tx.state.accounts.filter(all), func(a, b domain.Account) int {
-		return cmp.Or(strings.Compare(strings.ToLower(a.Email), strings.ToLower(b.Email)), compareID(a.ID, b.ID))
+		return cmp.Or(strings.Compare(foldEmail(a.Email), foldEmail(b.Email)), compareID(a.ID, b.ID))
 	}), nil
 }
 
@@ -764,6 +773,8 @@ func (r lessonRepo) put(l domain.Lesson) error {
 }
 
 func (r lessonRepo) ListRange(_ context.Context, from, to time.Time) ([]domain.Lesson, error) {
+	// Bounds get the precision of stored instants, as in PostgreSQL.
+	from, to = instant(from), instant(to)
 	lessons := r.tx.state.lessons.filter(func(l domain.Lesson) bool {
 		return !l.StartsAt.Before(from) && l.StartsAt.Before(to)
 	})

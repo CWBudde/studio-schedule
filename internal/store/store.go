@@ -5,9 +5,12 @@
 //
 // Rules for implementations and callers:
 //
-//   - InTx must never be nested. A nested call (detected through the
-//     context) fails with ErrNestedTx. Helpers that need data access take a
-//     Tx instead of starting their own transaction.
+//   - InTx must never be nested. Helpers that need data access take a Tx
+//     instead of starting their own transaction. A nested call is detected
+//     only through the context: it fails with ErrNestedTx if it gets the
+//     callback's ctx (or one derived from it). With an unrelated context it
+//     deadlocks in the memory store.
+//   - A context canceled before the commit rolls the transaction back.
 //   - If the callback returns an error (or panics), every change made through
 //     the Tx is rolled back and the error is returned unchanged.
 //   - The callback may run more than once: the PostgreSQL store retries it
@@ -129,18 +132,19 @@ type PersonRepo interface {
 	ListGuardians(ctx context.Context, dependent domain.PersonID) ([]domain.Person, error)
 }
 
-// AccountRepo stores login accounts. Emails are unique case-insensitively,
-// and a person has at most one account.
+// AccountRepo stores login accounts. Emails are unique ignoring the case of
+// ASCII letters (other letters compare exactly), and a person has at most
+// one account.
 type AccountRepo interface {
 	Get(ctx context.Context, id domain.AccountID) (domain.Account, error)
-	// GetByEmail finds an account by email, ignoring case.
+	// GetByEmail finds an account by email, ignoring ASCII case.
 	GetByEmail(ctx context.Context, email string) (domain.Account, error)
 	// Create fails with domain.ErrConflict if the ID, the email or the person
 	// is taken, or the person does not exist.
 	Create(ctx context.Context, a domain.Account) error
 	// Update fails with domain.ErrConflict under the same rules as Create.
 	Update(ctx context.Context, a domain.Account) error
-	// List returns all accounts ordered by lower-cased email and ID.
+	// List returns all accounts ordered by ASCII-lower-cased email and ID.
 	List(ctx context.Context) ([]domain.Account, error)
 }
 

@@ -57,6 +57,28 @@ func testTx(t *testing.T, newStore func(*testing.T) store.Store) {
 				e.t.Fatal("InTx with a canceled context ran the callback")
 			}
 		},
+		"CanceledBeforeCommitRollsBack": func(e *env) {
+			ctx, cancel := context.WithCancel(e.t.Context())
+			defer cancel()
+
+			p := domain.Person{ID: newID[domain.PersonID](e), GivenName: "Cleo", FamilyName: "Canceled"}
+
+			err := e.st.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+				if err := tx.Persons().Create(ctx, p); err != nil {
+					return err
+				}
+
+				cancel()
+
+				return nil
+			})
+			wantErr(e.t, err, context.Canceled)
+
+			_, err = query(e, func(ctx context.Context, tx store.Tx) (domain.Person, error) {
+				return tx.Persons().Get(ctx, p.ID)
+			})
+			wantErr(e.t, err, domain.ErrNotFound)
+		},
 		"PanicRollsBackAndPropagates": func(e *env) {
 			p := domain.Person{ID: newID[domain.PersonID](e), GivenName: "Pia", FamilyName: "Panic"}
 

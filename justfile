@@ -1,4 +1,5 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
+set dotenv-load # recipes see the variables of a local .env (see .env.example)
 
 version := `git describe --tags --always --dirty 2>/dev/null || echo dev`
 ldflags := "-s -w -X main.version=" + version

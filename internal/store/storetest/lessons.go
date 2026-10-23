@@ -63,6 +63,12 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 				return tx.Lessons().ListRange(ctx, t0.Add(72*time.Hour), t0.Add(96*time.Hour))
 			})
 			wantSlice(e.t, got, nil)
+
+			// Bounds are truncated to microseconds like stored instants.
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+				return tx.Lessons().ListRange(ctx, t0.Add(500*time.Nanosecond), t0.Add(30*time.Minute+500*time.Nanosecond))
+			})
+			wantSlice(e.t, got, []domain.Lesson{atStart2, atStart1})
 		},
 		"ClassStartIsUnique": func(e *env) {
 			s := e.setting()

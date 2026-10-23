@@ -144,6 +144,11 @@ func (s *Store) InTx(ctx context.Context, mode store.TxMode, fn func(ctx context
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// The request may have been canceled while waiting for the lock.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	t := &tx{state: s.state, mode: mode}
 	if mode == store.ReadWrite {
 		s.gen++
@@ -151,6 +156,11 @@ func (s *Store) InTx(ctx context.Context, mode store.TxMode, fn func(ctx context
 	}
 
 	if err := fn(context.WithValue(ctx, txKey{}, s), t); err != nil {
+		return err
+	}
+
+	// Like a PostgreSQL commit, a canceled context fails the transaction.
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 
