@@ -46,7 +46,7 @@ function StatusCard() {
   const failed = health.isError || settings.isError;
 
   return (
-    <Card aria-labelledby="status-title">
+    <Card role="region" aria-labelledby="status-title">
       <CardHeader>
         <CardTitle>
           <h2 id="status-title">{t('home.status.title')}</h2>

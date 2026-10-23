@@ -18,7 +18,7 @@ export function NextLessons() {
   const settings = useQuery(publicSettingsQuery);
 
   return (
-    <Card aria-labelledby="next-lessons-title">
+    <Card role="region" aria-labelledby="next-lessons-title">
       <CardHeader>
         <CardTitle>
           <h2 id="next-lessons-title">{t('home.schedule.title')}</h2>

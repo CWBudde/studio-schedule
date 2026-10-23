@@ -18,11 +18,7 @@ describe('HomePage', () => {
 
     renderInRouter(<HomePage />);
 
-    const card = (await screen.findByRole('heading', { name: 'System status' })).closest(
-      '[data-slot="card"]',
-    );
-    expect(card).not.toBeNull();
-    const status = within(card as HTMLElement);
+    const status = within(await screen.findByRole('region', { name: 'System status' }));
 
     expect(await status.findByText('OK')).toBeInTheDocument();
     expect(status.getByText('0.1.0-test')).toBeInTheDocument();
@@ -42,11 +38,7 @@ describe('HomePage', () => {
 
     renderInRouter(<HomePage />);
 
-    const teaser = within(
-      (await screen.findByRole('heading', { name: 'Next lessons' })).closest(
-        '[data-slot="card"]',
-      ) as HTMLElement,
-    );
+    const teaser = within(await screen.findByRole('region', { name: 'Next lessons' }));
     const ballet = await teaser.findByRole('link', { name: /Ballet/ });
     // Times are in the school time zone (Berlin), not the browser's.
     expect(ballet).toHaveTextContent('Mon, Oct 26, 18:00');
