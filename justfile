@@ -88,8 +88,16 @@ web-check:
     pnpm -C web check
     pnpm -C web test
 
-# Everything CI runs
-ci: check-tidy check-formatted check-sqlc lint test check-wasm-deps web-check demo-build
+# Install the browser for the e2e tests (once per machine)
+e2e-install:
+    pnpm -C web e2e:install
+
+# Build the demo and run the Playwright e2e tests against it (args go to playwright test)
+e2e *args: demo-build
+    pnpm -C web e2e {{args}}
+
+# Everything CI runs (the e2e tests need `just e2e-install` once)
+ci: check-tidy check-formatted check-sqlc lint test check-wasm-deps web-check e2e
 
 # ---------------------------------------------------------------- build & run
 

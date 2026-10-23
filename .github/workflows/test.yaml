@@ -24,3 +24,6 @@ jobs:
 
   test-web:
     uses: ./.github/workflows/test-web.yaml
+
+  test-e2e:
+    uses: ./.github/workflows/test-e2e.yaml
