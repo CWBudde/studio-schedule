@@ -19,3 +19,5 @@ if (!('ResizeObserver' in globalThis)) {
 Element.prototype.hasPointerCapture ??= () => false;
 Element.prototype.releasePointerCapture ??= () => undefined;
 Element.prototype.scrollIntoView ??= () => undefined;
+// jsdom does not implement scrolling; the router scrolls on navigation.
+window.scrollTo = () => undefined;

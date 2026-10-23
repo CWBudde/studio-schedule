@@ -20,5 +20,85 @@
   "status": {
     "scheduled": "Scheduled",
     "canceled": "Canceled"
+  },
+  "list": {
+    "cardLabel": "{{courseType}}, {{day}}, {{time}}",
+    "instructor": "Instructor",
+    "accompaniedBy": "accompanied by {{name}}",
+    "place": "Place",
+    "loading": "Loading schedule…",
+    "empty": {
+      "title": "No lessons in this period",
+      "unpublished": "No lessons have been published for these dates yet.",
+      "filtered": "No lessons match the selected filters.",
+      "nextRelease": "Next release: {{date}}"
+    },
+    "error": {
+      "title": "Could not load the schedule.",
+      "description": "Please check your connection and try again.",
+      "retry": "Retry"
+    }
+  },
+  "filters": {
+    "label": "Filters",
+    "location": "Location",
+    "instructor": "Instructor",
+    "courseType": "Course type",
+    "level": "Level",
+    "allLocations": "All locations",
+    "allInstructors": "All instructors",
+    "allCourseTypes": "All course types",
+    "anyLevel": "Any level",
+    "reset": "Reset filters"
+  },
+  "week": {
+    "label": "Week timetable",
+    "range": "{{start}} – {{end}}",
+    "navigation": "Week navigation",
+    "previous": "Previous week",
+    "current": "This week",
+    "next": "Next week",
+    "empty": "Nothing is published for this week."
+  },
+  "detail": {
+    "title": "Lesson details",
+    "close": "Close",
+    "loading": "Loading the lesson…",
+    "notFound": {
+      "title": "This lesson is not available",
+      "description": "It may have been removed or is not released yet."
+    },
+    "error": "Could not load the lesson.",
+    "retry": "Retry",
+    "canceled": "This lesson has been canceled.",
+    "room": "Room",
+    "location": "Location",
+    "instructor": "Instructor",
+    "accompanist": "Accompanist",
+    "capacity": "Capacity",
+    "places_one": "{{count}} place",
+    "places_other": "{{count}} places",
+    "about": "About this course"
+  },
+  "countdown": {
+    "in": "Next release in {{duration}}",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "hours_one": "{{count}} hour",
+    "hours_other": "{{count}} hours",
+    "minutes_one": "{{count}} minute",
+    "minutes_other": "{{count}} minutes",
+    "at": "Release: {{at}}",
+    "releasing": "New lessons are being released…"
+  },
+  "page": {
+    "rangeNav": "Date range",
+    "previous_one": "Previous day",
+    "previous_other": "Previous {{count}} days",
+    "next_one": "Next day",
+    "next_other": "Next {{count}} days",
+    "today": "Today",
+    "range": "{{from}} – {{to}}",
+    "releasedThrough": "Classes are published through {{day}}. The next ones follow on {{release}}; workshops are published earlier."
   }
 }

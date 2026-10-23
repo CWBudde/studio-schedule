@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { createBrowserHistory, createHashHistory, createRouter } from '@tanstack/react-router';
+import { ApiError } from '@/api/queries';
 import { routerHistory } from '@/lib/env';
 import { routeTree } from './routeTree.gen';
 
@@ -7,7 +8,10 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      retry: 1,
+      // Retry once on network and server errors; a client error such as a
+      // 404 will not go away by asking again.
+      retry: (failures, error) =>
+        failures < 1 && !(error instanceof ApiError && error.status < 500),
       refetchOnWindowFocus: false,
     },
   },

@@ -20,5 +20,85 @@
   "status": {
     "scheduled": "Findet statt",
     "canceled": "Abgesagt"
+  },
+  "list": {
+    "cardLabel": "{{courseType}}, {{day}}, {{time}}",
+    "instructor": "Lehrkraft",
+    "accompaniedBy": "Begleitung: {{name}}",
+    "place": "Ort",
+    "loading": "Stundenplan wird geladen…",
+    "empty": {
+      "title": "Keine Stunden in diesem Zeitraum",
+      "unpublished": "Für diese Tage sind noch keine Stunden veröffentlicht.",
+      "filtered": "Keine Stunden passen zu den gewählten Filtern.",
+      "nextRelease": "Nächste Veröffentlichung: {{date}}"
+    },
+    "error": {
+      "title": "Der Stundenplan konnte nicht geladen werden.",
+      "description": "Bitte prüfe deine Verbindung und versuche es erneut.",
+      "retry": "Erneut versuchen"
+    }
+  },
+  "filters": {
+    "label": "Filter",
+    "location": "Standort",
+    "instructor": "Lehrkraft",
+    "courseType": "Kursart",
+    "level": "Stufe",
+    "allLocations": "Alle Standorte",
+    "allInstructors": "Alle Lehrkräfte",
+    "allCourseTypes": "Alle Kursarten",
+    "anyLevel": "Jede Stufe",
+    "reset": "Filter zurücksetzen"
+  },
+  "week": {
+    "label": "Wochenplan",
+    "range": "{{start}} – {{end}}",
+    "navigation": "Wochennavigation",
+    "previous": "Vorherige Woche",
+    "current": "Diese Woche",
+    "next": "Nächste Woche",
+    "empty": "Für diese Woche ist nichts veröffentlicht."
+  },
+  "detail": {
+    "title": "Details zur Stunde",
+    "close": "Schließen",
+    "loading": "Stunde wird geladen…",
+    "notFound": {
+      "title": "Diese Stunde ist nicht verfügbar",
+      "description": "Sie wurde vielleicht entfernt oder ist noch nicht freigegeben."
+    },
+    "error": "Die Stunde konnte nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "canceled": "Diese Stunde fällt aus.",
+    "room": "Raum",
+    "location": "Standort",
+    "instructor": "Lehrkraft",
+    "accompanist": "Begleitung",
+    "capacity": "Plätze",
+    "places_one": "{{count}} Platz",
+    "places_other": "{{count}} Plätze",
+    "about": "Über den Kurs"
+  },
+  "countdown": {
+    "in": "Nächste Freigabe in {{duration}}",
+    "days_one": "{{count}} Tag",
+    "days_other": "{{count}} Tagen",
+    "hours_one": "{{count}} Stunde",
+    "hours_other": "{{count}} Stunden",
+    "minutes_one": "{{count}} Minute",
+    "minutes_other": "{{count}} Minuten",
+    "at": "Freigabe: {{at}}",
+    "releasing": "Neue Termine werden freigegeben…"
+  },
+  "page": {
+    "rangeNav": "Zeitraum",
+    "previous_one": "Vorheriger Tag",
+    "previous_other": "Vorherige {{count}} Tage",
+    "next_one": "Nächster Tag",
+    "next_other": "Nächste {{count}} Tage",
+    "today": "Heute",
+    "range": "{{from}} – {{to}}",
+    "releasedThrough": "Kurse sind bis einschließlich {{day}} veröffentlicht. Die nächsten folgen am {{release}}; Workshops werden früher veröffentlicht."
   }
 }
