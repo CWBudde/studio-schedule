@@ -33,8 +33,8 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
 ## Layers (Go)
 
 - `internal/domain`: entities, typed IDs, enums (roles, statuses), domain errors. No dependencies.
-- `internal/service`: use cases. It depends only on interfaces: `store.Store`, `clock.Clock`, ID
-  generator, password hasher. It returns domain errors.
+- `internal/service`: use cases. It depends only on interfaces: `store.Store`, `clock.Clock`, the ID
+  generator `ids.Source`, password hasher. It returns domain errors.
 - `internal/store`: repository interfaces, `InTx`, and the `storetest` contract suite that every
   implementation must pass.
 - `internal/httpapi`: Huma operations. It maps domain errors to problem+json and does no business

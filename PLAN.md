@@ -41,6 +41,7 @@ cmd/studio-schedule/      CLI: serve | migrate | seed | import | openapi | versi
 cmd/wasm/                 js/wasm entry point: same app, memory store, demo seed, tzdata
 internal/domain/          entities, typed IDs, roles, domain errors
 internal/clock/           Clock interface (system / fixed)
+internal/ids/             ID Source interface (UUIDv7 / deterministic sequence)
 internal/service/         business logic (interfaces only)
 internal/store/           Store/Tx/Repo interfaces, storetest contract suite
 internal/store/memory/    in-memory implementation (demo, fast tests)
@@ -113,7 +114,9 @@ in-memory store.
 
 Goal: a production-grade persistence layer with two interchangeable implementations.
 
-- [ ] Typed IDs (UUIDv7) generated in Go via an injectable `IDs` source
+- [x] Typed IDs (UUIDv7) generated in Go via an injectable `IDs` source (2026-10-23) — generic
+      `domain.ID[K]` with one alias per table; `ids.Source` with `V7` (prod) and a deterministic
+      `Sequence` (tests, seed); forbidigo bans `uuid.New*` outside `internal/ids`
 - [ ] Domain entities and validation for all tables in the domain model (no behaviour yet)
 - [ ] `store` interfaces per aggregate. Explicit ordering on every list method, no generic query
       builder

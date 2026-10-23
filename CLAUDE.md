@@ -78,6 +78,9 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
 - **Time:** never use `time.Local` or `time.Now()` directly in services; use `clock.Clock` and the
   school timezone from settings. golangci-lint (forbidigo) enforces this and also bans `fmt.Print*`
   outside `cmd/` (use `slog`).
+- **IDs:** entities use the typed IDs in `internal/domain/id.go` (`domain.LessonID`, ...). New IDs
+  come from an injected `ids.Source` (`ids.New[domain.LessonID](src)`); `ids.Sequence` gives
+  deterministic IDs for tests and seeds. forbidigo bans `uuid.New*` outside `internal/ids`.
 - **Both stores:** every repo method gets a case in `internal/store/storetest` and must pass for
   `memory` and `postgres`.
 - **API changes:** a Huma operation with an explicit `OperationID` (camelCase), camelCase JSON, then
