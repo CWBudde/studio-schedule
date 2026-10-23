@@ -58,4 +58,7 @@ it answers the first request), then on their interval.
   second insert then fails on the unique `(class_id, starts_at)` key and that run rolls back.
   The next run fills the gap. Running several instances needs a retry on conflict or an
   advisory lock around generation.
-- The demo's term has fixed dates, so its schedule is empty once the term has ended.
+- The web demo seeds its term and workshops relative to the day of the visit (`seed.LoadDemoAt`),
+  so its schedule is never empty. The server's demo seed (`seed.LoadDemo`, used by `serve` without
+  a database and by `studio-schedule seed`) keeps the fixed school year 2026/27, so its schedule is
+  empty once that term has ended.

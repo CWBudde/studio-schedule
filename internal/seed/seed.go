@@ -43,15 +43,26 @@ type Dataset struct {
 	Guardians    []domain.Guardian
 	Accounts     []domain.Account
 	ClassMembers []domain.ClassMember
+	Lessons      []domain.Lesson
 }
 
-// LoadDemo writes the complete demo data set (Demo) into st in one
-// transaction. It fails with domain.ErrConflict unless st is empty (has no
-// settings and no persons).
+// LoadDemo writes the complete demo data set for FixedDemoAnchor (Demo)
+// into st in one transaction. It fails with domain.ErrConflict unless st is
+// empty (has no settings and no persons).
 func LoadDemo(ctx context.Context, st store.Store) error {
-	d := Demo()
+	return LoadDemoAt(ctx, st, FixedDemoAnchor)
+}
 
-	err := st.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+// LoadDemoAt is LoadDemo for the demo data as seen on the visit date anchor
+// (DemoAt). The web demo uses it with today's date, so its term and
+// workshops always lie around the day of the visit.
+func LoadDemoAt(ctx context.Context, st store.Store, anchor domain.Date) error {
+	d, err := demoAt(anchor)
+	if err != nil {
+		return err
+	}
+
+	err = st.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		return write(ctx, tx, d)
 	})
 	if err != nil {
@@ -129,6 +140,12 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 	for _, m := range d.ClassMembers {
 		if err := tx.Classes().AddMember(ctx, m); err != nil {
 			return fmt.Errorf("member %v of class %v: %w", m.PersonID, m.ClassID, err)
+		}
+	}
+
+	for _, l := range d.Lessons {
+		if err := tx.Lessons().Create(ctx, l); err != nil {
+			return fmt.Errorf("lesson %v: %w", l.ID, err)
 		}
 	}
 

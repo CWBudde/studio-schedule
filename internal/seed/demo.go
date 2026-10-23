@@ -1,6 +1,7 @@
 package seed
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -8,21 +9,62 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/ids"
 )
 
-// The demo term is a fixed school year, not derived from the clock, so the
-// data set is the same on every run.
-var (
-	demoTermStart = date(2026, time.September, 1)
-	demoTermEnd   = date(2027, time.July, 31)
+// FixedDemoAnchor is the visit date that Demo and LoadDemo build the demo
+// for (the server and `studio-schedule seed`). It makes the demo term the
+// school year 2026/27, 2026-09-01 to 2027-07-31, on every run. The web demo
+// builds the data for the day of the visit instead (DemoAt).
+//
+// Its workshops fall before 2026-10-19, outside the weeks that the schedule
+// tests of other packages fill with lessons of their own.
+var FixedDemoAnchor = date(2026, time.September, 22)
+
+// The demo term starts termLeadDays before the anchor and lasts termDays
+// (inclusive), the length of a school year from September 1 to July 31.
+// So every anchor lies in the term, with three weeks of timetable before
+// it and about ten months (44 weeks) after it.
+const (
+	termLeadDays = 3 * 7
+	termDays     = 334
 )
 
-// Demo returns the fictional demo school: two locations, their rooms, staff,
-// course types, one term with its weekly classes, and members with their
-// families and accounts. It has no lessons and no bookings. IDs come from a
-// fresh ids.Sequence, so every call returns identical data.
-func Demo() Dataset {
+// Demo returns the demo school for FixedDemoAnchor; see DemoAt.
+func Demo() Dataset { return DemoAt(FixedDemoAnchor) }
+
+// DemoAt returns the fictional demo school as seen on the visit date
+// anchor: two locations, their rooms, staff, course types, one term around
+// anchor with its weekly classes, members with their families and accounts,
+// and a few one-off workshops in the weeks after anchor. It has no lessons
+// of the weekly classes (the lesson generator creates them) and no
+// bookings. IDs come from a fresh ids.Sequence, so every call with the same
+// anchor returns identical data.
+//
+// DemoAt panics if the demo time zone cannot be loaded (no zoneinfo
+// database); LoadDemoAt reports that as an error instead.
+func DemoAt(anchor domain.Date) Dataset {
+	d, err := demoAt(anchor)
+	if err != nil {
+		panic(err)
+	}
+
+	return d
+}
+
+func demoAt(anchor domain.Date) (Dataset, error) {
+	settings := DemoSettings()
+
+	// The workshops start at wall-clock times of the school.
+	loc, err := time.LoadLocation(settings.Timezone)
+	if err != nil {
+		return Dataset{}, fmt.Errorf("seed: demo time zone %q: %w", settings.Timezone, err)
+	}
+
+	termStart := anchor.AddDays(-termLeadDays)
+
 	b := builder{
+		loc:         loc,
+		termStart:   termStart,
 		seq:         ids.NewSequence(),
-		d:           Dataset{Settings: DemoSettings()},
+		d:           Dataset{Settings: settings},
 		persons:     map[string]domain.PersonID{},
 		rooms:       map[string]domain.RoomID{},
 		staff:       map[string]domain.StaffID{},
@@ -45,11 +87,12 @@ func Demo() Dataset {
 		b.courseType(c)
 	}
 
+	termEnd := termStart.AddDays(termDays - 1)
 	term := domain.Term{
 		ID:       ids.New[domain.TermID](b.seq),
-		Name:     "School Year 2026/27",
-		StartsOn: demoTermStart,
-		EndsOn:   demoTermEnd,
+		Name:     termName(termStart, termEnd),
+		StartsOn: termStart,
+		EndsOn:   termEnd,
 	}
 	b.d.Terms = append(b.d.Terms, term)
 
@@ -57,7 +100,21 @@ func Demo() Dataset {
 		b.class(term.ID, c)
 	}
 
-	return b.d
+	for _, w := range demoWorkshops {
+		b.workshop(anchor, w)
+	}
+
+	return b.d, nil
+}
+
+// termName is "School Year 2026/27", or "School Year 2027" for a term
+// within one calendar year.
+func termName(start, end domain.Date) string {
+	if start.Year == end.Year {
+		return fmt.Sprintf("School Year %d", start.Year)
+	}
+
+	return fmt.Sprintf("School Year %d/%02d", start.Year, end.Year%100)
 }
 
 // ------------------------------------------------------------------ tables
@@ -334,12 +391,37 @@ var demoClasses = []classSpec{
 	},
 }
 
+// workshopSpec is a one-off public workshop; days counts from the anchor.
+type workshopSpec struct {
+	days        int
+	start       domain.TimeOfDay
+	minutes     int
+	room        string
+	courseType  string
+	instructor  string
+	accompanist string
+	capacity    int
+}
+
+// demoWorkshops start at 13:30 and end at 15:30, when no weekly class runs,
+// so they never clash with one on whatever weekday they fall. The demo
+// releases one week ahead (DemoSettings), so the first workshop is usually
+// released already and the others lie beyond every release window: the
+// schedule shows them because workshops are published early.
+var demoWorkshops = []workshopSpec{
+	{3, at(13, 30), 120, "Studio A", "Contemporary", "Marco Wrenfield", "", 18},
+	{17, at(13, 30), 120, "Hall 1", "Jazz Dance", "Nina Tapworth", "", 20},
+	{24, at(13, 30), 120, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", 16},
+}
+
 // ----------------------------------------------------------------- builder
 
 // builder assigns IDs in table order and resolves the names used in the
 // tables. An unknown name is a bug in the tables and panics; the tests call
 // Demo, so it cannot reach a running server.
 type builder struct {
+	loc         *time.Location // school time zone
+	termStart   domain.Date
 	seq         *ids.Sequence
 	d           Dataset
 	persons     map[string]domain.PersonID
@@ -442,9 +524,38 @@ func (b *builder) class(term domain.TermID, spec classSpec) {
 		b.d.ClassMembers = append(b.d.ClassMembers, domain.ClassMember{
 			ClassID:  c.ID,
 			PersonID: lookup(b.persons, name),
-			Since:    demoTermStart,
+			Since:    b.termStart,
 		})
 	}
+}
+
+func (b *builder) workshop(anchor domain.Date, spec workshopSpec) {
+	start := anchor.AddDays(spec.days).At(spec.start, b.loc)
+
+	// Lessons share their ID space with the ones the lesson generator
+	// creates later. Tests generate those from their own ids.Sequence,
+	// which counts from 1 like this one; a marker in the (otherwise zero)
+	// timestamp keeps the demo lessons' IDs apart from them.
+	id := ids.New[domain.LessonID](b.seq)
+	id[5] = 1
+
+	l := domain.Lesson{
+		ID:           id,
+		CourseTypeID: lookup(b.courseTypes, spec.courseType),
+		RoomID:       lookup(b.rooms, spec.room),
+		InstructorID: lookup(b.staff, spec.instructor),
+		StartsAt:     start,
+		EndsAt:       start.Add(time.Duration(spec.minutes) * time.Minute),
+		Status:       domain.LessonScheduled,
+		Visibility:   domain.VisibilityPublic,
+		Kind:         domain.LessonWorkshop,
+		Capacity:     spec.capacity,
+	}
+	if spec.accompanist != "" {
+		l.AccompanistID = lookup(b.staff, spec.accompanist)
+	}
+
+	b.d.Lessons = append(b.d.Lessons, l)
 }
 
 func lookup[I domain.AnyID](m map[string]I, name string) I {

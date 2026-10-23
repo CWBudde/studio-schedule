@@ -59,12 +59,196 @@ func TestDemoDeterministic(t *testing.T) {
 	sameSlice(t, "guardians", a.Guardians, b.Guardians)
 	sameSlice(t, "accounts", a.Accounts, b.Accounts)
 	sameSlice(t, "class members", a.ClassMembers, b.ClassMembers)
+	sameSlice(t, "lessons", a.Lessons, b.Lessons)
+
+	anchor := domain.Date{Year: 2031, Month: time.March, Day: 9}
+	c, d := seed.DemoAt(anchor), seed.DemoAt(anchor)
+
+	sameSlice(t, "terms at "+anchor.String(), c.Terms, d.Terms)
+	sameSlice(t, "class members at "+anchor.String(), c.ClassMembers, d.ClassMembers)
+	sameSlice(t, "lessons at "+anchor.String(), c.Lessons, d.Lessons)
+}
+
+// TestDemoFixedAnchor checks that the server's demo data (Demo, LoadDemo)
+// is the fixed school year 2026/27.
+func TestDemoFixedAnchor(t *testing.T) {
+	t.Parallel()
+
+	d := seed.Demo()
+	want := domain.Term{
+		ID:       d.Terms[0].ID,
+		Name:     "School Year 2026/27",
+		StartsOn: domain.Date{Year: 2026, Month: time.September, Day: 1},
+		EndsOn:   domain.Date{Year: 2027, Month: time.July, Day: 31},
+	}
+
+	if len(d.Terms) != 1 || d.Terms[0] != want {
+		t.Fatalf("terms = %+v, want %+v", d.Terms, want)
+	}
+
+	for _, m := range d.ClassMembers {
+		if m.Since != want.StartsOn {
+			t.Fatalf("class member %+v: since %v, want the term start", m, m.Since)
+		}
+	}
+
+	at := seed.DemoAt(seed.FixedDemoAnchor)
+	sameSlice(t, "terms", at.Terms, d.Terms)
+	sameSlice(t, "class members", at.ClassMembers, d.ClassMembers)
+	sameSlice(t, "lessons", at.Lessons, d.Lessons)
+}
+
+// demoAnchors are visit dates the web demo may be built for: summer break,
+// the end of a school year, a leap day, a year boundary and both DST
+// changes in Europe/Berlin.
+var demoAnchors = []domain.Date{
+	{Year: 2026, Month: time.October, Day: 23},
+	{Year: 2027, Month: time.July, Day: 31},
+	{Year: 2027, Month: time.August, Day: 1},
+	{Year: 2027, Month: time.August, Day: 31},
+	{Year: 2028, Month: time.February, Day: 29},
+	{Year: 2028, Month: time.March, Day: 26},
+	{Year: 2029, Month: time.October, Day: 28},
+	{Year: 2030, Month: time.December, Day: 31},
+	{Year: 2031, Month: time.January, Day: 1},
+}
+
+// TestDemoAtTerm checks that the web demo's term always contains the visit
+// date, with weeks of timetable before and many months after it.
+func TestDemoAtTerm(t *testing.T) {
+	t.Parallel()
+
+	for _, anchor := range demoAnchors {
+		d := seed.DemoAt(anchor)
+		if len(d.Terms) != 1 {
+			t.Fatalf("%v: %d terms, want 1", anchor, len(d.Terms))
+		}
+
+		term := d.Terms[0]
+		if err := term.Validate(); err != nil {
+			t.Errorf("%v: invalid term %+v: %v", anchor, term, err)
+		}
+
+		if term.StartsOn.Compare(anchor.AddDays(-21)) > 0 || term.EndsOn.Compare(anchor.AddDays(180)) < 0 {
+			t.Errorf("%v: term %v..%v does not span three weeks before to half a year after the anchor",
+				anchor, term.StartsOn, term.EndsOn)
+		}
+
+		if !strings.HasPrefix(term.Name, "School Year ") {
+			t.Errorf("%v: term name %q", anchor, term.Name)
+		}
+
+		for _, m := range d.ClassMembers {
+			if m.Since != term.StartsOn {
+				t.Fatalf("%v: class member %+v: since %v, want the term start", anchor, m, m.Since)
+			}
+		}
+	}
+}
+
+// TestDemoWorkshops checks the one-off workshops: valid, public, without a
+// class, free of clashes with the weekly classes, and placed so that the
+// demo shows one beyond the release window (published early).
+func TestDemoWorkshops(t *testing.T) {
+	t.Parallel()
+
+	settings := seed.DemoSettings()
+
+	loc, err := time.LoadLocation(settings.Timezone)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
+		d := seed.DemoAt(anchor)
+
+		if n := len(d.Lessons); n < 2 || n > 3 {
+			t.Fatalf("%v: %d lessons, want 2..3 workshops", anchor, n)
+		}
+
+		validAll(t, d.Lessons)
+
+		rooms := index(d.Rooms, func(r domain.Room) domain.RoomID { return r.ID })
+		staff := index(d.Staff, func(s domain.Staff) domain.StaffID { return s.ID })
+		courseTypes := index(d.CourseTypes, func(c domain.CourseType) domain.CourseTypeID { return c.ID })
+		term := d.Terms[0]
+
+		// The furthest a release window reaches on the anchor day: just
+		// before midnight, after that day's release.
+		window := service.ComputeReleaseWindow(settings, loc, anchor.AddDays(1).At(domain.TimeOfDay{}, loc).Add(-time.Minute))
+
+		var inWeek, beyond int
+
+		for _, l := range d.Lessons {
+			if !l.ClassID.IsZero() || l.Kind != domain.LessonWorkshop || l.Visibility != domain.VisibilityPublic ||
+				l.Status != domain.LessonScheduled {
+				t.Errorf("%v: lesson %+v is not a scheduled public one-off workshop", anchor, l)
+			}
+
+			if _, ok := courseTypes[l.CourseTypeID]; !ok {
+				t.Errorf("%v: lesson %v: unknown course type", anchor, l.ID)
+			}
+
+			if room, ok := rooms[l.RoomID]; !ok || l.Capacity > room.Capacity {
+				t.Errorf("%v: lesson %v: unknown room or capacity %d above the room's", anchor, l.ID, l.Capacity)
+			}
+
+			if s, ok := staff[l.InstructorID]; !ok || s.Kind != domain.StaffInstructor || !s.Active {
+				t.Errorf("%v: lesson %v: instructor %+v is not an active instructor", anchor, l.ID, s)
+			}
+
+			if !l.AccompanistID.IsZero() {
+				if s, ok := staff[l.AccompanistID]; !ok || s.Kind != domain.StaffAccompanist || !s.Active {
+					t.Errorf("%v: lesson %v: accompanist %+v is not an active accompanist", anchor, l.ID, s)
+				}
+			}
+
+			day := domain.DateOf(l.StartsAt, loc)
+			if day.Compare(term.StartsOn) < 0 || day.Compare(term.EndsOn) > 0 {
+				t.Errorf("%v: lesson %v on %v lies outside the term", anchor, l.ID, day)
+			}
+
+			if day.Compare(anchor) > 0 && day.Compare(anchor.AddDays(7)) <= 0 {
+				inWeek++
+			}
+
+			if !l.StartsAt.Before(window.ReleasedUntil) {
+				beyond++
+			}
+
+			for _, c := range d.Classes {
+				if c.Weekday != day.Weekday() {
+					continue
+				}
+
+				start := day.At(c.StartTime, loc)
+				if !l.StartsAt.Before(start.Add(c.Duration)) || !start.Before(l.EndsAt) {
+					continue
+				}
+
+				if c.RoomID == l.RoomID || c.InstructorID == l.InstructorID ||
+					(!l.AccompanistID.IsZero() && c.AccompanistID == l.AccompanistID) {
+					t.Errorf("%v: lesson %v clashes with class %v", anchor, l.ID, c.ID)
+				}
+			}
+		}
+
+		if inWeek == 0 {
+			t.Errorf("%v: no workshop in the week after the anchor", anchor)
+		}
+
+		if beyond == 0 {
+			t.Errorf("%v: no workshop beyond the release window (until %v)", anchor, window.ReleasedUntil)
+		}
+	}
 }
 
 func TestDemoValid(t *testing.T) {
 	t.Parallel()
 
 	d := seed.Demo()
+
+	validAll(t, d.Lessons)
 
 	if d.Settings != seed.DemoSettings() {
 		t.Fatalf("settings %+v differ from DemoSettings", d.Settings)
@@ -503,11 +687,71 @@ func TestLoadDemoRoundTrip(t *testing.T) {
 		sameSet(t, "classes", classes, want.Classes)
 		sameSet(t, "class members", members, want.ClassMembers)
 
+		from, to := allTime()
+
+		lessons, err := tx.Lessons().ListRange(ctx, from, to)
+		if err != nil {
+			return err
+		}
+
+		if len(want.Lessons) == 0 {
+			t.Error("the demo has no lessons")
+		}
+
+		sameSet(t, "lessons", lessons, want.Lessons)
+
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestLoadDemoAt checks that the web demo's data, built for the visit date,
+// loads into the memory store with its workshops.
+func TestLoadDemoAt(t *testing.T) {
+	t.Parallel()
+
+	anchor := domain.Date{Year: 2027, Month: time.August, Day: 14}
+
+	st := memory.New()
+	if err := seed.LoadDemoAt(t.Context(), st, anchor); err != nil {
+		t.Fatal(err)
+	}
+
+	want := seed.DemoAt(anchor)
+
+	err := st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		terms, err := tx.Terms().List(ctx)
+		if err != nil {
+			return err
+		}
+
+		sameSet(t, "terms", terms, want.Terms)
+
+		from, to := allTime()
+
+		lessons, err := tx.Lessons().ListRange(ctx, from, to)
+		if err != nil {
+			return err
+		}
+
+		sameSet(t, "lessons", lessons, want.Lessons)
+
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := seed.LoadDemoAt(t.Context(), st, anchor); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("second load: want %v, got %v", domain.ErrConflict, err)
+	}
+}
+
+// allTime is a lesson range that covers every demo anchor.
+func allTime() (from, to time.Time) {
+	return time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC), time.Date(2100, time.January, 1, 0, 0, 0, 0, time.UTC)
 }
 
 func TestLoadDemoTwiceConflicts(t *testing.T) {

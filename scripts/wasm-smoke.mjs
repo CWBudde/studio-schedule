@@ -110,9 +110,10 @@ await check(
 );
 
 // The schedule of the coming week, in the school time zone. Lessons are only
-// required while today lies in a demo term (their dates are fixed) and at
-// least two released days lie ahead: just before a release, only the rest of
-// the day may be released, and the demo has no classes on Sundays.
+// required while today lies in a demo term (the web demo builds its term
+// around the day of the visit, so it always should) and at least two
+// released days lie ahead: just before a release, only the rest of the day
+// may be released, and the demo has no classes on Sundays.
 const getJSON = async (url) => {
   const res = await api.fetch({ method: "GET", url, headers: [], body: null });
   return res.status === 200 ? JSON.parse(decoder.decode(res.body)) : undefined;
@@ -158,6 +159,43 @@ await check(
   (text) => {
     const body = JSON.parse(text);
     return `${body.lessons.length} lessons, released until ${body.releasedUntil}${inTerm ? "" : " (outside the demo term)"}`;
+  },
+);
+
+// The web demo seeds one-off workshops in the weeks after the day of the
+// visit, some beyond every release window. Workshops are published early,
+// so the next four weeks (within the 42-day limit) must show one that
+// starts at or after releasedUntil.
+const inFourWeeks = isoDate(new Date(Date.now() + 28 * 24 * 3600 * 1000));
+
+await check(
+  `GET /api/v1/schedule ${today}..${inFourWeeks} shows an early-published workshop`,
+  {
+    method: "GET",
+    url: `/api/v1/schedule?from=${today}&to=${inFourWeeks}`,
+    headers: [],
+    body: null,
+  },
+  (res, text) => {
+    if (res.status !== 200) return "unexpected status";
+    const body = JSON.parse(text);
+    if (!Array.isArray(body.lessons) || !body.releasedUntil)
+      return "unexpected body";
+    const releasedUntil = Date.parse(body.releasedUntil);
+    if (
+      !body.lessons.some(
+        (l) =>
+          l.kind === "workshop" &&
+          !l.classId &&
+          Date.parse(l.startsAt) >= releasedUntil,
+      )
+    )
+      return "no workshop beyond the release window";
+  },
+  (text) => {
+    const body = JSON.parse(text);
+    const workshops = body.lessons.filter((l) => l.kind === "workshop");
+    return `${body.lessons.length} lessons, workshops at ${workshops.map((l) => l.startsAt).join(", ")}`;
   },
 );
 

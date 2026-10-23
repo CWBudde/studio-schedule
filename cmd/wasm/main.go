@@ -12,10 +12,12 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"time"
 	_ "time/tzdata" // the browser has no zoneinfo database
 
 	"github.com/cwbudde/studio-schedule/internal/app"
 	"github.com/cwbudde/studio-schedule/internal/clock"
+	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/store/memory"
 	"github.com/cwbudde/studio-schedule/internal/wasmbridge"
@@ -27,16 +29,26 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 
 	ctx := context.Background()
+	clk := clock.System{}
+
+	// The store lives only as long as the page, so the demo is built around
+	// the day of the visit (in the school's time zone): its term and
+	// workshops never lie in the past.
+	loc, err := time.LoadLocation(seed.DemoSettings().Timezone)
+	if err != nil {
+		logger.Error("loading the demo time zone failed", slog.Any("err", err))
+		os.Exit(1)
+	}
 
 	st := memory.New()
-	if err := seed.LoadDemo(ctx, st); err != nil {
+	if err := seed.LoadDemoAt(ctx, st, domain.DateOf(clk.Now(), loc)); err != nil {
 		logger.Error("seeding demo data failed", slog.Any("err", err))
 		os.Exit(1)
 	}
 
 	deps := app.Deps{
 		Store:   st,
-		Clock:   clock.System{},
+		Clock:   clk,
 		Version: version,
 		Logger:  logger,
 	}
