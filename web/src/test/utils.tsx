@@ -26,26 +26,34 @@ export function renderWithQuery(ui: ReactElement) {
 }
 
 /**
- * Renders ui as the page of a /schedule route with the given search params,
- * so components can use useScheduleSearch. Read the current params from
- * `router.state.location.search`. The route renders asynchronously: use
- * findBy* queries for the first assertion.
+ * Renders ui as the page at `at` ('/' or '/schedule') of a router with both
+ * routes, so components can use router hooks and links. The other route
+ * renders nothing. Read the current URL from `router.state.location`. The
+ * route renders asynchronously: use findBy* queries for the first assertion.
  */
-export function renderAtSchedule(ui: ReactElement, search: ScheduleSearch = {}) {
+export function renderInRouter(
+  ui: ReactElement,
+  { at = '/', search = {} }: { at?: '/' | '/schedule'; search?: ScheduleSearch } = {},
+) {
   const queryClient = testQueryClient();
   const rootRoute = createRootRoute({ component: Outlet });
+  const indexRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component: () => (at === '/' ? ui : null),
+  });
   const scheduleRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/schedule',
     validateSearch: validateScheduleSearch,
-    component: () => ui,
+    component: () => (at === '/schedule' ? ui : null),
   });
   const query = new URLSearchParams(
     Object.entries(search).filter((e): e is [string, string] => e[1] !== undefined),
   ).toString();
   const router = createRouter({
-    routeTree: rootRoute.addChildren([scheduleRoute]),
-    history: createMemoryHistory({ initialEntries: [`/schedule${query ? `?${query}` : ''}`] }),
+    routeTree: rootRoute.addChildren([indexRoute, scheduleRoute]),
+    history: createMemoryHistory({ initialEntries: [`${at}${query ? `?${query}` : ''}`] }),
   });
   return {
     queryClient,
@@ -56,4 +64,9 @@ export function renderAtSchedule(ui: ReactElement, search: ScheduleSearch = {}) 
       </QueryClientProvider>,
     ),
   };
+}
+
+/** Renders ui as the /schedule page with the given search params (see renderInRouter). */
+export function renderAtSchedule(ui: ReactElement, search: ScheduleSearch = {}) {
+  return renderInRouter(ui, { at: '/schedule', search });
 }

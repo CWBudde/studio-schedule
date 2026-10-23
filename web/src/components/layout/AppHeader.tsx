@@ -19,7 +19,17 @@ export function AppHeader() {
           </span>
           <span>{t('app.name')}</span>
         </Link>
-        <LanguageSwitcher />
+        <div className="flex items-center gap-1">
+          <nav aria-label={t('nav.label')}>
+            <Link
+              to="/schedule"
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none data-[status=active]:text-foreground"
+            >
+              {t('nav.schedule')}
+            </Link>
+          </nav>
+          <LanguageSwitcher />
+        </div>
       </div>
     </header>
   );

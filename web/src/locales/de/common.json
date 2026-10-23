@@ -4,6 +4,10 @@
     "tagline": "Kurse und Buchungen für deine Tanzschule",
     "home": "Studio Schedule – Startseite"
   },
+  "nav": {
+    "label": "Hauptnavigation",
+    "schedule": "Stundenplan"
+  },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"
   },
@@ -44,9 +48,11 @@
       "retry": "Erneut versuchen"
     },
     "schedule": {
-      "title": "Stundenplan",
-      "comingSoon": "Stundenplan folgt in Phase 2",
-      "description": "Hier erscheint der Wochenplan mit Kursen, Räumen und Lehrkräften."
+      "title": "Nächste Stunden",
+      "description": "Was in den nächsten Tagen ansteht.",
+      "empty": "In den nächsten 7 Tagen finden keine Stunden statt.",
+      "viewAll": "Ganzer Stundenplan",
+      "loadError": "Der Stundenplan konnte nicht geladen werden."
     }
   },
   "footer": {

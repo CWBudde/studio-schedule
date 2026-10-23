@@ -4,6 +4,10 @@
     "tagline": "Classes and bookings for your dance school",
     "home": "Studio Schedule – home"
   },
+  "nav": {
+    "label": "Main",
+    "schedule": "Schedule"
+  },
   "a11y": {
     "skipToContent": "Skip to content"
   },
@@ -44,9 +48,11 @@
       "retry": "Retry"
     },
     "schedule": {
-      "title": "Schedule",
-      "comingSoon": "Schedule coming in Phase 2",
-      "description": "The weekly timetable with classes, rooms and teachers will appear here."
+      "title": "Next lessons",
+      "description": "What is on in the coming days.",
+      "empty": "No lessons in the next 7 days.",
+      "viewAll": "Full schedule",
+      "loadError": "Could not load the schedule."
     }
   },
   "footer": {

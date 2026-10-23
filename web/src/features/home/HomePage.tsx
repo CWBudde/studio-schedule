@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, CircleAlert, RotateCcw } from 'lucide-react';
+import { CircleAlert, RotateCcw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { healthQuery, publicSettingsQuery } from '@/api/queries';
@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { NextLessons } from './NextLessons';
 
 export function HomePage() {
   const { t } = useTranslation();
@@ -31,7 +32,7 @@ export function HomePage() {
 
       <div className="grid gap-6 md:grid-cols-2">
         <StatusCard />
-        <SchedulePlaceholder />
+        <NextLessons />
       </div>
     </div>
   );
@@ -121,25 +122,5 @@ function Row({
         {loading ? <Skeleton className="h-4 w-28" /> : (children ?? '—')}
       </dd>
     </>
-  );
-}
-
-function SchedulePlaceholder() {
-  const { t } = useTranslation();
-  return (
-    <Card aria-labelledby="schedule-title" className="border-dashed">
-      <CardHeader>
-        <CardTitle>
-          <h2 id="schedule-title">{t('home.schedule.title')}</h2>
-        </CardTitle>
-        <CardDescription>{t('home.schedule.description')}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col items-center gap-3 rounded-lg bg-accent px-4 py-8 text-center text-accent-foreground">
-          <CalendarClock className="size-8" aria-hidden="true" />
-          <p className="font-medium">{t('home.schedule.comingSoon')}</p>
-        </div>
-      </CardContent>
-    </Card>
   );
 }

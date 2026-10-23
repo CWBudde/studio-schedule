@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { healthOk, mockApiGet, publicSettings } from '@/test/mockApi';
-import { renderWithQuery } from '@/test/utils';
+import { healthOk, ids, mockApiGet, publicSettings, schedule } from '@/test/mockApi';
+import { renderInRouter } from '@/test/utils';
 import { HomePage } from './HomePage';
 
 afterEach(() => {
@@ -13,13 +13,14 @@ describe('HomePage', () => {
     mockApiGet({
       '/api/v1/health': { body: healthOk },
       '/api/v1/settings/public': { body: publicSettings },
+      '/api/v1/schedule': { body: schedule },
     });
 
-    renderWithQuery(<HomePage />);
+    renderInRouter(<HomePage />);
 
-    const card = screen
-      .getByRole('heading', { name: 'System status' })
-      .closest('[data-slot="card"]');
+    const card = (await screen.findByRole('heading', { name: 'System status' })).closest(
+      '[data-slot="card"]',
+    );
     expect(card).not.toBeNull();
     const status = within(card as HTMLElement);
 
@@ -30,16 +31,55 @@ describe('HomePage', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Example Dance Studio' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Schedule coming in Phase 2')).toBeInTheDocument();
+  });
+
+  it('teases the next lessons and links them into the schedule', async () => {
+    mockApiGet({
+      '/api/v1/health': { body: healthOk },
+      '/api/v1/settings/public': { body: publicSettings },
+      '/api/v1/schedule': { body: schedule },
+    });
+
+    renderInRouter(<HomePage />);
+
+    const teaser = within(
+      (await screen.findByRole('heading', { name: 'Next lessons' })).closest(
+        '[data-slot="card"]',
+      ) as HTMLElement,
+    );
+    const ballet = await teaser.findByRole('link', { name: /Ballet/ });
+    // Times are in the school time zone (Berlin), not the browser's.
+    expect(ballet).toHaveTextContent('Mon, Oct 26, 18:00');
+    expect(ballet).toHaveAttribute('href', `/schedule?from=2026-10-26&lesson=${ids.lessonBallet}`);
+    expect(teaser.getByRole('link', { name: /Jazz/ })).toBeInTheDocument();
+    // Canceled lessons are left out of the teaser.
+    expect(teaser.queryByText('Contemporary')).not.toBeInTheDocument();
+    expect(teaser.getByRole('link', { name: /Full schedule/ })).toHaveAttribute(
+      'href',
+      '/schedule',
+    );
+  });
+
+  it('says so when no lessons are coming up', async () => {
+    mockApiGet({
+      '/api/v1/health': { body: healthOk },
+      '/api/v1/settings/public': { body: publicSettings },
+      '/api/v1/schedule': { body: { ...schedule, lessons: [] } },
+    });
+
+    renderInRouter(<HomePage />);
+
+    expect(await screen.findByText('No lessons in the next 7 days.')).toBeInTheDocument();
   });
 
   it('shows an error badge when the health check fails', async () => {
     mockApiGet({
       '/api/v1/health': { status: 503, body: { message: 'down' } },
       '/api/v1/settings/public': { body: publicSettings },
+      '/api/v1/schedule': { body: schedule },
     });
 
-    renderWithQuery(<HomePage />);
+    renderInRouter(<HomePage />);
 
     expect(await screen.findByText('Error')).toBeInTheDocument();
     expect(screen.getByText('Could not load data from the backend.')).toBeInTheDocument();

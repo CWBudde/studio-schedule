@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { HomePage } from '@/features/home/HomePage';
-import { healthOk, mockApiGet, publicSettings } from '@/test/mockApi';
-import { renderWithQuery } from '@/test/utils';
+import { healthOk, mockApiGet, publicSettings, schedule } from '@/test/mockApi';
+import { renderInRouter } from '@/test/utils';
 import i18n from './i18n';
 
 afterEach(() => {
@@ -20,21 +20,22 @@ describe('i18n', () => {
     mockApiGet({
       '/api/v1/health': { body: healthOk },
       '/api/v1/settings/public': { body: publicSettings },
+      '/api/v1/schedule': { body: schedule },
     });
     const user = userEvent.setup();
 
-    renderWithQuery(
+    renderInRouter(
       <>
         <LanguageSwitcher />
         <HomePage />
       </>,
     );
-    expect(screen.getByText('Schedule coming in Phase 2')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Next lessons' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Change language' }));
     await user.click(await screen.findByRole('menuitemradio', { name: 'Deutsch' }));
 
-    expect(await screen.findByText('Stundenplan folgt in Phase 2')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Nächste Stunden' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Systemstatus' })).toBeInTheDocument();
     expect(i18n.resolvedLanguage).toBe('de');
     expect(document.documentElement.lang).toBe('de');
