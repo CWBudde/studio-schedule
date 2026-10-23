@@ -229,18 +229,30 @@ Goal: people can sign up and log in; staff can maintain the timetable.
 
 - [ ] Persons and family: guardians manage dependents (children without their own login). The
       store already has persons and guardian links (`AddGuardian`, `ListDependents`,
-      `ListGuardians`); no service, operation or page uses them yet
-  - [ ] ADR "Families and dependents": a guardian sees and edits only their own person and their
+      `ListGuardians`); no service, operation or page uses them yet (2026-10-23) — partial: ADR
+      0008, `service.FamilyService` with `/api/v1/family` and the `/account` profile are done; the
+      office view remains
+  - [x] ADR "Families and dependents": a guardian sees and edits only their own person and their
         dependents (office sees everyone); how a second guardian is linked (proposed: office only
         in Phase 3); removing a dependent unlinks it and deletes the person only while nothing
         references it; a dependent who grows up gets an account for the existing person
-  - [ ] Service and operations (`signedIn`): `getMyFamily` (own person + dependents), update own
+        (2026-10-23) — ADR 0008, also covering the account's mail language
+  - [x] Service and operations (`signedIn`): `getMyFamily` (own person + dependents), update own
         person data, create, update and remove a dependent; the guardian check lives in the
-        service and is reused by booking for others in Phase 4
+        service and is reused by booking for others in Phase 4 (2026-10-23) —
+        `service/family.go` (`dependentOf`), `getMyFamily`, `updateMyPerson`, `addDependent`,
+        `updateDependent`, `removeDependent`; each dependent lists its other guardians; removing
+        the last guardian deletes the person, or answers 409 while bookings or class memberships
+        refer to it; a birth date after today (school zone) is a 422 on `body.birthDate`
   - [ ] Office: person list and detail with family links (`/admin/persons`), add and remove a
         guardian link; shares `listPersons` with the class-member subtask of Admin CRUD
-  - [ ] Demo: a demo family account with two children; tests for the guardian check (a stranger's
-        dependent is a 404, not a 403) in service and HTTP tests
+  - [ ] A dependent with their own account (ADR 0008, created by the office): the guardian's
+        removal only unlinks it (today `Persons().Delete` fails on the account and the API answers
+        a misleading 409), and the guardian no longer edits the data its owner manages
+  - [x] Demo: a demo family account with two children; tests for the guardian check (a stranger's
+        dependent is a 404, not a 403) in service and HTTP tests (2026-10-23) — the demo member
+        Clara Amberly has Ella and Finn (Tom is a second guardian, Hanna Birchmoor's Mia is a class
+        member); `service/family_test.go`, `app/family_test.go`, `seed_test.go`
 - [x] Registration with email confirmation; login and logout; server-side sessions (random token in
       an HttpOnly, Secure, SameSite=Lax cookie; only the token hash is stored); sliding expiry
       (2026-10-23) — `AuthService` and `/api/v1/auth/{register,confirm,login,logout,me}`; confirming
@@ -348,14 +360,20 @@ Goal: people can sign up and log in; staff can maintain the timetable.
       admin area with shadcn data tables and forms (react-hook-form + zod, schemas derived from the
       OpenAPI types) (2026-10-23) — partial: login, registration and confirm pages, the signed-in
       header, the admin account list (`/admin/accounts`, with "sign in as"), the reset pages and the
-      account settings for password and email are done; the profile's person data, dependents and
-      language and the rest of the admin area remain
-  - [ ] Profile: person data card on `/account` (name, phone, birth date) using `getMyFamily`
-  - [ ] Dependents section on `/account`: list, add, edit and remove children (Persons and family)
-  - [ ] Language preference: a language field on accounts (migration, both stores), set from the
+      account settings for password and email, and the profile's person data, dependents and
+      language are done; the rest of the admin area remains
+  - [x] Profile: person data card on `/account` (name, phone, birth date) using `getMyFamily`
+        (2026-10-23) — `ProfileCard`; the header's name follows a change; editable while
+        impersonating
+  - [x] Dependents section on `/account`: list, add, edit and remove children (Persons and family)
+        (2026-10-23) — `DependentsCard` with a sheet form and an in-row confirmation that says
+        whether the child is unlinked or deleted; 409 and 404 explained; e2e in `account.spec.ts`
+  - [x] Language preference: a language field on accounts (migration, both stores), set from the
         UI language at registration, editable on `/account`; mails are rendered in it (today the
         locale comes from the request, which a cancellation or waitlist mail does not have) and
-        the UI switches to it after sign-in
+        the UI switches to it after sign-in (2026-10-23) — `accounts.locale` (migration 00005),
+        `updateLocale` and `me.locale`; mails use the account's language, then the request's, then
+        the school's; login and email confirmation switch the UI (e2e)
   - [ ] Admin area: covered by the subtasks of Admin CRUD and Lesson administration; the audit log
         page (`/admin/audit`, admins) lists `audit_events`
 - [x] Demo: login page lists demo accounts per role (member, instructor, office, admin)
