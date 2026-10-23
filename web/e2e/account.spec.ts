@@ -83,3 +83,110 @@ test('changes the email address with the link from the demo mailbox', async ({ p
     page.getByRole('region', { name: 'Change email address' }).getByText(newEmail),
   ).toBeVisible();
 });
+
+test('edits the person data and shows the new name in the header', async ({ page }) => {
+  const { name } = await signInAsMember(page);
+  await openAccount(page, name);
+
+  const card = page.getByRole('region', { name: 'Your details' });
+  const givenName = card.getByLabel('First name');
+  await expect(givenName).toHaveValue(name.split(' ')[0] ?? '');
+  await givenName.fill('Marigold');
+  await card.getByRole('button', { name: 'Save details' }).click();
+  await expect(page.getByText('Your details have been saved.')).toBeVisible();
+
+  const newName = name.replace(/^\S+/, 'Marigold');
+  await expect(page.getByRole('banner').getByRole('button', { name: newName })).toBeVisible();
+});
+
+test('adds, edits and removes a child', async ({ page }) => {
+  const { name } = await signInAsMember(page);
+  await openAccount(page, name);
+  const familyName = name.split(' ').slice(1).join(' ');
+  const children = page.getByRole('region', { name: 'Your children' });
+  const entry = (childName: string) =>
+    children.getByRole('listitem').filter({ has: page.getByText(childName, { exact: true }) });
+
+  await children.getByRole('button', { name: 'Add child' }).click();
+  const add = page.getByRole('dialog', { name: 'Add a child' });
+  await expect(add.getByLabel('Last name')).toHaveValue(familyName);
+  await add.getByLabel('First name').fill('Wren');
+  await add.getByLabel('Birth date (optional)').fill('2020-02-29');
+  await add.getByRole('button', { name: 'Add child' }).click();
+  await expect(add).toBeHidden();
+  await expect(entry(`Wren ${familyName}`)).toContainText('Born February 29, 2020');
+
+  await entry(`Wren ${familyName}`)
+    .getByRole('button', { name: `Edit Wren ${familyName}` })
+    .click();
+  const edit = page.getByRole('dialog', { name: `Edit Wren ${familyName}` });
+  await expect(edit.getByLabel('Birth date (optional)')).toHaveValue('2020-02-29');
+  await edit.getByLabel('First name').fill('Wrenna');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(edit).toBeHidden();
+  const wrenna = entry(`Wrenna ${familyName}`);
+  await expect(wrenna).toBeVisible();
+  await expect(entry(`Wren ${familyName}`)).toHaveCount(0);
+
+  await wrenna.getByRole('button', { name: `Remove Wrenna ${familyName}` }).click();
+  const confirm = wrenna.getByRole('group', {
+    name: `Remove Wrenna ${familyName} from your family?`,
+  });
+  await expect(confirm).toContainText(
+    'Wrenna has no other guardian, so the details of Wrenna are deleted.',
+  );
+  await confirm.getByRole('button', { name: 'Yes, remove' }).click();
+  await expect(wrenna).toHaveCount(0);
+  await expect(
+    page.getByText(`Wrenna ${familyName} has been removed from your family.`),
+  ).toBeVisible();
+});
+
+test('removing a child with another guardian only takes it out of the family', async ({ page }) => {
+  const { name } = await signInAsMember(page);
+  await openAccount(page, name);
+  const children = page.getByRole('region', { name: 'Your children' });
+  const shared = children
+    .getByRole('listitem')
+    .filter({ hasText: 'Also in the family of ' })
+    .first();
+  const removeButton = shared.getByRole('button', { name: /^Remove / });
+  const childName = ((await removeButton.getAttribute('aria-label')) ?? '').replace(/^Remove /, '');
+  const guardians = (
+    (await shared.getByText(/^Also in the family of /).textContent()) ?? ''
+  ).replace('Also in the family of ', '');
+  expect(childName).not.toBe('');
+  expect(guardians).not.toBe('');
+
+  await removeButton.click();
+  const confirm = page.getByRole('group', { name: `Remove ${childName} from your family?` });
+  await expect(confirm).toContainText(
+    `${childName.split(' ')[0]} stays registered with ${guardians} and is only removed from your family.`,
+  );
+  await confirm.getByRole('button', { name: 'Yes, remove' }).click();
+
+  await expect(page.getByText(`${childName} has been removed from your family.`)).toBeVisible();
+  await expect(children.getByText(childName, { exact: true })).toHaveCount(0);
+});
+
+test('signs in in the language chosen for emails', async ({ page }) => {
+  const { name, email } = await signInAsMember(page);
+  await openAccount(page, name);
+
+  const card = page.getByRole('region', { name: 'Your details' });
+  await card.getByRole('combobox', { name: 'Language for emails' }).click();
+  await page.getByRole('option', { name: 'Deutsch' }).click();
+  await expect(page.getByText('The language for emails has been saved.')).toBeVisible();
+  // Choosing it does not switch the UI.
+  await expect(page.getByRole('heading', { level: 1, name: 'Your account' })).toBeVisible();
+
+  await page.getByRole('banner').getByRole('button', { name }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await page.getByRole('banner').getByRole('link', { name: 'Sign in' }).click();
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill('demo-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+
+  await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sprache ändern' })).toBeVisible();
+});

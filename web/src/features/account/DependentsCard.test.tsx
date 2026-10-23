@@ -21,7 +21,6 @@ afterEach(() => {
 });
 
 const lina = family.dependents[0]!;
-const max = family.dependents[1]!;
 
 const signedInMember = {
   '/api/v1/demo/mailbox': { status: 404, body: undefined },
