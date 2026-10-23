@@ -24,25 +24,13 @@ excludes = [
     ".release-please-manifest.json",
 ]
 
-[formatter.gofumpt]
-command = "gofumpt"
-options = ["-w"]
+# gofumpt + gci as configured in .golangci.yml. Using the linter's own
+# formatter keeps `just fmt` and `just lint` from disagreeing (a standalone gci
+# binary carries its own stdlib list and misgroups newer packages like uuid).
+[formatter.golangci-lint]
+command = "golangci-lint"
+options = ["fmt"]
 includes = ["*.go"]
-
-[formatter.gci]
-command = "gci"
-options = [
-    "write",
-    "--skip-generated",
-    "-s",
-    "standard",
-    "-s",
-    "default",
-    "-s",
-    "prefix(github.com/cwbudde/studio-schedule)",
-]
-includes = ["*.go"]
-priority = 1
 
 [formatter.shellcheck]
 command = "shellcheck"

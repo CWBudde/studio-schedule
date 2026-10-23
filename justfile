@@ -9,8 +9,7 @@ default:
 
 # Install pinned formatting/lint tools (CI and fresh machines)
 setup-deps:
-    go install mvdan.cc/gofumpt@v0.12.0
-    go install github.com/daixiang0/gci@v0.14.0
+    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
     go install mvdan.cc/sh/v3/cmd/shfmt@v3.12.0
     npm install -g prettier@3.7.4
 

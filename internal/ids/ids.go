@@ -5,7 +5,6 @@ package ids
 import (
 	"encoding/binary"
 	"sync"
-
 	"uuid"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
