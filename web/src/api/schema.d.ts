@@ -502,7 +502,7 @@ export interface components {
              */
             from: string;
             /** @description Visible lessons, ordered by start. */
-            lessons: components["schemas"]["LessonSummary"][] | null;
+            lessons: components["schemas"]["LessonSummary"][];
             /**
              * Format: date-time
              * @description Instant of the next weekly release.

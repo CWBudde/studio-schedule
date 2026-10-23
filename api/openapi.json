@@ -593,10 +593,7 @@
             "items": {
               "$ref": "#/components/schemas/LessonSummary"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "nextReleaseAt": {
             "description": "Instant of the next weekly release.",

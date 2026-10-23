@@ -122,7 +122,7 @@ func (s *ScheduleService) Schedule(ctx context.Context, q ScheduleQuery) (Schedu
 			return fmt.Errorf("lessons: %w", err)
 		}
 
-		refs, err := loadAllRefs(ctx, tx)
+		refs, err := loadRangeRefs(ctx, tx, q.From, q.To)
 		if err != nil {
 			return err
 		}
@@ -130,6 +130,10 @@ func (s *ScheduleService) Schedule(ctx context.Context, q ScheduleQuery) (Schedu
 		for _, l := range lessons {
 			if !visibleToGuest(l, out.Release) {
 				continue
+			}
+
+			if err := refs.loadClass(ctx, tx, l.ClassID); err != nil {
+				return err
 			}
 
 			sl, err := refs.resolve(l)
@@ -209,8 +213,9 @@ func newLessonRefs() lessonRefs {
 	}
 }
 
-// loadAllRefs loads every record a lesson can reference.
-func loadAllRefs(ctx context.Context, tx store.Tx) (lessonRefs, error) {
+// loadRangeRefs loads the catalog and the classes of the terms that overlap
+// the school dates [from, to), so the cost does not grow with past terms.
+func loadRangeRefs(ctx context.Context, tx store.Tx, from, to domain.Date) (lessonRefs, error) {
 	refs := newLessonRefs()
 
 	locations, err := tx.Locations().List(ctx)
@@ -255,6 +260,10 @@ func loadAllRefs(ctx context.Context, tx store.Tx) (lessonRefs, error) {
 	}
 
 	for _, t := range terms {
+		if t.EndsOn.Compare(from) < 0 || t.StartsOn.Compare(to) >= 0 {
+			continue
+		}
+
 		classes, err := tx.Classes().ListByTerm(ctx, t.ID)
 		if err != nil {
 			return refs, fmt.Errorf("classes of term %v: %w", t.ID, err)
@@ -266,6 +275,27 @@ func loadAllRefs(ctx context.Context, tx store.Tx) (lessonRefs, error) {
 	}
 
 	return refs, nil
+}
+
+// loadClass adds the class with the given ID unless it is zero (a one-off
+// lesson) or already loaded, e.g. for a lesson outside its term's dates.
+func (r lessonRefs) loadClass(ctx context.Context, tx store.Tx, id domain.ClassID) error {
+	if id.IsZero() {
+		return nil
+	}
+
+	if _, ok := r.classes[id]; ok {
+		return nil
+	}
+
+	c, err := tx.Classes().Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("class %v: %w", id, refErr(err))
+	}
+
+	r.classes[id] = c
+
+	return nil
 }
 
 // loadRefsOf loads the records that l references.

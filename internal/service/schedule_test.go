@@ -10,6 +10,7 @@ import (
 
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/memory"
@@ -488,5 +489,64 @@ func TestLesson(t *testing.T) {
 		if _, err := f.svc.Lesson(t.Context(), id); !errors.Is(err, domain.ErrNotFound) {
 			t.Errorf("%s: want ErrNotFound, got %v", name, err)
 		}
+	}
+}
+
+// TestScheduleLessonOutsideItsTerm checks that a lesson whose class belongs
+// to a term outside the requested range still resolves its class (only the
+// classes of overlapping terms are preloaded).
+func TestScheduleLessonOutsideItsTerm(t *testing.T) {
+	t.Parallel()
+
+	st := memory.New()
+	seq := ids.NewSequence()
+	loc := mustZone(t, "Europe/Berlin")
+	now := time.Date(2026, time.October, 21, 12, 0, 0, 0, loc)
+
+	location := domain.Location{ID: ids.New[domain.LocationID](seq), Name: "Example Hall"}
+	room := domain.Room{ID: ids.New[domain.RoomID](seq), LocationID: location.ID, Name: "Room 1", Capacity: 10}
+	staff := domain.Staff{ID: ids.New[domain.StaffID](seq), DisplayName: "Instructor Example", Kind: domain.StaffInstructor, Active: true}
+	courseType := domain.CourseType{ID: ids.New[domain.CourseTypeID](seq), Name: "Ballet"}
+	term := domain.Term{
+		ID: ids.New[domain.TermID](seq), Name: "Winter",
+		StartsOn: schoolDate(2026, time.January, 5), EndsOn: schoolDate(2026, time.January, 31),
+	}
+	class := domain.Class{
+		ID: ids.New[domain.ClassID](seq), TermID: term.ID, CourseTypeID: courseType.ID, RoomID: room.ID,
+		InstructorID: staff.ID, Level: domain.LevelAdvanced, Weekday: time.Monday,
+		StartTime: domain.TimeOfDay{Hour: 18}, Duration: time.Hour, Capacity: 10,
+	}
+	start := schoolDate(2026, time.October, 19).At(class.StartTime, loc)
+	lesson := domain.Lesson{
+		ID: ids.New[domain.LessonID](seq), ClassID: class.ID, CourseTypeID: courseType.ID, RoomID: room.ID,
+		InstructorID: staff.ID, StartsAt: start, EndsAt: start.Add(time.Hour), Status: domain.LessonScheduled,
+		Visibility: domain.VisibilityPublic, Kind: domain.LessonRegular, Capacity: 10,
+	}
+
+	err := st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return errors.Join(
+			tx.Settings().Put(ctx, seed.DemoSettings()),
+			tx.Locations().Create(ctx, location),
+			tx.Rooms().Create(ctx, room),
+			tx.Staff().Create(ctx, staff),
+			tx.CourseTypes().Create(ctx, courseType),
+			tx.Terms().Create(ctx, term),
+			tx.Classes().Create(ctx, class),
+			tx.Lessons().Create(ctx, lesson),
+		)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := NewScheduleService(st, clock.NewFixed(now)).Schedule(t.Context(), ScheduleQuery{
+		From: schoolDate(2026, time.October, 19), To: schoolDate(2026, time.October, 26),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(s.Lessons) != 1 || s.Lessons[0].Lesson.ID != lesson.ID || s.Lessons[0].Level != domain.LevelAdvanced {
+		t.Fatalf("lessons = %+v, want the lesson with its class level", s.Lessons)
 	}
 }
