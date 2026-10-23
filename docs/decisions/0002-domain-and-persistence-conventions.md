@@ -76,6 +76,15 @@ Settled while writing the first repositories (`internal/store/store.go`):
   "try insert, then carry on" is not part of the contract.
 - Instants come back in UTC, truncated to microseconds (the `timestamptz` precision); the memory
   store normalises them the same way. Text ordering is byte-wise (collation `C`); locale-aware
-  sorting belongs in the UI. Account emails are unique ignoring ASCII case only (`citext` with
-  collation `C`), so both stores agree on non-ASCII addresses.
+  sorting belongs in the UI. Account emails are unique ignoring ASCII case only (a `text COLLATE "C"`
+  column with a unique index on `lower(email)`), so both stores agree on non-ASCII addresses.
+  `citext` was rejected: it folds with the database collation even when declared with collation
+  `C`, so `Ä` and `ä` collided.
+- Restrict violations (SQLSTATE 23001), foreign-key (23503), unique (23505) and exclusion (23P01)
+  errors map to `ErrConflict`; check (23514), not-null (23502) and data exceptions (class 22) to
+  `ErrValidation`. When `InTx` gives up after its retries on 40001/40P01, the error wraps
+  `ErrConflict` (a lost race, not a server fault).
+- PostgreSQL tests use `STUDIO_TEST_DATABASE_URL` if set, otherwise a `postgres:18-alpine`
+  container via testcontainers. Migrations run once into a template database; every test gets
+  its own `CREATE DATABASE … TEMPLATE` clone.
 - A context canceled before the commit rolls the transaction back in both stores.

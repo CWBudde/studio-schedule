@@ -64,7 +64,7 @@ Phase 1 refines this outline. "Legacy" names are listed in [docs/glossary.md](do
 | ------------- | --------------------------------------------------------------------------------------------------------------------- |
 | Settings      | `settings` (singleton: school name, timezone, locale, release rule, cutoffs, currency, receipt prefix, legal data)    |
 | People        | `persons`, `person_guardians` (parents book for children)                                                             |
-| Accounts      | `accounts` (citext email, role enum, visible-days override), `sessions` (hashed token), `password_resets`             |
+| Accounts      | `accounts` (case-insensitive email, role enum, visible-days override), `sessions` (hashed token), `password_resets`   |
 | Catalogue     | `locations`, `rooms` (capacity), `staff` (instructor / accompanist), `course_types`                                   |
 | Timetable     | `terms` (date ranges, e.g. a summer timetable), `classes` (weekly template), `class_members`                          |
 | Lessons       | `lessons` (instants, status, visibility, kind, capacity; unique `(class_id, starts_at)`)                              |
@@ -125,20 +125,32 @@ Goal: a production-grade persistence layer with two interchangeable implementati
       prefix, release rule, cutoffs, visible days); conventions in ADR 0002. `sessions`,
       `password_resets`, `outbox_emails` and `receipt_counters` arrive with Phases 3/6/7.
       partial: visible in the demo with the seed dataset
-- [ ] `store` interfaces per aggregate. Explicit ordering on every list method, no generic query
-      builder
-  - [ ] `InTx(ctx, mode, fn)`. Document the "never nest InTx" rule; internal helpers take a `Tx`
-  - [ ] `Lessons().Lock(id)` as the domain-level serialisation primitive
-- [ ] `storetest` contract suite: CRUD, case-insensitive email uniqueness, ordering, NULL handling,
+- [x] `store` interfaces per aggregate. Explicit ordering on every list method, no generic query
+      builder (2026-10-23) — settings, persons + guardians, accounts, locations, rooms, staff,
+      course types, terms, classes + members, lessons, bookings + events; waitlist, passes,
+      receipts, messages, feeds and imports get their repositories in their phases
+  - [x] `InTx(ctx, mode, fn)`. Document the "never nest InTx" rule; internal helpers take a `Tx`
+        (2026-10-23) — nesting is detected through the context and fails with `ErrNestedTx`
+  - [x] `Lessons().Lock(id)` as the domain-level serialisation primitive (2026-10-23) — row
+        lock (`FOR UPDATE`) in PostgreSQL, the transaction mutex in memory; needs a read-write
+        transaction
+- [x] `storetest` contract suite: CRUD, case-insensitive email uniqueness, ordering, NULL handling,
       rollback, conflict errors, lock semantics (concurrent bookings with N goroutines)
+      (2026-10-23) — 180 parallel cases per store, incl. 20 goroutines booking a capacity-5 lesson
 - [x] `store/memory`: one transaction mutex plus copy-on-write snapshot for rollback; passes the suite
       (2026-10-23) — generic copy-on-write tables cloned on a transaction's first write; same keys,
       references and delete restrictions as the schema; UTC/µs instants; core aggregates
-- [ ] `store/postgres`: pgx v5 + sqlc, goose migrations embedded, `migrate up/down/status` CLI
-  - [ ] Enums instead of flag sets; citext; partial unique index for active bookings; CHECK
-        constraints
-  - [ ] READ COMMITTED with `SELECT … FOR UPDATE`, retry on 40001/40P01
-  - [ ] Passes the contract suite (local: docker; CI: Postgres service container)
+- [x] `store/postgres`: pgx v5 + sqlc, goose migrations embedded, `migrate up/down/status` CLI
+      (2026-10-23) — pgx v5.11, sqlc v1.31.1 (generated code in `internal/sqlc`), goose v3.28
+      provider with an advisory lock; constraint violations mapped to domain errors in the store
+  - [x] Enums instead of flag sets; citext; partial unique index for active bookings; CHECK
+        constraints (2026-10-23) — text + CHECK enums; emails as `text COLLATE "C"` with a unique
+        `lower(email)` index instead of citext (citext folds non-ASCII, see ADR 0002)
+  - [x] READ COMMITTED with `SELECT … FOR UPDATE`, retry on 40001/40P01 (2026-10-23) — up to 5
+        attempts with linear backoff; giving up reports `ErrConflict`
+  - [x] Passes the contract suite (local: docker; CI: Postgres service container) (2026-10-23) —
+        testcontainers `postgres:18-alpine` or `STUDIO_TEST_DATABASE_URL`, one cloned database
+        per test
 - [ ] Config: env + flags (`DATABASE_URL`, `HTTP_ADDR`, `BASE_URL`, `SMTP_*`, `SESSION_*`), no
       hard-coded secrets, `.env.example` (2026-10-23) — `internal/config`: flag > env > default,
       validation, redacted logging; `serve --addr/--database-url/--base-url`. partial: `SMTP_*` and

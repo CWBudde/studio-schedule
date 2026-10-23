@@ -22,7 +22,7 @@ func conflict(format string, args ...any) error {
 func compareID[I domain.AnyID](a, b I) int { return uuid.UUID(a).Compare(uuid.UUID(b)) }
 
 // foldEmail lower-cases ASCII letters only, like PostgreSQL's lower() under
-// collation "C" (the collation of the citext email column). Other letters
+// collation "C" (the collation of the email column). Other letters
 // keep their case, so "Ä" and "ä" are different emails in both stores.
 func foldEmail(s string) string {
 	return strings.Map(func(r rune) rune {
