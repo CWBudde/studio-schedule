@@ -50,7 +50,7 @@ function DaySection({
     <section aria-labelledby={headingId} className="space-y-3">
       <h2
         id={headingId}
-        className="sticky top-0 z-10 -mx-1 bg-background/90 px-1 py-2 font-heading text-lg font-semibold tracking-tight backdrop-blur supports-[backdrop-filter]:bg-background/75"
+        className="sticky top-0 z-10 -mx-1 flex items-center gap-4 bg-background/90 px-1 py-2 font-heading text-2xl font-medium tracking-tight italic backdrop-blur after:h-px after:flex-1 after:bg-border supports-[backdrop-filter]:bg-background/75"
       >
         {name}
       </h2>
@@ -88,15 +88,15 @@ function ClassCard({
   return (
     <article
       aria-label={t('class.cardLabel', { courseType, day: dayName, time })}
-      className="flex w-full flex-col gap-2 rounded-xl bg-card p-4 text-sm text-card-foreground ring-1 ring-foreground/10"
+      className="flex w-full flex-col gap-2 rounded-lg bg-card p-4 pl-5 text-sm text-card-foreground shadow-[inset_2px_0_0_0_var(--color-primary)] ring-1 ring-foreground/10"
     >
-      <span className="inline-flex items-center gap-1.5 font-medium tabular-nums">
-        <Clock className="size-4 text-muted-foreground" aria-hidden="true" />
+      <span className="inline-flex items-center gap-1.5 font-medium text-primary tabular-nums">
+        <Clock className="size-4" aria-hidden="true" />
         <span>{time}</span>
       </span>
 
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="font-heading text-base font-semibold">{courseType}</h3>
+        <h3 className="font-heading text-lg leading-snug font-medium">{courseType}</h3>
         <Badge variant="secondary">{ts(`level.${c.level}`)}</Badge>
       </div>
 

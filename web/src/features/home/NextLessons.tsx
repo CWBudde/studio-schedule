@@ -13,15 +13,17 @@ import { addDays, formatDateTime, schoolDateOf, todayIn } from '@/lib/schoolTime
 const shown = 3;
 
 /** Teaser for the schedule: the next lessons of the coming week. */
-export function NextLessons() {
+export function NextLessons({ className }: { className?: string }) {
   const { t } = useTranslation();
   const settings = useQuery(publicSettingsQuery);
 
   return (
-    <Card role="region" aria-labelledby="next-lessons-title">
+    <Card role="region" aria-labelledby="next-lessons-title" className={className}>
       <CardHeader>
         <CardTitle>
-          <h2 id="next-lessons-title">{t('home.schedule.title')}</h2>
+          <h2 id="next-lessons-title" className="text-2xl">
+            {t('home.schedule.title')}
+          </h2>
         </CardTitle>
         <CardDescription>{t('home.schedule.description')}</CardDescription>
       </CardHeader>
@@ -33,7 +35,7 @@ export function NextLessons() {
         ) : (
           <Loading />
         )}
-        <Button asChild variant="outline" size="sm">
+        <Button asChild size="sm">
           <Link to="/schedule">
             {t('home.schedule.viewAll')}
             <ArrowRight aria-hidden="true" />
@@ -61,23 +63,30 @@ function Upcoming({ timeZone }: { timeZone: string }) {
     return <p className="text-sm text-muted-foreground">{t('home.schedule.empty')}</p>;
   }
 
+  // A programme's running order: the piece, a dotted leader, then when it starts.
   return (
-    <ul className="divide-y rounded-lg border">
+    <ol className="-mx-2">
       {upcoming.map((l) => (
         <li key={l.id}>
           <Link
             to="/schedule"
             search={{ from: schoolDateOf(l.startsAt, timeZone), lesson: l.id }}
-            className="flex items-baseline justify-between gap-3 px-3 py-2 text-sm hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+            className="group flex items-baseline gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
           >
-            <span className="font-medium">{l.courseType.name}</span>
-            <span className="text-muted-foreground tabular-nums">
+            <span className="font-heading text-lg font-medium group-hover:text-accent-foreground">
+              {l.courseType.name}
+            </span>
+            <span
+              aria-hidden="true"
+              className="min-w-6 flex-1 border-b border-dotted border-foreground/30"
+            />
+            <span className="eyebrow whitespace-nowrap text-muted-foreground tabular-nums">
               {formatDateTime(l.startsAt, timeZone, lang)}
             </span>
           </Link>
         </li>
       ))}
-    </ul>
+    </ol>
   );
 }
 

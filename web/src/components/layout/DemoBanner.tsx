@@ -10,7 +10,7 @@ export function DemoBanner() {
   return (
     <aside
       aria-label={t('demo.label')}
-      className="border-b border-amber-300/70 bg-amber-50 text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-100"
+      className="border-b border-primary/10 bg-secondary/60 text-secondary-foreground"
     >
       <div className="mx-auto flex max-w-5xl items-start gap-3 px-4 py-2.5 text-sm sm:items-center">
         <FlaskConical className="mt-0.5 size-4 shrink-0 sm:mt-0" aria-hidden="true" />

@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Ornament } from '@/components/layout/Ornament';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NextLessons } from './NextLessons';
 
@@ -22,23 +23,31 @@ export function HomePage() {
   const settings = useQuery(publicSettingsQuery);
 
   return (
-    <div className="space-y-8">
-      <section aria-labelledby="home-title" className="space-y-2">
-        <h1 id="home-title" className="font-heading text-3xl font-semibold tracking-tight">
+    <div className="space-y-12">
+      {/* Laid out like the cover of a programme. */}
+      <section aria-labelledby="home-title" className="mx-auto max-w-2xl pt-6 text-center sm:pt-10">
+        <p className="eyebrow text-primary">{t('home.eyebrow')}</p>
+        <h1
+          id="home-title"
+          className="mt-4 font-heading text-4xl leading-[1.05] font-medium tracking-tight text-balance sm:text-6xl"
+        >
           {settings.data?.schoolName ?? t('home.title')}
         </h1>
-        <p className="max-w-prose text-muted-foreground">{t('home.intro')}</p>
+        <Ornament className="mx-auto mt-7 max-w-56" />
+        <p className="mx-auto mt-6 max-w-prose text-pretty text-muted-foreground sm:text-lg">
+          {t('home.intro')}
+        </p>
       </section>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <StatusCard />
-        <NextLessons />
+      <div className="grid items-start gap-6 md:grid-cols-5">
+        <NextLessons className="md:col-span-3" />
+        <StatusCard className="md:col-span-2" />
       </div>
     </div>
   );
 }
 
-function StatusCard() {
+function StatusCard({ className }: { className?: string }) {
   const { t } = useTranslation();
   const health = useQuery(healthQuery);
   const settings = useQuery(publicSettingsQuery);
@@ -46,10 +55,12 @@ function StatusCard() {
   const failed = health.isError || settings.isError;
 
   return (
-    <Card role="region" aria-labelledby="status-title">
+    <Card role="region" aria-labelledby="status-title" className={className}>
       <CardHeader>
         <CardTitle>
-          <h2 id="status-title">{t('home.status.title')}</h2>
+          <h2 id="status-title" className="text-xl">
+            {t('home.status.title')}
+          </h2>
         </CardTitle>
         <CardDescription>{t('home.status.description')}</CardDescription>
         <CardAction>

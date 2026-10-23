@@ -41,7 +41,7 @@ export function TimetablePage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <h1 className="font-heading text-3xl font-semibold tracking-tight">{t('title')}</h1>
+        <h1 className="font-heading text-4xl font-medium tracking-tight">{t('title')}</h1>
         <p className="max-w-prose text-muted-foreground">
           {t('intro')}{' '}
           <Link

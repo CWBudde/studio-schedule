@@ -31,7 +31,7 @@ export function SchedulePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-heading text-3xl font-semibold tracking-tight">{t('title')}</h1>
+      <h1 className="font-heading text-4xl font-medium tracking-tight">{t('title')}</h1>
       {settings.data ? (
         <ScheduleView timeZone={settings.data.timezone} />
       ) : settings.isError ? (

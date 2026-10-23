@@ -111,7 +111,7 @@ function DaySection({
         id={headingId}
         aria-current={tone === 'today' ? 'date' : undefined}
         className={cn(
-          'sticky top-0 z-10 rounded-lg px-3 py-2 font-heading text-lg font-semibold tracking-tight',
+          'sticky top-0 z-10 rounded-md px-4 py-2 font-heading text-xl font-medium tracking-tight shadow-[0_6px_16px_-12px_oklch(0.3_0.08_350/0.5)]',
           dayToneClass[tone],
         )}
       >
@@ -166,6 +166,7 @@ function LessonCard({
     .filter(Boolean)
     .join(', ');
 
+  // The thin primary line on the left is a barre; ended and canceled lessons lose it.
   return (
     <button
       type="button"
@@ -174,19 +175,19 @@ function LessonCard({
       onClick={onOpen}
       data-canceled={canceled || undefined}
       data-past={past || undefined}
-      className="flex w-full flex-col gap-2 rounded-xl bg-card p-4 text-left text-sm text-card-foreground ring-1 ring-foreground/10 transition-colors outline-none hover:bg-accent/60 focus-visible:ring-3 focus-visible:ring-ring/50 data-canceled:bg-muted/40 data-canceled:text-muted-foreground data-past:bg-muted/40 data-past:text-muted-foreground"
+      className="flex w-full flex-col gap-2 rounded-lg bg-card p-4 pl-5 text-left text-sm text-card-foreground shadow-[inset_2px_0_0_0_var(--color-primary)] ring-1 ring-foreground/10 transition-[background-color,box-shadow] outline-none hover:bg-accent/50 hover:ring-primary/30 focus-visible:ring-3 focus-visible:ring-ring/50 data-canceled:bg-muted/40 data-canceled:text-muted-foreground data-canceled:shadow-none data-past:bg-muted/40 data-past:text-muted-foreground data-past:shadow-none"
     >
       <span className="flex items-baseline justify-between gap-3">
         <span
           className={cn(
-            'font-heading text-base font-semibold',
-            canceled && 'line-through decoration-2',
+            'font-heading text-lg leading-snug font-medium',
+            canceled && 'line-through decoration-1',
           )}
         >
           {lesson.courseType.name}
         </span>
         {lesson.level && (
-          <span className="shrink-0 text-right text-muted-foreground">
+          <span className="shrink-0 text-right eyebrow text-muted-foreground">
             {t(`level.${lesson.level}`)}
           </span>
         )}
