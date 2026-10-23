@@ -2,7 +2,6 @@ package domain
 
 import (
 	"fmt"
-
 	"uuid"
 )
 
@@ -15,14 +14,25 @@ import (
 // uuid package directly.
 type ID[K any] uuid.UUID
 
-// AnyID is satisfied by every ID type.
-type AnyID interface{ ~[16]byte }
+// AnyID is satisfied by every ID type, and not by a bare uuid.UUID.
+type AnyID interface {
+	~[16]byte
+	String() string
+	IsZero() bool
+}
 
-// ParseID parses the canonical text form of an ID. Errors wrap
-// ErrValidation.
+// ParseID parses the canonical text form of an ID
+// (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx, hex digits in either case). Other
+// spellings uuid.Parse would accept (braces, urn:uuid:, no dashes) and the
+// nil UUID are rejected, so every ID has exactly one valid string form.
+// Errors wrap ErrValidation.
 func ParseID[I AnyID](s string) (I, error) {
+	if len(s) != 36 || s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
+		return I{}, fmt.Errorf("%w: invalid ID %q", ErrValidation, s)
+	}
+
 	u, err := uuid.Parse(s)
-	if err != nil {
+	if err != nil || u == uuid.Nil() {
 		return I{}, fmt.Errorf("%w: invalid ID %q", ErrValidation, s)
 	}
 

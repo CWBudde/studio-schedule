@@ -30,7 +30,15 @@ func TestParseIDRoundTrip(t *testing.T) {
 func TestParseIDInvalid(t *testing.T) {
 	t.Parallel()
 
-	for _, s := range []string{"", "not-a-uuid", sampleID + "0"} {
+	for _, s := range []string{
+		"",
+		"not-a-uuid",
+		sampleID + "0",
+		"{" + sampleID + "}",
+		"urn:uuid:" + sampleID,
+		"01890a5dac96774bbcceb302099a8057",
+		"00000000-0000-0000-0000-000000000000",
+	} {
 		if _, err := domain.ParseID[domain.PersonID](s); !errors.Is(err, domain.ErrValidation) {
 			t.Errorf("ParseID(%q): want ErrValidation, got %v", s, err)
 		}
