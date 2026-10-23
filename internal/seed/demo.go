@@ -275,7 +275,7 @@ var demoClasses = []classSpec{
 	},
 	{
 		time.Wednesday, at(18, 30), 60, "Hall 1", "Hip-Hop", "Jonas Featherby", "", domain.LevelIntermediate, 20,
-		[]string{"Noah Cloudsley", "Jona Fernwhistle", "Ben Gildenmoor"},
+		[]string{"Noah Cloudsley", "Ben Gildenmoor"},
 	},
 	{
 		time.Wednesday, at(19, 0), 90, "Studio A", "Classical Ballet", "Lea Moonfield", "Greta Ivorylane", domain.LevelProfessional, 16,

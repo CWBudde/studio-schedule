@@ -269,8 +269,8 @@ func TestDemoReferences(t *testing.T) {
 	}
 }
 
-// TestDemoTimetableConflicts checks that no room, instructor or accompanist
-// is in two classes at once.
+// TestDemoTimetableConflicts checks that no room, instructor, accompanist or
+// member is in two classes at once.
 func TestDemoTimetableConflicts(t *testing.T) {
 	t.Parallel()
 
@@ -284,6 +284,15 @@ func TestDemoTimetableConflicts(t *testing.T) {
 		aStart, bStart := a.StartTime.SinceMidnight(), b.StartTime.SinceMidnight()
 
 		return aStart < bStart+b.Duration && bStart < aStart+a.Duration
+	}
+
+	members := map[domain.ClassID]map[domain.PersonID]bool{}
+	for _, m := range d.ClassMembers {
+		if members[m.ClassID] == nil {
+			members[m.ClassID] = map[domain.PersonID]bool{}
+		}
+
+		members[m.ClassID][m.PersonID] = true
 	}
 
 	for i, a := range d.Classes {
@@ -302,6 +311,12 @@ func TestDemoTimetableConflicts(t *testing.T) {
 
 			if !a.AccompanistID.IsZero() && a.AccompanistID == b.AccompanistID {
 				t.Errorf("classes %v and %v overlap for the same accompanist", a.ID, b.ID)
+			}
+
+			for p := range members[a.ID] {
+				if members[b.ID][p] {
+					t.Errorf("classes %v and %v overlap for member %v", a.ID, b.ID, p)
+				}
 			}
 		}
 	}
