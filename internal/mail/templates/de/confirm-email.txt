@@ -1,0 +1,13 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+bitte bestätige die E-Mail-Adresse für dein Konto bei {{.SchoolName}},
+indem du diesen Link öffnest:
+
+{{.Link}}
+
+Der Link ist {{if eq .ExpiresHours 1}}1 Stunde{{else}}{{.ExpiresHours}} Stunden{{end}} gültig.
+
+Falls du dich nicht registriert hast, kannst du diese E-Mail ignorieren.
+
+Viele Grüße
+{{.SchoolName}}
