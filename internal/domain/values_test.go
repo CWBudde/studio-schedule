@@ -36,6 +36,28 @@ func TestDateRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDateZeroJSON(t *testing.T) {
+	t.Parallel()
+
+	type payload struct {
+		D domain.Date `json:"d"`
+	}
+
+	data, err := json.Marshal(payload{})
+	if err != nil || string(data) != `{"d":""}` {
+		t.Fatalf("Marshal zero = %s, %v", data, err)
+	}
+
+	back := payload{D: domain.Date{Year: 2026, Month: time.March, Day: 1}}
+	if err := json.Unmarshal(data, &back); err != nil || !back.D.IsZero() {
+		t.Fatalf("Unmarshal zero = %+v, %v", back.D, err)
+	}
+
+	if _, err := json.Marshal(payload{D: domain.Date{Year: 2026, Month: 2, Day: 30}}); err == nil {
+		t.Fatal("Marshal of an invalid date succeeded")
+	}
+}
+
 func TestDateInvalid(t *testing.T) {
 	t.Parallel()
 

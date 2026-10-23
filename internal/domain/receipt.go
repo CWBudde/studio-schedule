@@ -76,7 +76,12 @@ func (r Receipt) Validate() error {
 			return err
 		}
 
+		// |l.Total| <= maxLineTotal, so the sum cannot overflow before the
+		// bound check catches it.
 		sum += l.Total
+		if sum > maxLineTotal || sum < -maxLineTotal {
+			return invalidf("receipt total out of range")
+		}
 	}
 
 	if sum != r.Total {
@@ -86,11 +91,20 @@ func (r Receipt) Validate() error {
 	return nil
 }
 
+// Bounds that keep receipt arithmetic far away from int64 overflow:
+// maxQuantity × maxUnitPrice = maxLineTotal.
+const (
+	maxQuantity        = 10_000
+	maxUnitPrice Money = 1_000_000_000_000
+	maxLineTotal       = maxQuantity * maxUnitPrice
+)
+
 func (l ReceiptLine) validate(position int) error {
 	return validate(
 		rule{l.Position == position, "receipt line positions must count from 1"},
 		rule{!blank(l.Description), "receipt line description must not be empty"},
-		rule{l.Quantity > 0, "receipt line quantity must be positive"},
+		rule{l.Quantity > 0 && l.Quantity <= maxQuantity, "receipt line quantity out of range"},
+		rule{l.UnitPrice >= -maxUnitPrice && l.UnitPrice <= maxUnitPrice, "receipt line unit price out of range"},
 		rule{l.Total == Money(l.Quantity)*l.UnitPrice, "receipt line total must be quantity × unit price"},
 	)
 }

@@ -69,6 +69,7 @@ func TestAccountValidate(t *testing.T) {
 		"bad role":      func(a *domain.Account) { a.Role = "root" },
 		"guest role":    func(a *domain.Account) { a.Role = domain.RoleGuest },
 		"negative days": func(a *domain.Account) { a.VisibleDays = -1 },
+		"too many days": func(a *domain.Account) { a.VisibleDays = 367 },
 	})
 }
 
@@ -162,6 +163,7 @@ func TestTimetableValidate(t *testing.T) {
 			"sub-minute duration": func(c *domain.Class) { c.Duration = 90*time.Minute + time.Second },
 			"crosses midnight":    func(c *domain.Class) { c.StartTime = domain.TimeOfDay{Hour: 23}; c.Duration = 2 * time.Hour },
 			"zero capacity":       func(c *domain.Class) { c.Capacity = 0 },
+			"overflowing length":  func(c *domain.Class) { c.Duration = time.Duration(1<<63-1) / time.Minute * time.Minute },
 		})
 	})
 
@@ -379,6 +381,12 @@ func TestReceiptValidate(t *testing.T) {
 			"wrong position":    func(r *domain.Receipt) { r.Lines[1].Position = 3 },
 			"no description":    func(r *domain.Receipt) { r.Lines[0].Description = "" },
 			"zero quantity":     func(r *domain.Receipt) { r.Lines[1].Quantity, r.Lines[1].Total, r.Total = 0, 0, 12000 },
+			"huge quantity": func(r *domain.Receipt) {
+				r.Lines[1].Quantity, r.Lines[1].UnitPrice, r.Lines[1].Total, r.Total = 1<<32, 1, 1<<32, 12000+1<<32
+			},
+			"huge unit price": func(r *domain.Receipt) {
+				r.Lines[1].Quantity, r.Lines[1].UnitPrice, r.Lines[1].Total, r.Total = 1, 1<<62, 1<<62, 1<<62
+			},
 			"negative sale": func(r *domain.Receipt) {
 				r.Lines[0].UnitPrice, r.Lines[0].Total, r.Total = -12000, -12000, -11000
 			},

@@ -50,7 +50,7 @@ func (c Class) Validate() error {
 		rule{validWeekday(c.Weekday), "invalid class weekday"},
 		rule{c.StartTime.Valid(), "invalid class start time"},
 		rule{c.Duration > 0 && c.Duration%time.Minute == 0, "class duration must be a positive number of minutes"},
-		rule{c.StartTime.SinceMidnight()+c.Duration <= 24*time.Hour, "class must end on the day it starts"},
+		rule{c.Duration <= 24*time.Hour-c.StartTime.SinceMidnight(), "class must not run past midnight"},
 		rule{c.Capacity > 0, "class capacity must be positive"},
 	)
 }

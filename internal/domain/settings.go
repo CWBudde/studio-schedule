@@ -42,23 +42,37 @@ type Settings struct {
 // Validate checks the settings for consistency. All errors wrap
 // ErrValidation.
 func (s Settings) Validate() error {
-	_, tzErr := time.LoadLocation(s.Timezone)
-
-	return validate(
+	err := validate(
 		rule{!blank(s.SchoolName), "school name must not be empty"},
 		rule{s.Timezone != "", "timezone must not be empty"},
-		rule{tzErr == nil && s.Timezone != "Local", "unknown timezone " + s.Timezone},
 		rule{!blank(s.DefaultLocale), "default locale must not be empty"},
 		rule{validCurrency(s.Currency), "currency must be an ISO 4217 code"},
-		rule{validReceiptPrefix(s.ReceiptPrefix), "receipt prefix must be 1-16 of A-Z, 0-9 and -"},
+		rule{validReceiptPrefix(s.ReceiptPrefix), "receipt prefix must be 1-16 of A-Z and 0-9"},
 		rule{validWeekday(s.ReleaseWeekday), "invalid release weekday"},
 		rule{s.ReleaseTime.Valid(), "invalid release time"},
-		rule{s.ReleaseWeeksAhead >= 1, "release weeks ahead must be at least 1"},
-		rule{s.BookingCutoff >= 0, "booking cutoff must not be negative"},
-		rule{s.CancellationCutoff >= 0, "cancellation cutoff must not be negative"},
-		rule{s.DefaultVisibleDays >= 1, "default visible days must be at least 1"},
+		rule{s.ReleaseWeeksAhead >= 1 && s.ReleaseWeeksAhead <= maxWeeksAhead, "release weeks ahead must be between 1 and 52"},
+		rule{s.BookingCutoff >= 0 && s.BookingCutoff <= maxCutoff, "booking cutoff must be between 0 and 30 days"},
+		rule{s.CancellationCutoff >= 0 && s.CancellationCutoff <= maxCutoff, "cancellation cutoff must be between 0 and 30 days"},
+		rule{s.DefaultVisibleDays >= 1 && s.DefaultVisibleDays <= maxVisibleDays, "default visible days must be between 1 and 366"},
 	)
+	if err != nil {
+		return err
+	}
+
+	// Loading the zone parses tzdata, so it runs only after the cheap rules.
+	if _, err := time.LoadLocation(s.Timezone); err != nil || s.Timezone == "Local" {
+		return invalidf("unknown timezone %q", s.Timezone)
+	}
+
+	return nil
 }
+
+// Upper bounds that keep schedule arithmetic sane.
+const (
+	maxWeeksAhead  = 52
+	maxVisibleDays = 366
+	maxCutoff      = 30 * 24 * time.Hour
+)
 
 func validCurrency(s string) bool {
 	if len(s) != 3 {
@@ -80,7 +94,7 @@ func validReceiptPrefix(s string) bool {
 	}
 
 	for _, c := range []byte(s) {
-		if (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '-' {
+		if (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
 			return false
 		}
 	}

@@ -59,9 +59,13 @@ func (d Date) Compare(o Date) int {
 // String returns the date in the form "2006-01-02".
 func (d Date) String() string { return fmt.Sprintf("%04d-%02d-%02d", d.Year, d.Month, d.Day) }
 
-// MarshalText implements encoding.TextMarshaler. Invalid dates, including
-// the zero value, are an error.
+// MarshalText implements encoding.TextMarshaler. The zero value ("no date")
+// encodes as an empty string; other invalid dates are an error.
 func (d Date) MarshalText() ([]byte, error) {
+	if d.IsZero() {
+		return []byte{}, nil
+	}
+
 	if !d.Valid() {
 		return nil, invalidf("invalid date %+v", d)
 	}
@@ -69,8 +73,15 @@ func (d Date) MarshalText() ([]byte, error) {
 	return []byte(d.String()), nil
 }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
+// UnmarshalText implements encoding.TextUnmarshaler. An empty string
+// decodes to the zero value.
 func (d *Date) UnmarshalText(b []byte) error {
+	if len(b) == 0 {
+		*d = Date{}
+
+		return nil
+	}
+
 	parsed, err := ParseDate(string(b))
 	if err != nil {
 		return err

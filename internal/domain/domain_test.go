@@ -50,5 +50,10 @@ func TestSettingsValidate(t *testing.T) {
 		"negative cancel cut":   func(s *domain.Settings) { s.CancellationCutoff = -time.Minute },
 		"zero visible days":     func(s *domain.Settings) { s.DefaultVisibleDays = 0 },
 		"visible days negative": func(s *domain.Settings) { s.DefaultVisibleDays = -7 },
+		"dash in prefix":        func(s *domain.Settings) { s.ReceiptPrefix = "TS-" },
+		"too many weeks ahead":  func(s *domain.Settings) { s.ReleaseWeeksAhead = 53 },
+		"huge booking cut":      func(s *domain.Settings) { s.BookingCutoff = 31 * 24 * time.Hour },
+		"huge cancel cut":       func(s *domain.Settings) { s.CancellationCutoff = 1<<63 - 1 },
+		"too many visible days": func(s *domain.Settings) { s.DefaultVisibleDays = 367 },
 	})
 }

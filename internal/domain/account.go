@@ -24,6 +24,6 @@ func (a Account) Validate() error {
 		rule{!a.PersonID.IsZero(), "account person must be set"},
 		rule{validEmail(a.Email), "invalid account email"},
 		rule{a.Role.Valid() && a.Role != RoleGuest, "invalid account role"},
-		rule{a.VisibleDays >= 0, "visible days must not be negative"},
+		rule{a.VisibleDays >= 0 && a.VisibleDays <= maxVisibleDays, "visible days must be between 0 and 366"},
 	)
 }
