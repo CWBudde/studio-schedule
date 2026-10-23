@@ -213,10 +213,12 @@ Goal: anyone can browse the published timetable. This is the first real demo val
 - [x] UI: i18n for all strings; date/time formatting in the school timezone (`Intl` with an explicit
       `timeZone`) (2026-10-23) — `lib/schoolTime.ts`; a `schedule` namespace in en and de with a
       key-parity test; web tests run with `TZ=America/New_York` so browser-zone leaks fail
-- [ ] Tests: generation across DST changes, release window edge cases (Friday 17:59 / 18:00),
+- [x] Tests: generation across DST changes, release window edge cases (Friday 17:59 / 18:00),
       component tests, Playwright e2e against the demo build (2026-10-23) — Go tests for DST
-      generation and the release edges; component tests for every schedule part. partial:
-      Playwright e2e against the demo build
+      generation and the release edges; component tests for every schedule part; Playwright
+      (`web/e2e`, `just e2e`, CI job `test-e2e`) drives the WASM demo build in desktop and phone
+      Chromium: home, list, week grid, filters, lesson sheet, countdown, early workshops, deep
+      links, German
 
 ## Phase 3 — Accounts, auth & administration basics
 
