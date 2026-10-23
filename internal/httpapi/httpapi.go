@@ -82,6 +82,7 @@ func Register(api huma.API, deps Deps) {
 	registerSystem(api, h)
 	registerSettings(api, h)
 	registerCatalog(api, h)
+	registerCatalogAdmin(api, h)
 	registerTimetable(api, h)
 	registerSchedule(api, h)
 	registerAuth(api, h)
@@ -100,11 +101,22 @@ type handlers struct {
 // toHTTPError maps domain errors to RFC 9457 problem responses. Unknown
 // errors are logged and reported as 500 without leaking details.
 func (h *handlers) toHTTPError(ctx context.Context, err error) error {
+	var field *domain.FieldError
+
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		return huma.Error404NotFound("resource not found")
+	case errors.As(err, &field):
+		// Located like Huma's own schema errors, so forms can mark the field.
+		return huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
+			Message: field.Msg, Location: "body." + field.Field,
+		})
 	case errors.Is(err, domain.ErrValidation):
 		return huma.Error422UnprocessableEntity(err.Error())
+	case errors.Is(err, domain.ErrInUse):
+		return conflict(reasonInUse, "the record is still in use")
+	case errors.Is(err, domain.ErrDuplicate):
+		return conflict(reasonDuplicate, "the name is taken")
 	case errors.Is(err, domain.ErrConflict):
 		return huma.Error409Conflict("conflict")
 	case errors.Is(err, domain.ErrUnauthorized):

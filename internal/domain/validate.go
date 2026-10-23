@@ -7,18 +7,53 @@ import (
 	"time"
 )
 
-// rule is one condition checked by validate.
+// check is one condition checked by validate: a rule, or a fieldRule that
+// names the field it is about.
+type check interface {
+	err() error
+}
+
+// rule is a condition about the entity as a whole.
 type rule struct {
 	ok  bool
 	msg string
 }
 
-// validate returns an error wrapping ErrValidation for the first rule that
-// does not hold, or nil.
-func validate(rules ...rule) error {
-	for _, r := range rules {
-		if !r.ok {
-			return fmt.Errorf("%w: %s", ErrValidation, r.msg)
+func (r rule) err() error {
+	if r.ok {
+		return nil
+	}
+
+	return fmt.Errorf("%w: %s", ErrValidation, r.msg)
+}
+
+// fieldRule is a condition about one field a client sends, so the API can
+// point at it (ADR 0007).
+type fieldRule struct {
+	rule
+
+	field string
+}
+
+// on returns a rule about the field with the given JSON name.
+func on(field string, ok bool, msg string) fieldRule {
+	return fieldRule{rule: rule{ok: ok, msg: msg}, field: field}
+}
+
+func (r fieldRule) err() error {
+	if r.ok {
+		return nil
+	}
+
+	return &FieldError{Field: r.field, Msg: r.msg}
+}
+
+// validate returns an error wrapping ErrValidation for the first check that
+// does not hold, or nil. A failed fieldRule is a *FieldError.
+func validate(checks ...check) error {
+	for _, c := range checks {
+		if err := c.err(); err != nil {
+			return err
 		}
 	}
 

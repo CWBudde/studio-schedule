@@ -1,6 +1,7 @@
 package domain_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -597,6 +598,42 @@ func TestOutboxMailValidate(t *testing.T) {
 	} {
 		if got := m.Status(); got != want {
 			t.Errorf("Status() = %s, want %s", got, want)
+		}
+	}
+}
+
+func TestFieldErrors(t *testing.T) {
+	t.Parallel()
+
+	room := domain.Room{ID: newID[domain.RoomID](), LocationID: newID[domain.LocationID](), Name: "Studio A", Capacity: 20}
+
+	for name, tc := range map[string]struct {
+		entity interface{ Validate() error }
+		field  string
+	}{
+		"location name": {domain.Location{ID: newID[domain.LocationID]()}, "name"},
+		"room location": {func() domain.Room { r := room; r.LocationID = domain.LocationID{}; return r }(), "locationId"},
+		"room name":     {func() domain.Room { r := room; r.Name = " "; return r }(), "name"},
+		"room capacity": {func() domain.Room { r := room; r.Capacity = 0; return r }(), "capacity"},
+		"course type":   {domain.CourseType{ID: newID[domain.CourseTypeID]()}, "name"},
+	} {
+		err := tc.entity.Validate()
+
+		var fe *domain.FieldError
+		if !errors.As(err, &fe) || fe.Field != tc.field || !errors.Is(err, domain.ErrValidation) {
+			t.Errorf("%s: %v, want a FieldError on %q wrapping ErrValidation", name, err, tc.field)
+		}
+	}
+
+	// A rule about the entity as a whole names no field.
+	var fe *domain.FieldError
+	if err := (domain.Room{}).Validate(); errors.As(err, &fe) {
+		t.Errorf("zero room id: %v is a FieldError on %q", err, fe.Field)
+	}
+
+	for _, err := range []error{domain.ErrInUse, domain.ErrDuplicate} {
+		if !errors.Is(err, domain.ErrConflict) {
+			t.Errorf("%v does not wrap ErrConflict", err)
 		}
 	}
 }

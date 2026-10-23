@@ -19,7 +19,7 @@ var ErrDependentInUse = fmt.Errorf("%w: the dependent has bookings or class memb
 
 // ErrFutureBirthDate reports a birth date after today in the school time
 // zone.
-var ErrFutureBirthDate = fmt.Errorf("%w: birth date must not be in the future", domain.ErrValidation)
+var ErrFutureBirthDate error = &domain.FieldError{Field: "birthDate", Msg: "birth date must not be in the future"}
 
 // PersonData are the fields a guardian edits, for themself or a dependent.
 // Optional fields are empty or zero when absent.

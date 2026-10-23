@@ -194,10 +194,6 @@ func (h *handlers) familyError(ctx context.Context, err error) error {
 	switch {
 	case errors.Is(err, service.ErrDependentInUse):
 		return huma.Error409Conflict("the dependent has bookings or class memberships")
-	case errors.Is(err, service.ErrFutureBirthDate):
-		return huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
-			Message: "the birth date must not be in the future", Location: "body.birthDate",
-		})
 	default:
 		return h.toHTTPError(ctx, err)
 	}

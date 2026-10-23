@@ -14,7 +14,7 @@ type Location struct {
 func (l Location) Validate() error {
 	return validate(
 		rule{!l.ID.IsZero(), "location id must be set"},
-		rule{!blank(l.Name), "location name must not be empty"},
+		on("name", !blank(l.Name), "location name must not be empty"),
 	)
 }
 
@@ -30,9 +30,9 @@ type Room struct {
 func (r Room) Validate() error {
 	return validate(
 		rule{!r.ID.IsZero(), "room id must be set"},
-		rule{!r.LocationID.IsZero(), "room location must be set"},
-		rule{!blank(r.Name), "room name must not be empty"},
-		rule{r.Capacity > 0, "room capacity must be positive"},
+		on("locationId", !r.LocationID.IsZero(), "room location must be set"),
+		on("name", !blank(r.Name), "room name must not be empty"),
+		on("capacity", r.Capacity > 0, "room capacity must be positive"),
 	)
 }
 
@@ -102,6 +102,6 @@ type CourseType struct {
 func (c CourseType) Validate() error {
 	return validate(
 		rule{!c.ID.IsZero(), "course type id must be set"},
-		rule{!blank(c.Name), "course type name must not be empty"},
+		on("name", !blank(c.Name), "course type name must not be empty"),
 	)
 }
