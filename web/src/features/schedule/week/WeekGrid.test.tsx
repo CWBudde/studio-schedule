@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { LessonSummary, Schedule } from '@/api/client';
 import i18n from '@/i18n';
 import { ids, lessonBallet, lessonContemporary, schedule } from '@/test/mockApi';
+import { todayIn } from '@/lib/schoolTime';
 import { renderAtSchedule } from '@/test/utils';
 import { WeekGrid } from './WeekGrid';
 
@@ -25,9 +26,16 @@ function lessonAt(id: number, name: string, startsAt: string, minutes = 60): Les
 
 describe('WeekGrid', () => {
   it('places lessons by school date and wall-clock time in the school zone', async () => {
-    renderAtSchedule(<WeekGrid schedule={schedule} weekStart="2026-10-26" />, {
-      from: '2026-10-26',
-    });
+    renderAtSchedule(
+      <WeekGrid
+        schedule={schedule}
+        today={todayIn('Europe/Berlin', schedule.now)}
+        weekStart="2026-10-26"
+      />,
+      {
+        from: '2026-10-26',
+      },
+    );
 
     expect(await screen.findByRole('heading', { level: 2 })).toHaveTextContent(
       'Oct 26 – Nov 1, 2026',
@@ -62,7 +70,13 @@ describe('WeekGrid', () => {
         lessonAt(902, 'Sunday class', '2026-10-25T17:00:00Z'),
       ],
     };
-    renderAtSchedule(<WeekGrid schedule={autumn} weekStart="2026-10-19" />);
+    renderAtSchedule(
+      <WeekGrid
+        schedule={autumn}
+        today={todayIn('Europe/Berlin', autumn.now)}
+        weekStart="2026-10-19"
+      />,
+    );
 
     expect(await blockIn('Sat 24', /Saturday class/)).toHaveAttribute('data-start', '1080');
     expect(await blockIn('Sun 25', /Sunday class/)).toHaveAttribute('data-start', '1080');
@@ -78,7 +92,13 @@ describe('WeekGrid', () => {
         lessonAt(904, 'Sunday class', '2027-03-28T16:00:00Z'),
       ],
     };
-    renderAtSchedule(<WeekGrid schedule={spring} weekStart="2027-03-22" />);
+    renderAtSchedule(
+      <WeekGrid
+        schedule={spring}
+        today={todayIn('Europe/Berlin', spring.now)}
+        weekStart="2027-03-22"
+      />,
+    );
 
     expect(await blockIn('Sat 27', /Saturday class/)).toHaveAttribute('data-start', '1080');
     expect(await blockIn('Sun 28', /Sunday class/)).toHaveAttribute('data-start', '1080');
@@ -89,7 +109,13 @@ describe('WeekGrid', () => {
       ...schedule,
       lessons: [lessonAt(905, 'Night class', '2026-10-26T23:30:00Z')],
     };
-    renderAtSchedule(<WeekGrid schedule={late} weekStart="2026-10-26" />);
+    renderAtSchedule(
+      <WeekGrid
+        schedule={late}
+        today={todayIn('Europe/Berlin', late.now)}
+        weekStart="2026-10-26"
+      />,
+    );
 
     const block = await blockIn('Tue 27', /Night class/);
     expect(block).toHaveAttribute('data-start', '30');
@@ -105,7 +131,13 @@ describe('WeekGrid', () => {
         lessonAt(908, 'Later', '2026-10-26T19:00:00Z'),
       ],
     };
-    renderAtSchedule(<WeekGrid schedule={busy} weekStart="2026-10-26" />);
+    renderAtSchedule(
+      <WeekGrid
+        schedule={busy}
+        today={todayIn('Europe/Berlin', busy.now)}
+        weekStart="2026-10-26"
+      />,
+    );
 
     const lanes = async (name: RegExp) => {
       const block = await blockIn('Mon 26', name);
@@ -118,7 +150,13 @@ describe('WeekGrid', () => {
 
   it('marks workshops', async () => {
     const workshopWeek: Schedule = { ...schedule, from: '2026-11-02', to: '2026-11-09' };
-    renderAtSchedule(<WeekGrid schedule={workshopWeek} weekStart="2026-11-02" />);
+    renderAtSchedule(
+      <WeekGrid
+        schedule={workshopWeek}
+        today={todayIn('Europe/Berlin', workshopWeek.now)}
+        weekStart="2026-11-02"
+      />,
+    );
 
     const block = await blockIn('Sat 7', /Jazz/);
     expect(within(block).getByText('Workshop')).toBeInTheDocument();
@@ -127,10 +165,17 @@ describe('WeekGrid', () => {
 
   it('navigates between weeks via the search params', async () => {
     const user = userEvent.setup();
-    const { router } = renderAtSchedule(<WeekGrid schedule={schedule} weekStart="2026-10-26" />, {
-      from: '2026-10-26',
-      lesson: ids.lessonBallet,
-    });
+    const { router } = renderAtSchedule(
+      <WeekGrid
+        schedule={schedule}
+        today={todayIn('Europe/Berlin', schedule.now)}
+        weekStart="2026-10-26"
+      />,
+      {
+        from: '2026-10-26',
+        lesson: ids.lessonBallet,
+      },
+    );
 
     await user.click(await screen.findByRole('button', { name: 'Next week' }));
     expect(router.state.location.search).toEqual({ from: '2026-11-02', lesson: ids.lessonBallet });
@@ -144,7 +189,13 @@ describe('WeekGrid', () => {
 
   it('disables "This week" in the current week and highlights today', async () => {
     // The schedule was computed on Friday 2026-10-23.
-    renderAtSchedule(<WeekGrid schedule={{ ...schedule, lessons: [] }} weekStart="2026-10-19" />);
+    renderAtSchedule(
+      <WeekGrid
+        schedule={{ ...schedule, lessons: [] }}
+        today="2026-10-23"
+        weekStart="2026-10-19"
+      />,
+    );
 
     expect(await screen.findByRole('button', { name: 'This week' })).toBeDisabled();
     expect(screen.getByRole('heading', { level: 3, name: 'Fri 23' })).toHaveAttribute(
@@ -158,9 +209,16 @@ describe('WeekGrid', () => {
 
   it('opens a lesson by writing its id to the search params', async () => {
     const user = userEvent.setup();
-    const { router } = renderAtSchedule(<WeekGrid schedule={schedule} weekStart="2026-10-26" />, {
-      from: '2026-10-26',
-    });
+    const { router } = renderAtSchedule(
+      <WeekGrid
+        schedule={schedule}
+        today={todayIn('Europe/Berlin', schedule.now)}
+        weekStart="2026-10-26"
+      />,
+      {
+        from: '2026-10-26',
+      },
+    );
 
     await user.click(await blockIn('Mon 26', /Ballet/));
     expect(router.state.location.search).toEqual({ from: '2026-10-26', lesson: ids.lessonBallet });
@@ -174,7 +232,13 @@ describe('WeekGrid', () => {
   });
 
   it('renders the empty week with a note', async () => {
-    renderAtSchedule(<WeekGrid schedule={{ ...schedule, lessons: [] }} weekStart="2026-10-26" />);
+    renderAtSchedule(
+      <WeekGrid
+        schedule={{ ...schedule, lessons: [] }}
+        today="2026-10-23"
+        weekStart="2026-10-26"
+      />,
+    );
 
     expect(await screen.findByText('Nothing is published for this week.')).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
@@ -192,7 +256,13 @@ describe('WeekGrid', () => {
 
   it('renders in German', async () => {
     await i18n.changeLanguage('de');
-    renderAtSchedule(<WeekGrid schedule={schedule} weekStart="2026-10-26" />);
+    renderAtSchedule(
+      <WeekGrid
+        schedule={schedule}
+        today={todayIn('Europe/Berlin', schedule.now)}
+        weekStart="2026-10-26"
+      />,
+    );
 
     expect(await screen.findByRole('heading', { level: 2 })).toHaveTextContent(
       '26. Okt. – 1. Nov. 2026',

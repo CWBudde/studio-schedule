@@ -12,10 +12,17 @@ const HOUR = 60 * MINUTE;
 // The client clock runs 2 hours ahead of the server's clock in every test.
 const skew = 2 * HOUR;
 
-function renderCountdown(serverNow: string, nextReleaseAt: string) {
-  vi.setSystemTime(Date.parse(serverNow) + skew);
+/** Renders the countdown for a response that arrived `age` ms ago. */
+function renderCountdown(serverNow: string, nextReleaseAt: string, age = 0) {
+  const receivedAt = Date.parse(serverNow) + skew;
+  vi.setSystemTime(receivedAt + age);
   const result = renderWithQuery(
-    <ReleaseCountdown nextReleaseAt={nextReleaseAt} now={serverNow} timeZone="Europe/Berlin" />,
+    <ReleaseCountdown
+      nextReleaseAt={nextReleaseAt}
+      now={serverNow}
+      receivedAt={receivedAt}
+      timeZone="Europe/Berlin"
+    />,
   );
   const invalidate = vi.spyOn(result.queryClient, 'invalidateQueries');
   return { ...result, invalidate };
@@ -57,7 +64,15 @@ describe('ReleaseCountdown', () => {
     expect(timer).toHaveTextContent('Next release in 1 hour');
   });
 
-  it('ticks every second in the last hour and refetches the schedule once at the release', () => {
+  it('counts from the time the response arrived, not from the render', () => {
+    // The schedule came from the cache and is 5 minutes old.
+    renderCountdown('2026-10-25T15:00:00Z', '2026-10-25T17:00:00Z', 5 * MINUTE);
+    advance(0);
+
+    expect(screen.getByRole('timer')).toHaveTextContent('Next release in 1 hour and 55 minutes');
+  });
+
+  it('ticks every second in the last hour and refetches the schedule at the release', () => {
     const { invalidate } = renderCountdown('2026-10-25T15:58:30Z', '2026-10-25T17:00:00Z');
     advance(0);
 
@@ -82,8 +97,12 @@ describe('ReleaseCountdown', () => {
     expect(invalidate).toHaveBeenCalledTimes(1);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['schedule'] });
 
-    advance(10 * MINUTE);
+    // While the release does not arrive (the server is late or the request
+    // failed), it asks again every 30 seconds.
+    advance(29 * SECOND);
     expect(invalidate).toHaveBeenCalledTimes(1);
+    advance(SECOND);
+    expect(invalidate).toHaveBeenCalledTimes(2);
   });
 
   it('starts over when the schedule brings the next release', () => {
@@ -100,6 +119,7 @@ describe('ReleaseCountdown', () => {
         <ReleaseCountdown
           nextReleaseAt="2026-11-01T17:00:00Z"
           now="2026-10-25T17:00:02Z"
+          receivedAt={Date.now()}
           timeZone="Europe/Berlin"
         />
       </QueryClientProvider>,
@@ -108,6 +128,7 @@ describe('ReleaseCountdown', () => {
 
     expect(screen.getByRole('timer')).toHaveTextContent('Next release in 7 days');
     expect(screen.queryByText('New lessons are being released…')).not.toBeInTheDocument();
+    advance(10 * MINUTE);
     expect(invalidate).toHaveBeenCalledTimes(1);
   });
 

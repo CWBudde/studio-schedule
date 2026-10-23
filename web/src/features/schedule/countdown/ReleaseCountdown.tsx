@@ -10,22 +10,29 @@ const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
+/** How often to refetch the schedule while a due release has not arrived yet. */
+const RETRY = 30 * SECOND;
+
 /**
  * Time left until the next release of the schedule, as the server sees it.
  *
  * The props come from the schedule response. The server computes the release
  * (ADR 0003); the client only counts down. It corrects its own clock by the
- * difference to the server's `now`, so a wrong browser clock does not shift
- * the countdown. At zero it refetches the schedule once and says so until the
- * new schedule arrives.
+ * difference between the server's `now` and the client time the response
+ * arrived (`receivedAt`, e.g. the query's dataUpdatedAt), so neither a wrong
+ * browser clock nor cached data shifts the countdown. At zero it refetches
+ * the schedule, and again every 30 seconds until a schedule with a new
+ * release arrives, and says so meanwhile.
  */
 export function ReleaseCountdown({
   nextReleaseAt,
   now,
+  receivedAt,
   timeZone,
 }: {
   nextReleaseAt: string;
   now: string;
+  receivedAt: number;
   timeZone: string;
 }) {
   const { t, i18n } = useTranslation('schedule');
@@ -38,28 +45,31 @@ export function ReleaseCountdown({
   if (state.key !== key) {
     setState({ key, remaining: remainingAtResponse(nextReleaseAt, now) });
   }
-  const invalidatedFor = useRef<string | null>(null);
+  const lastRefetch = useRef(-Infinity);
 
   useEffect(() => {
     const release = Date.parse(nextReleaseAt);
-    const offset = Date.parse(now) - Date.now();
+    // Server time minus client time, as of the response.
+    const offset = Date.parse(now) - receivedAt;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const tick = () => {
       const remaining = release - (Date.now() + offset);
       setState({ key, remaining });
-      if (remaining <= 0) {
-        if (invalidatedFor.current !== key) {
-          invalidatedFor.current = key;
-          void queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
-        }
+      if (remaining > 0) {
+        timer = setTimeout(tick, untilNextChange(remaining));
         return;
       }
-      timer = setTimeout(tick, untilNextChange(remaining));
+      // Due: refetch until the schedule brings the next release (new props).
+      if (Date.now() - lastRefetch.current >= RETRY) {
+        lastRefetch.current = Date.now();
+        void queryClient.invalidateQueries({ queryKey: scheduleQueryKey });
+      }
+      timer = setTimeout(tick, RETRY);
     };
     timer = setTimeout(tick, 0);
     return () => clearTimeout(timer);
-  }, [key, nextReleaseAt, now, queryClient]);
+  }, [key, nextReleaseAt, now, receivedAt, queryClient]);
 
   if (state.remaining <= 0) {
     return (

@@ -1,6 +1,7 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { CalendarDays, ChevronLeft, ChevronRight, List } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import type { Schedule } from '@/api/client';
 import { publicSettingsQuery, scheduleQuery } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -13,7 +14,6 @@ import {
   startOfWeek,
   todayIn,
 } from '@/lib/schoolTime';
-import type { Schedule } from '@/api/client';
 import { ReleaseCountdown } from './countdown/ReleaseCountdown';
 import { LessonSheet } from './detail/LessonSheet';
 import { ScheduleFilters } from './filters/ScheduleFilters';
@@ -55,8 +55,8 @@ function ScheduleView({ timeZone }: { timeZone: string }) {
   const start = view === 'week' ? startOfWeek(from) : from;
   const end = addDays(start, view === 'week' ? 7 : listDays);
 
-  const schedule = useQuery({
-    ...scheduleQuery({
+  const schedule = useQuery(
+    scheduleQuery({
       from: start,
       to: end,
       location: search.location,
@@ -64,16 +64,19 @@ function ScheduleView({ timeZone }: { timeZone: string }) {
       courseType: search.courseType,
       level: search.level,
     }),
-    placeholderData: keepPreviousData,
-  });
+  );
+  // The release times do not depend on the range or the filters: a small
+  // query of its own keeps the countdown steady while the view changes.
+  const release = useQuery(scheduleQuery({ from: today, to: addDays(today, 1) }));
 
   return (
     <>
-      {schedule.data && (
+      {release.data && (
         <ReleaseCountdown
-          nextReleaseAt={schedule.data.nextReleaseAt}
-          now={schedule.data.now}
-          timeZone={schedule.data.timezone}
+          nextReleaseAt={release.data.nextReleaseAt}
+          now={release.data.now}
+          receivedAt={release.dataUpdatedAt}
+          timeZone={release.data.timezone}
         />
       )}
 
@@ -139,7 +142,7 @@ function ScheduleView({ timeZone }: { timeZone: string }) {
       {schedule.data ? (
         <>
           {view === 'week' ? (
-            <WeekGrid schedule={schedule.data} weekStart={start} />
+            <WeekGrid schedule={schedule.data} weekStart={start} today={today} />
           ) : (
             <ScheduleList schedule={schedule.data} />
           )}

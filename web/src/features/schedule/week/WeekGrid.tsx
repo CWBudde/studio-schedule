@@ -10,7 +10,6 @@ import {
   formatDayHeading,
   formatTimeRange,
   startOfWeek,
-  todayIn,
   type SchoolDate,
 } from '@/lib/schoolTime';
 import { cn } from '@/lib/utils';
@@ -29,7 +28,16 @@ const hourLabel = (hour: number) => `${String(hour).padStart(2, '0')}:00`;
  * date, Monday to Sunday, rows by wall-clock time in the school time zone.
  * Below md the columns scroll horizontally, one day per screen.
  */
-export function WeekGrid({ schedule, weekStart }: { schedule: Schedule; weekStart: SchoolDate }) {
+export function WeekGrid({
+  schedule,
+  weekStart,
+  today,
+}: {
+  schedule: Schedule;
+  weekStart: SchoolDate;
+  /** Today in the school time zone, as the page uses it for its default date. */
+  today: SchoolDate;
+}) {
   const { t, i18n } = useTranslation('schedule');
   const lang = i18n.resolvedLanguage ?? 'en';
   const { search, update } = useScheduleSearch();
@@ -41,8 +49,6 @@ export function WeekGrid({ schedule, weekStart }: { schedule: Schedule; weekStar
     () => layoutWeek(schedule.lessons, weekStart, tz),
     [schedule.lessons, weekStart, tz],
   );
-  // The server's clock, so the grid agrees with the rest of the response.
-  const today = todayIn(tz, schedule.now);
   const isCurrentWeek = startOfWeek(today) === weekStart;
   const focusDate = isCurrentWeek ? today : weekStart;
 

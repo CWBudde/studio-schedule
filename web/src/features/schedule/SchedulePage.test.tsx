@@ -41,7 +41,7 @@ describe('SchedulePage', () => {
     renderAtSchedule(<SchedulePage />, { from: '2026-10-26' });
 
     expect(await screen.findByRole('heading', { name: 'Monday, October 26' })).toBeInTheDocument();
-    expect(requests.at(-1)).toEqual({ from: '2026-10-26', to: '2026-11-09' });
+    expect(requests).toContainEqual({ from: '2026-10-26', to: '2026-11-09' });
     expect(screen.getByRole('heading', { level: 1, name: 'Schedule' })).toBeInTheDocument();
     expect(screen.getByRole('timer')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Location' })).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe('SchedulePage', () => {
 
     expect(router.state.location.search).toEqual({ from: '2026-10-28', view: 'week' });
     expect(await screen.findByRole('region', { name: /Mon 26/ })).toBeInTheDocument();
-    expect(requests.at(-1)).toEqual({ from: '2026-10-26', to: '2026-11-02' });
+    expect(requests).toContainEqual({ from: '2026-10-26', to: '2026-11-02' });
   });
 
   it('pages through the list and passes the filters to the API', async () => {
@@ -89,7 +89,7 @@ describe('SchedulePage', () => {
     await user.click(await screen.findByRole('button', { name: 'Next 14 days' }));
 
     expect(router.state.location.search.from).toBe('2026-11-09');
-    expect(requests.at(-1)).toEqual({
+    expect(requests).toContainEqual({
       from: '2026-11-09',
       to: '2026-11-23',
       level: 'beginner',

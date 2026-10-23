@@ -155,6 +155,21 @@ describe('LessonSheet', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('closes without a history entry, so Back does not reopen it', async () => {
+    mockLessons();
+    const user = userEvent.setup();
+    const { router } = renderAtSchedule(<LessonSheet />);
+    await router.navigate({ to: '/schedule', search: { lesson: ids.lessonBallet } });
+
+    await user.click(await screen.findByRole('button', { name: 'Close' }));
+    expect(router.state.location.search).toEqual({});
+
+    router.history.back();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(router.state.location.search).toEqual({});
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('renders in German', async () => {
     mockLessons();
     await i18n.changeLanguage('de');

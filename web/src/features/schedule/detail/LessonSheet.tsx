@@ -38,7 +38,7 @@ export function LessonSheet() {
     <Sheet
       open={lessonId !== undefined}
       onOpenChange={(open) => {
-        if (!open) void update({ lesson: undefined });
+        if (!open) void update({ lesson: undefined }, { replace: true });
       }}
     >
       <SheetContent
