@@ -1,6 +1,8 @@
 import { Link } from '@tanstack/react-router';
 import { CalendarHeart } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { DemoMailbox } from '@/features/demo/DemoMailbox';
+import { AccountMenu } from './AccountMenu';
 import { LanguageSwitcher } from './LanguageSwitcher';
 
 export function AppHeader() {
@@ -17,9 +19,9 @@ export function AppHeader() {
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
             <CalendarHeart className="size-4.5" aria-hidden="true" />
           </span>
-          <span>{t('app.name')}</span>
+          <span className="hidden sm:inline">{t('app.name')}</span>
         </Link>
-        <div className="flex items-center gap-1">
+        <div className="flex min-w-0 items-center gap-1">
           <nav aria-label={t('nav.label')}>
             <Link
               to="/schedule"
@@ -28,6 +30,8 @@ export function AppHeader() {
               {t('nav.schedule')}
             </Link>
           </nav>
+          <DemoMailbox />
+          <AccountMenu />
           <LanguageSwitcher />
         </div>
       </div>

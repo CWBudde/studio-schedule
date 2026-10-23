@@ -14,3 +14,13 @@ export type LessonDetail = Schemas['LessonDetail'];
 export type LessonLevel = NonNullable<LessonSummary['level']>;
 export type LessonKind = LessonSummary['kind'];
 export type LessonStatus = LessonSummary['status'];
+
+export type Me = Schemas['Me'];
+export type Role = Me['role'];
+export type LoginBody = Schemas['LoginInputBody'];
+export type RegisterBody = Schemas['RegisterInputBody'];
+export type ConfirmEmailBody = Schemas['ConfirmEmailInputBody'];
+export type MailboxMail = Schemas['MailboxMail'];
+export type MailStatus = MailboxMail['status'];
+export type DemoLogin = Schemas['DemoLogin'];
+export type ProblemDetails = Schemas['ErrorModel'];

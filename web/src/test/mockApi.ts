@@ -1,34 +1,61 @@
 import { vi } from 'vitest';
 import { api } from '@/api/client';
-import type { LessonDetail, LessonSummary, Schedule } from '@/api/client';
+import type {
+  DemoLogin,
+  LessonDetail,
+  LessonSummary,
+  MailboxMail,
+  Me,
+  Schedule,
+} from '@/api/client';
 
-type Answer = { status?: number; body: unknown };
+type Answer = { status?: number; body?: unknown };
 
 /** Request options as openapi-fetch receives them, e.g. { params: { query } }. */
 export type MockRequest = {
   params?: { query?: Record<string, unknown>; path?: Record<string, string> };
+  body?: unknown;
 };
 
 /** A fixed answer, or a function of the request (to vary by query or path params). */
 type Fixture = Answer | ((init: MockRequest) => Answer);
 type Fixtures = Partial<Record<string, Fixture>>;
 
+function answerFrom(fixtures: Fixtures, path: string, init?: MockRequest) {
+  const fixture = fixtures[path];
+  const answer = typeof fixture === 'function' ? fixture(init ?? {}) : fixture;
+  const status = answer?.status ?? (answer ? 200 : 404);
+  const ok = status >= 200 && status < 300;
+  // Like openapi-fetch: an answer without a body has no data.
+  const hasBody = answer?.body !== undefined && status !== 204;
+  return Promise.resolve({
+    data: ok && hasBody ? answer?.body : undefined,
+    error: ok ? undefined : (answer?.body ?? { title: 'Not Found', status }),
+    response: new Response(null, { status }),
+  });
+}
+
 /**
  * Replaces `api.GET` with a stub answering from fixtures keyed by path
  * template (e.g. '/api/v1/lessons/{lessonId}'). Unknown paths answer 404.
  */
 export function mockApiGet(fixtures: Fixtures) {
-  return vi.spyOn(api, 'GET').mockImplementation(((path: string, init?: MockRequest) => {
-    const fixture = fixtures[path];
-    const answer = typeof fixture === 'function' ? fixture(init ?? {}) : fixture;
-    const status = answer?.status ?? (answer ? 200 : 404);
-    const ok = status >= 200 && status < 300;
-    return Promise.resolve({
-      data: ok ? answer?.body : undefined,
-      error: ok ? undefined : (answer?.body ?? { message: 'not found' }),
-      response: new Response(null, { status }),
-    });
-  }) as unknown as typeof api.GET);
+  return vi
+    .spyOn(api, 'GET')
+    .mockImplementation(((path: string, init?: MockRequest) =>
+      answerFrom(fixtures, path, init)) as unknown as typeof api.GET);
+}
+
+/**
+ * Replaces `api.POST` like mockApiGet; a fixture function sees the request
+ * body in `init.body`. An answer without `body` (e.g. `{ status: 202 }`) has
+ * no data, as with openapi-fetch. Unknown paths answer 404.
+ */
+export function mockApiPost(fixtures: Fixtures) {
+  return vi
+    .spyOn(api, 'POST')
+    .mockImplementation(((path: string, init?: MockRequest) =>
+      answerFrom(fixtures, path, init)) as unknown as typeof api.POST);
 }
 
 export const healthOk = { status: 'ok', version: '0.1.0-test' };
@@ -146,3 +173,70 @@ export const catalogFixtures = {
   '/api/v1/staff': { body: { items: staff } },
   '/api/v1/course-types': { body: { items: courseTypes } },
 };
+
+/** The fictional member signed in in auth tests. */
+export const meMember: Me = {
+  accountId: id(301),
+  personId: id(302),
+  email: 'nora.example@example.org',
+  role: 'member',
+  givenName: 'Nora',
+  familyName: 'Example',
+};
+
+/** A problem+json answer, as the API sends it for errors. */
+export const problem = (status: number, detail: string, errors?: { location: string }[]) => ({
+  status,
+  body: { status, title: 'Error', detail, type: 'about:blank', errors },
+});
+
+/** Fixtures of a signed-out visitor (GET /auth/me answers 401). */
+export const signedOut = { '/api/v1/auth/me': problem(401, 'not signed in') };
+
+/** Fictional demo accounts as GET /demo/logins returns them. */
+export const demoLogins: DemoLogin[] = [
+  {
+    email: 'nora.example@example.org',
+    password: 'demo-password',
+    role: 'member',
+    givenName: 'Nora',
+    familyName: 'Example',
+  },
+  {
+    email: 'alex.example@example.com',
+    password: 'demo-password',
+    role: 'instructor',
+    givenName: 'Alex',
+    familyName: 'Example',
+  },
+  {
+    email: 'olli.office@example.org',
+    password: 'demo-password',
+    role: 'office',
+    givenName: 'Olli',
+    familyName: 'Office',
+  },
+  {
+    email: 'ada.admin@example.com',
+    password: 'demo-password',
+    role: 'admin',
+    givenName: 'Ada',
+    familyName: 'Admin',
+  },
+];
+
+/**
+ * A confirmation mail as the demo mailbox lists it, written Friday
+ * 2026-10-23 12:00 in Berlin. Its link points to the app (`appUrl`, the
+ * app's root URL ending in '/').
+ */
+export const confirmationMail = (appUrl: string): MailboxMail => ({
+  id: id(401),
+  to: 'new.dancer@example.org',
+  subject: 'Confirm your email address',
+  text: `Hello Nina,\n\nplease confirm your email address: ${appUrl}confirm?token=tok-123.\n\nHelp: https://example.org/help\n`,
+  html: '<p>Hello Nina</p>',
+  template: 'confirm_email',
+  createdAt: '2026-10-23T10:00:00Z',
+  status: 'pending',
+});

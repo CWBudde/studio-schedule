@@ -21,7 +21,26 @@
     "label": "Demo mode",
     "banner": "Demo mode: this app runs entirely in your browser (Go compiled to WebAssembly) with an in-memory database. Nothing is stored on a server and all changes are lost on reload.",
     "learnMore": "Learn more",
-    "learnMoreLabel": "Learn more about the live demo (opens GitHub in a new tab)"
+    "learnMoreLabel": "Learn more about the live demo (opens GitHub in a new tab)",
+    "mailbox": {
+      "open": "Demo mailbox",
+      "count_one": "{{count}} mail",
+      "count_other": "{{count}} mails",
+      "title": "Demo mailbox",
+      "description": "This demo sends no real email. The mails the app would send are listed here, newest first.",
+      "empty": "No mails yet.",
+      "to": "To",
+      "sentAt": "Written",
+      "status": {
+        "pending": "Pending",
+        "sent": "Sent",
+        "failed": "Failed"
+      },
+      "loading": "Loading mails…",
+      "loadError": "Could not load the mails.",
+      "retry": "Retry",
+      "close": "Close"
+    }
   },
   "backend": {
     "starting": "Starting demo backend…",

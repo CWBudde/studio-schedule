@@ -41,7 +41,7 @@ describe('i18n', () => {
     expect(document.documentElement.lang).toBe('de');
   });
 
-  it.each(['common', 'schedule'])('has the same %s keys in all locales', async (ns) => {
+  it.each(['common', 'schedule', 'auth'])('has the same %s keys in all locales', async (ns) => {
     const [en, de] = await Promise.all([
       import(`./locales/en/${ns}.json`) as Promise<{ default: object }>,
       import(`./locales/de/${ns}.json`) as Promise<{ default: object }>,

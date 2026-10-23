@@ -21,3 +21,15 @@ Element.prototype.releasePointerCapture ??= () => undefined;
 Element.prototype.scrollIntoView ??= () => undefined;
 // jsdom does not implement scrolling; the router scrolls on navigation.
 window.scrollTo = () => undefined;
+// jsdom lacks matchMedia, which the toaster uses for its theme.
+window.matchMedia ??= (query: string) =>
+  ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false,
+  }) as MediaQueryList;
