@@ -40,12 +40,14 @@ person link).
 - What nothing refers to can be deleted.
 - A location with rooms, a room used by classes or lessons, and a course type used by classes or
   lessons answer `in-use`.
-- Staff are deactivated instead of deleted. They then disappear from the public lists and filters
-  but stay on past lessons.
+- Staff are deactivated instead of deleted once classes or lessons refer to them; a staff member
+  nothing refers to (one created by mistake) can be deleted. Deactivated staff disappear from the
+  public lists and filters but stay on their lessons, past and future. Deactivating is allowed
+  while they still teach; the office reassigns their classes.
 - A class or term with past lessons is retired, not deleted.
 
-**Names.** Location names are unique within the school, and room names within their location,
-ignoring case.
+**Names.** Location names and course type names are unique within the school, and room names
+within their location, ignoring case. Staff display names are not unique.
 
 **Classes and their lessons.** Editing a class or a term changes the generated lessons that lie in
 the future and were not edited individually; they follow the class in the same transaction.

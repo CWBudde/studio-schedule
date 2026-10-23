@@ -9,10 +9,10 @@ where it differs.
 | `Class`            | Class               | Kurs                  | A recurring weekly template that generates lessons (formerly "Klasse")  |
 | `ClassMember`      | Class member        | Kursmitglied          | Fixed enrolment in a class; auto-booked into its lessons                |
 | `Term`             | Term                | Zeitraum / Saison     | Date range for a timetable, e.g. a summer timetable ("Sommertanzplan")  |
-| `CourseType`       | Course type / style | Stilrichtung          | Catalogue entry with description (formerly "Unterrichtsbeschreibung")   |
+| `CourseType`       | Course type / style | Stilrichtung          | Catalogue entry with description; name unique (ADR 0007)                |
 | `Level`            | Level               | Niveau                | e.g. beginner, intermediate, advanced, professional, open               |
 | `Location`, `Room` | Location, room      | Standort, Raum        | Rooms have a capacity; names unique (rooms per location; ADR 0007)      |
-| `Staff`            | Instructor          | Lehrkraft             | Kind `instructor` or `accompanist` (musician, "Korrepetition")          |
+| `Staff`            | Instructor          | Lehrkraft             | Kind `instructor` or `accompanist` ("Korrepetition"); may be inactive   |
 | `Person`           | Person              | Person                | Any human: member, child, guest                                         |
 | `Guardian`         | Parent / guardian   | Erziehungsberechtigte | Can manage and book for dependents ("Kinder")                           |
 | Dependent          | Child / dependent   | Kind                  | Person linked to a guardian, usually without an account (ADR 0008)      |

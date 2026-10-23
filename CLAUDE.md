@@ -72,7 +72,8 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `DELETE /{id}` → 204, registered with `withConflict` so their 409 is the `Conflict` problem with a
   `reason` (`domain.ErrInUse` → `in-use`, `domain.ErrDuplicate` → `duplicate`). A domain rule built
   with `on(field, …)` fails as a `*domain.FieldError`, which `toHTTPError` reports as a 422 on
-  `body.<field>`.
+  `body.<field>`. Office-only reads live under `/api/v1/admin/…` (`listAllStaff`, and
+  `listPersons` from `service.PersonService`, the person search for the office's pickers).
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),

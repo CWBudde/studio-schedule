@@ -249,6 +249,9 @@ Goal: people can sign up and log in; staff can maintain the timetable.
   - [ ] A dependent with their own account (ADR 0008, created by the office): the guardian's
         removal only unlinks it (today `Persons().Delete` fails on the account and the API answers
         a misleading 409), and the guardian no longer edits the data its owner manages
+  - [ ] A dependent the office linked to a staff record (`personId` on staff, 2026-10-24): removing
+        it fails on the staff link, but `ErrDependentInUse` names only bookings and class
+        memberships; say why, or only unlink it like a dependent with an account
   - [x] Demo: a demo family account with two children; tests for the guardian check (a stranger's
         dependent is a 404, not a 403) in service and HTTP tests (2026-10-23) — the demo member
         Clara Amberly has Ella and Finn (Tom is a second guardian, Hanna Birchmoor's Mia is a class
@@ -289,8 +292,8 @@ Goal: people can sign up and log in; staff can maintain the timetable.
       admin UI. Order: decisions and the two foundations first, then the entity slices (each slice
       is backend + UI + tests and can run in parallel; regenerate `api/openapi.json`,
       `schema.d.ts` and `routeTree.gen.ts` after merging), then demo and e2e (2026-10-24) —
-      partial: ADR 0007, the two foundations (except the parts listed there) and locations and
-      rooms are done; staff, course types, terms, classes, class members, demo and e2e remain
+      partial: ADR 0007, both foundations, locations and rooms, staff and course types are done;
+      terms, classes, class members, demo and e2e remain
   - [x] ADR 0007 "Timetable administration": `office` writes catalogue and timetable (admins
         inherit it), what an edit of a class or term does to its generated lessons (proposed:
         future, untouched lessons follow the class; past and individually edited lessons stay),
@@ -299,37 +302,46 @@ Goal: people can sign up and log in; staff can maintain the timetable.
         ADR 0007: office writes, retire what is referenced, future untouched lessons follow a
         class edit, terms may overlap, unique location and room names, last write wins, no audit
         of timetable edits
-  - [ ] Backend foundation: write-operation conventions (`POST` collection → 201 with the entity,
+  - [x] Backend foundation: write-operation conventions (`POST` collection → 201 with the entity,
         `PUT /{id}`, `DELETE /{id}` → 204; request bodies without IDs, IDs from `ids.Source`);
         a 409 that says _why_ (stable reason such as `in-use` or `duplicate`, no internals) so the
         UI can explain a refused delete; validation errors per field in the 422; office-only list
         variants that include what the public lists hide (inactive staff, staff person links)
-        (2026-10-24) — partial: the write conventions, the `Conflict` 409 with `reason`
+        (2026-10-24) — the write conventions, the `Conflict` 409 with `reason`
         (`in-use`, `duplicate`; `domain.ErrInUse`, `domain.ErrDuplicate`, `withConflict`) and
-        per-field 422s (`domain.FieldError` via `on(field, …)` rules, `body.<field>`) are done;
-        the office-only list variants come with the staff slice
-  - [ ] Frontend foundation: `/admin` layout with section navigation (office and admin see it in
+        per-field 422s (`domain.FieldError` via `on(field, …)` rules, `body.<field>`); office-only
+        reads under `/api/v1/admin/…`: `listAllStaff` (inactive staff, person links) and
+        `listPersons` (person search for pickers, `service.PersonService`)
+  - [x] Frontend foundation: `/admin` layout with section navigation (office and admin see it in
         the header, everyone else gets the 403 page), shared CRUD kit: data table (sorting,
         search, empty and error states, phone layout as cards), form sheet/dialog with
         react-hook-form + zod built from the generated types, 422 → field errors, delete
         confirmation that shows the 409 reason, toasts; shadcn `dialog`, `alert-dialog`, `form`,
-        `textarea`, `switch`, `popover` + `command` (combobox) (2026-10-24) — partial: `/admin`
+        `textarea`, `switch`, `popover` + `command` (combobox) (2026-10-24) — `/admin`
         layout with section navigation and an "Administration" menu item for office and admin,
         no-access and load-error states, `features/admin/crud` (`DataTable` with
         `@tanstack/react-table`, `FormSheet`, `ConfirmDelete`, 422 field marking, 409 reason
-        sentences, toasts), shadcn `alert-dialog` and `textarea`; `switch` and `popover` +
-        `command` come with the staff and class-member slices that use them (`dialog` and `form`
-        are not needed: forms use the sheet and `TextField`)
+        sentences, toasts, a shared `DeleteDialog`), shadcn `alert-dialog`, `textarea`, `switch`
+        and `popover` + `command` (`crud/PersonField`, a person combobox over `listPersons`);
+        `dialog` comes with `command`, `form` is not needed (forms use the sheet and `TextField`)
   - [x] Locations and rooms: create, rename, delete (refused while rooms or classes use them);
         rooms listed per location with capacity; `/admin/locations` (2026-10-24) — six `office`
         operations (`createLocation` … `deleteRoom`, `service/catalog_admin.go`), unique names
         (migration 00006, which renames existing case duplicates), 409 `in-use` and `duplicate`,
         a 422 on `locationId` for an unknown location; `/admin/locations` lists locations with
         their room count and the rooms with location and capacity; e2e in `admin.spec.ts`
-  - [ ] Staff: create, edit name and kind, optional link to a person, deactivate/reactivate
+  - [x] Staff: create, edit name and kind, optional link to a person, deactivate/reactivate
         (inactive staff disappear from the public lists and filters, stay on past lessons);
-        `/admin/staff`
-  - [ ] Course types: create, edit name and description, delete while unused; `/admin/course-types`
+        `/admin/staff` (2026-10-24) — `listAllStaff`, `createStaff`, `updateStaff` (`active` and
+        `personId` in the body; an unknown person is a 422 on `personId`), `deleteStaff` only while
+        unused (409 `in-use` suggests deactivating; ADR 0007); deactivating is allowed while they
+        teach, and `listClasses` now names instructor and accompanist itself so the timetable
+        still shows them; `/admin/staff` with an active switch, an All/Active/Inactive filter and
+        a person combobox; e2e: a deactivated instructor leaves the schedule filter
+  - [x] Course types: create, edit name and description, delete while unused; `/admin/course-types`
+        (2026-10-24) — `createCourseType`, `updateCourseType`, `deleteCourseType`; names unique
+        ignoring case (migration 00007, which renames existing case duplicates; 409
+        `duplicate`), 409 `in-use` while classes or lessons use one; e2e in `admin.spec.ts`
   - [ ] Terms: create, edit name and date range (refused when it would orphan classes or booked
         lessons, per ADR 0007), delete while empty; overlapping terms allowed or not per ADR;
         `/admin/terms`
@@ -380,8 +392,8 @@ Goal: people can sign up and log in; staff can maintain the timetable.
       OpenAPI types) (2026-10-23) — partial: login, registration and confirm pages, the signed-in
       header, the admin account list (`/admin/accounts`, with "sign in as"), the reset pages and the
       account settings for password and email, the profile's person data, dependents and
-      language, and the `/admin` layout with locations and rooms are done; the rest of the admin
-      area remains
+      language, and the `/admin` layout with locations and rooms, staff and course types are done;
+      the rest of the admin area remains
   - [x] Profile: person data card on `/account` (name, phone, birth date) using `getMyFamily`
         (2026-10-23) — `ProfileCard`; the header's name follows a change; editable while
         impersonating
