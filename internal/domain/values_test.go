@@ -3,6 +3,7 @@ package domain_test
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -182,6 +183,11 @@ func TestDateAt(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	auckland, err := time.LoadLocation("Pacific/Auckland")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	utc := func(s string) time.Time {
 		t.Helper()
 
@@ -207,10 +213,19 @@ func TestDateAt(t *testing.T) {
 		"gap":              {domain.Date{Year: 2027, Month: time.March, Day: 28}, domain.TimeOfDay{Hour: 2, Minute: 30}, utc("2027-03-28T01:30:00Z")},
 		"spring-ahead day": {domain.Date{Year: 2027, Month: time.March, Day: 28}, domain.TimeOfDay{Hour: 18}, utc("2027-03-28T16:00:00Z")},
 		"utc":              {domain.Date{Year: 2026, Month: time.October, Day: 25}, domain.TimeOfDay{Hour: 2, Minute: 30}, utc("2026-10-25T02:30:00Z")},
+		// Auckland is UTC+12/+13, so half a day either side of the wall clock
+		// is not enough to see both offsets.
+		"auckland gap":       {domain.Date{Year: 2026, Month: time.September, Day: 27}, domain.TimeOfDay{Hour: 2, Minute: 30}, utc("2026-09-26T14:30:00Z")},
+		"auckland ambiguous": {domain.Date{Year: 2026, Month: time.April, Day: 5}, domain.TimeOfDay{Hour: 2, Minute: 30}, utc("2026-04-04T13:30:00Z")},
+		"auckland evening":   {domain.Date{Year: 2026, Month: time.September, Day: 27}, domain.TimeOfDay{Hour: 18}, utc("2026-09-27T05:00:00Z")},
 	} {
 		loc := berlin
-		if name == "utc" {
+
+		switch {
+		case name == "utc":
 			loc = time.UTC
+		case strings.HasPrefix(name, "auckland"):
+			loc = auckland
 		}
 
 		if got := tc.date.At(tc.at, loc); !got.Equal(tc.want) {

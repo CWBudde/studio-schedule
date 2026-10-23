@@ -92,9 +92,9 @@ func (d Date) At(tod TimeOfDay, loc *time.Location) time.Time {
 
 	var earliest time.Time
 
-	// The offsets in effect half a day before and after cover both sides of
-	// any transition on this day.
-	for _, probe := range []time.Time{wall.Add(-12 * time.Hour), wall.Add(12 * time.Hour)} {
+	// UTC offsets lie within ±14 hours, so the offsets in effect a day before
+	// and after the wall clock cover both sides of any transition near it.
+	for _, probe := range []time.Time{wall.Add(-24 * time.Hour), wall.Add(24 * time.Hour)} {
 		_, offset := probe.In(loc).Zone()
 		candidate := wall.Add(-time.Duration(offset) * time.Second)
 
@@ -112,7 +112,7 @@ func (d Date) At(tod TimeOfDay, loc *time.Location) time.Time {
 		// A gap. With the offset from before the transition, the wall clock
 		// lands after it, moved forward by the size of the gap (time.Date
 		// does not guarantee which way it normalises).
-		_, before := wall.Add(-12 * time.Hour).In(loc).Zone()
+		_, before := wall.Add(-24 * time.Hour).In(loc).Zone()
 
 		return wall.Add(-time.Duration(before) * time.Second)
 	}
