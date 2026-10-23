@@ -59,8 +59,13 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `internal/auth/password`. Mails: render with `internal/mail` and call `enqueueMail` inside the
   causing transaction; the `deliver-mail` job sends them (`internal/mail/smtp`, server only).
   `Deps.Demo` (WASM demo, `serve` without DB) exposes `/api/v1/demo/{mailbox,logins}`.
+- **Access:** every operation is registered with `register(api, Access…, op, handler)` in
+  `httpapi/access.go` (`public`, `signedIn`, `staff`, `office`, `admin`; ADR 0005); the access
+  middleware answers 401/403 before the handler runs. Admin impersonation lives in
+  `service/impersonation.go`. What a caller _sees_ (e.g. schedule visibility) stays in the services.
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
-  `internal/httpapi` (plus a field in `httpapi.Deps` and its construction in `app.New`),
+  `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
+  plus a field in `httpapi.Deps` and its construction in `app.New`),
   `just gen-api`, then a query/mutation in `web/src/api/queries.ts` using the generated `paths`.
 - **Adding a repository:** extend the interfaces in `internal/store/store.go` (reached via
   `store.Tx`), implement it in `internal/store/memory` and `internal/store/postgres` (migration in

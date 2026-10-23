@@ -30,10 +30,18 @@ the schedule is released through the same weekday `ReleaseWeeksAhead` weeks late
 **Visible means released.** A guest sees a lesson if its visibility is `public` and it is released.
 One-off lessons (no class) and kinds other than `regular` (workshops, private lessons) ignore the
 window: they are "published early" by rule, without a per-lesson release field. Canceled lessons
-stay visible with their status. `members` lessons need a signed-in member and `hidden` lessons
-staff (Phase 3). `Settings.DefaultVisibleDays` and the per-account override additionally limit how
-far ahead signed-in members see once accounts exist. From Phase 4, booking enforces the same window
-on the server.
+stay visible with their status. Signed-in accounts see more:
+
+- **Members** also see `members` lessons, and they get _early access_: every lesson they may see
+  that starts before school-local midnight after today + N days, where N is the account's
+  `VisibleDays` or else `Settings.DefaultVisibleDays`. Early access only adds to the release window
+  and never hides a released lesson. Its end comes back as `visibleUntil` (for guests it equals
+  `releasedUntil`).
+- **Staff** (instructor, office, admin) see every lesson, `hidden` and unreleased ones included, and
+  get no `visibleUntil`.
+
+The lesson generator's rolling horizon covers the longest early access of any account. From
+Phase 4, booking enforces the same window on the server.
 
 **Lesson generation.** Lessons are generated from the weekly classes of each term for the dates in
 the term's inclusive range (classes have no range of their own). A lesson starts at

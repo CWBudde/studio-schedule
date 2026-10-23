@@ -44,7 +44,9 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   `internal/mail/smtp` is the server-only SMTP sender. Services write mails to the outbox in their
   transaction; a job sends them ([ADR 0004](decisions/0004-accounts-sessions-and-mail.md)).
 - `internal/app`: wiring and cross-cutting middleware (recovery, cross-origin protection). The
-  session middleware in `httpapi` resolves the `studio_session` cookie to the signed-in account.
+  session middleware in `httpapi` resolves the `studio_session` cookie to the signed-in account;
+  the access middleware after it enforces each operation's declared access level
+  ([ADR 0005](decisions/0005-rbac-and-impersonation.md)).
 
 ## Transactions and concurrency
 
@@ -105,6 +107,9 @@ the existing lessons of its range and creates only the missing ones.
 - Cross-site request forgery: Go's `http.CrossOriginProtection` (Sec-Fetch-Site / Origin based) on
   unsafe methods. Sessions are server-side rows behind an HttpOnly, SameSite=Lax cookie that holds
   a random token; only its hash is stored ([ADR 0004](decisions/0004-accounts-sessions-and-mail.md)).
+- Authorization: every operation declares an access level (`public`, `signedIn`, `staff`, `office`,
+  `admin`), published as `x-access` in the OpenAPI document and enforced by one middleware; a test
+  pins the level of every operation ([ADR 0005](decisions/0005-rbac-and-impersonation.md)).
 
 ## Frontend
 

@@ -55,6 +55,10 @@ The demo is a _demo installation_ (`app.Deps.Demo`, also set for `serve` without
 - **Mailbox:** nothing is ever delivered. `GET /api/v1/demo/mailbox` lists the outbox, and the
   mailbox panel in the header shows it, so a visitor can register, open the confirmation link and
   sign in.
+- **What each role sees:** the demo data has one workshop for members only and one hidden workshop
+  (staff only), a few days after the visit date. Signing in as the demo member, instructor or admin
+  shows the difference. The admin can open Accounts and "sign in as" another account; a banner
+  leads back ([ADR 0005](decisions/0005-rbac-and-impersonation.md)).
 - **Mail links:** the Worker passes the app's URL (with the `#/` route prefix) to Go as the
   `APP_URL` environment variable.
 
