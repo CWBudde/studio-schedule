@@ -5,6 +5,7 @@ import type { LessonSummary, Schedule } from '@/api/client';
 import i18n from '@/i18n';
 import { ids, lessonBallet, lessonContemporary, lessonWorkshop, schedule } from '@/test/mockApi';
 import { renderAtSchedule } from '@/test/utils';
+import type { ScheduleSearch } from '../search';
 import { ScheduleList } from './ScheduleList';
 
 /** Ballet at 00:30–01:30 Berlin on Tuesday 2026-10-27 (still Monday evening in New York and UTC). */
@@ -26,13 +27,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/**
+ * Renders the list as if the server answered at `serverNow` (by default the
+ * fixture's Friday 2026-10-23, before every lesson) just now.
+ */
+function renderList(list: Schedule, search?: ScheduleSearch, serverNow = list.now) {
+  return renderAtSchedule(
+    <ScheduleList schedule={{ ...list, now: serverNow }} receivedAt={Date.now()} />,
+    search,
+  );
+}
+
 function day(name: string) {
   return within(screen.getByRole('region', { name }));
 }
 
 describe('ScheduleList', () => {
   it('groups lessons by school day with headings and times in the school time zone', async () => {
-    renderAtSchedule(<ScheduleList schedule={withLate} />);
+    renderList(withLate);
 
     const headings = await screen.findAllByRole('heading', { level: 2 });
     expect(headings.map((h) => h.textContent)).toEqual([
@@ -55,7 +67,7 @@ describe('ScheduleList', () => {
   });
 
   it('shows course type, level, place and staff of a lesson', async () => {
-    renderAtSchedule(<ScheduleList schedule={schedule} />);
+    renderList(schedule);
 
     const card = within(
       await screen.findByRole('button', { name: 'Ballet, Monday, October 26, 18:00–19:30' }),
@@ -68,7 +80,7 @@ describe('ScheduleList', () => {
   });
 
   it('lists canceled lessons with their status and workshops with their kind', async () => {
-    renderAtSchedule(<ScheduleList schedule={schedule} />);
+    renderList(schedule);
 
     const canceled = await screen.findByRole('button', {
       name: 'Contemporary, Tuesday, October 27, 17:00–18:00, Canceled',
@@ -93,7 +105,7 @@ describe('ScheduleList', () => {
         { ...lessonWorkshop, visibility: 'hidden' },
       ],
     };
-    renderAtSchedule(<ScheduleList schedule={restricted} />);
+    renderList(restricted);
 
     const members = await screen.findByRole('button', {
       name: 'Ballet, Monday, October 26, 18:00–19:30, Members only',
@@ -106,7 +118,7 @@ describe('ScheduleList', () => {
   });
 
   it('shows no visibility badge on public lessons', async () => {
-    renderAtSchedule(<ScheduleList schedule={schedule} />);
+    renderList(schedule);
 
     expect(await screen.findAllByRole('button', { name: /\d{2}:\d{2}–/ })).toHaveLength(3);
     expect(screen.queryByText('Members only')).not.toBeInTheDocument();
@@ -115,7 +127,7 @@ describe('ScheduleList', () => {
 
   it('opens the lesson detail by writing the lesson id into the URL', async () => {
     const user = userEvent.setup();
-    const { router } = renderAtSchedule(<ScheduleList schedule={schedule} />, {
+    const { router } = renderList(schedule, {
       level: 'beginner',
     });
 
@@ -130,7 +142,7 @@ describe('ScheduleList', () => {
   });
 
   it('explains an empty range and shows the next release', async () => {
-    renderAtSchedule(<ScheduleList schedule={empty} />);
+    renderList(empty);
 
     expect(await screen.findByText('No lessons in this period')).toBeInTheDocument();
     expect(
@@ -143,7 +155,7 @@ describe('ScheduleList', () => {
 
   it('offers to reset active filters when nothing matches', async () => {
     const user = userEvent.setup();
-    const { router } = renderAtSchedule(<ScheduleList schedule={empty} />, {
+    const { router } = renderList(empty, {
       view: 'list',
       level: 'advanced',
       location: ids.locationSouth,
@@ -155,9 +167,60 @@ describe('ScheduleList', () => {
     expect(router.state.location.search).toEqual({ view: 'list' });
   });
 
+  it('colors the day headings and names today and tomorrow', async () => {
+    renderList(withLate, {}, '2026-10-26T10:00:00Z');
+
+    const headings = await screen.findAllByRole('heading', { level: 2 });
+    expect(headings.map((h) => h.textContent)).toEqual([
+      'Today, Monday, October 26',
+      'Tomorrow, Tuesday, October 27',
+      'Saturday, November 7',
+    ]);
+    expect(headings[0]).toHaveAttribute('aria-current', 'date');
+    expect(headings[0]).toHaveClass('bg-day-today');
+    expect(headings[1]).not.toHaveAttribute('aria-current');
+    expect(headings[1]).toHaveClass('bg-day-tomorrow');
+    expect(headings[2]).toHaveClass('bg-day-later');
+  });
+
+  it('shows days before today in muted colors', async () => {
+    renderList(withLate, {}, '2026-10-27T10:00:00Z');
+
+    const monday = await screen.findByRole('heading', { level: 2, name: 'Monday, October 26' });
+    expect(monday).toHaveClass('bg-muted');
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Today, Tuesday, October 27' }),
+    ).toBeInTheDocument();
+  });
+
+  it('counts time from the server clock as of the response', async () => {
+    // The server said Friday 10:00 three days ago by the browser's clock: now it is Monday 10:00.
+    renderAtSchedule(
+      <ScheduleList schedule={withLate} receivedAt={Date.now() - 3 * 24 * 60 * 60 * 1000} />,
+    );
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Today, Monday, October 26' }),
+    ).toBeInTheDocument();
+  });
+
+  it('mutes lessons that have ended', async () => {
+    // Monday 19:45 in Berlin: Ballet (18:00–19:30) is over, Contemporary on Tuesday is not.
+    renderList(schedule, {}, '2026-10-26T18:45:00Z');
+
+    expect(
+      await screen.findByRole('button', { name: 'Ballet, Monday, October 26, 18:00–19:30' }),
+    ).toHaveAttribute('data-past');
+    expect(
+      screen.getByRole('button', {
+        name: 'Contemporary, Tuesday, October 27, 17:00–18:00, Canceled',
+      }),
+    ).not.toHaveAttribute('data-past');
+  });
+
   it('renders in German', async () => {
     await i18n.changeLanguage('de');
-    renderAtSchedule(<ScheduleList schedule={schedule} />);
+    renderList(schedule);
 
     expect(
       await screen.findByRole('heading', { level: 2, name: 'Montag, 26. Oktober' }),

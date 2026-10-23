@@ -11,7 +11,7 @@ test('switches the schedule to German', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Stundenplan' })).toBeVisible();
   await expect(page.getByRole('radio', { name: 'Woche' })).toBeVisible();
   await expect(page.getByRole('main').getByRole('heading', { level: 2 }).first()).toHaveText(
-    /^(Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag), /,
+    /^(Heute, |Morgen, )?(Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag), /,
   );
   await expect(page.getByRole('timer')).toHaveText(/^Nächste Freigabe in /);
 });

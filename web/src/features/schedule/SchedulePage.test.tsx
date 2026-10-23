@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Schedule } from '@/api/client';
 import type { ScheduleParams } from '@/api/queries';
 import {
@@ -14,6 +14,13 @@ import {
 } from '@/test/mockApi';
 import { renderAtSchedule } from '@/test/utils';
 import { SchedulePage } from './SchedulePage';
+
+// Friday 2026-10-23, before the fixture lessons: no day is today or
+// tomorrow and no lesson has ended.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-23T10:00:00Z'));
+});
 
 afterEach(() => {
   vi.useRealTimers();

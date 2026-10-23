@@ -144,7 +144,7 @@ function ScheduleView({ timeZone }: { timeZone: string }) {
           {view === 'week' ? (
             <WeekGrid schedule={schedule.data} weekStart={start} today={today} />
           ) : (
-            <ScheduleList schedule={schedule.data} />
+            <ScheduleList schedule={schedule.data} receivedAt={schedule.dataUpdatedAt} />
           )}
           <ReleaseNote schedule={schedule.data} lastDay={addDays(end, -1)} />
         </>

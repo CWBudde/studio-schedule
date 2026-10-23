@@ -28,6 +28,8 @@
   },
   "list": {
     "cardLabel": "{{courseType}}, {{day}}, {{time}}",
+    "today": "Heute, {{day}}",
+    "tomorrow": "Morgen, {{day}}",
     "instructor": "Lehrkraft",
     "accompaniedBy": "Begleitung: {{name}}",
     "place": "Ort",

@@ -17,6 +17,12 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-day-today: var(--day-today);
+  --color-day-today-foreground: var(--day-today-foreground);
+  --color-day-tomorrow: var(--day-tomorrow);
+  --color-day-tomorrow-foreground: var(--day-tomorrow-foreground);
+  --color-day-later: var(--day-later);
+  --color-day-later-foreground: var(--day-later-foreground);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -74,6 +80,13 @@
   --chart-4: oklch(0.44 0.13 352);
   --chart-5: oklch(0.36 0.1 352);
   --radius: 0.625rem;
+  /* Day headings of the schedule list: today, tomorrow, and the days after. */
+  --day-today: oklch(0.56 0.21 0);
+  --day-today-foreground: oklch(1 0 0);
+  --day-tomorrow: oklch(0.92 0.17 105);
+  --day-tomorrow-foreground: oklch(0.38 0.13 352);
+  --day-later: oklch(0.52 0.085 215);
+  --day-later-foreground: oklch(1 0 0);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.46 0.15 352);
@@ -116,6 +129,12 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.6 0.12 352);
+  --day-today: oklch(0.5 0.19 0);
+  --day-today-foreground: oklch(1 0 0);
+  --day-tomorrow: oklch(0.82 0.14 100);
+  --day-tomorrow-foreground: oklch(0.2 0.04 352);
+  --day-later: oklch(0.45 0.08 215);
+  --day-later-foreground: oklch(1 0 0);
 }
 
 @layer base {
