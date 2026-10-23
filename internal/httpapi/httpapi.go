@@ -38,9 +38,11 @@ type Deps struct {
 
 // NewConfig returns the Huma configuration for the API: OpenAPI document at
 // BasePath/openapi.json, docs at BasePath/docs, and no `$schema` response
-// field or `Link` header (keeps generated client types clean).
+// field or `Link` header (keeps generated client types clean). Domain IDs
+// are documented as `{type: string, format: uuid}` (see registerIDSchemas).
 func NewConfig() huma.Config {
 	cfg := huma.DefaultConfig(Title, SpecVersion)
+	registerIDSchemas(cfg.Components.Schemas)
 	cfg.Info.Description = "Schedule and booking API for dance and ballet schools."
 	cfg.OpenAPIPath = BasePath + "/openapi"
 	cfg.DocsPath = BasePath + "/docs"

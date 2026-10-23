@@ -37,9 +37,9 @@ type ScheduleInput struct {
 	From domain.Date `doc:"First school date of the range." format:"date" query:"from" required:"true"`
 	To   domain.Date `doc:"School date after the last day of the range (exclusive); at most 42 days after from." format:"date" query:"to" required:"true"`
 
-	Location   domain.LocationID   `doc:"Only lessons at this location."                              format:"uuid" query:"location"`
-	Instructor domain.StaffID      `doc:"Only lessons with this staff member as instructor or accompanist." format:"uuid" query:"instructor"`
-	CourseType domain.CourseTypeID `doc:"Only lessons of this course type."                           format:"uuid" query:"courseType"`
+	Location   domain.LocationID   `doc:"Only lessons at this location." query:"location"`
+	Instructor domain.StaffID      `doc:"Only lessons with this staff member as instructor or accompanist." query:"instructor"`
+	CourseType domain.CourseTypeID `doc:"Only lessons of this course type." query:"courseType"`
 	Level      string              `doc:"Only lessons of classes at this level; excludes one-off lessons." enum:"beginner,intermediate,advanced,professional,open" query:"level"`
 }
 
@@ -56,8 +56,8 @@ type Schedule struct {
 
 // LessonSummary is a lesson in the schedule.
 type LessonSummary struct {
-	ID          domain.LessonID `doc:"Lesson ID."                                          format:"uuid" json:"id"`
-	ClassID     domain.ClassID  `doc:"Weekly class the lesson belongs to; absent for one-off lessons." format:"uuid" json:"classId,omitzero"`
+	ID          domain.LessonID `doc:"Lesson ID." json:"id"`
+	ClassID     domain.ClassID  `doc:"Weekly class the lesson belongs to; absent for one-off lessons." json:"classId,omitzero"`
 	StartsAt    time.Time       `doc:"Start instant (UTC)."                                              json:"startsAt"`
 	EndsAt      time.Time       `doc:"End instant (UTC)."                                                json:"endsAt"`
 	Status      string          `doc:"Whether the lesson takes place."  enum:"scheduled,canceled"         json:"status"`
@@ -81,25 +81,25 @@ type LessonDetail struct {
 
 // CourseTypeRef names a course type.
 type CourseTypeRef struct {
-	ID   domain.CourseTypeID `format:"uuid" json:"id"`
+	ID   domain.CourseTypeID `json:"id"`
 	Name string              `json:"name"`
 }
 
 // RoomRef names a room.
 type RoomRef struct {
-	ID   domain.RoomID `format:"uuid" json:"id"`
+	ID   domain.RoomID `json:"id"`
 	Name string        `json:"name"`
 }
 
 // LocationRef names a location.
 type LocationRef struct {
-	ID   domain.LocationID `format:"uuid" json:"id"`
+	ID   domain.LocationID `json:"id"`
 	Name string            `json:"name"`
 }
 
 // StaffRef names a staff member.
 type StaffRef struct {
-	ID          domain.StaffID `format:"uuid" json:"id"`
+	ID          domain.StaffID `json:"id"`
 	DisplayName string         `json:"displayName"`
 }
 
@@ -110,7 +110,7 @@ type ScheduleOutput struct {
 
 // LessonInput are the parameters of getLesson.
 type LessonInput struct {
-	LessonID domain.LessonID `doc:"Lesson ID." format:"uuid" path:"lessonId"`
+	LessonID domain.LessonID `doc:"Lesson ID." path:"lessonId"`
 }
 
 // LessonOutput is the response of getLesson.

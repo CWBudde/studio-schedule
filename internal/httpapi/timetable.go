@@ -31,7 +31,7 @@ func registerTimetable(api huma.API, h *handlers) {
 
 // Term is a date range with its own timetable.
 type Term struct {
-	ID       domain.TermID `doc:"Term ID."                           format:"uuid" json:"id"`
+	ID       domain.TermID `doc:"Term ID."                           json:"id"`
 	Name     string        `doc:"Display name."                      json:"name"`
 	StartsOn domain.Date   `doc:"First day of the term (inclusive)." format:"date" json:"startsOn"`
 	EndsOn   domain.Date   `doc:"Last day of the term (inclusive)."  format:"date" json:"endsOn"`
@@ -63,12 +63,12 @@ func (h *handlers) listTerms(ctx context.Context, _ *struct{}) (*TermListOutput,
 
 // Class is a weekly class of a term. Its members are not exposed.
 type Class struct {
-	ID              domain.ClassID      `doc:"Class ID."                                    format:"uuid"                                           json:"id"`
-	TermID          domain.TermID       `doc:"Term the class belongs to."                   format:"uuid"                                           json:"termId"`
-	CourseTypeID    domain.CourseTypeID `doc:"Course type taught."                          format:"uuid"                                           json:"courseTypeId"`
-	RoomID          domain.RoomID       `doc:"Room the class takes place in."               format:"uuid"                                           json:"roomId"`
-	InstructorID    domain.StaffID      `doc:"Instructor."                                  format:"uuid"                                           json:"instructorId"`
-	AccompanistID   domain.StaffID      `doc:"Accompanist, if any."                         format:"uuid"                                           json:"accompanistId,omitzero"`
+	ID              domain.ClassID      `doc:"Class ID."                                    json:"id"`
+	TermID          domain.TermID       `doc:"Term the class belongs to."                   json:"termId"`
+	CourseTypeID    domain.CourseTypeID `doc:"Course type taught."                          json:"courseTypeId"`
+	RoomID          domain.RoomID       `doc:"Room the class takes place in."               json:"roomId"`
+	InstructorID    domain.StaffID      `doc:"Instructor."                                  json:"instructorId"`
+	AccompanistID   domain.StaffID      `doc:"Accompanist, if any."                         json:"accompanistId,omitzero"`
 	Level           domain.Level        `doc:"Skill level the class is aimed at."           enum:"beginner,intermediate,advanced,professional,open" json:"level"`
 	Weekday         int                 `doc:"Day of the week, 0 = Sunday to 6 = Saturday." json:"weekday"                                          maximum:"6"      minimum:"0"`
 	StartTime       domain.TimeOfDay    `doc:"Start time (HH:MM) in the school time zone."  example:"18:00"                                         json:"startTime" pattern:"^[0-2][0-9]:[0-5][0-9]$"`
@@ -83,7 +83,7 @@ type ClassList struct {
 
 // ClassListInput is the request of listClasses.
 type ClassListInput struct {
-	TermID domain.TermID `doc:"Term ID." format:"uuid" path:"termId"`
+	TermID domain.TermID `doc:"Term ID." path:"termId"`
 }
 
 // ClassListOutput is the response of listClasses.

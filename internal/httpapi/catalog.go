@@ -48,7 +48,7 @@ func registerCatalog(api huma.API, h *handlers) {
 
 // Location is a site of the school.
 type Location struct {
-	ID      domain.LocationID `doc:"Location ID."              format:"uuid" json:"id"`
+	ID      domain.LocationID `doc:"Location ID."              json:"id"`
 	Name    string            `doc:"Display name."             json:"name"`
 	Address string            `doc:"Postal address, if known." json:"address,omitempty"`
 }
@@ -79,8 +79,8 @@ func (h *handlers) listLocations(ctx context.Context, _ *struct{}) (*LocationLis
 
 // Room is a studio at a location.
 type Room struct {
-	ID         domain.RoomID     `doc:"Room ID."                         format:"uuid"   json:"id"`
-	LocationID domain.LocationID `doc:"Location the room belongs to."    format:"uuid"   json:"locationId"`
+	ID         domain.RoomID     `doc:"Room ID."                         json:"id"`
+	LocationID domain.LocationID `doc:"Location the room belongs to."    json:"locationId"`
 	Name       string            `doc:"Display name."                    json:"name"`
 	Capacity   int               `doc:"Default capacity of its lessons." json:"capacity" minimum:"1"`
 }
@@ -92,7 +92,7 @@ type RoomList struct {
 
 // RoomListInput is the request of listRooms.
 type RoomListInput struct {
-	Location domain.LocationID `doc:"Only list the rooms of this location." format:"uuid" query:"location"`
+	Location domain.LocationID `doc:"Only list the rooms of this location." query:"location"`
 }
 
 // RoomListOutput is the response of listRooms.
@@ -117,7 +117,7 @@ func (h *handlers) listRooms(ctx context.Context, in *RoomListInput) (*RoomListO
 // StaffMember is an instructor or accompanist. The link to a person record
 // is not exposed.
 type StaffMember struct {
-	ID          domain.StaffID   `doc:"Staff ID."                    format:"uuid"                 json:"id"`
+	ID          domain.StaffID   `doc:"Staff ID."                    json:"id"`
 	DisplayName string           `doc:"Name shown in the timetable." json:"displayName"`
 	Kind        domain.StaffKind `doc:"Role of the staff member."    enum:"instructor,accompanist" json:"kind"`
 }
@@ -148,7 +148,7 @@ func (h *handlers) listStaff(ctx context.Context, _ *struct{}) (*StaffListOutput
 
 // CourseType is a catalog entry (dance style).
 type CourseType struct {
-	ID          domain.CourseTypeID `doc:"Course type ID."      format:"uuid" json:"id"`
+	ID          domain.CourseTypeID `doc:"Course type ID."      json:"id"`
 	Name        string              `doc:"Display name."        json:"name"`
 	Description string              `doc:"Description, if any." json:"description,omitempty"`
 }
