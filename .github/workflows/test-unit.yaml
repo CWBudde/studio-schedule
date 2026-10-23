@@ -18,5 +18,7 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # Includes the PostgreSQL contract tests: testcontainers starts
+      # postgres:18-alpine on the runner's Docker.
       - name: Run unit tests
         run: go test -race ./...

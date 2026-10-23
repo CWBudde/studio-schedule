@@ -50,6 +50,10 @@ check-tidy:
 check-generated:
     ./scripts/error-on-diff.sh sh -c 'ln -s "{{ justfile_directory() }}/web/node_modules" web/node_modules && just gen-api'
 
+# Fail if the sqlc-generated query code is stale
+check-sqlc:
+    ./scripts/error-on-diff.sh just sqlc
+
 # Fail if the WASM build pulls in server-only dependencies
 check-wasm-deps:
     ./scripts/check-wasm-deps.sh
@@ -85,7 +89,7 @@ web-check:
     pnpm -C web test
 
 # Everything CI runs
-ci: check-tidy check-formatted lint test check-wasm-deps web-check demo-build
+ci: check-tidy check-formatted check-sqlc lint test check-wasm-deps web-check demo-build
 
 # ---------------------------------------------------------------- build & run
 

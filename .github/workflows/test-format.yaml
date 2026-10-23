@@ -29,3 +29,6 @@ jobs:
 
       - name: Run treefmt
         run: just check-formatted
+
+      - name: Check sqlc output
+        run: just check-sqlc
