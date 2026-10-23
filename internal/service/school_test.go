@@ -35,8 +35,8 @@ func TestLoadSchool(t *testing.T) {
 		return s, zone, err
 	}
 
-	if _, _, err := load(); !errors.Is(err, domain.ErrNotFound) {
-		t.Fatalf("empty store: want ErrNotFound, got %v", err)
+	if _, _, err := load(); !errors.Is(err, ErrNoSchool) || !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("empty store: want ErrNoSchool (an ErrNotFound), got %v", err)
 	}
 
 	want := seed.DemoSettings()

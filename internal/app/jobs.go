@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/jobs"
 	"github.com/cwbudde/studio-schedule/internal/service"
 )
@@ -25,7 +24,7 @@ func Jobs(deps Deps) *jobs.Runner {
 			created, err := lessons.GenerateAhead(ctx)
 
 			switch {
-			case errors.Is(err, domain.ErrNotFound):
+			case errors.Is(err, service.ErrNoSchool):
 				// No school settings yet: there is no school to generate for.
 				// The server warns about this at startup.
 				deps.Logger.DebugContext(ctx, "lesson generation skipped: no school settings")
