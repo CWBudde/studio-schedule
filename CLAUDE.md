@@ -49,12 +49,14 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
 ## Code map
 
 - **Wiring:** `internal/app.New(Deps)` builds services, calls `httpapi.Register`, and adds the
-  middleware (recovery → access log → cross-origin protection → router). Unknown non-`/api` paths
+  middleware (security headers → recovery → access log → cross-origin protection → router). Unknown non-`/api` paths
   fall through to `Deps.UI` (the embedded SPA in `internal/webui`). `cmd/studio-schedule` (cobra:
   `serve`, `migrate`, `seed`, `openapi`, `version`) and `cmd/wasm` both call it. `serve` uses
   PostgreSQL when `DATABASE_URL` is set (refusing to start unless the schema matches), otherwise the
   memory store with `seed.LoadDemo`.
-- **Auth & mail:** `service.AuthService` (register → confirm with password → sessions; ADR 0004),
+- **Auth & mail:** `service.AuthService` (register → confirm with password → sessions; ADR 0004;
+  password reset/change and email change in `service/credentials.go`, rate limits in
+  `httpapi/ratelimit.go`; ADR 0006),
   the `studio_session` cookie middleware in `httpapi/auth.go` (`principalFrom(ctx)`), argon2id in
   `internal/auth/password`. Mails: render with `internal/mail` and call `enqueueMail` inside the
   causing transaction; the `deliver-mail` job sends them (`internal/mail/smtp`, server only).

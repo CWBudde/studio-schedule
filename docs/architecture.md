@@ -43,10 +43,13 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
 - `internal/mail`: mail templates (`en`, `de`; HTML plus text) and the `Mailer` interface;
   `internal/mail/smtp` is the server-only SMTP sender. Services write mails to the outbox in their
   transaction; a job sends them ([ADR 0004](decisions/0004-accounts-sessions-and-mail.md)).
-- `internal/app`: wiring and cross-cutting middleware (recovery, cross-origin protection). The
-  session middleware in `httpapi` resolves the `studio_session` cookie to the signed-in account;
-  the access middleware after it enforces each operation's declared access level
-  ([ADR 0005](decisions/0005-rbac-and-impersonation.md)).
+- `internal/app`: wiring and cross-cutting middleware (security headers, recovery, cross-origin
+  protection). In `httpapi`, a middleware resolves the client IP (`internal/clientip`, trusting
+  `X-Forwarded-For` only from `TRUSTED_PROXIES`), the session middleware resolves the
+  `studio_session` cookie to the signed-in account, and the access middleware after it enforces
+  each operation's declared access level ([ADR 0005](decisions/0005-rbac-and-impersonation.md)).
+- `internal/ratelimit`: in-memory fixed-window limiters for logins and mail-sending requests
+  ([ADR 0006](decisions/0006-credentials-rate-limits-and-headers.md)).
 
 ## Transactions and concurrency
 
@@ -110,6 +113,10 @@ the existing lessons of its range and creates only the missing ones.
 - Authorization: every operation declares an access level (`public`, `signedIn`, `staff`, `office`,
   `admin`), published as `x-access` in the OpenAPI document and enforced by one middleware; a test
   pins the level of every operation ([ADR 0005](decisions/0005-rbac-and-impersonation.md)).
+- Credentials: password reset, password change and email change use single-use email links;
+  logins and mail-sending requests are rate-limited (429 with `Retry-After`); every response
+  carries a Content Security Policy, `nosniff` and `Referrer-Policy`, plus HSTS when `BASE_URL` is
+  https ([ADR 0006](decisions/0006-credentials-rate-limits-and-headers.md)).
 
 ## Frontend
 

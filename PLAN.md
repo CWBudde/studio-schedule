@@ -237,16 +237,23 @@ Goal: people can sign up and log in; staff can maintain the timetable.
       demo; pre-hashed seed passwords) (2026-10-23) — `internal/auth/password` (PHC strings, OWASP
       parameters on the server, 1 MiB in `js`, rehash on login, bounded concurrency); every demo
       account has the pre-hashed password `demo-password`
-- [ ] Password reset (hashed single-use token with expiry); change password; change email with
-      re-confirmation
+- [x] Password reset (hashed single-use token with expiry); change password; change email with
+      re-confirmation (2026-10-23) — `service/credentials.go` and five operations under
+      `/api/v1/auth`; reset links last 1 hour and end every session, a password change ends every
+      other one; the new address confirms by link and the old one gets a notice; unknown or taken
+      addresses get the same answer; refused while impersonating; `/forgot-password`, `/reset-password`, `/confirm-email-change` and `/account` (ADR 0006)
 - [x] RBAC middleware/helpers on Huma operations; admin impersonation ("login as") with audit and a
       visible banner (2026-10-23) — every operation is registered with an access level (`public`,
       `signedIn`, `staff`, `office`, `admin`; `x-access` in the OpenAPI document), one middleware
       answers 401/403, a test pins every level and calls every operation as every role; admins
       sign in as non-admin accounts for at most an hour from `/admin/accounts`, a banner on every
       page leads back, start and end go to `audit_events` (ADR 0005)
-- [ ] Login rate limiting, security headers (CSP, HSTS in production), consistent problem+json
-      errors without internal details
+- [x] Login rate limiting, security headers (CSP, HSTS in production), consistent problem+json
+      errors without internal details (2026-10-23) — `internal/ratelimit` (5 wrong passwords per email
+      and 20 logins per client IP per 15 min, 5 mails per IP per hour; 429 with `Retry-After`, shown
+      in the forms), client IP via `TRUSTED_PROXIES`; CSP without script `unsafe-inline`/`eval`,
+      nosniff, `DENY` framing, same-origin referrer, HSTS for an https `BASE_URL`; every error is
+      problem+json and 500s say nothing more (`internal/app/security_test.go`, ADR 0006)
 - [x] Mail: outbox table, worker, SMTP sender, EN/DE templates (`html/template` + text alternative);
       demo: "Demo mailbox" panel listing outbox mails (2026-10-23) — mails go to `outbox_mails` in
       the causing transaction; the `deliver-mail` job claims one at a time and retries 5 times
@@ -258,15 +265,16 @@ Goal: people can sign up and log in; staff can maintain the timetable.
 - [ ] UI: login, registration, confirm, reset; profile (person data, dependents, password, language);
       admin area with shadcn data tables and forms (react-hook-form + zod, schemas derived from the
       OpenAPI types) (2026-10-23) — partial: login, registration and confirm pages, the signed-in
-      header and the admin account list (`/admin/accounts`, with "sign in as") are done; reset,
-      profile and the rest of the admin area remain
+      header, the admin account list (`/admin/accounts`, with "sign in as"), the reset pages and the
+      account settings for password and email are done; the profile's person data, dependents and
+      language and the rest of the admin area remain
 - [x] Demo: login page lists demo accounts per role (member, instructor, office, admin)
       (2026-10-23) — `GET /api/v1/demo/logins` in demo installations (WASM demo, `serve` without a
       database); one click signs in
 - [ ] Tests: auth flows, RBAC matrix per endpoint, mail rendering snapshots, e2e (login, admin edits a
       class) (2026-10-23) — partial: auth flow tests (service and HTTP), mail golden files, the RBAC
-      matrix (`internal/app/access_test.go`) and e2e sign-in, registration and impersonation exist;
-      "admin edits a class" remains
+      matrix (`internal/app/access_test.go`) and e2e sign-in, registration, impersonation, password
+      reset and account settings exist; "admin edits a class" remains
 
 ## Phase 4 — Booking & waiting list
 
