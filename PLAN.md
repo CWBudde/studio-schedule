@@ -114,9 +114,11 @@ in-memory store.
 
 Goal: a production-grade persistence layer with two interchangeable implementations.
 
-- [x] Typed IDs (UUIDv7) generated in Go via an injectable `IDs` source (2026-10-23) — generic
-      `domain.ID[K]` with one alias per table; `ids.Source` with `V7` (prod) and a deterministic
-      `Sequence` (tests, seed); forbidigo bans `uuid.New*` outside `internal/ids`
+- [~] Typed IDs (UUIDv7) generated in Go via an injectable `IDs` source (2026-10-23) — generic
+      `domain.ID[K]` with one alias per table, canonical-only parsing; `ids.Source` with `V7`
+      (prod) and a deterministic `Sequence` (tests, seed); forbidigo bans `uuid.New*` outside
+      `internal/ids`. partial: inject `ids.Source` via `app.Deps` (server: `V7`, demo seed:
+      `Sequence`) together with the first service that creates entities
 - [ ] Domain entities and validation for all tables in the domain model (no behaviour yet)
 - [ ] `store` interfaces per aggregate. Explicit ordering on every list method, no generic query
       builder
@@ -152,6 +154,8 @@ Goal: anyone can browse the published timetable. This is the first real demo val
       visible-days override (used later)
 - [ ] Visibility rules: `public | hidden | internal`; cancelled lessons stay visible with a status
 - [ ] `GET /api/v1/schedule?from&to&location&instructor&courseType&level`, `GET /api/v1/lessons/{id}`
+- [ ] OpenAPI schema for domain IDs: `type: string, format: uuid` (registered in `httpapi`, so
+      `domain` stays dependency-free), visible in the generated TS types
 - [ ] Background job runner abstraction (ticker in server, `setInterval` bridge in WASM) for lesson
       generation
 - [ ] UI: schedule list view (day groups), week grid, board view; filters; lesson detail sheet;
