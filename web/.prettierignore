@@ -1,0 +1,9 @@
+dist
+coverage
+node_modules
+pnpm-lock.yaml
+public/wasm_exec.js
+# Generated files (checked by `just check-generated`, must stay byte-identical)
+src/api/schema.d.ts
+src/routeTree.gen.ts
+.tmp-openapi.json

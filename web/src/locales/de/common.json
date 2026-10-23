@@ -1,0 +1,62 @@
+{
+  "app": {
+    "name": "Studio Schedule",
+    "tagline": "Kurse und Buchungen für deine Tanzschule",
+    "home": "Studio Schedule – Startseite"
+  },
+  "a11y": {
+    "skipToContent": "Zum Inhalt springen"
+  },
+  "language": {
+    "label": "Sprache",
+    "change": "Sprache ändern",
+    "en": "English",
+    "de": "Deutsch"
+  },
+  "demo": {
+    "label": "Demo-Modus",
+    "banner": "Demo-Modus: Diese App läuft vollständig in deinem Browser (Go, kompiliert zu WebAssembly) mit einer In-Memory-Datenbank. Nichts wird auf einem Server gespeichert und alle Änderungen gehen beim Neuladen verloren.",
+    "learnMore": "Mehr erfahren",
+    "learnMoreLabel": "Mehr über die Live-Demo erfahren (öffnet GitHub in einem neuen Tab)"
+  },
+  "backend": {
+    "starting": "Demo-Backend wird gestartet…",
+    "startingHint": "Das Backend wird in deinen Browser geladen. Das dauert normalerweise nur einen Moment.",
+    "crashedTitle": "Demo abgestürzt — bitte neu laden",
+    "crashedDescription": "Das Backend im Browser wurde unerwartet beendet. Lade die Seite neu, um eine frische Demo zu starten.",
+    "details": "Details: {{message}}",
+    "reload": "Neu laden"
+  },
+  "home": {
+    "title": "Willkommen",
+    "intro": "Kurse planen, den Stundenplan veröffentlichen und Schüler:innen ihren Platz buchen lassen.",
+    "status": {
+      "title": "Systemstatus",
+      "description": "Live-Informationen vom Backend.",
+      "backend": "Backend",
+      "ok": "OK",
+      "error": "Fehler",
+      "checking": "Wird geprüft…",
+      "version": "Version",
+      "school": "Schule",
+      "timezone": "Zeitzone",
+      "loadError": "Daten konnten nicht vom Backend geladen werden.",
+      "retry": "Erneut versuchen"
+    },
+    "schedule": {
+      "title": "Stundenplan",
+      "comingSoon": "Stundenplan folgt in Phase 2",
+      "description": "Hier erscheint der Wochenplan mit Kursen, Räumen und Lehrkräften."
+    }
+  },
+  "footer": {
+    "version": "Version {{version}}",
+    "versionUnknown": "Version unbekannt",
+    "source": "Quellcode auf GitHub"
+  },
+  "notFound": {
+    "title": "Seite nicht gefunden",
+    "description": "Die gesuchte Seite existiert nicht.",
+    "backHome": "Zur Startseite"
+  }
+}

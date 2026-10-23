@@ -1,0 +1,37 @@
+name: test-lint
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Setup just
+        uses: extractions/setup-just@v3
+
+      - name: Check tidy
+        run: just check-tidy
+
+      - name: Run linter
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.13.2
+          args: --timeout 5m
+
+      - name: Vet js/wasm target
+        run: GOOS=js GOARCH=wasm go vet ./cmd/wasm/... ./internal/wasmbridge/...
+
+      - name: Check WASM dependency guard
+        run: just check-wasm-deps

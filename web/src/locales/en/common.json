@@ -1,0 +1,62 @@
+{
+  "app": {
+    "name": "Studio Schedule",
+    "tagline": "Classes and bookings for your dance school",
+    "home": "Studio Schedule – home"
+  },
+  "a11y": {
+    "skipToContent": "Skip to content"
+  },
+  "language": {
+    "label": "Language",
+    "change": "Change language",
+    "en": "English",
+    "de": "Deutsch"
+  },
+  "demo": {
+    "label": "Demo mode",
+    "banner": "Demo mode: this app runs entirely in your browser (Go compiled to WebAssembly) with an in-memory database. Nothing is stored on a server and all changes are lost on reload.",
+    "learnMore": "Learn more",
+    "learnMoreLabel": "Learn more about the live demo (opens GitHub in a new tab)"
+  },
+  "backend": {
+    "starting": "Starting demo backend…",
+    "startingHint": "The backend is being loaded into your browser. This usually takes just a moment.",
+    "crashedTitle": "Demo crashed — reload",
+    "crashedDescription": "The in-browser backend stopped unexpectedly. Reload the page to start a fresh demo.",
+    "details": "Details: {{message}}",
+    "reload": "Reload"
+  },
+  "home": {
+    "title": "Welcome",
+    "intro": "Plan classes, publish the timetable and let students book their spot.",
+    "status": {
+      "title": "System status",
+      "description": "Live information from the backend.",
+      "backend": "Backend",
+      "ok": "OK",
+      "error": "Error",
+      "checking": "Checking…",
+      "version": "Version",
+      "school": "School",
+      "timezone": "Time zone",
+      "loadError": "Could not load data from the backend.",
+      "retry": "Retry"
+    },
+    "schedule": {
+      "title": "Schedule",
+      "comingSoon": "Schedule coming in Phase 2",
+      "description": "The weekly timetable with classes, rooms and teachers will appear here."
+    }
+  },
+  "footer": {
+    "version": "Version {{version}}",
+    "versionUnknown": "Version unknown",
+    "source": "Source code on GitHub"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "The page you are looking for does not exist.",
+    "backHome": "Back to home"
+  }
+}

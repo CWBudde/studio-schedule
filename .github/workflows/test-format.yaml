@@ -1,0 +1,31 @@
+name: test-format
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test-format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Setup just
+        uses: extractions/setup-just@v3
+
+      - name: Install formatters
+        run: |
+          just setup-deps
+          curl -fsSL https://github.com/numtide/treefmt/releases/download/v2.1.1/treefmt_2.1.1_linux_amd64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin treefmt
+
+      - name: Run treefmt
+        run: just check-formatted

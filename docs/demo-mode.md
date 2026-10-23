@@ -1,0 +1,47 @@
+# Demo mode (GitHub Pages)
+
+The live demo at https://cwbudde.github.io/studio-schedule/ runs **without any server**. GitHub Pages
+only serves static files, and we don't host a backend for the demo. Instead:
+
+1. The Go application (`cmd/wasm`) is compiled with `GOOS=js GOARCH=wasm`. This is the **same**
+   `internal/app.New` handler, services and HTTP API as the production server.
+2. The browser starts it in a **Web Worker**. The Worker loads `wasm_exec.js` (copied from the Go
+   toolchain that built the binary) and `app.wasm`.
+3. The Go side registers `globalThis.StudioScheduleAPI.fetch(request) → Promise<response>`. Each call
+   becomes an `*http.Request` that is served by the handler in its own goroutine.
+4. The React app uses the same generated `openapi-fetch` client as in production, but with a custom
+   `fetch` that posts requests to the Worker. A small cookie jar in the Worker stores `Set-Cookie`
+   headers, so session cookies behave as in a real browser–server setup.
+
+## Differences from a real installation
+
+| Aspect     | Production                  | Demo                                                            |
+| ---------- | --------------------------- | --------------------------------------------------------------- |
+| Database   | PostgreSQL                  | **In-memory store**, seeded with fictional data on every start  |
+| Durability | Persistent                  | **Lost on reload** (an optional IndexedDB snapshot is planned)  |
+| Email      | SMTP via outbox worker      | Outbox only; shown in a demo mailbox panel (Phase 3)            |
+| Passwords  | argon2id, production params | Cheap parameters so login is fast in WASM; seeded demo accounts |
+| Downloads  | Plain links (iCal, PDF)     | Fetched through the bridge and opened as Blob URLs              |
+| Routing    | Browser history             | Hash history (`/#/…`), because Pages has no SPA fallback        |
+| Timezone   | Host tzdata or embedded     | Embedded `time/tzdata`                                          |
+
+Everything else, including validation, permissions, booking rules, the release window, receipts and
+the API, is the same code.
+
+## Building it locally
+
+```sh
+just demo-serve        # = scripts/build-wasm.sh + vite build --mode demo + vite preview
+```
+
+Open the printed URL, for example `http://localhost:4173/studio-schedule/`.
+
+## Constraints to keep in mind
+
+- `cmd/wasm` must not import server-only packages (database drivers, SMTP, CLI, `os/exec`,
+  `httptest`). `scripts/check-wasm-deps.sh` enforces this in CI.
+- Go's WASM runtime is single-threaded. CPU-heavy work blocks the Worker (not the UI), so keep
+  request handlers cheap.
+- A panic that escapes recovery terminates the Go program. The UI then shows "Demo crashed —
+  reload".
+- The binary size is reported in every CI run (`test-web` job summary).

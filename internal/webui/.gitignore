@@ -1,0 +1,3 @@
+# Build output copied from web/dist by `just build`; only the placeholder
+# index.html is committed.
+/dist/assets/

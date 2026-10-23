@@ -1,0 +1,28 @@
+# Go
+/bin/
+/build/
+/wasm
+*.test
+*.out
+coverage.*
+
+# WASM demo artifacts (built by scripts/build-wasm.sh)
+web/public/app.wasm
+web/public/wasm_exec.js
+
+# Web
+node_modules/
+web/dist/
+*.tsbuildinfo
+.vite/
+playwright-report/
+test-results/
+
+# Env / local
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+.claude/settings.local.json

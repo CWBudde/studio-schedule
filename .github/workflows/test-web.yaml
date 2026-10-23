@@ -1,0 +1,71 @@
+name: test-web
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test-web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Setup just
+        uses: extractions/setup-just@v3
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install web dependencies
+        run: just web-install
+
+      - name: Check generated API spec and types
+        run: just check-generated
+
+      - name: Lint, typecheck and format check
+        run: pnpm -C web check
+
+      - name: Unit tests
+        run: pnpm -C web test
+
+      - name: Build WASM
+        run: just wasm
+
+      - name: Report WASM size
+        run: |
+          raw=$(stat -c%s web/public/app.wasm)
+          gz=$(gzip -9 -c web/public/app.wasm | wc -c)
+          {
+            echo "### WASM size"
+            echo ""
+            echo "| raw | gzip |"
+            echo "| --- | --- |"
+            echo "| $((raw / 1024)) KiB | $((gz / 1024)) KiB |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test WASM bridge
+        if: hashFiles('scripts/wasm-smoke.mjs') != ''
+        run: node scripts/wasm-smoke.mjs web/public/app.wasm web/public/wasm_exec.js
+
+      - name: Build demo
+        run: VITE_BASE=/studio-schedule/ pnpm -C web build:demo
+
+      - name: Build production web app
+        run: pnpm -C web build

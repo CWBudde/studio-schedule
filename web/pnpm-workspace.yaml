@@ -1,0 +1,3 @@
+# Only install package versions that have been public for at least 14 days
+# (supply-chain hygiene). Value is in minutes.
+minimumReleaseAge: 20160

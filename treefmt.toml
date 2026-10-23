@@ -1,0 +1,60 @@
+# treefmt configuration for studio-schedule.
+# The web/ app is formatted by its own prettier setup (pnpm -C web format).
+
+[global]
+excludes = [
+    "**/.gitignore",
+    "**/.git/**",
+    "go.mod",
+    "go.sum",
+    "LICENSE",
+    "CHANGELOG.md",
+    "**/*.txt",
+    "**/*.png",
+    "**/*.jpg",
+    "**/*.svg",
+    "**/*.ico",
+    "**/*.wasm",
+    "bin/**",
+    "build/**",
+    "web/**",
+    "internal/webui/dist/**",
+    # Generated from the Go code (just gen-api), never edited by hand.
+    "api/openapi.json",
+    ".release-please-manifest.json",
+]
+
+[formatter.gofumpt]
+command = "gofumpt"
+options = ["-w"]
+includes = ["*.go"]
+
+[formatter.gci]
+command = "gci"
+options = [
+    "write",
+    "--skip-generated",
+    "-s",
+    "standard",
+    "-s",
+    "default",
+    "-s",
+    "prefix(github.com/cwbudde/studio-schedule)",
+]
+includes = ["*.go"]
+priority = 1
+
+[formatter.shellcheck]
+command = "shellcheck"
+includes = ["*.sh"]
+
+[formatter.shfmt]
+command = "shfmt"
+options = ["-s", "-w"]
+includes = ["*.sh"]
+priority = 1
+
+[formatter.prettier]
+command = "prettier"
+options = ["-w"]
+includes = ["*.md", "*.yaml", "*.yml", "*.json"]

@@ -1,0 +1,5 @@
+# Temporary hand-written OpenAPI spec (until ../api/openapi.json exists)
+.tmp-openapi.json
+
+# The demo mode env file contains no secrets and is required for build:demo.
+!.env.demo

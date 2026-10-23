@@ -1,0 +1,95 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - errorlint
+    - forbidigo
+    - gosec
+    - misspell
+    - noctx
+    - nolintlint
+    - revive
+    - unconvert
+  settings:
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^time\.Local$
+          msg: use an explicit *time.Location (the school's timezone); time.Local differs between server, CI and browser
+        - pattern: ^time\.Now$
+          msg: inject a clock.Clock instead of calling time.Now
+        - pattern: ^fmt\.Print(f|ln)?$
+          msg: use a *slog.Logger or write to an explicit io.Writer
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # readability over struct packing
+        - shadow # `err` shadowing is idiomatic
+    misspell:
+      locale: US
+      ignore-rules:
+        - serialise
+        - serialised
+        - serialises
+        - authorisation
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: exported
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: var-declaration
+        - name: var-naming
+  exclusions:
+    generated: lax
+    presets:
+      - std-error-handling
+    rules:
+      # The clock package is the one place that may read the wall clock.
+      - path: ^internal/clock/
+        linters: [forbidigo]
+        text: time\.Now
+      # Command packages may print to stdout.
+      - path: ^cmd/
+        linters: [forbidigo]
+        text: fmt\.Print
+      - path: _test\.go$
+        linters: [gosec, noctx]
+
+formatters:
+  enable:
+    - gofumpt
+    - gci
+  settings:
+    gofumpt:
+      extra:
+        group-params: true
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/cwbudde/studio-schedule)
