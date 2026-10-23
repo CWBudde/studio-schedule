@@ -1,7 +1,8 @@
 import { QueryClient } from '@tanstack/react-query';
-import { createBrowserHistory, createHashHistory, createRouter } from '@tanstack/react-router';
+import { createBrowserHistory, createRouter } from '@tanstack/react-router';
 import { ApiError } from '@/api/queries';
 import { routerHistory } from '@/lib/env';
+import { createAppHashHistory } from '@/lib/hashHistory';
 import { routeTree } from './routeTree.gen';
 
 export const queryClient = new QueryClient({
@@ -18,7 +19,7 @@ export const queryClient = new QueryClient({
 });
 
 // Hash history for static hosting (GitHub Pages demo), browser history otherwise.
-const history = routerHistory === 'hash' ? createHashHistory() : createBrowserHistory();
+const history = routerHistory === 'hash' ? createAppHashHistory() : createBrowserHistory();
 const basepath =
   routerHistory === 'hash' ? '/' : import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
 
