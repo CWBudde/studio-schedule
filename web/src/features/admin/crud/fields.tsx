@@ -1,4 +1,4 @@
-import { type ComponentProps, type ReactNode, useId } from 'react';
+import type { ComponentProps } from 'react';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -7,30 +7,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-
-/** The hint and error lines under a field, and the ids that describe the field. */
-function useDescription(hint: string | undefined, error: string | undefined) {
-  const id = useId();
-  const hintId = `${id}-hint`;
-  const errorId = `${id}-error`;
-  const describedBy = [hint ? hintId : '', error ? errorId : ''].filter(Boolean).join(' ');
-  const lines: ReactNode = (
-    <>
-      {hint && (
-        <p id={hintId} className="text-xs text-muted-foreground">
-          {hint}
-        </p>
-      )}
-      {error && (
-        <p id={errorId} className="text-xs text-destructive">
-          {error}
-        </p>
-      )}
-    </>
-  );
-  return { id, describedBy: describedBy || undefined, lines };
-}
+import { useDescription } from './useDescription';
 
 /** A labelled multi-line text input with an optional hint and error text. */
 export function TextareaField({
@@ -96,6 +75,41 @@ export function SelectField({
           ))}
         </SelectContent>
       </Select>
+      {lines}
+    </div>
+  );
+}
+
+/** A labelled on/off switch with an optional hint and error text. */
+export function SwitchField({
+  label,
+  checked,
+  onChange,
+  onBlur,
+  error,
+  hint,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  onBlur?: () => void;
+  error?: string;
+  hint?: string;
+}) {
+  const { id, describedBy, lines } = useDescription(hint, error);
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex items-center gap-3">
+        <Switch
+          id={id}
+          checked={checked}
+          onCheckedChange={onChange}
+          onBlur={onBlur}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+        />
+        <Label htmlFor={id}>{label}</Label>
+      </div>
       {lines}
     </div>
   );

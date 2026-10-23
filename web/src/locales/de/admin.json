@@ -2,6 +2,8 @@
   "nav": {
     "label": "Verwaltung",
     "locations": "Standorte",
+    "courseTypes": "Kursarten",
+    "staff": "Personal",
     "accounts": "Konten"
   },
   "noAccess": {
@@ -28,6 +30,7 @@
     "errors": {
       "capacity": "Gib eine ganze Zahl von 1 bis 1000 ein.",
       "location": "Bitte wähle einen Standort.",
+      "person": "Diese Person gibt es nicht mehr; wähle eine andere.",
       "duplicate": "Dieser Name ist bereits vergeben."
     }
   },
@@ -93,5 +96,78 @@
   },
   "access": {
     "loadError": "Es konnte nicht geprüft werden, ob du diese Seite sehen darfst."
+  },
+  "courseTypes": {
+    "title": "Kursarten",
+    "description": "Die Arten von Kursen, die die Schule anbietet, etwa Ballett oder Jazz. Der Stundenplan zeigt ihre Namen und Beschreibungen und lässt sich nach ihnen filtern.",
+    "table": "Kursarten",
+    "search": "Kursarten durchsuchen",
+    "empty": "Es gibt noch keine Kursarten.",
+    "name": "Name",
+    "details": "Beschreibung",
+    "add": "Kursart hinzufügen",
+    "addTitle": "Kursart hinzufügen",
+    "editTitle": "{{name}} bearbeiten",
+    "sheetDescription": "Der Name muss sich von den Namen der anderen Kursarten unterscheiden, unabhängig von Groß- und Kleinschreibung.",
+    "editLabel": "{{name}} bearbeiten",
+    "deleteLabel": "{{name}} löschen",
+    "added": "{{name}} wurde hinzugefügt.",
+    "saved": "{{name}} wurde gespeichert.",
+    "deleted": "{{name}} wurde gelöscht.",
+    "duplicate": "Eine andere Kursart heißt bereits „{{name}}“.",
+    "notFound": "Diese Kursart gibt es nicht mehr.",
+    "deleteTitle": "{{name}} löschen?",
+    "deleteDescription": "Die Kursart wird endgültig gelöscht. Eine Kursart, die Kurse oder Stunden verwenden, kann nicht gelöscht werden.",
+    "inUse": "{{name}} wird von Kursen oder Stunden verwendet und kann daher nicht gelöscht werden."
+  },
+  "staff": {
+    "title": "Personal",
+    "description": "Die Lehrkräfte und Begleitmusiker der Schule. Inaktives Personal verschwindet aus den öffentlichen Listen und den Filtern des Stundenplans, bleibt aber bei seinen Stunden eingetragen.",
+    "table": "Personal",
+    "search": "Personal durchsuchen",
+    "empty": "Es gibt noch kein Personal.",
+    "show": "Anzeigen",
+    "showAll": "Alle",
+    "showActive": "Aktiv",
+    "showInactive": "Inaktiv",
+    "noActive": "Es gibt kein aktives Personal.",
+    "noInactive": "Es gibt kein inaktives Personal.",
+    "displayName": "Anzeigename",
+    "displayNameHint": "So, wie ihn der Stundenplan zeigt.",
+    "kind": "Rolle",
+    "kinds": {
+      "instructor": "Lehrkraft",
+      "accompanist": "Begleitmusik"
+    },
+    "person": "Person",
+    "personHint": "Der Personendatensatz dieses Mitglieds des Personals, falls es einen gibt.",
+    "status": "Status",
+    "active": "Aktiv",
+    "inactive": "Inaktiv",
+    "activeHint": "Inaktives Personal verschwindet aus den öffentlichen Listen und den Filtern des Stundenplans, bleibt aber bei seinen Stunden eingetragen.",
+    "add": "Personal hinzufügen",
+    "addTitle": "Personal hinzufügen",
+    "editTitle": "{{name}} bearbeiten",
+    "sheetDescription": "Lehrkräfte unterrichten Kurse; die Begleitmusik spielt für sie.",
+    "editLabel": "{{name}} bearbeiten",
+    "deleteLabel": "{{name}} löschen",
+    "added": "{{name}} wurde hinzugefügt.",
+    "saved": "{{name}} wurde gespeichert.",
+    "deleted": "{{name}} wurde gelöscht.",
+    "notFound": "Dieses Mitglied des Personals gibt es nicht mehr.",
+    "deleteTitle": "{{name}} löschen?",
+    "deleteDescription": "Der Eintrag wird endgültig gelöscht. Wer Kurse oder Stunden unterrichtet, kann nicht gelöscht werden; deaktiviere den Eintrag stattdessen.",
+    "inUse": "{{name}} unterrichtet noch Kurse oder Stunden und kann daher nicht gelöscht werden. Deaktiviere den Eintrag stattdessen: Er verschwindet dann aus den öffentlichen Listen, bleibt aber bei den Stunden eingetragen."
+  },
+  "personField": {
+    "none": "Keine Person",
+    "search": "Nach Name oder E-Mail suchen",
+    "list": "Personen",
+    "searching": "Wird gesucht…",
+    "error": "Die Personen konnten nicht gesucht werden.",
+    "nobody": "Es gibt noch keine Personen.",
+    "noMatches": "Niemand passt zu „{{query}}“.",
+    "more": "Es werden die ersten {{count}} Treffer gezeigt. Gib mehr ein, um die Liste einzugrenzen.",
+    "clear": "Person entfernen"
   }
 }

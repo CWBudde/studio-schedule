@@ -2,6 +2,8 @@
   "nav": {
     "label": "Administration",
     "locations": "Locations",
+    "courseTypes": "Course types",
+    "staff": "Staff",
     "accounts": "Accounts"
   },
   "noAccess": {
@@ -28,6 +30,7 @@
     "errors": {
       "capacity": "Enter a whole number from 1 to 1000.",
       "location": "Please choose a location.",
+      "person": "This person no longer exists; pick another.",
       "duplicate": "This name is already taken."
     }
   },
@@ -93,5 +96,78 @@
   },
   "access": {
     "loadError": "Could not check whether you may see this page."
+  },
+  "courseTypes": {
+    "title": "Course types",
+    "description": "The kinds of classes the school offers, such as ballet or jazz. The schedule shows their names and descriptions and can be filtered by them.",
+    "table": "Course types",
+    "search": "Search course types",
+    "empty": "There are no course types yet.",
+    "name": "Name",
+    "details": "Description",
+    "add": "Add course type",
+    "addTitle": "Add a course type",
+    "editTitle": "Edit {{name}}",
+    "sheetDescription": "The name must differ from the other course types’ names, whatever the case of the letters.",
+    "editLabel": "Edit {{name}}",
+    "deleteLabel": "Delete {{name}}",
+    "added": "{{name}} has been added.",
+    "saved": "{{name}} has been saved.",
+    "deleted": "{{name}} has been deleted.",
+    "duplicate": "Another course type is already called “{{name}}”.",
+    "notFound": "This course type no longer exists.",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteDescription": "The course type is deleted for good. A course type that classes or lessons use cannot be deleted.",
+    "inUse": "{{name}} is used by classes or lessons, so it cannot be deleted."
+  },
+  "staff": {
+    "title": "Staff",
+    "description": "The instructors and accompanists of the school. Inactive staff disappear from the public lists and the schedule’s filters but stay on their lessons.",
+    "table": "Staff",
+    "search": "Search staff",
+    "empty": "There are no staff yet.",
+    "show": "Show",
+    "showAll": "All",
+    "showActive": "Active",
+    "showInactive": "Inactive",
+    "noActive": "There are no active staff.",
+    "noInactive": "There are no inactive staff.",
+    "displayName": "Display name",
+    "displayNameHint": "As the schedule shows it.",
+    "kind": "Role",
+    "kinds": {
+      "instructor": "Instructor",
+      "accompanist": "Accompanist"
+    },
+    "person": "Person",
+    "personHint": "The person record of this staff member, if they have one.",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "activeHint": "Inactive staff disappear from the public lists and the schedule’s filters but stay on their lessons.",
+    "add": "Add staff member",
+    "addTitle": "Add a staff member",
+    "editTitle": "Edit {{name}}",
+    "sheetDescription": "Instructors teach classes; accompanists play the music for them.",
+    "editLabel": "Edit {{name}}",
+    "deleteLabel": "Delete {{name}}",
+    "added": "{{name}} has been added.",
+    "saved": "{{name}} has been saved.",
+    "deleted": "{{name}} has been deleted.",
+    "notFound": "This staff member no longer exists.",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteDescription": "The staff member is deleted for good. Staff who teach classes or lessons cannot be deleted; deactivate them instead.",
+    "inUse": "{{name}} still teaches classes or lessons, so they cannot be deleted. Deactivate them instead: they leave the public lists but stay on their lessons."
+  },
+  "personField": {
+    "none": "No person",
+    "search": "Search by name or email",
+    "list": "Persons",
+    "searching": "Searching…",
+    "error": "Could not search the persons.",
+    "nobody": "There are no persons yet.",
+    "noMatches": "Nobody matches “{{query}}”.",
+    "more": "Showing the first {{count}} matches. Type more to narrow the list.",
+    "clear": "Remove the person"
   }
 }

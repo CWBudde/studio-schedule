@@ -11,6 +11,9 @@ import type {
   Schedule,
 } from '@/api/client';
 
+type PersonMatch = components['schemas']['PersonMatch'];
+type StaffEntry = components['schemas']['StaffEntry'];
+
 type Answer = { status?: number; body?: unknown; headers?: Record<string, string> };
 
 /** Request options as openapi-fetch receives them, e.g. { params: { query } }. */
@@ -94,6 +97,7 @@ export const ids = {
   staffAlex: id(21),
   staffSam: id(22),
   staffRiley: id(23),
+  staffQuinn: id(24),
   ballet: id(31),
   contemporary: id(32),
   jazz: id(33),
@@ -107,6 +111,9 @@ export const ids = {
   termPast: id(501),
   termAutumn: id(502),
   termSpring: id(503),
+  personAlex: id(341),
+  personMia: id(342),
+  personNoah: id(343),
 };
 
 export const locations = [
@@ -118,6 +125,36 @@ export const staff = [
   { id: ids.staffAlex, displayName: 'Alex Example' },
   { id: ids.staffRiley, displayName: 'Riley Sample' },
   { id: ids.staffSam, displayName: 'Sam Pianist' },
+];
+
+/** Fictional persons as GET /admin/persons finds them (ordered by family and given name). */
+export const persons: PersonMatch[] = [
+  {
+    id: ids.personAlex,
+    givenName: 'Alex',
+    familyName: 'Example',
+    email: 'alex.example@example.com',
+  },
+  { id: ids.personMia, givenName: 'Mia', familyName: 'Sample', email: 'mia.sample@example.org' },
+  { id: ids.personNoah, givenName: 'Noah', familyName: 'Sample' },
+];
+
+/**
+ * All staff as GET /admin/staff lists them for the office (ordered by
+ * display name): Alex linked to a person, a former instructor, and two
+ * without a person.
+ */
+export const staffEntries: StaffEntry[] = [
+  {
+    id: ids.staffAlex,
+    displayName: 'Alex Example',
+    kind: 'instructor',
+    person: persons[0],
+    active: true,
+  },
+  { id: ids.staffQuinn, displayName: 'Quinn Former', kind: 'instructor', active: false },
+  { id: ids.staffRiley, displayName: 'Riley Sample', kind: 'instructor', active: true },
+  { id: ids.staffSam, displayName: 'Sam Pianist', kind: 'accompanist', active: true },
 ];
 
 export const rooms = [
@@ -233,7 +270,7 @@ export const autumnClasses: Class[] = [
     termId: ids.termAutumn,
     courseTypeId: ids.jazz,
     roomId: ids.roomB,
-    instructorId: ids.staffRiley,
+    instructor: { id: ids.staffRiley, displayName: 'Riley Sample' },
     level: 'open',
     weekday: 0,
     startTime: '11:00',
@@ -245,8 +282,8 @@ export const autumnClasses: Class[] = [
     termId: ids.termAutumn,
     courseTypeId: ids.ballet,
     roomId: ids.roomA,
-    instructorId: ids.staffAlex,
-    accompanistId: ids.staffSam,
+    instructor: { id: ids.staffAlex, displayName: 'Alex Example' },
+    accompanist: { id: ids.staffSam, displayName: 'Sam Pianist' },
     level: 'beginner',
     weekday: 1,
     startTime: '18:00',
@@ -258,7 +295,7 @@ export const autumnClasses: Class[] = [
     termId: ids.termAutumn,
     courseTypeId: ids.contemporary,
     roomId: ids.roomB,
-    instructorId: ids.staffRiley,
+    instructor: { id: ids.staffRiley, displayName: 'Riley Sample' },
     level: 'intermediate',
     weekday: 2,
     startTime: '17:00',
@@ -274,7 +311,7 @@ export const springClasses: Class[] = [
     termId: ids.termSpring,
     courseTypeId: ids.ballet,
     roomId: ids.roomA,
-    instructorId: ids.staffAlex,
+    instructor: { id: ids.staffAlex, displayName: 'Alex Example' },
     level: 'advanced',
     weekday: 4,
     startTime: '19:15',

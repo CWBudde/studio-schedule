@@ -9,7 +9,6 @@ import {
   locationsQuery,
   publicSettingsQuery,
   roomsQuery,
-  staffQuery,
   termsQuery,
 } from '@/api/queries';
 import {
@@ -129,13 +128,12 @@ function TermClasses({ term }: { term: Term }) {
   const courseTypes = useQuery(courseTypesQuery);
   const rooms = useQuery(roomsQuery);
   const locations = useQuery(locationsQuery);
-  const staff = useQuery(staffQuery);
-  const queries = [classes, courseTypes, rooms, locations, staff];
+  const queries = [classes, courseTypes, rooms, locations];
 
   if (queries.some((q) => q.isError)) {
     return <TimetableError onRetry={() => retryFailed(queries)} />;
   }
-  if (!classes.data || !courseTypes.data || !rooms.data || !locations.data || !staff.data) {
+  if (!classes.data || !courseTypes.data || !rooms.data || !locations.data) {
     return <TimetableLoading />;
   }
   if (classes.data.length === 0) {
@@ -151,7 +149,6 @@ function TermClasses({ term }: { term: Term }) {
     courseTypes: new Map(courseTypes.data.map((x) => [x.id, x.name])),
     rooms: new Map(rooms.data.map((x) => [x.id, x])),
     locations: new Map(locations.data.map((x) => [x.id, x.name])),
-    staff: new Map(staff.data.map((x) => [x.id, x.displayName])),
   };
   return <WeekList classes={classes.data} catalogue={catalogue} />;
 }

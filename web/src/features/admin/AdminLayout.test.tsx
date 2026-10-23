@@ -53,6 +53,8 @@ function renderAdmin(at: string, { accounts }: { accounts?: () => ReactElement }
       homeRoute,
       adminRoute.addChildren([
         section('/locations', 'Locations section'),
+        section('/course-types', 'Course types section'),
+        section('/staff', 'Staff section'),
         section('/accounts', 'Accounts section', accounts),
       ]),
     ]),
@@ -87,7 +89,7 @@ describe('AdminLayout', () => {
     expect(screen.queryByText('Locations section')).not.toBeInTheDocument();
   });
 
-  it('shows the office the locations but not the accounts', async () => {
+  it('shows the office the catalogue sections but not the accounts', async () => {
     mockApiGet({ '/api/v1/auth/me': { body: meOffice } });
 
     renderAdmin('/admin/locations');
@@ -98,8 +100,28 @@ describe('AdminLayout', () => {
       '/admin/locations',
     );
     expect(nav.getByRole('link', { name: 'Locations' })).toHaveAttribute('aria-current', 'page');
+    expect(nav.getByRole('link', { name: 'Course types' })).toHaveAttribute(
+      'href',
+      '/admin/course-types',
+    );
+    expect(nav.getByRole('link', { name: 'Staff' })).toHaveAttribute('href', '/admin/staff');
     expect(nav.queryByRole('link', { name: 'Accounts' })).not.toBeInTheDocument();
     expect(screen.getByText('Locations section')).toBeInTheDocument();
+  });
+
+  it('opens the staff from the navigation', async () => {
+    mockApiGet({ '/api/v1/auth/me': { body: meOffice } });
+    const user = userEvent.setup();
+
+    const { router } = renderAdmin('/admin/locations');
+    await user.click((await sections()).getByRole('link', { name: 'Staff' }));
+
+    expect(await screen.findByText('Staff section')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/admin/staff');
+    expect((await sections()).getByRole('link', { name: 'Staff' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   });
 
   it('shows the admin every section and switches between them', async () => {
@@ -109,7 +131,12 @@ describe('AdminLayout', () => {
     const { router } = renderAdmin('/admin/locations');
 
     const nav = await sections();
-    expect(nav.getAllByRole('link').map((a) => a.textContent)).toEqual(['Locations', 'Accounts']);
+    expect(nav.getAllByRole('link').map((a) => a.textContent)).toEqual([
+      'Locations',
+      'Course types',
+      'Staff',
+      'Accounts',
+    ]);
     await user.click(nav.getByRole('link', { name: 'Accounts' }));
 
     expect(await screen.findByText('Accounts section')).toBeInTheDocument();
@@ -161,6 +188,8 @@ describe('AdminLayout', () => {
 
     const nav = within(await screen.findByRole('navigation', { name: 'Verwaltung' }));
     expect(nav.getByRole('link', { name: 'Standorte' })).toBeInTheDocument();
+    expect(nav.getByRole('link', { name: 'Kursarten' })).toBeInTheDocument();
+    expect(nav.getByRole('link', { name: 'Personal' })).toBeInTheDocument();
     expect(nav.getByRole('link', { name: 'Konten' })).toBeInTheDocument();
   });
 });

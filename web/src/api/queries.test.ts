@@ -5,6 +5,7 @@ import i18n from '@/i18n';
 import {
   accounts,
   family,
+  ids,
   meAdmin,
   meImpersonated,
   meMember,
@@ -12,31 +13,40 @@ import {
   mockApiGet,
   mockApiPost,
   mockApiPut,
+  persons,
   problem,
   schedule,
+  staffEntries,
   tooManyRequests,
 } from '@/test/mockApi';
 import {
   addDependentMutation,
+  allStaffQuery,
   ApiError,
   changePasswordMutation,
   confirmEmailChangeMutation,
   confirmEmailMutation,
+  courseTypesQuery,
+  createCourseTypeMutation,
+  deleteStaffMutation,
   familyQuery,
   impersonateMutation,
   listAccountsQuery,
   loginMutation,
   logoutMutation,
   meQuery,
+  personsQuery,
   removeDependentMutation,
   requestEmailChangeMutation,
   requestPasswordResetMutation,
   resetPasswordMutation,
   scheduleQuery,
+  staffQuery,
   stopImpersonationMutation,
   updateDependentMutation,
   updateLocaleMutation,
   updateMyPersonMutation,
+  updateStaffMutation,
 } from './queries';
 
 afterEach(() => {
@@ -183,6 +193,97 @@ describe('admin queries', () => {
     expect(post).toHaveBeenCalledWith('/api/v1/admin/accounts/{accountId}/impersonate', {
       params: { path: { accountId: meMember.accountId } },
     });
+  });
+});
+
+describe('catalogue administration', () => {
+  /** A client with the public and the office's catalogue lists cached. */
+  function catalogueClient() {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(staffQuery.queryKey, []);
+    queryClient.setQueryData(allStaffQuery.queryKey, staffEntries);
+    queryClient.setQueryData(courseTypesQuery.queryKey, []);
+    queryClient.setQueryData(scheduleQuery(range).queryKey, schedule);
+    return queryClient;
+  }
+
+  it('lists all staff, inactive ones included', async () => {
+    const get = mockApiGet({ '/api/v1/admin/staff': { body: { items: staffEntries } } });
+
+    expect(await new QueryClient().fetchQuery(allStaffQuery)).toEqual(staffEntries);
+    expect(get).toHaveBeenCalledWith('/api/v1/admin/staff', expect.anything());
+  });
+
+  it('searches the persons by the trimmed words and leaves an empty search out', async () => {
+    const get = mockApiGet({ '/api/v1/admin/persons': { body: { items: persons } } });
+    const queryClient = new QueryClient();
+
+    expect(await queryClient.fetchQuery(personsQuery('  mia sam '))).toEqual(persons);
+    await queryClient.fetchQuery(personsQuery(''));
+
+    expect(get).toHaveBeenCalledWith('/api/v1/admin/persons', {
+      params: { query: { q: 'mia sam' } },
+      signal: expect.anything(),
+    });
+    expect(get).toHaveBeenCalledWith('/api/v1/admin/persons', {
+      params: { query: {} },
+      signal: expect.anything(),
+    });
+  });
+
+  it('refreshes the public staff list, the office list and the schedule after a staff write', async () => {
+    const put = mockApiPut({
+      '/api/v1/staff/{staffId}': ({ body }) => ({
+        body: { id: ids.staffRiley, ...(body as object) },
+      }),
+    });
+    const queryClient = catalogueClient();
+    const body = { displayName: 'Riley Sample', kind: 'instructor' as const, active: false };
+
+    await new MutationObserver(queryClient, updateStaffMutation(queryClient)).mutate({
+      staffId: ids.staffRiley,
+      body,
+    });
+
+    expect(put).toHaveBeenCalledWith('/api/v1/staff/{staffId}', {
+      params: { path: { staffId: ids.staffRiley } },
+      body,
+    });
+    for (const key of [
+      staffQuery.queryKey,
+      allStaffQuery.queryKey,
+      scheduleQuery(range).queryKey,
+    ]) {
+      expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+    }
+  });
+
+  it('refreshes the course types after a course type write', async () => {
+    mockApiPost({
+      '/api/v1/course-types': { status: 201, body: { id: ids.jazz, name: 'Tap' } },
+    });
+    const queryClient = catalogueClient();
+
+    await new MutationObserver(queryClient, createCourseTypeMutation(queryClient)).mutate({
+      name: 'Tap',
+    });
+
+    expect(queryClient.getQueryState(courseTypesQuery.queryKey)?.isInvalidated).toBe(true);
+  });
+
+  it('keeps the lists when a staff member is still in use (409)', async () => {
+    mockApiDelete({
+      '/api/v1/staff/{staffId}': {
+        status: 409,
+        body: { status: 409, reason: 'in-use', detail: 'staff in use' },
+      },
+    });
+    const queryClient = catalogueClient();
+
+    await expect(
+      new MutationObserver(queryClient, deleteStaffMutation(queryClient)).mutate(ids.staffAlex),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(queryClient.getQueryState(allStaffQuery.queryKey)?.isInvalidated).toBe(false);
   });
 });
 

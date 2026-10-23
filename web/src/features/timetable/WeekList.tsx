@@ -10,12 +10,11 @@ import {
   weekdayName,
 } from './timetable';
 
-/** Names of the catalogue entries a class refers to, by ID. */
+/** Names of the catalogue entries a class refers to, by ID. Staff come with the class. */
 export type Catalogue = {
   courseTypes: Map<string, string>;
   rooms: Map<string, { name: string; locationId: string }>;
   locations: Map<string, string>;
-  staff: Map<string, string>;
 };
 
 /**
@@ -82,8 +81,8 @@ function ClassCard({
   const room = catalogue.rooms.get(c.roomId);
   const location = room && catalogue.locations.get(room.locationId);
   const place = room ? [room.name, location].filter(Boolean).join(' · ') : unknown;
-  const instructor = catalogue.staff.get(c.instructorId) ?? unknown;
-  const accompanist = c.accompanistId && catalogue.staff.get(c.accompanistId);
+  const instructor = c.instructor.displayName;
+  const accompanist = c.accompanist?.displayName;
   const time = `${c.startTime}–${endTime(c.startTime, c.durationMinutes)}`;
 
   return (

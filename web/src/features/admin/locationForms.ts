@@ -3,7 +3,9 @@ import type { Location, LocationData, Room, RoomData } from '@/api/queries';
 
 // Limits as in the API (LocationData, RoomData). Messages are keys of
 // `auth:form.errors` or `admin:form.errors` (see useAdminErrorText).
-const name = z.string().trim().min(1, 'required').max(100, 'tooLong');
+/** The name of a catalogue record: 1 to 100 characters. */
+export const catalogueName = z.string().trim().min(1, 'required').max(100, 'tooLong');
+const name = catalogueName;
 
 /** A location's form: an empty address means none. */
 export const locationSchema = z.object({

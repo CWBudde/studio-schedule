@@ -1,8 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MapPinPlus, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { MapPinPlus, Plus } from 'lucide-react';
 import { type ReactNode, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 import {
   deleteLocationMutation,
   deleteRoomMutation,
@@ -13,8 +12,9 @@ import {
 } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ConfirmDelete } from './crud/ConfirmDelete';
+import { DeleteDialog } from './crud/DeleteDialog';
 import { DataTable } from './crud/DataTable';
+import { RowActions } from './crud/RowActions';
 import { columnHelper } from './crud/table';
 import { LocationSheet, type LocationTarget } from './LocationSheet';
 import { RoomSheet, type RoomTarget } from './RoomSheet';
@@ -181,7 +181,32 @@ export function LocationsPage() {
         locations={locations.data ?? []}
         onClose={() => setRoomSheet(null)}
       />
-      <DeleteDialog target={deleting} onClose={() => setDeleting(null)} />
+      <DeleteDialog
+        target={deleting?.kind === 'location' ? deleting.location : null}
+        id={(l) => l.id}
+        mutation={deleteLocationMutation}
+        texts={({ name }) => ({
+          title: t('locations.deleteTitle', { name }),
+          description: t('locations.deleteDescription'),
+          inUse: t('locations.inUse', { name }),
+          notFound: t('locations.notFound'),
+          deleted: t('locations.deleted', { name }),
+        })}
+        onClose={() => setDeleting(null)}
+      />
+      <DeleteDialog
+        target={deleting?.kind === 'room' ? deleting.room : null}
+        id={(r) => r.id}
+        mutation={deleteRoomMutation}
+        texts={({ name, locationName }) => ({
+          title: t('rooms.deleteTitle', { name }),
+          description: t('rooms.deleteDescription', { location: locationName }),
+          inUse: t('rooms.inUse', { name }),
+          notFound: t('rooms.notFound'),
+          deleted: t('rooms.deleted', { name }),
+        })}
+        onClose={() => setDeleting(null)}
+      />
     </div>
   );
 }
@@ -220,95 +245,5 @@ function Section({
       </div>
       {children}
     </section>
-  );
-}
-
-function RowActions({
-  editLabel,
-  deleteLabel,
-  onEdit,
-  onDelete,
-}: {
-  editLabel: string;
-  deleteLabel: string;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const { t } = useTranslation('admin');
-  return (
-    <>
-      <Button variant="outline" size="sm" aria-label={editLabel} onClick={onEdit}>
-        <Pencil aria-hidden="true" />
-        <span className="hidden md:inline">{t('form.edit')}</span>
-      </Button>
-      <Button variant="outline" size="sm" aria-label={deleteLabel} onClick={onDelete}>
-        <Trash2 aria-hidden="true" />
-        <span className="hidden md:inline">{t('form.delete')}</span>
-      </Button>
-    </>
-  );
-}
-
-/** Asks before deleting a location or a room; says why when the API refuses. */
-function DeleteDialog({ target, onClose }: { target: DeleteTarget | null; onClose: () => void }) {
-  // Keep the texts while the dialog animates out.
-  const [shown, setShown] = useState(target);
-  if (target !== null && target !== shown) setShown(target);
-  if (!shown) return null;
-  return (
-    <DeleteConfirm
-      // A fresh mutation (without the last error) for every record.
-      key={shown.kind === 'location' ? shown.location.id : shown.room.id}
-      target={shown}
-      open={target !== null}
-      onClose={onClose}
-    />
-  );
-}
-
-function DeleteConfirm({
-  target,
-  open,
-  onClose,
-}: {
-  target: DeleteTarget;
-  open: boolean;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation('admin');
-  const queryClient = useQueryClient();
-  const deleteLocation = useMutation(deleteLocationMutation(queryClient));
-  const deleteRoom = useMutation(deleteRoomMutation(queryClient));
-  const mutation = target.kind === 'location' ? deleteLocation : deleteRoom;
-  const name = target.kind === 'location' ? target.location.name : target.room.name;
-  const onSuccess = () => {
-    toast.success(t(target.kind === 'location' ? 'locations.deleted' : 'rooms.deleted', { name }));
-    onClose();
-  };
-  const common = {
-    open,
-    pending: mutation.isPending,
-    error: mutation.error,
-    onCancel: onClose,
-  };
-
-  return target.kind === 'location' ? (
-    <ConfirmDelete
-      {...common}
-      title={t('locations.deleteTitle', { name })}
-      description={t('locations.deleteDescription')}
-      conflicts={{ 'in-use': t('locations.inUse', { name }) }}
-      messages={{ 404: t('locations.notFound') }}
-      onConfirm={() => deleteLocation.mutate(target.location.id, { onSuccess })}
-    />
-  ) : (
-    <ConfirmDelete
-      {...common}
-      title={t('rooms.deleteTitle', { name })}
-      description={t('rooms.deleteDescription', { location: target.room.locationName })}
-      conflicts={{ 'in-use': t('rooms.inUse', { name }) }}
-      messages={{ 404: t('rooms.notFound') }}
-      onConfirm={() => deleteRoom.mutate(target.room.id, { onSuccess })}
-    />
   );
 }

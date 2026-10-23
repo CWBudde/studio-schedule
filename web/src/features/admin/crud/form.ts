@@ -33,7 +33,7 @@ export function showServerErrors<V extends FieldValues>(
 }
 
 /** Validation messages of the admin forms, keys of `admin:form.errors`. */
-const adminErrors = ['capacity', 'location', 'duplicate'] as const;
+const adminErrors = ['capacity', 'location', 'person', 'duplicate'] as const;
 type AdminErrorKey = (typeof adminErrors)[number];
 const isAdminErrorKey = (key: unknown): key is AdminErrorKey =>
   adminErrors.includes(key as AdminErrorKey);

@@ -22,7 +22,9 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ScheduleRouteImport } from './routes/schedule'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
+import { Route as AdminCourseTypesRouteImport } from './routes/admin.course-types'
 import { Route as AdminLocationsRouteImport } from './routes/admin.locations'
+import { Route as AdminStaffRouteImport } from './routes/admin.staff'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -89,9 +91,19 @@ const AdminAccountsRoute = AdminAccountsRouteImport.update({
   path: '/accounts',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminCourseTypesRoute = AdminCourseTypesRouteImport.update({
+  id: '/course-types',
+  path: '/course-types',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminLocationsRoute = AdminLocationsRouteImport.update({
   id: '/locations',
   path: '/locations',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminStaffRoute = AdminStaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
   getParentRoute: () => AdminRoute,
 } as any)
 
@@ -108,7 +120,9 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/schedule': typeof ScheduleRoute
   '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/locations': typeof AdminLocationsRoute
+  '/admin/staff': typeof AdminStaffRoute
   '/admin/': typeof AdminIndexRoute
 }
 export interface FileRoutesByTo {
@@ -123,7 +137,9 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/schedule': typeof ScheduleRoute
   '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/locations': typeof AdminLocationsRoute
+  '/admin/staff': typeof AdminStaffRoute
   '/admin': typeof AdminIndexRoute
 }
 export interface FileRoutesById {
@@ -140,7 +156,9 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/schedule': typeof ScheduleRoute
   '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/locations': typeof AdminLocationsRoute
+  '/admin/staff': typeof AdminStaffRoute
   '/admin/': typeof AdminIndexRoute
 }
 export interface FileRouteTypes {
@@ -158,7 +176,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/schedule'
     | '/admin/accounts'
+    | '/admin/course-types'
     | '/admin/locations'
+    | '/admin/staff'
     | '/admin/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -173,7 +193,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/schedule'
     | '/admin/accounts'
+    | '/admin/course-types'
     | '/admin/locations'
+    | '/admin/staff'
     | '/admin'
   id:
     | '__root__'
@@ -189,7 +211,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/schedule'
     | '/admin/accounts'
+    | '/admin/course-types'
     | '/admin/locations'
+    | '/admin/staff'
     | '/admin/'
   fileRoutesById: FileRoutesById
 }
@@ -300,6 +324,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAccountsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/course-types': {
+      id: '/admin/course-types'
+      path: '/course-types'
+      fullPath: '/admin/course-types'
+      preLoaderRoute: typeof AdminCourseTypesRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/locations': {
       id: '/admin/locations'
       path: '/locations'
@@ -307,18 +338,29 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLocationsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/staff': {
+      id: '/admin/staff'
+      path: '/staff'
+      fullPath: '/admin/staff'
+      preLoaderRoute: typeof AdminStaffRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
 
 interface AdminRouteChildren {
   AdminAccountsRoute: typeof AdminAccountsRoute
+  AdminCourseTypesRoute: typeof AdminCourseTypesRoute
   AdminLocationsRoute: typeof AdminLocationsRoute
+  AdminStaffRoute: typeof AdminStaffRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAccountsRoute: AdminAccountsRoute,
+  AdminCourseTypesRoute: AdminCourseTypesRoute,
   AdminLocationsRoute: AdminLocationsRoute,
+  AdminStaffRoute: AdminStaffRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 

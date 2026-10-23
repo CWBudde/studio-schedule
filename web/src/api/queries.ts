@@ -450,15 +450,58 @@ export type LocationData = PostBody<'/api/v1/locations'>;
 /** The editable fields of a room (create and update). */
 export type RoomData = PostBody<'/api/v1/rooms'>;
 
+export type CourseType = components['schemas']['CourseType'];
+/** The editable fields of a course type (create and update). */
+export type CourseTypeData = PostBody<'/api/v1/course-types'>;
+/** A staff member as the office sees them: with the person link and the active flag. */
+export type StaffEntry = components['schemas']['StaffEntry'];
+/** The editable fields of a staff member (create and update); no `personId` means no person. */
+export type StaffData = PostBody<'/api/v1/staff'>;
+/** A person found by the office's person search. */
+export type PersonMatch = components['schemas']['PersonMatch'];
+
+/** Every staff member, inactive ones included, with their person link (office). */
+export const allStaffQuery = queryOptions({
+  queryKey: [...adminQueryKey, 'staff'],
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/admin/staff', { signal }))).items,
+});
+
 /**
- * After a write to the catalogue: the lists are asked again, and so is what
- * shows catalogue names (the schedule, lessons, classes).
+ * The persons whose name or email contains every word of `q` (office), at
+ * most 50, ordered by family and given name; an empty `q` matches everyone.
+ */
+export const personsQuery = (q: string) =>
+  queryOptions({
+    queryKey: [...adminQueryKey, 'persons', q.trim()],
+    queryFn: async ({ signal }) =>
+      (
+        await unwrap(
+          api.GET('/api/v1/admin/persons', {
+            params: { query: q.trim() ? { q: q.trim() } : {} },
+            signal,
+          }),
+        )
+      ).items,
+    staleTime: 30_000,
+  });
+
+/**
+ * After a write to the catalogue: the lists are asked again (the public ones
+ * feed the schedule's filters), and so is what shows catalogue names (the
+ * schedule, lessons, classes).
  */
 function refreshCatalogue(queryClient: QueryClient) {
   return Promise.all(
-    [locationsQuery.queryKey, roomsQuery.queryKey, scheduleQueryKey, ['lesson'], ['terms']].map(
-      (queryKey) => queryClient.invalidateQueries({ queryKey }),
-    ),
+    [
+      locationsQuery.queryKey,
+      roomsQuery.queryKey,
+      courseTypesQuery.queryKey,
+      staffQuery.queryKey,
+      allStaffQuery.queryKey,
+      scheduleQueryKey,
+      ['lesson'],
+      ['terms'],
+    ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
   );
 }
 
@@ -522,6 +565,71 @@ export const deleteRoomMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (roomId: string) =>
       expectOk(api.DELETE('/api/v1/rooms/{roomId}', { params: { path: { roomId } } })),
+    onSuccess: () => refreshCatalogue(queryClient),
+    onError: onCatalogueError(queryClient),
+  });
+
+/** Adds a course type (office); a name another one has (ignoring case) is a 409 `duplicate`. */
+export const createCourseTypeMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: CourseTypeData) => unwrap(api.POST('/api/v1/course-types', { body })),
+    onSuccess: () => refreshCatalogue(queryClient),
+    onError: onCatalogueError(queryClient),
+  });
+
+/** Replaces the name and description of a course type (office). */
+export const updateCourseTypeMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ courseTypeId, body }: { courseTypeId: string; body: CourseTypeData }) =>
+      unwrap(
+        api.PUT('/api/v1/course-types/{courseTypeId}', {
+          params: { path: { courseTypeId } },
+          body,
+        }),
+      ),
+    onSuccess: () => refreshCatalogue(queryClient),
+    onError: onCatalogueError(queryClient),
+  });
+
+/** Deletes a course type (office); one used by classes or lessons is a 409 `in-use`. */
+export const deleteCourseTypeMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (courseTypeId: string) =>
+      expectOk(
+        api.DELETE('/api/v1/course-types/{courseTypeId}', {
+          params: { path: { courseTypeId } },
+        }),
+      ),
+    onSuccess: () => refreshCatalogue(queryClient),
+    onError: onCatalogueError(queryClient),
+  });
+
+/** Adds a staff member (office); an unknown person is a 422 on `body.personId`. */
+export const createStaffMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: StaffData) => unwrap(api.POST('/api/v1/staff', { body })),
+    onSuccess: () => refreshCatalogue(queryClient),
+    onError: onCatalogueError(queryClient),
+  });
+
+/**
+ * Replaces the name, kind, person link and active flag of a staff member
+ * (office). Inactive staff leave the public staff list (and so the
+ * schedule's filters) but stay on their lessons.
+ */
+export const updateStaffMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ staffId, body }: { staffId: string; body: StaffData }) =>
+      unwrap(api.PUT('/api/v1/staff/{staffId}', { params: { path: { staffId } }, body })),
+    onSuccess: () => refreshCatalogue(queryClient),
+    onError: onCatalogueError(queryClient),
+  });
+
+/** Deletes a staff member (office); one that classes or lessons refer to is a 409 `in-use`. */
+export const deleteStaffMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (staffId: string) =>
+      expectOk(api.DELETE('/api/v1/staff/{staffId}', { params: { path: { staffId } } })),
     onSuccess: () => refreshCatalogue(queryClient),
     onError: onCatalogueError(queryClient),
   });

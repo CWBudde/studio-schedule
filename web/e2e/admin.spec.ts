@@ -130,3 +130,133 @@ test('a member has no access to the administration', async ({ page }) => {
     page.getByText('Only the office and administrators can see this page.'),
   ).toBeVisible();
 });
+
+/** Opens a section of the administration from its navigation. */
+async function openSection(page: Page, section: string, heading = section): Promise<void> {
+  await page
+    .getByRole('navigation', { name: 'Administration' })
+    .getByRole('link', { name: section })
+    .click();
+  await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
+}
+
+/** The options of the schedule's instructor filter, read from its open list. */
+async function instructorOptions(page: Page): Promise<string[]> {
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Schedule' })
+    .click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Schedule' })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Instructor' }).click();
+  const options = page.getByRole('option');
+  await expect(options.first()).toBeVisible();
+  const names = await options.allTextContents();
+  await page.keyboard.press('Escape');
+  await expect(options).toHaveCount(0);
+  return names;
+}
+
+test('the office adds, renames and deletes a course type', async ({ page }) => {
+  const office = await signInAs(page, 'Office');
+  await openAdministration(page, office);
+  await openSection(page, 'Course types');
+
+  await page.getByRole('button', { name: 'Add course type' }).click();
+  const add = page.getByRole('dialog', { name: 'Add a course type' });
+  await add.getByLabel('Name').fill('Swing Dance');
+  await add.getByLabel('Description (optional)').fill('Partner dancing to big band music.');
+  await add.getByRole('button', { name: 'Add course type' }).click();
+  await expect(add).toBeHidden();
+  await expect(page.getByText('Swing Dance has been added.')).toBeVisible();
+
+  // Names are unique ignoring case.
+  await page.getByRole('button', { name: 'Edit Swing Dance' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit Swing Dance' });
+  await expect(edit.getByLabel('Description (optional)')).toHaveValue(
+    'Partner dancing to big band music.',
+  );
+  await edit.getByLabel('Name').fill('tap');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(edit.getByRole('alert')).toHaveText('Another course type is already called “tap”.');
+  await edit.getByLabel('Name').fill('Lindy Hop');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(edit).toBeHidden();
+  await expect(page.getByText('Lindy Hop has been saved.')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Delete Lindy Hop' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Delete Lindy Hop?' })
+    .getByRole('button', { name: 'Delete' })
+    .click();
+  await expect(page.getByText('Lindy Hop has been deleted.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit Lindy Hop' })).toHaveCount(0);
+});
+
+test('deleting a course type that classes use says why it stays', async ({ page }) => {
+  const office = await signInAs(page, 'Office');
+  await openAdministration(page, office);
+  await openSection(page, 'Course types');
+
+  await page.getByRole('button', { name: 'Delete Classical Ballet' }).click();
+  const dialog = page.getByRole('alertdialog', { name: 'Delete Classical Ballet?' });
+  await dialog.getByRole('button', { name: 'Delete' }).click();
+  await expect(dialog.getByRole('alert')).toHaveText(
+    'Classical Ballet is used by classes or lessons, so it cannot be deleted.',
+  );
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('button', { name: 'Edit Classical Ballet' })).toBeVisible();
+});
+
+test('a deactivated instructor leaves the schedule filter', async ({ page }) => {
+  const office = await signInAs(page, 'Office');
+  expect(await instructorOptions(page)).toContain('Nina Tapworth');
+
+  await openAdministration(page, office);
+  await openSection(page, 'Staff');
+
+  // Staff who teach cannot be deleted; the dialog suggests deactivating them.
+  await page.getByRole('button', { name: 'Delete Nina Tapworth' }).click();
+  const dialog = page.getByRole('alertdialog', { name: 'Delete Nina Tapworth?' });
+  await dialog.getByRole('button', { name: 'Delete' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Deactivate them instead');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole('button', { name: 'Edit Nina Tapworth' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Edit Nina Tapworth' });
+  await expect(sheet.getByRole('combobox', { name: 'Role' })).toHaveText('Instructor');
+  await sheet.getByRole('switch', { name: 'Active' }).click();
+  await expect(sheet.getByRole('switch', { name: 'Active' })).not.toBeChecked();
+  await sheet.getByRole('button', { name: 'Save changes' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByText('Nina Tapworth has been saved.')).toBeVisible();
+
+  // The office still lists former staff.
+  await page.getByRole('radio', { name: 'Inactive' }).click();
+  await expect(page.getByRole('button', { name: 'Edit Nina Tapworth' })).toBeVisible();
+
+  const options = await instructorOptions(page);
+  expect(options).not.toContain('Nina Tapworth');
+  expect(options).toContain('Alina Starling');
+});
+
+test('the office links a staff member to a person', async ({ page }) => {
+  const office = await signInAs(page, 'Office');
+  await openAdministration(page, office);
+  await openSection(page, 'Staff');
+
+  await page.getByRole('button', { name: 'Edit Alina Starling' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Edit Alina Starling' });
+  const person = sheet.getByRole('combobox', { name: 'Person (optional)' });
+  await expect(person).toHaveText('Alina Starling');
+
+  await sheet.getByRole('button', { name: 'Remove the person' }).click();
+  await expect(person).toHaveText('No person');
+  await person.click();
+  await page.getByRole('combobox', { name: 'Search by name or email' }).fill('starling');
+  await page.getByRole('option', { name: /Alina Starling/ }).click();
+  await expect(person).toHaveText('Alina Starling');
+  await sheet.getByRole('button', { name: 'Save changes' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByText('Alina Starling has been saved.')).toBeVisible();
+});
