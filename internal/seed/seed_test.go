@@ -573,6 +573,24 @@ func TestLoadDemoRefusesStoreWithPersons(t *testing.T) {
 	}
 }
 
+func TestLoadDemoRefusesStoreWithLocations(t *testing.T) {
+	t.Parallel()
+
+	st := memory.New()
+	l := domain.Location{ID: domain.LocationID{1}, Name: "Existing Studio"}
+
+	err := st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return tx.Locations().Create(ctx, l)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := seed.LoadDemo(t.Context(), st); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("load into store with locations: want %v, got %v", domain.ErrConflict, err)
+	}
+}
+
 func validAll[T interface{ Validate() error }](t *testing.T, items []T) {
 	t.Helper()
 

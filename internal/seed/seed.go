@@ -135,8 +135,10 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 	return nil
 }
 
-// checkEmpty fails with domain.ErrConflict if the store has settings or
-// persons: demo data is never mixed into a store that is in use.
+// checkEmpty fails with domain.ErrConflict if the store has settings or any
+// root record: demo data is never mixed into a store that is in use. Every
+// other record references a person, location, staff member, course type or
+// term, so checking these covers the whole store.
 func checkEmpty(ctx context.Context, tx store.Tx) error {
 	switch _, err := tx.Settings().Get(ctx); {
 	case err == nil:
@@ -145,14 +147,31 @@ func checkEmpty(ctx context.Context, tx store.Tx) error {
 		return fmt.Errorf("settings: %w", err)
 	}
 
-	persons, err := tx.Persons().List(ctx)
-	if err != nil {
-		return fmt.Errorf("persons: %w", err)
+	roots := []struct {
+		name  string
+		count func() (int, error)
+	}{
+		{"persons", func() (int, error) { return count(tx.Persons().List(ctx)) }},
+		{"locations", func() (int, error) { return count(tx.Locations().List(ctx)) }},
+		{"staff", func() (int, error) { return count(tx.Staff().List(ctx)) }},
+		{"course types", func() (int, error) { return count(tx.CourseTypes().List(ctx)) }},
+		{"terms", func() (int, error) { return count(tx.Terms().List(ctx)) }},
 	}
 
-	if len(persons) > 0 {
-		return fmt.Errorf("%w: the store is not empty (persons exist)", domain.ErrConflict)
+	for _, r := range roots {
+		n, err := r.count()
+		if err != nil {
+			return fmt.Errorf("%s: %w", r.name, err)
+		}
+
+		if n > 0 {
+			return fmt.Errorf("%w: the store is not empty (%s exist)", domain.ErrConflict, r.name)
+		}
 	}
 
 	return nil
+}
+
+func count[T any](items []T, err error) (int, error) {
+	return len(items), err
 }
