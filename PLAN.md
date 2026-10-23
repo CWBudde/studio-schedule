@@ -114,7 +114,7 @@ in-memory store.
 
 Goal: a production-grade persistence layer with two interchangeable implementations.
 
-- [~] Typed IDs (UUIDv7) generated in Go via an injectable `IDs` source (2026-10-23) — generic
+- [ ] Typed IDs (UUIDv7) generated in Go via an injectable `IDs` source (2026-10-23) — generic
       `domain.ID[K]` with one alias per table, canonical-only parsing; `ids.Source` with `V7`
       (prod) and a deterministic `Sequence` (tests, seed); forbidigo bans `uuid.New*` outside
       `internal/ids`. partial: inject `ids.Source` via `app.Deps` (server: `V7`, demo seed:
