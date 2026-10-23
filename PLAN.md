@@ -131,14 +131,18 @@ Goal: a production-grade persistence layer with two interchangeable implementati
   - [ ] `Lessons().Lock(id)` as the domain-level serialisation primitive
 - [ ] `storetest` contract suite: CRUD, case-insensitive email uniqueness, ordering, NULL handling,
       rollback, conflict errors, lock semantics (concurrent bookings with N goroutines)
-- [ ] `store/memory`: one transaction mutex plus copy-on-write snapshot for rollback; passes the suite
+- [x] `store/memory`: one transaction mutex plus copy-on-write snapshot for rollback; passes the suite
+      (2026-10-23) — generic copy-on-write tables cloned on a transaction's first write; same keys,
+      references and delete restrictions as the schema; UTC/µs instants; core aggregates
 - [ ] `store/postgres`: pgx v5 + sqlc, goose migrations embedded, `migrate up/down/status` CLI
   - [ ] Enums instead of flag sets; citext; partial unique index for active bookings; CHECK
         constraints
   - [ ] READ COMMITTED with `SELECT … FOR UPDATE`, retry on 40001/40P01
   - [ ] Passes the contract suite (local: docker; CI: Postgres service container)
 - [ ] Config: env + flags (`DATABASE_URL`, `HTTP_ADDR`, `BASE_URL`, `SMTP_*`, `SESSION_*`), no
-      hard-coded secrets, `.env.example`
+      hard-coded secrets, `.env.example` (2026-10-23) — `internal/config`: flag > env > default,
+      validation, redacted logging; `serve --addr/--database-url/--base-url`. partial: `SMTP_*` and
+      `SESSION_*` arrive with the mailer and sessions in Phase 3
 - [ ] `seed` command plus a deterministic fictional demo dataset (school, rooms, staff, course types,
       a term with ~25 weekly classes, members with families)
 - [ ] `serve` chooses the store: `postgres` when `DATABASE_URL` is set, otherwise `memory` with demo
