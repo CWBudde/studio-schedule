@@ -154,15 +154,17 @@ Goal: a production-grade persistence layer with two interchangeable implementati
       hard-coded secrets, `.env.example` (2026-10-23) — `internal/config`: flag > env > default,
       validation, redacted logging; `serve --addr/--database-url/--base-url`. partial: `SMTP_*` and
       `SESSION_*` arrive with the mailer and sessions in Phase 3
-- [ ] `seed` command plus a deterministic fictional demo dataset (school, rooms, staff, course types,
+- [x] `seed` command plus a deterministic fictional demo dataset (school, rooms, staff, course types,
       a term with ~25 weekly classes, members with families) (2026-10-23) — `internal/seed`: 2
-      locations, 5 rooms, 9 staff, 9 course types, term 2026-09-01..2027-07-31 with 26 classes, 40
-      persons in families with guardians and accounts; `studio-schedule seed` loads it into an
-      empty, migrated database only. partial: visible in the demo with the Phase 2 schedule
+      locations, 5 rooms, 9 staff, 9 course types, a term with 26 classes, 3 one-off workshops,
+      40 persons in families with guardians and accounts; `studio-schedule seed` loads it into an
+      empty, migrated database only. Server and `seed` use the school year 2026/27; the web demo
+      builds it around the visit date (`seed.DemoAt`), so its schedule is never empty
 - [x] `serve` chooses the store: `postgres` when `DATABASE_URL` is set, otherwise `memory` with demo
       seed (with a warning log) (2026-10-23) — refuses to start while migrations are pending
 - [ ] Demo: the WASM build loads the full demo dataset; optional IndexedDB snapshot; "Reset demo"
-      button (2026-10-23) — `cmd/wasm` loads the full dataset via `seed.LoadDemo`. partial: IndexedDB
+      button (2026-10-23) — `cmd/wasm` loads the full dataset for the visit date via
+      `seed.LoadDemoAt`. partial: IndexedDB
       snapshot and "Reset demo" once the demo can change data (Phase 3)
 - [x] CI: Postgres contract tests job; sqlc generate drift check (2026-10-23) — `test-unit` runs
       the PostgreSQL contract tests via testcontainers on the runner's Docker; `test-format` runs
@@ -172,39 +174,49 @@ Goal: a production-grade persistence layer with two interchangeable implementati
 
 Goal: anyone can browse the published timetable. This is the first real demo value.
 
-- [ ] Catalogue services and endpoints (read): locations, rooms, staff, course types (2026-10-23)
-      — `listLocations`, `listRooms`, `listStaff` (active, no person), `listCourseTypes`. partial:
-      visible in the demo with the schedule UI
+- [x] Catalogue services and endpoints (read): locations, rooms, staff, course types (2026-10-23)
+      — `listLocations`, `listRooms`, `listStaff` (active, no person), `listCourseTypes`; the
+      schedule filters list locations, staff and course types
 - [ ] Terms and classes (read). Lesson generation from class templates for a date range: idempotent
       (unique `(class_id, starts_at)`), DST-correct, respects term and class validity ranges
       (2026-10-23) — `listTerms`, `listClasses`; `LessonGenerator` at school wall-clock time
       (`Date.At`), reads existing lessons first, inclusive term range (classes have no range of
-      their own, ADR 0003). partial: visible in the demo with the schedule UI
+      their own, ADR 0003); the demo's schedule shows the generated lessons. partial: `listTerms`
+      and `listClasses` have no UI yet (a term or class overview)
 - [ ] Release window: settings `release_weekday`, `release_time`, `release_weeks_ahead`; lessons
       beyond the window are invisible to members; special lessons can be published early; per-account
       visible-days override (used later) (2026-10-23) — server-only `ComputeReleaseWindow`: released
       through the release weekday N weeks after the last release (ADR 0003); one-off lessons and
-      workshops are published early. partial: visible in the demo with the schedule UI and the
-      countdown; the visible-days override with accounts (Phase 3)
+      workshops are published early; the schedule counts down to the next release (server clock)
+      and says up to which day classes are published. partial: the per-account visible-days
+      override with accounts (Phase 3)
 - [ ] Visibility rules: `public | members | hidden`; cancelled lessons stay visible with a status
       (2026-10-23) — guests see public, released lessons; invisible lessons are a 404 like unknown
-      ones. partial: visible in the demo with the schedule UI; members and staff with accounts
-      (Phase 3)
-- [ ] `GET /api/v1/schedule?from&to&location&instructor&courseType&level`, `GET /api/v1/lessons/{id}`
+      ones; the demo shows canceled lessons struck through with their status. partial: members
+      and staff with accounts (Phase 3)
+- [x] `GET /api/v1/schedule?from&to&location&instructor&courseType&level`, `GET /api/v1/lessons/{id}`
       (2026-10-23) — `getSchedule` (≤ 42 days, filters, `releasedUntil`/`nextReleaseAt`/`now`) and
-      `getLesson`; the WASM smoke test checks the demo schedule. partial: visible in the demo with
-      the schedule UI
-- [ ] OpenAPI schema for domain IDs: `type: string, format: uuid` (registered in `httpapi`, so
-      `domain` stays dependency-free), visible in the generated TS types
+      `getLesson`, used by the schedule page and the lesson sheet; the WASM smoke test checks the
+      demo schedule and that its workshops are published early
+- [x] OpenAPI schema for domain IDs: `type: string, format: uuid` (registered in `httpapi`, so
+      `domain` stays dependency-free), visible in the generated TS types (2026-10-23) — every ID
+      type is a registry alias of one inline UUID schema instead of per-field tags; tests walk the
+      spec and read `domain/id.go` so a new ID type cannot miss it
 - [x] Background job runner abstraction (Go ticker in server and WASM) for lesson generation
       (2026-10-23) — `internal/jobs`; both targets run every job once at startup, then
       `generate-lessons` hourly over a rolling horizon
-- [ ] UI: schedule list view (day groups), week grid, board view; filters; lesson detail sheet;
-      countdown to the next release; empty and error states; mobile-first
-- [ ] UI: i18n for all strings; date/time formatting in the school timezone (`Intl` with an explicit
-      `timeZone`)
+- [x] UI: schedule list view (day groups, the previous system's "board"), week grid; filters; lesson
+      detail sheet; countdown to the next release; empty and error states; mobile-first
+      (2026-10-23) — `/schedule` with all state in the URL (view, date, filters, open lesson),
+      14-day list and Monday–Sunday grid (one day per screen on phones), a note up to which day
+      classes are released, and a "next lessons" teaser on the home page
+- [x] UI: i18n for all strings; date/time formatting in the school timezone (`Intl` with an explicit
+      `timeZone`) (2026-10-23) — `lib/schoolTime.ts`; a `schedule` namespace in en and de with a
+      key-parity test; web tests run with `TZ=America/New_York` so browser-zone leaks fail
 - [ ] Tests: generation across DST changes, release window edge cases (Friday 17:59 / 18:00),
-      component tests, Playwright e2e against the demo build
+      component tests, Playwright e2e against the demo build (2026-10-23) — Go tests for DST
+      generation and the release edges; component tests for every schedule part. partial:
+      Playwright e2e against the demo build
 
 ## Phase 3 — Accounts, auth & administration basics
 
