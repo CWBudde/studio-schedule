@@ -16,26 +16,31 @@ import (
 // accessLevels pins the access level of every operation (ADR 0005). A new
 // operation must be added here, and changing a level is a visible diff.
 var accessLevels = map[string]string{
-	"getHealth":          "public",
-	"getPublicSettings":  "public",
-	"listLocations":      "public",
-	"listRooms":          "public",
-	"listStaff":          "public",
-	"listCourseTypes":    "public",
-	"listTerms":          "public",
-	"listClasses":        "public",
-	"getSchedule":        "public",
-	"getLesson":          "public",
-	"register":           "public",
-	"confirmEmail":       "public",
-	"login":              "public",
-	"logout":             "public",
-	"getMe":              "signedIn",
-	"stopImpersonation":  "signedIn",
-	"listDemoMailbox":    "public",
-	"listDemoLogins":     "public",
-	"listAccounts":       "admin",
-	"impersonateAccount": "admin",
+	"getHealth":            "public",
+	"getPublicSettings":    "public",
+	"listLocations":        "public",
+	"listRooms":            "public",
+	"listStaff":            "public",
+	"listCourseTypes":      "public",
+	"listTerms":            "public",
+	"listClasses":          "public",
+	"getSchedule":          "public",
+	"getLesson":            "public",
+	"register":             "public",
+	"confirmEmail":         "public",
+	"login":                "public",
+	"logout":               "public",
+	"getMe":                "signedIn",
+	"stopImpersonation":    "signedIn",
+	"requestPasswordReset": "public",
+	"resetPassword":        "public",
+	"changePassword":       "signedIn",
+	"requestEmailChange":   "signedIn",
+	"confirmEmailChange":   "public",
+	"listDemoMailbox":      "public",
+	"listDemoLogins":       "public",
+	"listAccounts":         "admin",
+	"impersonateAccount":   "admin",
 }
 
 // minRoles is the least role each access level admits.
@@ -125,6 +130,27 @@ func TestAccessMatrix(t *testing.T) {
 		logins[l.Role] = l
 	}
 
+	// One session per role, so the matrix stays below the login rate
+	// limit; calling logout ends it, and the next call signs in again.
+	sessions := map[domain.Role]*http.Cookie{}
+	session := func(role domain.Role) *http.Cookie {
+		if c, ok := sessions[role]; ok {
+			return c
+		}
+
+		l := logins[role]
+
+		res, out := a.call(http.MethodPost, "/api/v1/auth/login",
+			`{"email":"`+l.Email+`","password":"`+l.Password+`"}`)
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("login as %s: %d %s", role, res.StatusCode, out)
+		}
+
+		sessions[role] = sessionCookie(t, res)
+
+		return sessions[role]
+	}
+
 	const placeholder = "00000000-0000-7000-8000-00000000f001"
 
 	for _, op := range specOperations(t, a) {
@@ -145,18 +171,13 @@ func TestAccessMatrix(t *testing.T) {
 			var cookies []*http.Cookie
 
 			if role != domain.RoleGuest {
-				l := logins[role]
-
-				res, out := a.call(http.MethodPost, "/api/v1/auth/login",
-					`{"email":"`+l.Email+`","password":"`+l.Password+`"}`)
-				if res.StatusCode != http.StatusOK {
-					t.Fatalf("login as %s: %d %s", role, res.StatusCode, out)
-				}
-
-				cookies = append(cookies, sessionCookie(t, res))
+				cookies = append(cookies, session(role))
 			}
 
 			res, out := a.call(op.method, path, body, cookies...)
+			if op.id == "logout" {
+				delete(sessions, role)
+			}
 
 			switch {
 			case !role.AtLeast(minimum) && role == domain.RoleGuest:

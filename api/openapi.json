@@ -67,6 +67,28 @@
         ],
         "type": "object"
       },
+      "ChangePasswordInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "currentPassword": {
+            "description": "The current password.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "newPassword": {
+            "description": "New password, at least 8 characters.",
+            "maxLength": 256,
+            "minLength": 8,
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "type": "object"
+      },
       "Class": {
         "additionalProperties": false,
         "properties": {
@@ -166,6 +188,26 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "ConfirmEmailChangeInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "locale": {
+            "description": "Language of the notice to the old address (BCP 47); defaults to the school's.",
+            "maxLength": 35,
+            "type": "string"
+          },
+          "token": {
+            "description": "Token from the confirmation link.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
         ],
         "type": "object"
       },
@@ -889,6 +931,75 @@
         ],
         "type": "object"
       },
+      "RequestEmailChangeInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "locale": {
+            "description": "Language of the mail (BCP 47), e.g. de; defaults to the school's.",
+            "maxLength": 35,
+            "type": "string"
+          },
+          "newEmail": {
+            "description": "The new email address.",
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "password": {
+            "description": "The account's password.",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "password",
+          "newEmail"
+        ],
+        "type": "object"
+      },
+      "RequestPasswordResetInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "Email address of the account.",
+            "maxLength": 254,
+            "minLength": 1,
+            "type": "string"
+          },
+          "locale": {
+            "description": "Language of the mail (BCP 47), e.g. de; defaults to the school's.",
+            "maxLength": 35,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
+      "ResetPasswordInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "description": "New password, at least 8 characters.",
+            "maxLength": 256,
+            "minLength": 8,
+            "type": "string"
+          },
+          "token": {
+            "description": "Token from the reset link.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ],
+        "type": "object"
+      },
       "Room": {
         "additionalProperties": false,
         "properties": {
@@ -1217,6 +1328,17 @@
       "post": {
         "description": "Confirms the email address with the token from the confirmation link and the account's password, and signs in. An unknown, used or expired link is a 410.",
         "operationId": "confirmEmail",
+        "parameters": [
+          {
+            "description": "Session cookie, if any; it ends on success.",
+            "in": "cookie",
+            "name": "studio_session",
+            "schema": {
+              "description": "Session cookie, if any; it ends on success.",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1257,6 +1379,78 @@
           }
         },
         "summary": "Confirm the email address",
+        "tags": [
+          "auth"
+        ],
+        "x-access": "public"
+      }
+    },
+    "/api/v1/auth/email": {
+      "post": {
+        "description": "Checks the password (a wrong one is a 422 on body.password) and mails a confirmation link to the new address; the account keeps its address until the link is used. The answer is the same if the new address already has an account (then no mail is sent). Refused (403) while an admin is signed in as the account.",
+        "operationId": "requestEmailChange",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestEmailChangeInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Request an email change",
+        "tags": [
+          "auth"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/auth/email/confirm": {
+      "post": {
+        "description": "Moves the account to the new address with the token from the link and mails a notice to the old address. An unknown, used or expired link is a 410; an address taken in the meantime is a 409.",
+        "operationId": "confirmEmailChange",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmEmailChangeInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Confirm a new email address",
         "tags": [
           "auth"
         ],
@@ -1305,8 +1499,19 @@
     },
     "/api/v1/auth/login": {
       "post": {
-        "description": "Signs in with email and password and sets the session cookie. A wrong email or password is a 401; a correct password for an unconfirmed email is a 403.",
+        "description": "Signs in with email and password and sets the session cookie. A wrong email or password is a 401; a correct password for an unconfirmed email is a 403. Too many attempts per client or wrong passwords per email are a 429 with Retry-After.",
         "operationId": "login",
+        "parameters": [
+          {
+            "description": "Session cookie, if any; it ends on success.",
+            "in": "cookie",
+            "name": "studio_session",
+            "schema": {
+              "description": "Session cookie, if any; it ends on success.",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1430,9 +1635,117 @@
         "x-access": "signedIn"
       }
     },
+    "/api/v1/auth/password": {
+      "post": {
+        "description": "Replaces the password after checking the current one (a wrong one is a 422 on body.currentPassword) and ends every other session of the account. Refused (403) while an admin is signed in as the account.",
+        "operationId": "changePassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Change the password",
+        "tags": [
+          "auth"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/auth/password-reset": {
+      "post": {
+        "description": "Mails a link to set a new password to the address if it belongs to an account that may sign in. The answer is the same for every address. Too many mail requests per client are a 429 with Retry-After.",
+        "operationId": "requestPasswordReset",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestPasswordResetInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Request a password-reset link",
+        "tags": [
+          "auth"
+        ],
+        "x-access": "public"
+      }
+    },
+    "/api/v1/auth/password-reset/confirm": {
+      "post": {
+        "description": "Sets the password with the token from the reset link and ends every session of the account; it does not sign in. An unknown, used or expired link is a 410.",
+        "operationId": "resetPassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Set a new password with a reset link",
+        "tags": [
+          "auth"
+        ],
+        "x-access": "public"
+      }
+    },
     "/api/v1/auth/register": {
       "post": {
-        "description": "Creates a member account and mails a confirmation link to the email address. The answer is the same whether the address is new or already registered.",
+        "description": "Creates a member account and mails a confirmation link to the email address. The answer is the same whether the address is new or already registered. Too many mail requests per client are a 429 with Retry-After.",
         "operationId": "register",
         "requestBody": {
           "content": {

@@ -64,6 +64,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request an email change
+         * @description Checks the password (a wrong one is a 422 on body.password) and mails a confirmation link to the new address; the account keeps its address until the link is used. The answer is the same if the new address already has an account (then no mail is sent). Refused (403) while an admin is signed in as the account.
+         */
+        post: operations["requestEmailChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/email/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a new email address
+         * @description Moves the account to the new address with the token from the link and mails a notice to the old address. An unknown, used or expired link is a 410; an address taken in the meantime is a 409.
+         */
+        post: operations["confirmEmailChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/impersonation/stop": {
         parameters: {
             query?: never;
@@ -95,7 +135,7 @@ export interface paths {
         put?: never;
         /**
          * Sign in
-         * @description Signs in with email and password and sets the session cookie. A wrong email or password is a 401; a correct password for an unconfirmed email is a 403.
+         * @description Signs in with email and password and sets the session cookie. A wrong email or password is a 401; a correct password for an unconfirmed email is a 403. Too many attempts per client or wrong passwords per email are a 429 with Retry-After.
          */
         post: operations["login"];
         delete?: never;
@@ -144,6 +184,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the password
+         * @description Replaces the password after checking the current one (a wrong one is a 422 on body.currentPassword) and ends every other session of the account. Refused (403) while an admin is signed in as the account.
+         */
+        post: operations["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a password-reset link
+         * @description Mails a link to set a new password to the address if it belongs to an account that may sign in. The answer is the same for every address. Too many mail requests per client are a 429 with Retry-After.
+         */
+        post: operations["requestPasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a new password with a reset link
+         * @description Sets the password with the token from the reset link and ends every session of the account; it does not sign in. An unknown, used or expired link is a 410.
+         */
+        post: operations["resetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/register": {
         parameters: {
             query?: never;
@@ -155,7 +255,7 @@ export interface paths {
         put?: never;
         /**
          * Register an account
-         * @description Creates a member account and mails a confirmation link to the email address. The answer is the same whether the address is new or already registered.
+         * @description Creates a member account and mails a confirmation link to the email address. The answer is the same whether the address is new or already registered. Too many mail requests per client are a 429 with Retry-After.
          */
         post: operations["register"];
         delete?: never;
@@ -434,6 +534,12 @@ export interface components {
             /** @description Accounts ordered by email. */
             items: components["schemas"]["AccountEntry"][];
         };
+        ChangePasswordInputBody: {
+            /** @description The current password. */
+            currentPassword: string;
+            /** @description New password, at least 8 characters. */
+            newPassword: string;
+        };
         Class: {
             /**
              * Format: uuid
@@ -494,6 +600,12 @@ export interface components {
         ClassList: {
             /** @description Classes ordered by weekday (Sunday first) and start time. */
             items: components["schemas"]["Class"][];
+        };
+        ConfirmEmailChangeInputBody: {
+            /** @description Language of the notice to the old address (BCP 47); defaults to the school's. */
+            locale?: string;
+            /** @description Token from the confirmation link. */
+            token: string;
         };
         ConfirmEmailInputBody: {
             /** @description The account's password. */
@@ -818,6 +930,29 @@ export interface components {
             /** @description Password, at least 8 characters. */
             password: string;
         };
+        RequestEmailChangeInputBody: {
+            /** @description Language of the mail (BCP 47), e.g. de; defaults to the school's. */
+            locale?: string;
+            /**
+             * Format: email
+             * @description The new email address.
+             */
+            newEmail: string;
+            /** @description The account's password. */
+            password: string;
+        };
+        RequestPasswordResetInputBody: {
+            /** @description Email address of the account. */
+            email: string;
+            /** @description Language of the mail (BCP 47), e.g. de; defaults to the school's. */
+            locale?: string;
+        };
+        ResetPasswordInputBody: {
+            /** @description New password, at least 8 characters. */
+            password: string;
+            /** @description Token from the reset link. */
+            token: string;
+        };
         Room: {
             /**
              * Format: int64
@@ -1004,7 +1139,10 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                /** @description Session cookie, if any; it ends on success. */
+                studio_session?: string;
+            };
         };
         requestBody: {
             content: {
@@ -1021,6 +1159,68 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Me"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    requestEmailChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestEmailChangeInputBody"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    confirmEmailChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmEmailChangeInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -1068,7 +1268,10 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                /** @description Session cookie, if any; it ends on success. */
+                studio_session?: string;
+            };
         };
         requestBody: {
             content: {
@@ -1145,6 +1348,99 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Me"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    requestPasswordReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestPasswordResetInputBody"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    resetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

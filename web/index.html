@@ -10,17 +10,9 @@
     />
     <meta name="theme-color" content="#9f1d5a" />
     <title>Studio Schedule</title>
-    <script>
-      // Follow the OS colour scheme before first paint to avoid a flash.
-      (function () {
-        var mq = window.matchMedia('(prefers-color-scheme: dark)');
-        var apply = function () {
-          document.documentElement.classList.toggle('dark', mq.matches);
-        };
-        apply();
-        mq.addEventListener('change', apply);
-      })();
-    </script>
+    <!-- A file, not inline, so the Content-Security-Policy needs no 'unsafe-inline'. Classic
+         (render-blocking) script: it sets the theme class before first paint. -->
+    <script src="%BASE_URL%theme.js"></script>
   </head>
   <body>
     <div id="root"></div>

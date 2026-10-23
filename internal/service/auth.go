@@ -1,13 +1,11 @@
 package service
 
 import (
-	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -157,11 +155,6 @@ func (s *AuthService) Register(ctx context.Context, r Registration) error {
 	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		now := s.clock.Now()
 
-		settings, err := tx.Settings().Get(ctx)
-		if err != nil {
-			return fmt.Errorf("school settings: %w", err)
-		}
-
 		acc, err := tx.Accounts().GetByEmail(ctx, r.Email)
 
 		switch {
@@ -187,7 +180,7 @@ func (s *AuthService) Register(ctx context.Context, r Registration) error {
 			return err
 		}
 
-		return s.sendConfirmation(ctx, tx, settings, acc, r, token, now)
+		return s.sendConfirmation(ctx, tx, acc, r, token)
 	})
 	if err != nil {
 		return fmt.Errorf("register: %w", err)
@@ -255,38 +248,12 @@ func (s *AuthService) renewPending(ctx context.Context, tx store.Tx, acc domain.
 // sendConfirmation replaces the account's confirmation links with a new one
 // and writes the mail to the outbox.
 func (s *AuthService) sendConfirmation(
-	ctx context.Context, tx store.Tx, settings domain.Settings, acc domain.Account, r Registration,
-	token string, now time.Time,
+	ctx context.Context, tx store.Tx, acc domain.Account, r Registration, token string,
 ) error {
-	if err := tx.AccountTokens().DeleteByAccount(ctx, acc.ID, domain.TokenConfirmEmail); err != nil {
-		return err
-	}
-
-	t := domain.AccountToken{
-		Hash: domain.HashToken(token), AccountID: acc.ID, Purpose: domain.TokenConfirmEmail,
-		Email: acc.Email, CreatedAt: now, ExpiresAt: now.Add(ConfirmTokenTTL),
-	}
-	if err := t.Validate(); err != nil {
-		return err
-	}
-
-	if err := tx.AccountTokens().Create(ctx, t); err != nil {
-		return err
-	}
-
-	rendered, err := s.mails.Render(cmp.Or(r.Locale, settings.DefaultLocale), mail.TemplateConfirmEmail, mail.ConfirmEmailData{
-		SchoolName:   settings.SchoolName,
-		GivenName:    r.GivenName,
-		Link:         s.appURL + "confirm?token=" + url.QueryEscape(token),
-		ExpiresHours: int(ConfirmTokenTTL / time.Hour),
+	return s.sendLink(ctx, tx, acc, token, linkMail{
+		purpose: domain.TokenConfirmEmail, to: acc.Email, ttl: ConfirmTokenTTL,
+		template: mail.TemplateConfirmEmail, route: "confirm", locale: r.Locale,
 	})
-	if err != nil {
-		// A misconfiguration (school name, app URL), not the user's input:
-		// %v keeps domain.ErrValidation out, so the client gets a 500.
-		return fmt.Errorf("render confirmation mail: %v", err) //nolint:errorlint // see above
-	}
-
-	return enqueueMail(ctx, tx, s.ids, now, acc.Email, mail.TemplateConfirmEmail, rendered)
 }
 
 // Confirm confirms the email of the account a confirmation link was sent
@@ -347,18 +314,9 @@ func (s *AuthService) Confirm(ctx context.Context, token, password string) (Sign
 func (s *AuthService) tokenAccount(
 	ctx context.Context, tx store.Tx, token string,
 ) (domain.Account, domain.Credential, error) {
-	t, err := tx.AccountTokens().Get(ctx, domain.HashToken(token))
-	if err != nil {
-		return domain.Account{}, domain.Credential{}, mapTokenErr(err)
-	}
-
-	acc, err := tx.Accounts().Get(ctx, t.AccountID)
+	_, acc, err := s.linkToken(ctx, tx, token, domain.TokenConfirmEmail)
 	if err != nil {
 		return domain.Account{}, domain.Credential{}, err
-	}
-
-	if t.Purpose != domain.TokenConfirmEmail || !s.clock.Now().Before(t.ExpiresAt) || t.Email != acc.Email {
-		return domain.Account{}, domain.Credential{}, ErrInvalidToken
 	}
 
 	cred, err := tx.Credentials().Get(ctx, acc.ID)

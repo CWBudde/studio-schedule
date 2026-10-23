@@ -1,0 +1,9 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+The email address of your account at {{.SchoolName}} was changed to
+{{.NewEmail}}. From now on, sign in with that address.
+
+If this was not you, contact {{.SchoolName}} right away.
+
+Kind regards,
+{{.SchoolName}}

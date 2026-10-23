@@ -127,10 +127,10 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		AppURL:  appURL(cfg),
 		Mailer:  mailer,
 		Demo:    demo,
-		// Plain HTTP only for local development, where BASE_URL is unset or
-		// http://; browsers drop Secure cookies there.
-		InsecureCookies: !isHTTPS(cfg.BaseURL),
+
+		TrustedProxies: cfg.TrustedProxies,
 	}
+	setTransportSecurity(&deps, cfg.BaseURL)
 	if !demo && !isHTTPS(cfg.BaseURL) {
 		logger.Warn("BASE_URL is not an https:// origin: mail links point to "+deps.AppURL+
 			" and session cookies are not Secure; only acceptable for local development",
@@ -185,6 +185,16 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	logger.Info("stopped")
 
 	return nil
+}
+
+// setTransportSecurity sets Secure session cookies and HSTS when BASE_URL is
+// https. Plain HTTP is only for local development, where BASE_URL is unset
+// or http://: browsers drop Secure cookies there, and HSTS must not pin the
+// host to HTTPS.
+func setTransportSecurity(deps *app.Deps, baseURL string) {
+	https := isHTTPS(baseURL)
+	deps.InsecureCookies = !https
+	deps.HSTS = https
 }
 
 // isHTTPS reports whether the validated BASE_URL uses https.

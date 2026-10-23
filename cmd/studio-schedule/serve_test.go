@@ -92,3 +92,22 @@ func TestIsHTTPS(t *testing.T) {
 		}
 	}
 }
+
+func TestSetTransportSecurity(t *testing.T) {
+	t.Parallel()
+
+	for baseURL, https := range map[string]bool{
+		"":                            false,
+		"http://localhost:8080":       false,
+		"https://school.example.test": true,
+	} {
+		var deps app.Deps
+
+		setTransportSecurity(&deps, baseURL)
+
+		if deps.InsecureCookies == https || deps.HSTS != https {
+			t.Errorf("BASE_URL %q: InsecureCookies = %v, HSTS = %v; want %v, %v",
+				baseURL, deps.InsecureCookies, deps.HSTS, !https, https)
+		}
+	}
+}

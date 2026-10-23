@@ -23,7 +23,8 @@ func registerAuth(api huma.API, h *handlers) {
 		Path:        BasePath + "/auth/register",
 		Summary:     "Register an account",
 		Description: "Creates a member account and mails a confirmation link to the email address. " +
-			"The answer is the same whether the address is new or already registered.",
+			"The answer is the same whether the address is new or already registered. Too many mail " +
+			"requests per client are a 429 with Retry-After.",
 		Tags:          []string{"auth"},
 		DefaultStatus: http.StatusAccepted,
 	}, h.register)
@@ -44,7 +45,8 @@ func registerAuth(api huma.API, h *handlers) {
 		Path:        BasePath + "/auth/login",
 		Summary:     "Sign in",
 		Description: "Signs in with email and password and sets the session cookie. A wrong email or " +
-			"password is a 401; a correct password for an unconfirmed email is a 403.",
+			"password is a 401; a correct password for an unconfirmed email is a 403. Too many attempts " +
+			"per client or wrong passwords per email are a 429 with Retry-After.",
 		Tags: []string{"auth"},
 	}, h.login)
 
@@ -167,6 +169,10 @@ type RegisterInput struct {
 }
 
 func (h *handlers) register(ctx context.Context, in *RegisterInput) (*struct{}, error) {
+	if err := allow(h.deps.RateLimits.Mails, clientIP(ctx)); err != nil {
+		return nil, err
+	}
+
 	err := h.deps.Auth.Register(ctx, service.Registration{
 		GivenName: in.Body.GivenName, FamilyName: in.Body.FamilyName,
 		Email: in.Body.Email, Password: in.Body.Password, Locale: in.Body.Locale,
@@ -250,10 +256,26 @@ func (h *handlers) confirmEmail(ctx context.Context, in *ConfirmEmailInput) (*Si
 }
 
 func (h *handlers) login(ctx context.Context, in *LoginInput) (*SignedInOutput, error) {
+	limits, email := h.deps.RateLimits, emailKey(in.Body.Email)
+
+	if err := allow(limits.Logins, clientIP(ctx)); err != nil {
+		return nil, err
+	}
+
+	if err := notBlocked(limits.PasswordFailures, email); err != nil {
+		return nil, err
+	}
+
 	s, err := h.deps.Auth.Login(ctx, in.Body.Email, in.Body.Password)
+	if errors.Is(err, service.ErrInvalidCredentials) {
+		record(limits.PasswordFailures, email)
+	}
+
 	if err != nil {
 		return nil, h.authError(ctx, err)
 	}
+
+	forget(limits.PasswordFailures, email)
 
 	h.endPrevious(ctx, in.Session)
 
@@ -278,8 +300,9 @@ func (h *handlers) endPrevious(ctx context.Context, token string) {
 	}
 }
 
-// authError maps the errors of login, confirmEmail and impersonation; their
-// messages are meant for the user.
+// authError maps the errors of login, confirmEmail, impersonation and the
+// credential changes; their messages are meant for the user. An error that
+// is an HTTP error already passes unchanged.
 func (h *handlers) authError(ctx context.Context, err error) error {
 	switch {
 	case errors.Is(err, service.ErrInvalidCredentials):
@@ -294,6 +317,14 @@ func (h *handlers) authError(ctx context.Context, err error) error {
 		return huma.Error409Conflict("the account is disabled or not confirmed")
 	case errors.Is(err, service.ErrNotImpersonating):
 		return huma.Error409Conflict("not signed in as another account")
+	case errors.Is(err, service.ErrImpersonating):
+		return huma.Error403Forbidden("not while signed in as another account")
+	case errors.Is(err, service.ErrEmailTaken):
+		return huma.Error409Conflict("the email address belongs to another account")
+	case errors.Is(err, service.ErrSameEmail):
+		return huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
+			Message: "this is the account's email address already", Location: "body.newEmail",
+		})
 	default:
 		return h.toHTTPError(ctx, err)
 	}

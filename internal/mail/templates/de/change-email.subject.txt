@@ -1,0 +1,1 @@
+Bestätige deine neue E-Mail-Adresse für {{.SchoolName}}

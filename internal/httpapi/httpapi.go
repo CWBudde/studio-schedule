@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/netip"
+	"sync"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -43,6 +45,12 @@ type Deps struct {
 	// the list of DemoLogins.
 	Demo       bool
 	DemoLogins []DemoLogin
+	// TrustedProxies are the reverse proxies whose X-Forwarded-For entries
+	// name the client (clientip.From); empty: the connection's address.
+	TrustedProxies []netip.Prefix
+	// RateLimits limit logins and mail-sending requests; the zero value
+	// imposes no limits.
+	RateLimits RateLimits
 }
 
 // NewConfig returns the Huma configuration for the API: OpenAPI document at
@@ -68,7 +76,7 @@ func Register(api huma.API, deps Deps) {
 
 	// Before any operation: Huma applies the middlewares registered so far.
 	// The session middleware resolves the principal that access checks.
-	api.UseMiddleware(h.sessionMiddleware(api), h.accessMiddleware(api))
+	api.UseMiddleware(h.clientIPMiddleware, h.sessionMiddleware(api), h.accessMiddleware(api))
 
 	registerSystem(api, h)
 	registerSettings(api, h)
@@ -76,12 +84,15 @@ func Register(api huma.API, deps Deps) {
 	registerTimetable(api, h)
 	registerSchedule(api, h)
 	registerAuth(api, h)
+	registerCredentials(api, h)
 	registerDemo(api, h)
 	registerAdmin(api, h)
 }
 
 type handlers struct {
 	deps Deps
+	// untrustedProxy warns once of X-Forwarded-For without TRUSTED_PROXIES.
+	untrustedProxy sync.Once
 }
 
 // toHTTPError maps domain errors to RFC 9457 problem responses. Unknown

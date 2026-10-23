@@ -1,0 +1,6 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>die E-Mail-Adresse deines Kontos bei {{.SchoolName}} wurde auf <strong>{{.NewEmail}}</strong> geändert. Nutze ab jetzt diese Adresse zum Anmelden.</p>
+<p>Falls du das nicht warst, melde dich bitte sofort bei {{.SchoolName}}.</p>
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

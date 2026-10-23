@@ -1,0 +1,9 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+die E-Mail-Adresse deines Kontos bei {{.SchoolName}} wurde auf
+{{.NewEmail}} geändert. Nutze ab jetzt diese Adresse zum Anmelden.
+
+Falls du das nicht warst, melde dich bitte sofort bei {{.SchoolName}}.
+
+Viele Grüße
+{{.SchoolName}}

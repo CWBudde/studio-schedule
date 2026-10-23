@@ -1,0 +1,13 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+Please confirm this address as the new email address of your account at
+{{.SchoolName}} by opening this link:
+
+{{.Link}}
+
+The link is valid for {{if eq .ExpiresHours 1}}1 hour{{else}}{{.ExpiresHours}} hours{{end}}.
+
+If you did not ask for this, ignore this email; nothing changes.
+
+Kind regards,
+{{.SchoolName}}

@@ -27,12 +27,38 @@ func newRenderer(t *testing.T) *mail.Renderer {
 	return r
 }
 
-func confirmData() mail.ConfirmEmailData {
-	return mail.ConfirmEmailData{
+func confirmData() mail.LinkData {
+	return mail.LinkData{
 		SchoolName:   "Studio Example",
 		GivenName:    "Anna",
 		Link:         "https://schedule.example.org/confirm-email?token=abc123",
 		ExpiresHours: 24,
+	}
+}
+
+func resetData() mail.LinkData {
+	return mail.LinkData{
+		SchoolName:   "Studio Example",
+		GivenName:    "Anna",
+		Link:         "https://schedule.example.org/reset-password?token=def456",
+		ExpiresHours: 1,
+	}
+}
+
+func changeEmailData() mail.LinkData {
+	return mail.LinkData{
+		SchoolName:   "Studio Example",
+		GivenName:    "Anna",
+		Link:         "https://schedule.example.org/change-email?token=ghi789",
+		ExpiresHours: 24,
+	}
+}
+
+func emailChangedData() mail.EmailChangedData {
+	return mail.EmailChangedData{
+		SchoolName: "Studio Example",
+		GivenName:  "Anna",
+		NewEmail:   "anna.new@example.org",
 	}
 }
 
@@ -64,24 +90,157 @@ func golden(t *testing.T, name, got string) {
 	}
 }
 
-func TestRenderConfirmEmailGolden(t *testing.T) {
+func TestRenderGolden(t *testing.T) {
+	t.Parallel()
+
+	r := newRenderer(t)
+
+	tests := []struct {
+		name string
+		data any
+	}{
+		{mail.TemplateConfirmEmail, confirmData()},
+		{mail.TemplateResetPassword, resetData()},
+		{mail.TemplateChangeEmail, changeEmailData()},
+		{mail.TemplateEmailChanged, emailChangedData()},
+	}
+
+	for _, tt := range tests {
+		for _, locale := range []string{"en", "de"} {
+			t.Run(tt.name+"/"+locale, func(t *testing.T) {
+				t.Parallel()
+
+				got, err := r.Render(locale, tt.name, tt.data)
+				if err != nil {
+					t.Fatalf("Render: %v", err)
+				}
+
+				golden(t, locale+"/"+tt.name+".subject.golden", got.Subject+"\n")
+				golden(t, locale+"/"+tt.name+".txt.golden", got.Text)
+				golden(t, locale+"/"+tt.name+".html.golden", got.HTML)
+			})
+		}
+	}
+}
+
+// TestRenderAccountMailsContent checks the essential statements of the
+// password and email change mails in both parts and both locales.
+func TestRenderAccountMailsContent(t *testing.T) {
+	t.Parallel()
+
+	r := newRenderer(t)
+
+	tests := []struct {
+		name   string
+		locale string
+		data   any
+		want   []string // in both parts
+		button string   // HTML part only; empty for no button
+	}{
+		{mail.TemplateResetPassword, "en", resetData(), []string{
+			"Anna", "Studio Example", resetData().Link, "1 hour.", "your password stays unchanged",
+		}, "Set a new password"},
+		{mail.TemplateResetPassword, "de", resetData(), []string{
+			"Anna", "Studio Example", resetData().Link, "1 Stunde ", "dein Passwort bleibt unverändert",
+		}, "Neues Passwort festlegen"},
+		{mail.TemplateChangeEmail, "en", changeEmailData(), []string{
+			"Anna", "Studio Example", changeEmailData().Link, "24 hours", "nothing changes",
+		}, "Confirm new email address"},
+		{mail.TemplateChangeEmail, "de", changeEmailData(), []string{
+			"Anna", "Studio Example", changeEmailData().Link, "24 Stunden", "ändert sich nichts",
+		}, "Neue E-Mail-Adresse bestätigen"},
+		{mail.TemplateEmailChanged, "en", emailChangedData(), []string{
+			"Anna", "Studio Example", "anna.new@example.org", "contact", "sign in",
+		}, ""},
+		{mail.TemplateEmailChanged, "de", emailChangedData(), []string{
+			"Anna", "Studio Example", "anna.new@example.org", "melde dich", "Anmelden",
+		}, ""},
+	}
+
+	for _, tt := range tests {
+		got, err := r.Render(tt.locale, tt.name, tt.data)
+		if err != nil {
+			t.Fatalf("Render(%s, %s): %v", tt.locale, tt.name, err)
+		}
+
+		if !strings.Contains(got.Subject, "Studio Example") {
+			t.Errorf("%s/%s subject %q does not name the school", tt.locale, tt.name, got.Subject)
+		}
+
+		for _, part := range []string{got.Text, got.HTML} {
+			for _, w := range tt.want {
+				if !strings.Contains(part, w) {
+					t.Errorf("%s/%s part does not contain %q:\n%s", tt.locale, tt.name, w, part)
+				}
+			}
+		}
+
+		if tt.button != "" && !strings.Contains(got.HTML, ">"+tt.button+"</a>") {
+			t.Errorf("%s/%s HTML has no button %q:\n%s", tt.locale, tt.name, tt.button, got.HTML)
+		}
+	}
+}
+
+func TestRenderResetPasswordExpiryPlural(t *testing.T) {
+	t.Parallel()
+
+	r := newRenderer(t)
+	data := resetData()
+	data.ExpiresHours = 2
+
+	for locale, want := range map[string]string{"en": "2 hours.", "de": "2 Stunden "} {
+		got, err := r.Render(locale, mail.TemplateResetPassword, data)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !strings.Contains(got.Text, want) {
+			t.Errorf("%s text does not contain %q:\n%s", locale, want, got.Text)
+		}
+	}
+}
+
+// TestRenderEmailChangedHasNoLink makes sure the notice to the old address
+// carries no link: it informs, it does not invite an action by link.
+func TestRenderEmailChangedHasNoLink(t *testing.T) {
 	t.Parallel()
 
 	r := newRenderer(t)
 
 	for _, locale := range []string{"en", "de"} {
-		t.Run(locale, func(t *testing.T) {
-			t.Parallel()
+		got, err := r.Render(locale, mail.TemplateEmailChanged, emailChangedData())
+		if err != nil {
+			t.Fatal(err)
+		}
 
-			got, err := r.Render(locale, mail.TemplateConfirmEmail, confirmData())
-			if err != nil {
-				t.Fatalf("Render: %v", err)
-			}
+		if strings.Contains(got.HTML, "<a ") || strings.Contains(got.Text, "http") {
+			t.Errorf("%s email-changed mail contains a link:\n%s\n%s", locale, got.Text, got.HTML)
+		}
+	}
+}
 
-			golden(t, locale+"/confirm-email.subject.golden", got.Subject+"\n")
-			golden(t, locale+"/confirm-email.txt.golden", got.Text)
-			golden(t, locale+"/confirm-email.html.golden", got.HTML)
-		})
+func TestRenderEmailChangedEscapesHTML(t *testing.T) {
+	t.Parallel()
+
+	r := newRenderer(t)
+	data := emailChangedData()
+	data.NewEmail = `"><script>alert(1)</script>@example.org`
+
+	got, err := r.Render("en", mail.TemplateEmailChanged, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(got.HTML, "<script>") {
+		t.Errorf("HTML contains the unescaped address:\n%s", got.HTML)
+	}
+
+	if !strings.Contains(got.HTML, "&lt;script&gt;") {
+		t.Errorf("HTML does not contain the escaped address:\n%s", got.HTML)
+	}
+
+	if !strings.Contains(got.Text, data.NewEmail) {
+		t.Errorf("text part altered the address:\n%s", got.Text)
 	}
 }
 
@@ -287,22 +446,75 @@ func TestRenderValidatesData(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		modify func(d *mail.ConfirmEmailData)
+		modify func(d *mail.LinkData)
 	}{
-		{"no school", func(d *mail.ConfirmEmailData) { d.SchoolName = " " }},
-		{"no link", func(d *mail.ConfirmEmailData) { d.Link = "" }},
-		{"relative link", func(d *mail.ConfirmEmailData) { d.Link = "/confirm-email?token=abc" }},
-		{"javascript link", func(d *mail.ConfirmEmailData) { d.Link = "javascript:alert(1)" }},
-		{"no expiry", func(d *mail.ConfirmEmailData) { d.ExpiresHours = 0 }},
+		{"no school", func(d *mail.LinkData) { d.SchoolName = " " }},
+		{"no link", func(d *mail.LinkData) { d.Link = "" }},
+		{"relative link", func(d *mail.LinkData) { d.Link = "/confirm-email?token=abc" }},
+		{"javascript link", func(d *mail.LinkData) { d.Link = "javascript:alert(1)" }},
+		{"no expiry", func(d *mail.LinkData) { d.ExpiresHours = 0 }},
+	}
+
+	for _, name := range []string{mail.TemplateConfirmEmail, mail.TemplateResetPassword, mail.TemplateChangeEmail} {
+		for _, tt := range tests {
+			data := confirmData()
+			tt.modify(&data)
+
+			if _, err := r.Render("en", name, data); !errors.Is(err, domain.ErrValidation) {
+				t.Errorf("%s %s: Render = %v, want an error wrapping domain.ErrValidation", name, tt.name, err)
+			}
+		}
+	}
+}
+
+func TestLinkDataValidateMessage(t *testing.T) {
+	t.Parallel()
+
+	data := confirmData()
+	data.Link = "/relative"
+
+	err := data.Validate()
+	if err == nil || !strings.Contains(err.Error(), "link must be an absolute http(s) URL") {
+		t.Fatalf("Validate = %v, want the generic link message", err)
+	}
+
+	if strings.Contains(err.Error(), "confirmation") {
+		t.Errorf("Validate = %v, message still names the confirmation", err)
+	}
+}
+
+func TestRenderValidatesEmailChangedData(t *testing.T) {
+	t.Parallel()
+
+	r := newRenderer(t)
+
+	tests := []struct {
+		name   string
+		modify func(d *mail.EmailChangedData)
+	}{
+		{"no school", func(d *mail.EmailChangedData) { d.SchoolName = " " }},
+		{"no new email", func(d *mail.EmailChangedData) { d.NewEmail = "" }},
+		{"blank new email", func(d *mail.EmailChangedData) { d.NewEmail = "  " }},
 	}
 
 	for _, tt := range tests {
-		data := confirmData()
+		data := emailChangedData()
 		tt.modify(&data)
 
-		if _, err := r.Render("en", mail.TemplateConfirmEmail, data); !errors.Is(err, domain.ErrValidation) {
+		if err := data.Validate(); !errors.Is(err, domain.ErrValidation) {
+			t.Errorf("%s: Validate = %v, want an error wrapping domain.ErrValidation", tt.name, err)
+		}
+
+		if _, err := r.Render("en", mail.TemplateEmailChanged, data); !errors.Is(err, domain.ErrValidation) {
 			t.Errorf("%s: Render = %v, want an error wrapping domain.ErrValidation", tt.name, err)
 		}
+	}
+
+	data := emailChangedData()
+	data.GivenName = ""
+
+	if err := data.Validate(); err != nil {
+		t.Errorf("Validate without given name = %v, want nil", err)
 	}
 }
 
@@ -381,7 +593,10 @@ func TestRenderAllTemplates(t *testing.T) {
 	r := newRenderer(t)
 
 	samples := map[string]any{
-		mail.TemplateConfirmEmail: confirmData(),
+		mail.TemplateConfirmEmail:  confirmData(),
+		mail.TemplateResetPassword: resetData(),
+		mail.TemplateChangeEmail:   changeEmailData(),
+		mail.TemplateEmailChanged:  emailChangedData(),
 	}
 
 	for _, name := range mail.TemplateNames() {
