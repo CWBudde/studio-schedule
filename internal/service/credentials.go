@@ -39,8 +39,8 @@ var (
 
 // RequestPasswordReset mails a password-reset link to email if it belongs to
 // an account that may sign in. It succeeds either way, so it reveals nothing
-// about which accounts exist. A new link replaces older ones. locale is the
-// language of the mail; empty means the school's default.
+// about which accounts exist. A new link replaces older ones. The mail is in
+// the account's language, else in locale, else in the school's default.
 func (s *AuthService) RequestPasswordReset(ctx context.Context, email, locale string) error {
 	token, err := newToken()
 	if err != nil {
@@ -274,7 +274,8 @@ func (s *AuthService) RequestEmailChange(ctx context.Context, p Principal, passw
 // ConfirmEmailChange moves the account of an email-change link to the new
 // address and mails a notice to the old one. The link alone suffices (it
 // proves the new address; the password was checked when it was requested),
-// so it works in any browser. locale is the language of the notice.
+// so it works in any browser. The notice is in the account's language, else
+// in locale, else in the school's default.
 func (s *AuthService) ConfirmEmailChange(ctx context.Context, token, locale string) error {
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		t, acc, err := s.linkToken(ctx, tx, token, domain.TokenChangeEmail)
@@ -332,7 +333,7 @@ func (s *AuthService) notifyEmailChanged(
 		return err
 	}
 
-	rendered, err := s.mails.Render(cmp.Or(locale, settings.DefaultLocale), mail.TemplateEmailChanged, mail.EmailChangedData{
+	rendered, err := s.mails.Render(cmp.Or(acc.Locale, locale, settings.DefaultLocale), mail.TemplateEmailChanged, mail.EmailChangedData{
 		SchoolName: settings.SchoolName, GivenName: person.GivenName, NewEmail: acc.Email,
 	})
 	if err != nil {
@@ -349,7 +350,7 @@ type linkMail struct {
 	ttl      time.Duration // whole hours
 	template string
 	route    string // the app route the link opens, e.g. "confirm"
-	locale   string // empty: the school's default
+	locale   string // used if the account has none; empty: the school's default
 }
 
 // sendLink replaces the account's links of m.purpose with token and writes
@@ -383,7 +384,7 @@ func (s *AuthService) sendLink(ctx context.Context, tx store.Tx, acc domain.Acco
 		return err
 	}
 
-	rendered, err := s.mails.Render(cmp.Or(m.locale, settings.DefaultLocale), m.template, mail.LinkData{
+	rendered, err := s.mails.Render(cmp.Or(acc.Locale, m.locale, settings.DefaultLocale), m.template, mail.LinkData{
 		SchoolName:   settings.SchoolName,
 		GivenName:    person.GivenName,
 		Link:         s.appURL + m.route + "?token=" + url.QueryEscape(token),

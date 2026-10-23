@@ -16,6 +16,7 @@ type Account struct {
 	VisibleDays pgtype.Int4
 	DisabledAt  pgtype.Timestamptz
 	ConfirmedAt pgtype.Timestamptz
+	Locale      pgtype.Text
 }
 
 type AccountCredential struct {

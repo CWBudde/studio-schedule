@@ -63,7 +63,7 @@ func TestAccountValidate(t *testing.T) {
 	checkValidate(t, func() domain.Account {
 		return domain.Account{
 			ID: newID[domain.AccountID](), PersonID: newID[domain.PersonID](),
-			Email: "ada@example.org", Role: domain.RoleMember, VisibleDays: 14,
+			Email: "ada@example.org", Role: domain.RoleMember, VisibleDays: 14, Locale: "de",
 		}
 	}, map[string]func(*domain.Account){
 		"zero id":       func(a *domain.Account) { a.ID = domain.AccountID{} },
@@ -73,6 +73,7 @@ func TestAccountValidate(t *testing.T) {
 		"guest role":    func(a *domain.Account) { a.Role = domain.RoleGuest },
 		"negative days": func(a *domain.Account) { a.VisibleDays = -1 },
 		"too many days": func(a *domain.Account) { a.VisibleDays = 367 },
+		"blank locale":  func(a *domain.Account) { a.Locale = " " },
 	})
 }
 

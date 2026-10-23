@@ -227,7 +227,20 @@ Goal: anyone can browse the published timetable. This is the first real demo val
 
 Goal: people can sign up and log in; staff can maintain the timetable.
 
-- [ ] Persons and family: guardians manage dependents (children without their own login)
+- [ ] Persons and family: guardians manage dependents (children without their own login). The
+      store already has persons and guardian links (`AddGuardian`, `ListDependents`,
+      `ListGuardians`); no service, operation or page uses them yet
+  - [ ] ADR "Families and dependents": a guardian sees and edits only their own person and their
+        dependents (office sees everyone); how a second guardian is linked (proposed: office only
+        in Phase 3); removing a dependent unlinks it and deletes the person only while nothing
+        references it; a dependent who grows up gets an account for the existing person
+  - [ ] Service and operations (`signedIn`): `getMyFamily` (own person + dependents), update own
+        person data, create, update and remove a dependent; the guardian check lives in the
+        service and is reused by booking for others in Phase 4
+  - [ ] Office: person list and detail with family links (`/admin/persons`), add and remove a
+        guardian link; shares `listPersons` with the class-member subtask of Admin CRUD
+  - [ ] Demo: a demo family account with two children; tests for the guardian check (a stranger's
+        dependent is a 404, not a 403) in service and HTTP tests
 - [x] Registration with email confirmation; login and logout; server-side sessions (random token in
       an HttpOnly, Secure, SameSite=Lax cookie; only the token hash is stored); sliding expiry
       (2026-10-23) — `AuthService` and `/api/v1/auth/{register,confirm,login,logout,me}`; confirming
@@ -259,15 +272,92 @@ Goal: people can sign up and log in; staff can maintain the timetable.
       the causing transaction; the `deliver-mail` job claims one at a time and retries 5 times
       (`SMTP_*` config, `internal/mail/smtp` server only); the demo's header opens the mailbox, whose
       confirmation links open in the app
-- [ ] Admin CRUD: locations, rooms, staff, course types, terms, classes, class members
+- [ ] Admin CRUD: locations, rooms, staff, course types, terms, classes, class members. The repos
+      already have Get/Create/Update/Delete/List; the work is services, write operations and the
+      admin UI. Order: decisions and the two foundations first, then the entity slices (each slice
+      is backend + UI + tests and can run in parallel; regenerate `api/openapi.json`,
+      `schema.d.ts` and `routeTree.gen.ts` after merging), then demo and e2e
+  - [ ] ADR 0007 "Timetable administration": `office` writes catalogue and timetable (admins
+        inherit it), what an edit of a class or term does to its generated lessons (proposed:
+        future, untouched lessons follow the class; past and individually edited lessons stay),
+        retiring instead of deleting what is referenced (staff `active`; a class or term with past
+        lessons), last write wins vs `If-Match`, whether edits go to `audit_events`
+  - [ ] Backend foundation: write-operation conventions (`POST` collection → 201 with the entity,
+        `PUT /{id}`, `DELETE /{id}` → 204; request bodies without IDs, IDs from `ids.Source`);
+        a 409 that says _why_ (stable reason such as `in-use` or `duplicate`, no internals) so the
+        UI can explain a refused delete; validation errors per field in the 422; office-only list
+        variants that include what the public lists hide (inactive staff, staff person links)
+  - [ ] Frontend foundation: `/admin` layout with section navigation (office and admin see it in
+        the header, everyone else gets the 403 page), shared CRUD kit: data table (sorting,
+        search, empty and error states, phone layout as cards), form sheet/dialog with
+        react-hook-form + zod built from the generated types, 422 → field errors, delete
+        confirmation that shows the 409 reason, toasts; shadcn `dialog`, `alert-dialog`, `form`,
+        `textarea`, `switch`, `popover` + `command` (combobox)
+  - [ ] Locations and rooms: create, rename, delete (refused while rooms or classes use them);
+        rooms listed per location with capacity; `/admin/locations`
+  - [ ] Staff: create, edit name and kind, optional link to a person, deactivate/reactivate
+        (inactive staff disappear from the public lists and filters, stay on past lessons);
+        `/admin/staff`
+  - [ ] Course types: create, edit name and description, delete while unused; `/admin/course-types`
+  - [ ] Terms: create, edit name and date range (refused when it would orphan classes or booked
+        lessons, per ADR 0007), delete while empty; overlapping terms allowed or not per ADR;
+        `/admin/terms`
+  - [ ] Classes: create and edit within a term (course type, room, instructor, accompanist, level,
+        weekday, start, duration, capacity defaulting to the room's), delete or retire;
+        `/admin/terms/{id}/classes` as a weekly overview reusing the `/classes` layout
+    - [ ] Store: `Lessons().ListByClass(class, from)` and `Lessons().Delete`, plus the
+          lesson-to-slot link or watermark from ADR 0003 so a moved lesson is not re-created;
+          contract cases in `storetest` for both stores
+    - [ ] Service: an edit updates or re-creates the class's future generated lessons in the same
+          transaction (time zone and DST through `Date.At`), then generation fills the rest; tests
+          across a DST change and for lessons that must not move
+  - [ ] Class members: list, add and remove persons with an optional "since" date; an office-only
+        person search (`listPersons`, name and email) for the combobox; adding twice is a 409;
+        no booking side effects until Phase 4
+  - [ ] Demo: the demo office account can do every action above; edits live in the worker's memory
+        store until a reload, and the open Phase 1 item ("Reset demo" button, optional IndexedDB
+        snapshot) lands with this slice
+  - [ ] Tests and docs: every new operation pinned in `internal/app/access_test.go`; service tests
+        per entity (validation, 409 reasons, lesson sync); component tests per admin page; e2e
+        "office edits a class and the schedule shows the change" on desktop and phone; glossary
+        and architecture updated
 - [ ] Lesson administration: edit, cancel (notifies booked participants), hide, add one-off/special
-      lessons, clone day, clone week
+      lessons, clone day, clone week. Builds on the class-to-lesson sync of Admin CRUD
+  - [ ] ADR 0007 (extended): an individually edited lesson is detached from its class, so neither
+        class edits nor generation touch it again; generated lessons are canceled, never deleted
+        (generation would re-create them), and only one-offs without bookings can be deleted;
+        copies made by cloning are one-off lessons; who may cancel (office; instructors their own
+        lessons or not)
+  - [ ] Store: lesson fields for a detached flag and a cancellation note (migration, both stores,
+        contract cases); a room-overlap query so an edit or clone can warn about a double-booked
+        room
+  - [ ] Edit a lesson: time, room, staff, capacity, visibility (hide/unhide as a quick action),
+        kind; capacity below the active bookings is refused; office actions in the existing lesson
+        sheet of the schedule
+  - [ ] Cancel and restore with an optional note: one transaction marks the lesson and queues an
+        EN/DE mail (outbox) to everyone with an active booking; bookings stay as they are until
+        Phase 4/6 decide about passes; the schedule already shows canceled lessons
+  - [ ] One-off and special lessons (workshop, private): create form with course type, room,
+        staff, time, capacity, visibility; published early per ADR 0003; delete while unbooked
+  - [ ] Clone day and clone week: pick source and target, preview what would be created and what
+        is skipped (same room and time taken), then apply in one transaction; only adds, never
+        deletes; lessons keep their wall-clock time across DST
+  - [ ] Tests: cancellation mail golden files, clone across a DST change, generation leaves
+        detached and moved lessons alone, e2e "office cancels a lesson and it shows as canceled"
 - [ ] UI: login, registration, confirm, reset; profile (person data, dependents, password, language);
       admin area with shadcn data tables and forms (react-hook-form + zod, schemas derived from the
       OpenAPI types) (2026-10-23) — partial: login, registration and confirm pages, the signed-in
       header, the admin account list (`/admin/accounts`, with "sign in as"), the reset pages and the
       account settings for password and email are done; the profile's person data, dependents and
       language and the rest of the admin area remain
+  - [ ] Profile: person data card on `/account` (name, phone, birth date) using `getMyFamily`
+  - [ ] Dependents section on `/account`: list, add, edit and remove children (Persons and family)
+  - [ ] Language preference: a language field on accounts (migration, both stores), set from the
+        UI language at registration, editable on `/account`; mails are rendered in it (today the
+        locale comes from the request, which a cancellation or waitlist mail does not have) and
+        the UI switches to it after sign-in
+  - [ ] Admin area: covered by the subtasks of Admin CRUD and Lesson administration; the audit log
+        page (`/admin/audit`, admins) lists `audit_events`
 - [x] Demo: login page lists demo accounts per role (member, instructor, office, admin)
       (2026-10-23) — `GET /api/v1/demo/logins` in demo installations (WASM demo, `serve` without a
       database); one click signs in
@@ -280,25 +370,79 @@ Goal: people can sign up and log in; staff can maintain the timetable.
 
 Goal: the core member workflow.
 
+Order: the booking ADR, then book and cancel (everything else builds on them), then auto-enrolment,
+staff actions, waitlist, instructor view and "My lessons" in parallel. The store already has
+bookings, booking events, `CountActive` and `Lessons().Lock`; the waitlist has a domain type but
+no repository yet.
+
+- [ ] ADR "Booking rules": who books for whom (self and dependents, via the family check of Phase
+      3); `BookingCutoff` closes booking that long before the start; after `CancellationCutoff` a
+      cancellation is allowed but flagged late (or refused); how class membership becomes bookings;
+      what a canceled lesson does to its bookings
 - [ ] Book a lesson for yourself or a dependent, as one transaction:
       `InTx → Lessons().Lock → CountActive < capacity → Insert → booking_event → outbox`; booking
       cutoff and release window enforced; duplicate booking is a conflict
+  - [ ] `BookingService.Book` and `bookLesson` (`signedIn`); 409 reasons `already-booked`, `full`
+        (the UI offers the waitlist), `closed` (cutoff, release window, canceled lesson);
+        confirmation mail (EN/DE, golden files)
+  - [ ] Availability in the schedule: free places and "booked by me / my child" per lesson in
+        `getSchedule` and `getLesson`, from one `CountActiveByLessons` query instead of one per
+        lesson (both stores, contract cases)
 - [ ] Cancel a booking (sign-out deadline configurable; late cancellation flagged); "also cancel
       following weeks" for class members
+  - [ ] `cancelBooking` for own and dependents' bookings; the late flag stored on the booking or
+        its event (migration); a cancellation frees the place for the waitlist in the same
+        transaction
+  - [ ] "Also cancel following weeks": cancels the person's future bookings of the same class in
+        one transaction, after a preview of the dates
 - [ ] Class members are auto-enrolled into generated lessons and can release single dates (this
       replaces the old paper "swap list")
+  - [ ] Generation books the class members into each lesson it creates; adding a member books
+        the future lessons, removing one cancels them; a class cannot have more members than
+        capacity
+  - [ ] Releasing a date is a normal cancellation (the place goes to the waitlist); taking it back
+        is a normal booking while a place is free
 - [ ] Staff actions: guest bookings (name + email, no account), trial flag, add or remove
       participants beyond capacity (explicit override)
+  - [ ] Office and instructor operations on a lesson's participants: add a person or a guest,
+        mark trial, remove; booking beyond capacity needs an explicit override that is recorded in
+        the booking event
 - [ ] Waitlist: join and leave; when a spot frees up, the next entry gets a **timed invite** (random
       token, only the hash stored, expiry configurable); accepting books under the lesson lock;
       expired invites move on to the next entry; "stay on list" option (decision record required)
+  - [ ] ADR "Waiting list": invite expiry setting, what "stay on list" means, whether accepting
+        needs a sign-in, invites stop at the booking cutoff
+  - [ ] Store: `WaitlistRepo` (migration, both stores, contract cases incl. ordering by
+        `JoinedAt` and lookup by token hash)
+  - [ ] Join and leave (self and dependents); position in the list shown to the member
+  - [ ] Invite: every transaction that frees a place invites the next waiting entry and queues the
+        invite mail; accepting books under the lesson lock and fails cleanly when the invite has
+        expired
+  - [ ] Expiry job (`internal/jobs`, both targets): expires due invites and invites the next entry
 - [ ] Instructor view: today's lessons, participant list, attendance check (attended / no-show),
       notify participants
+  - [ ] `/teach`: today's and the next lessons of the signed-in instructor (office sees all), with
+        participants including guests and trials
+  - [ ] Attendance: mark attended or no-show per participant and "all attended"; only from the
+        lesson start on
+  - [ ] Notify participants: a short message to everyone booked, as mails through the outbox,
+        rate-limited
 - [ ] "My lessons" (upcoming, history), booking audit trail for office/admin
+  - [ ] `/my-lessons` for the account and its dependents: upcoming with cancel, history with
+        status, waitlist entries
+  - [ ] Booking history (`listBookingEvents`, office) in the participant list of the lesson sheet
 - [ ] UI: book/cancel from schedule and detail views, for-whom selector (family), waitlist state,
       optimistic updates with rollback, toast feedback
+  - [ ] Lesson sheet: book / cancel / join waitlist with a for-whom selector when the account has
+        dependents; states for full, closed, late cancellation and canceled lessons
+  - [ ] List and week grid: free-place and booked badges; optimistic update with rollback on a
+        409, toasts with the reason
 - [ ] Tests: concurrent booking (contract suite, both stores), cutoffs, waitlist invite
       expiry/acceptance, e2e booking flow in the demo
+  - [ ] Service tests: cutoffs at the exact edge, booking for a stranger's child, override,
+        auto-enrolment and release, invite chain on expiry
+  - [ ] e2e in the demo: book, cancel, join the waitlist and accept the invite from the demo
+        mailbox, instructor marks attendance; desktop and phone
 
 ## Phase 5 — Calendar feeds
 

@@ -168,6 +168,7 @@ func toAccount(row sqlc.Account) domain.Account {
 		VisibleDays: int(row.VisibleDays.Int32),
 		ConfirmedAt: fromPgInstant(row.ConfirmedAt),
 		DisabledAt:  fromPgInstant(row.DisabledAt),
+		Locale:      row.Locale.String,
 	}
 }
 
@@ -203,6 +204,7 @@ func (r accountRepo) Create(ctx context.Context, a domain.Account) error {
 		VisibleDays: visibleDays,
 		ConfirmedAt: pgInstant(a.ConfirmedAt),
 		DisabledAt:  pgInstant(a.DisabledAt),
+		Locale:      pgText(a.Locale),
 	}))
 }
 
@@ -220,6 +222,7 @@ func (r accountRepo) Update(ctx context.Context, a domain.Account) error {
 		VisibleDays: visibleDays,
 		ConfirmedAt: pgInstant(a.ConfirmedAt),
 		DisabledAt:  pgInstant(a.DisabledAt),
+		Locale:      pgText(a.Locale),
 	})
 
 	return affected("account", n, err)

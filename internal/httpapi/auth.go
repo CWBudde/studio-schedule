@@ -71,6 +71,17 @@ func registerAuth(api huma.API, h *handlers) {
 	}, h.getMe)
 
 	register(api, AccessSignedIn, huma.Operation{
+		OperationID: "updateLocale",
+		Method:      http.MethodPut,
+		Path:        BasePath + "/auth/locale",
+		Summary:     "Set the language of mails",
+		Description: "Sets the language of the mails the account receives; without a locale the school's " +
+			"default applies.",
+		Tags:          []string{"auth"},
+		DefaultStatus: http.StatusNoContent,
+	}, h.updateLocale)
+
+	register(api, AccessSignedIn, huma.Operation{
 		OperationID: "stopImpersonation",
 		Method:      http.MethodPost,
 		Path:        BasePath + "/auth/impersonation/stop",
@@ -215,6 +226,7 @@ type Me struct {
 	Role       string           `doc:"Role of the account." enum:"member,instructor,office,admin" json:"role"`
 	GivenName  string           `doc:"Given name."                 json:"givenName"`
 	FamilyName string           `doc:"Family name."                json:"familyName"`
+	Locale     string           `doc:"Language of the mails the account receives; absent: the school's default." enum:"en,de" json:"locale,omitempty"`
 	// Impersonator is set while an admin is signed in as this account.
 	Impersonator *Impersonator `doc:"The admin signed in as this account (\"login as\"); absent otherwise." json:"impersonator,omitempty"`
 }
@@ -360,7 +372,7 @@ func (h *handlers) me(ctx context.Context, p service.Principal) (Me, error) {
 
 	out := Me{
 		AccountID: m.Account.ID, PersonID: m.Person.ID, Email: m.Account.Email, Role: string(m.Account.Role),
-		GivenName: m.Person.GivenName, FamilyName: m.Person.FamilyName,
+		GivenName: m.Person.GivenName, FamilyName: m.Person.FamilyName, Locale: m.Account.Locale,
 	}
 
 	if i := m.Impersonator; i != nil {
@@ -370,6 +382,23 @@ func (h *handlers) me(ctx context.Context, p service.Principal) (Me, error) {
 	}
 
 	return out, nil
+}
+
+// UpdateLocaleInput is the request of updateLocale.
+type UpdateLocaleInput struct {
+	Body struct {
+		Locale string `doc:"Language of the mails; absent: the school's default." enum:"en,de" json:"locale,omitempty"`
+	}
+}
+
+func (h *handlers) updateLocale(ctx context.Context, in *UpdateLocaleInput) (*struct{}, error) {
+	p, _ := principalFrom(ctx) // AccessSignedIn
+
+	if err := h.deps.Auth.SetLocale(ctx, p, in.Body.Locale); err != nil {
+		return nil, h.authError(ctx, err)
+	}
+
+	return &struct{}{}, nil
 }
 
 func (h *handlers) stopImpersonation(ctx context.Context, _ *struct{}) (*SignedInOutput, error) {

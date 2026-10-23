@@ -1,4 +1,5 @@
 import { hashKey, mutationOptions, type QueryClient, queryOptions } from '@tanstack/react-query';
+import i18n from '@/i18n';
 import {
   api,
   type ConfirmEmailBody,
@@ -181,18 +182,28 @@ function changeIdentity(queryClient: QueryClient, me: Me | null) {
   void queryClient.resetQueries({ predicate: (query) => query.queryHash !== meHash });
 }
 
-/** Signs in; the account becomes the `me` query's data. */
+/**
+ * A sign-in: `me` becomes the signed-in account, and the UI switches to the
+ * account's language if it has one. Only a sign-in does that; refetching
+ * `me` or signing in as someone else keeps the language the person chose.
+ */
+function signIn(queryClient: QueryClient, me: Me) {
+  changeIdentity(queryClient, me);
+  if (me.locale && me.locale !== i18n.resolvedLanguage) void i18n.changeLanguage(me.locale);
+}
+
+/** Signs in; the account becomes the `me` query's data and its language the UI's. */
 export const loginMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (body: LoginBody) => unwrap(api.POST('/api/v1/auth/login', { body })),
-    onSuccess: (me: Me) => changeIdentity(queryClient, me),
+    onSuccess: (me: Me) => signIn(queryClient, me),
   });
 
 /** Confirms an email address with the link's token and the password, and signs in. */
 export const confirmEmailMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (body: ConfirmEmailBody) => unwrap(api.POST('/api/v1/auth/confirm', { body })),
-    onSuccess: (me: Me) => changeIdentity(queryClient, me),
+    onSuccess: (me: Me) => signIn(queryClient, me),
   });
 
 /** Registers an account; the API mails a confirmation link (shown in the demo mailbox). */
@@ -209,11 +220,26 @@ type PostBody<P extends keyof paths> = paths[P] extends {
   ? B
   : never;
 
+/** The JSON request body of a PUT operation, as the generated schema has it. */
+type PutBody<P extends keyof paths> = paths[P] extends {
+  put: { requestBody: { content: { 'application/json': infer B } } };
+}
+  ? B
+  : never;
+
 export type RequestPasswordResetBody = PostBody<'/api/v1/auth/password-reset'>;
 export type ResetPasswordBody = PostBody<'/api/v1/auth/password-reset/confirm'>;
 export type ChangePasswordBody = PostBody<'/api/v1/auth/password'>;
 export type RequestEmailChangeBody = PostBody<'/api/v1/auth/email'>;
 export type ConfirmEmailChangeBody = PostBody<'/api/v1/auth/email/confirm'>;
+export type UpdateLocaleBody = PutBody<'/api/v1/auth/locale'>;
+/** Name, phone and birth date of the signed-in person or one of their dependents. */
+export type PersonData = PutBody<'/api/v1/family/me'>;
+
+export type Family =
+  paths['/api/v1/family']['get']['responses'][200]['content']['application/json'];
+export type FamilyPerson = Family['me'];
+export type FamilyDependent = Family['dependents'][number];
 
 /**
  * Asks the API again who is signed in after a change that may have ended
@@ -292,6 +318,77 @@ export const confirmEmailChangeMutation = (queryClient: QueryClient) =>
       void queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey });
       await refreshMe(queryClient);
     },
+  });
+
+/**
+ * Sets the language of the mails the account receives; an empty body means
+ * the school's default. The UI language stays as it is.
+ */
+export const updateLocaleMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: UpdateLocaleBody) => expectOk(api.PUT('/api/v1/auth/locale', { body })),
+    onSuccess: (_: void, { locale }: UpdateLocaleBody) =>
+      queryClient.setQueryData(meQuery.queryKey, (me) => {
+        if (!me) return me;
+        const { locale: _previous, ...rest } = me;
+        return locale ? { ...rest, locale } : rest;
+      }),
+    onError: signedOutOn401(queryClient),
+  });
+
+/** The signed-in person and their dependents (children without their own login). */
+export const familyQuery = queryOptions({
+  queryKey: ['family'],
+  queryFn: ({ signal }) => unwrap(api.GET('/api/v1/family', { signal })),
+});
+
+const refreshFamily = (queryClient: QueryClient) =>
+  queryClient.invalidateQueries({ queryKey: familyQuery.queryKey });
+
+/** Changes the signed-in person's data; the header's name comes from `me`, so it is asked again. */
+export const updateMyPersonMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: PersonData) => unwrap(api.PUT('/api/v1/family/me', { body })),
+    onSuccess: () =>
+      Promise.all([
+        refreshFamily(queryClient),
+        queryClient.invalidateQueries({ queryKey: meQuery.queryKey }),
+      ]),
+    onError: signedOutOn401(queryClient),
+  });
+
+/** Adds a child without their own login, with the signed-in person as guardian. */
+export const addDependentMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: PersonData) => unwrap(api.POST('/api/v1/family/dependents', { body })),
+    onSuccess: () => refreshFamily(queryClient),
+    onError: signedOutOn401(queryClient),
+  });
+
+/** Changes the data of one of the signed-in person's dependents (404 for anyone else). */
+export const updateDependentMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ personId, body }: { personId: string; body: PersonData }) =>
+      unwrap(
+        api.PUT('/api/v1/family/dependents/{personId}', { params: { path: { personId } }, body }),
+      ),
+    onSuccess: () => refreshFamily(queryClient),
+    onError: signedOutOn401(queryClient),
+  });
+
+/**
+ * Ends the signed-in person's guardianship of a dependent. One left without
+ * a guardian is deleted, unless it has bookings or class memberships: then
+ * the API answers 409 and nothing changes.
+ */
+export const removeDependentMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (personId: string) =>
+      expectOk(
+        api.DELETE('/api/v1/family/dependents/{personId}', { params: { path: { personId } } }),
+      ),
+    onSuccess: () => refreshFamily(queryClient),
+    onError: signedOutOn401(queryClient),
   });
 
 /** Signs out; the `me` query becomes null. */

@@ -969,6 +969,20 @@ func TestDemoLogins(t *testing.T) {
 		}
 	}
 
+	// The demo member is a parent: the family page has two children to show.
+	member := d.Accounts[slices.IndexFunc(d.Accounts, func(a domain.Account) bool { return a.Email == logins[0].Email })]
+
+	children := 0
+	for _, g := range d.Guardians {
+		if g.GuardianID == member.PersonID {
+			children++
+		}
+	}
+
+	if children != 2 {
+		t.Errorf("the demo member %s has %d dependents, want 2", member.Email, children)
+	}
+
 	// Every account can sign in.
 	if len(d.Credentials) != len(d.Accounts) {
 		t.Errorf("%d credentials for %d accounts", len(d.Credentials), len(d.Accounts))

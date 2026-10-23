@@ -35,6 +35,7 @@ type Deps struct {
 	Timetable *service.TimetableService
 	Schedule  *service.ScheduleService
 	Auth      *service.AuthService
+	Family    *service.FamilyService
 	Outbox    *service.OutboxService
 	Version   string
 	Logger    *slog.Logger
@@ -85,6 +86,7 @@ func Register(api huma.API, deps Deps) {
 	registerSchedule(api, h)
 	registerAuth(api, h)
 	registerCredentials(api, h)
+	registerFamily(api, h)
 	registerDemo(api, h)
 	registerAdmin(api, h)
 }

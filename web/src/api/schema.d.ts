@@ -124,6 +124,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/locale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the language of mails
+         * @description Sets the language of the mails the account receives; without a locale the school's default applies.
+         */
+        put: operations["updateLocale"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -317,6 +337,90 @@ export interface paths {
          */
         get: operations["listDemoMailbox"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/family": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get my family
+         * @description Returns the signed-in person and their dependents (children without their own login), each with its other guardians.
+         */
+        get: operations["getMyFamily"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/family/dependents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a dependent
+         * @description Creates a person (a child without their own login) with the signed-in person as guardian.
+         */
+        post: operations["addDependent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/family/dependents/{personId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update a dependent
+         * @description Replaces the name, phone and birth date of one of the signed-in person's dependents. Anyone else's person is a 404.
+         */
+        put: operations["updateDependent"];
+        post?: never;
+        /**
+         * Remove a dependent
+         * @description Ends the signed-in person's guardianship. A dependent left without a guardian is deleted; while it has bookings or class memberships, that is a 409 and nothing changes. Anyone else's person is a 404.
+         */
+        delete: operations["removeDependent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/family/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update my person data
+         * @description Replaces the signed-in person's name, phone and birth date.
+         */
+        put: operations["updateMyPerson"];
         post?: never;
         delete?: never;
         options?: never;
@@ -697,6 +801,56 @@ export interface components {
              */
             type: string;
         };
+        Family: {
+            /** @description Dependents ordered by family and given name. */
+            dependents: components["schemas"]["FamilyDependent"][];
+            /** @description The signed-in person. */
+            me: components["schemas"]["FamilyPerson"];
+        };
+        FamilyDependent: {
+            /**
+             * Format: date
+             * @description Date of birth, if known; not in the future.
+             */
+            birthDate?: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /** @description The dependent's other guardians. */
+            guardians: components["schemas"]["GuardianName"][];
+            /**
+             * Format: uuid
+             * @description Person ID.
+             */
+            id: string;
+            /** @description Phone number, if any. */
+            phone?: string;
+        };
+        FamilyPerson: {
+            /**
+             * Format: date
+             * @description Date of birth, if known; not in the future.
+             */
+            birthDate?: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /**
+             * Format: uuid
+             * @description Person ID.
+             */
+            id: string;
+            /** @description Phone number, if any. */
+            phone?: string;
+        };
+        GuardianName: {
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+        };
         Health: {
             /**
              * @description Always "ok" when the service responds.
@@ -897,6 +1051,11 @@ export interface components {
             /** @description The admin signed in as this account ("login as"); absent otherwise. */
             impersonator?: components["schemas"]["Impersonator"];
             /**
+             * @description Language of the mails the account receives; absent: the school's default.
+             * @enum {string}
+             */
+            locale?: "en" | "de";
+            /**
              * Format: uuid
              * @description ID of the account's person.
              */
@@ -906,6 +1065,19 @@ export interface components {
              * @enum {string}
              */
             role: "member" | "instructor" | "office" | "admin";
+        };
+        PersonData: {
+            /**
+             * Format: date
+             * @description Date of birth, if known; not in the future.
+             */
+            birthDate?: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /** @description Phone number, if any. */
+            phone?: string;
         };
         PublicSettings: {
             /** @description Default UI locale (BCP 47 tag), e.g. en. */
@@ -1062,6 +1234,13 @@ export interface components {
         TermList: {
             /** @description Terms ordered by start date. */
             items: components["schemas"]["Term"][];
+        };
+        UpdateLocaleInputBody: {
+            /**
+             * @description Language of the mails; absent: the school's default.
+             * @enum {string}
+             */
+            locale?: "en" | "de";
         };
     };
     responses: never;
@@ -1251,6 +1430,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Me"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateLocale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLocaleInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -1558,6 +1768,167 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DemoMailboxOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getMyFamily: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Family"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    addDependent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FamilyPerson"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateDependent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The dependent. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FamilyPerson"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    removeDependent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The dependent. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateMyPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FamilyPerson"];
                 };
             };
             /** @description Error */

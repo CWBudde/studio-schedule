@@ -15,6 +15,7 @@ where it differs.
 | `Staff`            | Instructor          | Lehrkraft             | Kind `instructor` or `accompanist` (musician, "Korrepetition")          |
 | `Person`           | Person              | Person                | Any human: member, child, guest                                         |
 | `Guardian`         | Parent / guardian   | Erziehungsberechtigte | Can manage and book for dependents ("Kinder")                           |
+| Dependent          | Child / dependent   | Kind                  | Person linked to a guardian, usually without an account (ADR 0008)      |
 | `Account`          | Account             | Konto                 | Login of a person, with a role                                          |
 | `Booking`          | Booking             | Buchung               | Formerly "Teilnahme"; actions "Eintragen" (book) / "Austragen" (cancel) |
 | `BookingEvent`     | Booking history     | Buchungsverlauf       | Audit trail of status changes, with time and acting account             |

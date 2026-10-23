@@ -56,7 +56,7 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   memory store with `seed.LoadDemo`.
 - **Auth & mail:** `service.AuthService` (register → confirm with password → sessions; ADR 0004;
   password reset/change and email change in `service/credentials.go`, rate limits in
-  `httpapi/ratelimit.go`; ADR 0006),
+  `httpapi/ratelimit.go`; ADR 0006; the account's mail language in `SetLocale`, ADR 0008),
   the `studio_session` cookie middleware in `httpapi/auth.go` (`principalFrom(ctx)`), argon2id in
   `internal/auth/password`. Mails: render with `internal/mail` and call `enqueueMail` inside the
   causing transaction; the `deliver-mail` job sends them (`internal/mail/smtp`, server only).
@@ -65,6 +65,8 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `httpapi/access.go` (`public`, `signedIn`, `staff`, `office`, `admin`; ADR 0005); the access
   middleware answers 401/403 before the handler runs. Admin impersonation lives in
   `service/impersonation.go`. What a caller _sees_ (e.g. schedule visibility) stays in the services.
+- **Family:** `service.FamilyService` (`/api/v1/family`): own person data and dependents; a guardian
+  reaches only their dependents (`dependentOf`, a 404 for anyone else; ADR 0008).
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),

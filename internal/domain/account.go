@@ -17,6 +17,9 @@ type Account struct {
 	ConfirmedAt time.Time
 	// DisabledAt is set when the account may no longer log in.
 	DisabledAt time.Time
+	// Locale is the language of the mails the account receives, a mail
+	// template locale such as "de"; empty means the school's default.
+	Locale string
 }
 
 // Validate checks the account for consistency. All errors wrap
@@ -28,5 +31,6 @@ func (a Account) Validate() error {
 		rule{validEmail(a.Email), "invalid account email"},
 		rule{a.Role.Valid() && a.Role != RoleGuest, "invalid account role"},
 		rule{a.VisibleDays >= 0 && a.VisibleDays <= maxVisibleDays, "visible days must be between 0 and 366"},
+		rule{a.Locale == "" || !blank(a.Locale), "account locale must not be blank"},
 	)
 }

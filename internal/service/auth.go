@@ -65,6 +65,9 @@ type PasswordHasher interface {
 // MailRenderer renders a mail template; *mail.Renderer implements it.
 type MailRenderer interface {
 	Render(locale, name string, data any) (mail.Rendered, error)
+	// MatchLocale returns the template locale for a requested one, or false
+	// if there is none.
+	MatchLocale(locale string) (string, bool)
 }
 
 // Principal is the signed-in account of a request.
@@ -96,8 +99,9 @@ type Registration struct {
 	FamilyName string
 	Email      string
 	Password   string
-	// Locale is the language of the confirmation mail (e.g. "de"); empty
-	// means the school's default.
+	// Locale is the language of the confirmation mail (e.g. "de") and is
+	// stored as the account's language if a mail template matches it;
+	// empty means the school's default.
 	Locale string
 }
 
@@ -164,7 +168,7 @@ func (s *AuthService) Register(ctx context.Context, r Registration) error {
 				return err // an account exists; say nothing
 			}
 
-			if err := s.renewPending(ctx, tx, acc, r); err != nil {
+			if acc, err = s.renewPending(ctx, tx, acc, r); err != nil {
 				return err
 			}
 		case errors.Is(err, domain.ErrNotFound):
@@ -194,6 +198,7 @@ func (s *AuthService) Register(ctx context.Context, r Registration) error {
 func (s *AuthService) createPending(ctx context.Context, tx store.Tx, r Registration) (domain.Account, error) {
 	p := domain.Person{ID: ids.New[domain.PersonID](s.ids), GivenName: r.GivenName, FamilyName: r.FamilyName}
 	acc := domain.Account{ID: ids.New[domain.AccountID](s.ids), PersonID: p.ID, Email: r.Email, Role: domain.RoleMember}
+	acc.Locale, _ = s.mails.MatchLocale(r.Locale)
 
 	if err := p.Validate(); err != nil {
 		return domain.Account{}, err
@@ -229,20 +234,33 @@ func isPendingRegistration(ctx context.Context, tx store.Tx, acc domain.Account)
 	return true, nil
 }
 
-// renewPending updates the person of an unconfirmed account to a new
-// registration.
-func (s *AuthService) renewPending(ctx context.Context, tx store.Tx, acc domain.Account, r Registration) error {
+// renewPending updates the person and the language of an unconfirmed
+// account to a new registration and returns the account.
+func (s *AuthService) renewPending(
+	ctx context.Context, tx store.Tx, acc domain.Account, r Registration,
+) (domain.Account, error) {
 	p, err := tx.Persons().Get(ctx, acc.PersonID)
 	if err != nil {
-		return err
+		return domain.Account{}, err
 	}
 
 	p.GivenName, p.FamilyName = r.GivenName, r.FamilyName
 	if err := p.Validate(); err != nil {
-		return err
+		return domain.Account{}, err
 	}
 
-	return tx.Persons().Update(ctx, p)
+	if err := tx.Persons().Update(ctx, p); err != nil {
+		return domain.Account{}, err
+	}
+
+	if locale, ok := s.mails.MatchLocale(r.Locale); ok && locale != acc.Locale {
+		acc.Locale = locale
+		if err := tx.Accounts().Update(ctx, acc); err != nil {
+			return domain.Account{}, err
+		}
+	}
+
+	return acc, nil
 }
 
 // sendConfirmation replaces the account's confirmation links with a new one
@@ -668,6 +686,37 @@ func (s *AuthService) Me(ctx context.Context, p Principal) (Me, error) {
 	}
 
 	return me, nil
+}
+
+// SetLocale sets the language of the mails p's account receives, a mail
+// template locale or a tag that matches one ("de-AT" is stored as "de").
+// Empty means the school's default. An unknown language is a validation
+// error.
+func (s *AuthService) SetLocale(ctx context.Context, p Principal, locale string) error {
+	if locale != "" {
+		matched, ok := s.mails.MatchLocale(locale)
+		if !ok {
+			return fmt.Errorf("%w: unknown language %q", domain.ErrValidation, locale)
+		}
+
+		locale = matched
+	}
+
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		acc, err := tx.Accounts().Get(ctx, p.AccountID)
+		if err != nil || acc.Locale == locale {
+			return err
+		}
+
+		acc.Locale = locale
+
+		return tx.Accounts().Update(ctx, acc)
+	})
+	if err != nil {
+		return fmt.Errorf("set locale: %w", err)
+	}
+
+	return nil
 }
 
 func accountWithPerson(ctx context.Context, tx store.Tx, id domain.AccountID) (Me, error) {

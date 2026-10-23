@@ -2,6 +2,7 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  family,
   meImpersonated,
   meMember,
   mockApiGet,
@@ -19,7 +20,11 @@ afterEach(() => {
 });
 
 const notDemo = { '/api/v1/demo/mailbox': { status: 404, body: undefined } };
-const signedInMember = { ...notDemo, '/api/v1/auth/me': { body: meMember } };
+const signedInMember = {
+  ...notDemo,
+  '/api/v1/auth/me': { body: meMember },
+  '/api/v1/family': { body: family },
+};
 
 function renderAccount() {
   return renderInRouter(<AccountPage />, { at: '/account' });
@@ -60,8 +65,8 @@ describe('AccountPage', () => {
     expect(screen.queryByRole('region', { name: 'Change password' })).not.toBeInTheDocument();
   });
 
-  it('shows a notice instead of the forms while signed in as someone else', async () => {
-    mockApiGet({ ...notDemo, '/api/v1/auth/me': { body: meImpersonated } });
+  it('shows the person data and children, but no credential forms, while signed in as someone else', async () => {
+    mockApiGet({ ...signedInMember, '/api/v1/auth/me': { body: meImpersonated } });
 
     renderAccount();
 
@@ -72,6 +77,44 @@ describe('AccountPage', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Change password' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Change email address' })).not.toBeInTheDocument();
+    const profile = within(screen.getByRole('region', { name: 'Your details' }));
+    expect(await profile.findByLabelText('First name')).toHaveValue('Nora');
+    expect(profile.getByRole('button', { name: 'Save details' })).toBeEnabled();
+    expect(profile.getByRole('combobox', { name: 'Language for emails' })).toBeEnabled();
+    const children = within(screen.getByRole('region', { name: 'Your children' }));
+    expect(await children.findByRole('button', { name: 'Edit Lina Example' })).toBeEnabled();
+    expect(children.getByRole('button', { name: 'Add child' })).toBeEnabled();
+  });
+
+  it('shows the cards in order: details, children, password, email', async () => {
+    mockApiGet(signedInMember);
+
+    renderAccount();
+    await screen.findByRole('region', { name: 'Change email address' });
+
+    const titles = screen
+      .getAllByRole('region')
+      .map((r) => within(r).getByRole('heading', { level: 2 }).textContent);
+    expect(titles).toEqual([
+      'Your details',
+      'Your children',
+      'Change password',
+      'Change email address',
+    ]);
+  });
+
+  it('says when the person data cannot be loaded', async () => {
+    mockApiGet({ ...signedInMember, '/api/v1/family': { status: 500 } });
+
+    renderAccount();
+
+    expect(
+      await within(await screen.findByRole('region', { name: 'Your details' })).findByText(
+        'Your details could not be loaded.',
+      ),
+    ).toBeInTheDocument();
+    // The credential forms do not depend on it.
+    expect(screen.getByRole('region', { name: 'Change password' })).toBeInTheDocument();
   });
 
   describe('change password', () => {

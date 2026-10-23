@@ -175,6 +175,7 @@ func testAccounts(t *testing.T, newStore func(*testing.T) store.Store) {
 				full.VisibleDays = 30
 				full.ConfirmedAt = t0.Add(-time.Hour)
 				full.DisabledAt = t0
+				full.Locale = "de"
 				valid(e.t, minimal)
 				valid(e.t, full)
 

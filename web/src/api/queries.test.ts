@@ -1,30 +1,41 @@
 import { MutationObserver, QueryClient, QueryObserver } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import i18n from '@/i18n';
 import {
   accounts,
+  family,
   meAdmin,
   meImpersonated,
   meMember,
+  mockApiDelete,
   mockApiGet,
   mockApiPost,
+  mockApiPut,
+  problem,
   schedule,
   tooManyRequests,
 } from '@/test/mockApi';
 import {
+  addDependentMutation,
   ApiError,
   changePasswordMutation,
   confirmEmailChangeMutation,
   confirmEmailMutation,
+  familyQuery,
   impersonateMutation,
   listAccountsQuery,
   loginMutation,
   logoutMutation,
   meQuery,
+  removeDependentMutation,
   requestEmailChangeMutation,
   requestPasswordResetMutation,
   resetPasswordMutation,
   scheduleQuery,
   stopImpersonationMutation,
+  updateDependentMutation,
+  updateLocaleMutation,
+  updateMyPersonMutation,
 } from './queries';
 
 afterEach(() => {
@@ -337,5 +348,184 @@ describe('credentials', () => {
       body: { token: 'tok-email', locale: 'en' },
     });
     expect(queryClient.getQueryData(meQuery.queryKey)).toEqual(moved);
+  });
+});
+
+describe('account language', () => {
+  it.each([
+    { name: 'login', mutation: loginMutation, path: '/api/v1/auth/login' },
+    { name: 'confirmEmail', mutation: confirmEmailMutation, path: '/api/v1/auth/confirm' },
+  ])('$name switches the UI to the account language', async ({ mutation, path }) => {
+    mockApiPost({ [path]: { body: { ...meMember, locale: 'de' } } });
+    const queryClient = new QueryClient();
+
+    await new MutationObserver(
+      queryClient,
+      mutation(queryClient) as ReturnType<typeof loginMutation>,
+    ).mutate({ email: meMember.email, token: 'tok-123', password: 'secret-password' } as never);
+
+    expect(i18n.resolvedLanguage).toBe('de');
+  });
+
+  it('keeps the UI language when the account has none', async () => {
+    await i18n.changeLanguage('de');
+    mockApiPost({ '/api/v1/auth/login': { body: meMember } });
+    const queryClient = new QueryClient();
+
+    await new MutationObserver(queryClient, loginMutation(queryClient)).mutate({
+      email: meMember.email,
+      password: 'secret-password',
+    });
+
+    expect(i18n.resolvedLanguage).toBe('de');
+  });
+
+  it('keeps the UI language when an admin signs in as someone else', async () => {
+    mockApiPost({
+      '/api/v1/admin/accounts/{accountId}/impersonate': {
+        body: { ...meImpersonated, locale: 'de' },
+      },
+    });
+    const queryClient = new QueryClient();
+
+    await new MutationObserver(queryClient, impersonateMutation(queryClient)).mutate(
+      meMember.accountId,
+    );
+
+    expect(i18n.resolvedLanguage).toBe('en');
+  });
+
+  it('keeps the UI language when me is fetched again', async () => {
+    mockApiGet({ '/api/v1/auth/me': { body: { ...meMember, locale: 'de' } } });
+    const queryClient = new QueryClient();
+
+    await queryClient.fetchQuery(meQuery);
+
+    expect(i18n.resolvedLanguage).toBe('en');
+  });
+
+  it.each([
+    { body: { locale: 'de' as const }, me: { ...meMember, locale: 'de' as const } },
+    { body: {}, me: meMember },
+  ])('saves the language for emails $body', async ({ body, me }) => {
+    const put = mockApiPut({ '/api/v1/auth/locale': { status: 204 } });
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(meQuery.queryKey, { ...meMember, locale: 'en' });
+
+    await new MutationObserver(queryClient, updateLocaleMutation(queryClient)).mutate(body);
+
+    expect(put).toHaveBeenCalledWith('/api/v1/auth/locale', { body });
+    expect(queryClient.getQueryData(meQuery.queryKey)).toEqual(me);
+    // The UI language is the header switcher's business.
+    expect(i18n.resolvedLanguage).toBe('en');
+  });
+});
+
+describe('family', () => {
+  const lina = family.dependents[0]!;
+  const person = { givenName: 'Nora', familyName: 'Example', phone: '+49 000 0000111' };
+
+  /** A client with me and the family cached, as /account has them. */
+  function familyClient() {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(meQuery.queryKey, meMember);
+    queryClient.setQueryData(familyQuery.queryKey, family);
+    return queryClient;
+  }
+
+  it('fetches the family', async () => {
+    const get = mockApiGet({ '/api/v1/family': { body: family } });
+
+    expect(await new QueryClient().fetchQuery(familyQuery)).toEqual(family);
+    expect(get).toHaveBeenCalledWith('/api/v1/family', expect.anything());
+  });
+
+  it('updates my person and refreshes the family and the name in the header', async () => {
+    const put = mockApiPut({
+      '/api/v1/family/me': { body: { id: meMember.personId, ...person } },
+    });
+    const queryClient = familyClient();
+
+    await new MutationObserver(queryClient, updateMyPersonMutation(queryClient)).mutate(person);
+
+    expect(put).toHaveBeenCalledWith('/api/v1/family/me', { body: person });
+    expect(queryClient.getQueryState(familyQuery.queryKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(meQuery.queryKey)?.isInvalidated).toBe(true);
+  });
+
+  it('adds a dependent and refreshes the family', async () => {
+    const child = { givenName: 'Ida', familyName: 'Example', birthDate: '2021-01-05' };
+    const post = mockApiPost({
+      '/api/v1/family/dependents': { status: 201, body: { id: lina.id, ...child } },
+    });
+    const queryClient = familyClient();
+
+    await new MutationObserver(queryClient, addDependentMutation(queryClient)).mutate(child);
+
+    expect(post).toHaveBeenCalledWith('/api/v1/family/dependents', { body: child });
+    expect(queryClient.getQueryState(familyQuery.queryKey)?.isInvalidated).toBe(true);
+  });
+
+  it('updates a dependent by its id', async () => {
+    const child = { givenName: 'Lina', familyName: 'Example' };
+    const put = mockApiPut({
+      '/api/v1/family/dependents/{personId}': { body: { id: lina.id, ...child } },
+    });
+    const queryClient = familyClient();
+
+    await new MutationObserver(queryClient, updateDependentMutation(queryClient)).mutate({
+      personId: lina.id,
+      body: child,
+    });
+
+    expect(put).toHaveBeenCalledWith('/api/v1/family/dependents/{personId}', {
+      params: { path: { personId: lina.id } },
+      body: child,
+    });
+    expect(queryClient.getQueryState(familyQuery.queryKey)?.isInvalidated).toBe(true);
+  });
+
+  it('removes a dependent by its id', async () => {
+    const del = mockApiDelete({ '/api/v1/family/dependents/{personId}': { status: 204 } });
+    const queryClient = familyClient();
+
+    await new MutationObserver(queryClient, removeDependentMutation(queryClient)).mutate(lina.id);
+
+    expect(del).toHaveBeenCalledWith('/api/v1/family/dependents/{personId}', {
+      params: { path: { personId: lina.id } },
+    });
+    expect(queryClient.getQueryState(familyQuery.queryKey)?.isInvalidated).toBe(true);
+  });
+
+  it('keeps everything when a dependent is still in use (409)', async () => {
+    mockApiDelete({
+      '/api/v1/family/dependents/{personId}': problem(
+        409,
+        'the dependent has bookings or class memberships',
+      ),
+    });
+    const queryClient = familyClient();
+
+    const error: unknown = await new MutationObserver(
+      queryClient,
+      removeDependentMutation(queryClient),
+    )
+      .mutate(lina.id)
+      .catch((e: unknown) => e);
+
+    expect((error as ApiError).status).toBe(409);
+    expect(queryClient.getQueryState(familyQuery.queryKey)?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryData(meQuery.queryKey)).toEqual(meMember);
+  });
+
+  it('signs out locally when the session has ended (401)', async () => {
+    mockApiPut({ '/api/v1/family/me': { status: 401 } });
+    const queryClient = familyClient();
+
+    await expect(
+      new MutationObserver(queryClient, updateMyPersonMutation(queryClient)).mutate(person),
+    ).rejects.toThrow();
+
+    expect(queryClient.getQueryData(meQuery.queryKey)).toBeNull();
   });
 });

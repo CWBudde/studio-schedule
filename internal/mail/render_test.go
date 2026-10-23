@@ -428,6 +428,19 @@ func TestResolveLocale(t *testing.T) {
 	}
 }
 
+func TestMatchLocale(t *testing.T) {
+	t.Parallel()
+
+	r := newRenderer(t)
+
+	for in, want := range map[string]string{"de-AT": "de", "en": "en", "de_de": "de", "fr": "", "": ""} {
+		got, ok := r.MatchLocale(in)
+		if got != want || ok != (want != "") {
+			t.Errorf("MatchLocale(%q) = %q, %v, want %q", in, got, ok, want)
+		}
+	}
+}
+
 func TestRenderUnknownTemplate(t *testing.T) {
 	t.Parallel()
 

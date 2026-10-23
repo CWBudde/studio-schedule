@@ -432,6 +432,129 @@
         },
         "type": "object"
       },
+      "Family": {
+        "additionalProperties": false,
+        "properties": {
+          "dependents": {
+            "description": "Dependents ordered by family and given name.",
+            "items": {
+              "$ref": "#/components/schemas/FamilyDependent"
+            },
+            "type": "array"
+          },
+          "me": {
+            "$ref": "#/components/schemas/FamilyPerson",
+            "description": "The signed-in person."
+          }
+        },
+        "required": [
+          "me",
+          "dependents"
+        ],
+        "type": "object"
+      },
+      "FamilyDependent": {
+        "additionalProperties": false,
+        "properties": {
+          "birthDate": {
+            "description": "Date of birth, if known; not in the future.",
+            "format": "date",
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "guardians": {
+            "description": "The dependent's other guardians.",
+            "items": {
+              "$ref": "#/components/schemas/GuardianName"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "Person ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "phone": {
+            "description": "Phone number, if any.",
+            "maxLength": 50,
+            "type": "string"
+          }
+        },
+        "required": [
+          "guardians",
+          "id",
+          "givenName",
+          "familyName"
+        ],
+        "type": "object"
+      },
+      "FamilyPerson": {
+        "additionalProperties": false,
+        "properties": {
+          "birthDate": {
+            "description": "Date of birth, if known; not in the future.",
+            "format": "date",
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "id": {
+            "description": "Person ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "phone": {
+            "description": "Phone number, if any.",
+            "maxLength": 50,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "givenName",
+          "familyName"
+        ],
+        "type": "object"
+      },
+      "GuardianName": {
+        "additionalProperties": false,
+        "properties": {
+          "familyName": {
+            "description": "Family name.",
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "givenName",
+          "familyName"
+        ],
+        "type": "object"
+      },
       "Health": {
         "additionalProperties": false,
         "properties": {
@@ -841,6 +964,14 @@
             "$ref": "#/components/schemas/Impersonator",
             "description": "The admin signed in as this account (\"login as\"); absent otherwise."
           },
+          "locale": {
+            "description": "Language of the mails the account receives; absent: the school's default.",
+            "enum": [
+              "en",
+              "de"
+            ],
+            "type": "string"
+          },
           "personId": {
             "description": "ID of the account's person.",
             "format": "uuid",
@@ -862,6 +993,38 @@
           "personId",
           "email",
           "role",
+          "givenName",
+          "familyName"
+        ],
+        "type": "object"
+      },
+      "PersonData": {
+        "additionalProperties": false,
+        "properties": {
+          "birthDate": {
+            "description": "Date of birth, if known; not in the future.",
+            "format": "date",
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "phone": {
+            "description": "Phone number, if any.",
+            "maxLength": 50,
+            "type": "string"
+          }
+        },
+        "required": [
           "givenName",
           "familyName"
         ],
@@ -1228,6 +1391,20 @@
           "items"
         ],
         "type": "object"
+      },
+      "UpdateLocaleInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "locale": {
+            "description": "Language of the mails; absent: the school's default.",
+            "enum": [
+              "en",
+              "de"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
       }
     }
   },
@@ -1491,6 +1668,42 @@
           }
         },
         "summary": "Return to the admin account",
+        "tags": [
+          "auth"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/auth/locale": {
+      "put": {
+        "description": "Sets the language of the mails the account receives; without a locale the school's default applies.",
+        "operationId": "updateLocale",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLocaleInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Set the language of mails",
         "tags": [
           "auth"
         ],
@@ -1876,6 +2089,218 @@
           "demo"
         ],
         "x-access": "public"
+      }
+    },
+    "/api/v1/family": {
+      "get": {
+        "description": "Returns the signed-in person and their dependents (children without their own login), each with its other guardians.",
+        "operationId": "getMyFamily",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Family"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get my family",
+        "tags": [
+          "family"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/family/dependents": {
+      "post": {
+        "description": "Creates a person (a child without their own login) with the signed-in person as guardian.",
+        "operationId": "addDependent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FamilyPerson"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add a dependent",
+        "tags": [
+          "family"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/family/dependents/{personId}": {
+      "delete": {
+        "description": "Ends the signed-in person's guardianship. A dependent left without a guardian is deleted; while it has bookings or class memberships, that is a 409 and nothing changes. Anyone else's person is a 404.",
+        "operationId": "removeDependent",
+        "parameters": [
+          {
+            "description": "The dependent.",
+            "in": "path",
+            "name": "personId",
+            "required": true,
+            "schema": {
+              "description": "The dependent.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove a dependent",
+        "tags": [
+          "family"
+        ],
+        "x-access": "signedIn"
+      },
+      "put": {
+        "description": "Replaces the name, phone and birth date of one of the signed-in person's dependents. Anyone else's person is a 404.",
+        "operationId": "updateDependent",
+        "parameters": [
+          {
+            "description": "The dependent.",
+            "in": "path",
+            "name": "personId",
+            "required": true,
+            "schema": {
+              "description": "The dependent.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FamilyPerson"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update a dependent",
+        "tags": [
+          "family"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/family/me": {
+      "put": {
+        "description": "Replaces the signed-in person's name, phone and birth date.",
+        "operationId": "updateMyPerson",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FamilyPerson"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update my person data",
+        "tags": [
+          "family"
+        ],
+        "x-access": "signedIn"
       }
     },
     "/api/v1/health": {

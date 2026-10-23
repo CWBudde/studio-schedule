@@ -1,12 +1,71 @@
 {
   "title": "Your account",
-  "description": "Change your password and email address.",
+  "description": "Your details, your children and how you sign in.",
   "loading": "Loading your account…",
   "signedOutTitle": "Please sign in",
-  "signedOut": "Sign in to change your password or email address.",
+  "signedOut": "Sign in to see and change your details, your children and how you sign in.",
   "signIn": "Sign in",
   "impersonatingTitle": "Signed in as someone else",
   "impersonating": "While you are signed in as {{name}}, you cannot change their password or email address.",
+  "profile": {
+    "title": "Your details",
+    "description": "Your name, phone number and birth date, as the school has them.",
+    "loading": "Loading your details…",
+    "loadFailed": "Your details could not be loaded.",
+    "submit": "Save details",
+    "submitting": "Saving…",
+    "saved": "Your details have been saved.",
+    "emailLanguage": "Language for emails",
+    "emailLanguageHint": "The school writes to you in this language, e.g. when a lesson is canceled. Saved as soon as you choose.",
+    "schoolDefault": "School default",
+    "emailLanguageSaved": "The language for emails has been saved."
+  },
+  "person": {
+    "givenName": "First name",
+    "familyName": "Last name",
+    "phone": "Phone (optional)",
+    "birthDate": "Birth date (optional)",
+    "errors": {
+      "birthDateFuture": "The birth date cannot be in the future."
+    }
+  },
+  "dependents": {
+    "title": "Your children",
+    "description": "Children without their own login, for whom you book lessons.",
+    "loading": "Loading your children…",
+    "loadFailed": "Your children could not be loaded.",
+    "empty": "You have not added any children yet.",
+    "add": "Add child",
+    "edit": "Edit",
+    "editNamed": "Edit {{name}}",
+    "remove": "Remove",
+    "removeNamed": "Remove {{name}}",
+    "born": "Born {{date}}",
+    "otherGuardians": "Also in the family of {{names}}",
+    "added": "{{name}} has been added.",
+    "updated": "{{name}} has been saved.",
+    "removed": "{{name}} has been removed from your family.",
+    "notFound": "This child is no longer in your family.",
+    "sheet": {
+      "addTitle": "Add a child",
+      "editTitle": "Edit {{name}}",
+      "description": "Children are booked through your account; they do not get a login of their own.",
+      "add": "Add child",
+      "save": "Save changes",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "close": "Close"
+    },
+    "confirm": {
+      "question": "Remove {{name}} from your family?",
+      "unlink": "{{givenName}} stays registered with {{guardians}} and is only removed from your family.",
+      "delete": "{{givenName}} has no other guardian, so the details of {{givenName}} are deleted.",
+      "inUse": "{{name}} has bookings or class memberships and cannot be removed. Please contact the office.",
+      "submit": "Yes, remove",
+      "submitting": "Removing…",
+      "cancel": "Keep"
+    }
+  },
   "password": {
     "title": "Change password",
     "description": "You stay signed in on this device; all your other devices are signed out.",

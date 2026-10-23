@@ -131,23 +131,33 @@ func parseSet(fsys fs.FS, loc, name string) (templateSet, error) {
 // Locales returns the available template locales.
 func (r *Renderer) Locales() []string { return slices.Clone(r.locales) }
 
-// ResolveLocale returns the template locale used for the requested one: an
-// exact match, else its base language ("de-AT" → "de"), else DefaultLocale.
-// Matching ignores case and accepts "_" as separator.
+// ResolveLocale returns the template locale used for the requested one: its
+// match (see MatchLocale), else DefaultLocale.
 func (r *Renderer) ResolveLocale(locale string) string {
+	if loc, ok := r.MatchLocale(locale); ok {
+		return loc
+	}
+
+	return DefaultLocale
+}
+
+// MatchLocale returns the template locale for the requested one: an exact
+// match, else its base language ("de-AT" → "de"). Matching ignores case and
+// accepts "_" as separator. It reports false if no template locale matches.
+func (r *Renderer) MatchLocale(locale string) (string, bool) {
 	loc := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(locale), "_", "-"))
 
 	if _, ok := r.sets[loc]; ok {
-		return loc
+		return loc, true
 	}
 
 	if base, _, ok := strings.Cut(loc, "-"); ok {
 		if _, ok := r.sets[base]; ok {
-			return base
+			return base, true
 		}
 	}
 
-	return DefaultLocale
+	return "", false
 }
 
 // Render renders template name in the best matching locale (see

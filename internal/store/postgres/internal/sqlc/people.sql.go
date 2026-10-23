@@ -26,8 +26,8 @@ func (q *Queries) AddGuardian(ctx context.Context, arg AddGuardianParams) error 
 }
 
 const createAccount = `-- name: CreateAccount :exec
-INSERT INTO accounts (id, person_id, email, role, visible_days, confirmed_at, disabled_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO accounts (id, person_id, email, role, visible_days, confirmed_at, disabled_at, locale)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type CreateAccountParams struct {
@@ -38,6 +38,7 @@ type CreateAccountParams struct {
 	VisibleDays pgtype.Int4
 	ConfirmedAt pgtype.Timestamptz
 	DisabledAt  pgtype.Timestamptz
+	Locale      pgtype.Text
 }
 
 func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) error {
@@ -49,6 +50,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) er
 		arg.VisibleDays,
 		arg.ConfirmedAt,
 		arg.DisabledAt,
+		arg.Locale,
 	)
 	return err
 }
@@ -94,7 +96,7 @@ func (q *Queries) DeletePerson(ctx context.Context, id pgtype.UUID) (int64, erro
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at FROM accounts WHERE id = $1
+SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at, locale FROM accounts WHERE id = $1
 `
 
 func (q *Queries) GetAccount(ctx context.Context, id pgtype.UUID) (Account, error) {
@@ -108,12 +110,13 @@ func (q *Queries) GetAccount(ctx context.Context, id pgtype.UUID) (Account, erro
 		&i.VisibleDays,
 		&i.DisabledAt,
 		&i.ConfirmedAt,
+		&i.Locale,
 	)
 	return i, err
 }
 
 const getAccountByEmail = `-- name: GetAccountByEmail :one
-SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at FROM accounts WHERE lower(email) = lower($1::text COLLATE "C")
+SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at, locale FROM accounts WHERE lower(email) = lower($1::text COLLATE "C")
 `
 
 // The parameter needs collation "C" as well, so that lower() folds ASCII
@@ -129,6 +132,7 @@ func (q *Queries) GetAccountByEmail(ctx context.Context, email string) (Account,
 		&i.VisibleDays,
 		&i.DisabledAt,
 		&i.ConfirmedAt,
+		&i.Locale,
 	)
 	return i, err
 }
@@ -153,7 +157,7 @@ func (q *Queries) GetPerson(ctx context.Context, id pgtype.UUID) (Person, error)
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at FROM accounts ORDER BY lower(email), id
+SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at, locale FROM accounts ORDER BY lower(email), id
 `
 
 func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
@@ -173,6 +177,7 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 			&i.VisibleDays,
 			&i.DisabledAt,
 			&i.ConfirmedAt,
+			&i.Locale,
 		); err != nil {
 			return nil, err
 		}
@@ -318,7 +323,8 @@ func (q *Queries) RemoveGuardian(ctx context.Context, arg RemoveGuardianParams) 
 
 const updateAccount = `-- name: UpdateAccount :execrows
 UPDATE accounts
-SET person_id = $2, email = $3, role = $4, visible_days = $5, confirmed_at = $6, disabled_at = $7
+SET person_id = $2, email = $3, role = $4, visible_days = $5, confirmed_at = $6, disabled_at = $7,
+    locale = $8
 WHERE id = $1
 `
 
@@ -330,6 +336,7 @@ type UpdateAccountParams struct {
 	VisibleDays pgtype.Int4
 	ConfirmedAt pgtype.Timestamptz
 	DisabledAt  pgtype.Timestamptz
+	Locale      pgtype.Text
 }
 
 func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (int64, error) {
@@ -341,6 +348,7 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (i
 		arg.VisibleDays,
 		arg.ConfirmedAt,
 		arg.DisabledAt,
+		arg.Locale,
 	)
 	if err != nil {
 		return 0, err

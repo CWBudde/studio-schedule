@@ -83,6 +83,7 @@ func TestPasswordReset(t *testing.T) {
 	f := newAuthFixture(t)
 	first := f.signedUp("ada@example.org", domain.RoleMember)
 	second := f.login("ada@example.org", "correct horse")
+	f.update("ada@example.org", func(a *domain.Account) { a.Locale = "" }) // the request's language applies
 
 	if err := f.svc.RequestPasswordReset(t.Context(), " ADA@example.org ", "de"); err != nil {
 		t.Fatal(err)
@@ -299,7 +300,12 @@ func TestChangeEmail(t *testing.T) {
 		t.Errorf("email changed before confirmation: %q", got)
 	}
 
-	if err := f.svc.ConfirmEmailChange(t.Context(), token, "de"); err != nil {
+	// The account's language wins over the request's.
+	if err := f.svc.SetLocale(t.Context(), s.Principal, "de"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.svc.ConfirmEmailChange(t.Context(), token, "en"); err != nil {
 		t.Fatalf("ConfirmEmailChange: %v", err)
 	}
 

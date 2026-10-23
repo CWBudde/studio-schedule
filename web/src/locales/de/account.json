@@ -1,12 +1,71 @@
 {
   "title": "Dein Konto",
-  "description": "Ändere dein Passwort und deine E-Mail-Adresse.",
+  "description": "Deine Daten, deine Kinder und deine Anmeldung.",
   "loading": "Dein Konto wird geladen…",
   "signedOutTitle": "Bitte melde dich an",
-  "signedOut": "Melde dich an, um dein Passwort oder deine E-Mail-Adresse zu ändern.",
+  "signedOut": "Melde dich an, um deine Daten, deine Kinder und deine Anmeldung zu sehen und zu ändern.",
   "signIn": "Anmelden",
   "impersonatingTitle": "Als andere Person angemeldet",
   "impersonating": "Solange du als {{name}} angemeldet bist, kannst du Passwort und E-Mail-Adresse dieses Kontos nicht ändern.",
+  "profile": {
+    "title": "Deine Daten",
+    "description": "Dein Name, deine Telefonnummer und dein Geburtsdatum, wie die Schule sie gespeichert hat.",
+    "loading": "Deine Daten werden geladen…",
+    "loadFailed": "Deine Daten konnten nicht geladen werden.",
+    "submit": "Daten speichern",
+    "submitting": "Speichern…",
+    "saved": "Deine Daten wurden gespeichert.",
+    "emailLanguage": "Sprache für E-Mails",
+    "emailLanguageHint": "In dieser Sprache schreibt dir die Schule, z. B. wenn eine Stunde ausfällt. Wird gespeichert, sobald du sie auswählst.",
+    "schoolDefault": "Standard der Schule",
+    "emailLanguageSaved": "Die Sprache für E-Mails wurde gespeichert."
+  },
+  "person": {
+    "givenName": "Vorname",
+    "familyName": "Nachname",
+    "phone": "Telefon (optional)",
+    "birthDate": "Geburtsdatum (optional)",
+    "errors": {
+      "birthDateFuture": "Das Geburtsdatum darf nicht in der Zukunft liegen."
+    }
+  },
+  "dependents": {
+    "title": "Deine Kinder",
+    "description": "Kinder ohne eigenen Zugang, für die du Stunden buchst.",
+    "loading": "Deine Kinder werden geladen…",
+    "loadFailed": "Deine Kinder konnten nicht geladen werden.",
+    "empty": "Du hast noch keine Kinder hinzugefügt.",
+    "add": "Kind hinzufügen",
+    "edit": "Bearbeiten",
+    "editNamed": "{{name}} bearbeiten",
+    "remove": "Entfernen",
+    "removeNamed": "{{name}} entfernen",
+    "born": "Geboren am {{date}}",
+    "otherGuardians": "Auch in der Familie von {{names}}",
+    "added": "{{name}} wurde hinzugefügt.",
+    "updated": "{{name}} wurde gespeichert.",
+    "removed": "{{name}} wurde aus deiner Familie entfernt.",
+    "notFound": "Dieses Kind gehört nicht mehr zu deiner Familie.",
+    "sheet": {
+      "addTitle": "Kind hinzufügen",
+      "editTitle": "{{name}} bearbeiten",
+      "description": "Kinder werden über dein Konto gebucht; sie bekommen keinen eigenen Zugang.",
+      "add": "Kind hinzufügen",
+      "save": "Änderungen speichern",
+      "saving": "Speichern…",
+      "cancel": "Abbrechen",
+      "close": "Schließen"
+    },
+    "confirm": {
+      "question": "{{name}} aus deiner Familie entfernen?",
+      "unlink": "{{givenName}} bleibt bei {{guardians}} eingetragen und wird nur aus deiner Familie entfernt.",
+      "delete": "{{givenName}} hat keine weitere erziehungsberechtigte Person, daher werden die Daten von {{givenName}} gelöscht.",
+      "inUse": "{{name}} hat Buchungen oder Kursmitgliedschaften und kann nicht entfernt werden. Bitte wende dich an das Büro.",
+      "submit": "Ja, entfernen",
+      "submitting": "Wird entfernt…",
+      "cancel": "Behalten"
+    }
+  },
   "password": {
     "title": "Passwort ändern",
     "description": "Auf diesem Gerät bleibst du angemeldet; auf allen anderen Geräten wirst du abgemeldet.",

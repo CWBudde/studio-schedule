@@ -60,6 +60,22 @@ export function mockApiPost(fixtures: Fixtures) {
       answerFrom(fixtures, path, init)) as unknown as typeof api.POST);
 }
 
+/** Replaces `api.PUT` like mockApiPost. */
+export function mockApiPut(fixtures: Fixtures) {
+  return vi
+    .spyOn(api, 'PUT')
+    .mockImplementation(((path: string, init?: MockRequest) =>
+      answerFrom(fixtures, path, init)) as unknown as typeof api.PUT);
+}
+
+/** Replaces `api.DELETE` like mockApiPost. */
+export function mockApiDelete(fixtures: Fixtures) {
+  return vi
+    .spyOn(api, 'DELETE')
+    .mockImplementation(((path: string, init?: MockRequest) =>
+      answerFrom(fixtures, path, init)) as unknown as typeof api.DELETE);
+}
+
 export const healthOk = { status: 'ok', version: '0.1.0-test' };
 export const publicSettings = {
   schoolName: 'Example Dance Studio',
@@ -296,6 +312,37 @@ export const meImpersonated: Me = {
     givenName: meAdmin.givenName,
     familyName: meAdmin.familyName,
   },
+};
+
+type Family = components['schemas']['Family'];
+
+/**
+ * The family of the member as GET /family returns it: two children, the
+ * first with another guardian, the second with Nora as the only one.
+ */
+export const family: Family = {
+  me: {
+    id: meMember.personId,
+    givenName: 'Nora',
+    familyName: 'Example',
+    phone: '+49 000 0000999',
+    birthDate: '1988-06-15',
+  },
+  dependents: [
+    {
+      id: id(331),
+      givenName: 'Lina',
+      familyName: 'Example',
+      birthDate: '2017-03-14',
+      guardians: [{ givenName: 'Paul', familyName: 'Example' }],
+    },
+    {
+      id: id(332),
+      givenName: 'Max',
+      familyName: 'Example',
+      guardians: [],
+    },
+  ],
 };
 
 /**
