@@ -79,9 +79,11 @@ func New(deps Deps) (http.Handler, huma.API) {
 	api := humachi.New(router, httpapi.NewConfig())
 
 	httpapi.Register(api, httpapi.Deps{
-		Settings: service.NewSettingsService(deps.Store),
-		Version:  deps.Version,
-		Logger:   deps.Logger,
+		Settings:  service.NewSettingsService(deps.Store),
+		Catalog:   service.NewCatalogService(deps.Store),
+		Timetable: service.NewTimetableService(deps.Store),
+		Version:   deps.Version,
+		Logger:    deps.Logger,
 	})
 
 	router.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {

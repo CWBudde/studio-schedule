@@ -28,9 +28,11 @@ const (
 
 // Deps are the dependencies of the API handlers.
 type Deps struct {
-	Settings *service.SettingsService
-	Version  string
-	Logger   *slog.Logger
+	Settings  *service.SettingsService
+	Catalog   *service.CatalogService
+	Timetable *service.TimetableService
+	Version   string
+	Logger    *slog.Logger
 }
 
 // NewConfig returns the Huma configuration for the API: OpenAPI document at
@@ -54,6 +56,8 @@ func Register(api huma.API, deps Deps) {
 
 	registerSystem(api, h)
 	registerSettings(api, h)
+	registerCatalog(api, h)
+	registerTimetable(api, h)
 }
 
 type handlers struct {
