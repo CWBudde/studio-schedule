@@ -21,6 +21,8 @@ func TestEnums(t *testing.T) {
 	t.Run("Audience", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.Audiences()) })
 	t.Run("FeedScope", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.FeedScopes()) })
 	t.Run("ImportStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.ImportStatuses()) })
+	t.Run("TokenPurpose", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.TokenPurposes()) })
+	t.Run("MailStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.MailStatuses()) })
 }
 
 func TestPersonValidate(t *testing.T) {
@@ -486,4 +488,96 @@ func TestIntegrationValidate(t *testing.T) {
 			"finished early":     func(r *domain.ImportRun) { r.FinishedAt = t0.Add(-time.Minute) },
 		})
 	})
+}
+
+func TestAuthValidate(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Credential", func(t *testing.T) {
+		t.Parallel()
+		checkValidate(t, func() domain.Credential {
+			return domain.Credential{AccountID: newID[domain.AccountID](), PasswordHash: "$argon2id$v=19$m=1,t=1,p=1$c2FsdA$a2V5", ChangedAt: t0}
+		}, map[string]func(*domain.Credential){
+			"zero account": func(c *domain.Credential) { c.AccountID = domain.AccountID{} },
+			"no hash":      func(c *domain.Credential) { c.PasswordHash = " " },
+			"no time":      func(c *domain.Credential) { c.ChangedAt = time.Time{} },
+		})
+	})
+
+	t.Run("Session", func(t *testing.T) {
+		t.Parallel()
+		checkValidate(t, func() domain.Session {
+			return domain.Session{
+				ID: newID[domain.SessionID](), AccountID: newID[domain.AccountID](), TokenHash: domain.HashToken("token"),
+				CreatedAt: t0, LastSeenAt: t0, ExpiresAt: t0.Add(time.Hour),
+			}
+		}, map[string]func(*domain.Session){
+			"zero id":          func(s *domain.Session) { s.ID = domain.SessionID{} },
+			"zero account":     func(s *domain.Session) { s.AccountID = domain.AccountID{} },
+			"no token":         func(s *domain.Session) { s.TokenHash = [32]byte{} },
+			"no creation":      func(s *domain.Session) { s.CreatedAt = time.Time{} },
+			"seen before born": func(s *domain.Session) { s.LastSeenAt = t0.Add(-time.Second) },
+			"expired at seen":  func(s *domain.Session) { s.ExpiresAt = s.LastSeenAt },
+		})
+	})
+
+	t.Run("AccountToken", func(t *testing.T) {
+		t.Parallel()
+		checkValidate(t, func() domain.AccountToken {
+			return domain.AccountToken{
+				Hash: domain.HashToken("token"), AccountID: newID[domain.AccountID](), Purpose: domain.TokenConfirmEmail,
+				Email: "ada@example.org", CreatedAt: t0, ExpiresAt: t0.Add(24 * time.Hour),
+			}
+		}, map[string]func(*domain.AccountToken){
+			"no hash":      func(a *domain.AccountToken) { a.Hash = [32]byte{} },
+			"zero account": func(a *domain.AccountToken) { a.AccountID = domain.AccountID{} },
+			"bad purpose":  func(a *domain.AccountToken) { a.Purpose = "unlock-door" },
+			"bad email":    func(a *domain.AccountToken) { a.Email = "ada" },
+			"no creation":  func(a *domain.AccountToken) { a.CreatedAt = time.Time{} },
+			"no expiry":    func(a *domain.AccountToken) { a.ExpiresAt = a.CreatedAt },
+		})
+	})
+
+	t.Run("HashToken", func(t *testing.T) {
+		t.Parallel()
+
+		a, again := domain.HashToken("a"), domain.HashToken("a")
+		if a != again || a == domain.HashToken("b") || a == [32]byte{} {
+			t.Fatal("HashToken must be deterministic and distinguish tokens")
+		}
+	})
+}
+
+func TestOutboxMailValidate(t *testing.T) {
+	t.Parallel()
+
+	pending := func() domain.OutboxMail {
+		return domain.OutboxMail{
+			ID: newID[domain.OutboxMailID](), To: "ada@example.org", Subject: "Hello", Text: "Hi Ada",
+			CreatedAt: t0, NextAttemptAt: t0,
+		}
+	}
+
+	checkValidate(t, pending, map[string]func(*domain.OutboxMail){
+		"zero id":        func(m *domain.OutboxMail) { m.ID = domain.OutboxMailID{} },
+		"bad recipient":  func(m *domain.OutboxMail) { m.To = "Ada <ada@example.org>" },
+		"no subject":     func(m *domain.OutboxMail) { m.Subject = "" },
+		"no text":        func(m *domain.OutboxMail) { m.Text = " " },
+		"no creation":    func(m *domain.OutboxMail) { m.CreatedAt = time.Time{} },
+		"negative tries": func(m *domain.OutboxMail) { m.Attempts = -1 },
+		"sent, but due":  func(m *domain.OutboxMail) { m.SentAt = t0 },
+		"sent too early": func(m *domain.OutboxMail) { m.SentAt, m.NextAttemptAt = t0.Add(-time.Second), time.Time{} },
+	})
+
+	sent, failed := pending(), pending()
+	sent.SentAt, sent.NextAttemptAt = t0, time.Time{}
+	failed.NextAttemptAt = time.Time{}
+
+	for m, want := range map[domain.OutboxMail]domain.MailStatus{
+		pending(): domain.MailPending, sent: domain.MailSent, failed: domain.MailFailed,
+	} {
+		if got := m.Status(); got != want {
+			t.Errorf("Status() = %s, want %s", got, want)
+		}
+	}
 }

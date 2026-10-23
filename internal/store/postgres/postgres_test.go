@@ -80,8 +80,8 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	wantStatus(true)
 	wantCheck(nil)
 
-	if n := tables(); n != 14 {
-		t.Fatalf("%d tables after up, want 14", n)
+	if n := tables(); n != 18 {
+		t.Fatalf("%d tables after up, want 18", n)
 	}
 
 	if res, err := m.Up(ctx); err != nil || len(res) != 0 {

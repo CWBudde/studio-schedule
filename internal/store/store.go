@@ -93,6 +93,9 @@ type Tx interface {
 	Settings() SettingsRepo
 	Persons() PersonRepo
 	Accounts() AccountRepo
+	Credentials() CredentialRepo
+	Sessions() SessionRepo
+	AccountTokens() AccountTokenRepo
 	Locations() LocationRepo
 	Rooms() RoomRepo
 	Staff() StaffRepo
@@ -101,6 +104,7 @@ type Tx interface {
 	Classes() ClassRepo
 	Lessons() LessonRepo
 	Bookings() BookingRepo
+	Outbox() OutboxRepo
 }
 
 // SettingsRepo stores the single, school-wide settings record.
@@ -146,6 +150,50 @@ type AccountRepo interface {
 	Update(ctx context.Context, a domain.Account) error
 	// List returns all accounts ordered by ASCII-lower-cased email and ID.
 	List(ctx context.Context) ([]domain.Account, error)
+}
+
+// CredentialRepo stores the passwords of accounts, at most one per account.
+type CredentialRepo interface {
+	// Get fails with domain.ErrNotFound if the account has no password.
+	Get(ctx context.Context, account domain.AccountID) (domain.Credential, error)
+	// Put creates or replaces the password of c.AccountID. It fails with
+	// domain.ErrConflict if the account does not exist.
+	Put(ctx context.Context, c domain.Credential) error
+}
+
+// SessionRepo stores signed-in sessions, found by the hash of their token.
+type SessionRepo interface {
+	// GetByToken finds a session by its token hash, whether it has expired
+	// or not.
+	GetByToken(ctx context.Context, hash [32]byte) (domain.Session, error)
+	// Create fails with domain.ErrConflict if the ID or the token hash is
+	// taken, or the account does not exist.
+	Create(ctx context.Context, s domain.Session) error
+	// Update fails with domain.ErrConflict under the same rules as Create.
+	Update(ctx context.Context, s domain.Session) error
+	Delete(ctx context.Context, id domain.SessionID) error
+	// DeleteExpired deletes every session that expired at or before now and
+	// returns how many it deleted.
+	DeleteExpired(ctx context.Context, now time.Time) (int, error)
+}
+
+// AccountTokenRepo stores single-use tokens sent by email, keyed by their
+// hash.
+type AccountTokenRepo interface {
+	// Get finds a token by its hash, whether it has expired or not.
+	Get(ctx context.Context, hash [32]byte) (domain.AccountToken, error)
+	// Create fails with domain.ErrConflict if the hash is taken or the
+	// account does not exist.
+	Create(ctx context.Context, t domain.AccountToken) error
+	// Delete removes a token. Using a token deletes it, so of two concurrent
+	// uses only one succeeds; the other gets domain.ErrNotFound.
+	Delete(ctx context.Context, hash [32]byte) error
+	// DeleteByAccount removes every token of the account with the purpose,
+	// e.g. older confirmation links when a new one is sent.
+	DeleteByAccount(ctx context.Context, account domain.AccountID, purpose domain.TokenPurpose) error
+	// DeleteExpired deletes every token that expired at or before now and
+	// returns how many it deleted.
+	DeleteExpired(ctx context.Context, now time.Time) (int, error)
 }
 
 // LocationRepo stores locations.
@@ -271,4 +319,21 @@ type BookingRepo interface {
 	AddEvent(ctx context.Context, e domain.BookingEvent) error
 	// ListEvents returns the history of a booking ordered by At and ID.
 	ListEvents(ctx context.Context, booking domain.BookingID) ([]domain.BookingEvent, error)
+}
+
+// OutboxRepo stores outgoing mails.
+type OutboxRepo interface {
+	Get(ctx context.Context, id domain.OutboxMailID) (domain.OutboxMail, error)
+	// Create fails with domain.ErrConflict if the ID is taken.
+	Create(ctx context.Context, m domain.OutboxMail) error
+	Update(ctx context.Context, m domain.OutboxMail) error
+	// ListDue returns at most limit pending mails whose next attempt is due
+	// at now, ordered by next attempt and ID. It needs a ReadWrite
+	// transaction: the PostgreSQL store locks the mails and skips those that
+	// another transaction has locked, so concurrent workers never pick the
+	// same mail.
+	ListDue(ctx context.Context, now time.Time, limit int) ([]domain.OutboxMail, error)
+	// List returns at most limit mails, newest first: ordered by creation
+	// time and ID, both descending.
+	List(ctx context.Context, limit int) ([]domain.OutboxMail, error)
 }

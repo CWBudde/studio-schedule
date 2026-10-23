@@ -32,10 +32,14 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 	t.Run("Settings", func(t *testing.T) { testSettings(t, newStore) })
 	t.Run("Persons", func(t *testing.T) { testPersons(t, newStore) })
 	t.Run("Accounts", func(t *testing.T) { testAccounts(t, newStore) })
+	t.Run("Credentials", func(t *testing.T) { testCredentials(t, newStore) })
+	t.Run("Sessions", func(t *testing.T) { testSessions(t, newStore) })
+	t.Run("AccountTokens", func(t *testing.T) { testAccountTokens(t, newStore) })
 	t.Run("Catalog", func(t *testing.T) { testCatalogue(t, newStore) })
 	t.Run("Timetable", func(t *testing.T) { testTimetable(t, newStore) })
 	t.Run("Lessons", func(t *testing.T) { testLessons(t, newStore) })
 	t.Run("Bookings", func(t *testing.T) { testBookings(t, newStore) })
+	t.Run("Outbox", func(t *testing.T) { testOutbox(t, newStore) })
 }
 
 // env is one test case's store plus an ID source for its fixtures.

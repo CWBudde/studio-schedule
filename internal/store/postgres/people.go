@@ -166,6 +166,7 @@ func toAccount(row sqlc.Account) domain.Account {
 		Email:       row.Email,
 		Role:        domain.Role(row.Role),
 		VisibleDays: int(row.VisibleDays.Int32),
+		ConfirmedAt: fromPgInstant(row.ConfirmedAt),
 		DisabledAt:  fromPgInstant(row.DisabledAt),
 	}
 }
@@ -200,6 +201,7 @@ func (r accountRepo) Create(ctx context.Context, a domain.Account) error {
 		Email:       a.Email,
 		Role:        string(a.Role),
 		VisibleDays: visibleDays,
+		ConfirmedAt: pgInstant(a.ConfirmedAt),
 		DisabledAt:  pgInstant(a.DisabledAt),
 	}))
 }
@@ -216,6 +218,7 @@ func (r accountRepo) Update(ctx context.Context, a domain.Account) error {
 		Email:       a.Email,
 		Role:        string(a.Role),
 		VisibleDays: visibleDays,
+		ConfirmedAt: pgInstant(a.ConfirmedAt),
 		DisabledAt:  pgInstant(a.DisabledAt),
 	})
 

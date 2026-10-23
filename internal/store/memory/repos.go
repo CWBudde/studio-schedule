@@ -243,6 +243,7 @@ func (r accountRepo) put(a domain.Account) error {
 		return conflict("person already has an account")
 	}
 
+	a.ConfirmedAt = instant(a.ConfirmedAt)
 	a.DisabledAt = instant(a.DisabledAt)
 	s.accounts.put(r.tx.gen, a.ID, a)
 

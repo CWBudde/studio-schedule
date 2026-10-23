@@ -172,6 +172,7 @@ func testAccounts(t *testing.T, newStore func(*testing.T) store.Store) {
 				full.Email = "Ada.Account@Example.org"
 				full.Role = domain.RoleOffice
 				full.VisibleDays = 30
+				full.ConfirmedAt = t0.Add(-time.Hour)
 				full.DisabledAt = t0
 				valid(e.t, minimal)
 				valid(e.t, full)

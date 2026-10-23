@@ -45,12 +45,12 @@ SELECT * FROM accounts WHERE id = $1;
 SELECT * FROM accounts WHERE lower(email) = lower(sqlc.arg(email)::text COLLATE "C");
 
 -- name: CreateAccount :exec
-INSERT INTO accounts (id, person_id, email, role, visible_days, disabled_at)
-VALUES ($1, $2, $3, $4, $5, $6);
+INSERT INTO accounts (id, person_id, email, role, visible_days, confirmed_at, disabled_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7);
 
 -- name: UpdateAccount :execrows
 UPDATE accounts
-SET person_id = $2, email = $3, role = $4, visible_days = $5, disabled_at = $6
+SET person_id = $2, email = $3, role = $4, visible_days = $5, confirmed_at = $6, disabled_at = $7
 WHERE id = $1;
 
 -- name: ListAccounts :many

@@ -15,6 +15,22 @@ type Account struct {
 	Role        string
 	VisibleDays pgtype.Int4
 	DisabledAt  pgtype.Timestamptz
+	ConfirmedAt pgtype.Timestamptz
+}
+
+type AccountCredential struct {
+	AccountID    pgtype.UUID
+	PasswordHash string
+	ChangedAt    pgtype.Timestamptz
+}
+
+type AccountToken struct {
+	TokenHash []byte
+	AccountID pgtype.UUID
+	Purpose   string
+	Email     string
+	CreatedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
 }
 
 type Booking struct {
@@ -86,6 +102,20 @@ type Location struct {
 	Address pgtype.Text
 }
 
+type OutboxMail struct {
+	ID            pgtype.UUID
+	Recipient     string
+	Subject       string
+	BodyText      string
+	BodyHtml      pgtype.Text
+	Template      pgtype.Text
+	CreatedAt     pgtype.Timestamptz
+	Attempts      int32
+	NextAttemptAt pgtype.Timestamptz
+	SentAt        pgtype.Timestamptz
+	LastError     pgtype.Text
+}
+
 type Person struct {
 	ID         pgtype.UUID
 	GivenName  string
@@ -106,6 +136,15 @@ type Room struct {
 	LocationID pgtype.UUID
 	Name       string
 	Capacity   int32
+}
+
+type Session struct {
+	ID         pgtype.UUID
+	AccountID  pgtype.UUID
+	TokenHash  []byte
+	CreatedAt  pgtype.Timestamptz
+	LastSeenAt pgtype.Timestamptz
+	ExpiresAt  pgtype.Timestamptz
 }
 
 type Setting struct {

@@ -37,6 +37,9 @@ type state struct {
 	persons       table[domain.PersonID, domain.Person]
 	guardians     table[domain.Guardian, struct{}]
 	accounts      table[domain.AccountID, domain.Account]
+	credentials   table[domain.AccountID, domain.Credential]
+	sessions      table[domain.SessionID, domain.Session]
+	accountTokens table[[32]byte, domain.AccountToken]
 	locations     table[domain.LocationID, domain.Location]
 	rooms         table[domain.RoomID, domain.Room]
 	staff         table[domain.StaffID, domain.Staff]
@@ -47,6 +50,7 @@ type state struct {
 	lessons       table[domain.LessonID, domain.Lesson]
 	bookings      table[domain.BookingID, domain.Booking]
 	bookingEvents table[domain.BookingEventID, domain.BookingEvent]
+	outbox        table[domain.OutboxMailID, domain.OutboxMail]
 }
 
 type memberKey struct {
@@ -180,6 +184,11 @@ type tx struct {
 func (t *tx) Settings() store.SettingsRepo      { return settingsRepo{t} }
 func (t *tx) Persons() store.PersonRepo         { return personRepo{t} }
 func (t *tx) Accounts() store.AccountRepo       { return accountRepo{t} }
+func (t *tx) Credentials() store.CredentialRepo { return credentialRepo{t} }
+func (t *tx) Sessions() store.SessionRepo       { return sessionRepo{t} }
+func (t *tx) AccountTokens() store.AccountTokenRepo {
+	return accountTokenRepo{t}
+}
 func (t *tx) Locations() store.LocationRepo     { return locationRepo{t} }
 func (t *tx) Rooms() store.RoomRepo             { return roomRepo{t} }
 func (t *tx) Staff() store.StaffRepo            { return staffRepo{t} }
@@ -188,6 +197,7 @@ func (t *tx) Terms() store.TermRepo             { return termRepo{t} }
 func (t *tx) Classes() store.ClassRepo          { return classRepo{t} }
 func (t *tx) Lessons() store.LessonRepo         { return lessonRepo{t} }
 func (t *tx) Bookings() store.BookingRepo       { return bookingRepo{t} }
+func (t *tx) Outbox() store.OutboxRepo          { return outboxRepo{t} }
 
 func (t *tx) checkWritable() error {
 	if t.mode != store.ReadWrite {

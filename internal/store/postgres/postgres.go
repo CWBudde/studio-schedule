@@ -189,6 +189,11 @@ type tx struct {
 func (t *tx) Settings() store.SettingsRepo      { return settingsRepo{t.q} }
 func (t *tx) Persons() store.PersonRepo         { return personRepo{t.q} }
 func (t *tx) Accounts() store.AccountRepo       { return accountRepo{t.q} }
+func (t *tx) Credentials() store.CredentialRepo { return credentialRepo{t.q} }
+func (t *tx) Sessions() store.SessionRepo       { return sessionRepo{t.q} }
+func (t *tx) AccountTokens() store.AccountTokenRepo {
+	return accountTokenRepo{t.q}
+}
 func (t *tx) Locations() store.LocationRepo     { return locationRepo{t.q} }
 func (t *tx) Rooms() store.RoomRepo             { return roomRepo{t.q} }
 func (t *tx) Staff() store.StaffRepo            { return staffRepo{t.q} }
@@ -197,3 +202,4 @@ func (t *tx) Terms() store.TermRepo             { return termRepo{t.q} }
 func (t *tx) Classes() store.ClassRepo          { return classRepo{t.q} }
 func (t *tx) Lessons() store.LessonRepo         { return lessonRepo{t.q} }
 func (t *tx) Bookings() store.BookingRepo       { return bookingRepo{t.q} }
+func (t *tx) Outbox() store.OutboxRepo          { return outboxRepo{t.q} }

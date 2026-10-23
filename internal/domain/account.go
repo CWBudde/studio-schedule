@@ -2,8 +2,7 @@ package domain
 
 import "time"
 
-// Account is the login of a person. Credentials arrive with authentication
-// in Phase 3.
+// Account is the login of a person. Its password is a separate Credential.
 type Account struct {
 	ID       AccountID
 	PersonID PersonID
@@ -12,6 +11,9 @@ type Account struct {
 	Role  Role
 	// VisibleDays overrides Settings.DefaultVisibleDays when positive.
 	VisibleDays int
+	// ConfirmedAt is set once the email address is confirmed. Unconfirmed
+	// accounts cannot log in.
+	ConfirmedAt time.Time
 	// DisabledAt is set when the account may no longer log in.
 	DisabledAt time.Time
 }

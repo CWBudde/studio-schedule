@@ -82,6 +82,8 @@ type (
 	messageKind       struct{}
 	calendarFeedKind  struct{}
 	importRunKind     struct{}
+	sessionKind       struct{}
+	outboxMailKind    struct{}
 )
 
 // ID types, one per entity of the domain model.
@@ -139,4 +141,10 @@ type (
 
 	// ImportRunID identifies an import run.
 	ImportRunID = ID[importRunKind]
+
+	// SessionID identifies a session.
+	SessionID = ID[sessionKind]
+
+	// OutboxMailID identifies an outbox mail.
+	OutboxMailID = ID[outboxMailKind]
 )
