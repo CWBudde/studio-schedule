@@ -156,11 +156,15 @@ Goal: a production-grade persistence layer with two interchangeable implementati
       validation, redacted logging; `serve --addr/--database-url/--base-url`. partial: `SMTP_*` and
       `SESSION_*` arrive with the mailer and sessions in Phase 3
 - [ ] `seed` command plus a deterministic fictional demo dataset (school, rooms, staff, course types,
-      a term with ~25 weekly classes, members with families)
-- [ ] `serve` chooses the store: `postgres` when `DATABASE_URL` is set, otherwise `memory` with demo
-      seed (with a warning log)
+      a term with ~25 weekly classes, members with families) (2026-10-23) — `internal/seed`: 2
+      locations, 5 rooms, 9 staff, 9 course types, term 2026-09-01..2027-07-31 with 26 classes, 40
+      persons in families with guardians and accounts; `studio-schedule seed` loads it into an
+      empty, migrated database only. partial: visible in the demo with the Phase 2 schedule
+- [x] `serve` chooses the store: `postgres` when `DATABASE_URL` is set, otherwise `memory` with demo
+      seed (with a warning log) (2026-10-23) — refuses to start while migrations are pending
 - [ ] Demo: the WASM build loads the full demo dataset; optional IndexedDB snapshot; "Reset demo"
-      button
+      button (2026-10-23) — `cmd/wasm` loads the full dataset via `seed.LoadDemo`. partial: IndexedDB
+      snapshot and "Reset demo" once the demo can change data (Phase 3)
 - [ ] CI: Postgres contract tests job; sqlc generate drift check
 
 ## Phase 2 — Public schedule (read-only)

@@ -33,7 +33,7 @@ golangci-lint.
 
 ```sh
 just web-install     # install frontend dependencies
-just serve           # API server on :8080 (in-memory store until Phase 1)
+just serve           # API server on :8080 (in-memory store with demo data unless DATABASE_URL is set)
 just web-dev         # Vite dev server on :5173, proxies /api to :8080
 ```
 
@@ -47,6 +47,17 @@ just gen-api         # regenerate api/openapi.json and web/src/api/schema.d.ts
 just demo-serve      # build Go → WASM + demo frontend and preview it locally
 just build           # single binary with embedded UI → bin/studio-schedule
 ```
+
+With PostgreSQL (18+), copy `.env.example` to `.env` and set `DATABASE_URL`, then:
+
+```sh
+just migrate up      # apply the embedded migrations (also: down, status)
+just seed            # optional: load the fictional demo data into the empty database
+just serve           # refuses to start while migrations are pending
+```
+
+The PostgreSQL tests (`just test-pg`, also part of `just test`) need Docker, or a server in
+`STUDIO_TEST_DATABASE_URL` whose role may create databases.
 
 ## Repository layout
 

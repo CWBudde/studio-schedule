@@ -21,7 +21,10 @@ Pages demo.
 
 ```sh
 just web-install # once: pnpm install for web/
-just serve       # API server on :8080 (memory store; Postgres arrives in Phase 1)
+just serve       # API server on :8080 (PostgreSQL if DATABASE_URL is set, else memory + demo data)
+just migrate up  # apply migrations to DATABASE_URL (also: down, status); just seed loads demo data
+just test-pg     # PostgreSQL store tests only (Docker via testcontainers, or STUDIO_TEST_DATABASE_URL)
+just sqlc        # after changing internal/store/postgres/{migrations,queries}: regenerate sqlc code
 just web-dev     # Vite on :5173, proxies /api to :8080
 just test        # go test ./...
 just test-race   # go test -race ./...
@@ -47,12 +50,15 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
 - **Wiring:** `internal/app.New(Deps)` builds services, calls `httpapi.Register`, and adds the
   middleware (recovery → access log → cross-origin protection → router). Unknown non-`/api` paths
   fall through to `Deps.UI` (the embedded SPA in `internal/webui`). `cmd/studio-schedule` (cobra:
-  `serve`, `openapi`, `version`) and `cmd/wasm` both call it.
+  `serve`, `migrate`, `seed`, `openapi`, `version`) and `cmd/wasm` both call it. `serve` uses
+  PostgreSQL when `DATABASE_URL` is set (refusing to start with pending migrations), otherwise the
+  memory store with `seed.LoadDemo`.
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` (plus a field in `httpapi.Deps` and its construction in `app.New`),
   `just gen-api`, then a query/mutation in `web/src/api/queries.ts` using the generated `paths`.
 - **Adding a repository:** extend the interfaces in `internal/store/store.go` (reached via
-  `store.Tx`), implement it in `internal/store/memory` (and `postgres` once it exists), and add
+  `store.Tx`), implement it in `internal/store/memory` and `internal/store/postgres` (migration in
+  `migrations/`, query in `queries/`, then `just sqlc`), and add
   contract cases to `storetest.Run`. Each store's `TestContract` runs that suite.
 - **WASM demo:** `internal/wasmbridge` (`bridge_js.go` is build-tagged `js && wasm`) exposes
   `StudioScheduleAPI.fetch`. On the web side, `web/src/api/transport.ts` picks HTTP or the Worker

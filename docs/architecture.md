@@ -59,6 +59,15 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   transaction.
 - Both stores return instants in UTC with microsecond precision and sort text byte-wise (collation
   `C`), so `storetest` can compare results with `==`.
+- `storetest` runs the same contract cases against both stores. The PostgreSQL tests use the
+  server in `STUDIO_TEST_DATABASE_URL` or start `postgres:18-alpine` via testcontainers; each test
+  gets its own database cloned from a migrated template.
+- **Schema:** goose migrations in `internal/store/postgres/migrations` are embedded in the binary
+  and are the schema of record; sqlc generates the query code from them (`just sqlc`, checked by
+  `just check-sqlc`). `serve` uses PostgreSQL when `DATABASE_URL` is set and refuses to start while
+  migrations are pending (`studio-schedule migrate up`); without it, `serve` runs the memory store
+  with the demo data and logs a warning. `studio-schedule seed` loads the demo data into an empty
+  database only.
 
 ## Time
 
