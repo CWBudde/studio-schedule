@@ -2,15 +2,17 @@ import i18n from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';
 import de from './locales/de/common.json';
+import deSchedule from './locales/de/schedule.json';
 import en from './locales/en/common.json';
+import enSchedule from './locales/en/schedule.json';
 
 export const supportedLanguages = ['en', 'de'] as const;
 export type SupportedLanguage = (typeof supportedLanguages)[number];
 
 export const defaultNS = 'common';
 export const resources = {
-  en: { common: en },
-  de: { common: de },
+  en: { common: en, schedule: enSchedule },
+  de: { common: de, schedule: deSchedule },
 } as const;
 
 void i18n
@@ -19,7 +21,7 @@ void i18n
   .init({
     resources,
     defaultNS,
-    ns: [defaultNS],
+    ns: [defaultNS, 'schedule'],
     fallbackLng: 'en',
     supportedLngs: supportedLanguages,
     nonExplicitSupportedLngs: true,

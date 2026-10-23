@@ -1,0 +1,24 @@
+{
+  "title": "Stundenplan",
+  "view": {
+    "label": "Ansicht",
+    "list": "Liste",
+    "week": "Woche"
+  },
+  "level": {
+    "beginner": "Anfänger",
+    "intermediate": "Mittelstufe",
+    "advanced": "Fortgeschrittene",
+    "professional": "Profis",
+    "open": "Alle Stufen"
+  },
+  "kind": {
+    "regular": "Kurs",
+    "workshop": "Workshop",
+    "private": "Privatstunde"
+  },
+  "status": {
+    "scheduled": "Findet statt",
+    "canceled": "Abgesagt"
+  }
+}

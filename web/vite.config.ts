@@ -50,6 +50,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // The browser's time zone must never leak into school dates and times: run
+    // the tests far away from the school (Europe/Berlin in the fixtures).
+    env: { TZ: 'America/New_York' },
     // Keep resource usage modest.
     maxWorkers: 2,
   },

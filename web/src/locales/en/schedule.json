@@ -1,0 +1,24 @@
+{
+  "title": "Schedule",
+  "view": {
+    "label": "View",
+    "list": "List",
+    "week": "Week"
+  },
+  "level": {
+    "beginner": "Beginner",
+    "intermediate": "Intermediate",
+    "advanced": "Advanced",
+    "professional": "Professional",
+    "open": "All levels"
+  },
+  "kind": {
+    "regular": "Class",
+    "workshop": "Workshop",
+    "private": "Private lesson"
+  },
+  "status": {
+    "scheduled": "Scheduled",
+    "canceled": "Canceled"
+  }
+}
