@@ -251,6 +251,8 @@ type StaffRepo interface {
 // CourseTypeRepo stores course types.
 type CourseTypeRepo interface {
 	Get(ctx context.Context, id domain.CourseTypeID) (domain.CourseType, error)
+	// Create and Update fail with domain.ErrDuplicate if another course
+	// type has the name, ignoring ASCII case.
 	Create(ctx context.Context, c domain.CourseType) error
 	Update(ctx context.Context, c domain.CourseType) error
 	// Delete fails with domain.ErrConflict while classes or lessons use the

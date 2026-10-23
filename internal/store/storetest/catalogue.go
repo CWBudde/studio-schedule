@@ -152,6 +152,17 @@ func testCatalogue(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			room.Capacity = 30
 			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Rooms().Update(ctx, room) })
+
+			ballet, jazz := e.courseType("Ballet"), e.courseType("Jazz")
+
+			dupType := domain.CourseType{ID: newID[domain.CourseTypeID](e), Name: "BALLET"}
+			wantErr(e.t, e.write(func(ctx context.Context, tx store.Tx) error { return tx.CourseTypes().Create(ctx, dupType) }), domain.ErrDuplicate)
+
+			jazz.Name = "ballet"
+			wantErr(e.t, e.write(func(ctx context.Context, tx store.Tx) error { return tx.CourseTypes().Update(ctx, jazz) }), domain.ErrDuplicate)
+
+			ballet.Name, ballet.Description = "BALLET", "Classical"
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.CourseTypes().Update(ctx, ballet) })
 		},
 		"MissingReferenceIsConflict": func(e *env) {
 			room := domain.Room{ID: newID[domain.RoomID](e), LocationID: newID[domain.LocationID](e), Name: "Nowhere", Capacity: 1}

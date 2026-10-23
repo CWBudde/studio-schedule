@@ -400,8 +400,9 @@ func TestRetry(t *testing.T) {
 	})
 }
 
-// TestUniqueNamesMigration upgrades a database whose names differ only in
-// case: the first keeps its name, the others get their ID appended.
+// TestUniqueNamesMigration upgrades a database whose location, room and
+// course type names differ only in case (00006, 00007): the first keeps its
+// name, the others get their ID appended.
 func TestUniqueNamesMigration(t *testing.T) {
 	t.Parallel()
 
@@ -414,14 +415,17 @@ func TestUniqueNamesMigration(t *testing.T) {
 
 	t.Cleanup(func() { _ = m.Close() })
 
-	if res, err := m.Down(ctx); err != nil || res.Name != "00006_catalog_unique_names.sql" {
-		t.Fatalf("down = %+v, %v; want 00006 rolled back", res, err)
+	for _, want := range []string{"00007_course_type_unique_names.sql", "00006_catalog_unique_names.sql"} {
+		if res, err := m.Down(ctx); err != nil || res.Name != want {
+			t.Fatalf("down = %+v, %v; want %s rolled back", res, err, want)
+		}
 	}
 
 	const (
 		loc1, loc2   = "00000000-0000-7000-8000-000000000001", "00000000-0000-7000-8000-000000000002"
 		room1, room2 = "00000000-0000-7000-8000-000000000011", "00000000-0000-7000-8000-000000000012"
 		room3        = "00000000-0000-7000-8000-000000000013"
+		ct1, ct2     = "00000000-0000-7000-8000-000000000021", "00000000-0000-7000-8000-000000000022"
 	)
 
 	if _, err := m.db.ExecContext(ctx,
@@ -435,6 +439,11 @@ func TestUniqueNamesMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if _, err := m.db.ExecContext(ctx,
+		`INSERT INTO course_types (id, name) VALUES ($1, 'Tap'), ($2, 'TAP')`, ct1, ct2); err != nil {
+		t.Fatal(err)
+	}
+
 	if _, err := m.Up(ctx); err != nil {
 		t.Fatalf("up: %v", err)
 	}
@@ -442,11 +451,13 @@ func TestUniqueNamesMigration(t *testing.T) {
 	for id, want := range map[string]string{
 		loc1: "Hall", loc2: "HALL (" + loc2 + ")",
 		room1: "Studio", room2: "studio (" + room2 + ")", room3: "Studio",
+		ct1: "Tap", ct2: "TAP (" + ct2 + ")",
 	} {
 		var name string
 
-		err := m.db.QueryRowContext(ctx,
-			`SELECT name FROM locations WHERE id = $1 UNION ALL SELECT name FROM rooms WHERE id = $1`, id).Scan(&name)
+		err := m.db.QueryRowContext(ctx, `SELECT name FROM locations WHERE id = $1
+			UNION ALL SELECT name FROM rooms WHERE id = $1
+			UNION ALL SELECT name FROM course_types WHERE id = $1`, id).Scan(&name)
 		if err != nil || name != want {
 			t.Errorf("name of %s = %q, %v; want %q", id, name, err, want)
 		}
@@ -560,12 +571,12 @@ func createLesson(t *testing.T, st *Store, seq *ids.Sequence, offset time.Durati
 	t.Helper()
 
 	start := time.Date(2026, time.March, 2, 9, 0, 0, 0, time.UTC).Add(offset)
-	// Location names are unique; each lesson gets its own location.
-	locID := ids.New[domain.LocationID](seq)
+	// Location and course type names are unique; each lesson gets its own.
+	locID, ctID := ids.New[domain.LocationID](seq), ids.New[domain.CourseTypeID](seq)
 	loc := domain.Location{ID: locID, Name: "Studio " + locID.String()}
 	room := domain.Room{ID: ids.New[domain.RoomID](seq), LocationID: loc.ID, Name: "Room A", Capacity: 10}
 	staff := domain.Staff{ID: ids.New[domain.StaffID](seq), DisplayName: "Instructor", Kind: domain.StaffInstructor}
-	ct := domain.CourseType{ID: ids.New[domain.CourseTypeID](seq), Name: "Ballet"}
+	ct := domain.CourseType{ID: ctID, Name: "Ballet " + ctID.String()}
 	l := domain.Lesson{
 		ID: ids.New[domain.LessonID](seq), CourseTypeID: ct.ID, RoomID: room.ID, InstructorID: staff.ID,
 		StartsAt: start, EndsAt: start.Add(time.Hour), Status: domain.LessonScheduled,

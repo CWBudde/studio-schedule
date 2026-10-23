@@ -514,9 +514,7 @@ func (r courseTypeRepo) Create(_ context.Context, c domain.CourseType) error {
 		return conflict("course type %s exists", c.ID)
 	}
 
-	s.courseTypes.put(r.tx.gen, c.ID, c)
-
-	return nil
+	return r.put(c)
 }
 
 func (r courseTypeRepo) Update(_ context.Context, c domain.CourseType) error {
@@ -527,6 +525,15 @@ func (r courseTypeRepo) Update(_ context.Context, c domain.CourseType) error {
 
 	if !s.courseTypes.has(c.ID) {
 		return notFound("course type")
+	}
+
+	return r.put(c)
+}
+
+func (r courseTypeRepo) put(c domain.CourseType) error {
+	s := &r.tx.state
+	if s.courseTypes.exists(func(o domain.CourseType) bool { return o.ID != c.ID && sameName(o.Name, c.Name) }) {
+		return fmt.Errorf("course type name is taken: %w", domain.ErrDuplicate)
 	}
 
 	s.courseTypes.put(r.tx.gen, c.ID, c)
