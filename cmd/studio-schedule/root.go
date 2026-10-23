@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/cwbudde/studio-schedule/internal/config"
 )
 
 type logOptions struct {
@@ -14,7 +16,9 @@ type logOptions struct {
 	level  string
 }
 
-func newRootCmd() *cobra.Command {
+// newRootCmd builds the command tree. env looks up environment variables
+// (os.LookupEnv in main), so tests never touch the process environment.
+func newRootCmd(env config.LookupFunc) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "studio-schedule",
 		Short:         "Schedule and booking system for dance and ballet schools",
@@ -22,7 +26,7 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 
-	root.AddCommand(newServeCmd(), newOpenAPICmd(), newVersionCmd())
+	root.AddCommand(newServeCmd(env), newOpenAPICmd(), newVersionCmd())
 
 	return root
 }

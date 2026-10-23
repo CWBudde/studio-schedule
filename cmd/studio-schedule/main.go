@@ -10,7 +10,7 @@ import (
 var version = "dev"
 
 func main() {
-	if err := newRootCmd().Execute(); err != nil {
+	if err := newRootCmd(os.LookupEnv).Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}

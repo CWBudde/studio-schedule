@@ -3,25 +3,41 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/cwbudde/studio-schedule/internal/config"
 )
 
 func run(t *testing.T, args ...string) string {
 	t.Helper()
 
+	out, err := execute(nil, args...)
+	if err != nil {
+		t.Fatalf("%v: %v\n%s", args, err, out)
+	}
+
+	return out
+}
+
+// execute runs the root command with env as the environment (nil means
+// empty) and returns its combined output.
+func execute(env map[string]string, args ...string) (string, error) {
 	var out bytes.Buffer
 
-	cmd := newRootCmd()
+	cmd := newRootCmd(func(key string) (string, bool) {
+		v, ok := env[key]
+
+		return v, ok
+	})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 	cmd.SetArgs(args)
 
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("%v: %v\n%s", args, err, out.String())
-	}
+	err := cmd.Execute()
 
-	return out.String()
+	return out.String(), err
 }
 
 func TestOpenAPICommand(t *testing.T) {
@@ -68,6 +84,71 @@ func TestLogOptions(t *testing.T) {
 	for _, o := range []logOptions{{"xml", "info"}, {"text", "loud"}} {
 		if _, err := o.logger(&bytes.Buffer{}); err == nil {
 			t.Errorf("%+v: want error", o)
+		}
+	}
+}
+
+func TestServeRejectsDatabaseURL(t *testing.T) {
+	t.Parallel()
+
+	const dsn = "postgres://app:change-me@db.example.test/studio"
+
+	for name, tc := range map[string]struct {
+		env  map[string]string
+		args []string
+	}{
+		"env":  {env: map[string]string{"DATABASE_URL": dsn}},
+		"flag": {args: []string{"--database-url", dsn}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			out, err := execute(tc.env, append([]string{"serve"}, tc.args...)...)
+			if !errors.Is(err, errNoPostgres) {
+				t.Fatalf("serve error = %v, want errNoPostgres\n%s", err, out)
+			}
+
+			if strings.Contains(err.Error()+out, "change-me") {
+				t.Errorf("output leaks the password: %v\n%s", err, out)
+			}
+		})
+	}
+}
+
+func TestServeRejectsInvalidConfig(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		env  map[string]string
+		args []string
+	}{
+		"env addr":      {env: map[string]string{"HTTP_ADDR": "nonsense"}},
+		"flag addr":     {args: []string{"--addr", "nonsense"}},
+		"flag base url": {args: []string{"--base-url", "/relative"}},
+		"flag over valid env": {
+			env:  map[string]string{"BASE_URL": "https://schedule.example.test"},
+			args: []string{"--base-url", "ftp://schedule.example.test"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			out, err := execute(tc.env, append([]string{"serve"}, tc.args...)...)
+			if !errors.Is(err, config.ErrInvalid) {
+				t.Fatalf("serve error = %v, want config.ErrInvalid\n%s", err, out)
+			}
+		})
+	}
+}
+
+func TestServeFlagHelpNamesEnv(t *testing.T) {
+	t.Parallel()
+
+	out := run(t, "serve", "--help")
+
+	for _, want := range []string{"--addr", "HTTP_ADDR", "--database-url", "DATABASE_URL", "--base-url", "BASE_URL"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("serve --help lacks %q:\n%s", want, out)
 		}
 	}
 }
