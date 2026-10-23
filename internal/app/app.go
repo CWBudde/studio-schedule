@@ -18,6 +18,7 @@ import (
 
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/httpapi"
+	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/service"
 	"github.com/cwbudde/studio-schedule/internal/store"
 )
@@ -28,6 +29,8 @@ type Deps struct {
 	Store store.Store
 	// Clock defaults to clock.System.
 	Clock clock.Clock
+	// IDs generates the IDs of new entities; defaults to ids.V7.
+	IDs ids.Source
 	// Version is the build version reported by the health endpoint;
 	// defaults to "dev".
 	Version string
@@ -38,27 +41,39 @@ type Deps struct {
 	UI http.Handler
 }
 
+// withDefaults fills in the optional dependencies. It panics without a
+// store.
+func (d Deps) withDefaults() Deps {
+	if d.Store == nil {
+		panic("app: Deps.Store is required")
+	}
+
+	if d.Clock == nil {
+		d.Clock = clock.System{}
+	}
+
+	if d.IDs == nil {
+		d.IDs = ids.V7{}
+	}
+
+	if d.Version == "" {
+		d.Version = "dev"
+	}
+
+	if d.Logger == nil {
+		d.Logger = slog.New(slog.DiscardHandler)
+	}
+
+	return d
+}
+
 // New builds the application handler. The returned huma.API gives access to
 // the OpenAPI document and allows tests to register extra operations.
 //
 // Middleware order (outermost first): panic recovery, access log,
 // cross-origin protection for unsafe methods, router.
 func New(deps Deps) (http.Handler, huma.API) {
-	if deps.Store == nil {
-		panic("app: Deps.Store is required")
-	}
-
-	if deps.Clock == nil {
-		deps.Clock = clock.System{}
-	}
-
-	if deps.Version == "" {
-		deps.Version = "dev"
-	}
-
-	if deps.Logger == nil {
-		deps.Logger = slog.New(slog.DiscardHandler)
-	}
+	deps = deps.withDefaults()
 
 	router := chi.NewRouter()
 	api := humachi.New(router, httpapi.NewConfig())

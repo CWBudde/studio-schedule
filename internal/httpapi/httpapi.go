@@ -47,71 +47,17 @@ func NewConfig() huma.Config {
 	return cfg
 }
 
-// Register adds all API operations to api.
+// Register adds all API operations to api. Each area registers its
+// operations in its own file.
 func Register(api huma.API, deps Deps) {
 	h := &handlers{deps: deps}
 
-	huma.Register(api, huma.Operation{
-		OperationID: "getHealth",
-		Method:      "GET",
-		Path:        BasePath + "/health",
-		Summary:     "Health check",
-		Description: "Reports that the service is running and which version is deployed.",
-		Tags:        []string{"system"},
-	}, h.getHealth)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "getPublicSettings",
-		Method:      "GET",
-		Path:        BasePath + "/settings/public",
-		Summary:     "Public school settings",
-		Description: "Returns the school settings that are visible without signing in.",
-		Tags:        []string{"settings"},
-	}, h.getPublicSettings)
+	registerSystem(api, h)
+	registerSettings(api, h)
 }
 
 type handlers struct {
 	deps Deps
-}
-
-// Health is the response body of getHealth.
-type Health struct {
-	Status  string `doc:"Always \"ok\" when the service responds." enum:"ok" json:"status"`
-	Version string `doc:"Build version of the running service."    json:"version"`
-}
-
-// HealthOutput is the response of getHealth.
-type HealthOutput struct {
-	Body Health
-}
-
-func (h *handlers) getHealth(context.Context, *struct{}) (*HealthOutput, error) {
-	return &HealthOutput{Body: Health{Status: "ok", Version: h.deps.Version}}, nil
-}
-
-// PublicSettings is the response body of getPublicSettings.
-type PublicSettings struct {
-	SchoolName    string `doc:"Display name of the school."                      json:"schoolName"`
-	Timezone      string `doc:"IANA time zone of the school, e.g. Europe/Berlin." json:"timezone"`
-	DefaultLocale string `doc:"Default UI locale (BCP 47 tag), e.g. en."         json:"defaultLocale"`
-}
-
-// PublicSettingsOutput is the response of getPublicSettings.
-type PublicSettingsOutput struct {
-	Body PublicSettings
-}
-
-func (h *handlers) getPublicSettings(ctx context.Context, _ *struct{}) (*PublicSettingsOutput, error) {
-	s, err := h.deps.Settings.Public(ctx)
-	if err != nil {
-		return nil, h.toHTTPError(ctx, err)
-	}
-
-	return &PublicSettingsOutput{Body: PublicSettings{
-		SchoolName:    s.SchoolName,
-		Timezone:      s.Timezone,
-		DefaultLocale: s.DefaultLocale,
-	}}, nil
 }
 
 // toHTTPError maps domain errors to RFC 9457 problem responses. Unknown
