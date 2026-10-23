@@ -523,6 +523,56 @@ func TestLoadDemoTwiceConflicts(t *testing.T) {
 	}
 }
 
+// TestLoadDemoRefusesNonEmptyStore checks that demo data is never mixed into
+// a store that already holds a school, even one with different IDs.
+func TestLoadDemoRefusesNonEmptyStore(t *testing.T) {
+	t.Parallel()
+
+	st := memory.New()
+	settings := seed.DemoSettings()
+	settings.SchoolName = "Other Example School"
+
+	err := st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return tx.Settings().Put(ctx, settings)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := seed.LoadDemo(t.Context(), st); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("load into non-empty store: want %v, got %v", domain.ErrConflict, err)
+	}
+
+	var got domain.Settings
+
+	err = st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		got, err = tx.Settings().Get(ctx)
+
+		return err
+	})
+	if err != nil || got != settings {
+		t.Fatalf("settings changed: %+v, %v", got, err)
+	}
+}
+
+func TestLoadDemoRefusesStoreWithPersons(t *testing.T) {
+	t.Parallel()
+
+	st := memory.New()
+	p := domain.Person{ID: domain.PersonID{1}, GivenName: "Existing", FamilyName: "Example"}
+
+	err := st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return tx.Persons().Create(ctx, p)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := seed.LoadDemo(t.Context(), st); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("load into store with persons: want %v, got %v", domain.ErrConflict, err)
+	}
+}
+
 func validAll[T interface{ Validate() error }](t *testing.T, items []T) {
 	t.Helper()
 

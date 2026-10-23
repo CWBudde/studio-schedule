@@ -4,6 +4,7 @@ package seed
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -45,8 +46,8 @@ type Dataset struct {
 }
 
 // LoadDemo writes the complete demo data set (Demo) into st in one
-// transaction. It fails with domain.ErrConflict if the data is already
-// there.
+// transaction. It fails with domain.ErrConflict unless st is empty (has no
+// settings and no persons).
 func LoadDemo(ctx context.Context, st store.Store) error {
 	d := Demo()
 
@@ -63,6 +64,10 @@ func LoadDemo(ctx context.Context, st store.Store) error {
 // write stores d through the repositories of tx, referenced records first.
 // It has no side effects outside tx, so the store may retry it.
 func write(ctx context.Context, tx store.Tx, d Dataset) error {
+	if err := checkEmpty(ctx, tx); err != nil {
+		return err
+	}
+
 	if err := tx.Settings().Put(ctx, d.Settings); err != nil {
 		return fmt.Errorf("settings: %w", err)
 	}
@@ -125,6 +130,28 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 		if err := tx.Classes().AddMember(ctx, m); err != nil {
 			return fmt.Errorf("member %v of class %v: %w", m.PersonID, m.ClassID, err)
 		}
+	}
+
+	return nil
+}
+
+// checkEmpty fails with domain.ErrConflict if the store has settings or
+// persons: demo data is never mixed into a store that is in use.
+func checkEmpty(ctx context.Context, tx store.Tx) error {
+	switch _, err := tx.Settings().Get(ctx); {
+	case err == nil:
+		return fmt.Errorf("%w: the store is not empty (settings exist)", domain.ErrConflict)
+	case !errors.Is(err, domain.ErrNotFound):
+		return fmt.Errorf("settings: %w", err)
+	}
+
+	persons, err := tx.Persons().List(ctx)
+	if err != nil {
+		return fmt.Errorf("persons: %w", err)
+	}
+
+	if len(persons) > 0 {
+		return fmt.Errorf("%w: the store is not empty (persons exist)", domain.ErrConflict)
 	}
 
 	return nil
