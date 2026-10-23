@@ -23,6 +23,7 @@ func TestEnums(t *testing.T) {
 	t.Run("ImportStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.ImportStatuses()) })
 	t.Run("TokenPurpose", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.TokenPurposes()) })
 	t.Run("MailStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.MailStatuses()) })
+	t.Run("AuditAction", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.AuditActions()) })
 }
 
 func TestPersonValidate(t *testing.T) {
@@ -518,6 +519,23 @@ func TestAuthValidate(t *testing.T) {
 			"no creation":      func(s *domain.Session) { s.CreatedAt = time.Time{} },
 			"seen before born": func(s *domain.Session) { s.LastSeenAt = t0.Add(-time.Second) },
 			"expired at seen":  func(s *domain.Session) { s.ExpiresAt = s.LastSeenAt },
+			"self-impersonate": func(s *domain.Session) { s.ImpersonatorID = s.AccountID },
+		})
+	})
+
+	t.Run("AuditEvent", func(t *testing.T) {
+		t.Parallel()
+		checkValidate(t, func() domain.AuditEvent {
+			return domain.AuditEvent{
+				ID: newID[domain.AuditEventID](), At: t0, ActorID: newID[domain.AccountID](),
+				Action: domain.AuditImpersonationStarted, TargetID: newID[domain.AccountID](),
+			}
+		}, map[string]func(*domain.AuditEvent){
+			"zero id":    func(e *domain.AuditEvent) { e.ID = domain.AuditEventID{} },
+			"no time":    func(e *domain.AuditEvent) { e.At = time.Time{} },
+			"no actor":   func(e *domain.AuditEvent) { e.ActorID = domain.AccountID{} },
+			"bad action": func(e *domain.AuditEvent) { e.Action = "deleted" },
+			"no target":  func(e *domain.AuditEvent) { e.TargetID = domain.AccountID{} },
 		})
 	})
 

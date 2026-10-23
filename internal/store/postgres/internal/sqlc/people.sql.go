@@ -288,6 +288,17 @@ func (q *Queries) ListPersons(ctx context.Context) ([]Person, error) {
 	return items, nil
 }
 
+const maxAccountVisibleDays = `-- name: MaxAccountVisibleDays :one
+SELECT coalesce(max(visible_days), 0)::integer FROM accounts
+`
+
+func (q *Queries) MaxAccountVisibleDays(ctx context.Context) (int32, error) {
+	row := q.db.QueryRow(ctx, maxAccountVisibleDays)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const removeGuardian = `-- name: RemoveGuardian :execrows
 DELETE FROM person_guardians WHERE guardian_id = $1 AND dependent_id = $2
 `

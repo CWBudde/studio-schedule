@@ -42,6 +42,9 @@ type Session struct {
 	LastSeenAt time.Time
 	// ExpiresAt is when the session ends unless it is extended before.
 	ExpiresAt time.Time
+	// ImpersonatorID is the admin who signed in as AccountID ("login as");
+	// zero for a normal session. Such a session is never extended.
+	ImpersonatorID AccountID
 }
 
 // Validate checks the session for consistency. All errors wrap
@@ -54,6 +57,7 @@ func (s Session) Validate() error {
 		rule{!s.CreatedAt.IsZero(), "session creation time must be set"},
 		rule{!s.LastSeenAt.Before(s.CreatedAt), "session cannot be seen before it is created"},
 		rule{s.ExpiresAt.After(s.LastSeenAt), "session must expire after it was last seen"},
+		rule{s.ImpersonatorID != s.AccountID, "an account cannot impersonate itself"},
 	)
 }
 

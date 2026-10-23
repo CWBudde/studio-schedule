@@ -38,17 +38,18 @@ func (q *Queries) CreateAccountToken(ctx context.Context, arg CreateAccountToken
 }
 
 const createSession = `-- name: CreateSession :exec
-INSERT INTO sessions (id, account_id, token_hash, created_at, last_seen_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO sessions (id, account_id, token_hash, created_at, last_seen_at, expires_at, impersonator_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateSessionParams struct {
-	ID         pgtype.UUID
-	AccountID  pgtype.UUID
-	TokenHash  []byte
-	CreatedAt  pgtype.Timestamptz
-	LastSeenAt pgtype.Timestamptz
-	ExpiresAt  pgtype.Timestamptz
+	ID             pgtype.UUID
+	AccountID      pgtype.UUID
+	TokenHash      []byte
+	CreatedAt      pgtype.Timestamptz
+	LastSeenAt     pgtype.Timestamptz
+	ExpiresAt      pgtype.Timestamptz
+	ImpersonatorID pgtype.UUID
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
@@ -59,6 +60,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 		arg.CreatedAt,
 		arg.LastSeenAt,
 		arg.ExpiresAt,
+		arg.ImpersonatorID,
 	)
 	return err
 }
@@ -155,7 +157,7 @@ func (q *Queries) GetCredential(ctx context.Context, accountID pgtype.UUID) (Acc
 }
 
 const getSessionByToken = `-- name: GetSessionByToken :one
-SELECT id, account_id, token_hash, created_at, last_seen_at, expires_at FROM sessions WHERE token_hash = $1
+SELECT id, account_id, token_hash, created_at, last_seen_at, expires_at, impersonator_id FROM sessions WHERE token_hash = $1
 `
 
 func (q *Queries) GetSessionByToken(ctx context.Context, tokenHash []byte) (Session, error) {
@@ -168,6 +170,7 @@ func (q *Queries) GetSessionByToken(ctx context.Context, tokenHash []byte) (Sess
 		&i.CreatedAt,
 		&i.LastSeenAt,
 		&i.ExpiresAt,
+		&i.ImpersonatorID,
 	)
 	return i, err
 }
@@ -192,17 +195,19 @@ func (q *Queries) PutCredential(ctx context.Context, arg PutCredentialParams) er
 
 const updateSession = `-- name: UpdateSession :execrows
 UPDATE sessions
-SET account_id = $2, token_hash = $3, created_at = $4, last_seen_at = $5, expires_at = $6
+SET account_id = $2, token_hash = $3, created_at = $4, last_seen_at = $5, expires_at = $6,
+    impersonator_id = $7
 WHERE id = $1
 `
 
 type UpdateSessionParams struct {
-	ID         pgtype.UUID
-	AccountID  pgtype.UUID
-	TokenHash  []byte
-	CreatedAt  pgtype.Timestamptz
-	LastSeenAt pgtype.Timestamptz
-	ExpiresAt  pgtype.Timestamptz
+	ID             pgtype.UUID
+	AccountID      pgtype.UUID
+	TokenHash      []byte
+	CreatedAt      pgtype.Timestamptz
+	LastSeenAt     pgtype.Timestamptz
+	ExpiresAt      pgtype.Timestamptz
+	ImpersonatorID pgtype.UUID
 }
 
 func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) (int64, error) {
@@ -213,6 +218,7 @@ func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) (i
 		arg.CreatedAt,
 		arg.LastSeenAt,
 		arg.ExpiresAt,
+		arg.ImpersonatorID,
 	)
 	if err != nil {
 		return 0, err

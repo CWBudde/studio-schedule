@@ -11,12 +11,13 @@ SET password_hash = excluded.password_hash, changed_at = excluded.changed_at;
 SELECT * FROM sessions WHERE token_hash = $1;
 
 -- name: CreateSession :exec
-INSERT INTO sessions (id, account_id, token_hash, created_at, last_seen_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6);
+INSERT INTO sessions (id, account_id, token_hash, created_at, last_seen_at, expires_at, impersonator_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7);
 
 -- name: UpdateSession :execrows
 UPDATE sessions
-SET account_id = $2, token_hash = $3, created_at = $4, last_seen_at = $5, expires_at = $6
+SET account_id = $2, token_hash = $3, created_at = $4, last_seen_at = $5, expires_at = $6,
+    impersonator_id = $7
 WHERE id = $1;
 
 -- name: DeleteSession :execrows

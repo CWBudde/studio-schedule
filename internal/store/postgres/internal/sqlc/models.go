@@ -33,6 +33,14 @@ type AccountToken struct {
 	ExpiresAt pgtype.Timestamptz
 }
 
+type AuditEvent struct {
+	ID         pgtype.UUID
+	OccurredAt pgtype.Timestamptz
+	ActorID    pgtype.UUID
+	Action     string
+	TargetID   pgtype.UUID
+}
+
 type Booking struct {
 	ID         pgtype.UUID
 	LessonID   pgtype.UUID
@@ -139,12 +147,13 @@ type Room struct {
 }
 
 type Session struct {
-	ID         pgtype.UUID
-	AccountID  pgtype.UUID
-	TokenHash  []byte
-	CreatedAt  pgtype.Timestamptz
-	LastSeenAt pgtype.Timestamptz
-	ExpiresAt  pgtype.Timestamptz
+	ID             pgtype.UUID
+	AccountID      pgtype.UUID
+	TokenHash      []byte
+	CreatedAt      pgtype.Timestamptz
+	LastSeenAt     pgtype.Timestamptz
+	ExpiresAt      pgtype.Timestamptz
+	ImpersonatorID pgtype.UUID
 }
 
 type Setting struct {

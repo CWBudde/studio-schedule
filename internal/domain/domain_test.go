@@ -23,6 +23,27 @@ func TestRoleValid(t *testing.T) {
 	}
 }
 
+func TestRoleAtLeast(t *testing.T) {
+	t.Parallel()
+
+	roles := domain.Roles()
+	for i, r := range roles {
+		for j, minimum := range roles {
+			if got, want := r.AtLeast(minimum), i >= j; got != want {
+				t.Errorf("%s.AtLeast(%s) = %v, want %v", r, minimum, got, want)
+			}
+		}
+
+		if got, want := r.Staff(), r.AtLeast(domain.RoleInstructor); got != want {
+			t.Errorf("%s.Staff() = %v, want %v", r, got, want)
+		}
+
+		if domain.Role("root").AtLeast(r) || domain.Role("").AtLeast(r) {
+			t.Errorf("an unknown role is at least %s", r)
+		}
+	}
+}
+
 func TestSettingsValidate(t *testing.T) {
 	t.Parallel()
 

@@ -80,6 +80,8 @@ func (r sessionRepo) put(sess domain.Session) error {
 	switch {
 	case !s.accounts.has(sess.AccountID):
 		return conflict("session references a missing account")
+	case !sess.ImpersonatorID.IsZero() && !s.accounts.has(sess.ImpersonatorID):
+		return conflict("session references a missing impersonator")
 	case s.sessions.exists(func(o domain.Session) bool { return o.ID != sess.ID && o.TokenHash == sess.TokenHash }):
 		return conflict("session token is taken")
 	}
@@ -263,4 +265,36 @@ func (r outboxRepo) List(_ context.Context, limit int) ([]domain.OutboxMail, err
 	})
 
 	return mails[:min(max(limit, 0), len(mails))], nil
+}
+
+// ---------------------------------------------------------------- audit
+
+type auditRepo struct{ tx *tx }
+
+func (r auditRepo) Create(_ context.Context, e domain.AuditEvent) error {
+	if err := r.tx.checkWritable(); err != nil {
+		return err
+	}
+
+	s := &r.tx.state
+
+	switch {
+	case s.audit.has(e.ID):
+		return conflict("audit event %s exists", e.ID)
+	case !s.accounts.has(e.ActorID) || !s.accounts.has(e.TargetID):
+		return conflict("audit event references a missing account")
+	}
+
+	e.At = instant(e.At)
+	s.audit.put(r.tx.gen, e.ID, e)
+
+	return nil
+}
+
+func (r auditRepo) List(_ context.Context, limit int) ([]domain.AuditEvent, error) {
+	events := sorted(r.tx.state.audit.filter(all), func(a, b domain.AuditEvent) int {
+		return cmp.Or(b.At.Compare(a.At), compareID(b.ID, a.ID))
+	})
+
+	return events[:min(max(limit, 0), len(events))], nil
 }

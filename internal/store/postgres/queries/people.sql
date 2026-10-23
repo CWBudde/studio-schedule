@@ -55,3 +55,6 @@ WHERE id = $1;
 
 -- name: ListAccounts :many
 SELECT * FROM accounts ORDER BY lower(email), id;
+
+-- name: MaxAccountVisibleDays :one
+SELECT coalesce(max(visible_days), 0)::integer FROM accounts;

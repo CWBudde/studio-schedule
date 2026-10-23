@@ -231,6 +231,12 @@ func (r accountRepo) List(ctx context.Context) ([]domain.Account, error) {
 	return convertRows(rows, err, toAccount)
 }
 
+func (r accountRepo) MaxVisibleDays(ctx context.Context) (int, error) {
+	n, err := r.q.MaxAccountVisibleDays(ctx)
+
+	return int(n), mapErr(err)
+}
+
 // convertRows maps the rows of a list query, or its error.
 func convertRows[R, E any](rows []R, err error, convert func(R) E) ([]E, error) {
 	if err != nil {

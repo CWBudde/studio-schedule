@@ -105,6 +105,7 @@ type Tx interface {
 	Lessons() LessonRepo
 	Bookings() BookingRepo
 	Outbox() OutboxRepo
+	Audit() AuditRepo
 }
 
 // SettingsRepo stores the single, school-wide settings record.
@@ -150,6 +151,9 @@ type AccountRepo interface {
 	Update(ctx context.Context, a domain.Account) error
 	// List returns all accounts ordered by ASCII-lower-cased email and ID.
 	List(ctx context.Context) ([]domain.Account, error)
+	// MaxVisibleDays returns the largest VisibleDays override of any
+	// account, or 0 if none has one.
+	MaxVisibleDays(ctx context.Context) (int, error)
 }
 
 // CredentialRepo stores the passwords of accounts, at most one per account.
@@ -167,7 +171,7 @@ type SessionRepo interface {
 	// or not.
 	GetByToken(ctx context.Context, hash [32]byte) (domain.Session, error)
 	// Create fails with domain.ErrConflict if the ID or the token hash is
-	// taken, or the account does not exist.
+	// taken, or the account or the impersonator does not exist.
 	Create(ctx context.Context, s domain.Session) error
 	// Update fails with domain.ErrConflict under the same rules as Create.
 	Update(ctx context.Context, s domain.Session) error
@@ -336,4 +340,14 @@ type OutboxRepo interface {
 	// List returns at most limit mails, newest first: ordered by creation
 	// time and ID, both descending.
 	List(ctx context.Context, limit int) ([]domain.OutboxMail, error)
+}
+
+// AuditRepo stores audit events. Events are only ever added.
+type AuditRepo interface {
+	// Create fails with domain.ErrConflict if the ID is taken or an account
+	// does not exist.
+	Create(ctx context.Context, e domain.AuditEvent) error
+	// List returns at most limit events, newest first: ordered by time and
+	// ID, both descending.
+	List(ctx context.Context, limit int) ([]domain.AuditEvent, error)
 }

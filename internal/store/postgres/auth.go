@@ -49,6 +49,8 @@ func toSession(row sqlc.Session) domain.Session {
 		CreatedAt:  fromPgInstant(row.CreatedAt),
 		LastSeenAt: fromPgInstant(row.LastSeenAt),
 		ExpiresAt:  fromPgInstant(row.ExpiresAt),
+
+		ImpersonatorID: fromPgID[domain.AccountID](row.ImpersonatorID),
 	}
 }
 
@@ -63,23 +65,25 @@ func (r sessionRepo) GetByToken(ctx context.Context, hash [32]byte) (domain.Sess
 
 func (r sessionRepo) Create(ctx context.Context, s domain.Session) error {
 	return mapErr(r.q.CreateSession(ctx, sqlc.CreateSessionParams{
-		ID:         pgID(s.ID),
-		AccountID:  pgID(s.AccountID),
-		TokenHash:  s.TokenHash[:],
-		CreatedAt:  pgInstant(s.CreatedAt),
-		LastSeenAt: pgInstant(s.LastSeenAt),
-		ExpiresAt:  pgInstant(s.ExpiresAt),
+		ID:             pgID(s.ID),
+		AccountID:      pgID(s.AccountID),
+		TokenHash:      s.TokenHash[:],
+		CreatedAt:      pgInstant(s.CreatedAt),
+		LastSeenAt:     pgInstant(s.LastSeenAt),
+		ExpiresAt:      pgInstant(s.ExpiresAt),
+		ImpersonatorID: pgID(s.ImpersonatorID),
 	}))
 }
 
 func (r sessionRepo) Update(ctx context.Context, s domain.Session) error {
 	n, err := r.q.UpdateSession(ctx, sqlc.UpdateSessionParams{
-		ID:         pgID(s.ID),
-		AccountID:  pgID(s.AccountID),
-		TokenHash:  s.TokenHash[:],
-		CreatedAt:  pgInstant(s.CreatedAt),
-		LastSeenAt: pgInstant(s.LastSeenAt),
-		ExpiresAt:  pgInstant(s.ExpiresAt),
+		ID:             pgID(s.ID),
+		AccountID:      pgID(s.AccountID),
+		TokenHash:      s.TokenHash[:],
+		CreatedAt:      pgInstant(s.CreatedAt),
+		LastSeenAt:     pgInstant(s.LastSeenAt),
+		ExpiresAt:      pgInstant(s.ExpiresAt),
+		ImpersonatorID: pgID(s.ImpersonatorID),
 	})
 
 	return affected("session", n, err)

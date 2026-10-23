@@ -2,6 +2,7 @@ package storetest
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -189,6 +190,31 @@ func testAccounts(t *testing.T, newStore func(*testing.T) store.Store) {
 	}
 
 	cases(t, newStore, map[string]func(e *env){
+		"MaxVisibleDays": func(e *env) {
+			maxDays := func() int {
+				n, err := query(e, func(ctx context.Context, tx store.Tx) (int, error) {
+					return tx.Accounts().MaxVisibleDays(ctx)
+				})
+				if err != nil {
+					e.t.Fatalf("MaxVisibleDays: %v", err)
+				}
+
+				return n
+			}
+
+			wantEqual(e.t, maxDays(), 0) // no accounts
+
+			e.account(e.person("Ada", "Account"), "ada@example.org") // no override
+			wantEqual(e.t, maxDays(), 0)
+
+			for i, days := range []int{30, 45, 7} {
+				a := e.account(e.person("Bea", fmt.Sprint("Other", i)), fmt.Sprintf("bea%d@example.org", i))
+				a.VisibleDays = days
+				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Accounts().Update(ctx, a) })
+			}
+
+			wantEqual(e.t, maxDays(), 45)
+		},
 		"EmailIsCaseInsensitive": func(e *env) {
 			a := e.account(e.person("Ada", "Account"), "Ada@Example.org")
 

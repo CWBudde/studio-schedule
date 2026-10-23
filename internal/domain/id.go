@@ -84,6 +84,7 @@ type (
 	importRunKind     struct{}
 	sessionKind       struct{}
 	outboxMailKind    struct{}
+	auditEventKind    struct{}
 )
 
 // ID types, one per entity of the domain model.
@@ -147,4 +148,7 @@ type (
 
 	// OutboxMailID identifies an outbox mail.
 	OutboxMailID = ID[outboxMailKind]
+
+	// AuditEventID identifies an audit event.
+	AuditEventID = ID[auditEventKind]
 )

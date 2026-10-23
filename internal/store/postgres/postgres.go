@@ -203,3 +203,4 @@ func (t *tx) Classes() store.ClassRepo          { return classRepo{t.q} }
 func (t *tx) Lessons() store.LessonRepo         { return lessonRepo{t.q} }
 func (t *tx) Bookings() store.BookingRepo       { return bookingRepo{t.q} }
 func (t *tx) Outbox() store.OutboxRepo          { return outboxRepo{t.q} }
+func (t *tx) Audit() store.AuditRepo            { return auditRepo{t.q} }

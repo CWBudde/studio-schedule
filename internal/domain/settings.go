@@ -33,9 +33,9 @@ type Settings struct {
 	BookingCutoff      time.Duration
 	CancellationCutoff time.Duration
 
-	// DefaultVisibleDays additionally limits how many days ahead signed-in
-	// members see lessons, unless their account overrides it (applied once
-	// accounts exist, Phase 3).
+	// DefaultVisibleDays is the early access of signed-in members: they see
+	// the lessons they may see up to this many days after today, even if
+	// not released yet, unless their account overrides it (ADR 0003).
 	DefaultVisibleDays int
 
 	// LegalNotice is the optional imprint shown in the footer.

@@ -9,7 +9,8 @@ type Account struct {
 	// Email is the login name; the store keeps it unique case-insensitively.
 	Email string
 	Role  Role
-	// VisibleDays overrides Settings.DefaultVisibleDays when positive.
+	// VisibleDays overrides Settings.DefaultVisibleDays (early access)
+	// when positive.
 	VisibleDays int
 	// ConfirmedAt is set once the email address is confirmed. Unconfirmed
 	// accounts cannot log in.

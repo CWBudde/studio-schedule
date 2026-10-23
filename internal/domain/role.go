@@ -29,3 +29,22 @@ func (r Role) Valid() bool {
 
 // String implements fmt.Stringer.
 func (r Role) String() string { return string(r) }
+
+// AtLeast reports whether r is a known role with at least the privileges
+// of minimum, in the order of Roles. An unknown role has none.
+func (r Role) AtLeast(minimum Role) bool {
+	return r.rank() >= minimum.rank() && r.Valid()
+}
+
+func (r Role) rank() int {
+	for i, known := range Roles() {
+		if r == known {
+			return i
+		}
+	}
+
+	return -1
+}
+
+// Staff reports whether r is a staff role: instructor, office or admin.
+func (r Role) Staff() bool { return r.AtLeast(RoleInstructor) }

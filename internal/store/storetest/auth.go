@@ -137,6 +137,35 @@ func testSessions(t *testing.T, newStore func(*testing.T) store.Store) {
 			noAccount := s
 			noAccount.ID, noAccount.TokenHash, noAccount.AccountID = newID[domain.SessionID](e), domain.HashToken("other"), newID[domain.AccountID](e)
 			wantErr(e.t, create(noAccount), domain.ErrConflict)
+
+			noImpersonator := s
+			noImpersonator.ID, noImpersonator.TokenHash = newID[domain.SessionID](e), domain.HashToken("third")
+			noImpersonator.ImpersonatorID = newID[domain.AccountID](e)
+			wantErr(e.t, create(noImpersonator), domain.ErrConflict)
+		},
+		"Impersonation": func(e *env) {
+			admin := e.account(e.person("Ada", "Admin"), "ada@example.org")
+			member := e.account(e.person("Ben", "Member"), "ben@example.org")
+
+			s := domain.Session{
+				ID: newID[domain.SessionID](e), AccountID: member.ID, TokenHash: domain.HashToken("as-ben"),
+				CreatedAt: t0, LastSeenAt: t0, ExpiresAt: t0.Add(time.Hour), ImpersonatorID: admin.ID,
+			}
+			valid(e.t, s)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Sessions().Create(ctx, s) })
+
+			got, err := getByToken(e, "as-ben")
+			if err != nil {
+				e.t.Fatalf("GetByToken: %v", err)
+			}
+
+			wantEqual(e.t, got, s)
+
+			s.ImpersonatorID = domain.AccountID{}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Sessions().Update(ctx, s) })
+
+			got, _ = getByToken(e, "as-ben")
+			wantEqual(e.t, got, s)
 		},
 		"DeleteExpired": func(e *env) {
 			a := e.account(e.person("Ada", "Account"), "ada@example.org")
@@ -305,6 +334,85 @@ func testAccountTokens(t *testing.T, newStore func(*testing.T) store.Store) {
 					e.t.Fatalf("%s: want ErrReadOnly, got %v", name, err)
 				}
 			}
+		},
+	})
+}
+
+func testAudit(t *testing.T, newStore func(*testing.T) store.Store) {
+	t.Helper()
+
+	list := func(e *env, limit int) []domain.AuditEvent {
+		e.t.Helper()
+
+		events, err := query(e, func(ctx context.Context, tx store.Tx) ([]domain.AuditEvent, error) {
+			return tx.Audit().List(ctx, limit)
+		})
+		if err != nil {
+			e.t.Fatalf("List: %v", err)
+		}
+
+		return events
+	}
+
+	event := func(e *env, at time.Time, actor, target domain.Account, action domain.AuditAction) domain.AuditEvent {
+		ev := domain.AuditEvent{ID: newID[domain.AuditEventID](e), At: at, ActorID: actor.ID, Action: action, TargetID: target.ID}
+		valid(e.t, ev)
+
+		return ev
+	}
+
+	create := func(e *env, ev domain.AuditEvent) error {
+		return e.write(func(ctx context.Context, tx store.Tx) error { return tx.Audit().Create(ctx, ev) })
+	}
+
+	cases(t, newStore, map[string]func(e *env){
+		"CreateList": func(e *env) {
+			admin := e.account(e.person("Ada", "Admin"), "ada@example.org")
+			member := e.account(e.person("Ben", "Member"), "ben@example.org")
+
+			wantEqual(e.t, len(list(e, 10)), 0)
+
+			started := event(e, t0, admin, member, domain.AuditImpersonationStarted)
+			ended := event(e, t0.Add(time.Minute), admin, member, domain.AuditImpersonationEnded)
+			sameTime := event(e, t0.Add(time.Minute), admin, member, domain.AuditImpersonationStarted)
+
+			for _, ev := range []domain.AuditEvent{started, ended, sameTime} {
+				if err := create(e, ev); err != nil {
+					e.t.Fatalf("Create: %v", err)
+				}
+			}
+
+			// Newest first; equal times by ID descending.
+			wantSlice(e.t, list(e, 10), []domain.AuditEvent{sameTime, ended, started})
+			wantSlice(e.t, list(e, 1), []domain.AuditEvent{sameTime})
+			wantEqual(e.t, len(list(e, 0)), 0)
+		},
+		"Conflicts": func(e *env) {
+			admin := e.account(e.person("Ada", "Admin"), "ada@example.org")
+			member := e.account(e.person("Ben", "Member"), "ben@example.org")
+
+			ev := event(e, t0, admin, member, domain.AuditImpersonationStarted)
+			if err := create(e, ev); err != nil {
+				e.t.Fatalf("Create: %v", err)
+			}
+
+			wantErr(e.t, create(e, ev), domain.ErrConflict) // same ID
+
+			noActor := ev
+			noActor.ID, noActor.ActorID = newID[domain.AuditEventID](e), newID[domain.AccountID](e)
+			wantErr(e.t, create(e, noActor), domain.ErrConflict)
+
+			noTarget := ev
+			noTarget.ID, noTarget.TargetID = newID[domain.AuditEventID](e), newID[domain.AccountID](e)
+			wantErr(e.t, create(e, noTarget), domain.ErrConflict)
+		},
+		"ReadOnlyRejectsWrites": func(e *env) {
+			admin := e.account(e.person("Ada", "Admin"), "ada@example.org")
+			member := e.account(e.person("Ben", "Member"), "ben@example.org")
+			ev := event(e, t0, admin, member, domain.AuditImpersonationStarted)
+
+			err := e.read(func(ctx context.Context, tx store.Tx) error { return tx.Audit().Create(ctx, ev) })
+			wantErr(e.t, err, store.ErrReadOnly)
 		},
 	})
 }

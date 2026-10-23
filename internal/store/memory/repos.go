@@ -256,6 +256,15 @@ func (r accountRepo) List(context.Context) ([]domain.Account, error) {
 	}), nil
 }
 
+func (r accountRepo) MaxVisibleDays(context.Context) (int, error) {
+	n := 0
+	for _, a := range r.tx.state.accounts.filter(all) {
+		n = max(n, a.VisibleDays)
+	}
+
+	return n, nil
+}
+
 // ---------------------------------------------------------------- catalog
 
 type locationRepo struct{ tx *tx }
