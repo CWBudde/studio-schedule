@@ -76,6 +76,20 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   correctly.
 - `time.Local` is forbidden (golangci-lint forbidigo). The WASM build embeds `time/tzdata`.
 - Services take the current time from `clock.Clock`, so tests use a fixed clock.
+- `domain.Date.At(TimeOfDay, loc)` turns a school date and wall-clock time into an instant (an
+  ambiguous time takes the earlier instant, a time in the DST gap moves forward);
+  `service.loadSchool` is the one place that resolves the school time zone.
+- The release window and the lessons a guest sees are computed on the server only
+  ([ADR 0003](decisions/0003-release-window-and-visibility.md)); the schedule response carries
+  `releasedUntil`, `nextReleaseAt` and the server's `now`.
+
+## Background jobs
+
+`internal/jobs` runs named jobs on a Go ticker each. `app.Jobs(deps)` registers them (today:
+`generate-lessons`, hourly, over a rolling horizon). The server and the WASM build run every job
+once at startup (the demo before it answers its first request), then on its interval; Go timers
+work in `js/wasm`, so both targets use the same code. Jobs must be idempotent: the generator reads
+the existing lessons of its range and creates only the missing ones.
 
 ## API contract
 

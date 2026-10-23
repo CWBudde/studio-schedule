@@ -54,4 +54,8 @@ it answers the first request), then on their interval.
   Phase 3 lesson administration needs a per-class "generated through" watermark or a link between
   a lesson and its slot.
 - There is no "publish early" switch for a single regular lesson; Phase 3 can add one if needed.
+- Two server instances generating at the same moment can both see a lesson as missing; the
+  second insert then fails on the unique `(class_id, starts_at)` key and that run rolls back.
+  The next run fills the gap. Running several instances needs a retry on conflict or an
+  advisory lock around generation.
 - The demo's term has fixed dates, so its schedule is empty once the term has ended.

@@ -114,11 +114,10 @@ in-memory store.
 
 Goal: a production-grade persistence layer with two interchangeable implementations.
 
-- [ ] Typed IDs (UUIDv7) generated in Go via an injectable `IDs` source (2026-10-23) — generic
+- [x] Typed IDs (UUIDv7) generated in Go via an injectable `IDs` source (2026-10-23) — generic
       `domain.ID[K]` with one alias per table, canonical-only parsing; `ids.Source` with `V7`
       (prod) and a deterministic `Sequence` (tests, seed); forbidigo bans `uuid.New*` outside
-      `internal/ids`. partial: inject `ids.Source` via `app.Deps` (server: `V7`, demo seed:
-      `Sequence`) together with the first service that creates entities
+      `internal/ids`; `app.Deps.IDs` (default `V7`) feeds the lesson generator
 - [ ] Domain entities and validation for all tables in the domain model (no behaviour yet)
       (2026-10-23) — plain structs with `Validate()` for every business table, string enums with
       `Valid()`, value types `Money`/`Date`/`TimeOfDay`, `Settings` extended (currency, receipt
@@ -165,24 +164,41 @@ Goal: a production-grade persistence layer with two interchangeable implementati
 - [ ] Demo: the WASM build loads the full demo dataset; optional IndexedDB snapshot; "Reset demo"
       button (2026-10-23) — `cmd/wasm` loads the full dataset via `seed.LoadDemo`. partial: IndexedDB
       snapshot and "Reset demo" once the demo can change data (Phase 3)
-- [ ] CI: Postgres contract tests job; sqlc generate drift check
+- [x] CI: Postgres contract tests job; sqlc generate drift check (2026-10-23) — `test-unit` runs
+      the PostgreSQL contract tests via testcontainers on the runner's Docker; `test-format` runs
+      `just check-sqlc`
 
 ## Phase 2 — Public schedule (read-only)
 
 Goal: anyone can browse the published timetable. This is the first real demo value.
 
-- [ ] Catalogue services and endpoints (read): locations, rooms, staff, course types
+- [ ] Catalogue services and endpoints (read): locations, rooms, staff, course types (2026-10-23)
+      — `listLocations`, `listRooms`, `listStaff` (active, no person), `listCourseTypes`. partial:
+      visible in the demo with the schedule UI
 - [ ] Terms and classes (read). Lesson generation from class templates for a date range: idempotent
       (unique `(class_id, starts_at)`), DST-correct, respects term and class validity ranges
+      (2026-10-23) — `listTerms`, `listClasses`; `LessonGenerator` at school wall-clock time
+      (`Date.At`), reads existing lessons first, inclusive term range (classes have no range of
+      their own, ADR 0003). partial: visible in the demo with the schedule UI
 - [ ] Release window: settings `release_weekday`, `release_time`, `release_weeks_ahead`; lessons
       beyond the window are invisible to members; special lessons can be published early; per-account
-      visible-days override (used later)
-- [ ] Visibility rules: `public | hidden | internal`; cancelled lessons stay visible with a status
+      visible-days override (used later) (2026-10-23) — server-only `ComputeReleaseWindow`: released
+      through the release weekday N weeks after the last release (ADR 0003); one-off lessons and
+      workshops are published early. partial: visible in the demo with the schedule UI and the
+      countdown; the visible-days override with accounts (Phase 3)
+- [ ] Visibility rules: `public | members | hidden`; cancelled lessons stay visible with a status
+      (2026-10-23) — guests see public, released lessons; invisible lessons are a 404 like unknown
+      ones. partial: visible in the demo with the schedule UI; members and staff with accounts
+      (Phase 3)
 - [ ] `GET /api/v1/schedule?from&to&location&instructor&courseType&level`, `GET /api/v1/lessons/{id}`
+      (2026-10-23) — `getSchedule` (≤ 42 days, filters, `releasedUntil`/`nextReleaseAt`/`now`) and
+      `getLesson`; the WASM smoke test checks the demo schedule. partial: visible in the demo with
+      the schedule UI
 - [ ] OpenAPI schema for domain IDs: `type: string, format: uuid` (registered in `httpapi`, so
       `domain` stays dependency-free), visible in the generated TS types
-- [ ] Background job runner abstraction (ticker in server, `setInterval` bridge in WASM) for lesson
-      generation
+- [x] Background job runner abstraction (Go ticker in server and WASM) for lesson generation
+      (2026-10-23) — `internal/jobs`; both targets run every job once at startup, then
+      `generate-lessons` hourly over a rolling horizon
 - [ ] UI: schedule list view (day groups), week grid, board view; filters; lesson detail sheet;
       countdown to the next release; empty and error states; mobile-first
 - [ ] UI: i18n for all strings; date/time formatting in the school timezone (`Intl` with an explicit
@@ -330,6 +346,13 @@ Issues found in the previous system that this rewrite must avoid:
   forbidden.
 - **Two parallel frontends and APIs drifted** (field names, endpoints). → Generated types plus a
   drift check in CI.
+- **The release rule existed three times** (server, browser client, rewrite) with different times,
+  computed in the browser's timezone and compared by date. → Computed once on the server from
+  settings; the API returns `releasedUntil`, `nextReleaseAt` and `now`; comparisons use instants.
+- **Cloning a day shifted lessons by an hour across DST**, and copying deleted the target day first.
+  → Lessons are generated at school wall-clock time and generation only adds what is missing.
+- **The release job had no caller**, so nothing ran on schedule. → A job runner wired into both
+  targets and covered by tests.
 
 ## Risks
 
