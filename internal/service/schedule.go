@@ -73,7 +73,8 @@ type ScheduledLesson struct {
 	Instructor, Accompanist domain.Staff
 }
 
-// Schedule is the published timetable of a date range as a guest sees it.
+// Schedule is the published timetable of a date range as one viewer sees
+// it.
 type Schedule struct {
 	// Timezone is the IANA time zone of the school.
 	Timezone string
@@ -81,12 +82,18 @@ type Schedule struct {
 	Now      time.Time
 	From, To domain.Date
 	Release  ReleaseWindow
+	// VisibleUntil is the instant before which regular lessons are visible
+	// to the viewer: ReleasedUntil for guests, later for members with early
+	// access, zero for staff (no limit).
+	VisibleUntil time.Time
 	// Lessons are ordered by start and ID.
 	Lessons []ScheduledLesson
 }
 
-// ScheduleService publishes the timetable. Until accounts exist (Phase 3)
-// every caller is a guest.
+// ScheduleService publishes the timetable. What a caller sees depends on
+// their role (ADR 0003): guests see public, released lessons; members also
+// lessons for members and, with early access, a few more days; staff see
+// everything.
 type ScheduleService struct {
 	store store.Store
 	clock clock.Clock
@@ -97,10 +104,10 @@ func NewScheduleService(st store.Store, clk clock.Clock) *ScheduleService {
 	return &ScheduleService{store: st, clock: clk}
 }
 
-// Schedule returns the lessons a guest may see that start in the school
-// dates [q.From, q.To) and match the filters of q. An invalid query fails
-// with an error wrapping domain.ErrValidation.
-func (s *ScheduleService) Schedule(ctx context.Context, q ScheduleQuery) (Schedule, error) {
+// Schedule returns the lessons p may see that start in the school dates
+// [q.From, q.To) and match the filters of q; a zero p is a guest. An
+// invalid query fails with an error wrapping domain.ErrValidation.
+func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQuery) (Schedule, error) {
 	if err := q.validate(); err != nil {
 		return Schedule{}, err
 	}
@@ -117,6 +124,9 @@ func (s *ScheduleService) Schedule(ctx context.Context, q ScheduleQuery) (Schedu
 		out.Release = ComputeReleaseWindow(settings, loc, out.Now)
 		out.Lessons = nil // the callback may run more than once
 
+		v := viewerOf(p, settings, loc, out.Now)
+		out.VisibleUntil = v.visibleUntil(out.Release)
+
 		lessons, err := tx.Lessons().ListRange(ctx, q.From.At(domain.TimeOfDay{}, loc), q.To.At(domain.TimeOfDay{}, loc))
 		if err != nil {
 			return fmt.Errorf("lessons: %w", err)
@@ -128,7 +138,7 @@ func (s *ScheduleService) Schedule(ctx context.Context, q ScheduleQuery) (Schedu
 		}
 
 		for _, l := range lessons {
-			if !visibleToGuest(l, out.Release) {
+			if !v.sees(l, out.Release) {
 				continue
 			}
 
@@ -155,10 +165,10 @@ func (s *ScheduleService) Schedule(ctx context.Context, q ScheduleQuery) (Schedu
 	return out, nil
 }
 
-// Lesson returns one lesson a guest may see. A lesson that does not exist
-// or is not visible fails alike with domain.ErrNotFound, so the response
-// does not reveal hidden or unreleased lessons.
-func (s *ScheduleService) Lesson(ctx context.Context, id domain.LessonID) (ScheduledLesson, error) {
+// Lesson returns one lesson p may see; a zero p is a guest. A lesson that
+// does not exist or is not visible fails alike with domain.ErrNotFound, so
+// the response does not reveal hidden or unreleased lessons.
+func (s *ScheduleService) Lesson(ctx context.Context, p Principal, id domain.LessonID) (ScheduledLesson, error) {
 	now := s.clock.Now()
 
 	var out ScheduledLesson
@@ -174,7 +184,7 @@ func (s *ScheduleService) Lesson(ctx context.Context, id domain.LessonID) (Sched
 			return err
 		}
 
-		if !visibleToGuest(l, ComputeReleaseWindow(settings, loc, now)) {
+		if !viewerOf(p, settings, loc, now).sees(l, ComputeReleaseWindow(settings, loc, now)) {
 			return domain.ErrNotFound
 		}
 

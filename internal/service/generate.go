@@ -33,22 +33,32 @@ func NewLessonGenerator(st store.Store, clk clock.Clock, src ids.Source) *Lesson
 // Generate creates the missing lessons for the school dates in [from, to)
 // and returns how many it created.
 func (g *LessonGenerator) Generate(ctx context.Context, from, to domain.Date) (int, error) {
-	return g.generate(ctx, func(domain.Settings, *time.Location) (domain.Date, domain.Date) {
-		return from, to
+	return g.generate(ctx, func(context.Context, store.Tx, domain.Settings, *time.Location) (domain.Date, domain.Date, error) {
+		return from, to, nil
 	})
 }
 
 // GenerateAhead creates the missing lessons of the rolling horizon: from 7
-// days before today to max(7·(ReleaseWeeksAhead+2), DefaultVisibleDays) + 7
-// days after it (inclusive), today being the current school date. The
-// horizon covers everything a release or a member's view can reach before
-// the next hourly run.
+// days before today to max(7·(ReleaseWeeksAhead+2), visible days) + 7 days
+// after it (inclusive), today being the current school date and visible
+// days the longest early access of any account (DefaultVisibleDays or an
+// account's override). The horizon covers everything a release or a
+// member's view can reach before the next hourly run.
 func (g *LessonGenerator) GenerateAhead(ctx context.Context) (int, error) {
-	return g.generate(ctx, func(s domain.Settings, loc *time.Location) (domain.Date, domain.Date) {
-		today := domain.DateOf(g.clock.Now(), loc)
-		ahead := max(7*(s.ReleaseWeeksAhead+2), s.DefaultVisibleDays) + 7
+	return g.generate(ctx, func(
+		ctx context.Context, tx store.Tx, s domain.Settings, loc *time.Location,
+	) (domain.Date, domain.Date, error) {
+		longest, err := tx.Accounts().MaxVisibleDays(ctx)
+		if err != nil {
+			return domain.Date{}, domain.Date{}, fmt.Errorf("longest early access: %w", err)
+		}
 
-		return today.AddDays(-7), today.AddDays(ahead + 1)
+		visible := max(s.DefaultVisibleDays, longest)
+
+		today := domain.DateOf(g.clock.Now(), loc)
+		ahead := max(7*(s.ReleaseWeeksAhead+2), visible) + 7
+
+		return today.AddDays(-7), today.AddDays(ahead + 1), nil
 	})
 }
 
@@ -62,7 +72,8 @@ type lessonKey struct {
 // generate creates the missing lessons for the date range returned by
 // dates, in one transaction.
 func (g *LessonGenerator) generate(
-	ctx context.Context, dates func(domain.Settings, *time.Location) (from, to domain.Date),
+	ctx context.Context,
+	dates func(context.Context, store.Tx, domain.Settings, *time.Location) (from, to domain.Date, err error),
 ) (int, error) {
 	var created int
 
@@ -74,7 +85,11 @@ func (g *LessonGenerator) generate(
 			return err
 		}
 
-		from, to := dates(settings, loc)
+		from, to, err := dates(ctx, tx, settings, loc)
+		if err != nil {
+			return err
+		}
+
 		if from.Compare(to) >= 0 {
 			return nil
 		}

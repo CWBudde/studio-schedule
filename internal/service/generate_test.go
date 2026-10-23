@@ -468,14 +468,19 @@ func TestGenerateAhead(t *testing.T) {
 		name        string
 		weeksAhead  int
 		visibleDays int
+		accountDays int    // an account's visible-days override; 0 = none
 		first, last string // first and last Friday lesson, school dates
 	}{
 		// max(7·(1+2), 14) + 7 = 28 days: [10-16, 11-21).
-		{"release window dominates", 1, 14, "2026-10-16", "2026-11-20"},
+		{"release window dominates", 1, 14, 0, "2026-10-16", "2026-11-20"},
 		// max(7·(1+2), 30) + 7 = 37 days: [10-16, 11-30).
-		{"visible days dominate", 1, 30, "2026-10-16", "2026-11-27"},
+		{"visible days dominate", 1, 30, 0, "2026-10-16", "2026-11-27"},
 		// max(7·(3+2), 14) + 7 = 42 days: [10-16, 12-05).
-		{"more weeks ahead", 3, 14, "2026-10-16", "2026-12-04"},
+		{"more weeks ahead", 3, 14, 0, "2026-10-16", "2026-12-04"},
+		// max(7·(1+2), 45) + 7 = 52 days: [10-16, 12-15).
+		{"an account's early access dominates", 1, 14, 45, "2026-10-16", "2026-12-11"},
+		// A shorter override does not shorten the horizon.
+		{"a shorter override", 1, 30, 5, "2026-10-16", "2026-11-27"},
 	}
 
 	for _, tt := range tests {
@@ -488,6 +493,20 @@ func TestGenerateAhead(t *testing.T) {
 
 			f := newGenFixture(t, settings)
 			f.addClass(t, time.Friday, domain.TimeOfDay{Hour: 19})
+
+			if tt.accountDays > 0 {
+				person := domain.Person{ID: ids.New[domain.PersonID](f.seq), GivenName: "Ada", FamilyName: "Example"}
+				f.write(t, func(ctx context.Context, tx store.Tx) error {
+					return errors.Join(
+						tx.Persons().Create(ctx, person),
+						tx.Accounts().Create(ctx, domain.Account{
+							ID: ids.New[domain.AccountID](f.seq), PersonID: person.ID, Email: "ada@example.org",
+							Role: domain.RoleMember, VisibleDays: tt.accountDays,
+						}),
+					)
+				})
+			}
+
 			gen := generatorAt(f.st, now)
 
 			created, err := gen.GenerateAhead(t.Context())

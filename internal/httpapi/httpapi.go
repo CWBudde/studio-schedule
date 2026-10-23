@@ -67,7 +67,8 @@ func Register(api huma.API, deps Deps) {
 	h := &handlers{deps: deps}
 
 	// Before any operation: Huma applies the middlewares registered so far.
-	api.UseMiddleware(h.sessionMiddleware(api))
+	// The session middleware resolves the principal that access checks.
+	api.UseMiddleware(h.sessionMiddleware(api), h.accessMiddleware(api))
 
 	registerSystem(api, h)
 	registerSettings(api, h)
@@ -76,6 +77,7 @@ func Register(api huma.API, deps Deps) {
 	registerSchedule(api, h)
 	registerAuth(api, h)
 	registerDemo(api, h)
+	registerAdmin(api, h)
 }
 
 type handlers struct {

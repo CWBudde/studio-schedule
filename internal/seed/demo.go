@@ -1,6 +1,7 @@
 package seed
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 	"time"
@@ -401,17 +402,23 @@ type workshopSpec struct {
 	instructor  string
 	accompanist string
 	capacity    int
+	// visibility defaults to public.
+	visibility domain.LessonVisibility
 }
 
 // demoWorkshops start at 13:30 and end at 15:30, when no weekly class runs,
 // so they never clash with one on whatever weekday they fall. The demo
 // releases one week ahead (DemoSettings), so the first workshop is usually
 // released already and the others lie beyond every release window: the
-// schedule shows them because workshops are published early.
+// schedule shows them because workshops are published early. Two more show
+// the other visibilities: one only signed-in members see, and one only
+// staff see.
 var demoWorkshops = []workshopSpec{
-	{3, at(13, 30), 120, "Studio A", "Contemporary", "Marco Wrenfield", "", 18},
-	{17, at(13, 30), 120, "Hall 1", "Jazz Dance", "Nina Tapworth", "", 20},
-	{24, at(13, 30), 120, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", 16},
+	{3, at(13, 30), 120, "Studio A", "Contemporary", "Marco Wrenfield", "", 18, ""},
+	{17, at(13, 30), 120, "Hall 1", "Jazz Dance", "Nina Tapworth", "", 20, ""},
+	{24, at(13, 30), 120, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", 16, ""},
+	{5, at(13, 30), 120, "Studio B", "Contemporary", "Marco Wrenfield", "", 12, domain.VisibilityMembers},
+	{6, at(13, 30), 120, "Hall 1", "Hip-Hop", "Nina Tapworth", "", 15, domain.VisibilityHidden},
 }
 
 // ----------------------------------------------------------------- builder
@@ -548,7 +555,7 @@ func (b *builder) workshop(anchor domain.Date, spec workshopSpec) {
 		StartsAt:     start,
 		EndsAt:       start.Add(time.Duration(spec.minutes) * time.Minute),
 		Status:       domain.LessonScheduled,
-		Visibility:   domain.VisibilityPublic,
+		Visibility:   cmp.Or(spec.visibility, domain.VisibilityPublic),
 		Kind:         domain.LessonWorkshop,
 		Capacity:     spec.capacity,
 	}

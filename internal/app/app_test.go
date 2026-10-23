@@ -11,6 +11,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/cwbudde/studio-schedule/internal/app"
+	"github.com/cwbudde/studio-schedule/internal/httpapi"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/store/memory"
 	"github.com/cwbudde/studio-schedule/internal/webui"
@@ -191,7 +192,10 @@ func TestCrossOriginProtection(t *testing.T) {
 	t.Parallel()
 
 	h, api := newApp(t, nil)
-	huma.Post(api, "/api/v1/test-echo", func(_ context.Context, in *echoInput) (*echoOutput, error) {
+	op := httpapi.Declare(huma.Operation{
+		OperationID: "testEcho", Method: http.MethodPost, Path: "/api/v1/test-echo",
+	}, httpapi.AccessPublic)
+	huma.Register(api, op, func(_ context.Context, in *echoInput) (*echoOutput, error) {
 		out := &echoOutput{}
 		out.Body.Msg = in.Body.Msg
 
@@ -261,13 +265,24 @@ func TestRecoverer(t *testing.T) {
 	t.Parallel()
 
 	h, api := newApp(t, nil)
-	huma.Get(api, "/api/v1/test-panic", func(context.Context, *struct{}) (*struct{}, error) {
+	op := httpapi.Declare(huma.Operation{
+		OperationID: "testPanic", Method: http.MethodGet, Path: "/api/v1/test-panic",
+	}, httpapi.AccessPublic)
+
+	panicked := false
+	huma.Register(api, op, func(context.Context, *struct{}) (*struct{}, error) {
+		panicked = true
+
 		panic("boom")
 	})
 
 	res, body := do(t, h, httptest.NewRequest(http.MethodGet, "/api/v1/test-panic", nil))
 	if res.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status = %d, body %s", res.StatusCode, body)
+	}
+
+	if !panicked {
+		t.Fatal("the handler did not run")
 	}
 
 	if strings.Contains(string(body), "boom") {

@@ -76,6 +76,12 @@ type Principal struct {
 	Email     string
 	Role      domain.Role
 	SessionID domain.SessionID
+	// ImpersonatorID is the admin who signed in as this account; zero
+	// unless the session is an impersonation.
+	ImpersonatorID domain.AccountID
+	// VisibleDays is the account's early-access override (0: the school's
+	// default).
+	VisibleDays int
 }
 
 // SignedIn is a new or extended session together with its secret token,
@@ -502,15 +508,10 @@ func (s *AuthService) signIn(
 			}
 		}
 
-		sess = domain.Session{
-			ID: ids.New[domain.SessionID](s.ids), AccountID: acc.ID, TokenHash: domain.HashToken(token),
-			CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(SessionIdleTimeout),
-		}
-		if err := sess.Validate(); err != nil {
-			return err
-		}
+		var err error
+		sess, err = s.createSession(ctx, tx, acc.ID, token, now, domain.AccountID{})
 
-		return tx.Sessions().Create(ctx, sess)
+		return err
 	})
 	if err != nil {
 		return SignedIn{}, fmt.Errorf("sign in: %w", err)
@@ -519,10 +520,34 @@ func (s *AuthService) signIn(
 	return SignedIn{Token: token, Principal: principal(acc, sess), ExpiresAt: sess.ExpiresAt}, nil
 }
 
+// createSession stores a new session of account for token. An
+// impersonation session (impersonator set) lasts ImpersonationMaxAge and is
+// never extended.
+func (s *AuthService) createSession(
+	ctx context.Context, tx store.Tx, account domain.AccountID, token string, now time.Time,
+	impersonator domain.AccountID,
+) (domain.Session, error) {
+	sess := domain.Session{
+		ID: ids.New[domain.SessionID](s.ids), AccountID: account, TokenHash: domain.HashToken(token),
+		CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(SessionIdleTimeout), ImpersonatorID: impersonator,
+	}
+	if !impersonator.IsZero() {
+		sess.ExpiresAt = now.Add(ImpersonationMaxAge)
+	}
+
+	if err := sess.Validate(); err != nil {
+		return domain.Session{}, err
+	}
+
+	return sess, tx.Sessions().Create(ctx, sess)
+}
+
 // Authenticate resolves a session token to its principal. A session that
 // was last extended more than a day ago is extended (sliding expiry, capped
 // by SessionMaxAge); then the returned SignedIn carries the new expiry for
-// the cookie, otherwise it is the zero value.
+// the cookie, otherwise it is the zero value. An impersonation session is
+// never extended, and it ends as soon as its admin may no longer sign in or
+// is no admin any more.
 func (s *AuthService) Authenticate(ctx context.Context, token string) (Principal, SignedIn, error) {
 	if token == "" {
 		return Principal{}, SignedIn{}, ErrNoSession
@@ -531,8 +556,8 @@ func (s *AuthService) Authenticate(ctx context.Context, token string) (Principal
 	hash := domain.HashToken(token)
 
 	var (
-		acc  domain.Account
-		sess domain.Session
+		acc, admin domain.Account
+		sess       domain.Session
 	)
 
 	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
@@ -540,6 +565,12 @@ func (s *AuthService) Authenticate(ctx context.Context, token string) (Principal
 
 		if sess, err = tx.Sessions().GetByToken(ctx, hash); err != nil {
 			return err
+		}
+
+		if !sess.ImpersonatorID.IsZero() {
+			if admin, err = tx.Accounts().Get(ctx, sess.ImpersonatorID); err != nil {
+				return err
+			}
 		}
 
 		acc, err = tx.Accounts().Get(ctx, sess.AccountID)
@@ -555,12 +586,13 @@ func (s *AuthService) Authenticate(ctx context.Context, token string) (Principal
 	}
 
 	now := s.clock.Now()
-	if !now.Before(sessionEnd(sess)) || !acc.DisabledAt.IsZero() || acc.ConfirmedAt.IsZero() {
+	if !now.Before(sessionEnd(sess)) || !mayActAs(acc) ||
+		(!sess.ImpersonatorID.IsZero() && (!mayActAs(admin) || admin.Role != domain.RoleAdmin)) {
 		return Principal{}, SignedIn{}, ErrNoSession
 	}
 
 	p := principal(acc, sess)
-	if now.Sub(sess.LastSeenAt) < sessionRefreshAfter {
+	if now.Sub(sess.LastSeenAt) < sessionRefreshAfter || !sess.ImpersonatorID.IsZero() {
 		return p, SignedIn{}, nil
 	}
 
@@ -592,7 +624,8 @@ func sessionEnd(sess domain.Session) time.Time {
 	return minTime(sess.ExpiresAt, sess.CreatedAt.Add(SessionMaxAge))
 }
 
-// Logout ends the session of token. Unknown tokens are ignored.
+// Logout ends the session of token. Unknown tokens are ignored. Signing out
+// of an impersonation ends it (audited) without signing the admin in again.
 func (s *AuthService) Logout(ctx context.Context, token string) error {
 	if token == "" {
 		return nil
@@ -602,6 +635,15 @@ func (s *AuthService) Logout(ctx context.Context, token string) error {
 		sess, err := tx.Sessions().GetByToken(ctx, domain.HashToken(token))
 		if err != nil {
 			return err
+		}
+
+		// An impersonation that expired already ended then; it is not
+		// ended again.
+		if !sess.ImpersonatorID.IsZero() && s.clock.Now().Before(sessionEnd(sess)) {
+			err := s.audit(ctx, tx, sess.ImpersonatorID, domain.AuditImpersonationEnded, sess.AccountID)
+			if err != nil {
+				return err
+			}
 		}
 
 		return tx.Sessions().Delete(ctx, sess.ID)
@@ -638,24 +680,28 @@ func (s *AuthService) PurgeExpired(ctx context.Context) (int, error) {
 	return n, nil
 }
 
-// Me is the signed-in account together with its person.
+// Me is the signed-in account together with its person. Impersonator is
+// the admin who signed in as it, if any (with its own Impersonator nil).
 type Me struct {
-	Account domain.Account
-	Person  domain.Person
+	Account      domain.Account
+	Person       domain.Person
+	Impersonator *Me
 }
 
-// Me returns the account and person of p.
+// Me returns the account and person of p, and those of its impersonator.
 func (s *AuthService) Me(ctx context.Context, p Principal) (Me, error) {
 	var me Me
 
 	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 		var err error
 
-		if me.Account, err = tx.Accounts().Get(ctx, p.AccountID); err != nil {
+		me, err = accountWithPerson(ctx, tx, p.AccountID)
+		if err != nil || p.ImpersonatorID.IsZero() {
 			return err
 		}
 
-		me.Person, err = tx.Persons().Get(ctx, me.Account.PersonID)
+		admin, err := accountWithPerson(ctx, tx, p.ImpersonatorID)
+		me.Impersonator = &admin
 
 		return err
 	})
@@ -666,8 +712,28 @@ func (s *AuthService) Me(ctx context.Context, p Principal) (Me, error) {
 	return me, nil
 }
 
+func accountWithPerson(ctx context.Context, tx store.Tx, id domain.AccountID) (Me, error) {
+	acc, err := tx.Accounts().Get(ctx, id)
+	if err != nil {
+		return Me{}, err
+	}
+
+	person, err := tx.Persons().Get(ctx, acc.PersonID)
+
+	return Me{Account: acc, Person: person}, err
+}
+
 func principal(acc domain.Account, sess domain.Session) Principal {
-	return Principal{AccountID: acc.ID, PersonID: acc.PersonID, Email: acc.Email, Role: acc.Role, SessionID: sess.ID}
+	return Principal{
+		AccountID: acc.ID, PersonID: acc.PersonID, Email: acc.Email, Role: acc.Role, SessionID: sess.ID,
+		ImpersonatorID: sess.ImpersonatorID, VisibleDays: acc.VisibleDays,
+	}
+}
+
+// mayActAs reports whether a session may act as acc: it is confirmed and not
+// disabled.
+func mayActAs(acc domain.Account) bool {
+	return !acc.ConfirmedAt.IsZero() && acc.DisabledAt.IsZero()
 }
 
 // checkPassword enforces the password length limits.

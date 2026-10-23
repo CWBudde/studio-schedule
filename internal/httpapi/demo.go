@@ -16,7 +16,7 @@ const mailboxLimit = 50
 // Demo endpoints exist in every build but answer only in a demo
 // installation (Deps.Demo); elsewhere they are a 404 like unknown routes.
 func registerDemo(api huma.API, h *handlers) {
-	huma.Register(api, huma.Operation{
+	register(api, AccessPublic, huma.Operation{
 		OperationID: "listDemoMailbox",
 		Method:      http.MethodGet,
 		Path:        BasePath + "/demo/mailbox",
@@ -26,7 +26,7 @@ func registerDemo(api huma.API, h *handlers) {
 		Tags: []string{"demo"},
 	}, h.listDemoMailbox)
 
-	huma.Register(api, huma.Operation{
+	register(api, AccessPublic, huma.Operation{
 		OperationID: "listDemoLogins",
 		Method:      http.MethodGet,
 		Path:        BasePath + "/demo/logins",

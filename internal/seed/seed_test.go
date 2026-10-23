@@ -148,9 +148,10 @@ func TestDemoAtTerm(t *testing.T) {
 	}
 }
 
-// TestDemoWorkshops checks the one-off workshops: valid, public, without a
-// class, free of clashes with the weekly classes, and placed so that the
-// demo shows one beyond the release window (published early).
+// TestDemoWorkshops checks the one-off workshops: valid, without a class,
+// free of clashes with the weekly classes, and placed so that the demo shows
+// one beyond the release window (published early). One is for members and
+// one hidden (staff only); the others are public.
 func TestDemoWorkshops(t *testing.T) {
 	t.Parallel()
 
@@ -164,8 +165,8 @@ func TestDemoWorkshops(t *testing.T) {
 	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
 		d := seed.DemoAt(anchor)
 
-		if n := len(d.Lessons); n < 2 || n > 3 {
-			t.Fatalf("%v: %d lessons, want 2..3 workshops", anchor, n)
+		if n := len(d.Lessons); n < 4 || n > 5 {
+			t.Fatalf("%v: %d lessons, want 4..5 workshops", anchor, n)
 		}
 
 		validAll(t, d.Lessons)
@@ -181,11 +182,14 @@ func TestDemoWorkshops(t *testing.T) {
 
 		var inWeek, beyond int
 
+		visibilities := map[domain.LessonVisibility]int{}
+
 		for _, l := range d.Lessons {
-			if !l.ClassID.IsZero() || l.Kind != domain.LessonWorkshop || l.Visibility != domain.VisibilityPublic ||
-				l.Status != domain.LessonScheduled {
-				t.Errorf("%v: lesson %+v is not a scheduled public one-off workshop", anchor, l)
+			if !l.ClassID.IsZero() || l.Kind != domain.LessonWorkshop || l.Status != domain.LessonScheduled {
+				t.Errorf("%v: lesson %+v is not a scheduled one-off workshop", anchor, l)
 			}
+
+			visibilities[l.Visibility]++
 
 			if _, ok := courseTypes[l.CourseTypeID]; !ok {
 				t.Errorf("%v: lesson %v: unknown course type", anchor, l.ID)
@@ -210,11 +214,13 @@ func TestDemoWorkshops(t *testing.T) {
 				t.Errorf("%v: lesson %v on %v lies outside the term", anchor, l.ID, day)
 			}
 
-			if day.Compare(anchor) > 0 && day.Compare(anchor.AddDays(7)) <= 0 {
+			// What guests see: public workshops.
+			public := l.Visibility == domain.VisibilityPublic
+			if public && day.Compare(anchor) > 0 && day.Compare(anchor.AddDays(7)) <= 0 {
 				inWeek++
 			}
 
-			if !l.StartsAt.Before(window.ReleasedUntil) {
+			if public && !l.StartsAt.Before(window.ReleasedUntil) {
 				beyond++
 			}
 
@@ -235,8 +241,12 @@ func TestDemoWorkshops(t *testing.T) {
 			}
 		}
 
+		if visibilities[domain.VisibilityMembers] != 1 || visibilities[domain.VisibilityHidden] != 1 {
+			t.Errorf("%v: visibilities %v, want one workshop for members and one hidden", anchor, visibilities)
+		}
+
 		if inWeek == 0 {
-			t.Errorf("%v: no workshop in the week after the anchor", anchor)
+			t.Errorf("%v: no public workshop in the week after the anchor", anchor)
 		}
 
 		if beyond == 0 {

@@ -7,7 +7,7 @@ import (
 )
 
 func registerSettings(api huma.API, h *handlers) {
-	huma.Register(api, huma.Operation{
+	register(api, AccessPublic, huma.Operation{
 		OperationID: "getPublicSettings",
 		Method:      "GET",
 		Path:        BasePath + "/settings/public",

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/app"
+	"github.com/cwbudde/studio-schedule/internal/auth/password"
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/seed"
@@ -114,8 +115,13 @@ func newScheduleApp(t *testing.T) scheduleApp {
 		t.Fatal(err)
 	}
 
+	hasher, err := password.NewWithParams(password.Params{Memory: 8, Time: 1, Threads: 1, SaltLen: 16, KeyLen: 32}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	now := time.Date(2026, time.October, 21, 12, 0, 0, 0, berlin)
-	a.h, _ = app.New(app.Deps{Store: st, Clock: clock.NewFixed(now)})
+	a.h, _ = app.New(app.Deps{Store: st, Clock: clock.NewFixed(now), Hasher: hasher})
 
 	return a
 }
@@ -131,10 +137,104 @@ func scheduleLessonID(t *testing.T, n int) domain.LessonID {
 	return id
 }
 
-func (a scheduleApp) get(t *testing.T, target string) (response, []byte) {
+func (a scheduleApp) get(t *testing.T, target string, cookies ...*http.Cookie) (response, []byte) {
 	t.Helper()
 
-	return do(t, a.h, httptest.NewRequest(http.MethodGet, target, nil))
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+
+	return do(t, a.h, req)
+}
+
+// login signs in as the demo account with role r and returns its session
+// cookie.
+func (a scheduleApp) login(t *testing.T, r domain.Role) *http.Cookie {
+	t.Helper()
+
+	for _, l := range seed.DemoLogins() {
+		if l.Role != r {
+			continue
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login",
+			strings.NewReader(`{"email":"`+l.Email+`","password":"`+l.Password+`"}`))
+		req.Header.Set("Content-Type", "application/json")
+
+		rec := httptest.NewRecorder()
+		a.h.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("login as %s: %d %s", r, rec.Code, rec.Body)
+		}
+
+		return sessionCookie(t, authResponse{StatusCode: rec.Code, Header: rec.Header()})
+	}
+
+	t.Fatalf("no demo login with role %s", r)
+
+	return nil
+}
+
+// TestScheduleVisibility checks what each role sees through the session
+// cookie (ADR 0003): members also see lessons for members and, with early
+// access (demo default 14 days), next week's lessons; staff see everything.
+func TestScheduleVisibility(t *testing.T) {
+	t.Parallel()
+
+	a := newScheduleApp(t)
+
+	guest := []string{"ballet", "hipHop", "canceled", "workshop"}
+	member := []string{"ballet", "hipHop", "members", "canceled", "unreleased", "workshop"}
+	staff := []string{"ballet", "hipHop", "hidden", "members", "canceled", "unreleased", "workshop"}
+
+	tests := []struct {
+		role         domain.Role
+		want         []string
+		visibleUntil any
+	}{
+		{domain.RoleGuest, guest, "2026-10-25T23:00:00Z"},
+		{domain.RoleMember, member, "2026-11-04T23:00:00Z"}, // Thursday 00:00 CET
+		{domain.RoleInstructor, staff, nil},
+		{domain.RoleAdmin, staff, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.role), func(t *testing.T) {
+			t.Parallel()
+
+			var cookies []*http.Cookie
+			if tt.role != domain.RoleGuest {
+				cookies = append(cookies, a.login(t, tt.role))
+			}
+
+			res, body := a.get(t, "/api/v1/schedule?from=2026-10-19&to=2026-11-09", cookies...)
+			if res.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d, body %s", res.StatusCode, body)
+			}
+
+			if names := a.lessonNames(t, body); !slices.Equal(names, tt.want) {
+				t.Errorf("lessons = %v, want %v", names, tt.want)
+			}
+
+			if got := decode(t, body)["visibleUntil"]; got != tt.visibleUntil {
+				t.Errorf("visibleUntil = %v, want %v", got, tt.visibleUntil)
+			}
+
+			for name := range a.lessons {
+				res, body := a.get(t, "/api/v1/lessons/"+a.id(name), cookies...)
+				want := http.StatusNotFound
+				if slices.Contains(tt.want, name) {
+					want = http.StatusOK
+				}
+
+				if res.StatusCode != want {
+					t.Errorf("lesson %s: status %d, want %d (%s)", name, res.StatusCode, want, body)
+				}
+			}
+		})
+	}
 }
 
 // lessonNames maps the lessons of a schedule body back to fixture names.
@@ -216,7 +316,7 @@ func TestGetSchedule(t *testing.T) {
 
 	got := decode(t, body)
 
-	wantKeys := []string{"from", "lessons", "nextReleaseAt", "now", "releasedUntil", "timezone", "to"}
+	wantKeys := []string{"from", "lessons", "nextReleaseAt", "now", "releasedUntil", "timezone", "to", "visibleUntil"}
 	if !slices.Equal(sortedJSONKeys(got), wantKeys) {
 		t.Fatalf("keys = %v, want %v", sortedJSONKeys(got), wantKeys)
 	}
@@ -228,6 +328,7 @@ func TestGetSchedule(t *testing.T) {
 		"to":            "2026-11-09",
 		"releasedUntil": "2026-10-25T23:00:00Z", // Monday 00:00 CET
 		"nextReleaseAt": "2026-10-25T17:00:00Z", // Sunday 18:00 CET
+		"visibleUntil":  "2026-10-25T23:00:00Z", // a guest sees what is released
 	}
 	for k, v := range header {
 		if got[k] != v {
@@ -244,7 +345,7 @@ func TestGetSchedule(t *testing.T) {
 	ballet, _ := lessons[0].(map[string]any)
 	wantBallet := []string{
 		"accompanist", "capacity", "classId", "courseType", "endsAt", "id", "instructor", "kind",
-		"level", "location", "room", "startsAt", "status",
+		"level", "location", "room", "startsAt", "status", "visibility",
 	}
 	if !slices.Equal(sortedJSONKeys(ballet), wantBallet) {
 		t.Fatalf("lesson keys = %v, want %v", sortedJSONKeys(ballet), wantBallet)
@@ -252,14 +353,15 @@ func TestGetSchedule(t *testing.T) {
 
 	l := a.lessons["ballet"]
 	want := map[string]any{
-		"id":       l.ID.String(),
-		"classId":  l.ClassID.String(),
-		"startsAt": "2026-10-19T14:30:00Z",
-		"endsAt":   "2026-10-19T15:30:00Z",
-		"status":   "scheduled",
-		"kind":     "regular",
-		"level":    "beginner",
-		"capacity": float64(l.Capacity),
+		"id":         l.ID.String(),
+		"classId":    l.ClassID.String(),
+		"startsAt":   "2026-10-19T14:30:00Z",
+		"endsAt":     "2026-10-19T15:30:00Z",
+		"status":     "scheduled",
+		"kind":       "regular",
+		"visibility": "public",
+		"level":      "beginner",
+		"capacity":   float64(l.Capacity),
 	}
 	for k, v := range want {
 		if ballet[k] != v {
@@ -304,7 +406,8 @@ func TestGetSchedule(t *testing.T) {
 		t.Errorf("workshop kind = %v", workshop["kind"])
 	}
 
-	for _, leak := range []string{"visibility", a.id("hidden"), a.id("members"), a.id("unreleased")} {
+	// A guest's lessons are all public, so their visibility reveals nothing.
+	for _, leak := range []string{`"members"`, `"hidden"`, a.id("hidden"), a.id("members"), a.id("unreleased")} {
 		if strings.Contains(string(body), leak) {
 			t.Errorf("response leaks %q", leak)
 		}
@@ -406,6 +509,7 @@ func TestGetLesson(t *testing.T) {
 	wantKeys := []string{
 		"accompanist", "capacity", "classId", "courseType", "courseTypeDescription", "endsAt", "id",
 		"instructor", "kind", "level", "location", "locationAddress", "room", "startsAt", "status",
+		"visibility",
 	}
 
 	if !slices.Equal(sortedJSONKeys(got), wantKeys) {
@@ -506,10 +610,11 @@ func TestScheduleEnums(t *testing.T) {
 	summary := spec.Components.Schemas["LessonSummary"].Properties
 
 	for name, c := range map[string]struct{ got, want []string }{
-		"level parameter": {levelParam, levels},
-		"lesson level":    {summary["level"].Enum, levels},
-		"lesson status":   {summary["status"].Enum, enumStrings(domain.LessonStatuses())},
-		"lesson kind":     {summary["kind"].Enum, enumStrings(domain.LessonKinds())},
+		"level parameter":   {levelParam, levels},
+		"lesson level":      {summary["level"].Enum, levels},
+		"lesson status":     {summary["status"].Enum, enumStrings(domain.LessonStatuses())},
+		"lesson kind":       {summary["kind"].Enum, enumStrings(domain.LessonKinds())},
+		"lesson visibility": {summary["visibility"].Enum, enumStrings(domain.LessonVisibilities())},
 	} {
 		if !slices.Equal(c.got, c.want) {
 			t.Errorf("%s enum = %v, want %v", name, c.got, c.want)

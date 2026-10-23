@@ -17,7 +17,7 @@ import (
 const SessionCookie = "studio_session"
 
 func registerAuth(api huma.API, h *handlers) {
-	huma.Register(api, huma.Operation{
+	register(api, AccessPublic, huma.Operation{
 		OperationID: "register",
 		Method:      http.MethodPost,
 		Path:        BasePath + "/auth/register",
@@ -28,7 +28,7 @@ func registerAuth(api huma.API, h *handlers) {
 		DefaultStatus: http.StatusAccepted,
 	}, h.register)
 
-	huma.Register(api, huma.Operation{
+	register(api, AccessPublic, huma.Operation{
 		OperationID: "confirmEmail",
 		Method:      http.MethodPost,
 		Path:        BasePath + "/auth/confirm",
@@ -38,7 +38,7 @@ func registerAuth(api huma.API, h *handlers) {
 		Tags: []string{"auth"},
 	}, h.confirmEmail)
 
-	huma.Register(api, huma.Operation{
+	register(api, AccessPublic, huma.Operation{
 		OperationID: "login",
 		Method:      http.MethodPost,
 		Path:        BasePath + "/auth/login",
@@ -48,7 +48,7 @@ func registerAuth(api huma.API, h *handlers) {
 		Tags: []string{"auth"},
 	}, h.login)
 
-	huma.Register(api, huma.Operation{
+	register(api, AccessPublic, huma.Operation{
 		OperationID:   "logout",
 		Method:        http.MethodPost,
 		Path:          BasePath + "/auth/logout",
@@ -58,14 +58,25 @@ func registerAuth(api huma.API, h *handlers) {
 		DefaultStatus: http.StatusNoContent,
 	}, h.logout)
 
-	huma.Register(api, huma.Operation{
+	register(api, AccessSignedIn, huma.Operation{
 		OperationID: "getMe",
 		Method:      http.MethodGet,
 		Path:        BasePath + "/auth/me",
 		Summary:     "Signed-in account",
-		Description: "Returns the signed-in account, or 401 without a valid session.",
-		Tags:        []string{"auth"},
+		Description: "Returns the signed-in account, or 401 without a valid session. While an admin is " +
+			"signed in as the account, impersonator names the admin.",
+		Tags: []string{"auth"},
 	}, h.getMe)
+
+	register(api, AccessSignedIn, huma.Operation{
+		OperationID: "stopImpersonation",
+		Method:      http.MethodPost,
+		Path:        BasePath + "/auth/impersonation/stop",
+		Summary:     "Return to the admin account",
+		Description: "Ends an impersonation and signs the admin in again with a new session cookie. " +
+			"A 409 if the session is no impersonation.",
+		Tags: []string{"auth"},
+	}, h.stopImpersonation)
 }
 
 // principalKey is the context key of the request's service.Principal.
@@ -169,7 +180,8 @@ func (h *handlers) register(ctx context.Context, in *RegisterInput) (*struct{}, 
 
 // ConfirmEmailInput is the request of confirmEmail.
 type ConfirmEmailInput struct {
-	Body struct {
+	Session string `cookie:"studio_session" doc:"Session cookie, if any; it ends on success."`
+	Body    struct {
 		Token    string `doc:"Token from the confirmation link." json:"token"    maxLength:"100" minLength:"1"`
 		Password string `doc:"The account's password."           json:"password" maxLength:"256" minLength:"1"`
 	}
@@ -177,7 +189,8 @@ type ConfirmEmailInput struct {
 
 // LoginInput is the request of login.
 type LoginInput struct {
-	Body struct {
+	Session string `cookie:"studio_session" doc:"Session cookie, if any; it ends on success."`
+	Body    struct {
 		Email    string `doc:"Email address." json:"email"    maxLength:"254" minLength:"1"`
 		Password string `doc:"Password."      json:"password" maxLength:"256" minLength:"1"`
 	}
@@ -196,6 +209,16 @@ type Me struct {
 	Role       string           `doc:"Role of the account." enum:"member,instructor,office,admin" json:"role"`
 	GivenName  string           `doc:"Given name."                 json:"givenName"`
 	FamilyName string           `doc:"Family name."                json:"familyName"`
+	// Impersonator is set while an admin is signed in as this account.
+	Impersonator *Impersonator `doc:"The admin signed in as this account (\"login as\"); absent otherwise." json:"impersonator,omitempty"`
+}
+
+// Impersonator is the admin behind an impersonation.
+type Impersonator struct {
+	AccountID  domain.AccountID `doc:"Account ID of the admin." json:"accountId"`
+	Email      string           `doc:"Email address of the admin." json:"email"`
+	GivenName  string           `doc:"Given name of the admin."  json:"givenName"`
+	FamilyName string           `doc:"Family name of the admin." json:"familyName"`
 }
 
 // MeOutput is the response of getMe.
@@ -221,6 +244,8 @@ func (h *handlers) confirmEmail(ctx context.Context, in *ConfirmEmailInput) (*Si
 		return nil, h.authError(ctx, err)
 	}
 
+	h.endPrevious(ctx, in.Session)
+
 	return h.signedIn(ctx, s)
 }
 
@@ -229,6 +254,8 @@ func (h *handlers) login(ctx context.Context, in *LoginInput) (*SignedInOutput, 
 	if err != nil {
 		return nil, h.authError(ctx, err)
 	}
+
+	h.endPrevious(ctx, in.Session)
 
 	return h.signedIn(ctx, s)
 }
@@ -242,8 +269,17 @@ func (h *handlers) signedIn(ctx context.Context, s service.SignedIn) (*SignedInO
 	return &SignedInOutput{SetCookie: h.sessionCookie(s), Body: me}, nil
 }
 
-// authError maps the errors of login and confirmEmail; their messages are
-// meant for the user.
+// endPrevious ends the session the client signed in over, so that it does
+// not stay valid behind the new cookie; an impersonation ends audited. A
+// failure is logged: the new session is valid either way.
+func (h *handlers) endPrevious(ctx context.Context, token string) {
+	if err := h.deps.Auth.Logout(ctx, token); err != nil {
+		h.deps.Logger.WarnContext(ctx, "end previous session", slog.Any("err", err))
+	}
+}
+
+// authError maps the errors of login, confirmEmail and impersonation; their
+// messages are meant for the user.
 func (h *handlers) authError(ctx context.Context, err error) error {
 	switch {
 	case errors.Is(err, service.ErrInvalidCredentials):
@@ -252,6 +288,12 @@ func (h *handlers) authError(ctx context.Context, err error) error {
 		return huma.Error403Forbidden("email address not confirmed")
 	case errors.Is(err, service.ErrInvalidToken):
 		return huma.Error410Gone("the link is invalid or has expired")
+	case errors.Is(err, service.ErrNotImpersonable):
+		return huma.Error403Forbidden("this account cannot be impersonated")
+	case errors.Is(err, service.ErrAccountInactive):
+		return huma.Error409Conflict("the account is disabled or not confirmed")
+	case errors.Is(err, service.ErrNotImpersonating):
+		return huma.Error409Conflict("not signed in as another account")
 	default:
 		return h.toHTTPError(ctx, err)
 	}
@@ -285,8 +327,27 @@ func (h *handlers) me(ctx context.Context, p service.Principal) (Me, error) {
 		return Me{}, h.toHTTPError(ctx, err)
 	}
 
-	return Me{
+	out := Me{
 		AccountID: m.Account.ID, PersonID: m.Person.ID, Email: m.Account.Email, Role: string(m.Account.Role),
 		GivenName: m.Person.GivenName, FamilyName: m.Person.FamilyName,
-	}, nil
+	}
+
+	if i := m.Impersonator; i != nil {
+		out.Impersonator = &Impersonator{
+			AccountID: i.Account.ID, Email: i.Account.Email, GivenName: i.Person.GivenName, FamilyName: i.Person.FamilyName,
+		}
+	}
+
+	return out, nil
+}
+
+func (h *handlers) stopImpersonation(ctx context.Context, _ *struct{}) (*SignedInOutput, error) {
+	p, _ := principalFrom(ctx) // AccessSignedIn
+
+	s, err := h.deps.Auth.StopImpersonation(ctx, p)
+	if err != nil {
+		return nil, h.authError(ctx, err)
+	}
+
+	return h.signedIn(ctx, s)
 }

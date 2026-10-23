@@ -9,7 +9,7 @@ import (
 )
 
 func registerCatalog(api huma.API, h *handlers) {
-	huma.Register(api, huma.Operation{
+	register(api, AccessPublic, huma.Operation{
 		OperationID: "listLocations",
 		Method:      "GET",
 		Path:        BasePath + "/locations",
@@ -18,7 +18,7 @@ func registerCatalog(api huma.API, h *handlers) {
 		Tags:        []string{"catalog"},
 	}, h.listLocations)
 
-	huma.Register(api, huma.Operation{
+	register(api, AccessPublic, huma.Operation{
 		OperationID: "listRooms",
 		Method:      "GET",
 		Path:        BasePath + "/rooms",
@@ -27,7 +27,7 @@ func registerCatalog(api huma.API, h *handlers) {
 		Tags:        []string{"catalog"},
 	}, h.listRooms)
 
-	huma.Register(api, huma.Operation{
+	register(api, AccessPublic, huma.Operation{
 		OperationID: "listStaff",
 		Method:      "GET",
 		Path:        BasePath + "/staff",
@@ -36,7 +36,7 @@ func registerCatalog(api huma.API, h *handlers) {
 		Tags:        []string{"catalog"},
 	}, h.listStaff)
 
-	huma.Register(api, huma.Operation{
+	register(api, AccessPublic, huma.Operation{
 		OperationID: "listCourseTypes",
 		Method:      "GET",
 		Path:        BasePath + "/course-types",

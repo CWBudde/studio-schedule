@@ -1,6 +1,72 @@
 {
   "components": {
     "schemas": {
+      "AccountEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "description": "Whether the email address is confirmed.",
+            "type": "boolean"
+          },
+          "disabled": {
+            "description": "Whether the account may no longer sign in.",
+            "type": "boolean"
+          },
+          "email": {
+            "description": "Email address (login name).",
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Account ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "role": {
+            "description": "Role of the account.",
+            "enum": [
+              "member",
+              "instructor",
+              "office",
+              "admin"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role",
+          "givenName",
+          "familyName",
+          "confirmed",
+          "disabled"
+        ],
+        "type": "object"
+      },
+      "AccountList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "Accounts ordered by email.",
+            "items": {
+              "$ref": "#/components/schemas/AccountEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "Class": {
         "additionalProperties": false,
         "properties": {
@@ -345,6 +411,35 @@
         ],
         "type": "object"
       },
+      "Impersonator": {
+        "additionalProperties": false,
+        "properties": {
+          "accountId": {
+            "description": "Account ID of the admin.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "email": {
+            "description": "Email address of the admin.",
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name of the admin.",
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name of the admin.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accountId",
+          "email",
+          "givenName",
+          "familyName"
+        ],
+        "type": "object"
+      },
       "LessonDetail": {
         "additionalProperties": false,
         "properties": {
@@ -425,6 +520,15 @@
               "canceled"
             ],
             "type": "string"
+          },
+          "visibility": {
+            "description": "Who may see the lesson: everyone, signed-in members, or staff only.",
+            "enum": [
+              "public",
+              "members",
+              "hidden"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -433,6 +537,7 @@
           "endsAt",
           "status",
           "kind",
+          "visibility",
           "capacity",
           "courseType",
           "room",
@@ -513,6 +618,15 @@
               "canceled"
             ],
             "type": "string"
+          },
+          "visibility": {
+            "description": "Who may see the lesson: everyone, signed-in members, or staff only.",
+            "enum": [
+              "public",
+              "members",
+              "hidden"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -521,6 +635,7 @@
           "endsAt",
           "status",
           "kind",
+          "visibility",
           "capacity",
           "courseType",
           "room",
@@ -679,6 +794,10 @@
           "givenName": {
             "description": "Given name.",
             "type": "string"
+          },
+          "impersonator": {
+            "$ref": "#/components/schemas/Impersonator",
+            "description": "The admin signed in as this account (\"login as\"); absent otherwise."
           },
           "personId": {
             "description": "ID of the account's person.",
@@ -873,6 +992,11 @@
             "description": "School date after the last day of the range.",
             "format": "date",
             "type": "string"
+          },
+          "visibleUntil": {
+            "description": "Regular lessons that start before this instant are visible to the caller: releasedUntil for guests, later for members with early access; absent for staff, who see every lesson.",
+            "format": "date-time",
+            "type": "string"
           }
         },
         "required": [
@@ -1003,6 +1127,92 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/accounts": {
+      "get": {
+        "description": "Returns every account with its person, ordered by email.",
+        "operationId": "listAccounts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List accounts",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "admin"
+      }
+    },
+    "/api/v1/admin/accounts/{accountId}/impersonate": {
+      "post": {
+        "description": "Signs the admin in as another account (\"login as\") for at most one hour and sets the session cookie; the admin's own session ends. Recorded in the audit log. Admins cannot be impersonated (403); a disabled or unconfirmed account is a 409.",
+        "operationId": "impersonateAccount",
+        "parameters": [
+          {
+            "description": "Account to sign in as.",
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "description": "Account to sign in as.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Sign in as an account",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "admin"
+      }
+    },
     "/api/v1/auth/confirm": {
       "post": {
         "description": "Confirms the email address with the token from the confirmation link and the account's password, and signs in. An unknown, used or expired link is a 410.",
@@ -1049,7 +1259,48 @@
         "summary": "Confirm the email address",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-access": "public"
+      }
+    },
+    "/api/v1/auth/impersonation/stop": {
+      "post": {
+        "description": "Ends an impersonation and signs the admin in again with a new session cookie. A 409 if the session is no impersonation.",
+        "operationId": "stopImpersonation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Return to the admin account",
+        "tags": [
+          "auth"
+        ],
+        "x-access": "signedIn"
       }
     },
     "/api/v1/auth/login": {
@@ -1098,7 +1349,8 @@
         "summary": "Sign in",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/auth/logout": {
@@ -1141,12 +1393,13 @@
         "summary": "Sign out",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/auth/me": {
       "get": {
-        "description": "Returns the signed-in account, or 401 without a valid session.",
+        "description": "Returns the signed-in account, or 401 without a valid session. While an admin is signed in as the account, impersonator names the admin.",
         "operationId": "getMe",
         "responses": {
           "200": {
@@ -1173,7 +1426,8 @@
         "summary": "Signed-in account",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-access": "signedIn"
       }
     },
     "/api/v1/auth/register": {
@@ -1208,7 +1462,8 @@
         "summary": "Register an account",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/course-types": {
@@ -1240,7 +1495,8 @@
         "summary": "List course types",
         "tags": [
           "catalog"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/demo/logins": {
@@ -1272,7 +1528,8 @@
         "summary": "Demo accounts",
         "tags": [
           "demo"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/demo/mailbox": {
@@ -1304,7 +1561,8 @@
         "summary": "Demo mailbox",
         "tags": [
           "demo"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/health": {
@@ -1336,12 +1594,13 @@
         "summary": "Health check",
         "tags": [
           "system"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/lessons/{lessonId}": {
       "get": {
-        "description": "Returns one published lesson. Lessons that do not exist or are not visible are reported alike as not found.",
+        "description": "Returns one lesson the caller may see (see getSchedule). Lessons that do not exist or are not visible are reported alike as not found.",
         "operationId": "getLesson",
         "parameters": [
           {
@@ -1381,7 +1640,8 @@
         "summary": "Published lesson",
         "tags": [
           "schedule"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/locations": {
@@ -1413,7 +1673,8 @@
         "summary": "List locations",
         "tags": [
           "catalog"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/rooms": {
@@ -1458,12 +1719,13 @@
         "summary": "List rooms",
         "tags": [
           "catalog"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/schedule": {
       "get": {
-        "description": "Returns the published lessons that start in a range of school dates, as a visitor who is not signed in sees them: public lessons that are released, plus one-off lessons and special formats, which are published early. Canceled lessons are included with their status.",
+        "description": "Returns the lessons that start in a range of school dates, as the caller may see them. Visitors who are not signed in see public lessons that are released, plus one-off lessons and special formats, which are published early. Members also see lessons for members, and regular lessons up to visibleUntil (early access). Staff see every lesson, hidden and unreleased ones included. Canceled lessons are included with their status.",
         "operationId": "getSchedule",
         "parameters": [
           {
@@ -1566,7 +1828,8 @@
         "summary": "Published schedule",
         "tags": [
           "schedule"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/settings/public": {
@@ -1598,7 +1861,8 @@
         "summary": "Public school settings",
         "tags": [
           "settings"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/staff": {
@@ -1630,7 +1894,8 @@
         "summary": "List staff",
         "tags": [
           "catalog"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/terms": {
@@ -1662,7 +1927,8 @@
         "summary": "List terms",
         "tags": [
           "timetable"
-        ]
+        ],
+        "x-access": "public"
       }
     },
     "/api/v1/terms/{termId}/classes": {
@@ -1707,7 +1973,8 @@
         "summary": "List the classes of a term",
         "tags": [
           "timetable"
-        ]
+        ],
+        "x-access": "public"
       }
     }
   }

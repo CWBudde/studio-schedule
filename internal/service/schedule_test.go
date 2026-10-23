@@ -344,7 +344,7 @@ func TestScheduleFilters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			s, err := f.svc.Schedule(t.Context(), tt.query(base))
+			s, err := f.svc.Schedule(t.Context(), Principal{}, tt.query(base))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -362,7 +362,7 @@ func TestScheduleResult(t *testing.T) {
 	f := newScheduleFixture(t)
 	q := ScheduleQuery{From: schoolDate(2026, time.October, 19), To: schoolDate(2026, time.November, 9)}
 
-	s, err := f.svc.Schedule(t.Context(), q)
+	s, err := f.svc.Schedule(t.Context(), Principal{}, q)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -424,13 +424,13 @@ func TestScheduleValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if _, err := f.svc.Schedule(t.Context(), tt.query); !errors.Is(err, domain.ErrValidation) {
+			if _, err := f.svc.Schedule(t.Context(), Principal{}, tt.query); !errors.Is(err, domain.ErrValidation) {
 				t.Fatalf("want ErrValidation, got %v", err)
 			}
 		})
 	}
 
-	if _, err := f.svc.Schedule(t.Context(), ScheduleQuery{From: from, To: from.AddDays(MaxScheduleDays)}); err != nil {
+	if _, err := f.svc.Schedule(t.Context(), Principal{}, ScheduleQuery{From: from, To: from.AddDays(MaxScheduleDays)}); err != nil {
 		t.Fatalf("42 days: %v", err)
 	}
 }
@@ -440,7 +440,7 @@ func TestScheduleWithoutSettings(t *testing.T) {
 
 	svc := NewScheduleService(memory.New(), clock.NewFixed(time.Date(2026, time.October, 21, 10, 0, 0, 0, time.UTC)))
 
-	_, err := svc.Schedule(t.Context(), ScheduleQuery{From: schoolDate(2026, time.October, 19), To: schoolDate(2026, time.October, 26)})
+	_, err := svc.Schedule(t.Context(), Principal{}, ScheduleQuery{From: schoolDate(2026, time.October, 19), To: schoolDate(2026, time.October, 26)})
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
@@ -452,7 +452,7 @@ func TestLesson(t *testing.T) {
 	f := newScheduleFixture(t)
 
 	for _, name := range []string{"monBallet", "wedPointeCanceled", "workshop"} {
-		got, err := f.svc.Lesson(t.Context(), f.lessons[name].ID)
+		got, err := f.svc.Lesson(t.Context(), Principal{}, f.lessons[name].ID)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -462,7 +462,7 @@ func TestLesson(t *testing.T) {
 		}
 	}
 
-	got, err := f.svc.Lesson(t.Context(), f.lessons["monBallet"].ID)
+	got, err := f.svc.Lesson(t.Context(), Principal{}, f.lessons["monBallet"].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -486,7 +486,7 @@ func TestLesson(t *testing.T) {
 	}
 
 	for name, id := range invisible {
-		if _, err := f.svc.Lesson(t.Context(), id); !errors.Is(err, domain.ErrNotFound) {
+		if _, err := f.svc.Lesson(t.Context(), Principal{}, id); !errors.Is(err, domain.ErrNotFound) {
 			t.Errorf("%s: want ErrNotFound, got %v", name, err)
 		}
 	}
@@ -539,7 +539,7 @@ func TestScheduleLessonOutsideItsTerm(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := NewScheduleService(st, clock.NewFixed(now)).Schedule(t.Context(), ScheduleQuery{
+	s, err := NewScheduleService(st, clock.NewFixed(now)).Schedule(t.Context(), Principal{}, ScheduleQuery{
 		From: schoolDate(2026, time.October, 19), To: schoolDate(2026, time.October, 26),
 	})
 	if err != nil {

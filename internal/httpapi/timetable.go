@@ -10,7 +10,7 @@ import (
 )
 
 func registerTimetable(api huma.API, h *handlers) {
-	huma.Register(api, huma.Operation{
+	register(api, AccessPublic, huma.Operation{
 		OperationID: "listTerms",
 		Method:      "GET",
 		Path:        BasePath + "/terms",
@@ -19,7 +19,7 @@ func registerTimetable(api huma.API, h *handlers) {
 		Tags:        []string{"timetable"},
 	}, h.listTerms)
 
-	huma.Register(api, huma.Operation{
+	register(api, AccessPublic, huma.Operation{
 		OperationID: "listClasses",
 		Method:      "GET",
 		Path:        BasePath + "/terms/{termId}/classes",
