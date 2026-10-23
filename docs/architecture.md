@@ -64,8 +64,8 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   gets its own database cloned from a migrated template.
 - **Schema:** goose migrations in `internal/store/postgres/migrations` are embedded in the binary
   and are the schema of record; sqlc generates the query code from them (`just sqlc`, checked by
-  `just check-sqlc`). `serve` uses PostgreSQL when `DATABASE_URL` is set and refuses to start while
-  migrations are pending (`studio-schedule migrate up`); without it, `serve` runs the memory store
+  `just check-sqlc`). `serve` uses PostgreSQL when `DATABASE_URL` is set and refuses to start unless
+  exactly the embedded migrations are applied (checked read-only; `studio-schedule migrate up`); without it, `serve` runs the memory store
   with the demo data and logs a warning. `studio-schedule seed` loads the demo data into an empty
   database only.
 

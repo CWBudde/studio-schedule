@@ -51,7 +51,7 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   middleware (recovery → access log → cross-origin protection → router). Unknown non-`/api` paths
   fall through to `Deps.UI` (the embedded SPA in `internal/webui`). `cmd/studio-schedule` (cobra:
   `serve`, `migrate`, `seed`, `openapi`, `version`) and `cmd/wasm` both call it. `serve` uses
-  PostgreSQL when `DATABASE_URL` is set (refusing to start with pending migrations), otherwise the
+  PostgreSQL when `DATABASE_URL` is set (refusing to start unless the schema matches), otherwise the
   memory store with `seed.LoadDemo`.
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` (plus a field in `httpapi.Deps` and its construction in `app.New`),

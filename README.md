@@ -52,11 +52,12 @@ With PostgreSQL (18+), copy `.env.example` to `.env` and set `DATABASE_URL`, the
 
 ```sh
 just migrate up      # apply the embedded migrations (also: down, status)
-just seed            # optional: load the fictional demo data into the empty database
-just serve           # refuses to start while migrations are pending
+just seed            # load the fictional demo data into the empty database
+just serve           # refuses to start unless the schema matches the binary
 ```
 
-The PostgreSQL tests (`just test-pg`, also part of `just test`) need Docker, or a server in
+Until the admin area arrives (Phase 3), `seed` is the only way to create the school settings the
+UI needs; `serve` logs a warning without them. The PostgreSQL tests (`just test-pg`, also part of `just test`) need Docker, or a server in
 `STUDIO_TEST_DATABASE_URL` whose role may create databases.
 
 ## Repository layout

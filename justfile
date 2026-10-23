@@ -106,8 +106,8 @@ migrate *args:
     go run ./cmd/studio-schedule migrate {{args}}
 
 # Load the fictional demo data into an empty, migrated database (needs DATABASE_URL)
-seed:
-    go run ./cmd/studio-schedule seed
+seed *args:
+    go run ./cmd/studio-schedule seed {{args}}
 
 # Start the Vite dev server (proxies /api to :8080)
 web-dev:
