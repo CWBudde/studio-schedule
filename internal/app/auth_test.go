@@ -255,13 +255,45 @@ func TestAuthSessionRenewal(t *testing.T) {
 	}
 }
 
-func TestMailboxDisabled(t *testing.T) {
+func TestDemoEndpointsOnlyInDemo(t *testing.T) {
 	t.Parallel()
 
-	a := newAuthApp(t, app.Deps{})
+	a := newAuthApp(t, app.Deps{DemoLogins: seed.DemoLogins()})
 
-	res, _ := a.call(http.MethodGet, "/api/v1/demo/mailbox", "")
-	if res.StatusCode != http.StatusNotFound {
-		t.Fatalf("mailbox without Deps.Mailbox: %d, want 404", res.StatusCode)
+	for _, path := range []string{"/api/v1/demo/mailbox", "/api/v1/demo/logins"} {
+		res, _ := a.call(http.MethodGet, path, "")
+		if res.StatusCode != http.StatusNotFound {
+			t.Errorf("%s without Deps.Demo: %d, want 404", path, res.StatusCode)
+		}
+	}
+}
+
+func TestDemoLoginsSignIn(t *testing.T) {
+	t.Parallel()
+
+	a := newAuthApp(t, app.Deps{Demo: true, DemoLogins: seed.DemoLogins()})
+
+	res, body := a.call(http.MethodGet, "/api/v1/demo/logins", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("demo logins: %d %s", res.StatusCode, body)
+	}
+
+	var out struct {
+		Logins []struct{ Email, Password, Role string } `json:"logins"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil || len(out.Logins) != 4 {
+		t.Fatalf("demo logins %s: %v", body, err)
+	}
+
+	for _, l := range out.Logins {
+		res, body := a.call(http.MethodPost, "/api/v1/auth/login",
+			`{"email":"`+l.Email+`","password":"`+l.Password+`"}`)
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("login %s: %d %s", l.Email, res.StatusCode, body)
+		}
+
+		if role := decode(t, body)["role"]; role != l.Role {
+			t.Errorf("%s: role %v, want %s", l.Email, role, l.Role)
+		}
 	}
 }
