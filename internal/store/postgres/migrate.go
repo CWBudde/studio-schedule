@@ -111,6 +111,16 @@ func (m *Migrator) Down(ctx context.Context) (MigrationResult, error) {
 	return result(res), nil
 }
 
+// HasPending reports whether some embedded migration is not applied.
+func (m *Migrator) HasPending(ctx context.Context) (bool, error) {
+	pending, err := m.provider.HasPending(ctx)
+	if err != nil {
+		return false, migrationErr("status", err)
+	}
+
+	return pending, nil
+}
+
 // Status lists every embedded migration in version order.
 func (m *Migrator) Status(ctx context.Context) ([]MigrationStatus, error) {
 	status, err := m.provider.Status(ctx)

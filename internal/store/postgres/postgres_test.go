@@ -69,8 +69,16 @@ func TestMigrationsRoundTrip(t *testing.T) {
 
 		return n
 	}
+	wantPending := func(want bool) {
+		t.Helper()
+
+		if got, err := m.HasPending(ctx); err != nil || got != want {
+			t.Fatalf("HasPending = %v, %v; want %v", got, err, want)
+		}
+	}
 
 	wantStatus(true)
+	wantPending(false)
 
 	if n := tables(); n != 14 {
 		t.Fatalf("%d tables after up, want 14", n)
@@ -96,6 +104,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 
 	wantStatus(false)
+	wantPending(true)
 
 	if n := tables(); n != 0 {
 		t.Fatalf("%d tables left after down, want 0", n)
