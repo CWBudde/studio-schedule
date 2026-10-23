@@ -39,8 +39,12 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   implementation must pass.
 - `internal/httpapi`: Huma operations. It maps domain errors to problem+json and does no business
   logic.
-- `internal/app`: wiring and cross-cutting middleware (recovery, cross-origin protection, later
-  sessions and request IDs).
+- `internal/auth/password`: argon2id `PasswordHasher` (cheap parameters in the `js` build).
+- `internal/mail`: mail templates (`en`, `de`; HTML plus text) and the `Mailer` interface;
+  `internal/mail/smtp` is the server-only SMTP sender. Services write mails to the outbox in their
+  transaction; a job sends them ([ADR 0004](decisions/0004-accounts-sessions-and-mail.md)).
+- `internal/app`: wiring and cross-cutting middleware (recovery, cross-origin protection). The
+  session middleware in `httpapi` resolves the `studio_session` cookie to the signed-in account.
 
 ## Transactions and concurrency
 
@@ -85,8 +89,9 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
 
 ## Background jobs
 
-`internal/jobs` runs named jobs on a Go ticker each. `app.Jobs(deps)` registers them (today:
-`generate-lessons`, hourly, over a rolling horizon). The server and the WASM build run every job
+`internal/jobs` runs named jobs on a Go ticker each. `app.Jobs(deps)` registers them:
+`generate-lessons` (hourly, over a rolling horizon), `purge-sessions` (hourly, deletes expired
+sessions and email links) and, when a mailer is configured, `deliver-mail` (every minute). The server and the WASM build run every job
 once at startup (the demo before it answers its first request), then on its interval; Go timers
 work in `js/wasm`, so both targets use the same code. Jobs must be idempotent: the generator reads
 the existing lessons of its range and creates only the missing ones.
@@ -98,7 +103,8 @@ the existing lessons of its range and creates only the missing ones.
 - Conventions: base path `/api/v1`, camelCase JSON, explicit camelCase `operationId`s, RFC 9457
   problem+json errors without internal details.
 - Cross-site request forgery: Go's `http.CrossOriginProtection` (Sec-Fetch-Site / Origin based) on
-  unsafe methods. Sessions use HttpOnly SameSite=Lax cookies (Phase 3).
+  unsafe methods. Sessions are server-side rows behind an HttpOnly, SameSite=Lax cookie that holds
+  a random token; only its hash is stored ([ADR 0004](decisions/0004-accounts-sessions-and-mail.md)).
 
 ## Frontend
 

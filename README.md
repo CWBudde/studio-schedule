@@ -34,6 +34,7 @@ golangci-lint.
 ```sh
 just web-install     # install frontend dependencies
 just serve           # API server on :8080 (in-memory store with demo data unless DATABASE_URL is set)
+                     # demo data: sign in with any demo account, password demo-password
 just web-dev         # Vite dev server on :5173, proxies /api to :8080
 ```
 

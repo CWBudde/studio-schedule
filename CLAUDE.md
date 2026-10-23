@@ -54,6 +54,11 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `serve`, `migrate`, `seed`, `openapi`, `version`) and `cmd/wasm` both call it. `serve` uses
   PostgreSQL when `DATABASE_URL` is set (refusing to start unless the schema matches), otherwise the
   memory store with `seed.LoadDemo`.
+- **Auth & mail:** `service.AuthService` (register → confirm with password → sessions; ADR 0004),
+  the `studio_session` cookie middleware in `httpapi/auth.go` (`principalFrom(ctx)`), argon2id in
+  `internal/auth/password`. Mails: render with `internal/mail` and call `enqueueMail` inside the
+  causing transaction; the `deliver-mail` job sends them (`internal/mail/smtp`, server only).
+  `Deps.Demo` (WASM demo, `serve` without DB) exposes `/api/v1/demo/{mailbox,logins}`.
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` (plus a field in `httpapi.Deps` and its construction in `app.New`),
   `just gen-api`, then a query/mutation in `web/src/api/queries.ts` using the generated `paths`.
