@@ -14,22 +14,23 @@ export class ApiError extends Error {
   }
 }
 
+/** The data of an openapi-fetch result; a non-2xx answer throws an ApiError. */
+async function unwrap<T>(
+  request: Promise<{ data?: T; error?: unknown; response: Response }>,
+): Promise<T> {
+  const { data, error, response } = await request;
+  if (data === undefined) throw new ApiError(response.status, error);
+  return data;
+}
+
 export const healthQuery = queryOptions({
   queryKey: ['health'],
-  queryFn: async ({ signal }) => {
-    const { data, error, response } = await api.GET('/api/v1/health', { signal });
-    if (data === undefined) throw new ApiError(response.status, error);
-    return data;
-  },
+  queryFn: ({ signal }) => unwrap(api.GET('/api/v1/health', { signal })),
 });
 
 export const publicSettingsQuery = queryOptions({
   queryKey: ['settings', 'public'],
-  queryFn: async ({ signal }) => {
-    const { data, error, response } = await api.GET('/api/v1/settings/public', { signal });
-    if (data === undefined) throw new ApiError(response.status, error);
-    return data;
-  },
+  queryFn: ({ signal }) => unwrap(api.GET('/api/v1/settings/public', { signal })),
   staleTime: 5 * 60_000,
 });
 
@@ -42,56 +43,42 @@ export const scheduleQueryKey = ['schedule'] as const;
 export const scheduleQuery = (params: ScheduleParams) =>
   queryOptions({
     queryKey: [...scheduleQueryKey, params],
-    queryFn: async ({ signal }) => {
-      const { data, error, response } = await api.GET('/api/v1/schedule', {
-        params: { query: params },
-        signal,
-      });
-      if (data === undefined) throw new ApiError(response.status, error);
-      return data;
-    },
+    queryFn: ({ signal }) =>
+      unwrap(
+        api.GET('/api/v1/schedule', {
+          params: { query: params },
+          signal,
+        }),
+      ),
   });
 
 /** One published lesson. Unknown and invisible lessons fail alike with status 404. */
 export const lessonQuery = (lessonId: string) =>
   queryOptions({
     queryKey: ['lesson', lessonId],
-    queryFn: async ({ signal }) => {
-      const { data, error, response } = await api.GET('/api/v1/lessons/{lessonId}', {
-        params: { path: { lessonId } },
-        signal,
-      });
-      if (data === undefined) throw new ApiError(response.status, error);
-      return data;
-    },
+    queryFn: ({ signal }) =>
+      unwrap(
+        api.GET('/api/v1/lessons/{lessonId}', {
+          params: { path: { lessonId } },
+          signal,
+        }),
+      ),
   });
 
 export const locationsQuery = queryOptions({
   queryKey: ['locations'],
-  queryFn: async ({ signal }) => {
-    const { data, error, response } = await api.GET('/api/v1/locations', { signal });
-    if (data === undefined) throw new ApiError(response.status, error);
-    return data.items;
-  },
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/locations', { signal }))).items,
   staleTime: 5 * 60_000,
 });
 
 export const staffQuery = queryOptions({
   queryKey: ['staff'],
-  queryFn: async ({ signal }) => {
-    const { data, error, response } = await api.GET('/api/v1/staff', { signal });
-    if (data === undefined) throw new ApiError(response.status, error);
-    return data.items;
-  },
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/staff', { signal }))).items,
   staleTime: 5 * 60_000,
 });
 
 export const courseTypesQuery = queryOptions({
   queryKey: ['course-types'],
-  queryFn: async ({ signal }) => {
-    const { data, error, response } = await api.GET('/api/v1/course-types', { signal });
-    if (data === undefined) throw new ApiError(response.status, error);
-    return data.items;
-  },
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/course-types', { signal }))).items,
   staleTime: 5 * 60_000,
 });

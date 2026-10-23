@@ -1,7 +1,16 @@
 import { z } from 'zod';
+import type { LessonLevel } from '@/api/client';
 
 const schoolDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const levels = ['beginner', 'intermediate', 'advanced', 'professional', 'open'] as const;
+
+/** Every lesson level of the API, in the order the filter offers them. */
+export const levels = ['beginner', 'intermediate', 'advanced', 'professional', 'open'] as const;
+
+// A level the API adds must be added above (and vice versa).
+type Missing = Exclude<LessonLevel, (typeof levels)[number]>;
+type Unknown = Exclude<(typeof levels)[number], LessonLevel>;
+const levelsMatchAPI: [Missing, Unknown] extends [never, never] ? true : false = true;
+void levelsMatchAPI;
 
 /**
  * Search params of /schedule. Everything is optional so URLs stay short;
