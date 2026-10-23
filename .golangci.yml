@@ -25,6 +25,8 @@ linters:
           msg: inject a clock.Clock instead of calling time.Now
         - pattern: ^fmt\.Print(f|ln)?$
           msg: use a *slog.Logger or write to an explicit io.Writer
+        - pattern: ^uuid\.New(V4|V7)?$
+          msg: inject an ids.Source instead of generating UUIDs directly
     govet:
       enable-all: true
       disable:
@@ -73,6 +75,10 @@ linters:
       - path: ^internal/clock/
         linters: [forbidigo]
         text: time\.Now
+      # The ids package is the one place that may generate UUIDs.
+      - path: ^internal/ids/
+        linters: [forbidigo]
+        text: uuid\.New
       # Command packages may print to stdout.
       - path: ^cmd/
         linters: [forbidigo]
