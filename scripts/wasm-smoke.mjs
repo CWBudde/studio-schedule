@@ -31,13 +31,15 @@ const api = globalThis.StudioScheduleAPI;
 const decoder = new TextDecoder();
 let failures = 0;
 
-async function check(name, req, assert) {
+// summary turns a successful response body into the logged text (default:
+// the body itself).
+async function check(name, req, assert, summary = (text) => text) {
   try {
     const res = await Promise.race([api.fetch(req), timeout(5_000)]);
     const text = decoder.decode(res.body).trim();
     const problem = assert(res, text);
-    if (problem) throw new Error(`${problem} (status ${res.status}, body ${text})`);
-    console.log(`ok   ${name}: ${res.status} ${text}`);
+    if (problem) throw new Error(`${problem} (status ${res.status}, body ${text.slice(0, 500)})`);
+    console.log(`ok   ${name}: ${res.status} ${summary(text)}`);
   } catch (err) {
     failures++;
     console.error(`FAIL ${name}: ${err.message}`);
@@ -79,6 +81,33 @@ await check(
     body: new TextEncoder().encode("{}"),
   },
   (res) => (res.status === 405 ? undefined : "unexpected status"),
+);
+
+// The schedule of the coming week, in the school time zone. The demo terms
+// have fixed dates, so lessons are only required while today lies in one.
+const isoDate = (d) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(d);
+const today = isoDate(new Date());
+const nextWeek = isoDate(new Date(Date.now() + 7 * 24 * 3600 * 1000));
+const termsRes = await api.fetch({ method: "GET", url: "/api/v1/terms", headers: [], body: null });
+const terms = termsRes.status === 200 ? JSON.parse(decoder.decode(termsRes.body)).items : [];
+const inTerm = terms.some((t) => t.startsOn <= today && today <= t.endsOn);
+
+await check(
+  `GET /api/v1/schedule ${today}..${nextWeek} (lessons ${inTerm ? "required" : "optional"})`,
+  { method: "GET", url: `/api/v1/schedule?from=${today}&to=${nextWeek}`, headers: [], body: null },
+  (res, text) => {
+    if (res.status !== 200) return "unexpected status";
+    const body = JSON.parse(text);
+    if (!Array.isArray(body.lessons) || !body.releasedUntil || !body.nextReleaseAt) return "unexpected body";
+    if (inTerm && body.lessons.length === 0) return "no lessons generated";
+    const releasedUntil = Date.parse(body.releasedUntil);
+    if (body.lessons.some((l) => l.classId && l.kind === "regular" && Date.parse(l.startsAt) >= releasedUntil))
+      return "unreleased lesson visible";
+  },
+  (text) => {
+    const body = JSON.parse(text);
+    return `${body.lessons.length} lessons, released until ${body.releasedUntil}`;
+  },
 );
 
 await check("GET /api/v1/nope", { method: "GET", url: "/api/v1/nope", headers: [], body: null }, (res) => {
