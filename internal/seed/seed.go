@@ -28,13 +28,103 @@ func DemoSettings() domain.Settings {
 	}
 }
 
-// LoadDemo writes the complete demo data set into st in one transaction.
+// Dataset is a complete set of school data. Every entity is valid, and all
+// references point to entities of the same Dataset.
+type Dataset struct {
+	Settings     domain.Settings
+	Locations    []domain.Location
+	Rooms        []domain.Room
+	Staff        []domain.Staff
+	CourseTypes  []domain.CourseType
+	Terms        []domain.Term
+	Classes      []domain.Class
+	Persons      []domain.Person
+	Guardians    []domain.Guardian
+	Accounts     []domain.Account
+	ClassMembers []domain.ClassMember
+}
+
+// LoadDemo writes the complete demo data set (Demo) into st in one
+// transaction. It fails with domain.ErrConflict if the data is already
+// there.
 func LoadDemo(ctx context.Context, st store.Store) error {
+	d := Demo()
+
 	err := st.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		return tx.Settings().Put(ctx, DemoSettings())
+		return write(ctx, tx, d)
 	})
 	if err != nil {
 		return fmt.Errorf("seed demo data: %w", err)
+	}
+
+	return nil
+}
+
+// write stores d through the repositories of tx, referenced records first.
+// It has no side effects outside tx, so the store may retry it.
+func write(ctx context.Context, tx store.Tx, d Dataset) error {
+	if err := tx.Settings().Put(ctx, d.Settings); err != nil {
+		return fmt.Errorf("settings: %w", err)
+	}
+
+	for _, p := range d.Persons {
+		if err := tx.Persons().Create(ctx, p); err != nil {
+			return fmt.Errorf("person %v: %w", p.ID, err)
+		}
+	}
+
+	for _, g := range d.Guardians {
+		if err := tx.Persons().AddGuardian(ctx, g); err != nil {
+			return fmt.Errorf("guardian %v of %v: %w", g.GuardianID, g.DependentID, err)
+		}
+	}
+
+	for _, a := range d.Accounts {
+		if err := tx.Accounts().Create(ctx, a); err != nil {
+			return fmt.Errorf("account %v: %w", a.ID, err)
+		}
+	}
+
+	for _, l := range d.Locations {
+		if err := tx.Locations().Create(ctx, l); err != nil {
+			return fmt.Errorf("location %v: %w", l.ID, err)
+		}
+	}
+
+	for _, r := range d.Rooms {
+		if err := tx.Rooms().Create(ctx, r); err != nil {
+			return fmt.Errorf("room %v: %w", r.ID, err)
+		}
+	}
+
+	for _, s := range d.Staff {
+		if err := tx.Staff().Create(ctx, s); err != nil {
+			return fmt.Errorf("staff %v: %w", s.ID, err)
+		}
+	}
+
+	for _, c := range d.CourseTypes {
+		if err := tx.CourseTypes().Create(ctx, c); err != nil {
+			return fmt.Errorf("course type %v: %w", c.ID, err)
+		}
+	}
+
+	for _, t := range d.Terms {
+		if err := tx.Terms().Create(ctx, t); err != nil {
+			return fmt.Errorf("term %v: %w", t.ID, err)
+		}
+	}
+
+	for _, c := range d.Classes {
+		if err := tx.Classes().Create(ctx, c); err != nil {
+			return fmt.Errorf("class %v: %w", c.ID, err)
+		}
+	}
+
+	for _, m := range d.ClassMembers {
+		if err := tx.Classes().AddMember(ctx, m); err != nil {
+			return fmt.Errorf("member %v of class %v: %w", m.PersonID, m.ClassID, err)
+		}
 	}
 
 	return nil
