@@ -167,6 +167,80 @@ func testSessions(t *testing.T, newStore func(*testing.T) store.Store) {
 			got, _ = getByToken(e, "as-ben")
 			wantEqual(e.t, got, s)
 		},
+		"DeleteByAccount": func(e *env) {
+			ada := e.account(e.person("Ada", "Admin"), "ada@example.org")
+			ben := e.account(e.person("Ben", "Member"), "ben@example.org")
+			cleo := e.account(e.person("Cleo", "Admin"), "cleo@example.org")
+
+			impersonate := func(impersonator, as domain.Account, token string) {
+				s := domain.Session{
+					ID: newID[domain.SessionID](e), AccountID: as.ID, TokenHash: domain.HashToken(token),
+					CreatedAt: t0, LastSeenAt: t0, ExpiresAt: t0.Add(time.Hour), ImpersonatorID: impersonator.ID,
+				}
+				valid(e.t, s)
+				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Sessions().Create(ctx, s) })
+			}
+			deleteByAccount := func(account domain.AccountID, except domain.SessionID) int {
+				var n int
+
+				e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+					var err error
+					n, err = tx.Sessions().DeleteByAccount(ctx, account, except)
+
+					return err
+				})
+
+				return n
+			}
+			wantGone := func(tokens ...string) {
+				e.t.Helper()
+
+				for _, token := range tokens {
+					_, err := getByToken(e, token)
+					wantErr(e.t, err, domain.ErrNotFound)
+				}
+			}
+			wantKept := func(sessions ...domain.Session) {
+				e.t.Helper()
+
+				for _, s := range sessions {
+					got, err := query(e, func(ctx context.Context, tx store.Tx) (domain.Session, error) {
+						return tx.Sessions().GetByToken(ctx, s.TokenHash)
+					})
+					if err != nil {
+						e.t.Fatalf("GetByToken %s: %v", s.ID, err)
+					}
+
+					wantEqual(e.t, got, s)
+				}
+			}
+
+			e.session(ada, "ada-1", t0.Add(time.Hour))
+			current := e.session(ada, "ada-2", t0.Add(time.Hour))
+			e.session(ada, "ada-expired", t0.Add(-time.Hour))
+			impersonate(ada, ben, "ada-as-ben")   // acts for Ada
+			impersonate(cleo, ada, "cleo-as-ada") // signed in as Ada
+			ben1 := e.session(ben, "ben-1", t0.Add(time.Hour))
+			cleo1 := e.session(cleo, "cleo-1", t0.Add(time.Hour))
+
+			// Keeps the current session, deletes every other one acting for Ada.
+			wantEqual(e.t, deleteByAccount(ada.ID, current.ID), 4)
+			wantGone("ada-1", "ada-expired", "ada-as-ben", "cleo-as-ada")
+			wantKept(current, ben1, cleo1)
+
+			// A session of another account is no exception for Ada's.
+			wantEqual(e.t, deleteByAccount(ada.ID, ben1.ID), 1)
+			wantGone("ada-2")
+			wantKept(ben1, cleo1)
+
+			wantEqual(e.t, deleteByAccount(ada.ID, domain.SessionID{}), 0)
+
+			// The zero exception deletes all.
+			e.session(ben, "ben-2", t0.Add(time.Hour))
+			wantEqual(e.t, deleteByAccount(ben.ID, domain.SessionID{}), 2)
+			wantGone("ben-1", "ben-2")
+			wantKept(cleo1)
+		},
 		"DeleteExpired": func(e *env) {
 			a := e.account(e.person("Ada", "Account"), "ada@example.org")
 			e.session(a, "old", t0.Add(-time.Minute))
@@ -201,6 +275,11 @@ func testSessions(t *testing.T, newStore func(*testing.T) store.Store) {
 				"Create": func(ctx context.Context, tx store.Tx) error { return tx.Sessions().Create(ctx, s) },
 				"Update": func(ctx context.Context, tx store.Tx) error { return tx.Sessions().Update(ctx, s) },
 				"Delete": func(ctx context.Context, tx store.Tx) error { return tx.Sessions().Delete(ctx, s.ID) },
+				"DeleteByAccount": func(ctx context.Context, tx store.Tx) error {
+					_, err := tx.Sessions().DeleteByAccount(ctx, a.ID, domain.SessionID{})
+
+					return err
+				},
 				"DeleteExpired": func(ctx context.Context, tx store.Tx) error {
 					_, err := tx.Sessions().DeleteExpired(ctx, t0.Add(2*time.Hour))
 
@@ -257,6 +336,42 @@ func testAccountTokens(t *testing.T, newStore func(*testing.T) store.Store) {
 			// A token can be used once: deleting it again reports not found.
 			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.AccountTokens().Delete(ctx, at.Hash) })
 			wantErr(e.t, err, domain.ErrNotFound)
+		},
+		"EveryPurpose": func(e *env) {
+			a := e.account(e.person("Ada", "Account"), "ada@example.org")
+
+			for _, purpose := range domain.TokenPurposes() {
+				at := domain.AccountToken{
+					Hash: domain.HashToken(string(purpose)), AccountID: a.ID, Purpose: purpose,
+					Email: "new-" + a.Email, CreatedAt: t0, ExpiresAt: t0.Add(time.Hour),
+				}
+				valid(e.t, at)
+
+				if err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.AccountTokens().Create(ctx, at) }); err != nil {
+					e.t.Fatalf("Create %s: %v", purpose, err)
+				}
+
+				got, err := get(e, string(purpose))
+				if err != nil {
+					e.t.Fatalf("Get %s: %v", purpose, err)
+				}
+
+				wantEqual(e.t, got, at)
+			}
+
+			// DeleteByAccount removes only the tokens of the given purpose.
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				return tx.AccountTokens().DeleteByAccount(ctx, a.ID, domain.TokenResetPassword)
+			})
+
+			for _, purpose := range domain.TokenPurposes() {
+				_, err := get(e, string(purpose))
+				if purpose == domain.TokenResetPassword {
+					wantErr(e.t, err, domain.ErrNotFound)
+				} else if err != nil {
+					e.t.Fatalf("Get %s: %v", purpose, err)
+				}
+			}
 		},
 		"Conflicts": func(e *env) {
 			a := e.account(e.person("Ada", "Account"), "ada@example.org")

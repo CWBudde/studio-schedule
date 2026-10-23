@@ -68,10 +68,17 @@ type TokenPurpose string
 const (
 	// TokenConfirmEmail confirms the email address of a new account.
 	TokenConfirmEmail TokenPurpose = "confirm-email"
+	// TokenResetPassword sets a new password of a confirmed account.
+	TokenResetPassword TokenPurpose = "reset-password"
+	// TokenChangeEmail confirms the new email address of an account; the
+	// token's Email is the new address.
+	TokenChangeEmail TokenPurpose = "change-email"
 )
 
 // TokenPurposes returns all token purposes.
-func TokenPurposes() []TokenPurpose { return []TokenPurpose{TokenConfirmEmail} }
+func TokenPurposes() []TokenPurpose {
+	return []TokenPurpose{TokenConfirmEmail, TokenResetPassword, TokenChangeEmail}
+}
 
 // Valid reports whether p is a known token purpose.
 func (p TokenPurpose) Valid() bool { return slices.Contains(TokenPurposes(), p) }
@@ -82,8 +89,9 @@ type AccountToken struct {
 	Hash      [32]byte
 	AccountID AccountID
 	Purpose   TokenPurpose
-	// Email is the address the token was sent to. The token is only valid
-	// while the account still has that address.
+	// Email is the address the token was sent to. A confirmation or reset
+	// token is only valid while the account still has that address; a
+	// change-email token carries the new address.
 	Email     string
 	CreatedAt time.Time
 	ExpiresAt time.Time

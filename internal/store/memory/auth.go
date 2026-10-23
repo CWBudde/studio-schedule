@@ -108,6 +108,21 @@ func (r sessionRepo) Delete(_ context.Context, id domain.SessionID) error {
 	return nil
 }
 
+func (r sessionRepo) DeleteByAccount(_ context.Context, account domain.AccountID, except domain.SessionID) (int, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return 0, err
+	}
+
+	actsFor := r.tx.state.sessions.filter(func(s domain.Session) bool {
+		return (s.AccountID == account || s.ImpersonatorID == account) && s.ID != except
+	})
+	for _, s := range actsFor {
+		r.tx.state.sessions.delete(r.tx.gen, s.ID)
+	}
+
+	return len(actsFor), nil
+}
+
 func (r sessionRepo) DeleteExpired(_ context.Context, now time.Time) (int, error) {
 	if err := r.tx.checkWritable(); err != nil {
 		return 0, err

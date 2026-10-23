@@ -127,6 +127,25 @@ func (q *Queries) DeleteSession(ctx context.Context, id pgtype.UUID) (int64, err
 	return result.RowsAffected(), nil
 }
 
+const deleteSessionsByAccount = `-- name: DeleteSessionsByAccount :execrows
+DELETE FROM sessions
+WHERE (account_id = $1 OR impersonator_id = $1)
+    AND id IS DISTINCT FROM $2
+`
+
+type DeleteSessionsByAccountParams struct {
+	AccountID pgtype.UUID
+	ExceptID  pgtype.UUID
+}
+
+func (q *Queries) DeleteSessionsByAccount(ctx context.Context, arg DeleteSessionsByAccountParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSessionsByAccount, arg.AccountID, arg.ExceptID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getAccountToken = `-- name: GetAccountToken :one
 SELECT token_hash, account_id, purpose, email, created_at, expires_at FROM account_tokens WHERE token_hash = $1
 `

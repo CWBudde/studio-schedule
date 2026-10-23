@@ -176,6 +176,11 @@ type SessionRepo interface {
 	// Update fails with domain.ErrConflict under the same rules as Create.
 	Update(ctx context.Context, s domain.Session) error
 	Delete(ctx context.Context, id domain.SessionID) error
+	// DeleteByAccount deletes every session that acts for the account, its
+	// own and the impersonation sessions it started, except the session
+	// except (none if zero), and returns how many it deleted. It signs the
+	// account out everywhere else when its password is changed or reset.
+	DeleteByAccount(ctx context.Context, account domain.AccountID, except domain.SessionID) (int, error)
 	// DeleteExpired deletes every session that expired at or before now and
 	// returns how many it deleted.
 	DeleteExpired(ctx context.Context, now time.Time) (int, error)

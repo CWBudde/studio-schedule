@@ -23,6 +23,11 @@ WHERE id = $1;
 -- name: DeleteSession :execrows
 DELETE FROM sessions WHERE id = $1;
 
+-- name: DeleteSessionsByAccount :execrows
+DELETE FROM sessions
+WHERE (account_id = sqlc.arg(account_id) OR impersonator_id = sqlc.arg(account_id))
+    AND id IS DISTINCT FROM sqlc.narg(except_id);
+
 -- name: DeleteExpiredSessions :execrows
 DELETE FROM sessions WHERE expires_at <= $1;
 
