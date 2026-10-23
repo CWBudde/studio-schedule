@@ -121,7 +121,7 @@ func (s *Store) InTx(ctx context.Context, mode store.TxMode, fn func(ctx context
 		}
 
 		if attempt >= s.retry.attempts {
-			return fmt.Errorf("postgres: giving up after %d attempts: %w", attempt, err)
+			return lostRace(err, attempt)
 		}
 
 		if err := sleep(ctx, s.retry.backoff*time.Duration(attempt)); err != nil {

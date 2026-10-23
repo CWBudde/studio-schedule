@@ -10,7 +10,6 @@ import (
 	"path"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/lock"
@@ -52,9 +51,11 @@ type MigrationStatus struct {
 // NewMigrator returns a migrator for the database at databaseURL. It does not
 // connect until it is used. Errors never contain the password.
 func NewMigrator(databaseURL string) (*Migrator, error) {
-	cfg, err := pgx.ParseConfig(databaseURL)
+	// Parse like Open, so pool_* parameters are accepted (and dropped)
+	// instead of being sent to the server as runtime parameters.
+	cfg, err := poolConfig(databaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("postgres: invalid database URL: %w", mapErr(err))
+		return nil, err
 	}
 
 	fsys, err := fs.Sub(migrationFiles, "migrations")
@@ -67,7 +68,7 @@ func NewMigrator(databaseURL string) (*Migrator, error) {
 		return nil, err
 	}
 
-	db := stdlib.OpenDB(*cfg)
+	db := stdlib.OpenDB(*cfg.ConnConfig)
 
 	provider, err := goose.NewProvider(goose.DialectPostgres, db, fsys, goose.WithSessionLocker(locker))
 	if err != nil {

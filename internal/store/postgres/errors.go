@@ -51,7 +51,27 @@ func (e *retryableError) Error() string {
 	return "postgres: serialization failure"
 }
 
-func (*retryableError) Unwrap() error { return domain.ErrConflict }
+// lostRace is the error InTx returns when it gives up after the retryable
+// failure err: a conflict, because the transaction kept losing against
+// concurrent ones. Only here does a retryable failure become ErrConflict;
+// inside the callback it must stay distinct, or a callback that handles
+// ErrConflict would swallow it and prevent the retry. A raw driver error that
+// a callback returned never leaves the package.
+func lostRace(err error, attempts int) error {
+	reason := "serialization failure"
+
+	var (
+		re    *retryableError
+		pgErr *pgconn.PgError
+	)
+
+	if (errors.As(err, &re) && re.code == pgerrcode.DeadlockDetected) ||
+		(errors.As(err, &pgErr) && pgErr.Code == pgerrcode.DeadlockDetected) {
+		reason = "deadlock detected"
+	}
+
+	return fmt.Errorf("%w: postgres: %s, giving up after %d attempts", domain.ErrConflict, reason, attempts)
+}
 
 // retryable reports whether the transaction that failed with err may succeed
 // when run again. It also recognizes a driver error that a callback returned

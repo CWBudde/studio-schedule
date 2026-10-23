@@ -142,8 +142,8 @@ func TestMapErr(t *testing.T) {
 		"not null":           {pg(pgerrcode.NotNullViolation, ""), domain.ErrValidation},
 		"out of range":       {pg(pgerrcode.NumericValueOutOfRange, ""), domain.ErrValidation},
 		"read-only":          {pg(pgerrcode.ReadOnlySQLTransaction, ""), store.ErrReadOnly},
-		"serialization":      {pg(pgerrcode.SerializationFailure, ""), domain.ErrConflict},
-		"deadlock":           {pg(pgerrcode.DeadlockDetected, ""), domain.ErrConflict},
+		"serialization":      {pg(pgerrcode.SerializationFailure, ""), nil},
+		"deadlock":           {pg(pgerrcode.DeadlockDetected, ""), nil},
 		"no rows":            {pgx.ErrNoRows, domain.ErrNotFound},
 		"other server error": {pg(pgerrcode.UndefinedTable, ""), nil},
 		"other error":        {errors.New("network down"), nil},
@@ -168,6 +168,15 @@ func TestMapErr(t *testing.T) {
 				t.Errorf("mapErr(%v) = %v exposes the driver error", tc.err, got)
 			}
 		})
+	}
+
+	// A retryable failure is not a business conflict: a callback that
+	// handled ErrConflict would swallow it and prevent the retry. InTx
+	// reports ErrConflict only when it gives up.
+	for _, code := range []string{pgerrcode.SerializationFailure, pgerrcode.DeadlockDetected} {
+		if got := mapErr(pg(code, "")); !retryable(got) || errors.Is(got, domain.ErrConflict) {
+			t.Errorf("mapErr(%s) = %v, want a retryable error that is not ErrConflict", code, got)
+		}
 	}
 
 	if mapErr(nil) != nil {
@@ -222,6 +231,41 @@ func TestCheckViolationIsValidation(t *testing.T) {
 	}
 }
 
+// TestPoolParametersAreAccepted checks that the migrator, like Open,
+// accepts pool_* parameters instead of sending them to the server.
+func TestPoolParametersAreAccepted(t *testing.T) {
+	t.Parallel()
+
+	dbURL := newTestDatabase(t)
+
+	switch {
+	case !strings.Contains(dbURL, "://"):
+		dbURL += " pool_max_conns=4"
+	case strings.Contains(dbURL, "?"):
+		dbURL += "&pool_max_conns=4"
+	default:
+		dbURL += "?pool_max_conns=4"
+	}
+
+	m, err := NewMigrator(dbURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = m.Close() })
+
+	if _, err := m.Status(t.Context()); err != nil {
+		t.Fatalf("migrator status: %v", err)
+	}
+
+	st, err := Open(t.Context(), dbURL)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	st.Close()
+}
+
 func TestRetry(t *testing.T) {
 	t.Parallel()
 
@@ -256,8 +300,15 @@ func TestRetry(t *testing.T) {
 		calls := 0
 
 		err := st.InTx(t.Context(), store.ReadWrite, failing(pgerrcode.SerializationFailure, 100, &calls))
-		if err == nil || !retryable(err) {
-			t.Fatalf("got %v, want the serialization failure", err)
+		if !errors.Is(err, domain.ErrConflict) {
+			t.Fatalf("got %v, want ErrConflict", err)
+		}
+
+		// The callback returned a raw driver error; it must not leave the
+		// package, and the result must not look retryable to an outer caller.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) || retryable(err) {
+			t.Errorf("got %v (%T), want a mapped, final error", err, err)
 		}
 
 		if calls != st.retry.attempts {
