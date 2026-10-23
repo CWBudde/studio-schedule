@@ -119,7 +119,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 
 	httpapi.Register(api, httpapi.Deps{
 		Settings:       service.NewSettingsService(deps.Store),
-		Catalog:        service.NewCatalogService(deps.Store),
+		Catalog:        service.NewCatalogService(deps.Store, deps.IDs),
 		Timetable:      service.NewTimetableService(deps.Store),
 		Schedule:       service.NewScheduleService(deps.Store, deps.Clock),
 		Auth:           newAuthService(deps),

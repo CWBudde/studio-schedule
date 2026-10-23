@@ -481,8 +481,36 @@ export interface paths {
          */
         get: operations["listLocations"];
         put?: never;
-        post?: never;
+        /**
+         * Create a location
+         * @description Adds a location. A name another location has (ignoring case) is a 409 `duplicate`.
+         */
+        post: operations["createLocation"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{locationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update a location
+         * @description Replaces the name and address of a location. A name another location has is a 409 `duplicate`.
+         */
+        put: operations["updateLocation"];
+        post?: never;
+        /**
+         * Delete a location
+         * @description Deletes a location without rooms; one with rooms is a 409 `in-use`.
+         */
+        delete: operations["deleteLocation"];
         options?: never;
         head?: never;
         patch?: never;
@@ -501,8 +529,36 @@ export interface paths {
          */
         get: operations["listRooms"];
         put?: never;
-        post?: never;
+        /**
+         * Create a room
+         * @description Adds a room to a location. A name another room of the location has (ignoring case) is a 409 `duplicate`; an unknown location is a 422 on `locationId`.
+         */
+        post: operations["createRoom"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/{roomId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update a room
+         * @description Replaces the location, name and capacity of a room. Existing lessons keep their capacity. A name another room of the location has is a 409 `duplicate`.
+         */
+        put: operations["updateRoom"];
+        post?: never;
+        /**
+         * Delete a room
+         * @description Deletes a room that no class or lesson uses; a used one is a 409 `in-use`.
+         */
+        delete: operations["deleteRoom"];
         options?: never;
         head?: never;
         patch?: never;
@@ -716,6 +772,44 @@ export interface components {
             password: string;
             /** @description Token from the confirmation link. */
             token: string;
+        };
+        Conflict: {
+            /**
+             * @description A human-readable explanation specific to this occurrence of the problem.
+             * @example Property foo is required but is missing.
+             */
+            detail?: string;
+            /** @description Optional list of individual error details */
+            errors?: components["schemas"]["ErrorDetail"][] | null;
+            /**
+             * Format: uri
+             * @description A URI reference that identifies the specific occurrence of the problem.
+             * @example https://example.com/error-log/abc123
+             */
+            instance?: string;
+            /**
+             * @description in-use: something still refers to the record; duplicate: the name is taken.
+             * @enum {string}
+             */
+            reason: "in-use" | "duplicate";
+            /**
+             * Format: int64
+             * @description HTTP status code
+             * @example 400
+             */
+            status?: number;
+            /**
+             * @description A short, human-readable summary of the problem type. This value should not change between occurrences of the error.
+             * @example Bad Request
+             */
+            title?: string;
+            /**
+             * Format: uri
+             * @description A URI reference to human-readable documentation for the error.
+             * @default about:blank
+             * @example https://example.com/errors/example
+             */
+            type: string;
         };
         CourseType: {
             /** @description Description, if any. */
@@ -994,6 +1088,12 @@ export interface components {
             /** @description Display name. */
             name: string;
         };
+        LocationData: {
+            /** @description Postal address, if known. */
+            address?: string;
+            /** @description Display name, unique within the school (ignoring case). */
+            name: string;
+        };
         LocationList: {
             /** @description Locations ordered by name. */
             items: components["schemas"]["Location"][];
@@ -1142,6 +1242,20 @@ export interface components {
              */
             locationId: string;
             /** @description Display name. */
+            name: string;
+        };
+        RoomData: {
+            /**
+             * Format: int64
+             * @description Default capacity of its lessons.
+             */
+            capacity: number;
+            /**
+             * Format: uuid
+             * @description Location the room belongs to.
+             */
+            locationId: string;
+            /** @description Display name, unique within its location (ignoring case). */
             name: string;
         };
         RoomList: {
@@ -2032,6 +2146,132 @@ export interface operations {
             };
         };
     };
+    createLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocationData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Location"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location. */
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocationData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Location"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location. */
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listRooms: {
         parameters: {
             query?: {
@@ -2051,6 +2291,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoomList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoomData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The room. */
+                roomId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoomData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The room. */
+                roomId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
                 };
             };
             /** @description Error */

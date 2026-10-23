@@ -6,18 +6,21 @@ import (
 	"slices"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/store"
 )
 
-// CatalogService provides read access to the catalog: locations, rooms,
-// staff and course types.
+// CatalogService provides the catalog: locations, rooms, staff and course
+// types. Everyone reads it; the office writes it (catalog_admin.go).
 type CatalogService struct {
 	store store.Store
+	ids   ids.Source
 }
 
-// NewCatalogService returns a CatalogService backed by st.
-func NewCatalogService(st store.Store) *CatalogService {
-	return &CatalogService{store: st}
+// NewCatalogService returns a CatalogService backed by st. New records get
+// their IDs from src.
+func NewCatalogService(st store.Store, src ids.Source) *CatalogService {
+	return &CatalogService{store: st, ids: src}
 }
 
 // Locations returns all locations ordered by name.

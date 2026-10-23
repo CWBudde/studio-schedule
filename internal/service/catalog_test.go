@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/service"
 	"github.com/cwbudde/studio-schedule/internal/store"
@@ -53,12 +54,12 @@ func mustParseID[I domain.AnyID](t *testing.T, s string) I {
 func TestCatalogLocations(t *testing.T) {
 	t.Parallel()
 
-	got, err := service.NewCatalogService(memory.New()).Locations(t.Context())
+	got, err := service.NewCatalogService(memory.New(), ids.V7{}).Locations(t.Context())
 	if err != nil || len(got) != 0 {
 		t.Fatalf("empty store: Locations() = %v, %v; want no locations", got, err)
 	}
 
-	got, err = service.NewCatalogService(catalogDemoStore(t)).Locations(t.Context())
+	got, err = service.NewCatalogService(catalogDemoStore(t), ids.V7{}).Locations(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,13 +75,13 @@ func TestCatalogLocations(t *testing.T) {
 func TestCatalogRooms(t *testing.T) {
 	t.Parallel()
 
-	got, err := service.NewCatalogService(memory.New()).Rooms(t.Context(), domain.LocationID{})
+	got, err := service.NewCatalogService(memory.New(), ids.V7{}).Rooms(t.Context(), domain.LocationID{})
 	if err != nil || len(got) != 0 {
 		t.Fatalf("empty store: Rooms() = %v, %v; want no rooms", got, err)
 	}
 
 	demo := seed.Demo()
-	svc := service.NewCatalogService(catalogDemoStore(t))
+	svc := service.NewCatalogService(catalogDemoStore(t), ids.V7{})
 	byName := func(rooms []domain.Room) []domain.Room {
 		return sortedByName(rooms,
 			func(r domain.Room) string { return r.Name },
@@ -141,7 +142,7 @@ func TestCatalogRoomsLocationWithoutRooms(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := service.NewCatalogService(st).Rooms(t.Context(), loc.ID)
+	got, err := service.NewCatalogService(st, ids.V7{}).Rooms(t.Context(), loc.ID)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("Rooms() = %v, %v; want no rooms", got, err)
 	}
@@ -150,12 +151,12 @@ func TestCatalogRoomsLocationWithoutRooms(t *testing.T) {
 func TestCatalogStaff(t *testing.T) {
 	t.Parallel()
 
-	got, err := service.NewCatalogService(memory.New()).Staff(t.Context())
+	got, err := service.NewCatalogService(memory.New(), ids.V7{}).Staff(t.Context())
 	if err != nil || len(got) != 0 {
 		t.Fatalf("empty store: Staff() = %v, %v; want no staff", got, err)
 	}
 
-	got, err = service.NewCatalogService(catalogDemoStore(t)).Staff(t.Context())
+	got, err = service.NewCatalogService(catalogDemoStore(t), ids.V7{}).Staff(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,12 +179,12 @@ func TestCatalogStaff(t *testing.T) {
 func TestCatalogCourseTypes(t *testing.T) {
 	t.Parallel()
 
-	got, err := service.NewCatalogService(memory.New()).CourseTypes(t.Context())
+	got, err := service.NewCatalogService(memory.New(), ids.V7{}).CourseTypes(t.Context())
 	if err != nil || len(got) != 0 {
 		t.Fatalf("empty store: CourseTypes() = %v, %v; want no course types", got, err)
 	}
 
-	got, err = service.NewCatalogService(catalogDemoStore(t)).CourseTypes(t.Context())
+	got, err = service.NewCatalogService(catalogDemoStore(t), ids.V7{}).CourseTypes(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
