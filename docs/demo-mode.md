@@ -52,6 +52,19 @@ just demo-serve        # = scripts/build-wasm.sh + vite build --mode demo + vite
 
 Open the printed URL, for example `http://localhost:4173/studio-schedule/`.
 
+## End-to-end tests
+
+`just e2e` builds the demo and runs the Playwright tests in `web/e2e` against it through
+`vite preview`: the real WASM backend in its Worker, in Chromium at desktop and phone size, with
+the browser in `America/New_York` so school times cannot fall back to the browser's zone. They
+cover the home page, the schedule list and week grid, filters, the lesson sheet, the release
+countdown, early-published workshops, deep links and German. Any console error fails a test. The
+`test-e2e` CI job runs them on every push and uploads the Playwright report when they fail. Run
+`just e2e-install` once to download the browser.
+
+Lessons are generated with random IDs on every start, so a link to a lesson works only within the
+visit that produced it.
+
 ## Constraints to keep in mind
 
 - `cmd/wasm` must not import server-only packages (database drivers, SMTP, CLI, `os/exec`,

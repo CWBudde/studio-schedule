@@ -34,6 +34,7 @@ just fmt         # treefmt + prettier
 just gen-api     # after changing any HTTP operation: regenerates api/openapi.json + TS types
 just web-check   # pnpm -C web check (eslint, tsc, prettier) && pnpm -C web test (vitest)
 just demo-serve  # WASM demo locally
+just e2e         # builds the demo, runs the Playwright tests in web/e2e (once: just e2e-install)
 just ci          # everything CI runs
 ```
 
@@ -69,7 +70,8 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `web/src/test/mockApi.ts` and render routed components with `renderInRouter` /
   `renderAtSchedule` (`web/src/test/utils.tsx`). School dates and times go through
   `web/src/lib/schoolTime.ts` with the school time zone, never the browser's; tests run with
-  `TZ=America/New_York` to catch leaks.
+  `TZ=America/New_York` to catch leaks. Playwright tests in `web/e2e` drive the demo build
+  (desktop and phone Chromium, same far-away browser zone) through roles and accessible names.
 
 ## Rules
 
