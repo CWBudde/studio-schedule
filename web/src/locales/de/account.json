@@ -1,0 +1,33 @@
+{
+  "title": "Dein Konto",
+  "description": "Ändere dein Passwort und deine E-Mail-Adresse.",
+  "loading": "Dein Konto wird geladen…",
+  "signedOutTitle": "Bitte melde dich an",
+  "signedOut": "Melde dich an, um dein Passwort oder deine E-Mail-Adresse zu ändern.",
+  "signIn": "Anmelden",
+  "impersonatingTitle": "Als andere Person angemeldet",
+  "impersonating": "Solange du als {{name}} angemeldet bist, kannst du Passwort und E-Mail-Adresse dieses Kontos nicht ändern.",
+  "password": {
+    "title": "Passwort ändern",
+    "description": "Auf diesem Gerät bleibst du angemeldet; auf allen anderen Geräten wirst du abgemeldet.",
+    "current": "Aktuelles Passwort",
+    "new": "Neues Passwort",
+    "repeat": "Neues Passwort wiederholen",
+    "hint": "Mindestens 8 Zeichen.",
+    "submit": "Passwort ändern",
+    "submitting": "Ändern…",
+    "success": "Dein Passwort wurde geändert. Auf deinen anderen Geräten wurdest du abgemeldet."
+  },
+  "email": {
+    "title": "E-Mail-Adresse ändern",
+    "description": "Wir schicken einen Bestätigungslink an die neue Adresse. Bis du ihn öffnest, bleibt deine aktuelle Adresse bestehen.",
+    "current": "Aktuelle Adresse",
+    "new": "Neue E-Mail-Adresse",
+    "password": "Passwort",
+    "passwordHint": "Zur Bestätigung, dass du es bist.",
+    "submit": "Bestätigungslink senden",
+    "submitting": "Senden…",
+    "successTitle": "Bitte prüfe dein Postfach",
+    "success": "Wir haben einen Link an {{email}} geschickt. Deine Adresse ändert sich, sobald du ihn öffnest."
+  }
+}

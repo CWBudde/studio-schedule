@@ -11,7 +11,7 @@ import type {
   Schedule,
 } from '@/api/client';
 
-type Answer = { status?: number; body?: unknown };
+type Answer = { status?: number; body?: unknown; headers?: Record<string, string> };
 
 /** Request options as openapi-fetch receives them, e.g. { params: { query } }. */
 export type MockRequest = {
@@ -33,7 +33,7 @@ function answerFrom(fixtures: Fixtures, path: string, init?: MockRequest) {
   return Promise.resolve({
     data: ok && hasBody ? answer?.body : undefined,
     error: ok ? undefined : (answer?.body ?? { title: 'Not Found', status }),
-    response: new Response(null, { status }),
+    response: new Response(null, { status, headers: answer?.headers }),
   });
 }
 
@@ -354,6 +354,15 @@ export const accounts: AccountEntry[] = [
 export const problem = (status: number, detail: string, errors?: { location: string }[]) => ({
   status,
   body: { status, title: 'Error', detail, type: 'about:blank', errors },
+});
+
+/**
+ * A 429 answer as the API's rate limits send it: problem+json with the wait
+ * in the detail and, unless `header` is false, in the Retry-After header.
+ */
+export const tooManyRequests = (seconds: number, { header = true } = {}) => ({
+  ...problem(429, `too many attempts; try again in ${seconds} seconds`),
+  headers: header ? { 'Retry-After': String(seconds) } : undefined,
 });
 
 /** Fixtures of a signed-out visitor (GET /auth/me answers 401). */

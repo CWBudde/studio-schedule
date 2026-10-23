@@ -26,7 +26,17 @@ export function renderWithQuery(ui: ReactElement) {
 }
 
 /** The routes of the test router; each renders ui when it is the page `at`. */
-export type TestPath = '/' | '/schedule' | '/login' | '/register' | '/confirm' | '/admin/accounts';
+export type TestPath =
+  | '/'
+  | '/schedule'
+  | '/login'
+  | '/register'
+  | '/confirm'
+  | '/forgot-password'
+  | '/reset-password'
+  | '/confirm-email-change'
+  | '/account'
+  | '/admin/accounts';
 
 /**
  * Renders ui as the page at `at` (default '/') of a router with the app's
@@ -59,6 +69,10 @@ export function renderInRouter(
       route('/login'),
       route('/register'),
       route('/confirm'),
+      route('/forgot-password'),
+      route('/reset-password'),
+      route('/confirm-email-change'),
+      route('/account'),
       route('/admin/accounts'),
     ]),
     history: createMemoryHistory({ initialEntries: [`${at}${query ? `?${query}` : ''}`] }),

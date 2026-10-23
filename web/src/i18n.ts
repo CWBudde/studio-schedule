@@ -1,10 +1,12 @@
 import i18n from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';
+import deAccount from './locales/de/account.json';
 import deAuth from './locales/de/auth.json';
 import de from './locales/de/common.json';
 import deSchedule from './locales/de/schedule.json';
 import deTimetable from './locales/de/timetable.json';
+import enAccount from './locales/en/account.json';
 import enAuth from './locales/en/auth.json';
 import en from './locales/en/common.json';
 import enSchedule from './locales/en/schedule.json';
@@ -15,8 +17,20 @@ export type SupportedLanguage = (typeof supportedLanguages)[number];
 
 export const defaultNS = 'common';
 export const resources = {
-  en: { common: en, schedule: enSchedule, auth: enAuth, timetable: enTimetable },
-  de: { common: de, schedule: deSchedule, auth: deAuth, timetable: deTimetable },
+  en: {
+    common: en,
+    schedule: enSchedule,
+    auth: enAuth,
+    account: enAccount,
+    timetable: enTimetable,
+  },
+  de: {
+    common: de,
+    schedule: deSchedule,
+    auth: deAuth,
+    account: deAccount,
+    timetable: deTimetable,
+  },
 } as const;
 
 void i18n
@@ -25,7 +39,7 @@ void i18n
   .init({
     resources,
     defaultNS,
-    ns: [defaultNS, 'schedule', 'auth', 'timetable'],
+    ns: [defaultNS, 'schedule', 'auth', 'account', 'timetable'],
     fallbackLng: 'en',
     supportedLngs: supportedLanguages,
     nonExplicitSupportedLngs: true,

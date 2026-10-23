@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { CircleAlert, MailCheck, UserPlus } from 'lucide-react';
+import { MailCheck, UserPlus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
@@ -18,7 +18,8 @@ import {
 } from '@/components/ui/card';
 import { DemoMailboxHint } from '@/features/demo/DemoMailboxHint';
 import { currentLanguage } from '@/i18n';
-import { invalidFields, registerSchema, statusOf, useFieldErrorText } from './form';
+import { FormError } from './FormError';
+import { invalidFields, registerSchema, useFieldErrorText } from './form';
 import { TextField } from './TextField';
 
 type Registration = z.infer<typeof registerSchema>;
@@ -69,14 +70,7 @@ export function RegisterPage() {
           </Alert>
         ) : (
           <>
-            {register.isError && (
-              <Alert variant="destructive">
-                <CircleAlert aria-hidden="true" />
-                <AlertTitle>
-                  {statusOf(register.error) === 422 ? t('form.checkEntries') : t('form.failed')}
-                </AlertTitle>
-              </Alert>
-            )}
+            <FormError error={register.error} messages={{ 422: t('form.checkEntries') }} />
             <form noValidate className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <TextField

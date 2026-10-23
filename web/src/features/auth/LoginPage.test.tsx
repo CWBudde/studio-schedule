@@ -10,6 +10,7 @@ import {
   problem,
   publicSettings,
   signedOut,
+  tooManyRequests,
 } from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { LoginPage } from './LoginPage';
@@ -144,6 +145,39 @@ describe('LoginPage', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
     await waitFor(() => expect(get).toHaveBeenCalledWith('/api/v1/demo/logins', expect.anything()));
     expect(screen.queryByRole('region', { name: 'Demo accounts' })).not.toBeInTheDocument();
+  });
+
+  it('says how long to wait after too many attempts', async () => {
+    mockApiGet({ ...signedOut, ...notDemo });
+    mockApiPost({ '/api/v1/auth/login': tooManyRequests(300) });
+
+    renderLogin();
+    await fillAndSubmit('nora.example@example.org', 'wrong-password');
+
+    const alert = await screen.findByRole('alert');
+    expect(within(alert).getByText('Too many attempts')).toBeInTheDocument();
+    expect(within(alert).getByText('Please try again in 5 minutes.')).toBeInTheDocument();
+  });
+
+  it('takes the wait from the problem detail without a Retry-After header', async () => {
+    mockApiGet({ ...signedOut, ...notDemo });
+    mockApiPost({ '/api/v1/auth/login': tooManyRequests(1, { header: false }) });
+
+    renderLogin();
+    await fillAndSubmit('nora.example@example.org', 'wrong-password');
+
+    expect(await screen.findByText('Please try again in 1 second.')).toBeInTheDocument();
+  });
+
+  it('links to the password reset', async () => {
+    mockApiGet({ ...signedOut, ...notDemo });
+
+    renderLogin();
+
+    expect(await screen.findByRole('link', { name: 'Forgot password?' })).toHaveAttribute(
+      'href',
+      '/forgot-password',
+    );
   });
 
   it('links to the registration', async () => {

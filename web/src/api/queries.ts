@@ -12,13 +12,32 @@ import {
 export class ApiError extends Error {
   readonly status: number;
   readonly body: unknown;
+  /** Seconds to wait before asking again, from a Retry-After header (e.g. of a 429). */
+  readonly retryAfter: number | undefined;
 
-  constructor(status: number, body: unknown) {
+  constructor(status: number, body: unknown, retryAfter?: number) {
     super(`API request failed with status ${status}`);
     this.name = 'ApiError';
     this.status = status;
     this.body = body;
+    this.retryAfter = retryAfter;
   }
+
+  static from(response: Response, body: unknown): ApiError {
+    return new ApiError(
+      response.status,
+      body,
+      parseRetryAfter(response.headers.get('Retry-After')),
+    );
+  }
+}
+
+/** The seconds of a Retry-After header: delay-seconds or an HTTP date. */
+function parseRetryAfter(header: string | null): number | undefined {
+  if (!header) return undefined;
+  if (/^\d+$/.test(header.trim())) return Number(header.trim());
+  const at = Date.parse(header);
+  return Number.isNaN(at) ? undefined : Math.max(0, Math.ceil((at - Date.now()) / 1000));
 }
 
 /** The data of an openapi-fetch result; a non-2xx answer throws an ApiError. */
@@ -26,7 +45,7 @@ async function unwrap<T>(
   request: Promise<{ data?: T; error?: unknown; response: Response }>,
 ): Promise<T> {
   const { data, error, response } = await request;
-  if (data === undefined) throw new ApiError(response.status, error);
+  if (data === undefined) throw ApiError.from(response, error);
   return data;
 }
 
@@ -37,14 +56,14 @@ async function unwrapOrNull<T>(
 ): Promise<T | null> {
   const { data, error, response } = await request;
   if (response.status === absent) return null;
-  if (data === undefined) throw new ApiError(response.status, error);
+  if (data === undefined) throw ApiError.from(response, error);
   return data;
 }
 
 /** Waits for an answer without a body (e.g. 202, 204); a non-2xx answer throws an ApiError. */
 async function expectOk(request: Promise<{ error?: unknown; response: Response }>): Promise<void> {
   const { error, response } = await request;
-  if (!response.ok) throw new ApiError(response.status, error);
+  if (!response.ok) throw ApiError.from(response, error);
 }
 
 export const healthQuery = queryOptions({
@@ -181,6 +200,98 @@ export const registerMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (body: RegisterBody) => expectOk(api.POST('/api/v1/auth/register', { body })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey }),
+  });
+
+/** The JSON request body of a POST operation, as the generated schema has it. */
+type PostBody<P extends keyof paths> = paths[P] extends {
+  post: { requestBody: { content: { 'application/json': infer B } } };
+}
+  ? B
+  : never;
+
+export type RequestPasswordResetBody = PostBody<'/api/v1/auth/password-reset'>;
+export type ResetPasswordBody = PostBody<'/api/v1/auth/password-reset/confirm'>;
+export type ChangePasswordBody = PostBody<'/api/v1/auth/password'>;
+export type RequestEmailChangeBody = PostBody<'/api/v1/auth/email'>;
+export type ConfirmEmailChangeBody = PostBody<'/api/v1/auth/email/confirm'>;
+
+/**
+ * Asks the API again who is signed in after a change that may have ended
+ * the session or changed the account (a password reset, a new address).
+ * Nothing to do if nobody was signed in. A different answer is a change of
+ * identity; a failure only marks `me` stale.
+ */
+async function refreshMe(queryClient: QueryClient): Promise<void> {
+  const before = queryClient.getQueryData(meQuery.queryKey);
+  if (!before) return;
+  try {
+    const me = await queryClient.fetchQuery({ ...meQuery, staleTime: 0 });
+    if (me?.accountId !== before.accountId) changeIdentity(queryClient, me);
+  } catch {
+    void queryClient.invalidateQueries({ queryKey: meQuery.queryKey });
+  }
+}
+
+/** A 401 of a signed-in operation means the session is over: nobody is signed in any more. */
+function signedOutOn401(queryClient: QueryClient) {
+  return (error: Error) => {
+    if (error instanceof ApiError && error.status === 401) changeIdentity(queryClient, null);
+  };
+}
+
+/**
+ * Mails a link to set a new password (shown in the demo mailbox). The API
+ * answers alike for every address.
+ */
+export const requestPasswordResetMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: RequestPasswordResetBody) =>
+      expectOk(api.POST('/api/v1/auth/password-reset', { body })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey }),
+  });
+
+/**
+ * Sets a new password with the token of a reset link. It does not sign in
+ * and ends every session of the account, perhaps the one of this browser.
+ */
+export const resetPasswordMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: ResetPasswordBody) =>
+      expectOk(api.POST('/api/v1/auth/password-reset/confirm', { body })),
+    onSuccess: () => refreshMe(queryClient),
+  });
+
+/** Changes the signed-in account's password; its other sessions end, this one stays. */
+export const changePasswordMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: ChangePasswordBody) => expectOk(api.POST('/api/v1/auth/password', { body })),
+    onError: signedOutOn401(queryClient),
+  });
+
+/**
+ * Mails a confirmation link to a new address of the signed-in account (shown
+ * in the demo mailbox); the address changes once the link is opened.
+ */
+export const requestEmailChangeMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: RequestEmailChangeBody) =>
+      expectOk(api.POST('/api/v1/auth/email', { body })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey }),
+    onError: signedOutOn401(queryClient),
+  });
+
+/**
+ * Moves an account to its new address with the token of the mailed link
+ * (signed in or not); the API mails a notice to the old address.
+ */
+export const confirmEmailChangeMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: ConfirmEmailChangeBody) =>
+      expectOk(api.POST('/api/v1/auth/email/confirm', { body })),
+    onSuccess: async () => {
+      void queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey });
+      await refreshMe(queryClient);
+    },
   });
 
 /** Signs out; the `me` query becomes null. */

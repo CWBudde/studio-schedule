@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from '@/i18n';
-import { mockApiGet, mockApiPost, problem, publicSettings } from '@/test/mockApi';
+import { mockApiGet, mockApiPost, problem, publicSettings, tooManyRequests } from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { RegisterPage } from './RegisterPage';
 
@@ -132,6 +132,18 @@ describe('RegisterPage', () => {
       expect(screen.getByLabelText('Email')).toHaveAttribute('aria-invalid', 'true'),
     );
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
+  });
+
+  it('says how long to wait after too many attempts', async () => {
+    mockApiGet(notDemo);
+    mockApiPost({ '/api/v1/auth/register': tooManyRequests(90) });
+
+    renderInRouter(<RegisterPage />, { at: '/register' });
+    await fillAndSubmit(registration);
+
+    const alert = await screen.findByRole('alert');
+    expect(within(alert).getByText('Too many attempts')).toBeInTheDocument();
+    expect(within(alert).getByText('Please try again in 90 seconds.')).toBeInTheDocument();
   });
 
   it('links to the sign-in page', async () => {

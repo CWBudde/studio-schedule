@@ -1,0 +1,33 @@
+{
+  "title": "Your account",
+  "description": "Change your password and email address.",
+  "loading": "Loading your account…",
+  "signedOutTitle": "Please sign in",
+  "signedOut": "Sign in to change your password or email address.",
+  "signIn": "Sign in",
+  "impersonatingTitle": "Signed in as someone else",
+  "impersonating": "While you are signed in as {{name}}, you cannot change their password or email address.",
+  "password": {
+    "title": "Change password",
+    "description": "You stay signed in on this device; all your other devices are signed out.",
+    "current": "Current password",
+    "new": "New password",
+    "repeat": "Repeat new password",
+    "hint": "At least 8 characters.",
+    "submit": "Change password",
+    "submitting": "Changing…",
+    "success": "Your password has been changed. Your other devices have been signed out."
+  },
+  "email": {
+    "title": "Change email address",
+    "description": "We send a confirmation link to the new address. Until you open it, your current address stays.",
+    "current": "Current address",
+    "new": "New email address",
+    "password": "Password",
+    "passwordHint": "To confirm that it is you.",
+    "submit": "Send confirmation link",
+    "submitting": "Sending…",
+    "successTitle": "Check your inbox",
+    "success": "We have sent a link to {{email}}. Your address changes once you open it."
+  }
+}

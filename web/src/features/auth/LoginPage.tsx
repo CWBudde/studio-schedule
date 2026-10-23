@@ -19,6 +19,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { DemoMailboxHint } from '@/features/demo/DemoMailboxHint';
+import { FormError } from './FormError';
 import { loginSchema, statusOf, useFieldErrorText } from './form';
 import { TextField } from './TextField';
 
@@ -51,8 +52,16 @@ export function LoginPage() {
           <CardDescription>{t('login.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <LoginError status={statusOf(login.error)} />
+          <LoginError error={login.error} />
           <LoginForm onSubmit={signIn} pending={login.isPending} />
+          <p className="text-right text-sm">
+            <Link
+              to="/forgot-password"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {t('login.forgotPassword')}
+            </Link>
+          </p>
         </CardContent>
         <CardFooter className="justify-center gap-1 text-sm text-muted-foreground">
           {t('login.noAccount')}
@@ -108,12 +117,15 @@ function LoginForm({
   );
 }
 
-/** The answer of a failed sign-in: wrong credentials, unconfirmed email, or anything else. */
-function LoginError({ status }: { status: number | undefined }) {
+/**
+ * The answer of a failed sign-in: wrong credentials, unconfirmed email, too
+ * many attempts, or anything else.
+ */
+function LoginError({ error }: { error: Error | null }) {
   const { t } = useTranslation('auth');
-  if (status === undefined) return null;
+  if (!error) return null;
 
-  if (status === 403) {
+  if (statusOf(error) === 403) {
     return (
       <Alert>
         <CircleAlert aria-hidden="true" />
@@ -126,12 +138,7 @@ function LoginError({ status }: { status: number | undefined }) {
     );
   }
 
-  return (
-    <Alert variant="destructive">
-      <CircleAlert aria-hidden="true" />
-      <AlertTitle>{status === 401 ? t('login.invalidCredentials') : t('form.failed')}</AlertTitle>
-    </Alert>
-  );
+  return <FormError error={error} messages={{ 401: t('login.invalidCredentials') }} />;
 }
 
 /** The fictional demo accounts with their passwords; absent outside a demo. */

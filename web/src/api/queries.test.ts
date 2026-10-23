@@ -8,14 +8,21 @@ import {
   mockApiGet,
   mockApiPost,
   schedule,
+  tooManyRequests,
 } from '@/test/mockApi';
 import {
+  ApiError,
+  changePasswordMutation,
+  confirmEmailChangeMutation,
   confirmEmailMutation,
   impersonateMutation,
   listAccountsQuery,
   loginMutation,
   logoutMutation,
   meQuery,
+  requestEmailChangeMutation,
+  requestPasswordResetMutation,
+  resetPasswordMutation,
   scheduleQuery,
   stopImpersonationMutation,
 } from './queries';
@@ -164,5 +171,171 @@ describe('admin queries', () => {
     expect(post).toHaveBeenCalledWith('/api/v1/admin/accounts/{accountId}/impersonate', {
       params: { path: { accountId: meMember.accountId } },
     });
+  });
+});
+
+describe('ApiError', () => {
+  it('carries the wait of a 429 from the Retry-After header', async () => {
+    mockApiPost({ '/api/v1/auth/password-reset': tooManyRequests(42) });
+    const queryClient = new QueryClient();
+
+    const error: unknown = await new MutationObserver(
+      queryClient,
+      requestPasswordResetMutation(queryClient),
+    )
+      .mutate({ email: meMember.email })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(429);
+    expect((error as ApiError).retryAfter).toBe(42);
+  });
+
+  it('has no wait without a Retry-After header', async () => {
+    mockApiPost({ '/api/v1/auth/password-reset': { status: 500 } });
+    const queryClient = new QueryClient();
+
+    const error: unknown = await new MutationObserver(
+      queryClient,
+      requestPasswordResetMutation(queryClient),
+    )
+      .mutate({ email: meMember.email })
+      .catch((e: unknown) => e);
+
+    expect((error as ApiError).retryAfter).toBeUndefined();
+  });
+});
+
+describe('credentials', () => {
+  it('requests a reset link and refreshes the demo mailbox', async () => {
+    const post = mockApiPost({ '/api/v1/auth/password-reset': { status: 202 } });
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(['demo', 'mailbox'], []);
+
+    await new MutationObserver(queryClient, requestPasswordResetMutation(queryClient)).mutate({
+      email: meMember.email,
+      locale: 'en',
+    });
+
+    expect(post).toHaveBeenCalledWith('/api/v1/auth/password-reset', {
+      body: { email: meMember.email, locale: 'en' },
+    });
+    expect(queryClient.getQueryState(['demo', 'mailbox'])?.isInvalidated).toBe(true);
+  });
+
+  it('resets the password and signs out locally if it was the signed-in account', async () => {
+    mockApiGet({ '/api/v1/auth/me': { status: 401 }, '/api/v1/schedule': { body: schedule } });
+    const post = mockApiPost({ '/api/v1/auth/password-reset/confirm': { status: 204 } });
+    const { queryClient, unsubscribe } = await signedInClient();
+
+    await new MutationObserver(queryClient, resetPasswordMutation(queryClient)).mutate({
+      token: 'tok-reset',
+      password: 'new-secret-password',
+    });
+
+    expect(post).toHaveBeenCalledWith('/api/v1/auth/password-reset/confirm', {
+      body: { token: 'tok-reset', password: 'new-secret-password' },
+    });
+    expect(queryClient.getQueryData(meQuery.queryKey)).toBeNull();
+    expect(queryClient.getQueryState(listAccountsQuery.queryKey)).toBeUndefined();
+    unsubscribe();
+  });
+
+  it('resets the password without asking who is signed in when nobody is', async () => {
+    const get = mockApiGet({});
+    mockApiPost({ '/api/v1/auth/password-reset/confirm': { status: 204 } });
+    const queryClient = new QueryClient();
+
+    await new MutationObserver(queryClient, resetPasswordMutation(queryClient)).mutate({
+      token: 'tok-reset',
+      password: 'new-secret-password',
+    });
+
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it('changes the password and keeps the session', async () => {
+    const post = mockApiPost({ '/api/v1/auth/password': { status: 204 } });
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(meQuery.queryKey, meMember);
+
+    await new MutationObserver(queryClient, changePasswordMutation(queryClient)).mutate({
+      currentPassword: 'old-password',
+      newPassword: 'new-secret-password',
+    });
+
+    expect(post).toHaveBeenCalledWith('/api/v1/auth/password', {
+      body: { currentPassword: 'old-password', newPassword: 'new-secret-password' },
+    });
+    expect(queryClient.getQueryData(meQuery.queryKey)).toEqual(meMember);
+  });
+
+  it.each([
+    {
+      name: 'changePassword',
+      mutation: changePasswordMutation,
+      path: '/api/v1/auth/password',
+      variables: { currentPassword: 'old-password', newPassword: 'new-secret-password' },
+    },
+    {
+      name: 'requestEmailChange',
+      mutation: requestEmailChangeMutation,
+      path: '/api/v1/auth/email',
+      variables: { password: 'secret-password', newEmail: 'nora.new@example.org' },
+    },
+  ])(
+    '$name signs out locally when the session has ended (401)',
+    async ({ mutation, path, variables }) => {
+      mockApiPost({ [path]: { status: 401 } });
+      const queryClient = new QueryClient();
+      queryClient.setQueryData(meQuery.queryKey, meMember);
+
+      await expect(
+        new MutationObserver(
+          queryClient,
+          mutation(queryClient) as ReturnType<typeof changePasswordMutation>,
+        ).mutate(variables as never),
+      ).rejects.toThrow();
+
+      expect(queryClient.getQueryData(meQuery.queryKey)).toBeNull();
+    },
+  );
+
+  it('requests an email change and refreshes the demo mailbox', async () => {
+    const post = mockApiPost({ '/api/v1/auth/email': { status: 202 } });
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(['demo', 'mailbox'], []);
+    queryClient.setQueryData(meQuery.queryKey, meMember);
+
+    await new MutationObserver(queryClient, requestEmailChangeMutation(queryClient)).mutate({
+      password: 'secret-password',
+      newEmail: 'nora.new@example.org',
+      locale: 'de',
+    });
+
+    expect(post).toHaveBeenCalledWith('/api/v1/auth/email', {
+      body: { password: 'secret-password', newEmail: 'nora.new@example.org', locale: 'de' },
+    });
+    expect(queryClient.getQueryState(['demo', 'mailbox'])?.isInvalidated).toBe(true);
+    // The address changes only once the link is opened.
+    expect(queryClient.getQueryData(meQuery.queryKey)).toEqual(meMember);
+  });
+
+  it('confirms an email change and refreshes the signed-in account', async () => {
+    const moved = { ...meMember, email: 'nora.new@example.org' };
+    mockApiGet({ '/api/v1/auth/me': { body: moved } });
+    const post = mockApiPost({ '/api/v1/auth/email/confirm': { status: 204 } });
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(meQuery.queryKey, meMember);
+
+    await new MutationObserver(queryClient, confirmEmailChangeMutation(queryClient)).mutate({
+      token: 'tok-email',
+      locale: 'en',
+    });
+
+    expect(post).toHaveBeenCalledWith('/api/v1/auth/email/confirm', {
+      body: { token: 'tok-email', locale: 'en' },
+    });
+    expect(queryClient.getQueryData(meQuery.queryKey)).toEqual(moved);
   });
 });

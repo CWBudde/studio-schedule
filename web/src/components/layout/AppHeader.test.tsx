@@ -66,6 +66,18 @@ describe('AppHeader', () => {
     await vi.waitFor(() => expect(router.state.location.pathname).toBe('/admin/accounts'));
   });
 
+  it('links to the account settings from the account menu', async () => {
+    mockApiGet({ ...notDemo, '/api/v1/auth/me': { body: meMember } });
+    const user = userEvent.setup();
+
+    const { router } = renderInRouter(<AppHeader />);
+
+    await user.click(await screen.findByRole('button', { name: 'Nora Example' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Account settings' }));
+
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe('/account'));
+  });
+
   it('has no accounts link for other roles', async () => {
     mockApiGet({ ...notDemo, '/api/v1/auth/me': { body: meMember } });
     const user = userEvent.setup();
