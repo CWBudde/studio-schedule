@@ -69,16 +69,16 @@ func TestMigrationsRoundTrip(t *testing.T) {
 
 		return n
 	}
-	wantPending := func(want bool) {
+	wantCheck := func(want error) {
 		t.Helper()
 
-		if got, err := m.HasPending(ctx); err != nil || got != want {
-			t.Fatalf("HasPending = %v, %v; want %v", got, err, want)
+		if err := m.CheckSchema(ctx); !errors.Is(err, want) {
+			t.Fatalf("CheckSchema = %v, want %v", err, want)
 		}
 	}
 
 	wantStatus(true)
-	wantPending(false)
+	wantCheck(nil)
 
 	if n := tables(); n != 14 {
 		t.Fatalf("%d tables after up, want 14", n)
@@ -104,7 +104,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 
 	wantStatus(false)
-	wantPending(true)
+	wantCheck(ErrSchemaPending)
 
 	if n := tables(); n != 0 {
 		t.Fatalf("%d tables left after down, want 0", n)
@@ -237,6 +237,55 @@ func TestCheckViolationIsValidation(t *testing.T) {
 	})
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("self guardian: got %v, want ErrValidation", err)
+	}
+}
+
+// TestCheckSchemaIsReadOnly checks that CheckSchema reports a database
+// without migrations as pending without creating goose's version table, and
+// a database with unknown migrations as newer than the binary.
+func TestCheckSchemaIsReadOnly(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	check := func(dbURL string) (*Migrator, error) {
+		t.Helper()
+
+		m, err := NewMigrator(dbURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		t.Cleanup(func() { _ = m.Close() })
+
+		return m, m.CheckSchema(ctx)
+	}
+
+	m, err := check(newUnmigratedDatabase(t))
+	if !errors.Is(err, ErrSchemaPending) {
+		t.Fatalf("unmigrated: CheckSchema = %v, want ErrSchemaPending", err)
+	}
+
+	var table *string
+	if err := m.db.QueryRowContext(ctx, "SELECT to_regclass('goose_db_version')::text").Scan(&table); err != nil {
+		t.Fatal(err)
+	}
+
+	if table != nil {
+		t.Errorf("CheckSchema created %s", *table)
+	}
+
+	m, err = check(newTestDatabase(t))
+	if err != nil {
+		t.Fatalf("migrated: CheckSchema = %v, want nil", err)
+	}
+
+	if _, err := m.db.ExecContext(ctx, "INSERT INTO goose_db_version (version_id, is_applied) VALUES (99999, true)"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.CheckSchema(ctx); !errors.Is(err, ErrSchemaNewer) {
+		t.Fatalf("unknown migration: CheckSchema = %v, want ErrSchemaNewer", err)
 	}
 }
 

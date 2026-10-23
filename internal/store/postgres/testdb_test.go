@@ -154,14 +154,27 @@ func startTestServer(ctx context.Context) (func() error, error) {
 func newTestDatabase(t *testing.T) string {
 	t.Helper()
 
+	return createTestDatabase(t, " TEMPLATE "+pgx.Identifier{testServer.template}.Sanitize())
+}
+
+// newUnmigratedDatabase creates an empty database without any migration
+// (not even goose's version table) for t and returns its URL.
+func newUnmigratedDatabase(t *testing.T) string {
+	t.Helper()
+
+	return createTestDatabase(t, "")
+}
+
+func createTestDatabase(t *testing.T, options string) string {
+	t.Helper()
+
 	if testServer.err != nil {
 		t.Fatalf("no PostgreSQL test server: %v", testServer.err)
 	}
 
 	name := fmt.Sprintf("%s_%d", testServer.prefix, testServer.next.Add(1))
 
-	_, err := testServer.admin.Exec(t.Context(), "CREATE DATABASE "+pgx.Identifier{name}.Sanitize()+
-		" TEMPLATE "+pgx.Identifier{testServer.template}.Sanitize())
+	_, err := testServer.admin.Exec(t.Context(), "CREATE DATABASE "+pgx.Identifier{name}.Sanitize()+options)
 	if err != nil {
 		t.Fatalf("create test database: %v", err)
 	}

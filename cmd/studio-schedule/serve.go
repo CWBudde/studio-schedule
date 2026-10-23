@@ -17,6 +17,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/app"
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/config"
+	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/memory"
@@ -165,6 +166,12 @@ func openStore(ctx context.Context, cfg config.Config, logger *slog.Logger) (sto
 			return nil, nil, err
 		}
 
+		if err := warnWithoutSettings(ctx, st, logger); err != nil {
+			st.Close()
+
+			return nil, nil, err
+		}
+
 		return st, st.Close, nil
 	}
 
@@ -177,4 +184,25 @@ func openStore(ctx context.Context, cfg config.Config, logger *slog.Logger) (sto
 	}
 
 	return st, func() {}, nil
+}
+
+// warnWithoutSettings logs a warning if the database has no school settings:
+// the UI cannot load without them, and until the admin area exists only
+// `studio-schedule seed` creates them.
+func warnWithoutSettings(ctx context.Context, st store.Store, logger *slog.Logger) error {
+	err := st.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		_, err := tx.Settings().Get(ctx)
+
+		return err
+	})
+
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		logger.Warn("the database has no school settings, so the UI cannot load",
+			slog.String("hint", "run `studio-schedule seed` to load the demo data"))
+	case err != nil:
+		return fmt.Errorf("read settings: %w", err)
+	}
+
+	return nil
 }

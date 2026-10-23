@@ -21,9 +21,17 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-// ErrNoMigrationToRollBack is returned by Migrator.Down when no migration is
-// applied.
-var ErrNoMigrationToRollBack = errors.New("postgres: no migration to roll back")
+var (
+	// ErrNoMigrationToRollBack is returned by Migrator.Down when no
+	// migration is applied.
+	ErrNoMigrationToRollBack = errors.New("postgres: no migration to roll back")
+	// ErrSchemaPending is returned by Migrator.CheckSchema when embedded
+	// migrations are not applied.
+	ErrSchemaPending = errors.New("postgres: the database schema is not up to date, migrations are pending")
+	// ErrSchemaNewer is returned by Migrator.CheckSchema when the database
+	// has migrations that the binary does not embed.
+	ErrSchemaNewer = errors.New("postgres: the database schema is newer than this binary")
+)
 
 // Migrator applies the embedded schema migrations. Concurrent migrators on
 // the same database wait for each other (PostgreSQL advisory lock).
@@ -111,14 +119,72 @@ func (m *Migrator) Down(ctx context.Context) (MigrationResult, error) {
 	return result(res), nil
 }
 
-// HasPending reports whether some embedded migration is not applied.
-func (m *Migrator) HasPending(ctx context.Context) (bool, error) {
-	pending, err := m.provider.HasPending(ctx)
+// appliedVersionsQuery lists the applied migrations from goose's version
+// table (goose.DefaultTablename).
+const appliedVersionsQuery = `SELECT version_id FROM (
+		SELECT DISTINCT ON (version_id) version_id, is_applied
+		FROM goose_db_version ORDER BY version_id, id DESC
+	) v WHERE is_applied AND version_id > 0`
+
+// CheckSchema reports, without writing anything, whether the database has
+// exactly the embedded migrations applied. It fails with ErrSchemaPending if
+// some are missing (also if the database was never migrated) and with
+// ErrSchemaNewer if the database has migrations this binary does not know,
+// e.g. after rolling back to an older binary.
+func (m *Migrator) CheckSchema(ctx context.Context) error {
+	var exists bool
+
+	err := m.db.QueryRowContext(ctx, "SELECT to_regclass($1) IS NOT NULL", goose.DefaultTablename).Scan(&exists)
 	if err != nil {
-		return false, migrationErr("status", err)
+		return fmt.Errorf("postgres: check schema: %w", mapErr(err))
 	}
 
-	return pending, nil
+	if !exists {
+		return ErrSchemaPending
+	}
+
+	// The provider deletes the row of a rolled back migration; the latest
+	// row per version decides, in case older tools appended is_applied=false.
+	rows, err := m.db.QueryContext(ctx, appliedVersionsQuery)
+	if err != nil {
+		return fmt.Errorf("postgres: check schema: %w", mapErr(err))
+	}
+
+	defer func() { _ = rows.Close() }()
+
+	applied := map[int64]bool{}
+
+	for rows.Next() {
+		var v int64
+		if err := rows.Scan(&v); err != nil {
+			return fmt.Errorf("postgres: check schema: %w", mapErr(err))
+		}
+
+		applied[v] = true
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("postgres: check schema: %w", mapErr(err))
+	}
+
+	pending := false
+
+	for _, src := range m.provider.ListSources() {
+		if !applied[src.Version] {
+			pending = true
+		}
+
+		delete(applied, src.Version)
+	}
+
+	switch {
+	case len(applied) > 0:
+		return ErrSchemaNewer
+	case pending:
+		return ErrSchemaPending
+	}
+
+	return nil
 }
 
 // Status lists every embedded migration in version order.

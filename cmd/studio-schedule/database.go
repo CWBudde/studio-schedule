@@ -17,6 +17,9 @@ var (
 	// errSchemaOutdated is returned when the database lacks migrations that
 	// the binary embeds.
 	errSchemaOutdated = errors.New("the database schema is not up to date: run `studio-schedule migrate up`")
+	// errSchemaNewer is returned when the database has migrations that the
+	// binary does not embed.
+	errSchemaNewer = errors.New("the database schema is newer than this binary: run a newer studio-schedule")
 )
 
 const databaseURLUsage = "PostgreSQL connection URL or key=value DSN; prefer the env var, flags are " +
@@ -48,8 +51,9 @@ func (f *databaseFlag) load(cmd *cobra.Command, env config.LookupFunc) (string, 
 	return cfg.DatabaseURL, nil
 }
 
-// openPostgres opens the PostgreSQL store after checking that every embedded
-// migration is applied, so a server never runs against an older schema.
+// openPostgres opens the PostgreSQL store after checking, without writing,
+// that exactly the embedded migrations are applied, so a server never runs
+// against an older or newer schema.
 func openPostgres(ctx context.Context, databaseURL string) (*postgres.Store, error) {
 	m, err := postgres.NewMigrator(databaseURL)
 	if err != nil {
@@ -58,13 +62,13 @@ func openPostgres(ctx context.Context, databaseURL string) (*postgres.Store, err
 
 	defer func() { _ = m.Close() }()
 
-	pending, err := m.HasPending(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if pending {
+	switch err := m.CheckSchema(ctx); {
+	case errors.Is(err, postgres.ErrSchemaPending):
 		return nil, errSchemaOutdated
+	case errors.Is(err, postgres.ErrSchemaNewer):
+		return nil, errSchemaNewer
+	case err != nil:
+		return nil, err
 	}
 
 	return postgres.Open(ctx, databaseURL)
