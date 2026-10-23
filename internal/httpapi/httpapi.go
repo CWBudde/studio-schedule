@@ -31,6 +31,7 @@ type Deps struct {
 	Settings  *service.SettingsService
 	Catalog   *service.CatalogService
 	Timetable *service.TimetableService
+	Schedule  *service.ScheduleService
 	Version   string
 	Logger    *slog.Logger
 }
@@ -58,6 +59,7 @@ func Register(api huma.API, deps Deps) {
 	registerSettings(api, h)
 	registerCatalog(api, h)
 	registerTimetable(api, h)
+	registerSchedule(api, h)
 }
 
 type handlers struct {

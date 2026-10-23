@@ -82,6 +82,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 		Settings:  service.NewSettingsService(deps.Store),
 		Catalog:   service.NewCatalogService(deps.Store),
 		Timetable: service.NewTimetableService(deps.Store),
+		Schedule:  service.NewScheduleService(deps.Store, deps.Clock),
 		Version:   deps.Version,
 		Logger:    deps.Logger,
 	})

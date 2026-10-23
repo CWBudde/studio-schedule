@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/v1/course-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List course types
+         * @description Returns all course types (dance styles) ordered by name.
+         */
+        get: operations["listCourseTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -16,6 +36,86 @@ export interface paths {
          * @description Reports that the service is running and which version is deployed.
          */
         get: operations["getHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lessons/{lessonId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Published lesson
+         * @description Returns one published lesson. Lessons that do not exist or are not visible are reported alike as not found.
+         */
+        get: operations["getLesson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List locations
+         * @description Returns all locations of the school ordered by name.
+         */
+        get: operations["listLocations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List rooms
+         * @description Returns the rooms of one location, or of all locations, ordered by name.
+         */
+        get: operations["listRooms"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Published schedule
+         * @description Returns the published lessons that start in a range of school dates, as a visitor who is not signed in sees them: public lessons that are released, plus one-off lessons and special formats, which are published early. Canceled lessons are included with their status.
+         */
+        get: operations["getSchedule"];
         put?: never;
         post?: never;
         delete?: never;
@@ -44,10 +144,151 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List staff
+         * @description Returns the active instructors and accompanists ordered by display name.
+         */
+        get: operations["listStaff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List terms
+         * @description Returns all terms ordered by start date.
+         */
+        get: operations["listTerms"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terms/{termId}/classes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the classes of a term
+         * @description Returns the weekly classes of a term ordered by weekday (Sunday first) and start time.
+         */
+        get: operations["listClasses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Class: {
+            /**
+             * Format: uuid
+             * @description Accompanist, if any.
+             */
+            accompanistId?: string;
+            /**
+             * Format: int64
+             * @description Maximum number of participants per lesson.
+             */
+            capacity: number;
+            /**
+             * Format: uuid
+             * @description Course type taught.
+             */
+            courseTypeId: string;
+            /**
+             * Format: int64
+             * @description Length of each lesson in minutes.
+             */
+            durationMinutes: number;
+            /**
+             * Format: uuid
+             * @description Class ID.
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Instructor.
+             */
+            instructorId: string;
+            /**
+             * @description Skill level the class is aimed at.
+             * @enum {string}
+             */
+            level: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            /**
+             * Format: uuid
+             * @description Room the class takes place in.
+             */
+            roomId: string;
+            /**
+             * @description Start time (HH:MM) in the school time zone.
+             * @example 18:00
+             */
+            startTime: string;
+            /**
+             * Format: uuid
+             * @description Term the class belongs to.
+             */
+            termId: string;
+            /**
+             * Format: int64
+             * @description Day of the week, 0 = Sunday to 6 = Saturday.
+             */
+            weekday: number;
+        };
+        ClassList: {
+            /** @description Classes ordered by weekday (Sunday first) and start time. */
+            items: components["schemas"]["Class"][];
+        };
+        CourseType: {
+            /** @description Description, if any. */
+            description?: string;
+            /**
+             * Format: uuid
+             * @description Course type ID.
+             */
+            id: string;
+            /** @description Display name. */
+            name: string;
+        };
+        CourseTypeList: {
+            /** @description Course types ordered by name. */
+            items: components["schemas"]["CourseType"][];
+        };
+        CourseTypeRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
             location?: string;
@@ -98,6 +339,126 @@ export interface components {
             /** @description Build version of the running service. */
             version: string;
         };
+        LessonDetail: {
+            /** @description Accompanist; absent if the lesson has none. */
+            accompanist?: components["schemas"]["StaffRef"];
+            /**
+             * Format: int64
+             * @description Maximum number of participants.
+             */
+            capacity: number;
+            /**
+             * Format: uuid
+             * @description Weekly class the lesson belongs to; absent for one-off lessons.
+             */
+            classId?: string;
+            courseType: components["schemas"]["CourseTypeRef"];
+            /** @description Description of the course type. */
+            courseTypeDescription?: string;
+            /**
+             * Format: date-time
+             * @description End instant (UTC).
+             */
+            endsAt: string;
+            /**
+             * Format: uuid
+             * @description Lesson ID.
+             */
+            id: string;
+            instructor: components["schemas"]["StaffRef"];
+            /**
+             * @description Regular lesson or special format.
+             * @enum {string}
+             */
+            kind: "regular" | "workshop" | "private";
+            /**
+             * @description Level of the class; absent for one-off lessons.
+             * @enum {string}
+             */
+            level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            location: components["schemas"]["LocationRef"];
+            /** @description Postal address of the location. */
+            locationAddress?: string;
+            room: components["schemas"]["RoomRef"];
+            /**
+             * Format: date-time
+             * @description Start instant (UTC).
+             */
+            startsAt: string;
+            /**
+             * @description Whether the lesson takes place.
+             * @enum {string}
+             */
+            status: "scheduled" | "canceled";
+        };
+        LessonSummary: {
+            /** @description Accompanist; absent if the lesson has none. */
+            accompanist?: components["schemas"]["StaffRef"];
+            /**
+             * Format: int64
+             * @description Maximum number of participants.
+             */
+            capacity: number;
+            /**
+             * Format: uuid
+             * @description Weekly class the lesson belongs to; absent for one-off lessons.
+             */
+            classId?: string;
+            courseType: components["schemas"]["CourseTypeRef"];
+            /**
+             * Format: date-time
+             * @description End instant (UTC).
+             */
+            endsAt: string;
+            /**
+             * Format: uuid
+             * @description Lesson ID.
+             */
+            id: string;
+            instructor: components["schemas"]["StaffRef"];
+            /**
+             * @description Regular lesson or special format.
+             * @enum {string}
+             */
+            kind: "regular" | "workshop" | "private";
+            /**
+             * @description Level of the class; absent for one-off lessons.
+             * @enum {string}
+             */
+            level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            location: components["schemas"]["LocationRef"];
+            room: components["schemas"]["RoomRef"];
+            /**
+             * Format: date-time
+             * @description Start instant (UTC).
+             */
+            startsAt: string;
+            /**
+             * @description Whether the lesson takes place.
+             * @enum {string}
+             */
+            status: "scheduled" | "canceled";
+        };
+        Location: {
+            /** @description Postal address, if known. */
+            address?: string;
+            /**
+             * Format: uuid
+             * @description Location ID.
+             */
+            id: string;
+            /** @description Display name. */
+            name: string;
+        };
+        LocationList: {
+            /** @description Locations ordered by name. */
+            items: components["schemas"]["Location"][];
+        };
+        LocationRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
         PublicSettings: {
             /** @description Default UI locale (BCP 47 tag), e.g. en. */
             defaultLocale: string;
@@ -105,6 +466,111 @@ export interface components {
             schoolName: string;
             /** @description IANA time zone of the school, e.g. Europe/Berlin. */
             timezone: string;
+        };
+        Room: {
+            /**
+             * Format: int64
+             * @description Default capacity of its lessons.
+             */
+            capacity: number;
+            /**
+             * Format: uuid
+             * @description Room ID.
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Location the room belongs to.
+             */
+            locationId: string;
+            /** @description Display name. */
+            name: string;
+        };
+        RoomList: {
+            /** @description Rooms ordered by name. */
+            items: components["schemas"]["Room"][];
+        };
+        RoomRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        Schedule: {
+            /**
+             * Format: date
+             * @description First school date of the range.
+             */
+            from: string;
+            /** @description Visible lessons, ordered by start. */
+            lessons: components["schemas"]["LessonSummary"][] | null;
+            /**
+             * Format: date-time
+             * @description Instant of the next weekly release.
+             */
+            nextReleaseAt: string;
+            /**
+             * Format: date-time
+             * @description Server time the response was computed at.
+             */
+            now: string;
+            /**
+             * Format: date-time
+             * @description Regular lessons that start before this instant are released.
+             */
+            releasedUntil: string;
+            /** @description IANA time zone of the school; school dates and times are local to it. */
+            timezone: string;
+            /**
+             * Format: date
+             * @description School date after the last day of the range.
+             */
+            to: string;
+        };
+        StaffList: {
+            /** @description Active staff ordered by display name. */
+            items: components["schemas"]["StaffMember"][];
+        };
+        StaffMember: {
+            /** @description Name shown in the timetable. */
+            displayName: string;
+            /**
+             * Format: uuid
+             * @description Staff ID.
+             */
+            id: string;
+            /**
+             * @description Role of the staff member.
+             * @enum {string}
+             */
+            kind: "instructor" | "accompanist";
+        };
+        StaffRef: {
+            displayName: string;
+            /** Format: uuid */
+            id: string;
+        };
+        Term: {
+            /**
+             * Format: date
+             * @description Last day of the term (inclusive).
+             */
+            endsOn: string;
+            /**
+             * Format: uuid
+             * @description Term ID.
+             */
+            id: string;
+            /** @description Display name. */
+            name: string;
+            /**
+             * Format: date
+             * @description First day of the term (inclusive).
+             */
+            startsOn: string;
+        };
+        TermList: {
+            /** @description Terms ordered by start date. */
+            items: components["schemas"]["Term"][];
         };
     };
     responses: never;
@@ -115,6 +581,35 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listCourseTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseTypeList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     getHealth: {
         parameters: {
             query?: never;
@@ -144,6 +639,141 @@ export interface operations {
             };
         };
     };
+    getLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Lesson ID. */
+                lessonId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonDetail"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listLocations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listRooms: {
+        parameters: {
+            query?: {
+                /** @description Only list the rooms of this location. */
+                location?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSchedule: {
+        parameters: {
+            query: {
+                /** @description First school date of the range. */
+                from: string;
+                /** @description School date after the last day of the range (exclusive); at most 42 days after from. */
+                to: string;
+                /** @description Only lessons at this location. */
+                location?: string;
+                /** @description Only lessons with this staff member as instructor or accompanist. */
+                instructor?: string;
+                /** @description Only lessons of this course type. */
+                courseType?: string;
+                /** @description Only lessons of classes at this level; excludes one-off lessons. */
+                level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     getPublicSettings: {
         parameters: {
             query?: never;
@@ -160,6 +790,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicSettings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listTerms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TermList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listClasses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Term ID. */
+                termId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassList"];
                 };
             };
             /** @description Error */

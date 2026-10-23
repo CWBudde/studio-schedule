@@ -1,6 +1,164 @@
 {
   "components": {
     "schemas": {
+      "Class": {
+        "additionalProperties": false,
+        "properties": {
+          "accompanistId": {
+            "description": "Accompanist, if any.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "capacity": {
+            "description": "Maximum number of participants per lesson.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "courseTypeId": {
+            "description": "Course type taught.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "durationMinutes": {
+            "description": "Length of each lesson in minutes.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "id": {
+            "description": "Class ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "instructorId": {
+            "description": "Instructor.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "level": {
+            "description": "Skill level the class is aimed at.",
+            "enum": [
+              "beginner",
+              "intermediate",
+              "advanced",
+              "professional",
+              "open"
+            ],
+            "type": "string"
+          },
+          "roomId": {
+            "description": "Room the class takes place in.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "startTime": {
+            "description": "Start time (HH:MM) in the school time zone.",
+            "examples": [
+              "18:00"
+            ],
+            "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+            "type": "string"
+          },
+          "termId": {
+            "description": "Term the class belongs to.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "weekday": {
+            "description": "Day of the week, 0 = Sunday to 6 = Saturday.",
+            "format": "int64",
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "termId",
+          "courseTypeId",
+          "roomId",
+          "instructorId",
+          "level",
+          "weekday",
+          "startTime",
+          "durationMinutes",
+          "capacity"
+        ],
+        "type": "object"
+      },
+      "ClassList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "Classes ordered by weekday (Sunday first) and start time.",
+            "items": {
+              "$ref": "#/components/schemas/Class"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "CourseType": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "description": "Description, if any.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Course type ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "CourseTypeList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "Course types ordered by name.",
+            "items": {
+              "$ref": "#/components/schemas/CourseType"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "CourseTypeRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
       "ErrorDetail": {
         "additionalProperties": false,
         "properties": {
@@ -94,6 +252,246 @@
         ],
         "type": "object"
       },
+      "LessonDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "accompanist": {
+            "$ref": "#/components/schemas/StaffRef",
+            "description": "Accompanist; absent if the lesson has none."
+          },
+          "capacity": {
+            "description": "Maximum number of participants.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "classId": {
+            "description": "Weekly class the lesson belongs to; absent for one-off lessons.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "courseType": {
+            "$ref": "#/components/schemas/CourseTypeRef"
+          },
+          "courseTypeDescription": {
+            "description": "Description of the course type.",
+            "type": "string"
+          },
+          "endsAt": {
+            "description": "End instant (UTC).",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "Lesson ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "instructor": {
+            "$ref": "#/components/schemas/StaffRef"
+          },
+          "kind": {
+            "description": "Regular lesson or special format.",
+            "enum": [
+              "regular",
+              "workshop",
+              "private"
+            ],
+            "type": "string"
+          },
+          "level": {
+            "description": "Level of the class; absent for one-off lessons.",
+            "enum": [
+              "beginner",
+              "intermediate",
+              "advanced",
+              "professional",
+              "open"
+            ],
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/LocationRef"
+          },
+          "locationAddress": {
+            "description": "Postal address of the location.",
+            "type": "string"
+          },
+          "room": {
+            "$ref": "#/components/schemas/RoomRef"
+          },
+          "startsAt": {
+            "description": "Start instant (UTC).",
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "description": "Whether the lesson takes place.",
+            "enum": [
+              "scheduled",
+              "canceled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "startsAt",
+          "endsAt",
+          "status",
+          "kind",
+          "capacity",
+          "courseType",
+          "room",
+          "location",
+          "instructor"
+        ],
+        "type": "object"
+      },
+      "LessonSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "accompanist": {
+            "$ref": "#/components/schemas/StaffRef",
+            "description": "Accompanist; absent if the lesson has none."
+          },
+          "capacity": {
+            "description": "Maximum number of participants.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "classId": {
+            "description": "Weekly class the lesson belongs to; absent for one-off lessons.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "courseType": {
+            "$ref": "#/components/schemas/CourseTypeRef"
+          },
+          "endsAt": {
+            "description": "End instant (UTC).",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "Lesson ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "instructor": {
+            "$ref": "#/components/schemas/StaffRef"
+          },
+          "kind": {
+            "description": "Regular lesson or special format.",
+            "enum": [
+              "regular",
+              "workshop",
+              "private"
+            ],
+            "type": "string"
+          },
+          "level": {
+            "description": "Level of the class; absent for one-off lessons.",
+            "enum": [
+              "beginner",
+              "intermediate",
+              "advanced",
+              "professional",
+              "open"
+            ],
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/LocationRef"
+          },
+          "room": {
+            "$ref": "#/components/schemas/RoomRef"
+          },
+          "startsAt": {
+            "description": "Start instant (UTC).",
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "description": "Whether the lesson takes place.",
+            "enum": [
+              "scheduled",
+              "canceled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "startsAt",
+          "endsAt",
+          "status",
+          "kind",
+          "capacity",
+          "courseType",
+          "room",
+          "location",
+          "instructor"
+        ],
+        "type": "object"
+      },
+      "Location": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Postal address, if known.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Location ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "LocationList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "Locations ordered by name.",
+            "items": {
+              "$ref": "#/components/schemas/Location"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "LocationRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
       "PublicSettings": {
         "additionalProperties": false,
         "properties": {
@@ -116,6 +514,233 @@
           "defaultLocale"
         ],
         "type": "object"
+      },
+      "Room": {
+        "additionalProperties": false,
+        "properties": {
+          "capacity": {
+            "description": "Default capacity of its lessons.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "id": {
+            "description": "Room ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "locationId": {
+            "description": "Location the room belongs to.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "locationId",
+          "name",
+          "capacity"
+        ],
+        "type": "object"
+      },
+      "RoomList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "Rooms ordered by name.",
+            "items": {
+              "$ref": "#/components/schemas/Room"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "RoomRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "Schedule": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "First school date of the range.",
+            "format": "date",
+            "type": "string"
+          },
+          "lessons": {
+            "description": "Visible lessons, ordered by start.",
+            "items": {
+              "$ref": "#/components/schemas/LessonSummary"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "nextReleaseAt": {
+            "description": "Instant of the next weekly release.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "now": {
+            "description": "Server time the response was computed at.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "releasedUntil": {
+            "description": "Regular lessons that start before this instant are released.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "timezone": {
+            "description": "IANA time zone of the school; school dates and times are local to it.",
+            "type": "string"
+          },
+          "to": {
+            "description": "School date after the last day of the range.",
+            "format": "date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "timezone",
+          "now",
+          "from",
+          "to",
+          "releasedUntil",
+          "nextReleaseAt",
+          "lessons"
+        ],
+        "type": "object"
+      },
+      "StaffList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "Active staff ordered by display name.",
+            "items": {
+              "$ref": "#/components/schemas/StaffMember"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "StaffMember": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "description": "Name shown in the timetable.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Staff ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "description": "Role of the staff member.",
+            "enum": [
+              "instructor",
+              "accompanist"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "StaffRef": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName"
+        ],
+        "type": "object"
+      },
+      "Term": {
+        "additionalProperties": false,
+        "properties": {
+          "endsOn": {
+            "description": "Last day of the term (inclusive).",
+            "format": "date",
+            "type": "string"
+          },
+          "id": {
+            "description": "Term ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name.",
+            "type": "string"
+          },
+          "startsOn": {
+            "description": "First day of the term (inclusive).",
+            "format": "date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "startsOn",
+          "endsOn"
+        ],
+        "type": "object"
+      },
+      "TermList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "Terms ordered by start date.",
+            "items": {
+              "$ref": "#/components/schemas/Term"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
       }
     }
   },
@@ -126,6 +751,38 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/course-types": {
+      "get": {
+        "description": "Returns all course types (dance styles) ordered by name.",
+        "operationId": "listCourseTypes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourseTypeList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List course types",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "description": "Reports that the service is running and which version is deployed.",
@@ -158,6 +815,236 @@
         ]
       }
     },
+    "/api/v1/lessons/{lessonId}": {
+      "get": {
+        "description": "Returns one published lesson. Lessons that do not exist or are not visible are reported alike as not found.",
+        "operationId": "getLesson",
+        "parameters": [
+          {
+            "description": "Lesson ID.",
+            "in": "path",
+            "name": "lessonId",
+            "required": true,
+            "schema": {
+              "description": "Lesson ID.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Published lesson",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
+    "/api/v1/locations": {
+      "get": {
+        "description": "Returns all locations of the school ordered by name.",
+        "operationId": "listLocations",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List locations",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/rooms": {
+      "get": {
+        "description": "Returns the rooms of one location, or of all locations, ordered by name.",
+        "operationId": "listRooms",
+        "parameters": [
+          {
+            "description": "Only list the rooms of this location.",
+            "explode": false,
+            "in": "query",
+            "name": "location",
+            "schema": {
+              "description": "Only list the rooms of this location.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoomList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List rooms",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/schedule": {
+      "get": {
+        "description": "Returns the published lessons that start in a range of school dates, as a visitor who is not signed in sees them: public lessons that are released, plus one-off lessons and special formats, which are published early. Canceled lessons are included with their status.",
+        "operationId": "getSchedule",
+        "parameters": [
+          {
+            "description": "First school date of the range.",
+            "explode": false,
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "description": "First school date of the range.",
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "description": "School date after the last day of the range (exclusive); at most 42 days after from.",
+            "explode": false,
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "description": "School date after the last day of the range (exclusive); at most 42 days after from.",
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only lessons at this location.",
+            "explode": false,
+            "in": "query",
+            "name": "location",
+            "schema": {
+              "description": "Only lessons at this location.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only lessons with this staff member as instructor or accompanist.",
+            "explode": false,
+            "in": "query",
+            "name": "instructor",
+            "schema": {
+              "description": "Only lessons with this staff member as instructor or accompanist.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only lessons of this course type.",
+            "explode": false,
+            "in": "query",
+            "name": "courseType",
+            "schema": {
+              "description": "Only lessons of this course type.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only lessons of classes at this level; excludes one-off lessons.",
+            "explode": false,
+            "in": "query",
+            "name": "level",
+            "schema": {
+              "description": "Only lessons of classes at this level; excludes one-off lessons.",
+              "enum": [
+                "beginner",
+                "intermediate",
+                "advanced",
+                "professional",
+                "open"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Published schedule",
+        "tags": [
+          "schedule"
+        ]
+      }
+    },
     "/api/v1/settings/public": {
       "get": {
         "description": "Returns the school settings that are visible without signing in.",
@@ -187,6 +1074,115 @@
         "summary": "Public school settings",
         "tags": [
           "settings"
+        ]
+      }
+    },
+    "/api/v1/staff": {
+      "get": {
+        "description": "Returns the active instructors and accompanists ordered by display name.",
+        "operationId": "listStaff",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List staff",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/terms": {
+      "get": {
+        "description": "Returns all terms ordered by start date.",
+        "operationId": "listTerms",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TermList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List terms",
+        "tags": [
+          "timetable"
+        ]
+      }
+    },
+    "/api/v1/terms/{termId}/classes": {
+      "get": {
+        "description": "Returns the weekly classes of a term ordered by weekday (Sunday first) and start time.",
+        "operationId": "listClasses",
+        "parameters": [
+          {
+            "description": "Term ID.",
+            "in": "path",
+            "name": "termId",
+            "required": true,
+            "schema": {
+              "description": "Term ID.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List the classes of a term",
+        "tags": [
+          "timetable"
         ]
       }
     }
