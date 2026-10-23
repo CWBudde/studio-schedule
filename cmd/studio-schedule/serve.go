@@ -18,15 +18,12 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/config"
 	"github.com/cwbudde/studio-schedule/internal/seed"
+	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/memory"
 	"github.com/cwbudde/studio-schedule/internal/webui"
 )
 
 const shutdownTimeout = 10 * time.Second
-
-// errNoPostgres is returned while the PostgreSQL store does not exist yet, so
-// that a configured database is never silently replaced by the memory store.
-var errNoPostgres = errors.New("a database URL is set (DATABASE_URL or --database-url), but the PostgreSQL store is not available yet")
 
 func newServeCmd(env config.LookupFunc) *cobra.Command {
 	var (
@@ -77,9 +74,7 @@ type serveFlags struct {
 func (f *serveFlags) register(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.httpAddr, "addr", config.DefaultHTTPAddr,
 		"listen address host:port (env "+config.EnvHTTPAddr+")")
-	cmd.Flags().StringVar(&f.databaseURL, "database-url", "",
-		"PostgreSQL connection URL or key=value DSN; prefer the env var, flags are visible "+
-			"in the process list (env "+config.EnvDatabaseURL+")")
+	cmd.Flags().StringVar(&f.databaseURL, "database-url", "", databaseURLUsage)
 	cmd.Flags().StringVar(&f.baseURL, "base-url", "",
 		"public origin of the app, e.g. https://schedule.example.org (env "+config.EnvBaseURL+")")
 }
@@ -102,16 +97,12 @@ func (f *serveFlags) explicit(cmd *cobra.Command) config.Flags {
 }
 
 func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
-	// The PostgreSQL store replaces this check once it exists (PLAN.md Phase 1).
-	if cfg.DatabaseURL != "" {
-		return errNoPostgres
-	}
-
-	// Until then: in-memory store with demo data.
-	st := memory.New()
-	if err := seed.LoadDemo(ctx, st); err != nil {
+	st, closeStore, err := openStore(ctx, cfg, logger)
+	if err != nil {
 		return err
 	}
+
+	defer closeStore()
 
 	handler, _ := app.New(app.Deps{
 		Store:   st,
@@ -162,4 +153,28 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	logger.Info("stopped")
 
 	return nil
+}
+
+// openStore returns the PostgreSQL store if a database is configured.
+// Otherwise it returns an in-memory store with the demo data, whose changes
+// are lost on exit.
+func openStore(ctx context.Context, cfg config.Config, logger *slog.Logger) (store.Store, func(), error) {
+	if cfg.DatabaseURL != "" {
+		st, err := openPostgres(ctx, cfg.DatabaseURL)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return st, st.Close, nil
+	}
+
+	logger.Warn("no database configured: using the in-memory store with demo data, all changes are lost on exit",
+		slog.String("hint", "set "+config.EnvDatabaseURL+" to use PostgreSQL"))
+
+	st := memory.New()
+	if err := seed.LoadDemo(ctx, st); err != nil {
+		return nil, nil, err
+	}
+
+	return st, func() {}, nil
 }

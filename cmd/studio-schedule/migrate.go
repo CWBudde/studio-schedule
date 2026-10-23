@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,11 +16,8 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/store/postgres"
 )
 
-// errNoDatabaseURL is returned by the migrate commands without a database.
-var errNoDatabaseURL = errors.New("no database URL: set " + config.EnvDatabaseURL + " or --database-url")
-
 func newMigrateCmd(env config.LookupFunc) *cobra.Command {
-	var databaseURL string
+	var db databaseFlag
 
 	cmd := &cobra.Command{
 		Use:   "migrate",
@@ -31,27 +27,16 @@ func newMigrateCmd(env config.LookupFunc) *cobra.Command {
 		Args: cobra.NoArgs,
 	}
 
-	cmd.PersistentFlags().StringVar(&databaseURL, "database-url", "",
-		"PostgreSQL connection URL or key=value DSN; prefer the env var, flags are visible "+
-			"in the process list (env "+config.EnvDatabaseURL+")")
+	db.register(cmd.PersistentFlags())
 
 	// withMigrator runs fn with a migrator for the configured database.
 	withMigrator := func(cmd *cobra.Command, fn func(ctx context.Context, m *postgres.Migrator, out io.Writer) error) error {
-		var flags config.Flags
-		if cmd.Flags().Changed("database-url") {
-			flags.DatabaseURL = &databaseURL
-		}
-
-		cfg, err := config.Load(env, flags)
+		databaseURL, err := db.load(cmd, env)
 		if err != nil {
 			return err
 		}
 
-		if cfg.DatabaseURL == "" {
-			return errNoDatabaseURL
-		}
-
-		m, err := postgres.NewMigrator(cfg.DatabaseURL)
+		m, err := postgres.NewMigrator(databaseURL)
 		if err != nil {
 			return err
 		}

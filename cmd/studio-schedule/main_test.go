@@ -88,30 +88,47 @@ func TestLogOptions(t *testing.T) {
 	}
 }
 
-func TestServeRejectsDatabaseURL(t *testing.T) {
+// TestDatabaseCommandsHidePassword checks that serve and seed use the
+// configured database instead of falling back to the memory store, and that
+// a connection error does not leak the password.
+func TestDatabaseCommandsHidePassword(t *testing.T) {
 	t.Parallel()
 
-	const dsn = "postgres://app:change-me@db.example.test/studio"
+	const password = "change-me-secret"
+
+	// Nothing listens on port 1, so connecting fails.
+	dsn := "postgres://app:" + password + "@127.0.0.1:1/studio?connect_timeout=2"
 
 	for name, tc := range map[string]struct {
 		env  map[string]string
 		args []string
 	}{
-		"env":  {env: map[string]string{"DATABASE_URL": dsn}},
-		"flag": {args: []string{"--database-url", dsn}},
+		"serve env":  {env: map[string]string{"DATABASE_URL": dsn}, args: []string{"serve", "--addr", "127.0.0.1:0"}},
+		"serve flag": {args: []string{"serve", "--addr", "127.0.0.1:0", "--database-url", dsn}},
+		"seed env":   {env: map[string]string{"DATABASE_URL": dsn}, args: []string{"seed"}},
+		"seed flag":  {args: []string{"seed", "--database-url", dsn}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			out, err := execute(tc.env, append([]string{"serve"}, tc.args...)...)
-			if !errors.Is(err, errNoPostgres) {
-				t.Fatalf("serve error = %v, want errNoPostgres\n%s", err, out)
+			out, err := execute(tc.env, tc.args...)
+			if err == nil {
+				t.Fatalf("%v succeeded\n%s", tc.args, out)
 			}
 
-			if strings.Contains(err.Error()+out, "change-me") {
+			if strings.Contains(err.Error()+out, password) {
 				t.Errorf("output leaks the password: %v\n%s", err, out)
 			}
 		})
+	}
+}
+
+func TestSeedNeedsDatabaseURL(t *testing.T) {
+	t.Parallel()
+
+	out, err := execute(nil, "seed")
+	if !errors.Is(err, errNoDatabaseURL) {
+		t.Fatalf("seed error = %v, want errNoDatabaseURL\n%s", err, out)
 	}
 }
 

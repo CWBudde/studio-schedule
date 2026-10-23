@@ -93,9 +93,17 @@ ci: check-tidy check-formatted lint test check-wasm-deps web-check demo-build
 build: web-build
     ./scripts/build-server.sh "{{ldflags}}"
 
-# Run the API server (in-memory store until Phase 1)
+# Run the API server (PostgreSQL if DATABASE_URL is set, otherwise in-memory with demo data)
 serve *args:
     go run ./cmd/studio-schedule serve {{args}}
+
+# Apply, roll back or list database migrations (needs DATABASE_URL), e.g. `just migrate up`
+migrate *args:
+    go run ./cmd/studio-schedule migrate {{args}}
+
+# Load the fictional demo data into an empty, migrated database (needs DATABASE_URL)
+seed:
+    go run ./cmd/studio-schedule seed
 
 # Start the Vite dev server (proxies /api to :8080)
 web-dev:
