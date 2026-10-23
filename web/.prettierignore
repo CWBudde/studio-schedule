@@ -7,3 +7,5 @@ public/wasm_exec.js
 src/api/schema.d.ts
 src/routeTree.gen.ts
 .tmp-openapi.json
+playwright-report
+test-results

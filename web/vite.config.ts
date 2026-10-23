@@ -48,6 +48,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // e2e/ holds the Playwright specs (`pnpm e2e`).
+    include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['./src/test/setup.ts'],
     css: false,
     // The browser's time zone must never leak into school dates and times: run

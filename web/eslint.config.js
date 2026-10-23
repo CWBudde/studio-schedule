@@ -7,7 +7,15 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig([
-  globalIgnores(['dist', 'coverage', 'public', 'src/routeTree.gen.ts', 'src/api/schema.d.ts']),
+  globalIgnores([
+    'dist',
+    'coverage',
+    'public',
+    'playwright-report',
+    'test-results',
+    'src/routeTree.gen.ts',
+    'src/api/schema.d.ts',
+  ]),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -38,8 +46,13 @@ export default defineConfig([
     rules: { 'react-refresh/only-export-components': 'off' },
   },
   {
-    files: ['*.config.{js,ts}'],
+    files: ['*.config.{js,ts}', 'e2e/**/*.ts'],
     languageOptions: { globals: globals.node },
+  },
+  {
+    // Playwright fixtures call `use()`, which is not a React hook.
+    files: ['e2e/**/*.ts'],
+    rules: { 'react-hooks/rules-of-hooks': 'off' },
   },
   prettier,
 ]);
