@@ -59,6 +59,67 @@ func (d Date) Compare(o Date) int {
 // String returns the date in the form "2006-01-02".
 func (d Date) String() string { return fmt.Sprintf("%04d-%02d-%02d", d.Year, d.Month, d.Day) }
 
+// utc returns midnight UTC of d, for calendar arithmetic only.
+func (d Date) utc() time.Time { return time.Date(d.Year, d.Month, d.Day, 0, 0, 0, 0, time.UTC) }
+
+// AddDays returns the date n calendar days after d (before d if n < 0).
+func (d Date) AddDays(n int) Date {
+	t := d.utc().AddDate(0, 0, n)
+
+	return Date{Year: t.Year(), Month: t.Month(), Day: t.Day()}
+}
+
+// Weekday returns the day of the week of d.
+func (d Date) Weekday() time.Weekday { return d.utc().Weekday() }
+
+// DateOf returns the calendar date of the instant t in loc.
+func DateOf(t time.Time, loc *time.Location) Date {
+	t = t.In(loc)
+
+	return Date{Year: t.Year(), Month: t.Month(), Day: t.Day()}
+}
+
+// At returns the instant at which the wall clock in loc shows tod on d.
+//
+// Daylight saving time makes this ambiguous twice a year. A wall-clock time
+// that happens twice (when clocks go back) resolves to the earlier instant;
+// one that does not exist (when clocks go forward) moves forward by the size
+// of the gap, e.g. 02:30 becomes 03:30.
+func (d Date) At(tod TimeOfDay, loc *time.Location) time.Time {
+	// The requested wall clock read as UTC; subtracting an offset of loc
+	// gives an instant that shows this wall clock if that offset applies.
+	wall := time.Date(d.Year, d.Month, d.Day, tod.Hour, tod.Minute, 0, 0, time.UTC)
+
+	var earliest time.Time
+
+	// The offsets in effect half a day before and after cover both sides of
+	// any transition on this day.
+	for _, probe := range []time.Time{wall.Add(-12 * time.Hour), wall.Add(12 * time.Hour)} {
+		_, offset := probe.In(loc).Zone()
+		candidate := wall.Add(-time.Duration(offset) * time.Second)
+
+		local := candidate.In(loc)
+		if local.Hour() != tod.Hour || local.Minute() != tod.Minute || DateOf(candidate, loc) != d {
+			continue // this offset does not apply at that wall clock
+		}
+
+		if earliest.IsZero() || candidate.Before(earliest) {
+			earliest = candidate
+		}
+	}
+
+	if earliest.IsZero() {
+		// A gap. With the offset from before the transition, the wall clock
+		// lands after it, moved forward by the size of the gap (time.Date
+		// does not guarantee which way it normalises).
+		_, before := wall.Add(-12 * time.Hour).In(loc).Zone()
+
+		return wall.Add(-time.Duration(before) * time.Second)
+	}
+
+	return earliest
+}
+
 // MarshalText implements encoding.TextMarshaler. The zero value ("no date")
 // encodes as an empty string; other invalid dates are an error.
 func (d Date) MarshalText() ([]byte, error) {

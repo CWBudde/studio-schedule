@@ -144,3 +144,96 @@ func TestTimeOfDayCompare(t *testing.T) {
 		t.Fatalf("SinceMidnight = %v", got)
 	}
 }
+
+func TestDateAddDaysAndWeekday(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		from string
+		days int
+		want string
+	}{
+		{"2026-02-28", 1, "2026-03-01"},
+		{"2028-02-28", 1, "2028-02-29"},
+		{"2027-01-01", -1, "2026-12-31"},
+		{"2026-10-23", 365, "2027-10-23"},
+		{"2026-10-23", 0, "2026-10-23"},
+	} {
+		d, err := domain.ParseDate(tc.from)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got := d.AddDays(tc.days).String(); got != tc.want {
+			t.Errorf("%s.AddDays(%d) = %s, want %s", tc.from, tc.days, got, tc.want)
+		}
+	}
+
+	if got := (domain.Date{Year: 2026, Month: time.October, Day: 23}).Weekday(); got != time.Friday {
+		t.Errorf("2026-10-23 weekday = %v, want Friday", got)
+	}
+}
+
+func TestDateAt(t *testing.T) {
+	t.Parallel()
+
+	berlin, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	utc := func(s string) time.Time {
+		t.Helper()
+
+		v, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return v
+	}
+
+	for name, tc := range map[string]struct {
+		date domain.Date
+		at   domain.TimeOfDay
+		want time.Time
+	}{
+		"summer time":   {domain.Date{Year: 2026, Month: time.October, Day: 24}, domain.TimeOfDay{Hour: 18}, utc("2026-10-24T16:00:00Z")},
+		"winter time":   {domain.Date{Year: 2026, Month: time.October, Day: 26}, domain.TimeOfDay{Hour: 18}, utc("2026-10-26T17:00:00Z")},
+		"fall-back day": {domain.Date{Year: 2026, Month: time.October, Day: 25}, domain.TimeOfDay{Hour: 18}, utc("2026-10-25T17:00:00Z")},
+		// 02:30 happens twice on 2026-10-25; the earlier instant (CEST) wins.
+		"ambiguous": {domain.Date{Year: 2026, Month: time.October, Day: 25}, domain.TimeOfDay{Hour: 2, Minute: 30}, utc("2026-10-25T00:30:00Z")},
+		// 02:30 does not exist on 2027-03-28; it moves forward to 03:30 CEST.
+		"gap":              {domain.Date{Year: 2027, Month: time.March, Day: 28}, domain.TimeOfDay{Hour: 2, Minute: 30}, utc("2027-03-28T01:30:00Z")},
+		"spring-ahead day": {domain.Date{Year: 2027, Month: time.March, Day: 28}, domain.TimeOfDay{Hour: 18}, utc("2027-03-28T16:00:00Z")},
+		"utc":              {domain.Date{Year: 2026, Month: time.October, Day: 25}, domain.TimeOfDay{Hour: 2, Minute: 30}, utc("2026-10-25T02:30:00Z")},
+	} {
+		loc := berlin
+		if name == "utc" {
+			loc = time.UTC
+		}
+
+		if got := tc.date.At(tc.at, loc); !got.Equal(tc.want) {
+			t.Errorf("%s: %v.At(%v) = %v, want %v", name, tc.date, tc.at, got.UTC(), tc.want)
+		}
+	}
+}
+
+func TestDateOf(t *testing.T) {
+	t.Parallel()
+
+	berlin, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	instant := time.Date(2026, time.October, 24, 22, 30, 0, 0, time.UTC) // 00:30 CEST on the 25th
+
+	if got, want := domain.DateOf(instant, berlin), (domain.Date{Year: 2026, Month: time.October, Day: 25}); got != want {
+		t.Errorf("DateOf(Berlin) = %v, want %v", got, want)
+	}
+
+	if got, want := domain.DateOf(instant, time.UTC), (domain.Date{Year: 2026, Month: time.October, Day: 24}); got != want {
+		t.Errorf("DateOf(UTC) = %v, want %v", got, want)
+	}
+}
