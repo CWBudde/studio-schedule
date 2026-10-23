@@ -303,6 +303,16 @@ export const meAdmin: Me = {
   familyName: 'Admin',
 };
 
+/** A fictional office worker, as GET /auth/me returns them. */
+export const meOffice: Me = {
+  accountId: id(321),
+  personId: id(322),
+  email: 'otto.office@example.com',
+  role: 'office',
+  givenName: 'Otto',
+  familyName: 'Office',
+};
+
 /** The member as the admin sees them while signed in as them ("login as"). */
 export const meImpersonated: Me = {
   ...meMember,
@@ -401,6 +411,12 @@ export const accounts: AccountEntry[] = [
 export const problem = (status: number, detail: string, errors?: { location: string }[]) => ({
   status,
   body: { status, title: 'Error', detail, type: 'about:blank', errors },
+});
+
+/** A 409 answer of a catalogue write: problem+json with a stable `reason`. */
+export const conflict = (reason: 'in-use' | 'duplicate', detail = 'conflict') => ({
+  status: 409,
+  body: { status: 409, title: 'Conflict', detail, type: 'about:blank', reason },
 });
 
 /**

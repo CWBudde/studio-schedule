@@ -1,0 +1,166 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  RouterProvider,
+} from '@tanstack/react-router';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { ReactElement } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import i18n from '@/i18n';
+import {
+  accounts,
+  meAdmin,
+  meImpersonated,
+  meMember,
+  meOffice,
+  mockApiGet,
+  mockApiPost,
+  problem,
+  signedOut,
+} from '@/test/mockApi';
+import { AccountsPage } from './AccountsPage';
+import { AdminLayout } from './AdminLayout';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+/**
+ * Renders the admin layout at `at` with stand-ins for its sections (or the
+ * real accounts page) and a home page.
+ */
+function renderAdmin(at: string, { accounts }: { accounts?: () => ReactElement } = {}) {
+  const rootRoute = createRootRoute({ component: Outlet });
+  const homeRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component: () => <p>Home page</p>,
+  });
+  const adminRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/admin',
+    component: AdminLayout,
+  });
+  const section = (path: string, text: string, component = () => <p>{text}</p>) =>
+    createRoute({ getParentRoute: () => adminRoute, path, component });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([
+      homeRoute,
+      adminRoute.addChildren([
+        section('/locations', 'Locations section'),
+        section('/accounts', 'Accounts section', accounts),
+      ]),
+    ]),
+    history: createMemoryHistory({ initialEntries: [at] }),
+  });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
+  return { router, queryClient };
+}
+
+const sections = async () =>
+  within(await screen.findByRole('navigation', { name: 'Administration' }));
+
+describe('AdminLayout', () => {
+  it.each([
+    ['a member', { '/api/v1/auth/me': { body: meMember } }],
+    ['a visitor who is not signed in', signedOut],
+  ])('shows no access to %s', async (_, fixtures) => {
+    mockApiGet(fixtures);
+
+    renderAdmin('/admin/locations');
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'No access' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Only the office and administrators can see this page.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(screen.queryByText('Locations section')).not.toBeInTheDocument();
+  });
+
+  it('shows the office the locations but not the accounts', async () => {
+    mockApiGet({ '/api/v1/auth/me': { body: meOffice } });
+
+    renderAdmin('/admin/locations');
+
+    const nav = await sections();
+    expect(nav.getByRole('link', { name: 'Locations' })).toHaveAttribute(
+      'href',
+      '/admin/locations',
+    );
+    expect(nav.getByRole('link', { name: 'Locations' })).toHaveAttribute('aria-current', 'page');
+    expect(nav.queryByRole('link', { name: 'Accounts' })).not.toBeInTheDocument();
+    expect(screen.getByText('Locations section')).toBeInTheDocument();
+  });
+
+  it('shows the admin every section and switches between them', async () => {
+    mockApiGet({ '/api/v1/auth/me': { body: meAdmin } });
+    const user = userEvent.setup();
+
+    const { router } = renderAdmin('/admin/locations');
+
+    const nav = await sections();
+    expect(nav.getAllByRole('link').map((a) => a.textContent)).toEqual(['Locations', 'Accounts']);
+    await user.click(nav.getByRole('link', { name: 'Accounts' }));
+
+    expect(await screen.findByText('Accounts section')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/admin/accounts');
+  });
+
+  it('says when it cannot check the access, and checks again', async () => {
+    let fail = true;
+    mockApiGet({
+      '/api/v1/auth/me': () => (fail ? problem(503, 'unavailable') : { body: meOffice }),
+    });
+    const user = userEvent.setup();
+
+    renderAdmin('/admin/locations');
+
+    expect(
+      await screen.findByText('Could not check whether you may see this page.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No access')).not.toBeInTheDocument();
+    fail = false;
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByText('Locations section')).toBeInTheDocument();
+  });
+
+  it('goes home after signing in as a member, although the layout drops the accounts page', async () => {
+    mockApiGet({
+      '/api/v1/auth/me': { body: meAdmin },
+      '/api/v1/admin/accounts': { body: { items: accounts } },
+    });
+    mockApiPost({
+      '/api/v1/admin/accounts/{accountId}/impersonate': { body: meImpersonated },
+    });
+    const user = userEvent.setup();
+
+    const { router, queryClient } = renderAdmin('/admin/accounts', { accounts: AccountsPage });
+    await user.click(await screen.findByRole('button', { name: 'Sign in as Nora Example' }));
+
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe('/'));
+    expect(await screen.findByText('Home page')).toBeInTheDocument();
+    expect(queryClient.getQueryData(['auth', 'me'])).toEqual(meImpersonated);
+  });
+
+  it('renders in German', async () => {
+    mockApiGet({ '/api/v1/auth/me': { body: meAdmin } });
+    await i18n.changeLanguage('de');
+
+    renderAdmin('/admin/locations');
+
+    const nav = within(await screen.findByRole('navigation', { name: 'Verwaltung' }));
+    expect(nav.getByRole('link', { name: 'Standorte' })).toBeInTheDocument();
+    expect(nav.getByRole('link', { name: 'Konten' })).toBeInTheDocument();
+  });
+});

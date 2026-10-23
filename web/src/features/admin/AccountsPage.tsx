@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { CircleAlert, LogIn, RotateCcw, ShieldX } from 'lucide-react';
+import { CircleAlert, LogIn, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import type { AccountEntry } from '@/api/client';
@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { NoAccess } from './NoAccess';
 
 const fullName = (a: { givenName: string; familyName: string }) => `${a.givenName} ${a.familyName}`;
 
@@ -35,16 +36,22 @@ export function AccountsPage() {
   const me = useQuery(meQuery);
   const isAdmin = me.data?.role === 'admin';
   const accounts = useQuery({ ...listAccountsQuery, enabled: isAdmin });
-  // Here and not in the table: once it succeeds, the signed-in account is no
-  // admin any more and the table is gone, but the navigation must happen.
   const impersonate = useMutation(impersonateMutation(queryClient));
-  const signInAs = (account: AccountEntry) =>
-    impersonate.mutate(account.id, {
-      onSuccess: (target) => {
-        toast.success(t('accounts.signedInAs', { name: fullName(target) }));
-        void navigate({ to: '/' });
-      },
-    });
+  // Once it succeeds, the signed-in account is no admin any more: the admin
+  // layout may unmount this page before mutate()'s own callbacks run, and
+  // TanStack Query skips those of an unmounted observer. The promise of
+  // mutateAsync settles anyway, so the toast and the navigation follow it.
+  // A failure shows through `impersonate.isError`.
+  const signInAs = async (account: AccountEntry) => {
+    let target;
+    try {
+      target = await impersonate.mutateAsync(account.id);
+    } catch {
+      return;
+    }
+    toast.success(t('accounts.signedInAs', { name: fullName(target) }));
+    void navigate({ to: '/' });
+  };
 
   return (
     <div className="space-y-6">
@@ -59,11 +66,11 @@ export function AccountsPage() {
       {me.isPending || impersonate.isSuccess ? (
         <AccountsLoading />
       ) : !isAdmin ? (
-        <NoAccess />
+        <NoAccess message={t('accounts.noAccess')} />
       ) : accounts.data ? (
         <AccountsTable
           accounts={accounts.data}
-          onSignInAs={signInAs}
+          onSignInAs={(account) => void signInAs(account)}
           pending={impersonate.isPending}
           failed={
             impersonate.isError
@@ -157,17 +164,6 @@ function AccountStatus({ account }: { account: AccountEntry }) {
   if (account.disabled) return <Badge variant="destructive">{t('accounts.disabled')}</Badge>;
   if (!account.confirmed) return <Badge variant="outline">{t('accounts.unconfirmed')}</Badge>;
   return <Badge variant="secondary">{t('accounts.active')}</Badge>;
-}
-
-function NoAccess() {
-  const { t } = useTranslation('auth');
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed px-4 py-10 text-center">
-      <ShieldX className="size-8 text-muted-foreground" aria-hidden="true" />
-      <p className="font-heading text-lg font-semibold">{t('accounts.noAccessTitle')}</p>
-      <p className="max-w-prose text-muted-foreground">{t('accounts.noAccess')}</p>
-    </div>
-  );
 }
 
 function AccountsLoading() {

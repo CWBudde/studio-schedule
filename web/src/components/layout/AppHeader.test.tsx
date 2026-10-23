@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   meAdmin,
   meMember,
+  meOffice,
   mockApiGet,
   mockApiPost,
   publicSettings,
@@ -78,7 +79,34 @@ describe('AppHeader', () => {
     await vi.waitFor(() => expect(router.state.location.pathname).toBe('/account'));
   });
 
-  it('has no accounts link for other roles', async () => {
+  it('links the office to the administration but not to the accounts', async () => {
+    mockApiGet({ ...notDemo, '/api/v1/auth/me': { body: meOffice } });
+    const user = userEvent.setup();
+
+    renderInRouter(<AppHeader />);
+
+    await user.click(await screen.findByRole('button', { name: 'Otto Office' }));
+    expect(await screen.findByRole('menuitem', { name: 'Administration' })).toHaveAttribute(
+      'href',
+      '/admin',
+    );
+    expect(screen.queryByRole('menuitem', { name: 'Accounts' })).not.toBeInTheDocument();
+  });
+
+  it('links admins to the administration as well', async () => {
+    mockApiGet({ ...notDemo, '/api/v1/auth/me': { body: meAdmin } });
+    const user = userEvent.setup();
+
+    renderInRouter(<AppHeader />);
+
+    await user.click(await screen.findByRole('button', { name: 'Ada Admin' }));
+    expect(await screen.findByRole('menuitem', { name: 'Administration' })).toHaveAttribute(
+      'href',
+      '/admin',
+    );
+  });
+
+  it('has no administration or accounts link for other roles', async () => {
     mockApiGet({ ...notDemo, '/api/v1/auth/me': { body: meMember } });
     const user = userEvent.setup();
 
@@ -86,6 +114,7 @@ describe('AppHeader', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Nora Example' }));
     expect(await screen.findByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Administration' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Accounts' })).not.toBeInTheDocument();
   });
 

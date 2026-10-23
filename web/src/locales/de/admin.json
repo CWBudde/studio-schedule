@@ -1,0 +1,97 @@
+{
+  "nav": {
+    "label": "Verwaltung",
+    "locations": "Standorte",
+    "accounts": "Konten"
+  },
+  "noAccess": {
+    "title": "Kein Zugriff",
+    "office": "Nur das Büro und Administratoren können diese Seite sehen."
+  },
+  "loading": "Wird geladen…",
+  "table": {
+    "search": "Suchen",
+    "noMatches": "Nichts passt zu „{{query}}“.",
+    "loadError": "Die Daten konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "actions": "Aktionen",
+    "sortBy": "Nach {{column}} sortieren"
+  },
+  "form": {
+    "optional": "{{label}} (optional)",
+    "save": "Änderungen speichern",
+    "saving": "Wird gespeichert…",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "errors": {
+      "capacity": "Gib eine ganze Zahl von 1 bis 1000 ein.",
+      "location": "Bitte wähle einen Standort.",
+      "duplicate": "Dieser Name ist bereits vergeben."
+    }
+  },
+  "delete": {
+    "confirm": "Löschen",
+    "deleting": "Wird gelöscht…",
+    "cancel": "Abbrechen"
+  },
+  "locations": {
+    "title": "Standorte und Räume",
+    "description": "Wo die Schule unterrichtet. Jeder Standort hat Räume; die Kapazität eines Raums ist die Standardkapazität seiner Stunden.",
+    "heading": "Standorte",
+    "table": "Standorte",
+    "search": "Standorte durchsuchen",
+    "empty": "Es gibt noch keine Standorte.",
+    "name": "Name",
+    "address": "Adresse",
+    "rooms": "Räume",
+    "roomCount_zero": "Keine Räume",
+    "roomCount_one": "{{count}} Raum",
+    "roomCount_other": "{{count}} Räume",
+    "add": "Standort hinzufügen",
+    "addTitle": "Standort hinzufügen",
+    "editTitle": "{{name}} bearbeiten",
+    "sheetDescription": "Der Name muss sich von den Namen der anderen Standorte unterscheiden.",
+    "editLabel": "{{name}} bearbeiten",
+    "deleteLabel": "{{name}} löschen",
+    "added": "{{name}} wurde hinzugefügt.",
+    "saved": "{{name}} wurde gespeichert.",
+    "deleted": "{{name}} wurde gelöscht.",
+    "duplicate": "Ein anderer Standort heißt bereits „{{name}}“.",
+    "notFound": "Diesen Standort gibt es nicht mehr.",
+    "deleteTitle": "{{name}} löschen?",
+    "deleteDescription": "Der Standort wird endgültig gelöscht. Ein Standort, der noch Räume hat, kann nicht gelöscht werden.",
+    "inUse": "{{name}} hat noch Räume. Lösche zuerst seine Räume.",
+    "roomCountUnknown": "Unbekannt"
+  },
+  "rooms": {
+    "heading": "Räume",
+    "table": "Räume",
+    "search": "Räume durchsuchen",
+    "empty": "Es gibt noch keine Räume.",
+    "needLocation": "Lege zuerst einen Standort an; jeder Raum gehört zu einem.",
+    "name": "Name",
+    "location": "Standort",
+    "chooseLocation": "Standort wählen",
+    "capacity": "Kapazität",
+    "capacityHint": "Wie viele Personen hineinpassen; die Standardkapazität seiner Stunden.",
+    "add": "Raum hinzufügen",
+    "addTitle": "Raum hinzufügen",
+    "editTitle": "{{name}} bearbeiten",
+    "sheetDescription": "Raumnamen müssen innerhalb eines Standorts verschieden sein.",
+    "editLabel": "{{name}} ({{location}}) bearbeiten",
+    "deleteLabel": "{{name}} ({{location}}) löschen",
+    "added": "{{name}} wurde hinzugefügt.",
+    "saved": "{{name}} wurde gespeichert.",
+    "deleted": "{{name}} wurde gelöscht.",
+    "duplicate": "{{location}} hat bereits einen Raum namens „{{name}}“.",
+    "notFound": "Diesen Raum gibt es nicht mehr.",
+    "deleteTitle": "{{name}} löschen?",
+    "deleteDescription": "Der Raum in {{location}} wird endgültig gelöscht. Ein Raum, den Kurse oder Stunden nutzen, kann nicht gelöscht werden.",
+    "inUse": "{{name}} wird von Kursen oder Stunden genutzt und kann daher nicht gelöscht werden."
+  },
+  "access": {
+    "loadError": "Es konnte nicht geprüft werden, ob du diese Seite sehen darfst."
+  }
+}

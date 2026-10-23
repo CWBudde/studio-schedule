@@ -1,0 +1,97 @@
+{
+  "nav": {
+    "label": "Administration",
+    "locations": "Locations",
+    "accounts": "Accounts"
+  },
+  "noAccess": {
+    "title": "No access",
+    "office": "Only the office and administrators can see this page."
+  },
+  "loading": "Loading…",
+  "table": {
+    "search": "Search",
+    "noMatches": "Nothing matches “{{query}}”.",
+    "loadError": "Could not load the data.",
+    "retry": "Retry",
+    "actions": "Actions",
+    "sortBy": "Sort by {{column}}"
+  },
+  "form": {
+    "optional": "{{label}} (optional)",
+    "save": "Save changes",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "edit": "Edit",
+    "delete": "Delete",
+    "errors": {
+      "capacity": "Enter a whole number from 1 to 1000.",
+      "location": "Please choose a location.",
+      "duplicate": "This name is already taken."
+    }
+  },
+  "delete": {
+    "confirm": "Delete",
+    "deleting": "Deleting…",
+    "cancel": "Cancel"
+  },
+  "locations": {
+    "title": "Locations and rooms",
+    "description": "Where the school teaches. Each location has rooms; a room's capacity is the default capacity of its lessons.",
+    "heading": "Locations",
+    "table": "Locations",
+    "search": "Search locations",
+    "empty": "There are no locations yet.",
+    "name": "Name",
+    "address": "Address",
+    "rooms": "Rooms",
+    "roomCount_zero": "No rooms",
+    "roomCount_one": "{{count}} room",
+    "roomCount_other": "{{count}} rooms",
+    "add": "Add location",
+    "addTitle": "Add a location",
+    "editTitle": "Edit {{name}}",
+    "sheetDescription": "The name must differ from the other locations' names.",
+    "editLabel": "Edit {{name}}",
+    "deleteLabel": "Delete {{name}}",
+    "added": "{{name}} has been added.",
+    "saved": "{{name}} has been saved.",
+    "deleted": "{{name}} has been deleted.",
+    "duplicate": "Another location is already called “{{name}}”.",
+    "notFound": "This location no longer exists.",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteDescription": "The location is deleted for good. A location that still has rooms cannot be deleted.",
+    "inUse": "{{name}} still has rooms. Delete its rooms first.",
+    "roomCountUnknown": "Unknown"
+  },
+  "rooms": {
+    "heading": "Rooms",
+    "table": "Rooms",
+    "search": "Search rooms",
+    "empty": "There are no rooms yet.",
+    "needLocation": "Add a location first; every room belongs to one.",
+    "name": "Name",
+    "location": "Location",
+    "chooseLocation": "Choose a location",
+    "capacity": "Capacity",
+    "capacityHint": "How many people fit in; the default capacity of its lessons.",
+    "add": "Add room",
+    "addTitle": "Add a room",
+    "editTitle": "Edit {{name}}",
+    "sheetDescription": "Room names must differ within a location.",
+    "editLabel": "Edit {{name}} ({{location}})",
+    "deleteLabel": "Delete {{name}} ({{location}})",
+    "added": "{{name}} has been added.",
+    "saved": "{{name}} has been saved.",
+    "deleted": "{{name}} has been deleted.",
+    "duplicate": "{{location}} already has a room called “{{name}}”.",
+    "notFound": "This room no longer exists.",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteDescription": "The room at {{location}} is deleted for good. A room that classes or lessons use cannot be deleted.",
+    "inUse": "{{name}} is used by classes or lessons, so it cannot be deleted."
+  },
+  "access": {
+    "loadError": "Could not check whether you may see this page."
+  }
+}

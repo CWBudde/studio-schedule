@@ -8,6 +8,7 @@ import {
   type paths,
   type RegisterBody,
 } from './client';
+import type { components } from './schema';
 
 /** Error thrown by query functions when the API answers with a non-2xx status. */
 export class ApiError extends Error {
@@ -440,6 +441,89 @@ export const stopImpersonationMutation = (queryClient: QueryClient) =>
     onError: (error) => {
       if (error instanceof ApiError && error.status === 401) changeIdentity(queryClient, null);
     },
+  });
+
+export type Location = components['schemas']['Location'];
+export type Room = components['schemas']['Room'];
+/** The editable fields of a location (create and update). */
+export type LocationData = PostBody<'/api/v1/locations'>;
+/** The editable fields of a room (create and update). */
+export type RoomData = PostBody<'/api/v1/rooms'>;
+
+/**
+ * After a write to the catalogue: the lists are asked again, and so is what
+ * shows catalogue names (the schedule, lessons, classes).
+ */
+function refreshCatalogue(queryClient: QueryClient) {
+  return Promise.all(
+    [locationsQuery.queryKey, roomsQuery.queryKey, scheduleQueryKey, ['lesson'], ['terms']].map(
+      (queryKey) => queryClient.invalidateQueries({ queryKey }),
+    ),
+  );
+}
+
+/**
+ * The errors of a catalogue write. A 404 means someone else deleted the
+ * record meanwhile, so the lists are asked again.
+ */
+function onCatalogueError(queryClient: QueryClient) {
+  const signedOut = signedOutOn401(queryClient);
+  return (error: Error) => {
+    signedOut(error);
+    if (error instanceof ApiError && error.status === 404) void refreshCatalogue(queryClient);
+  };
+}
+
+/** Adds a location (office); a name another location has is a 409 `duplicate`. */
+export const createLocationMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: LocationData) => unwrap(api.POST('/api/v1/locations', { body })),
+    onSuccess: () => refreshCatalogue(queryClient),
+    onError: onCatalogueError(queryClient),
+  });
+
+/** Replaces the name and address of a location (office). */
+export const updateLocationMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ locationId, body }: { locationId: string; body: LocationData }) =>
+      unwrap(api.PUT('/api/v1/locations/{locationId}', { params: { path: { locationId } }, body })),
+    onSuccess: () => refreshCatalogue(queryClient),
+    onError: onCatalogueError(queryClient),
+  });
+
+/** Deletes a location (office); one with rooms is a 409 `in-use`. */
+export const deleteLocationMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (locationId: string) =>
+      expectOk(api.DELETE('/api/v1/locations/{locationId}', { params: { path: { locationId } } })),
+    onSuccess: () => refreshCatalogue(queryClient),
+    onError: onCatalogueError(queryClient),
+  });
+
+/** Adds a room to a location (office); a name the location has is a 409 `duplicate`. */
+export const createRoomMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: RoomData) => unwrap(api.POST('/api/v1/rooms', { body })),
+    onSuccess: () => refreshCatalogue(queryClient),
+    onError: onCatalogueError(queryClient),
+  });
+
+/** Replaces the location, name and capacity of a room (office). */
+export const updateRoomMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ roomId, body }: { roomId: string; body: RoomData }) =>
+      unwrap(api.PUT('/api/v1/rooms/{roomId}', { params: { path: { roomId } }, body })),
+    onSuccess: () => refreshCatalogue(queryClient),
+    onError: onCatalogueError(queryClient),
+  });
+
+/** Deletes a room (office); one used by classes or lessons is a 409 `in-use`. */
+export const deleteRoomMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (roomId: string) =>
+      expectOk(api.DELETE('/api/v1/rooms/{roomId}', { params: { path: { roomId } } })),
+    onSuccess: () => refreshCatalogue(queryClient),
+    onError: onCatalogueError(queryClient),
   });
 
 /**

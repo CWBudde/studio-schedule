@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { LogIn, LogOut, Settings, UserRound, UsersRound } from 'lucide-react';
+import { LogIn, LogOut, Settings, ShieldCheck, UserRound, UsersRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useBackendStatus } from '@/api/backendStatus';
@@ -14,10 +14,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { canAdminister } from '@/features/admin/access';
 
 /** "Sign in" when signed out; the signed-in person's menu (with "Sign out") otherwise. */
 export function AccountMenu() {
   const { t } = useTranslation('auth');
+  const { t: tAdmin } = useTranslation('admin');
   const queryClient = useQueryClient();
   const backend = useBackendStatus();
   const me = useQuery({ ...meQuery, enabled: backend.state === 'ready' });
@@ -59,6 +61,14 @@ export function AccountMenu() {
             {t('account.settings')}
           </Link>
         </DropdownMenuItem>
+        {canAdminister(me.data.role) && (
+          <DropdownMenuItem asChild>
+            <Link to="/admin">
+              <ShieldCheck aria-hidden="true" />
+              {tAdmin('nav.label')}
+            </Link>
+          </DropdownMenuItem>
+        )}
         {me.data.role === 'admin' && (
           <DropdownMenuItem asChild>
             <Link to="/admin/accounts">

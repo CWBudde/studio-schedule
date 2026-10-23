@@ -2,11 +2,13 @@ import i18n from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';
 import deAccount from './locales/de/account.json';
+import deAdmin from './locales/de/admin.json';
 import deAuth from './locales/de/auth.json';
 import de from './locales/de/common.json';
 import deSchedule from './locales/de/schedule.json';
 import deTimetable from './locales/de/timetable.json';
 import enAccount from './locales/en/account.json';
+import enAdmin from './locales/en/admin.json';
 import enAuth from './locales/en/auth.json';
 import en from './locales/en/common.json';
 import enSchedule from './locales/en/schedule.json';
@@ -23,6 +25,7 @@ export const resources = {
     auth: enAuth,
     account: enAccount,
     timetable: enTimetable,
+    admin: enAdmin,
   },
   de: {
     common: de,
@@ -30,6 +33,7 @@ export const resources = {
     auth: deAuth,
     account: deAccount,
     timetable: deTimetable,
+    admin: deAdmin,
   },
 } as const;
 
@@ -39,7 +43,7 @@ void i18n
   .init({
     resources,
     defaultNS,
-    ns: [defaultNS, 'schedule', 'auth', 'account', 'timetable'],
+    ns: [defaultNS, 'schedule', 'auth', 'account', 'timetable', 'admin'],
     fallbackLng: 'en',
     supportedLngs: supportedLanguages,
     nonExplicitSupportedLngs: true,
