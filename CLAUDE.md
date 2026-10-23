@@ -81,6 +81,10 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
 - **IDs:** entities use the typed IDs in `internal/domain/id.go` (`domain.LessonID`, ...). New IDs
   come from an injected `ids.Source` (`ids.New[domain.LessonID](src)`); `ids.Sequence` gives
   deterministic IDs for tests and seeds. forbidigo bans `uuid.New*` outside `internal/ids`.
+- **Domain:** plain structs with `Validate()` (errors wrap `domain.ErrValidation`), string enums with
+  `Valid()`, zero value = absent, money as `domain.Money` (int64 minor units), `domain.Date` /
+  `domain.TimeOfDay` for school-local dates and times. See
+  [ADR 0002](docs/decisions/0002-domain-and-persistence-conventions.md).
 - **Both stores:** every repo method gets a case in `internal/store/storetest` and must pass for
   `memory` and `postgres`.
 - **API changes:** a Huma operation with an explicit `OperationID` (camelCase), camelCase JSON, then

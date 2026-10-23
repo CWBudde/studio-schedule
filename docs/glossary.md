@@ -17,6 +17,7 @@ where it differs.
 | `Guardian`         | Parent / guardian   | Erziehungsberechtigte | Can manage and book for dependents ("Kinder")                           |
 | `Account`          | Account             | Konto                 | Login of a person, with a role                                          |
 | `Booking`          | Booking             | Buchung               | Formerly "Teilnahme"; actions "Eintragen" (book) / "Austragen" (cancel) |
+| `BookingEvent`     | Booking history     | Buchungsverlauf       | Audit trail of status changes, with time and acting account             |
 | Guest booking      | Guest               | Gast / extern         | Booking without an account (name + email)                               |
 | Trial              | Trial lesson        | Probestunde           |                                                                         |
 | `WaitlistEntry`    | Waiting list        | Warteliste            | Timed invites instead of "notify all"                                   |
