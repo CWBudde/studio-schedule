@@ -541,11 +541,14 @@ no repository yet.
         for generation and enrolment; "cancel following weeks" pauses a member until a date
         (`class_members.paused_until`, migration 00011), the office ends a pause with
         `updateClassMember`
-- [ ] Staff actions: guest bookings (name + email, no account), trial flag, add or remove
+- [x] Staff actions: guest bookings (name + email, no account), trial flag, add or remove
       participants beyond capacity (explicit override)
-  - [ ] Office and instructor operations on a lesson's participants: add a person or a guest,
+  - [x] Office and instructor operations on a lesson's participants: add a person or a guest,
         mark trial, remove; booking beyond capacity needs an explicit override that is recorded in
-        the booking event
+        the booking event (2026-10-24) — `service/participants.go`: office on every lesson,
+        instructors and accompanists on their own until the end of the lesson's day; guests with
+        an optional email; trial with a note; `confirmOverCapacity`; staff find persons by name
+        (`searchPersonsForStaff`); "Participants" in the lesson sheet; e2e `participants.spec.ts`
 - [x] Waitlist: join and leave; when a spot frees up, the next entry gets a **timed invite** (random
       token, only the hash stored, expiry configurable); accepting books under the lesson lock;
       expired invites move on to the next entry; "stay on list" option (decision record required)
@@ -568,14 +571,18 @@ no repository yet.
       notify participants
   - [ ] `/teach`: today's and the next lessons of the signed-in instructor (office sees all), with
         participants including guests and trials
-  - [ ] Attendance: mark attended or no-show per participant and "all attended"; only from the
-        lesson start on
+  - [x] Attendance: mark attended or no-show per participant and "all attended"; only from the
+        lesson start on (2026-10-24) — `setAttendance`, `markAllAttended`; in the lesson sheet's
+        participant list
   - [ ] Notify participants: a short message to everyone booked, as mails through the outbox,
-        rate-limited
+        rate-limited (2026-10-24) — partial: `notifyParticipants` (Reply-To the sender, 5 per hour
+        per account, 3 per lesson per day) and `listTeachLessons` are built; the `/teach` page
+        remains
 - [ ] "My lessons" (upcoming, history), booking audit trail for office/admin
   - [ ] `/my-lessons` for the account and its dependents: upcoming with cancel, history with
         status, waitlist entries
-  - [ ] Booking history (`listBookingEvents`, office) in the participant list of the lesson sheet
+  - [x] Booking history (`listBookingEvents`, office) in the participant list of the lesson sheet
+        (2026-10-24) — `GET /api/v1/admin/bookings/{id}/events`, "History" per participant
 - [x] UI: book/cancel from schedule and detail views, for-whom selector (family), waitlist state,
       optimistic updates with rollback, toast feedback
   - [x] Lesson sheet: book / cancel / join waitlist with a for-whom selector when the account has

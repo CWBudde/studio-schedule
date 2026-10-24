@@ -261,3 +261,66 @@ tell namesakes apart), no contact data. The office keeps `listPersons`.
 **Demo.** Felix Keysworth, the demo accompanist, has an instructor account (signing in by email, as
 the login page lists Alina for instructors), and Alina's ballet workshop, which Felix accompanies,
 has a guest with an email, one without and a trial with a note, added by Alina.
+
+## Amendment (2026-10-24): instructor view
+
+The `/teach` page lists the lessons a staff member teaches and lets them message their participants.
+
+**Lessons** (`listTeachLessons`, `GET /api/v1/teach?from=&to=&staffId=`, access `staff`). The lessons
+that start in a range of school dates: by default the week before today, today and the week after
+(`from` = today − 7, `to` = `from` + 15, exclusive; a `from` alone gets the same length), at most 31
+days. An instructor or accompanist gets the lessons of their **active** staff records linked to their
+person, as instructor or accompanist (`Lessons().ListByStaff`, served by the indexes on
+`(instructor_id, starts_at)` and `(accompanist_id, starts_at)`, migration 00014); without a staff
+link the list is empty, not an error. The office gets every lesson, or with `staffId` one staff
+member's; for an instructor `staffId` only narrows their own. Canceled and hidden lessons are
+included. Each lesson has the schedule's summary fields plus the caller's `role` (`instructor`,
+`accompanist`, or `office` for a lesson of others), `active`, `held`, `freePlaces`, `waiting`,
+`trials`, `guests`, `dayOverAt`, `attendanceOpen` (the lesson takes place and has started, and for
+instructors and accompanists its day is not over: the rule of `setAttendance`) and
+`attendanceTaken` (it takes place, has started and has no active booking left `booked`; a lesson
+without bookings counts as taken). The counts come from one grouped count of the active bookings
+of all lessons (`Bookings().CountsByLessons`: active, trials, guests, still `booked`) and one read of
+their open waiting-list entries, not per lesson.
+
+**Notices** (`notifyParticipants`, `POST /api/v1/lessons/{lessonId}/notify`, body `{message}`, 200
+`{recipients}`). Same access as the participant list (the office every lesson, an instructor or
+accompanist their own, 404 otherwise). The message is plain text: line breaks (CR LF, CR, U+2028,
+U+2029) are normalized to `\n` and the space around it is trimmed, then it must have 1 to 1000
+characters, no control characters other than line breaks and tabs, and no invisible format
+characters (Unicode `Cf`: bidi overrides and isolates, zero-width spaces, BOM) other than the
+zero-width joiner and non-joiner that emoji sequences and some scripts need (a 422 on
+`body.message`; the schema only caps the raw input at 4000 characters). It goes to the recipient chain of every **active** booking and to guests with an
+email (ADR 0007, ADR 0010), each address once with the participants it is for, each in its
+language (a guest in the school's), as the `lesson-notice` mail: school, lesson (course type, date
+and time in the school zone, room, location, a line if the school canceled it), the sender's name
+and the message, escaped in HTML with its line breaks kept. Notices about lessons that are over or
+canceled are allowed: staff may want to share something after the class or explain a cancellation.
+
+The **sender** is the account that sends, the admin while impersonating (like the actor of booking
+events). The mail names it as the schedule does when one of its active staff records is the lesson's
+instructor or accompanist (the staff display name), else by its person's name. Its address is the
+mail's **Reply-To** (`outbox_mails.reply_to`, migration 00014; the SMTP
+sender writes the header), so replies reach the staff member, not the school's no-reply address.
+
+**Limits.** An account sends at most **5 notices in an hour** (a sliding hour), and a lesson gets at
+most **3 notices a school day**, from anyone; beyond either it is a 429 problem with `Retry-After`
+(the longer wait if both apply). The limits must survive restarts and hold for several server
+processes, so they are not in-memory limiters (ADR 0006): each sent notice is recorded in
+`lesson_notices` (lesson, sender, time, number of recipients), which the limits count. Counting the
+outbox rows would count mails, not notices. A notice outlives its lesson (`lesson_id` becomes NULL
+when the office deletes the lesson): it still counts for its sender's hour and records what was
+sent. The lesson lock, then the sender's person lock, taken just before the count, serialize
+concurrent notices, so neither limit can be overrun. A lesson nobody
+is mailed for sends nothing and counts no notice. The notice records also say who sent what when;
+the text itself is in the outbox mails.
+
+**422 reasons** (applies to the staff actions above). The staff actions answer a change their time window refuses with a
+422 on the path parameter (`path.lessonId` or `path.bookingId`), which by itself does not say
+whether the lesson has not started or its day is over, and the UI should not guess from its own
+clock. Like a 409 carries `reason` (the `Conflict` problem), these 422s are the `Invalid` problem
+with a top-level `reason`: `not-started` (attendance before the start: `setAttendance`,
+`markAllAttended`) or `day-over` (an instructor or accompanist after the lesson's school day:
+`addLessonParticipant`, `updateLessonParticipant`, `removeLessonParticipant`, `setAttendance`,
+`markAllAttended`). The `errors` list keeps the location. A 422 about the request body has no
+`reason`. The client reads `problem.reason` of a 422 response, as it reads it of a 409.
