@@ -78,6 +78,7 @@ var accessLevels = map[string]string{
 	"listDemoLogins":       "public",
 	"listAccounts":         "admin",
 	"impersonateAccount":   "admin",
+	"listAuditEvents":      "admin",
 }
 
 // minRoles is the least role each access level admits.
@@ -340,6 +341,94 @@ func TestImpersonationFlow(t *testing.T) {
 
 	if res, _ := a.call(http.MethodPost, "/api/v1/admin/accounts/"+adminID+"/impersonate", "", back); res.StatusCode != http.StatusForbidden {
 		t.Errorf("impersonating an admin: status %d, want 403", res.StatusCode)
+	}
+}
+
+// TestAuditLogListsImpersonation: after an admin impersonated the demo
+// member and returned, the audit log names both events, newest first, with
+// the admin as actor and the member as target.
+func TestAuditLogListsImpersonation(t *testing.T) {
+	t.Parallel()
+
+	a := newAuthApp(t, app.Deps{Demo: true, DemoLogins: seed.DemoLogins()})
+
+	var admin, member seed.Login
+
+	for _, l := range seed.DemoLogins() {
+		switch l.Role {
+		case domain.RoleAdmin:
+			admin = l
+		case domain.RoleMember:
+			member = l
+		}
+	}
+
+	res, body := a.call(http.MethodPost, "/api/v1/auth/login", `{"email":"`+admin.Email+`","password":"`+admin.Password+`"}`)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("login: %d %s", res.StatusCode, body)
+	}
+
+	adminCookie := sessionCookie(t, res)
+
+	res, body = a.call(http.MethodGet, "/api/v1/admin/audit", "", adminCookie)
+	if res.StatusCode != http.StatusOK || string(body) != `{"items":[]}`+"\n" {
+		t.Fatalf("empty audit log: %d %q", res.StatusCode, body)
+	}
+
+	res, body = a.call(http.MethodGet, "/api/v1/admin/accounts", "", adminCookie)
+
+	var accounts struct {
+		Items []struct{ ID, Email string } `json:"items"`
+	}
+	if err := json.Unmarshal(body, &accounts); err != nil || res.StatusCode != http.StatusOK {
+		t.Fatalf("listAccounts: %d %s", res.StatusCode, body)
+	}
+
+	memberID := ""
+
+	for _, it := range accounts.Items {
+		if it.Email == member.Email {
+			memberID = it.ID
+		}
+	}
+
+	res, body = a.call(http.MethodPost, "/api/v1/admin/accounts/"+memberID+"/impersonate", "", adminCookie)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("impersonate: %d %s", res.StatusCode, body)
+	}
+
+	res, body = a.call(http.MethodPost, "/api/v1/auth/impersonation/stop", "", sessionCookie(t, res))
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("stop: %d %s", res.StatusCode, body)
+	}
+
+	res, body = a.call(http.MethodGet, "/api/v1/admin/audit", "", sessionCookie(t, res))
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("listAuditEvents: %d %s", res.StatusCode, body)
+	}
+
+	type account struct{ ID, Email, GivenName, FamilyName string }
+
+	var log struct {
+		Items []struct {
+			ID, Action, At string
+			Actor, Target  account
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &log); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"impersonation-ended", "impersonation-started"}
+	if len(log.Items) != len(want) {
+		t.Fatalf("audit log %s, want two events", body)
+	}
+
+	for i, e := range log.Items {
+		if e.ID == "" || e.At == "" || e.Action != want[i] || e.Actor.Email != admin.Email ||
+			e.Actor.GivenName == "" || e.Target.Email != member.Email || e.Target.ID != memberID {
+			t.Errorf("event %d = %+v", i, e)
+		}
 	}
 }
 

@@ -2,11 +2,14 @@ package httpapi
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/service"
 )
 
 func registerAdmin(api huma.API, h *handlers) {
@@ -29,6 +32,16 @@ func registerAdmin(api huma.API, h *handlers) {
 			"be impersonated (403); a disabled or unconfirmed account is a 409.",
 		Tags: []string{"admin"},
 	}, h.impersonateAccount)
+
+	register(api, AccessAdmin, huma.Operation{
+		OperationID: "listAuditEvents",
+		Method:      http.MethodGet,
+		Path:        BasePath + "/admin/audit",
+		Summary:     "List audit events",
+		Description: fmt.Sprintf("Returns the latest %d audit events, newest first, with the accounts they name.",
+			service.AuditLogLimit),
+		Tags: []string{"admin"},
+	}, h.listAuditEvents)
 }
 
 // AccountEntry is an account in the admin's account list.
@@ -52,6 +65,35 @@ type AccountListOutput struct {
 	Body AccountList
 }
 
+// AuditAccount is an account named by an audit event. An account that can
+// no longer be found has only its ID, one whose person can no longer be
+// found no names.
+type AuditAccount struct {
+	ID         domain.AccountID `doc:"Account ID."                                                                         json:"id"`
+	Email      string           `doc:"Email address (login name). Absent if the account can no longer be found."           json:"email,omitempty"`
+	GivenName  string           `doc:"Given name. Absent if the account or its person can no longer be found."             json:"givenName,omitempty"`
+	FamilyName string           `doc:"Family name. Absent if the account or its person can no longer be found."            json:"familyName,omitempty"`
+}
+
+// AuditEventEntry is an event in the audit log.
+type AuditEventEntry struct {
+	ID     domain.AuditEventID `doc:"Audit event ID."  json:"id"`
+	At     time.Time           `doc:"When it happened." json:"at"`
+	Action string              `doc:"What happened, e.g. impersonation-started or impersonation-ended; later versions may add actions." json:"action"`
+	Actor  AuditAccount        `doc:"The account that acted."   json:"actor"`
+	Target AuditAccount        `doc:"The account acted upon."   json:"target"`
+}
+
+// AuditEventList is the response body of listAuditEvents.
+type AuditEventList struct {
+	Items []AuditEventEntry `doc:"The latest audit events, newest first." json:"items" nullable:"false"`
+}
+
+// AuditEventListOutput is the response of listAuditEvents.
+type AuditEventListOutput struct {
+	Body AuditEventList
+}
+
 // ImpersonateInput are the parameters of impersonateAccount.
 type ImpersonateInput struct {
 	AccountID domain.AccountID `doc:"Account to sign in as." path:"accountId"`
@@ -73,6 +115,29 @@ func (h *handlers) listAccounts(ctx context.Context, _ *struct{}) (*AccountListO
 	}
 
 	return &AccountListOutput{Body: AccountList{Items: items}}, nil
+}
+
+func (h *handlers) listAuditEvents(ctx context.Context, _ *struct{}) (*AuditEventListOutput, error) {
+	events, err := h.deps.Auth.AuditLog(ctx)
+	if err != nil {
+		return nil, h.toHTTPError(ctx, err)
+	}
+
+	items := make([]AuditEventEntry, 0, len(events))
+	for _, e := range events {
+		items = append(items, AuditEventEntry{
+			ID: e.Event.ID, At: e.Event.At, Action: string(e.Event.Action),
+			Actor: auditAccount(e.Actor), Target: auditAccount(e.Target),
+		})
+	}
+
+	return &AuditEventListOutput{Body: AuditEventList{Items: items}}, nil
+}
+
+func auditAccount(a service.AccountEntry) AuditAccount {
+	return AuditAccount{
+		ID: a.Account.ID, Email: a.Account.Email, GivenName: a.Person.GivenName, FamilyName: a.Person.FamilyName,
+	}
 }
 
 func (h *handlers) impersonateAccount(ctx context.Context, in *ImpersonateInput) (*SignedInOutput, error) {

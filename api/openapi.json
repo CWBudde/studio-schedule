@@ -115,6 +115,83 @@
         ],
         "type": "object"
       },
+      "AuditAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "Email address (login name). Absent if the account can no longer be found.",
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name. Absent if the account or its person can no longer be found.",
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name. Absent if the account or its person can no longer be found.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Account ID.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "AuditEventEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "What happened, e.g. impersonation-started or impersonation-ended; later versions may add actions.",
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/AuditAccount",
+            "description": "The account that acted."
+          },
+          "at": {
+            "description": "When it happened.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "Audit event ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/AuditAccount",
+            "description": "The account acted upon."
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "action",
+          "actor",
+          "target"
+        ],
+        "type": "object"
+      },
+      "AuditEventList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "The latest audit events, newest first.",
+            "items": {
+              "$ref": "#/components/schemas/AuditEventEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "ChangePasswordInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -2342,6 +2419,39 @@
           }
         },
         "summary": "Sign in as an account",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "admin"
+      }
+    },
+    "/api/v1/admin/audit": {
+      "get": {
+        "description": "Returns the latest 200 audit events, newest first, with the accounts they name.",
+        "operationId": "listAuditEvents",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditEventList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List audit events",
         "tags": [
           "admin"
         ],

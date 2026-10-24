@@ -62,4 +62,4 @@ bookings".
 - Adding an endpoint now also means choosing its access level and adding it to the pinned table.
 - Services may still check roles where the rule is business logic (e.g. `Impersonate` checks for an
   admin itself), so that they stay safe when called from elsewhere.
-- The audit log has no UI yet; the admin area will list it.
+- The admin area lists the latest audit events at `/admin/audit`.

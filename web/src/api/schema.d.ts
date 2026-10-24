@@ -44,6 +44,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List audit events
+         * @description Returns the latest 200 audit events, newest first, with the accounts they name.
+         */
+        get: operations["listAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/classes/{classId}/members": {
         parameters: {
             query?: never;
@@ -1039,6 +1059,41 @@ export interface components {
             notes?: string;
             /** @description Phone number, if any. */
             phone?: string;
+        };
+        AuditAccount: {
+            /** @description Email address (login name). Absent if the account can no longer be found. */
+            email?: string;
+            /** @description Family name. Absent if the account or its person can no longer be found. */
+            familyName?: string;
+            /** @description Given name. Absent if the account or its person can no longer be found. */
+            givenName?: string;
+            /**
+             * Format: uuid
+             * @description Account ID.
+             */
+            id: string;
+        };
+        AuditEventEntry: {
+            /** @description What happened, e.g. impersonation-started or impersonation-ended; later versions may add actions. */
+            action: string;
+            /** @description The account that acted. */
+            actor: components["schemas"]["AuditAccount"];
+            /**
+             * Format: date-time
+             * @description When it happened.
+             */
+            at: string;
+            /**
+             * Format: uuid
+             * @description Audit event ID.
+             */
+            id: string;
+            /** @description The account acted upon. */
+            target: components["schemas"]["AuditAccount"];
+        };
+        AuditEventList: {
+            /** @description The latest audit events, newest first. */
+            items: components["schemas"]["AuditEventEntry"][];
         };
         ChangePasswordInputBody: {
             /** @description The current password. */
@@ -2082,6 +2137,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listAuditEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventList"];
                 };
             };
             /** @description Error */
