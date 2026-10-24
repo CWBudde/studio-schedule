@@ -21,6 +21,10 @@ where it differs.
 | Invitation         | Invitation          | Einladung             | Mail with a password link for an account the office creates             |
 | `Booking`          | Booking             | Buchung               | Formerly "Teilnahme"; actions "Eintragen" (book) / "Austragen" (cancel) |
 | `BookingEvent`     | Booking history     | Buchungsverlauf       | Audit trail of status changes, with time and acting account             |
+| Booking source     | (not shown)         | (nicht sichtbar)      | `self` or `member` (auto-enrolment); staff bookings later (ADR 0009)    |
+| Late cancellation  | Late cancellation   | Späte Absage          | Canceled after the cancellation cutoff; allowed, flagged (ADR 0009)     |
+| Auto-enrolment     | Auto-enrolment      | Automatische Buchung  | Class members are booked into their class's lessons (ADR 0009)          |
+| Release a date     | Release this date   | Termin freigeben      | A class member cancels one lesson; the place goes to others (0009)      |
 | Guest booking      | Guest               | Gast / extern         | Booking without an account (name + email)                               |
 | Trial              | Trial lesson        | Probestunde           |                                                                         |
 | `WaitlistEntry`    | Waiting list        | Warteliste            | Timed invites instead of "notify all"                                   |

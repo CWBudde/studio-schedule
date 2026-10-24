@@ -496,28 +496,37 @@ staff actions, waitlist, instructor view and "My lessons" in parallel. The store
 bookings, booking events, `CountActive` and `Lessons().Lock`; the waitlist has a domain type but
 no repository yet.
 
-- [ ] ADR "Booking rules": who books for whom (self and dependents, via the family check of Phase
+- [x] ADR "Booking rules": who books for whom (self and dependents, via the family check of Phase
       3); `BookingCutoff` closes booking that long before the start; after `CancellationCutoff` a
       cancellation is allowed but flagged late (or refused); how class membership becomes bookings;
-      what a canceled lesson does to its bookings
-  - [ ] Open from ADR 0008: may guardians book for a managed dependent (own account, staff link
-        or dependents of its own)?
-- [ ] Book a lesson for yourself or a dependent, as one transaction:
+      what a canceled lesson does to its bookings (2026-10-24) — ADR 0009: family incl. managed
+      dependents, member rules for everyone (early access books early, hidden is a 404), late
+      cancellations allowed and flagged, no cancel after the start, bookings of a canceled lesson
+      stay, member auto-bookings (source `member`) ignore the cutoff and are canceled by the office
+      edits that remove their lessons
+  - [x] Open from ADR 0008: may guardians book for a managed dependent (own account, staff link
+        or dependents of its own)? (2026-10-24) — yes, ADR 0008 and 0009
+- [x] Book a lesson for yourself or a dependent, as one transaction:
       `InTx → Lessons().Lock → CountActive < capacity → Insert → booking_event → outbox`; booking
       cutoff and release window enforced; duplicate booking is a conflict
-  - [ ] `BookingService.Book` and `bookLesson` (`signedIn`); 409 reasons `already-booked`, `full`
+  - [x] `BookingService.Book` and `bookLesson` (`signedIn`); 409 reasons `already-booked`, `full`
         (the UI offers the waitlist), `closed` (cutoff, release window, canceled lesson);
-        confirmation mail (EN/DE, golden files)
-  - [ ] Availability in the schedule: free places and "booked by me / my child" per lesson in
+        confirmation mail (EN/DE, golden files) (2026-10-24) — `service/booking.go`; `closed`
+        carries `why` (cutoff, release, canceled, started); the mail goes to the acting account
+  - [x] Availability in the schedule: free places and "booked by me / my child" per lesson in
         `getSchedule` and `getLesson`, from one `CountActiveByLessons` query instead of one per
-        lesson (both stores, contract cases)
-- [ ] Cancel a booking (sign-out deadline configurable; late cancellation flagged); "also cancel
+        lesson (both stores, contract cases) (2026-10-24) — `freePlaces`, `bookedFor`,
+        `bookingClosesAt`, `lateCancelFrom`; `CountActiveByLessons` and
+        `ListActiveByLessonsAndPersons`
+- [x] Cancel a booking (sign-out deadline configurable; late cancellation flagged); "also cancel
       following weeks" for class members
-  - [ ] `cancelBooking` for own and dependents' bookings; the late flag stored on the booking or
+  - [x] `cancelBooking` for own and dependents' bookings; the late flag stored on the booking or
         its event (migration); a cancellation frees the place for the waitlist in the same
-        transaction
-  - [ ] "Also cancel following weeks": cancels the person's future bookings of the same class in
-        one transaction, after a preview of the dates
+        transaction (2026-10-24) — `cancelBooking`; migration 00010 (`late` on bookings and
+        events, `source`, `override`); the freed place invites the waitlist once it exists
+  - [x] "Also cancel following weeks": cancels the person's future bookings of the same class in
+        one transaction, after a preview of the dates (2026-10-24) — `previewCancelFollowing`
+        (GET) and `cancelFollowing`; one summary mail
 - [ ] Class members are auto-enrolled into generated lessons and can release single dates (this
       replaces the old paper "swap list")
   - [ ] Generation books the class members into each lesson it creates; adding a member books
@@ -557,9 +566,12 @@ no repository yet.
 - [ ] UI: book/cancel from schedule and detail views, for-whom selector (family), waitlist state,
       optimistic updates with rollback, toast feedback
   - [ ] Lesson sheet: book / cancel / join waitlist with a for-whom selector when the account has
-        dependents; states for full, closed, late cancellation and canceled lessons
-  - [ ] List and week grid: free-place and booked badges; optimistic update with rollback on a
-        409, toasts with the reason
+        dependents; states for full, closed, late cancellation and canceled lessons (2026-10-24) —
+        partial: `features/schedule/booking/BookingSection.tsx` books and cancels with the
+        selector, warns before a late cancellation and offers "also cancel following weeks";
+        joining the waitlist remains
+  - [x] List and week grid: free-place and booked badges; optimistic update with rollback on a
+        409, toasts with the reason (2026-10-24) — `AvailabilityBadges`; e2e `booking.spec.ts`
 - [ ] Tests: concurrent booking (contract suite, both stores), cutoffs, waitlist invite
       expiry/acceptance, e2e booking flow in the demo
   - [ ] Service tests: cutoffs at the exact edge, booking for a stranger's child, override,

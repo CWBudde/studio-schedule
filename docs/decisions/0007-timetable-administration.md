@@ -199,3 +199,11 @@ itself (above); other lesson edits are not recorded.
 - Who changed the timetable is not recorded, except who canceled a lesson.
 - A class edit no longer reaches a lesson the office has touched, even one it set back by hand to
   what the class generates; the office edits such a lesson one by one.
+
+## Amendment (2026-10-24): member bookings
+
+Class members are booked automatically into their class's lessons (source `member`, ADR 0009).
+Term shortening, a class's weekday move and retiring a class ignore those bookings and cancel
+them; only other bookings (source `self`, later also the staff's) still keep a lesson or refuse the
+change as described above. A canceled lesson keeps its bookings (ADR 0009). Phase 4 chunk B
+implements this.

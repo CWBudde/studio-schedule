@@ -81,6 +81,10 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   with `on(field, …)` fails as a `*domain.FieldError`, which `toHTTPError` reports as a 422 on
   `body.<field>`. Office-only reads live under `/api/v1/admin/…` (`listAllStaff`, `listAllClasses`, `listClassMembers`, and
   `listPersons` from `service.PersonService`, the person search for the office's pickers).
+- **Bookings:** `service.BookingService` (`service/booking.go`, `httpapi/booking.go`; ADR 0009):
+  book and cancel for the caller's family under `Lessons().Lock` with member rules for everyone,
+  late cancellations flagged, "cancel following weeks" under the class lock. The schedule's
+  availability (`freePlaces`, `bookedFor`, the cutoff instants) is filled in `service/schedule.go`.
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),

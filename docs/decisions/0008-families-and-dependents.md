@@ -121,6 +121,6 @@ reset is therefore also open to such an invited account (unconfirmed, enabled, w
 when the invitation expires, "forgot password" sends a new link. An unconfirmed registration still
 confirms with its own link.
 
-**Open question for the Phase 4 booking ADR.** May a guardian book for a managed dependent, e.g. a
-teenager with their own login? `dependentOf` still admits every dependent; the booking ADR decides
-whether managed ones are excluded.
+**Booking for managed dependents** (decided in ADR 0009, 2026-10-24). A guardian books and cancels
+for every dependent, managed ones included, e.g. a teenager with their own login, who can also
+book for themself. `dependentOf` stays the only family check.
