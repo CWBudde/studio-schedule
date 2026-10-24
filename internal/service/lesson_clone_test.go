@@ -452,7 +452,7 @@ func TestCloneLocksAndReads(t *testing.T) {
 	blocker := f.oneOff(t, svc, "2026-10-29", domain.TimeOfDay{Hour: 12, Minute: 30}, 60)
 
 	rec := &recordingStore{Store: f.st}
-	recorded := NewLessonService(rec, clock.NewFixed(mustInstant(t, lessonNow)), f.seq, nil)
+	recorded := NewLessonService(rec, clock.NewFixed(mustInstant(t, lessonNow)), f.seq, Mails{})
 
 	res, err := recorded.Clone(ctx, CloneRequest{
 		Unit: CloneDay, Source: mustDate(t, "2026-10-22"), Target: mustDate(t, "2026-10-29"),

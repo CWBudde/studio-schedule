@@ -43,6 +43,14 @@ const (
 	// bookings of a person to the account that canceled them, marking the
 	// late ones (ADR 0009). Data: BookingData.
 	TemplateBookingCanceled = "booking-canceled"
+	// TemplateWaitlistInvite tells a person on the waiting list, through
+	// the lesson's recipients (ADR 0010), that a place is reserved for them
+	// until an instant, with the link to take it. Data: WaitlistInviteData.
+	TemplateWaitlistInvite = "waitlist-invite"
+	// TemplateWaitlistExpired tells them that the reserved place was not
+	// taken in time and whether they stay on the list. Data:
+	// WaitlistExpiredData.
+	TemplateWaitlistExpired = "waitlist-expired"
 )
 
 // TemplateNames returns all template names.
@@ -50,7 +58,7 @@ func TemplateNames() []string {
 	return []string{
 		TemplateConfirmEmail, TemplateResetPassword, TemplateChangeEmail, TemplateEmailChanged, TemplateInvite,
 		TemplateLessonCanceled, TemplateLessonRestored, TemplateLessonChanged, TemplateBookingConfirmed,
-		TemplateBookingCanceled,
+		TemplateBookingCanceled, TemplateWaitlistInvite, TemplateWaitlistExpired,
 	}
 }
 
@@ -221,6 +229,80 @@ func (d BookingData) Validate() error {
 	}
 
 	return nil
+}
+
+// WaitlistData is the part the waiting-list mails share: a person on the
+// list of one lesson. The templates format the times in their own location,
+// which must be the school's time zone.
+type WaitlistData struct {
+	// SchoolName is the school that sends the mail.
+	SchoolName string
+	// GivenName greets the recipient; empty means a greeting without name.
+	GivenName string
+	// Participant names the person on the list: the recipient or a
+	// dependent.
+	Participant string
+	// CourseType names what is taught.
+	CourseType string
+	// StartsAt and EndsAt are the lesson's times in the school's time zone.
+	StartsAt, EndsAt time.Time
+	// Room and Location say where the lesson takes place.
+	Room, Location string
+}
+
+// Validate checks the data before rendering. All errors wrap
+// domain.ErrValidation.
+func (d WaitlistData) Validate() error {
+	switch {
+	case strings.TrimSpace(d.SchoolName) == "":
+		return fmt.Errorf("%w: school name must not be empty", domain.ErrValidation)
+	case strings.TrimSpace(d.Participant) == "":
+		return fmt.Errorf("%w: a waiting-list mail needs a participant", domain.ErrValidation)
+	case strings.TrimSpace(d.CourseType) == "" || strings.TrimSpace(d.Room) == "" ||
+		strings.TrimSpace(d.Location) == "":
+		return fmt.Errorf("%w: course type, room and location must not be empty", domain.ErrValidation)
+	case d.StartsAt.IsZero() || !d.EndsAt.After(d.StartsAt):
+		return fmt.Errorf("%w: a lesson must end after it starts", domain.ErrValidation)
+	}
+
+	return nil
+}
+
+// WaitlistInviteData is the data of TemplateWaitlistInvite.
+type WaitlistInviteData struct {
+	WaitlistData
+
+	// Link is the absolute URL of the page that accepts the invite,
+	// including its token.
+	Link string
+	// ExpiresAt is when the reservation ends, in the school's time zone.
+	ExpiresAt time.Time
+}
+
+// Validate checks the data before rendering. All errors wrap
+// domain.ErrValidation.
+func (d WaitlistInviteData) Validate() error {
+	if err := d.WaitlistData.Validate(); err != nil {
+		return err
+	}
+
+	switch {
+	case !absoluteHTTPURL(d.Link):
+		return fmt.Errorf("%w: link must be an absolute http(s) URL", domain.ErrValidation)
+	case d.ExpiresAt.IsZero():
+		return fmt.Errorf("%w: the invite needs an expiry", domain.ErrValidation)
+	}
+
+	return nil
+}
+
+// WaitlistExpiredData is the data of TemplateWaitlistExpired.
+type WaitlistExpiredData struct {
+	WaitlistData
+
+	// StillWaiting tells that the person went back to the end of the list
+	// (they chose to stay on it) rather than leaving it.
+	StillWaiting bool
 }
 
 // absoluteHTTPURL reports whether s is an absolute http or https URL with a

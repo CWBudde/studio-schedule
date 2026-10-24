@@ -1,0 +1,10 @@
+{{define "content" -}}
+<p>Hello{{with .GivenName}} {{.}}{{end}},</p>
+<p>A place has become free in a lesson at {{.SchoolName}} that {{.Participant}} is on the waiting list for:</p>
+<p><strong>{{.CourseType}}</strong><br>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}<br>{{.Room}}, {{.Location}}</p>
+<p>The place is reserved for {{.Participant}} until {{date .ExpiresAt}}, {{clock .ExpiresAt}}.</p>
+<p><a href="{{.Link}}" style="display:inline-block;padding:10px 20px;border-radius:6px;background-color:#18181b;color:#ffffff;text-decoration:none;">Take the place</a></p>
+<p>If the button does not work, open this link in your browser:<br><a href="{{.Link}}" style="color:#18181b;word-break:break-all;">{{.Link}}</a></p>
+<p>If the place is not taken by then, it goes to the next person on the waiting list.</p>
+<p>Kind regards,<br>{{.SchoolName}}</p>
+{{- end}}

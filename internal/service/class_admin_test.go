@@ -22,7 +22,7 @@ import (
 func (f *genFixture) timetable(t *testing.T, now string) *TimetableService {
 	t.Helper()
 
-	return NewTimetableService(f.st, clock.NewFixed(mustInstant(t, now)), f.seq)
+	return NewTimetableService(f.st, clock.NewFixed(mustInstant(t, now)), f.seq, testMails(newTestRenderer(t)))
 }
 
 // classData is a Tuesday class at 18:00 for 60 minutes.

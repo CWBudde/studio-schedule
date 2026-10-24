@@ -29,7 +29,7 @@ func (f *genFixture) lessonService(t *testing.T, now string) *LessonService {
 		t.Fatal(err)
 	}
 
-	return NewLessonService(f.st, clock.NewFixed(mustInstant(t, now)), f.seq, r)
+	return NewLessonService(f.st, clock.NewFixed(mustInstant(t, now)), f.seq, testMails(r))
 }
 
 // lessonData is a one-off slot on Friday 2026-10-30, 17:00 to 18:30, in

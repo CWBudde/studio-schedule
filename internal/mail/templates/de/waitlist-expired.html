@@ -1,0 +1,11 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>der für {{.Participant}} reservierte Platz in dieser Stunde bei {{.SchoolName}} wurde nicht rechtzeitig genommen:</p>
+<p><strong>{{.CourseType}}</strong><br>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr<br>{{.Room}}, {{.Location}}</p>
+{{- if .StillWaiting}}
+<p>{{.Participant}} bleibt auf der Warteliste, an ihrem Ende, und wird wieder eingeladen, sobald ein weiterer Platz frei wird.</p>
+{{- else}}
+<p>{{.Participant}} steht nicht mehr auf der Warteliste für diese Stunde.</p>
+{{- end}}
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

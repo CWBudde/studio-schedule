@@ -15,7 +15,8 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/ratelimit"
 )
 
-// RateLimits limit guessing passwords and sending mails (ADR 0006). A nil
+// RateLimits limit guessing passwords and tokens and sending mails (ADR
+// 0006, ADR 0010). A nil
 // limiter imposes no limit.
 type RateLimits struct {
 	// PasswordFailures counts wrong passwords per email address: at login
@@ -26,6 +27,9 @@ type RateLimits struct {
 	// Mails counts the requests that send mails, per client IP: register,
 	// password reset and email change.
 	Mails *ratelimit.Limiter
+	// InviteLinks counts the requests on waiting-list invite links, which
+	// need no sign-in, per client IP (ADR 0010).
+	InviteLinks *ratelimit.Limiter
 }
 
 // DefaultRateLimits returns the limits of ADR 0006.
@@ -34,6 +38,7 @@ func DefaultRateLimits(clk clock.Clock) RateLimits {
 		PasswordFailures: ratelimit.New(clk, 5, 15*time.Minute),
 		Logins:           ratelimit.New(clk, 20, 15*time.Minute),
 		Mails:            ratelimit.New(clk, 5, time.Hour),
+		InviteLinks:      ratelimit.New(clk, 20, 15*time.Minute),
 	}
 }
 

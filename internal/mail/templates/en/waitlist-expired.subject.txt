@@ -1,0 +1,1 @@
+{{.SchoolName}}: the place in {{.CourseType}} on {{date .StartsAt}} was not taken

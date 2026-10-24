@@ -118,17 +118,19 @@ func New(deps Deps) (http.Handler, huma.API) {
 	api := humachi.New(router, cfg)
 
 	renderer := newRenderer()
+	mails := service.Mails{Renderer: renderer, AppURL: deps.AppURL}
 
 	httpapi.Register(api, httpapi.Deps{
 		Settings:       service.NewSettingsService(deps.Store),
 		Catalog:        service.NewCatalogService(deps.Store, deps.IDs),
-		Timetable:      service.NewTimetableService(deps.Store, deps.Clock, deps.IDs),
+		Timetable:      service.NewTimetableService(deps.Store, deps.Clock, deps.IDs, mails),
 		Schedule:       service.NewScheduleService(deps.Store, deps.Clock),
-		Lessons:        service.NewLessonService(deps.Store, deps.Clock, deps.IDs, renderer),
-		Bookings:       service.NewBookingService(deps.Store, deps.Clock, deps.IDs, renderer),
+		Lessons:        service.NewLessonService(deps.Store, deps.Clock, deps.IDs, mails),
+		Bookings:       service.NewBookingService(deps.Store, deps.Clock, deps.IDs, mails),
+		Waitlist:       service.NewWaitlistService(deps.Store, deps.Clock, deps.IDs, mails),
 		Auth:           newAuthService(deps, renderer),
-		Family:         service.NewFamilyService(deps.Store, deps.Clock, deps.IDs),
-		Persons:        service.NewPersonService(deps.Store, deps.Clock, deps.IDs),
+		Family:         service.NewFamilyService(deps.Store, deps.Clock, deps.IDs, mails),
+		Persons:        service.NewPersonService(deps.Store, deps.Clock, deps.IDs, mails),
 		Outbox:         service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer),
 		Version:        deps.Version,
 		Logger:         deps.Logger,

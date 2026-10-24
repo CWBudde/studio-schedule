@@ -3,7 +3,6 @@ package service
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -48,33 +47,12 @@ func lessonRecipients(ctx context.Context, tx store.Tx, lesson domain.LessonID) 
 	var booked []domain.PersonID
 
 	for _, b := range bookings {
-		if !b.PersonID.IsZero() {
+		if !b.PersonID.IsZero() && !slices.Contains(booked, b.PersonID) {
 			booked = append(booked, b.PersonID)
 		}
 	}
 
-	persons, accounts, err := personsWithAccounts(ctx, tx, booked)
-	if err != nil {
-		return nil, err
-	}
-
-	// Booked persons without an account that decides and without an
-	// address of their own are mailed through their guardians.
-	var viaGuardians []domain.PersonID
-
-	for _, id := range booked {
-		p, ok := persons[id]
-		if !ok {
-			return nil, fmt.Errorf("person %v: %w", id, errBrokenReference)
-		}
-
-		acc, found := accounts[id]
-		if decides := found && (!acc.DisabledAt.IsZero() || !acc.ConfirmedAt.IsZero()); !decides && p.Email == "" {
-			viaGuardians = append(viaGuardians, id)
-		}
-	}
-
-	guardiansOf, guardians, guardianAccounts, err := guardiansWithAccounts(ctx, tx, viaGuardians)
+	chains, err := recipientsOf(ctx, tx, booked)
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +64,7 @@ func lessonRecipients(ctx context.Context, tx store.Tx, lesson domain.LessonID) 
 
 		switch {
 		case i < 0:
+			r.participants = nil // added below
 			out = append(out, r)
 			i = len(out) - 1
 		case r.account && !out[i].account:
@@ -104,32 +83,108 @@ func lessonRecipients(ctx context.Context, tx store.Tx, lesson domain.LessonID) 
 			continue
 		}
 
-		p := persons[b.PersonID]
-		name := fullName(p)
-		acc, found := accounts[p.ID]
-
-		switch {
-		case found && !acc.DisabledAt.IsZero():
-			continue
-		case found && !acc.ConfirmedAt.IsZero():
-			add(recipient{email: acc.Email, locale: acc.Locale, givenName: p.GivenName, account: true}, name)
-
-			continue
-		case p.Email != "":
-			add(recipient{email: p.Email, givenName: p.GivenName}, name)
-
-			continue
-		}
-
-		for _, g := range guardiansOf[p.ID] {
-			acc, found := guardianAccounts[g]
-			if found && acc.DisabledAt.IsZero() && !acc.ConfirmedAt.IsZero() {
-				add(recipient{email: acc.Email, locale: acc.Locale, givenName: guardians[g].GivenName, account: true}, name)
-			}
+		for _, r := range chains[b.PersonID] {
+			add(r, r.participants[0])
 		}
 	}
 
 	return out, nil
+}
+
+// mailsGuardians reports whether mail about booked person p goes to p's
+// guardians: p has neither an account that decides (a confirmed or a
+// disabled one) nor an address of its own.
+func mailsGuardians(p domain.Person, accounts map[domain.PersonID]domain.Account) bool {
+	acc, found := accounts[p.ID]
+	decides := found && (!acc.DisabledAt.IsZero() || !acc.ConfirmedAt.IsZero())
+
+	return !decides && p.Email == ""
+}
+
+// chainOf returns whom mail about booked person p goes to (see
+// lessonRecipients), without participants: nobody for a disabled account,
+// else the confirmed account, else p's own address, else the confirmed
+// accounts of p's guardians (guardianIDs, ordered like PersonRepo.List)
+// that are not disabled.
+func chainOf(
+	p domain.Person, accounts map[domain.PersonID]domain.Account, guardianIDs []domain.PersonID,
+	guardians map[domain.PersonID]domain.Person, guardianAccounts map[domain.PersonID]domain.Account,
+) []recipient {
+	acc, found := accounts[p.ID]
+
+	switch {
+	case found && !acc.DisabledAt.IsZero():
+		return nil
+	case found && !acc.ConfirmedAt.IsZero():
+		return []recipient{{email: acc.Email, locale: acc.Locale, givenName: p.GivenName, account: true}}
+	case p.Email != "":
+		return []recipient{{email: p.Email, givenName: p.GivenName}}
+	}
+
+	var out []recipient
+
+	for _, g := range guardianIDs {
+		acc, found := guardianAccounts[g]
+		if found && acc.DisabledAt.IsZero() && !acc.ConfirmedAt.IsZero() {
+			out = append(out, recipient{email: acc.Email, locale: acc.Locale, givenName: guardians[g].GivenName, account: true})
+		}
+	}
+
+	return out
+}
+
+// recipientsOf returns, by person, whom mail about each of the persons goes
+// to, by the chain of lessonRecipients, each recipient with the person as
+// its one participant: the waiting-list mails (ADR 0010). A person whom the
+// chain reaches nobody has none. It costs the same few queries for any
+// number of persons.
+func recipientsOf(
+	ctx context.Context, tx store.Tx, ids []domain.PersonID,
+) (map[domain.PersonID][]recipient, error) {
+	persons, accounts, err := personsWithAccounts(ctx, tx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	var viaGuardians []domain.PersonID
+
+	for _, id := range ids {
+		p, ok := persons[id]
+		if !ok {
+			return nil, fmt.Errorf("person %v: %w", id, errBrokenReference)
+		}
+
+		if mailsGuardians(p, accounts) {
+			viaGuardians = append(viaGuardians, id)
+		}
+	}
+
+	guardiansOf, guardians, guardianAccounts, err := guardiansWithAccounts(ctx, tx, viaGuardians)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make(map[domain.PersonID][]recipient, len(ids))
+
+	for _, id := range ids {
+		p := persons[id]
+
+		rs := chainOf(p, accounts, guardiansOf[id], guardians, guardianAccounts)
+		for i := range rs {
+			rs[i].participants = []string{fullName(p)}
+		}
+
+		out[id] = rs
+	}
+
+	return out, nil
+}
+
+// personRecipients returns whom mail about person goes to (recipientsOf).
+func personRecipients(ctx context.Context, tx store.Tx, person domain.PersonID) ([]recipient, error) {
+	out, err := recipientsOf(ctx, tx, []domain.PersonID{person})
+
+	return out[person], err
 }
 
 // personsWithAccounts returns the persons with the given IDs and, by
@@ -273,33 +328,13 @@ func (s *LessonService) mailRecipients(
 		return err
 	}
 
-	for _, r := range recipients {
-		d := data(mail.LessonData{
+	return sendMails(ctx, tx, s.ids, s.mails, settings, now, recipients, template, func(r recipient) any {
+		return data(mail.LessonData{
 			SchoolName: settings.SchoolName, GivenName: r.givenName, Participants: r.participants,
 			CourseType: ct.Name, StartsAt: l.StartsAt.In(loc), EndsAt: l.EndsAt.In(loc),
 			Room: room.Name, Location: location.Name, Note: l.CancelNote,
 		})
-
-		rendered, err := s.mails.Render(cmp.Or(r.locale, settings.DefaultLocale), template, d)
-		if err != nil {
-			// Broken data or templates, not the office's input: %v keeps
-			// domain.ErrValidation out, so the client gets a 500.
-			return fmt.Errorf("render %s mail: %v", template, err) //nolint:errorlint // see above
-		}
-
-		err = enqueueMail(ctx, tx, s.ids, now, r.email, template, rendered)
-
-		switch {
-		case errors.Is(err, domain.ErrValidation):
-			// A stored address that is no address is broken data too, not
-			// the office's input: a 500 like above.
-			return fmt.Errorf("queue %s mail: %v", template, err) //nolint:errorlint // see above
-		case err != nil:
-			return err
-		}
-	}
-
-	return nil
+	})
 }
 
 // place returns a room and its location.

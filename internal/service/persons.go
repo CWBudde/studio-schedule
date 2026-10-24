@@ -41,11 +41,13 @@ type PersonService struct {
 	store store.Store
 	clock clock.Clock
 	ids   ids.Source
+	w     waitlister
 }
 
-// NewPersonService returns a PersonService.
-func NewPersonService(st store.Store, clk clock.Clock, src ids.Source) *PersonService {
-	return &PersonService{store: st, clock: clk, ids: src}
+// NewPersonService returns a PersonService. Deleting a person sends the
+// waiting-list invites of the places it frees with mails.
+func NewPersonService(st store.Store, clk clock.Clock, src ids.Source, mails Mails) *PersonService {
+	return &PersonService{store: st, clock: clk, ids: src, w: waitlister{ids: src, mails: mails}}
 }
 
 // PersonRecord are the fields of a person the office edits: all of them,
@@ -279,11 +281,16 @@ func (s *PersonService) apply(
 // DeletePerson deletes the person id, e.g. one created by mistake. While
 // anything refers to it (an account, a staff link, bookings, class
 // memberships, or a guardian link in either direction) that is
-// domain.ErrInUse and nothing changes. An unknown person is
-// domain.ErrNotFound.
+// domain.ErrInUse and nothing changes. The person leaves the waiting lists
+// first, like a removed dependent (FamilyService.RemoveDependent). An
+// unknown person is domain.ErrNotFound.
 func (s *PersonService) DeletePerson(ctx context.Context, id domain.PersonID) error {
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		if err := tx.Persons().Lock(ctx, id); err != nil {
+			return err
+		}
+
+		if err := s.w.withdrawPerson(ctx, tx, s.clock.Now(), id); err != nil {
 			return err
 		}
 

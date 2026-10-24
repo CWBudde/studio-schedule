@@ -54,12 +54,23 @@ type LessonService struct {
 	clock clock.Clock
 	ids   ids.Source
 	mails MailRenderer
+	w     waitlister
 }
 
-// NewLessonService returns a LessonService that renders its mails with
-// mails.
-func NewLessonService(st store.Store, clk clock.Clock, src ids.Source, mails MailRenderer) *LessonService {
-	return &LessonService{store: st, clock: clk, ids: src, mails: mails}
+// NewLessonService returns a LessonService that sends its mails, and the
+// waiting-list invites of the places it frees, with mails.
+func NewLessonService(st store.Store, clk clock.Clock, src ids.Source, mails Mails) *LessonService {
+	return &LessonService{store: st, clock: clk, ids: src, mails: mails.Renderer, w: waitlister{ids: src, mails: mails}}
+}
+
+// overCapacity explains a capacity below n active bookings and held places
+// that waiting-list invites hold.
+func overCapacity(n, held int) string {
+	if held == 0 {
+		return fmt.Sprintf("has %d bookings, more than the capacity", n)
+	}
+
+	return fmt.Sprintf("has %d bookings and %d places reserved for the waiting list, more than the capacity", n, held)
 }
 
 // LessonData are the fields the office edits on a lesson. Date and
@@ -147,8 +158,8 @@ func (s *LessonService) CreateLesson(ctx context.Context, d NewLesson) (Schedule
 			return err
 		}
 
-		// A new lesson has no bookings.
-		out, err = adminLesson(ctx, tx, settings, l, 0)
+		// A new lesson has no bookings and no waiting list.
+		out, err = adminLesson(ctx, tx, settings, l, 0, 0)
 
 		return err
 	})
@@ -161,8 +172,10 @@ func (s *LessonService) CreateLesson(ctx context.Context, d NewLesson) (Schedule
 
 // UpdateLesson replaces the editable fields of a lesson that has not
 // started (ErrLessonStarted otherwise) and detaches a lesson of a class.
-// Its course type, class and slot stay. A capacity below the active
-// bookings is a validation error on capacity. A new start in the past needs
+// Its course type, class and slot stay. Lowering the capacity below the
+// active bookings and the places held by waiting-list invites is a
+// validation error on capacity; free places (a higher capacity, a lesson
+// that takes invites again) go to the waiting list (ADR 0010). A new start in the past needs
 // d.ConfirmPast (ErrLessonPast otherwise). A new time or room of a scheduled
 // lesson is checked for another lesson in the room (see CreateLesson), and
 // with active bookings mails them the change unless the new start is in the
@@ -195,15 +208,18 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 			return err
 		}
 
-		active, err := tx.Bookings().CountActive(ctx, l.ID)
+		now := s.clock.Now()
+
+		active, held, err := places(ctx, tx, now, l.ID)
 		if err != nil {
 			return err
 		}
 
-		if active > l.Capacity {
-			return &domain.FieldError{
-				Field: "capacity", Msg: fmt.Sprintf("the lesson has %d bookings, more than the capacity", active),
-			}
+		// Only a lower capacity can conflict with the bookings and held
+		// places: a lesson booked beyond its capacity already (a member's
+		// override, ADR 0009) stays editable otherwise.
+		if l.Capacity < old.Capacity && active+held > l.Capacity {
+			return &domain.FieldError{Field: "capacity", Msg: "the lesson " + overCapacity(active, held)}
 		}
 
 		if err := s.confirmPast(l, d); err != nil {
@@ -228,7 +244,18 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 			}
 		}
 
-		out, err = adminLesson(ctx, tx, settings, l, active)
+		// A higher capacity, a lesson visible again or moved so that booking
+		// is open again: free places go to the waiting list. One query when
+		// nobody waits.
+		if err := s.w.offer(ctx, tx, now, l, nil); err != nil {
+			return err
+		}
+
+		if active, held, err = places(ctx, tx, now, l.ID); err != nil {
+			return err
+		}
+
+		out, err = adminLesson(ctx, tx, settings, l, active, held)
 
 		return err
 	})
@@ -241,7 +268,9 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 
 // CancelLesson cancels a lesson that has not started (ErrLessonStarted
 // otherwise) with an optional note, records when and by whom, and mails
-// everyone with an active booking. The bookings stay as they are. An admin
+// everyone with an active booking. The bookings stay as they are; the
+// invites of its waiting list are void and go back to waiting, without a
+// mail (ADR 0010). An admin
 // signed in as another account is recorded as the canceling account. A
 // lesson canceled already stays as it is, started or not: its note stays
 // too, and nobody is mailed again.
@@ -250,17 +279,17 @@ func (s *LessonService) CancelLesson(
 ) (ScheduledLesson, error) {
 	by := cmp.Or(p.ImpersonatorID, p.AccountID)
 
-	return s.setStatus(ctx, id, domain.LessonCanceled, func(_ context.Context, _ store.Tx, l *domain.Lesson, now time.Time) error {
+	return s.setStatus(ctx, id, domain.LessonCanceled, func(ctx context.Context, tx store.Tx, l *domain.Lesson, now time.Time) error {
 		l.CancelNote, l.CanceledAt, l.CanceledBy = strings.TrimSpace(note), now, by
 
-		return nil
+		return s.w.void(ctx, tx, l.ID)
 	}, mail.TemplateLessonCanceled)
 }
 
 // RestoreLesson lets a canceled lesson that has not started take place
 // after all (ErrLessonStarted otherwise): it clears the cancellation, keeps
 // the lesson detached and mails everyone with an active booking its current
-// time and room. Another lesson in the room at that time is a
+// time and room. Its free places go to the waiting list. Another lesson in the room at that time is a
 // *RoomTakenError unless confirmRoomOverlap is set. A scheduled lesson stays
 // as it is, started or not.
 func (s *LessonService) RestoreLesson(
@@ -319,14 +348,20 @@ func (s *LessonService) setStatus(
 			if err := s.mailLesson(ctx, tx, settings, loc, l, template); err != nil {
 				return err
 			}
+
+			if status == domain.LessonScheduled {
+				if err := s.w.offer(ctx, tx, now, l, nil); err != nil {
+					return err
+				}
+			}
 		}
 
-		active, err := tx.Bookings().CountActive(ctx, l.ID)
+		active, held, err := places(ctx, tx, s.clock.Now(), l.ID)
 		if err != nil {
 			return err
 		}
 
-		out, err = adminLesson(ctx, tx, settings, l, active)
+		out, err = adminLesson(ctx, tx, settings, l, active, held)
 
 		return err
 	})
@@ -451,9 +486,10 @@ func roomTaker(ctx context.Context, tx store.Tx, l domain.Lesson) (domain.Lesson
 }
 
 // adminLesson returns l with its references, cutoffs and what the office
-// sees of it, given its number of active bookings.
+// sees of it, given its number of active bookings and the places that
+// waiting-list invites hold.
 func adminLesson(
-	ctx context.Context, tx store.Tx, settings domain.Settings, l domain.Lesson, active int,
+	ctx context.Context, tx store.Tx, settings domain.Settings, l domain.Lesson, active, held int,
 ) (ScheduledLesson, error) {
 	refs, err := loadRefsOf(ctx, tx, l)
 	if err != nil {
@@ -471,7 +507,7 @@ func adminLesson(
 	}
 
 	sl.Admin = &a
-	sl.setAvailability(settings, active)
+	sl.setAvailability(settings, active, held)
 
 	return sl, nil
 }

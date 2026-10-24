@@ -1,0 +1,10 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>in einer Stunde bei {{.SchoolName}}, für die {{.Participant}} auf der Warteliste steht, ist ein Platz frei geworden:</p>
+<p><strong>{{.CourseType}}</strong><br>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr<br>{{.Room}}, {{.Location}}</p>
+<p>Der Platz ist für {{.Participant}} reserviert bis {{date .ExpiresAt}}, {{clock .ExpiresAt}} Uhr.</p>
+<p><a href="{{.Link}}" style="display:inline-block;padding:10px 20px;border-radius:6px;background-color:#18181b;color:#ffffff;text-decoration:none;">Platz nehmen</a></p>
+<p>Falls die Schaltfläche nicht funktioniert, öffne diesen Link in deinem Browser:<br><a href="{{.Link}}" style="color:#18181b;word-break:break-all;">{{.Link}}</a></p>
+<p>Wird der Platz bis dahin nicht genommen, geht er an die nächste Person auf der Warteliste.</p>
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

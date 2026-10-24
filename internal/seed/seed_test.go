@@ -63,6 +63,7 @@ func TestDemoDeterministic(t *testing.T) {
 	sameSlice(t, "class members", a.ClassMembers, b.ClassMembers)
 	sameSlice(t, "lessons", a.Lessons, b.Lessons)
 	sameSlice(t, "bookings", a.Bookings, b.Bookings)
+	sameSlice(t, "waitlist entries", a.WaitlistEntries, b.WaitlistEntries)
 	sameSlice(t, "booking events", a.BookingEvents, b.BookingEvents)
 
 	anchor := domain.Date{Year: 2031, Month: time.March, Day: 9}
@@ -168,8 +169,8 @@ func TestDemoWorkshops(t *testing.T) {
 		d := seed.DemoAt(anchor)
 		d.Lessons = slices.DeleteFunc(d.Lessons, func(l domain.Lesson) bool { return !l.ClassID.IsZero() })
 
-		if n := len(d.Lessons); n < 4 || n > 5 {
-			t.Fatalf("%v: %d one-off lessons, want 4..5 workshops", anchor, n)
+		if n := len(d.Lessons); n < 5 || n > 6 {
+			t.Fatalf("%v: %d one-off lessons, want 5..6 workshops", anchor, n)
 		}
 
 		validAll(t, d.Lessons)
@@ -348,6 +349,12 @@ func TestDemoMemberBookings(t *testing.T) {
 	t.Parallel()
 
 	d := seed.Demo()
+	// The members' own bookings of the full workshop: TestDemoFullWorkshop.
+	full := fullWorkshop(t, d)
+	d.Bookings = slices.DeleteFunc(d.Bookings, func(b domain.Booking) bool { return b.LessonID == full.ID })
+	d.BookingEvents = slices.DeleteFunc(d.BookingEvents, func(e domain.BookingEvent) bool {
+		return !slices.ContainsFunc(d.Bookings, func(b domain.Booking) bool { return b.ID == e.BookingID })
+	})
 
 	booked := map[domain.LessonID][]domain.PersonID{}
 
@@ -388,6 +395,95 @@ func TestDemoMemberBookings(t *testing.T) {
 		}
 
 		sameSet(t, "members booked into lesson "+l.ID.String(), booked[l.ID], want)
+	}
+}
+
+// fullWorkshop returns the demo's only lesson with a waiting list.
+func fullWorkshop(t *testing.T, d seed.Dataset) domain.Lesson {
+	t.Helper()
+
+	if len(d.WaitlistEntries) == 0 {
+		t.Fatal("the demo has no waiting list")
+	}
+
+	i := slices.IndexFunc(d.Lessons, func(l domain.Lesson) bool { return l.ID == d.WaitlistEntries[0].LessonID })
+	if i < 0 {
+		t.Fatal("the waiting list's lesson is missing")
+	}
+
+	return d.Lessons[i]
+}
+
+// TestDemoFullWorkshop checks the full workshop of every demo (ADR 0010):
+// a public workshop after the anchor whose places members booked
+// themselves, and two persons with logins on its waiting list, one who
+// stays on it after an invite, nobody of the demo logins' families.
+func TestDemoFullWorkshop(t *testing.T) {
+	t.Parallel()
+
+	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
+		d := seed.DemoAt(anchor)
+		l := fullWorkshop(t, d)
+		validAll(t, d.WaitlistEntries)
+
+		if !l.ClassID.IsZero() || l.Kind != domain.LessonWorkshop || l.Visibility != domain.VisibilityPublic ||
+			!l.StartsAt.After(anchor.AddDays(1).At(domain.TimeOfDay{}, time.UTC)) {
+			t.Errorf("%v: full workshop %+v, want a public workshop after the anchor", anchor, l)
+		}
+
+		accounts := index(d.Accounts, func(a domain.Account) domain.PersonID { return a.PersonID })
+		booked := map[domain.PersonID]bool{}
+
+		for _, b := range d.Bookings {
+			if b.LessonID != l.ID {
+				continue
+			}
+
+			booked[b.PersonID] = true
+
+			if b.Source != domain.BookingSourceSelf || b.Status != domain.BookingBooked || !b.BookedAt.Before(l.StartsAt) {
+				t.Errorf("%v: booking %+v, want a member's own booking", anchor, b)
+			}
+
+			i := slices.IndexFunc(d.BookingEvents, func(e domain.BookingEvent) bool { return e.BookingID == b.ID })
+			if i < 0 || d.BookingEvents[i].ActorAccountID != accounts[b.PersonID].ID {
+				t.Errorf("%v: booking %v has no event by its member's account", anchor, b.ID)
+			}
+		}
+
+		if len(booked) != l.Capacity {
+			t.Errorf("%v: %d persons booked, want the capacity %d", anchor, len(booked), l.Capacity)
+		}
+
+		logins := map[string]bool{}
+		for _, login := range seed.DemoLogins() {
+			logins[login.Email] = true
+		}
+
+		var stays int
+
+		for i, e := range d.WaitlistEntries {
+			acc, ok := accounts[e.PersonID]
+
+			switch {
+			case e.LessonID != l.ID || e.Status != domain.WaitlistWaiting || booked[e.PersonID]:
+				t.Errorf("%v: entry %+v, want a waiting entry of someone not booked", anchor, e)
+			case !ok || e.JoinedBy != acc.ID || logins[acc.Email]:
+				t.Errorf("%v: entry %+v, want one joined by its own account, not a demo login", anchor, e)
+			case !e.JoinedAt.Before(anchor.At(domain.TimeOfDay{}, time.UTC)):
+				t.Errorf("%v: entry %+v joined after the anchor", anchor, e)
+			case i > 0 && !d.WaitlistEntries[i-1].JoinedAt.Before(e.JoinedAt):
+				t.Errorf("%v: entries out of order", anchor)
+			}
+
+			if e.StayOnList {
+				stays++
+			}
+		}
+
+		if len(d.WaitlistEntries) != 2 || stays != 1 {
+			t.Errorf("%v: entries %+v, want two, one staying on the list", anchor, d.WaitlistEntries)
+		}
 	}
 }
 
@@ -878,6 +974,19 @@ func TestLoadDemoRoundTrip(t *testing.T) {
 
 		sameSet(t, "bookings", bookings, want.Bookings)
 		sameSet(t, "booking events", events, want.BookingEvents)
+
+		var entries []domain.WaitlistEntry
+
+		for _, l := range lessons {
+			es, err := tx.Waitlist().ListByLesson(ctx, l.ID)
+			if err != nil {
+				return err
+			}
+
+			entries = append(entries, es...)
+		}
+
+		sameSet(t, "waitlist entries", entries, want.WaitlistEntries)
 
 		return nil
 	})

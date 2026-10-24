@@ -1,0 +1,19 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+A place has become free in a lesson at {{.SchoolName}} that {{.Participant}}
+is on the waiting list for:
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}
+{{.Room}}, {{.Location}}
+
+The place is reserved for {{.Participant}} until {{date .ExpiresAt}}, {{clock .ExpiresAt}}.
+To take it, open this link and confirm:
+
+{{.Link}}
+
+If the place is not taken by then, it goes to the next person on the
+waiting list.
+
+Kind regards,
+{{.SchoolName}}

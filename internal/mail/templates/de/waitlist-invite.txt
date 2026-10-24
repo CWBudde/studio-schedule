@@ -1,0 +1,19 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+in einer Stunde bei {{.SchoolName}}, für die {{.Participant}} auf der
+Warteliste steht, ist ein Platz frei geworden:
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr
+{{.Room}}, {{.Location}}
+
+Der Platz ist für {{.Participant}} reserviert bis {{date .ExpiresAt}}, {{clock .ExpiresAt}} Uhr.
+Um ihn zu nehmen, öffne diesen Link und bestätige:
+
+{{.Link}}
+
+Wird der Platz bis dahin nicht genommen, geht er an die nächste Person auf
+der Warteliste.
+
+Viele Grüße
+{{.SchoolName}}

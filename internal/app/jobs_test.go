@@ -10,6 +10,7 @@ import (
 
 	"github.com/cwbudde/studio-schedule/internal/app"
 	"github.com/cwbudde/studio-schedule/internal/clock"
+	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/store"
@@ -70,5 +71,52 @@ func TestJobsWithoutSettings(t *testing.T) {
 
 	if err := runner.RunOnce(t.Context()); err != nil {
 		t.Fatalf("RunOnce without settings: %v", err)
+	}
+}
+
+// TestJobsWaitlistExpiry ends the open waiting-list entries of lessons that
+// have started: the demo's full workshop (2026-10-02 for the fixed anchor)
+// is over at the test's time.
+func TestJobsWaitlistExpiry(t *testing.T) {
+	t.Parallel()
+
+	st := memory.New()
+	if err := seed.LoadDemo(t.Context(), st); err != nil {
+		t.Fatal(err)
+	}
+
+	var logs bytes.Buffer
+
+	runner := app.Jobs(app.Deps{
+		Store: st, Clock: clock.NewFixed(time.Date(2026, time.October, 23, 8, 0, 0, 0, time.UTC)), IDs: ids.V7{},
+		Logger: slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
+	})
+
+	for range 2 { // the second run finds nothing to do
+		if err := runner.RunOnce(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	err := st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		for _, want := range seed.Demo().WaitlistEntries {
+			e, err := tx.Waitlist().Get(ctx, want.ID)
+			if err != nil {
+				return err
+			}
+
+			if e.Status != domain.WaitlistExpired {
+				t.Errorf("entry %+v, want it expired", e)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Count(logs.String(), "waiting lists settled") != 1 {
+		t.Errorf("want one log of the settled lists:\n%s", logs.String())
 	}
 }

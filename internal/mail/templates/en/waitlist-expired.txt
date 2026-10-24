@@ -1,0 +1,18 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+The place reserved for {{.Participant}} in this lesson at {{.SchoolName}}
+was not taken in time:
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}
+{{.Room}}, {{.Location}}
+
+{{if .StillWaiting -}}
+{{.Participant}} stays on the waiting list, at its end, and is invited again
+when another place becomes free.
+{{- else -}}
+{{.Participant}} is no longer on the waiting list for this lesson.
+{{- end}}
+
+Kind regards,
+{{.SchoolName}}

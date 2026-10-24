@@ -34,7 +34,8 @@ func Demo() Dataset { return DemoAt(FixedDemoAnchor) }
 // DemoAt returns the fictional demo school as seen on the visit date
 // anchor: two locations, their rooms, staff, course types, one term around
 // anchor with its weekly classes, members with their families and accounts,
-// and a few one-off workshops in the weeks after anchor. Of the weekly
+// and a few one-off workshops in the weeks after anchor, one of them full
+// with a waiting list (ADR 0010). Of the weekly
 // classes it has the lessons of the week up to and including anchor
 // (history), with the automatic bookings of the class members, as the
 // lesson generator would have created them; the generator creates the
@@ -109,6 +110,7 @@ func demoAt(anchor domain.Date) (Dataset, error) {
 
 	b.history(anchor)
 	b.memberBookings()
+	b.fullWorkshop(anchor, demoFullWorkshop)
 
 	return b.d, nil
 }
@@ -434,6 +436,30 @@ var demoWorkshops = []workshopSpec{
 	{6, at(13, 30), 120, "Hall 1", "Hip-Hop", "Nina Tapworth", "", 15, domain.VisibilityHidden},
 }
 
+// fullWorkshopSpec is a small public workshop that members have booked up,
+// with persons on its waiting list in this order.
+type fullWorkshopSpec struct {
+	workshop workshopSpec
+	booked   []string
+	waiting  []waitingSpec
+}
+
+type waitingSpec struct {
+	person     string
+	stayOnList bool
+}
+
+// demoFullWorkshop lies in the second week after the anchor, after the
+// first workshops, when no other workshop takes place. Its members booked
+// it two days before the anchor and joined its waiting list the evening
+// before, so the demo shows a full lesson, its list and the places on it;
+// nobody of a demo login's family is on it.
+var demoFullWorkshop = fullWorkshopSpec{
+	workshop: workshopSpec{10, at(13, 30), 90, "Studio C", "Tap", "Nina Tapworth", "", 4, ""},
+	booked:   []string{"Irene Inkwell", "Kai Lanternby", "Oskar Nettlebury", "Rhea Pinecrest"},
+	waiting:  []waitingSpec{{"Vera Rushwick", true}, {"Wanda Sparrowhill", false}},
+}
+
 // ----------------------------------------------------------------- builder
 
 // builder assigns IDs in table order and resolves the names used in the
@@ -639,6 +665,54 @@ func (b *builder) workshop(anchor domain.Date, spec workshopSpec) {
 	}
 
 	b.d.Lessons = append(b.d.Lessons, l)
+}
+
+// fullWorkshop adds spec's workshop, the members' own bookings of all its
+// places (each with its event, by the member's account) and its waiting
+// list.
+func (b *builder) fullWorkshop(anchor domain.Date, spec fullWorkshopSpec) {
+	if len(spec.booked) != spec.workshop.capacity {
+		panic("seed: the full workshop must be booked up")
+	}
+
+	b.workshop(anchor, spec.workshop)
+	l := b.d.Lessons[len(b.d.Lessons)-1]
+
+	bookedAt := anchor.AddDays(-2).At(at(19, 0), b.loc)
+	for i, name := range spec.booked {
+		person := lookup(b.persons, name)
+		at := bookedAt.Add(time.Duration(i) * time.Minute)
+		booking := domain.Booking{
+			ID: ids.New[domain.BookingID](b.seq), LessonID: l.ID, PersonID: person,
+			Status: domain.BookingBooked, Source: domain.BookingSourceSelf, BookedAt: at,
+		}
+		b.d.Bookings = append(b.d.Bookings, booking)
+		b.d.BookingEvents = append(b.d.BookingEvents, domain.BookingEvent{
+			ID: ids.New[domain.BookingEventID](b.seq), BookingID: booking.ID, At: at,
+			Status: domain.BookingBooked, ActorAccountID: b.accountOf(person),
+		})
+	}
+
+	joinedAt := anchor.AddDays(-1).At(at(18, 0), b.loc)
+	for i, w := range spec.waiting {
+		person := lookup(b.persons, w.person)
+		b.d.WaitlistEntries = append(b.d.WaitlistEntries, domain.WaitlistEntry{
+			ID: ids.New[domain.WaitlistEntryID](b.seq), LessonID: l.ID, PersonID: person,
+			Status: domain.WaitlistWaiting, JoinedAt: joinedAt.Add(time.Duration(i) * 30 * time.Minute),
+			StayOnList: w.stayOnList, JoinedBy: b.accountOf(person),
+		})
+	}
+}
+
+// accountOf returns the account of a person with a login.
+func (b *builder) accountOf(person domain.PersonID) domain.AccountID {
+	for _, a := range b.d.Accounts {
+		if a.PersonID == person {
+			return a.ID
+		}
+	}
+
+	panic("seed: no account for person " + person.String())
 }
 
 func lookup[I domain.AnyID](m map[string]I, name string) I {

@@ -208,7 +208,7 @@ func TestStaffAdmin(t *testing.T) {
 	svc := service.NewCatalogService(st, ids.V7{})
 	ctx := t.Context()
 
-	persons := service.NewPersonService(st, clock.NewFixed(time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)), ids.V7{})
+	persons := service.NewPersonService(st, clock.NewFixed(time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)), ids.V7{}, service.Mails{})
 
 	found, err := persons.SearchPersons(ctx, "clara amberly")
 	if err != nil || len(found) != 1 {

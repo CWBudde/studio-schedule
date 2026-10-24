@@ -76,7 +76,8 @@ type ScheduledLesson struct {
 	// Admin is what the office sees beyond the schedule; nil for
 	// everyone else.
 	Admin *LessonAdmin
-	// FreePlaces is the capacity minus the active bookings, at least 0.
+	// FreePlaces is the capacity minus the active bookings and the places
+	// that waiting-list invites hold, at least 0 (ADR 0010).
 	FreePlaces int
 	// BookingClosesAt is when booking closes: the booking cutoff before
 	// the start (ADR 0009).
@@ -88,6 +89,21 @@ type ScheduledLesson struct {
 	// BookedFor are the viewer and their dependents with an active booking
 	// for the lesson, the viewer first; only in Schedule and Lesson.
 	BookedFor []BookedPerson
+	// Waiting are the viewer and their dependents on the lesson's waiting
+	// list (open entries), the viewer first; only in Schedule and Lesson.
+	Waiting []WaitingPerson
+}
+
+// WaitingPerson is someone of the viewer's family on a lesson's waiting
+// list.
+type WaitingPerson struct {
+	Person domain.Person
+	// Name is the person's given and family name, for display.
+	Name string
+	WaitlistPlace
+	// Status is the entry's status as the viewer sees it: an invite that
+	// has run out is expired, even before the waitlist-expiry job ends it.
+	Status domain.WaitlistStatus
 }
 
 // BookedPerson is someone of the viewer's family with an active booking.
@@ -181,7 +197,7 @@ func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQ
 			}
 		}
 
-		return addAvailability(ctx, tx, p, settings, out.Lessons)
+		return addAvailability(ctx, tx, p, settings, out.Now, out.Lessons)
 	})
 	if err != nil {
 		return Schedule{}, fmt.Errorf("schedule: %w", err)
@@ -220,12 +236,17 @@ func (s *ScheduleService) Lesson(ctx context.Context, p Principal, id domain.Les
 			return fmt.Errorf("active bookings: %w", err)
 		}
 
-		if out, err = s.resolveLesson(ctx, tx, p, settings, l, active[l.ID]); err != nil {
+		open, err := tx.Waitlist().ListOpenByLessons(ctx, []domain.LessonID{l.ID})
+		if err != nil {
+			return fmt.Errorf("waiting lists: %w", err)
+		}
+
+		if out, err = s.resolveLesson(ctx, tx, p, settings, l, active[l.ID], heldPlaces(open, now)[l.ID]); err != nil {
 			return err
 		}
 
 		lessons := []ScheduledLesson{out}
-		if err := addBookedFor(ctx, tx, p, lessons); err != nil {
+		if err := addFamily(ctx, tx, p, now, lessons, open); err != nil {
 			return err
 		}
 
@@ -241,13 +262,14 @@ func (s *ScheduleService) Lesson(ctx context.Context, p Principal, id domain.Les
 }
 
 // resolveLesson combines l, which has active bookings that are not
-// canceled, with the records it references, its free places and cutoffs
-// and, for office and admin accounts, the office's details.
+// canceled and held places of waiting-list invites, with the records it
+// references, its free places and cutoffs and, for office and admin
+// accounts, the office's details.
 func (s *ScheduleService) resolveLesson(
-	ctx context.Context, tx store.Tx, p Principal, settings domain.Settings, l domain.Lesson, active int,
+	ctx context.Context, tx store.Tx, p Principal, settings domain.Settings, l domain.Lesson, active, held int,
 ) (ScheduledLesson, error) {
 	if p.Role.AtLeast(domain.RoleOffice) {
-		return adminLesson(ctx, tx, settings, l, active)
+		return adminLesson(ctx, tx, settings, l, active, held)
 	}
 
 	refs, err := loadRefsOf(ctx, tx, l)
@@ -260,36 +282,51 @@ func (s *ScheduleService) resolveLesson(
 		return ScheduledLesson{}, err
 	}
 
-	sl.setAvailability(settings, active)
+	sl.setAvailability(settings, active, held)
 
 	return sl, nil
 }
 
-// addAvailability sets the free places and cutoffs of the lessons and, for
-// a signed-in p, whom of p's family each has booked (ADR 0009). It counts
-// the active bookings of all lessons with one query.
+// addAvailability sets the free places and cutoffs of the lessons at now
+// and, for a signed-in p, whom of p's family each has booked and has on its
+// waiting list (ADR 0009, ADR 0010). It counts the active bookings of all
+// lessons with one query and reads their open waiting-list entries with
+// another.
 func addAvailability(
-	ctx context.Context, tx store.Tx, p Principal, settings domain.Settings, lessons []ScheduledLesson,
+	ctx context.Context, tx store.Tx, p Principal, settings domain.Settings, now time.Time, lessons []ScheduledLesson,
 ) error {
 	if len(lessons) == 0 {
 		return nil
 	}
 
-	active, err := tx.Bookings().CountActiveByLessons(ctx, lessonIDsOf(lessons))
+	ids := lessonIDsOf(lessons)
+
+	active, err := tx.Bookings().CountActiveByLessons(ctx, ids)
 	if err != nil {
 		return fmt.Errorf("active bookings: %w", err)
 	}
 
-	for i := range lessons {
-		lessons[i].setAvailability(settings, active[lessons[i].Lesson.ID])
+	open, err := tx.Waitlist().ListOpenByLessons(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("waiting lists: %w", err)
 	}
 
-	return addBookedFor(ctx, tx, p, lessons)
+	held := heldPlaces(open, now)
+	for i := range lessons {
+		id := lessons[i].Lesson.ID
+		lessons[i].setAvailability(settings, active[id], held[id])
+	}
+
+	return addFamily(ctx, tx, p, now, lessons, open)
 }
 
-// addBookedFor sets, for a signed-in p, whom of p's family each lesson has
-// booked: three queries for all lessons together.
-func addBookedFor(ctx context.Context, tx store.Tx, p Principal, lessons []ScheduledLesson) error {
+// addFamily sets, for a signed-in p, whom of p's family each lesson has
+// booked (three queries for all lessons together) and has on its waiting
+// list, from open, the open entries of the lessons, with their places.
+func addFamily(
+	ctx context.Context, tx store.Tx, p Principal, now time.Time, lessons []ScheduledLesson,
+	open []domain.WaitlistEntry,
+) error {
 	if p.PersonID.IsZero() || len(lessons) == 0 {
 		return nil
 	}
@@ -329,18 +366,50 @@ func addBookedFor(ctx context.Context, tx store.Tx, p Principal, lessons []Sched
 		})
 	}
 
+	byLessonOpen := map[domain.LessonID][]domain.WaitlistEntry{}
+	for _, e := range open {
+		byLessonOpen[e.LessonID] = append(byLessonOpen[e.LessonID], e)
+	}
+
+	waiting := map[domain.LessonID][]WaitingPerson{}
+
+	for _, e := range open {
+		r, ok := rank[e.PersonID]
+		if !ok {
+			continue
+		}
+
+		person := family[r]
+		status := e.Status
+
+		if status == domain.WaitlistInvited && !holdsPlace(e, now) {
+			status = domain.WaitlistExpired
+		}
+
+		waiting[e.LessonID] = append(waiting[e.LessonID], WaitingPerson{
+			Person: person, Name: fullName(person),
+			WaitlistPlace: WaitlistPlace{Entry: e, Position: position(byLessonOpen[e.LessonID], e.ID)}, Status: status,
+		})
+	}
+
 	for i := range lessons {
-		lessons[i].BookedFor = byLesson[lessons[i].Lesson.ID]
+		id := lessons[i].Lesson.ID
+		lessons[i].BookedFor = byLesson[id]
+		lessons[i].Waiting = waiting[id]
+		slices.SortStableFunc(lessons[i].Waiting, func(a, b WaitingPerson) int {
+			return cmp.Compare(rank[a.Person.ID], rank[b.Person.ID])
+		})
 	}
 
 	return nil
 }
 
 // setAvailability sets the free places of sl, which has active bookings
-// that are not canceled, when booking it closes and when canceling it
-// becomes late (ADR 0009). It is the only place that sets them.
-func (sl *ScheduledLesson) setAvailability(settings domain.Settings, active int) {
-	sl.FreePlaces = max(0, sl.Lesson.Capacity-active)
+// that are not canceled and places held by waiting-list invites, when
+// booking it closes and when canceling it becomes late (ADR 0009, ADR
+// 0010). It is the only place that sets them.
+func (sl *ScheduledLesson) setAvailability(settings domain.Settings, active, held int) {
+	sl.FreePlaces = max(0, sl.Lesson.Capacity-active-held)
 	sl.BookingClosesAt = bookingClosesAt(settings, sl.Lesson)
 	sl.LateCancelFrom = lateCancelFrom(settings, sl.Lesson)
 }

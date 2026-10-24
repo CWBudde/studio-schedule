@@ -16,7 +16,10 @@ import (
 func Jobs(deps Deps) *jobs.Runner {
 	deps = deps.withDefaults()
 	lessons := service.NewLessonGenerator(deps.Store, deps.Clock, deps.IDs)
-	auth := newAuthService(deps, newRenderer())
+	renderer := newRenderer()
+	auth := newAuthService(deps, renderer)
+	waitlist := service.NewWaitlistService(deps.Store, deps.Clock, deps.IDs,
+		service.Mails{Renderer: renderer, AppURL: deps.AppURL})
 
 	all := []jobs.Job{{
 		Name:  "generate-lessons",
@@ -54,6 +57,28 @@ func Jobs(deps Deps) *jobs.Runner {
 			}
 
 			return err
+		},
+	}, {
+		// Ends the waiting-list invites that ran out and the entries of
+		// lessons that started, and invites the next (ADR 0010). It only
+		// queues mails, so it runs without a mailer too (the demo).
+		Name:  "waitlist-expiry",
+		Every: time.Minute,
+		Run: func(ctx context.Context) error {
+			n, err := waitlist.ExpireDue(ctx)
+
+			switch {
+			case errors.Is(err, service.ErrNoSchool):
+				return nil // entries but no settings: broken data, nothing to settle
+			case err != nil:
+				return err
+			}
+
+			if n > 0 {
+				deps.Logger.InfoContext(ctx, "waiting lists settled", slog.Int("entries", n))
+			}
+
+			return nil
 		},
 	}}
 

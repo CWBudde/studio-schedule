@@ -70,7 +70,7 @@ func TestSearchPersonsLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	found, err := service.NewPersonService(st, clock.NewFixed(time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)), ids.V7{}).SearchPersons(t.Context(), "sam")
+	found, err := service.NewPersonService(st, clock.NewFixed(time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)), ids.V7{}, service.Mails{}).SearchPersons(t.Context(), "sam")
 	if err != nil || len(found) != service.MaxPersonMatches {
 		t.Errorf("found %d, %v; want %d", len(found), err, service.MaxPersonMatches)
 	}
@@ -90,7 +90,7 @@ func newPersonsFixture(t *testing.T) *personsFixture {
 	// Wednesday 2026-10-21, 23:30 in Berlin: already the 22nd at school.
 	now := time.Date(2026, time.October, 21, 22, 30, 0, 0, time.UTC)
 
-	return &personsFixture{t: t, st: st, svc: service.NewPersonService(st, clock.NewFixed(now), ids.V7{})}
+	return &personsFixture{t: t, st: st, svc: service.NewPersonService(st, clock.NewFixed(now), ids.V7{}, service.Mails{})}
 }
 
 // person returns the person with the given name.
@@ -374,7 +374,7 @@ func TestAddGuardianRaces(t *testing.T) {
 	f := newPersonsFixture(t)
 	ella, hanna := f.person("Ella", "Amberly"), f.person("Hanna", "Birchmoor")
 	add := func(storeErr error) error {
-		svc := service.NewPersonService(racingStore{Store: f.st, guardianErr: storeErr}, clock.NewFixed(time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)), ids.V7{})
+		svc := service.NewPersonService(racingStore{Store: f.st, guardianErr: storeErr}, clock.NewFixed(time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)), ids.V7{}, service.Mails{})
 		_, err := svc.AddGuardian(t.Context(), ella.ID, hanna.ID)
 
 		return err
@@ -591,7 +591,7 @@ func TestPersonChecksRunUnderTheLock(t *testing.T) {
 	rec := recordingStore{Store: f.st, calls: &calls}
 
 	// The cycle check reads every dependent only once it is locked.
-	if _, err := service.NewPersonService(rec, clk, ids.V7{}).AddGuardian(ctx, ella.ID, hanna.ID); err != nil {
+	if _, err := service.NewPersonService(rec, clk, ids.V7{}, service.Mails{}).AddGuardian(ctx, ella.ID, hanna.ID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -607,7 +607,7 @@ func TestPersonChecksRunUnderTheLock(t *testing.T) {
 	wantBefore(t, calls, "Lock "+ella.ID.String(), "AddGuardian")
 
 	// The managed check of a guardian's edit and removal.
-	family := service.NewFamilyService(rec, clk, ids.V7{})
+	family := service.NewFamilyService(rec, clk, ids.V7{}, service.Mails{})
 	p := service.Principal{PersonID: hanna.ID}
 
 	calls = nil
@@ -626,7 +626,7 @@ func TestPersonChecksRunUnderTheLock(t *testing.T) {
 
 	// The office's deletion.
 	calls = nil
-	if err := service.NewPersonService(rec, clk, ids.V7{}).DeletePerson(ctx, lotta.ID); !errors.Is(err, domain.ErrInUse) {
+	if err := service.NewPersonService(rec, clk, ids.V7{}, service.Mails{}).DeletePerson(ctx, lotta.ID); !errors.Is(err, domain.ErrInUse) {
 		t.Fatalf("DeletePerson of an enrolled child: %v", err)
 	}
 

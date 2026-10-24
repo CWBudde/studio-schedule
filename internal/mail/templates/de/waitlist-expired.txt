@@ -1,0 +1,18 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+der für {{.Participant}} reservierte Platz in dieser Stunde bei
+{{.SchoolName}} wurde nicht rechtzeitig genommen:
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr
+{{.Room}}, {{.Location}}
+
+{{if .StillWaiting -}}
+{{.Participant}} bleibt auf der Warteliste, an ihrem Ende, und wird wieder
+eingeladen, sobald ein weiterer Platz frei wird.
+{{- else -}}
+{{.Participant}} steht nicht mehr auf der Warteliste für diese Stunde.
+{{- end}}
+
+Viele Grüße
+{{.SchoolName}}

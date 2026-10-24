@@ -45,14 +45,14 @@ func membersOn(members []domain.ClassMember, d domain.Date) []domain.PersonID {
 }
 
 // bookMember books person into lesson l as an automatic class member
-// booking at now. active is the number of active bookings of l before; a
-// booking beyond l's capacity is made anyway and its event records an
-// override. The actor is the office account, or zero for generation. The
+// booking at now. taken is the number of places of l taken before (its
+// active bookings, and places held by waiting-list invites); a booking
+// beyond l's capacity is made anyway and its event records an override. The actor is the office account, or zero for generation. The
 // caller holds the class lock and either the lesson lock or a lesson it has
 // just created.
 func bookMember(
 	ctx context.Context, tx store.Tx, src ids.Source, now time.Time, actor domain.AccountID, l domain.Lesson,
-	person domain.PersonID, active int,
+	person domain.PersonID, taken int,
 ) error {
 	b := domain.Booking{
 		ID: ids.New[domain.BookingID](src), LessonID: l.ID, PersonID: person, Status: domain.BookingBooked,
@@ -66,7 +66,7 @@ func bookMember(
 		return fmt.Errorf("book member %v into lesson %v: %w", person, l.ID, err)
 	}
 
-	return recordEvent(ctx, tx, src, actor, now, b, active >= l.Capacity)
+	return recordEvent(ctx, tx, src, actor, now, b, taken >= l.Capacity)
 }
 
 // bookMembers books the members of l's class who are active on l's slot
@@ -136,8 +136,9 @@ func lessonIDs(lessons []domain.Lesson) []domain.LessonID {
 // bookings stay; ADR 0009). A lesson the person has an active booking for,
 // or a date they released (domain.Booking.Released), is skipped; a booking
 // the office canceled or a pause canceled does not keep them out. A full
-// lesson gets the booking anyway, recorded as an override. The actor is
-// the office account.
+// lesson gets the booking anyway, recorded as an override. The member's
+// open entry on a lesson's waiting list ends with the booking (ADR 0010).
+// The actor is the office account.
 func (s *TimetableService) enroll(ctx context.Context, tx store.Tx, actor domain.AccountID, m domain.ClassMember) error {
 	now := s.clock.Now()
 
@@ -166,12 +167,31 @@ func (s *TimetableService) enroll(ctx context.Context, tx store.Tx, actor domain
 		return err
 	}
 
+	open, err := tx.Waitlist().ListOpenByLessons(ctx, aheadIDs)
+	if err != nil {
+		return err
+	}
+
+	waiting := map[domain.LessonID][]domain.WaitlistEntry{}
+	for _, e := range open {
+		waiting[e.LessonID] = append(waiting[e.LessonID], e)
+	}
+
 	for _, l := range lessons {
 		if keepOut[l.ID] || !m.ActiveOn(l.SlotDate) {
 			continue
 		}
 
-		if err := bookMember(ctx, tx, s.ids, now, actor, l, m.PersonID, active[l.ID]); err != nil {
+		// Places that others' invites hold are taken too (ADR 0010).
+		others := slices.DeleteFunc(slices.Clone(waiting[l.ID]), func(e domain.WaitlistEntry) bool {
+			return e.PersonID == m.PersonID
+		})
+
+		if err := bookMember(ctx, tx, s.ids, now, actor, l, m.PersonID, active[l.ID]+heldPlaces(others, now)[l.ID]); err != nil {
+			return err
+		}
+
+		if _, err := s.w.booked(ctx, tx, now, l, waiting[l.ID], m.PersonID); err != nil {
 			return err
 		}
 	}
@@ -229,7 +249,7 @@ func (s *TimetableService) cancelAhead(
 		}
 
 		b.Late, b.Released = false, false
-		if _, err := cancelBooking(ctx, tx, s.ids, actor, now, b); err != nil {
+		if _, err := cancelBooking(ctx, tx, s.w, actor, now, byID[b.LessonID], b); err != nil {
 			return err
 		}
 	}

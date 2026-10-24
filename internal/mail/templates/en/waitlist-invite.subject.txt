@@ -1,0 +1,1 @@
+{{.SchoolName}}: a place in {{.CourseType}} on {{date .StartsAt}} is free

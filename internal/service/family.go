@@ -63,11 +63,13 @@ type FamilyService struct {
 	store store.Store
 	clock clock.Clock
 	ids   ids.Source
+	w     waitlister
 }
 
-// NewFamilyService returns a FamilyService.
-func NewFamilyService(st store.Store, clk clock.Clock, src ids.Source) *FamilyService {
-	return &FamilyService{store: st, clock: clk, ids: src}
+// NewFamilyService returns a FamilyService. Removing a dependent sends the
+// waiting-list invites of the places it frees with mails.
+func NewFamilyService(st store.Store, clk clock.Clock, src ids.Source, mails Mails) *FamilyService {
+	return &FamilyService{store: st, clock: clk, ids: src, w: waitlister{ids: src, mails: mails}}
 }
 
 // Family returns p's person and dependents, ordered by family and given
@@ -203,8 +205,10 @@ func (s *FamilyService) UpdateDependent(
 // RemoveDependent ends p's guardianship of id. If no guardian is left, the
 // person is deleted as well, unless it is a managed dependent, which stays.
 // Then only bookings and class memberships can still refer to it; while
-// they do, that fails with ErrDependentInUse and nothing changes. Anyone
-// else's person is domain.ErrNotFound.
+// they do, that fails with ErrDependentInUse and nothing changes. A deleted
+// person leaves the waiting lists first: their open entries are withdrawn,
+// and the places their invites held go to the next entries (ADR 0010).
+// Anyone else's person is domain.ErrNotFound.
 func (s *FamilyService) RemoveDependent(ctx context.Context, p Principal, id domain.PersonID) error {
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		if _, err := dependentOf(ctx, tx, p.PersonID, id); err != nil {
@@ -227,6 +231,10 @@ func (s *FamilyService) RemoveDependent(ctx context.Context, p Principal, id dom
 		}
 
 		if managed, err := isManaged(ctx, tx, id); err != nil || managed {
+			return err
+		}
+
+		if err := s.w.withdrawPerson(ctx, tx, s.clock.Now(), id); err != nil {
 			return err
 		}
 

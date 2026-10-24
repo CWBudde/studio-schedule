@@ -37,7 +37,7 @@ func newFamilyFixture(t *testing.T) *familyFixture {
 	// Wednesday 2026-10-21, 23:30 in Berlin: already the 22nd at school.
 	now := time.Date(2026, time.October, 21, 22, 30, 0, 0, time.UTC)
 
-	return &familyFixture{t: t, st: st, svc: service.NewFamilyService(st, clock.NewFixed(now), ids.V7{})}
+	return &familyFixture{t: t, st: st, svc: service.NewFamilyService(st, clock.NewFixed(now), ids.V7{}, service.Mails{})}
 }
 
 // principal returns the principal of the account with email.
@@ -430,7 +430,7 @@ func TestRemoveDependentDeleteRefused(t *testing.T) {
 	}
 
 	clk := clock.NewFixed(time.Date(2026, time.October, 21, 22, 30, 0, 0, time.UTC))
-	refusing := service.NewFamilyService(racingStore{Store: f.st, deleteErr: fmt.Errorf("foreign key violated: %w", domain.ErrConflict)}, clk, ids.V7{})
+	refusing := service.NewFamilyService(racingStore{Store: f.st, deleteErr: fmt.Errorf("foreign key violated: %w", domain.ErrConflict)}, clk, ids.V7{}, service.Mails{})
 
 	err = refusing.RemoveDependent(t.Context(), p, added.ID)
 	wantIs(t, err, service.ErrDependentInUse)

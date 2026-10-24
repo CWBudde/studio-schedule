@@ -170,7 +170,7 @@ func TestAddClassMemberRaces(t *testing.T) {
 	f.write(t, func(ctx context.Context, tx store.Tx) error { return tx.Persons().Create(ctx, zoe) })
 
 	add := func(storeErr error) error {
-		svc := NewTimetableService(racingMembers{Store: f.st, err: storeErr}, clock.NewFixed(mustInstant(t, "2026-10-19T10:00:00Z")), f.seq)
+		svc := NewTimetableService(racingMembers{Store: f.st, err: storeErr}, clock.NewFixed(mustInstant(t, "2026-10-19T10:00:00Z")), f.seq, Mails{})
 		_, err := svc.AddClassMember(ctx, Principal{}, domain.ClassMember{ClassID: c.ID, PersonID: zoe.ID})
 
 		return err

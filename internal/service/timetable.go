@@ -17,11 +17,16 @@ type TimetableService struct {
 	clock clock.Clock
 	ids   ids.Source
 	gen   *LessonGenerator
+	w     waitlister
 }
 
-// NewTimetableService returns a TimetableService backed by st.
-func NewTimetableService(st store.Store, clk clock.Clock, src ids.Source) *TimetableService {
-	return &TimetableService{store: st, clock: clk, ids: src, gen: NewLessonGenerator(st, clk, src)}
+// NewTimetableService returns a TimetableService backed by st. Class edits
+// that free places (a membership that ends, a higher capacity) send the
+// waiting-list invites with mails.
+func NewTimetableService(st store.Store, clk clock.Clock, src ids.Source, mails Mails) *TimetableService {
+	return &TimetableService{
+		store: st, clock: clk, ids: src, gen: NewLessonGenerator(st, clk, src), w: waitlister{ids: src, mails: mails},
+	}
 }
 
 // Terms returns all terms ordered by start date.

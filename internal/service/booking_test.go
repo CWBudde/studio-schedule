@@ -87,7 +87,7 @@ func (f *bookingFixture) bookingServiceAt(t *testing.T, now time.Time) *BookingS
 		t.Fatal(err)
 	}
 
-	return NewBookingService(f.st, clock.NewFixed(now), f.seq, r)
+	return NewBookingService(f.st, clock.NewFixed(now), f.seq, testMails(r))
 }
 
 // principal signs in as the account of person p.
@@ -283,7 +283,7 @@ func TestBookCreateFails(t *testing.T) {
 			}
 
 			svc := NewBookingService(failingBookingStore{Store: f.st, createErr: tt.err},
-				clock.NewFixed(mustInstant(t, bookingNow)), f.seq, r)
+				clock.NewFixed(mustInstant(t, bookingNow)), f.seq, testMails(r))
 
 			_, err = svc.Book(t.Context(), anna, l.ID, f.mia.ID)
 			if !errors.Is(err, tt.want) || (tt.wantNot != nil && errors.Is(err, tt.wantNot)) {
@@ -840,7 +840,7 @@ func TestCancelFollowingMovedLesson(t *testing.T) {
 
 	counting := &countingStore{Store: f.st}
 
-	done, err := NewBookingService(counting, clock.NewFixed(mustInstant(t, bookingNow)), f.seq, r).
+	done, err := NewBookingService(counting, clock.NewFixed(mustInstant(t, bookingNow)), f.seq, testMails(r)).
 		CancelFollowing(ctx, anna, start.ID, domain.Date{})
 	if err != nil {
 		t.Fatal(err)
@@ -911,7 +911,7 @@ func TestCancelFollowingConcurrentEdits(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		return NewBookingService(editingStore{Store: f.st, onLock: onLock}, clock.NewFixed(mustInstant(t, bookingNow)), f.seq, r)
+		return NewBookingService(editingStore{Store: f.st, onLock: onLock}, clock.NewFixed(mustInstant(t, bookingNow)), f.seq, testMails(r))
 	}
 
 	past := func(l domain.Lesson) domain.Lesson {

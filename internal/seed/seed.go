@@ -26,6 +26,8 @@ func DemoSettings() domain.Settings {
 		BookingCutoff:      0,
 		CancellationCutoff: 2 * time.Hour,
 		DefaultVisibleDays: 14,
+
+		WaitlistInviteExpiry: 12 * time.Hour,
 	}
 }
 
@@ -46,9 +48,12 @@ type Dataset struct {
 	ClassMembers []domain.ClassMember
 	Lessons      []domain.Lesson
 	// Bookings are the automatic bookings of the class members in the
-	// lessons of their classes, each with its event in BookingEvents.
+	// lessons of their classes and the members' own bookings of the full
+	// workshop, each with its event in BookingEvents.
 	Bookings      []domain.Booking
 	BookingEvents []domain.BookingEvent
+	// WaitlistEntries are the waiting list of the full workshop.
+	WaitlistEntries []domain.WaitlistEntry
 }
 
 // LoadDemo writes the complete demo data set for FixedDemoAnchor (Demo)
@@ -169,6 +174,12 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 	for _, e := range d.BookingEvents {
 		if err := tx.Bookings().AddEvent(ctx, e); err != nil {
 			return fmt.Errorf("booking event %v: %w", e.ID, err)
+		}
+	}
+
+	for _, e := range d.WaitlistEntries {
+		if err := tx.Waitlist().Create(ctx, e); err != nil {
+			return fmt.Errorf("waitlist entry %v: %w", e.ID, err)
 		}
 	}
 

@@ -1,0 +1,11 @@
+{{define "content" -}}
+<p>Hello{{with .GivenName}} {{.}}{{end}},</p>
+<p>The place reserved for {{.Participant}} in this lesson at {{.SchoolName}} was not taken in time:</p>
+<p><strong>{{.CourseType}}</strong><br>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}<br>{{.Room}}, {{.Location}}</p>
+{{- if .StillWaiting}}
+<p>{{.Participant}} stays on the waiting list, at its end, and is invited again when another place becomes free.</p>
+{{- else}}
+<p>{{.Participant}} is no longer on the waiting list for this lesson.</p>
+{{- end}}
+<p>Kind regards,<br>{{.SchoolName}}</p>
+{{- end}}

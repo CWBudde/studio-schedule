@@ -67,8 +67,9 @@ type ScheduleLesson struct {
 // Availability is how many places a lesson has left and whom of the
 // caller's family it has booked (ADR 0009).
 type Availability struct {
-	FreePlaces int         `doc:"Places left: the capacity minus the active bookings, at least 0." json:"freePlaces" minimum:"0"`
-	BookedFor  []BookedFor `doc:"The signed-in person and their dependents with an active booking for the lesson, the signed-in person first; absent if there is none or the caller is not signed in (and in the responses of the lesson writes)." json:"bookedFor,omitempty" nullable:"false"`
+	FreePlaces int           `doc:"Places left: the capacity minus the active bookings and the places that waiting-list invites reserve, at least 0. A lesson without one is full: members may join its waiting list." json:"freePlaces" minimum:"0"`
+	BookedFor  []BookedFor   `doc:"The signed-in person and their dependents with an active booking for the lesson, the signed-in person first; absent if there is none or the caller is not signed in (and in the responses of the lesson writes)." json:"bookedFor,omitempty" nullable:"false"`
+	Waitlist   []WaitlistFor `doc:"The signed-in person and their dependents on the lesson's waiting list, the signed-in person first, with their place or invite; absent if there is none or the caller is not signed in (and in the responses of the lesson writes)." json:"waitlist,omitempty" nullable:"false"`
 	// The cutoffs are not secret: everyone gets them, so the UI can show a
 	// closed booking and warn of a late cancellation without a request.
 	BookingClosesAt time.Time `doc:"Booking closes at this instant: the booking cutoff before the start (UTC)." json:"bookingClosesAt"`
@@ -185,7 +186,9 @@ func (h *handlers) getSchedule(ctx context.Context, in *ScheduleInput) (*Schedul
 	}
 
 	for _, sl := range s.Lessons {
-		body.Lessons = append(body.Lessons, ScheduleLesson{LessonSummary: lessonSummary(sl), Availability: availability(sl)})
+		body.Lessons = append(body.Lessons, ScheduleLesson{
+			LessonSummary: lessonSummary(sl), Availability: availability(sl),
+		})
 	}
 
 	return &ScheduleOutput{Body: body}, nil
@@ -224,10 +227,12 @@ func lessonDetail(sl service.ScheduledLesson) LessonDetail {
 	return out
 }
 
-// availability returns the free places and the family's bookings of sl.
+// availability returns the free places and the family's bookings and
+// waiting-list entries of sl.
 func availability(sl service.ScheduledLesson) Availability {
 	a := Availability{
 		FreePlaces: sl.FreePlaces, BookingClosesAt: sl.BookingClosesAt.UTC(), LateCancelFrom: sl.LateCancelFrom.UTC(),
+		Waitlist: waitlistFor(sl.Waiting),
 	}
 
 	for _, b := range sl.BookedFor {

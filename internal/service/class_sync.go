@@ -116,28 +116,35 @@ func (s *TimetableService) follow(
 		return deleteClassLesson(ctx, tx, l.ID)
 	}
 
-	// Only a lower capacity can conflict with the bookings: a lesson booked
-	// beyond its capacity already (a member's override, ADR 0009) moves
-	// along when the capacity stays.
+	now := s.clock.Now()
+
+	// Only a lower capacity can conflict with the bookings and the places
+	// that waiting-list invites hold (ADR 0010): a lesson booked beyond its
+	// capacity already (a member's override, ADR 0009) moves along when the
+	// capacity stays.
 	if c.Capacity < l.Capacity {
-		n, err := tx.Bookings().CountActive(ctx, l.ID)
+		n, held, err := places(ctx, tx, now, l.ID)
 		if err != nil {
 			return err
 		}
 
-		if n > c.Capacity {
-			return &domain.FieldError{
-				Field: "capacity",
-				Msg:   fmt.Sprintf("the lesson of %s has %d bookings, more than the capacity", l.SlotDate, n),
-			}
+		if n+held > c.Capacity {
+			return &domain.FieldError{Field: "capacity", Msg: fmt.Sprintf("the lesson of %s %s", l.SlotDate, overCapacity(n, held))}
 		}
 	}
+
+	raised := c.Capacity > l.Capacity
 
 	l.SlotDate, l.StartsAt, l.EndsAt = slot, start, start.Add(c.Duration)
 	l.CourseTypeID, l.RoomID, l.Capacity = c.CourseTypeID, c.RoomID, c.Capacity
 	l.InstructorID, l.AccompanistID = c.InstructorID, c.AccompanistID
 
-	return tx.Lessons().Update(ctx, l)
+	if err := tx.Lessons().Update(ctx, l); err != nil || !raised {
+		return err
+	}
+
+	// The new places go to the waiting list.
+	return s.w.offer(ctx, tx, now, l, nil)
 }
 
 // follows reports whether lesson l still is what class c generated for its

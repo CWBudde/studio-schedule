@@ -928,6 +928,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lessons/{lessonId}/waitlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Join a lesson's waiting list
+         * @description Puts the signed-in person or one of their dependents at the end of the waiting list of a full lesson. Whenever a place frees, the oldest waiting entry is invited by mail; the invite reserves the place until `expiresAt`. With `stayOnList`, an invite the person lets expire or declines puts them back at the end of the list instead of ending the entry. A person outside the family, or a lesson the caller may not see, is a 404; a lesson that cannot be booked a 409 `closed` with `why`, as in `bookLesson`. A person booked already is a 409 `already-booked`, one on the list already a 409 `already-waiting`, and a lesson with a free place (`freePlaces` > 0) a 409 `not-full`: book it instead.
+         */
+        post: operations["joinWaitlist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations": {
         parameters: {
             query?: never;
@@ -1178,6 +1198,90 @@ export interface paths {
          * @description Adds a weekly class to a term and generates its lessons that lie ahead. An unknown course type, room or staff member is a 422 on the field that names it.
          */
         post: operations["createClass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waitlist-invites/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Look at a waiting-list invite
+         * @description Returns what the link of a `waitlist-invite` mail stands for: the lesson, the given name of the person the place is reserved for, until when, and whether it can still be taken (`state`, `closed`); after an invite that ended while the person went back to the list, `state` is `waiting` with their `position`. It changes nothing, so mail scanners that open links take no place. No sign-in is needed; an unknown token is a 404. Rate-limited per client.
+         */
+        get: operations["getWaitlistInvite"];
+        put?: never;
+        /**
+         * Accept a waiting-list invite by its link
+         * @description Books the place the invite holds without a sign-in, the token being the proof, and returns the invite as it is now (`state` accepted). It fails like `acceptWaitlistInvite`; the link of an entry that went back to waiting is a 409 `invite-expired`, an unknown token (or a link that a newer invite replaced) a 404. The confirmation goes to the person's mail recipients, like the invite. Rate-limited per client.
+         */
+        post: operations["acceptWaitlistInviteByToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waitlist/{entryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Leave a waiting list
+         * @description Takes an entry of the signed-in person or one of their dependents off the list (404 for any other entry); a place its invite held goes to the next entry. An entry that is no longer on the list is a 409 `not-waiting`.
+         */
+        delete: operations["leaveWaitlist"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waitlist/{entryId}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept a waiting-list invite
+         * @description Books the place an invite of the signed-in person or one of their dependents holds (404 for any other entry), like `bookLesson`, and returns the booking. A waiting entry is a 409 `not-invited`, an invite that ran out a 409 `invite-expired`, one used already (accepted, or the entry left the list) a 409 `invite-used`; a lesson that cannot be booked any more a 409 `closed` with `why`. The signed-in account gets the confirmation mail.
+         */
+        post: operations["acceptWaitlistInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waitlist/{entryId}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline a waiting-list invite
+         * @description Gives up the place an invite holds, failing like `acceptWaitlistInvite`; the place goes to the next entry. An entry with `stayOnList` goes back to the end of the list (while booking is open), any other ends. Returns the entry as it is now.
+         */
+        post: operations["declineWaitlistInvite"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1634,10 +1738,10 @@ export interface components {
             /** @description The lesson that uses the room; only with reason room-taken. */
             lesson?: components["schemas"]["ConflictLesson"];
             /**
-             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking is canceled already.
+             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list.
              * @enum {string}
              */
-            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled";
+            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting";
             /**
              * Format: int64
              * @description HTTP status code
@@ -1865,6 +1969,15 @@ export interface components {
             /** @description Given name of the admin. */
             givenName: string;
         };
+        JoinWaitlistData: {
+            /**
+             * Format: uuid
+             * @description Who joins: the signed-in person or one of their dependents.
+             */
+            personId: string;
+            /** @description Stay on the list, at its end, after letting an invite expire or declining it; default false. */
+            stayOnList?: boolean;
+        };
         LessonAdmin: {
             /**
              * Format: int64
@@ -2089,7 +2202,7 @@ export interface components {
             endsAt: string;
             /**
              * Format: int64
-             * @description Places left: the capacity minus the active bookings, at least 0.
+             * @description Places left: the capacity minus the active bookings and the places that waiting-list invites reserve, at least 0. A lesson without one is full: members may join its waiting list.
              */
             freePlaces: number;
             /**
@@ -2132,6 +2245,8 @@ export interface components {
              * @enum {string}
              */
             visibility: "public" | "members" | "hidden";
+            /** @description The signed-in person and their dependents on the lesson's waiting list, the signed-in person first, with their place or invite; absent if there is none or the caller is not signed in (and in the responses of the lesson writes). */
+            waitlist?: components["schemas"]["WaitlistFor"][];
         };
         LessonRestoreData: {
             /** @description Restore even if another lesson uses the room at an overlapping time (skips the 409 room-taken). */
@@ -2574,7 +2689,7 @@ export interface components {
             endsAt: string;
             /**
              * Format: int64
-             * @description Places left: the capacity minus the active bookings, at least 0.
+             * @description Places left: the capacity minus the active bookings and the places that waiting-list invites reserve, at least 0. A lesson without one is full: members may join its waiting list.
              */
             freePlaces: number;
             /**
@@ -2615,6 +2730,8 @@ export interface components {
              * @enum {string}
              */
             visibility: "public" | "members" | "hidden";
+            /** @description The signed-in person and their dependents on the lesson's waiting list, the signed-in person first, with their place or invite; absent if there is none or the caller is not signed in (and in the responses of the lesson writes). */
+            waitlist?: components["schemas"]["WaitlistFor"][];
         };
         StaffData: {
             /** @description Whether the staff member is listed publicly; former staff are inactive. */
@@ -2720,6 +2837,101 @@ export interface components {
              * @enum {string}
              */
             locale?: "en" | "de";
+        };
+        WaitlistEntry: {
+            /**
+             * Format: date-time
+             * @description Until when the invite reserves the place; only while invited.
+             */
+            expiresAt?: string;
+            /**
+             * Format: uuid
+             * @description Entry ID.
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When the entry joined the list, or went back to its end.
+             */
+            joinedAt: string;
+            /**
+             * Format: uuid
+             * @description The lesson.
+             */
+            lessonId: string;
+            /**
+             * Format: uuid
+             * @description The person on the list.
+             */
+            personId: string;
+            /**
+             * Format: int64
+             * @description Place among the waiting entries, 1 for the next to be invited; absent unless waiting.
+             */
+            position?: number;
+            /**
+             * @description waiting: for an invite; invited: a place is reserved until expiresAt; accepted: the place was taken; expired: the invite ran out or was declined, or the lesson started; withdrawn: the person left the list, or got booked otherwise.
+             * @enum {string}
+             */
+            status: "waiting" | "invited" | "accepted" | "expired" | "withdrawn";
+            /** @description Whether an invite that expires or is declined puts the entry back at the end of the list. */
+            stayOnList: boolean;
+        };
+        WaitlistFor: {
+            /**
+             * Format: uuid
+             * @description The entry, e.g. to leave the list or to accept its invite.
+             */
+            entryId: string;
+            /**
+             * Format: date-time
+             * @description Until when the invite reserves the place; absent while waiting.
+             */
+            expiresAt?: string;
+            /** @description Given and family name of the person. */
+            name: string;
+            /**
+             * Format: uuid
+             * @description The person on the list.
+             */
+            personId: string;
+            /**
+             * Format: int64
+             * @description Place among the waiting entries, 1 for the next to be invited; absent unless waiting.
+             */
+            position?: number;
+            /**
+             * @description waiting: for an invite; invited: a place is reserved until expiresAt; expired: the invite has run out (the entry is about to end, or to go back to the end of the list).
+             * @enum {string}
+             */
+            status: "waiting" | "invited" | "expired";
+            /** @description Whether an invite that expires or is declined puts the entry back at the end of the list. */
+            stayOnList: boolean;
+        };
+        WaitlistInvite: {
+            /**
+             * @description Why the lesson cannot be booked now, if it cannot (see the closed conflict); the place cannot be taken then.
+             * @enum {string}
+             */
+            closed?: "cutoff" | "release" | "canceled" | "started";
+            /**
+             * Format: date-time
+             * @description Until when the invite reserves (or reserved) the place; absent while waiting.
+             */
+            expiresAt?: string;
+            /** @description Given name of the person the place is reserved for. */
+            givenName: string;
+            lesson: components["schemas"]["LessonSummary"];
+            /**
+             * Format: int64
+             * @description Place among the waiting entries, 1 for the next to be invited; only with state waiting.
+             */
+            position?: number;
+            /**
+             * @description invited: the place is reserved until expiresAt and can be taken (unless closed says otherwise); accepted: it was taken; expired: the invite ran out, was declined, or the lesson started, and the entry ended; withdrawn: the person left the list, or got booked otherwise; waiting: the invite ended, but the person is back on the list (see position) and gets a new link with the next invite.
+             * @enum {string}
+             */
+            state: "invited" | "accepted" | "expired" | "withdrawn" | "waiting";
         };
     };
     responses: never;
@@ -4716,6 +4928,51 @@ export interface operations {
             };
         };
     };
+    joinWaitlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The lesson. */
+                lessonId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoinWaitlistData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistEntry"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listLocations: {
         parameters: {
             query?: never;
@@ -5465,6 +5722,200 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClassEntry"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getWaitlistInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The token from the invite link. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistInvite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    acceptWaitlistInviteByToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The token from the invite link. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistInvite"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    leaveWaitlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entry. */
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    acceptWaitlistInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entry. */
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    declineWaitlistInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The entry. */
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistEntry"];
                 };
             };
             /** @description Conflict */

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -49,6 +50,36 @@ func enqueueMail(
 	}
 
 	return tx.Outbox().Create(ctx, m)
+}
+
+// sendMails renders template with mails for each recipient, with the data
+// that data makes of it, in the recipient's language (else the school's
+// default; ADR 0008), and queues it at now.
+func sendMails(
+	ctx context.Context, tx store.Tx, src ids.Source, mails MailRenderer, settings domain.Settings, now time.Time,
+	recipients []recipient, template string, data func(recipient) any,
+) error {
+	for _, r := range recipients {
+		rendered, err := mails.Render(cmp.Or(r.locale, settings.DefaultLocale), template, data(r))
+		if err != nil {
+			// Broken data or templates, not the caller's input: %v keeps
+			// domain.ErrValidation out, so the client gets a 500.
+			return fmt.Errorf("render %s mail: %v", template, err) //nolint:errorlint // see above
+		}
+
+		err = enqueueMail(ctx, tx, src, now, r.email, template, rendered)
+
+		switch {
+		case errors.Is(err, domain.ErrValidation):
+			// A stored address that is no address is broken data too: a
+			// 500 like above.
+			return fmt.Errorf("queue %s mail: %v", template, err) //nolint:errorlint // see above
+		case err != nil:
+			return err
+		}
+	}
+
+	return nil
 }
 
 // OutboxService sends the mails of the outbox and lists them.

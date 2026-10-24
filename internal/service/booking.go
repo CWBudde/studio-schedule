@@ -83,12 +83,13 @@ type BookingService struct {
 	clock clock.Clock
 	ids   ids.Source
 	mails MailRenderer
+	w     waitlister
 }
 
-// NewBookingService returns a BookingService that renders its mails with
-// mails.
-func NewBookingService(st store.Store, clk clock.Clock, src ids.Source, mails MailRenderer) *BookingService {
-	return &BookingService{store: st, clock: clk, ids: src, mails: mails}
+// NewBookingService returns a BookingService that sends its mails, and the
+// waiting-list invites of the places it frees, with mails.
+func NewBookingService(st store.Store, clk clock.Clock, src ids.Source, mails Mails) *BookingService {
+	return &BookingService{store: st, clock: clk, ids: src, mails: mails.Renderer, w: waitlister{ids: src, mails: mails}}
 }
 
 // Book books lesson for person, who must be p's own person or one of p's
@@ -97,15 +98,26 @@ func NewBookingService(st store.Store, clk clock.Clock, src ids.Source, mails Ma
 // not at all, is a *BookingClosedError with ClosedRelease. A canceled,
 // started or past lesson, or one whose booking cutoff has passed, is a
 // *BookingClosedError too. A person with an active booking for the lesson
-// is ErrAlreadyBooked; a lesson whose active bookings fill its capacity is
-// ErrLessonFull. The booking event records p's real account (the admin when
-// impersonating), and the acting account p gets the confirmation mail.
+// is ErrAlreadyBooked; a lesson whose active bookings and the places held
+// by waiting-list invites fill its capacity is ErrLessonFull, unless the
+// person's own invite holds one of them: booking then takes that place like
+// accepting the invite. Any other open entry of the person on the lesson's
+// list is withdrawn (ADR 0010). The booking event records p's real account
+// (the admin when impersonating), and the acting account p gets the
+// confirmation mail. Before it counts the places, it settles the lesson's
+// waiting list (an invite that ran out goes to the next entry), and that
+// stays even when the booking is refused.
 func (s *BookingService) Book(
 	ctx context.Context, p Principal, lesson domain.LessonID, person domain.PersonID,
 ) (domain.Booking, error) {
-	var b domain.Booking
+	var (
+		b       domain.Booking
+		refused error // a refusal after the list was settled, which commits
+	)
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		refused = nil // the callback may run more than once
+
 		settings, loc, err := loadSchool(ctx, tx)
 		if err != nil {
 			return err
@@ -126,13 +138,20 @@ func (s *BookingService) Book(
 			return err
 		}
 
+		open, err := s.w.settled(ctx, tx, now, l)
+		if err != nil {
+			return err
+		}
+
 		booked, err := tx.Bookings().ListActiveByLessonsAndPersons(ctx, []domain.LessonID{l.ID}, []domain.PersonID{who.ID})
 		if err != nil {
 			return err
 		}
 
 		if len(booked) > 0 {
-			return ErrAlreadyBooked
+			refused = ErrAlreadyBooked
+
+			return nil
 		}
 
 		active, err := tx.Bookings().CountActive(ctx, l.ID)
@@ -140,8 +159,12 @@ func (s *BookingService) Book(
 			return err
 		}
 
-		if active >= l.Capacity {
-			return ErrLessonFull
+		// The person's own invite holds its place for them.
+		others := slices.DeleteFunc(slices.Clone(open), func(e domain.WaitlistEntry) bool { return e.PersonID == who.ID })
+		if active+heldPlaces(others, now)[l.ID] >= l.Capacity {
+			refused = ErrLessonFull
+
+			return nil
 		}
 
 		b = domain.Booking{
@@ -165,13 +188,28 @@ func (s *BookingService) Book(
 			return err
 		}
 
-		if err := s.addEvent(ctx, tx, p, b, now); err != nil {
+		accepted, err := s.w.booked(ctx, tx, now, l, open, who.ID)
+		if err != nil {
+			return err
+		}
+
+		if accepted {
+			err = recordWaitlistEvent(ctx, tx, s.ids, actorOf(p), now, b)
+		} else {
+			err = s.addEvent(ctx, tx, p, b, now)
+		}
+
+		if err != nil {
 			return err
 		}
 
 		return s.mail(ctx, tx, p, settings, loc, now, mail.TemplateBookingConfirmed, who,
 			[]FollowingBooking{{Booking: b, Lesson: l}})
 	})
+	if err == nil {
+		err = refused
+	}
+
 	if err != nil {
 		return domain.Booking{}, fmt.Errorf("book lesson %v: %w", lesson, err)
 	}
@@ -521,7 +559,7 @@ func (s *BookingService) cancel(
 
 	b.Late, b.Released = lateCancellation(settings, now, l), released
 
-	b, err := cancelBooking(ctx, tx, s.ids, actorOf(p), now, b)
+	b, err := cancelBooking(ctx, tx, s.w, actorOf(p), now, l, b)
 	if err != nil {
 		return FollowingBooking{}, err
 	}
@@ -529,14 +567,16 @@ func (s *BookingService) cancel(
 	return FollowingBooking{Booking: b, Lesson: l, Late: b.Late}, nil
 }
 
-// cancelBooking cancels the active booking b, whose lesson the caller has
-// locked, at now, keeping the Late and Released flags the caller set,
+// cancelBooking cancels the active booking b of lesson l, which the caller
+// has locked, at now, keeping the Late and Released flags the caller set,
 // and records the event with the actor (zero for the system). It frees the
-// place in the caller's transaction. Every cancellation goes through here:
-// a member's (BookingService.cancel) and the office's when a membership
-// ends (unenroll).
+// place in the caller's transaction and offers it to the lesson's waiting
+// list (ADR 0010). Every cancellation goes through here: a member's
+// (BookingService.cancel) and the office's when a membership ends
+// (unenroll).
 func cancelBooking(
-	ctx context.Context, tx store.Tx, src ids.Source, actor domain.AccountID, now time.Time, b domain.Booking,
+	ctx context.Context, tx store.Tx, w waitlister, actor domain.AccountID, now time.Time, l domain.Lesson,
+	b domain.Booking,
 ) (domain.Booking, error) {
 	b.Status, b.CanceledAt = domain.BookingCanceled, now
 	if err := b.Validate(); err != nil {
@@ -547,15 +587,13 @@ func cancelBooking(
 		return domain.Booking{}, err
 	}
 
-	if err := recordEvent(ctx, tx, src, actor, now, b, false); err != nil {
+	if err := recordEvent(ctx, tx, w.ids, actor, now, b, false); err != nil {
 		return domain.Booking{}, err
 	}
 
-	// The place is free now. Once the waiting list exists (PLAN.md, Phase 4
-	// "Waitlist"), this transaction invites its next entry here, under the
-	// same lesson lock.
-
-	return b, nil
+	// The place is free now: the next entry of the waiting list gets it,
+	// under the same lesson lock.
+	return b, w.offer(ctx, tx, now, l, nil)
 }
 
 // addEvent records b's current status, with p's real account as the actor:
@@ -749,17 +787,42 @@ func (s *BookingService) mail(
 		return nil
 	}
 
+	r, err := actingRecipient(ctx, tx, p)
+	if err != nil {
+		return err
+	}
+
+	return mailBookings(ctx, tx, s.ids, s.mails, settings, loc, now, template, []recipient{r}, person, bookings)
+}
+
+// actingRecipient returns the acting account p as the recipient of the
+// mails about what it did, greeted by its person's given name.
+func actingRecipient(ctx context.Context, tx store.Tx, p Principal) (recipient, error) {
 	acc, err := tx.Accounts().Get(ctx, p.AccountID)
 	if err != nil {
-		return fmt.Errorf("account %v: %w", p.AccountID, refErr(err))
+		return recipient{}, fmt.Errorf("account %v: %w", p.AccountID, refErr(err))
 	}
 
 	me, err := tx.Persons().Get(ctx, acc.PersonID)
 	if err != nil {
-		return fmt.Errorf("person %v: %w", acc.PersonID, refErr(err))
+		return recipient{}, fmt.Errorf("person %v: %w", acc.PersonID, refErr(err))
 	}
 
-	data := mail.BookingData{SchoolName: settings.SchoolName, GivenName: me.GivenName, Participant: fullName(person)}
+	return recipient{email: acc.Email, locale: acc.Locale, givenName: me.GivenName, account: true}, nil
+}
+
+// mailBookings renders template about the bookings of person with mails
+// for each recipient, in its language (else the school's default; ADR
+// 0008), and queues it.
+func mailBookings(
+	ctx context.Context, tx store.Tx, src ids.Source, mails MailRenderer, settings domain.Settings,
+	loc *time.Location, now time.Time, template string, recipients []recipient, person domain.Person,
+	bookings []FollowingBooking,
+) error {
+	if len(bookings) == 0 || len(recipients) == 0 {
+		return nil
+	}
+
 	// The bookings of a class share their course type and mostly their
 	// room: read each once.
 	type roomAt struct {
@@ -769,12 +832,14 @@ func (s *BookingService) mail(
 
 	courseTypes := map[domain.CourseTypeID]domain.CourseType{}
 	places := map[domain.RoomID]roomAt{}
+	lessons := make([]mail.BookedLesson, 0, len(bookings))
 
 	for _, fb := range bookings {
 		l := fb.Lesson
 
 		ct, ok := courseTypes[l.CourseTypeID]
 		if !ok {
+			var err error
 			if ct, err = tx.CourseTypes().Get(ctx, l.CourseTypeID); err != nil {
 				return fmt.Errorf("course type %v: %w", l.CourseTypeID, refErr(err))
 			}
@@ -784,6 +849,7 @@ func (s *BookingService) mail(
 
 		at, ok := places[l.RoomID]
 		if !ok {
+			var err error
 			if at.room, at.location, err = place(ctx, tx, l.RoomID); err != nil {
 				return err
 			}
@@ -791,24 +857,15 @@ func (s *BookingService) mail(
 			places[l.RoomID] = at
 		}
 
-		data.Lessons = append(data.Lessons, mail.BookedLesson{
+		lessons = append(lessons, mail.BookedLesson{
 			CourseType: ct.Name, StartsAt: l.StartsAt.In(loc), EndsAt: l.EndsAt.In(loc), Room: at.room.Name,
 			Location: at.location.Name, Late: fb.Late,
 		})
 	}
 
-	rendered, err := s.mails.Render(cmp.Or(acc.Locale, settings.DefaultLocale), template, data)
-	if err != nil {
-		// Broken data or templates, not the member's input: %v keeps
-		// domain.ErrValidation out, so the client gets a 500.
-		return fmt.Errorf("render %s mail: %v", template, err) //nolint:errorlint // see above
-	}
-
-	if err := enqueueMail(ctx, tx, s.ids, now, acc.Email, template, rendered); errors.Is(err, domain.ErrValidation) {
-		return fmt.Errorf("queue %s mail: %v", template, err) //nolint:errorlint // a stored address that is no address is broken data
-	} else if err != nil {
-		return err
-	}
-
-	return nil
+	return sendMails(ctx, tx, src, mails, settings, now, recipients, template, func(r recipient) any {
+		return mail.BookingData{
+			SchoolName: settings.SchoolName, GivenName: r.givenName, Participant: fullName(person), Lessons: lessons,
+		}
+	})
 }

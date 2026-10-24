@@ -1,0 +1,1 @@
+{{.SchoolName}}: Ein Platz in {{.CourseType}} am {{date .StartsAt}} ist frei

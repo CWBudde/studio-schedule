@@ -20,7 +20,7 @@ import (
 func TestTimetableTerms(t *testing.T) {
 	t.Parallel()
 
-	got, err := service.NewTimetableService(memory.New(), clock.NewFixed(time.Time{}), ids.NewSequence()).Terms(t.Context())
+	got, err := service.NewTimetableService(memory.New(), clock.NewFixed(time.Time{}), ids.NewSequence(), service.Mails{}).Terms(t.Context())
 	if err != nil || len(got) != 0 {
 		t.Fatalf("empty store: Terms() = %v, %v; want no terms", got, err)
 	}
@@ -43,7 +43,7 @@ func TestTimetableTerms(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err = service.NewTimetableService(st, clock.NewFixed(time.Time{}), ids.NewSequence()).Terms(t.Context())
+	got, err = service.NewTimetableService(st, clock.NewFixed(time.Time{}), ids.NewSequence(), service.Mails{}).Terms(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestTimetableClasses(t *testing.T) {
 	t.Parallel()
 
 	st := catalogDemoStore(t)
-	svc := service.NewTimetableService(st, clock.NewFixed(time.Time{}), ids.NewSequence())
+	svc := service.NewTimetableService(st, clock.NewFixed(time.Time{}), ids.NewSequence(), service.Mails{})
 	demo := seed.Demo()
 
 	t.Run("demo term", func(t *testing.T) {
@@ -123,7 +123,7 @@ func TestTimetableClassesTermWithoutClasses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := service.NewTimetableService(st, clock.NewFixed(time.Time{}), ids.NewSequence()).Classes(t.Context(), term.ID)
+	got, err := service.NewTimetableService(st, clock.NewFixed(time.Time{}), ids.NewSequence(), service.Mails{}).Classes(t.Context(), term.ID)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("Classes() = %v, %v; want no classes", got, err)
 	}
