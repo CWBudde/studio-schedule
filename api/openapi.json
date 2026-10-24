@@ -374,6 +374,59 @@
         ],
         "type": "object"
       },
+      "ClassMember": {
+        "additionalProperties": false,
+        "properties": {
+          "person": {
+            "$ref": "#/components/schemas/PersonMatch",
+            "description": "The member."
+          },
+          "since": {
+            "description": "Member since, if known.",
+            "format": "date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "person"
+        ],
+        "type": "object"
+      },
+      "ClassMemberData": {
+        "additionalProperties": false,
+        "properties": {
+          "personId": {
+            "description": "The person to enroll.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "since": {
+            "description": "Member since, if known.",
+            "format": "date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "personId"
+        ],
+        "type": "object"
+      },
+      "ClassMemberList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "Members ordered by family and given name.",
+            "items": {
+              "$ref": "#/components/schemas/ClassMember"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "ConfirmEmailChangeInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -1825,6 +1878,33 @@
         ],
         "type": "object"
       },
+      "TermData": {
+        "additionalProperties": false,
+        "properties": {
+          "endsOn": {
+            "description": "Last day of the term (inclusive).",
+            "format": "date",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "startsOn": {
+            "description": "First day of the term (inclusive).",
+            "format": "date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "startsOn",
+          "endsOn"
+        ],
+        "type": "object"
+      },
       "TermList": {
         "additionalProperties": false,
         "properties": {
@@ -1948,6 +2028,52 @@
           "admin"
         ],
         "x-access": "admin"
+      }
+    },
+    "/api/v1/admin/classes/{classId}/members": {
+      "get": {
+        "description": "Returns the persons enrolled in a class, ordered by family and given name.",
+        "operationId": "listClassMembers",
+        "parameters": [
+          {
+            "description": "The class.",
+            "in": "path",
+            "name": "classId",
+            "required": true,
+            "schema": {
+              "description": "The class.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassMemberList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List the members of a class",
+        "tags": [
+          "timetable"
+        ],
+        "x-access": "office"
       }
     },
     "/api/v1/admin/persons": {
@@ -2615,7 +2741,7 @@
         "x-access": "office"
       },
       "put": {
-        "description": "Replaces the fields of a class; its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons without bookings are deleted.",
+        "description": "Replaces the fields of a class; its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons that still follow it and have no bookings are deleted.",
         "operationId": "updateClass",
         "parameters": [
           {
@@ -2673,6 +2799,122 @@
           }
         },
         "summary": "Update a class",
+        "tags": [
+          "timetable"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/classes/{classId}/members": {
+      "post": {
+        "description": "Enrolls a person in a class. An unknown person is a 422 on `personId`, a person who is a member already a 409 `duplicate`.",
+        "operationId": "addClassMember",
+        "parameters": [
+          {
+            "description": "The class.",
+            "in": "path",
+            "name": "classId",
+            "required": true,
+            "schema": {
+              "description": "The class.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassMemberData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassMember"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add a class member",
+        "tags": [
+          "timetable"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/classes/{classId}/members/{personId}": {
+      "delete": {
+        "description": "Ends a person's membership in a class; a person who is not a member is a 404.",
+        "operationId": "removeClassMember",
+        "parameters": [
+          {
+            "description": "The class.",
+            "in": "path",
+            "name": "classId",
+            "required": true,
+            "schema": {
+              "description": "The class.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The member.",
+            "in": "path",
+            "name": "personId",
+            "required": true,
+            "schema": {
+              "description": "The member.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove a class member",
         "tags": [
           "timetable"
         ],
@@ -4010,6 +4252,170 @@
           "timetable"
         ],
         "x-access": "public"
+      },
+      "post": {
+        "description": "Adds a term. Terms may overlap, and their names need not be unique.",
+        "operationId": "createTerm",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TermData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Term"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create a term",
+        "tags": [
+          "timetable"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/terms/{termId}": {
+      "delete": {
+        "description": "Deletes a term without classes; a term with classes is a 409 `in-use`.",
+        "operationId": "deleteTerm",
+        "parameters": [
+          {
+            "description": "The term.",
+            "in": "path",
+            "name": "termId",
+            "required": true,
+            "schema": {
+              "description": "The term.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete a term",
+        "tags": [
+          "timetable"
+        ],
+        "x-access": "office"
+      },
+      "put": {
+        "description": "Replaces the name and dates of a term. The lessons of its classes that the new dates leave out are deleted while they lie ahead, still follow their class and have no bookings; any other lesson left out is a 422 on `startsOn` or `endsOn`, whichever leaves it out. Longer dates get the lessons that lie ahead.",
+        "operationId": "updateTerm",
+        "parameters": [
+          {
+            "description": "The term.",
+            "in": "path",
+            "name": "termId",
+            "required": true,
+            "schema": {
+              "description": "The term.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TermData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Term"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update a term",
+        "tags": [
+          "timetable"
+        ],
+        "x-access": "office"
       }
     },
     "/api/v1/terms/{termId}/classes": {

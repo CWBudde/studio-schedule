@@ -110,6 +110,12 @@ func (g *LessonGenerator) generate(
 				continue // no overlap with [from, to)
 			}
 
+			// Work with the locked term: a change of its dates that ran
+			// meanwhile is complete (TermRepo.Lock).
+			if term, err = tx.Terms().Lock(ctx, term.ID); err != nil {
+				return fmt.Errorf("lock term %s: %w", term.ID, err)
+			}
+
 			classes, err := tx.Classes().ListByTerm(ctx, term.ID)
 			if err != nil {
 				return fmt.Errorf("list classes of term %s: %w", term.ID, err)
@@ -141,7 +147,8 @@ func (g *LessonGenerator) generate(
 // class has a slot date in its Monday-based week, so a lesson that stayed
 // on an earlier weekday of the class still counts. It locks the class
 // first and works with the locked version, so a concurrent class edit
-// (UpdateClass, which locks it too) is either complete or not begun.
+// (UpdateClass, which locks it too) is either complete or not begun. The
+// caller has locked t (TermRepo.Lock).
 func (g *LessonGenerator) fill(
 	ctx context.Context, tx store.Tx, c domain.Class, t domain.Term, from, to domain.Date, loc *time.Location,
 	after time.Time,

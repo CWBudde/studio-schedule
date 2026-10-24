@@ -15,10 +15,10 @@ type Term struct {
 func (t Term) Validate() error {
 	return validate(
 		rule{!t.ID.IsZero(), "term id must be set"},
-		rule{!blank(t.Name), "term name must not be empty"},
-		rule{t.StartsOn.Valid(), "invalid term start"},
-		rule{t.EndsOn.Valid(), "invalid term end"},
-		rule{t.StartsOn.Compare(t.EndsOn) <= 0, "term must not end before it starts"},
+		on("name", !blank(t.Name), "term name must not be empty"),
+		on("startsOn", t.StartsOn.Valid(), "invalid term start"),
+		on("endsOn", t.EndsOn.Valid(), "invalid term end"),
+		on("endsOn", t.StartsOn.Compare(t.EndsOn) <= 0, "term must not end before it starts"),
 	)
 }
 
@@ -75,6 +75,6 @@ func (m ClassMember) Validate() error {
 	return validate(
 		rule{!m.ClassID.IsZero(), "class member class must be set"},
 		rule{!m.PersonID.IsZero(), "class member person must be set"},
-		rule{optionalDate(m.Since), "invalid class member start date"},
+		on("since", optionalDate(m.Since), "invalid class member start date"),
 	)
 }

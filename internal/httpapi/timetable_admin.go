@@ -11,15 +11,45 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/service"
 )
 
-// registerTimetableAdmin registers the office's writes to the weekly
-// classes (ADR 0007), and the office's list of a term's classes. The public
-// reads are in timetable.go.
+// registerTimetableAdmin registers the office's writes to the terms, the
+// weekly classes and their members (ADR 0007), and the office's lists of a
+// term's classes and a class's members. The public reads are in
+// timetable.go.
 func registerTimetableAdmin(api huma.API, h *handlers) {
 	write := func(op huma.Operation) huma.Operation {
 		op.Tags = []string{"timetable"}
 
 		return withConflict(api, op)
 	}
+
+	register(api, AccessOffice, write(huma.Operation{
+		OperationID:   "createTerm",
+		Method:        http.MethodPost,
+		Path:          BasePath + "/terms",
+		Summary:       "Create a term",
+		Description:   "Adds a term. Terms may overlap, and their names need not be unique.",
+		DefaultStatus: http.StatusCreated,
+	}), h.createTerm)
+
+	register(api, AccessOffice, write(huma.Operation{
+		OperationID: "updateTerm",
+		Method:      http.MethodPut,
+		Path:        BasePath + "/terms/{termId}",
+		Summary:     "Update a term",
+		Description: "Replaces the name and dates of a term. The lessons of its classes that the new dates " +
+			"leave out are deleted while they lie ahead, still follow their class and have no bookings; " +
+			"any other lesson left out is a 422 on `startsOn` or `endsOn`, whichever leaves it out. " +
+			"Longer dates get the lessons that lie ahead.",
+	}), h.updateTerm)
+
+	register(api, AccessOffice, write(huma.Operation{
+		OperationID:   "deleteTerm",
+		Method:        http.MethodDelete,
+		Path:          BasePath + "/terms/{termId}",
+		Summary:       "Delete a term",
+		Description:   "Deletes a term without classes; a term with classes is a 409 `in-use`.",
+		DefaultStatus: http.StatusNoContent,
+	}), h.deleteTerm)
 
 	register(api, AccessOffice, huma.Operation{
 		OperationID: "listAllClasses",
@@ -60,6 +90,35 @@ func registerTimetableAdmin(api huma.API, h *handlers) {
 		Description:   "Deletes a class with its lessons while none of them has started or been booked and it has no members; otherwise it is a 409 `in-use` and can be retired instead.",
 		DefaultStatus: http.StatusNoContent,
 	}), h.deleteClass)
+
+	register(api, AccessOffice, huma.Operation{
+		OperationID: "listClassMembers",
+		Method:      http.MethodGet,
+		Path:        BasePath + "/admin/classes/{classId}/members",
+		Summary:     "List the members of a class",
+		Description: "Returns the persons enrolled in a class, ordered by family and given name.",
+		Tags:        []string{"timetable"},
+	}, h.listClassMembers)
+
+	register(api, AccessOffice, write(huma.Operation{
+		OperationID: "addClassMember",
+		Method:      http.MethodPost,
+		Path:        BasePath + "/classes/{classId}/members",
+		Summary:     "Add a class member",
+		Description: "Enrolls a person in a class. An unknown person is a 422 on `personId`, a person who is a " +
+			"member already a 409 `duplicate`.",
+		DefaultStatus: http.StatusCreated,
+	}), h.addClassMember)
+
+	register(api, AccessOffice, huma.Operation{
+		OperationID:   "removeClassMember",
+		Method:        http.MethodDelete,
+		Path:          BasePath + "/classes/{classId}/members/{personId}",
+		Summary:       "Remove a class member",
+		Description:   "Ends a person's membership in a class; a person who is not a member is a 404.",
+		Tags:          []string{"timetable"},
+		DefaultStatus: http.StatusNoContent,
+	}, h.removeClassMember)
 }
 
 // ClassData is the editable part of a class.
@@ -162,4 +221,138 @@ func (d ClassData) service() service.ClassData {
 		Level: d.Level, Weekday: time.Weekday(d.Weekday), StartTime: d.StartTime,
 		Duration: time.Duration(d.DurationMinutes) * time.Minute, Capacity: d.Capacity, Retired: d.Retired,
 	}
+}
+
+// TermData is the editable part of a term.
+type TermData struct {
+	Name     string      `doc:"Display name."                      json:"name"     maxLength:"100" minLength:"1"`
+	StartsOn domain.Date `doc:"First day of the term (inclusive)." format:"date" json:"startsOn"`
+	EndsOn   domain.Date `doc:"Last day of the term (inclusive)."  format:"date" json:"endsOn"`
+}
+
+// TermDataInput is the request of createTerm.
+type TermDataInput struct {
+	Body TermData
+}
+
+// TermUpdateInput is the request of updateTerm.
+type TermUpdateInput struct {
+	TermID domain.TermID `doc:"The term." path:"termId"`
+	Body   TermData
+}
+
+// TermRefInput is the request of deleteTerm.
+type TermRefInput struct {
+	TermID domain.TermID `doc:"The term." path:"termId"`
+}
+
+// TermOutput is the response of createTerm and updateTerm.
+type TermOutput struct {
+	Body Term
+}
+
+func (h *handlers) createTerm(ctx context.Context, in *TermDataInput) (*TermOutput, error) {
+	return h.termOutput(ctx)(h.deps.Timetable.CreateTerm(ctx, in.Body.service()))
+}
+
+func (h *handlers) updateTerm(ctx context.Context, in *TermUpdateInput) (*TermOutput, error) {
+	return h.termOutput(ctx)(h.deps.Timetable.UpdateTerm(ctx, in.TermID, in.Body.service()))
+}
+
+func (h *handlers) deleteTerm(ctx context.Context, in *TermRefInput) (*struct{}, error) {
+	if err := h.deps.Timetable.DeleteTerm(ctx, in.TermID); err != nil {
+		return nil, h.toHTTPError(ctx, err)
+	}
+
+	return &struct{}{}, nil
+}
+
+func (h *handlers) termOutput(ctx context.Context) func(domain.Term, error) (*TermOutput, error) {
+	return func(t domain.Term, err error) (*TermOutput, error) {
+		if err != nil {
+			return nil, h.toHTTPError(ctx, err)
+		}
+
+		return &TermOutput{Body: term(t)}, nil
+	}
+}
+
+func (d TermData) service() service.TermData {
+	return service.TermData{Name: d.Name, StartsOn: d.StartsOn, EndsOn: d.EndsOn}
+}
+
+// ClassMemberData is the request body of addClassMember.
+type ClassMemberData struct {
+	PersonID domain.PersonID `doc:"The person to enroll."           json:"personId"`
+	Since    domain.Date     `doc:"Member since, if known."        format:"date" json:"since,omitzero"`
+}
+
+// ClassMember is a person enrolled in a class.
+type ClassMember struct {
+	Person PersonMatch `doc:"The member."             json:"person"`
+	Since  domain.Date `doc:"Member since, if known." format:"date" json:"since,omitzero"`
+}
+
+// ClassMemberList is the response body of listClassMembers.
+type ClassMemberList struct {
+	Items []ClassMember `doc:"Members ordered by family and given name." json:"items" nullable:"false"`
+}
+
+// ClassMemberListOutput is the response of listClassMembers.
+type ClassMemberListOutput struct {
+	Body ClassMemberList
+}
+
+// ClassMemberInput is the request of addClassMember.
+type ClassMemberInput struct {
+	ClassID domain.ClassID `doc:"The class." path:"classId"`
+	Body    ClassMemberData
+}
+
+// ClassMemberRefInput is the request of removeClassMember.
+type ClassMemberRefInput struct {
+	ClassID  domain.ClassID  `doc:"The class."  path:"classId"`
+	PersonID domain.PersonID `doc:"The member." path:"personId"`
+}
+
+// ClassMemberOutput is the response of addClassMember.
+type ClassMemberOutput struct {
+	Body ClassMember
+}
+
+func (h *handlers) listClassMembers(ctx context.Context, in *ClassRefInput) (*ClassMemberListOutput, error) {
+	members, err := h.deps.Timetable.ClassMembers(ctx, in.ClassID)
+	if err != nil {
+		return nil, h.toHTTPError(ctx, err)
+	}
+
+	items := make([]ClassMember, 0, len(members))
+	for _, m := range members {
+		items = append(items, classMember(m))
+	}
+
+	return &ClassMemberListOutput{Body: ClassMemberList{Items: items}}, nil
+}
+
+func (h *handlers) addClassMember(ctx context.Context, in *ClassMemberInput) (*ClassMemberOutput, error) {
+	m, err := h.deps.Timetable.AddClassMember(ctx, domain.ClassMember{
+		ClassID: in.ClassID, PersonID: in.Body.PersonID, Since: in.Body.Since,
+	})
+	if err != nil {
+		return nil, h.toHTTPError(ctx, err)
+	}
+
+	return &ClassMemberOutput{Body: classMember(m)}, nil
+}
+
+func (h *handlers) removeClassMember(ctx context.Context, in *ClassMemberRefInput) (*struct{}, error) {
+	if err := h.deps.Timetable.RemoveClassMember(ctx, in.ClassID, in.PersonID); err != nil {
+		return nil, h.toHTTPError(ctx, err)
+	}
+
+	return &struct{}{}, nil
+}
+
+func classMember(m service.ClassMemberEntry) ClassMember {
+	return ClassMember{Person: personMatch(m.Person), Since: m.Since}
 }

@@ -57,10 +57,14 @@ func (h *handlers) listTerms(ctx context.Context, _ *struct{}) (*TermListOutput,
 
 	items := make([]Term, 0, len(terms))
 	for _, t := range terms {
-		items = append(items, Term{ID: t.ID, Name: t.Name, StartsOn: t.StartsOn, EndsOn: t.EndsOn})
+		items = append(items, term(t))
 	}
 
 	return &TermListOutput{Body: TermList{Items: items}}, nil
+}
+
+func term(t domain.Term) Term {
+	return Term{ID: t.ID, Name: t.Name, StartsOn: t.StartsOn, EndsOn: t.EndsOn}
 }
 
 // Class is a weekly class of a term. Its members are not exposed.

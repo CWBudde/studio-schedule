@@ -44,6 +44,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/classes/{classId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the members of a class
+         * @description Returns the persons enrolled in a class, ordered by family and given name.
+         */
+        get: operations["listClassMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/persons": {
         parameters: {
             query?: never;
@@ -354,7 +374,7 @@ export interface paths {
         get?: never;
         /**
          * Update a class
-         * @description Replaces the fields of a class; its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons without bookings are deleted.
+         * @description Replaces the fields of a class; its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons that still follow it and have no bookings are deleted.
          */
         put: operations["updateClass"];
         post?: never;
@@ -363,6 +383,46 @@ export interface paths {
          * @description Deletes a class with its lessons while none of them has started or been booked and it has no members; otherwise it is a 409 `in-use` and can be retired instead.
          */
         delete: operations["deleteClass"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/classes/{classId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a class member
+         * @description Enrolls a person in a class. An unknown person is a 422 on `personId`, a person who is a member already a 409 `duplicate`.
+         */
+        post: operations["addClassMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/classes/{classId}/members/{personId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a class member
+         * @description Ends a person's membership in a class; a person who is not a member is a 404.
+         */
+        delete: operations["removeClassMember"];
         options?: never;
         head?: never;
         patch?: never;
@@ -777,8 +837,36 @@ export interface paths {
          */
         get: operations["listTerms"];
         put?: never;
-        post?: never;
+        /**
+         * Create a term
+         * @description Adds a term. Terms may overlap, and their names need not be unique.
+         */
+        post: operations["createTerm"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terms/{termId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update a term
+         * @description Replaces the name and dates of a term. The lessons of its classes that the new dates leave out are deleted while they lie ahead, still follow their class and have no bookings; any other lesson left out is a 422 on `startsOn` or `endsOn`, whichever leaves it out. Longer dates get the lessons that lie ahead.
+         */
+        put: operations["updateTerm"];
+        post?: never;
+        /**
+         * Delete a term
+         * @description Deletes a term without classes; a term with classes is a 409 `in-use`.
+         */
+        delete: operations["deleteTerm"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1004,6 +1092,31 @@ export interface components {
         ClassList: {
             /** @description Classes ordered by weekday (Sunday first) and start time. */
             items: components["schemas"]["Class"][];
+        };
+        ClassMember: {
+            /** @description The member. */
+            person: components["schemas"]["PersonMatch"];
+            /**
+             * Format: date
+             * @description Member since, if known.
+             */
+            since?: string;
+        };
+        ClassMemberData: {
+            /**
+             * Format: uuid
+             * @description The person to enroll.
+             */
+            personId: string;
+            /**
+             * Format: date
+             * @description Member since, if known.
+             */
+            since?: string;
+        };
+        ClassMemberList: {
+            /** @description Members ordered by family and given name. */
+            items: components["schemas"]["ClassMember"][];
         };
         ConfirmEmailChangeInputBody: {
             /** @description Language of the notice to the old address (BCP 47); defaults to the school's. */
@@ -1650,6 +1763,20 @@ export interface components {
              */
             startsOn: string;
         };
+        TermData: {
+            /**
+             * Format: date
+             * @description Last day of the term (inclusive).
+             */
+            endsOn: string;
+            /** @description Display name. */
+            name: string;
+            /**
+             * Format: date
+             * @description First day of the term (inclusive).
+             */
+            startsOn: string;
+        };
         TermList: {
             /** @description Terms ordered by start date. */
             items: components["schemas"]["Term"][];
@@ -1719,6 +1846,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listClassMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The class. */
+                classId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassMemberList"];
                 };
             };
             /** @description Error */
@@ -2278,6 +2437,83 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["Conflict"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    addClassMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The class. */
+                classId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassMemberData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassMember"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    removeClassMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The class. */
+                classId: string;
+                /** @description The member. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -3280,6 +3516,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TermList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createTerm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TermData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Term"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateTerm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The term. */
+                termId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TermData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Term"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteTerm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The term. */
+                termId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
                 };
             };
             /** @description Error */

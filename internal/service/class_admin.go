@@ -47,7 +47,9 @@ func (s *TimetableService) CreateClass(ctx context.Context, term domain.TermID, 
 	var tc TimetableClass
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		t, err := tx.Terms().Get(ctx, term)
+		// The term's lock keeps a change of its dates out until the class
+		// and its lessons are in place.
+		t, err := tx.Terms().Lock(ctx, term)
 		if err != nil {
 			return err
 		}
@@ -82,7 +84,18 @@ func (s *TimetableService) UpdateClass(ctx context.Context, id domain.ClassID, d
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		// An unknown class is a 404 before anything about the fields. The
-		// lock keeps lesson generation out until the edit is done.
+		// locks, the term's first (TermRepo.Lock), keep lesson generation
+		// and a change of the term's dates out until the edit is done.
+		cur, err := tx.Classes().Get(ctx, id)
+		if err != nil {
+			return err
+		}
+
+		t, err := tx.Terms().Lock(ctx, cur.TermID)
+		if err != nil {
+			return fmt.Errorf("term of class %s: %w", id, err)
+		}
+
 		old, err := tx.Classes().Lock(ctx, id)
 		if err != nil {
 			return err
@@ -95,11 +108,6 @@ func (s *TimetableService) UpdateClass(ctx context.Context, id domain.ClassID, d
 
 		if tc, err = classReferences(ctx, tx, c); err != nil {
 			return err
-		}
-
-		t, err := tx.Terms().Get(ctx, c.TermID)
-		if err != nil {
-			return fmt.Errorf("term of class %s: %w", id, err)
 		}
 
 		if err := tx.Classes().Update(ctx, c); err != nil {
