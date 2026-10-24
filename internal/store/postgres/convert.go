@@ -17,6 +17,15 @@ func pgID[I domain.AnyID](id I) pgtype.UUID {
 	return pgtype.UUID{Bytes: [16]byte(id), Valid: !id.IsZero()}
 }
 
+func pgIDs[I domain.AnyID](ids []I) []pgtype.UUID {
+	out := make([]pgtype.UUID, len(ids))
+	for i, id := range ids {
+		out[i] = pgID(id)
+	}
+
+	return out
+}
+
 func fromPgID[I domain.AnyID](u pgtype.UUID) I {
 	if !u.Valid {
 		return I{}

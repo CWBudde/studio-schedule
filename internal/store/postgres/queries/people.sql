@@ -21,6 +21,9 @@ SELECT id FROM persons WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY id FOR UPD
 -- name: ListPersons :many
 SELECT * FROM persons ORDER BY family_name, given_name, id;
 
+-- name: ListPersonsByIDs :many
+SELECT * FROM persons WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY family_name, given_name, id;
+
 -- name: AddGuardian :exec
 INSERT INTO person_guardians (guardian_id, dependent_id) VALUES ($1, $2);
 
@@ -64,6 +67,9 @@ WHERE id = $1;
 
 -- name: ListAccounts :many
 SELECT * FROM accounts ORDER BY lower(email), id;
+
+-- name: ListAccountsByIDs :many
+SELECT * FROM accounts WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY lower(email), id;
 
 -- name: MaxAccountVisibleDays :one
 SELECT coalesce(max(visible_days), 0)::integer FROM accounts;

@@ -53,6 +53,22 @@ func testPersons(t *testing.T, newStore func(*testing.T) store.Store) {
 			b1 := e.person("Ben", "Berg") // same name: the ID decides
 			wantSlice(e.t, list(e), []domain.Person{z, a, b2, b1, lower})
 		},
+		"ListByIDs": func(e *env) {
+			byIDs := func(ids ...domain.PersonID) []domain.Person {
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Person, error) {
+					return tx.Persons().ListByIDs(ctx, ids)
+				})
+			}
+			b := e.person("Ben", "Berg")
+			a := e.person("Anna", "Berg")
+			z := e.person("Zoe", "Arnold")
+			e.person("Not", "Asked")
+
+			// Ordered like List, each person once, missing IDs simply absent.
+			wantSlice(e.t, byIDs(b.ID, newID[domain.PersonID](e), z.ID, a.ID, b.ID), []domain.Person{z, a, b})
+			wantSlice(e.t, byIDs(), nil)
+			wantSlice(e.t, byIDs(newID[domain.PersonID](e)), nil)
+		},
 		"Guardians": func(e *env) {
 			parent := e.person("Paula", "Parent")
 			other := e.person("Otto", "Parent")
@@ -323,6 +339,22 @@ func testAccounts(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			got := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Account, error) { return tx.Accounts().List(ctx) })
 			wantSlice(e.t, got, []domain.Account{a, b, c})
+		},
+		"ListByIDs": func(e *env) {
+			byIDs := func(ids ...domain.AccountID) []domain.Account {
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Account, error) {
+					return tx.Accounts().ListByIDs(ctx, ids)
+				})
+			}
+			c := e.account(e.person("C", "C"), "carl@example.org")
+			b := e.account(e.person("B", "B"), "Bea@example.org")
+			a := e.account(e.person("A", "A"), "anna@example.org")
+			e.account(e.person("D", "D"), "dora@example.org")
+
+			// Ordered like List, each account once, missing IDs simply absent.
+			wantSlice(e.t, byIDs(c.ID, newID[domain.AccountID](e), a.ID, b.ID, c.ID), []domain.Account{a, b, c})
+			wantSlice(e.t, byIDs(), nil)
+			wantSlice(e.t, byIDs(newID[domain.AccountID](e)), nil)
 		},
 	})
 }

@@ -126,6 +126,9 @@ type PersonRepo interface {
 	Delete(ctx context.Context, id domain.PersonID) error
 	// List returns all persons ordered by family name, given name and ID.
 	List(ctx context.Context) ([]domain.Person, error)
+	// ListByIDs returns the persons with the given IDs, each once and
+	// ordered like List. IDs that do not exist are left out.
+	ListByIDs(ctx context.Context, ids []domain.PersonID) ([]domain.Person, error)
 	// Lock locks the persons until the transaction ends (in PostgreSQL:
 	// SELECT … FOR UPDATE, in ID order, so that two transactions locking
 	// the same persons in another order do not deadlock). Whatever checks
@@ -165,6 +168,9 @@ type AccountRepo interface {
 	Update(ctx context.Context, a domain.Account) error
 	// List returns all accounts ordered by ASCII-lower-cased email and ID.
 	List(ctx context.Context) ([]domain.Account, error)
+	// ListByIDs returns the accounts with the given IDs, each once and
+	// ordered like List. IDs that do not exist are left out.
+	ListByIDs(ctx context.Context, ids []domain.AccountID) ([]domain.Account, error)
 	// MaxVisibleDays returns the largest VisibleDays override of any
 	// account, or 0 if none has one.
 	MaxVisibleDays(ctx context.Context) (int, error)

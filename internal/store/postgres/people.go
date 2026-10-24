@@ -160,6 +160,10 @@ func (r personRepo) List(ctx context.Context) ([]domain.Person, error) {
 	return toPersons(r.q.ListPersons(ctx))
 }
 
+func (r personRepo) ListByIDs(ctx context.Context, ids []domain.PersonID) ([]domain.Person, error) {
+	return toPersons(r.q.ListPersonsByIDs(ctx, pgIDs(ids)))
+}
+
 func (r personRepo) AddGuardian(ctx context.Context, g domain.Guardian) error {
 	return mapErr(r.q.AddGuardian(ctx, sqlc.AddGuardianParams{
 		GuardianID:  pgID(g.GuardianID),
@@ -268,6 +272,12 @@ func (r accountRepo) Update(ctx context.Context, a domain.Account) error {
 
 func (r accountRepo) List(ctx context.Context) ([]domain.Account, error) {
 	rows, err := r.q.ListAccounts(ctx)
+
+	return convertRows(rows, err, toAccount)
+}
+
+func (r accountRepo) ListByIDs(ctx context.Context, ids []domain.AccountID) ([]domain.Account, error) {
+	rows, err := r.q.ListAccountsByIDs(ctx, pgIDs(ids))
 
 	return convertRows(rows, err, toAccount)
 }

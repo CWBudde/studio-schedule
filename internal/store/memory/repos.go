@@ -48,6 +48,28 @@ func sorted[T any](s []T, cmpFn func(a, b T) int) []T {
 
 func all[V any](V) bool { return true }
 
+// byIDs returns the values get finds for ids, each once, in no particular
+// order.
+func byIDs[I comparable, V any](get func(I) (V, bool), ids []I) []V {
+	seen := make(map[I]bool, len(ids))
+
+	var out []V
+
+	for _, id := range ids {
+		if seen[id] {
+			continue
+		}
+
+		seen[id] = true
+
+		if v, ok := get(id); ok {
+			out = append(out, v)
+		}
+	}
+
+	return out
+}
+
 // ---------------------------------------------------------------- persons
 
 type personRepo struct{ tx *tx }
@@ -144,6 +166,10 @@ func (r personRepo) Lock(_ context.Context, ids ...domain.PersonID) error {
 
 func (r personRepo) List(context.Context) ([]domain.Person, error) {
 	return sorted(r.tx.state.persons.filter(all), comparePersons), nil
+}
+
+func (r personRepo) ListByIDs(_ context.Context, ids []domain.PersonID) ([]domain.Person, error) {
+	return sorted(byIDs(r.tx.state.persons.get, ids), comparePersons), nil
 }
 
 func (r personRepo) AddGuardian(_ context.Context, g domain.Guardian) error {
@@ -280,10 +306,16 @@ func (r accountRepo) put(a domain.Account) error {
 	return nil
 }
 
+func compareAccounts(a, b domain.Account) int {
+	return cmp.Or(strings.Compare(foldASCII(a.Email), foldASCII(b.Email)), compareID(a.ID, b.ID))
+}
+
 func (r accountRepo) List(context.Context) ([]domain.Account, error) {
-	return sorted(r.tx.state.accounts.filter(all), func(a, b domain.Account) int {
-		return cmp.Or(strings.Compare(foldASCII(a.Email), foldASCII(b.Email)), compareID(a.ID, b.ID))
-	}), nil
+	return sorted(r.tx.state.accounts.filter(all), compareAccounts), nil
+}
+
+func (r accountRepo) ListByIDs(_ context.Context, ids []domain.AccountID) ([]domain.Account, error) {
+	return sorted(byIDs(r.tx.state.accounts.get, ids), compareAccounts), nil
 }
 
 func (r accountRepo) MaxVisibleDays(context.Context) (int, error) {

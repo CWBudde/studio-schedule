@@ -209,6 +209,39 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 	return items, nil
 }
 
+const listAccountsByIDs = `-- name: ListAccountsByIDs :many
+SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at, locale FROM accounts WHERE id = ANY($1::uuid[]) ORDER BY lower(email), id
+`
+
+func (q *Queries) ListAccountsByIDs(ctx context.Context, ids []pgtype.UUID) ([]Account, error) {
+	rows, err := q.db.Query(ctx, listAccountsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Account
+	for rows.Next() {
+		var i Account
+		if err := rows.Scan(
+			&i.ID,
+			&i.PersonID,
+			&i.Email,
+			&i.Role,
+			&i.VisibleDays,
+			&i.DisabledAt,
+			&i.ConfirmedAt,
+			&i.Locale,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDependents = `-- name: ListDependents :many
 SELECT p.id, p.given_name, p.family_name, p.email, p.phone, p.birth_date, p.notes
 FROM person_guardians g
@@ -287,6 +320,38 @@ SELECT id, given_name, family_name, email, phone, birth_date, notes FROM persons
 
 func (q *Queries) ListPersons(ctx context.Context) ([]Person, error) {
 	rows, err := q.db.Query(ctx, listPersons)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Person
+	for rows.Next() {
+		var i Person
+		if err := rows.Scan(
+			&i.ID,
+			&i.GivenName,
+			&i.FamilyName,
+			&i.Email,
+			&i.Phone,
+			&i.BirthDate,
+			&i.Notes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPersonsByIDs = `-- name: ListPersonsByIDs :many
+SELECT id, given_name, family_name, email, phone, birth_date, notes FROM persons WHERE id = ANY($1::uuid[]) ORDER BY family_name, given_name, id
+`
+
+func (q *Queries) ListPersonsByIDs(ctx context.Context, ids []pgtype.UUID) ([]Person, error) {
+	rows, err := q.db.Query(ctx, listPersonsByIDs, ids)
 	if err != nil {
 		return nil, err
 	}
