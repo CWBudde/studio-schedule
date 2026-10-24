@@ -10,7 +10,7 @@ import { TextField } from '@/features/auth/TextField';
 import type { Term } from '@/features/timetable/timetable';
 import { showServerErrors, useAdminErrorText } from './crud/form';
 import { FormSheet, FormSheetActions, FormSheetHeader } from './crud/FormSheet';
-import { ProblemAlert } from './crud/ProblemAlert';
+import { ProblemAlert } from '@/components/ProblemAlert';
 import { termFields, termSchema, type TermValues, termValues } from './termForms';
 
 /** What the sheet edits: a new term or an existing one. */

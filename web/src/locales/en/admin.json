@@ -5,6 +5,7 @@
     "courseTypes": "Course types",
     "staff": "Staff",
     "timetable": "Timetable",
+    "persons": "Persons",
     "accounts": "Accounts"
   },
   "noAccess": {
@@ -42,7 +43,13 @@
       "endBeforeStart": "The last day cannot be before the first day.",
       "termLessons": "A lesson outside these dates has started, has bookings or was changed one by one, so the term cannot leave it out.",
       "choosePerson": "Please choose a person.",
-      "alreadyMember": "This person is a member of the class already."
+      "alreadyMember": "This person is a member of the class already.",
+      "birthDateFuture": "The birth date cannot be in the future.",
+      "selfGuardian": "A person cannot be their own guardian.",
+      "alreadyGuardian": "This person is a guardian already.",
+      "emailTaken": "Another account already uses this email address.",
+      "guardianCycle": "A child of this person cannot be their guardian.",
+      "guardianInvalid": "This person cannot be a guardian here: they no longer exist, or they are a child or grandchild of this person."
     }
   },
   "delete": {
@@ -296,5 +303,118 @@
     "confirm": "Remove {{name}} from {{classLabel}}?",
     "removed": "{{name}} has been removed from the class.",
     "notFound": "{{name}} is no longer a member of this class."
+  },
+  "persons": {
+    "title": "Persons",
+    "description": "Everyone the school knows: members, children, parents and staff. Search by name or email, then open a person to see and change their details, family, account and classes.",
+    "search": "Search persons",
+    "searchPlaceholder": "Name or email",
+    "table": "Persons",
+    "name": "Name",
+    "email": "Email",
+    "empty": "There are no persons yet.",
+    "noMatches": "Nobody matches “{{query}}”.",
+    "more": "Showing the first {{count}} persons. Type more to narrow the list.",
+    "openLabel": "Open {{name}}",
+    "add": "Add person",
+    "addTitle": "Add a person",
+    "addDescription": "For example a second parent or the person record of a staff member. The person gets no account; you can create one later.",
+    "editTitle": "Edit {{name}}",
+    "editDescription": "The email here is for contact. The address an account signs in with stays as it is.",
+    "added": "{{name}} has been added.",
+    "saved": "{{name}} has been saved.",
+    "notFound": "This person no longer exists.",
+    "delete": {
+      "button": "Delete",
+      "label": "Delete {{name}}",
+      "title": "Delete {{name}}?",
+      "description": "The person is deleted for good. Only a person nothing refers to can be deleted: no account, staff link, bookings, class memberships, guardians or children.",
+      "inUse": "{{name}} still has an account, a staff link, bookings, class memberships, guardians or children, so they cannot be deleted. Remove those first.",
+      "deleted": "{{name}} has been deleted."
+    },
+    "fields": {
+      "givenName": "First name",
+      "familyName": "Last name",
+      "email": "Email",
+      "phone": "Phone",
+      "birthDate": "Birth date",
+      "notes": "Notes",
+      "notesHint": "Only the office sees these notes."
+    },
+    "detail": {
+      "all": "All persons",
+      "loadError": "Could not load this person.",
+      "noPerson": "This person does not exist.",
+      "noPersonDescription": "The link may be wrong. Search for the person instead.",
+      "details": "Details",
+      "edit": "Edit details",
+      "editLabel": "Edit the details of {{name}}"
+    },
+    "guardians": {
+      "title": "Guardians",
+      "description": "The parents or other guardians who book for {{name}}.",
+      "list": "Guardians",
+      "empty": "{{name}} has no guardian.",
+      "addLabel": "Add a guardian",
+      "person": "Guardian",
+      "add": "Add guardian",
+      "added": "{{guardian}} is now a guardian of {{name}}.",
+      "duplicate": "{{guardian}} is a guardian of {{name}} already.",
+      "duplicateUnknown": "This person is a guardian of {{name}} already.",
+      "removeLabel": "Remove {{guardian}} as guardian",
+      "remove": "Remove",
+      "removing": "Removing…",
+      "keep": "Keep",
+      "confirm": "Remove {{guardian}} as guardian of {{name}}?",
+      "lastGuardian": "{{givenName}} then has no guardian left but stays registered.",
+      "removed": "{{guardian}} is no longer a guardian of {{name}}.",
+      "notFound": "{{guardian}} is no longer a guardian of {{name}}."
+    },
+    "dependents": {
+      "title": "Children",
+      "description": "The persons {{name}} is a guardian of.",
+      "list": "Children",
+      "empty": "{{name}} is no guardian."
+    },
+    "account": {
+      "title": "Account",
+      "description": "The login of {{name}}.",
+      "none": "{{name}} has no account and cannot sign in.",
+      "email": "Sign-in address",
+      "role": "Role",
+      "status": "Status",
+      "statuses": {
+        "pending": "Unconfirmed",
+        "active": "Active",
+        "disabled": "Disabled"
+      },
+      "pendingHint": "The account becomes active once {{givenName}} confirms the email address with the link from the invitation or the registration.",
+      "create": "Create account",
+      "createTitle": "Create an account for {{name}}",
+      "createDescription": "{{givenName}} gets an invitation by email. Its link, valid for 72 hours, sets the password and activates the account.",
+      "emailHint": "The account signs in with this address, and the invitation goes there.",
+      "chooseRole": "Choose a role",
+      "submit": "Create and invite",
+      "created": "{{name}} has an account now. The invitation has been sent to {{email}}.",
+      "duplicate": "Another account already uses this email address. Choose another one.",
+      "hasAccount": "{{name}} has an account already, perhaps created meanwhile. Close this form to see it.",
+      "forbidden": "Only administrators can create administrator accounts."
+    },
+    "staff": {
+      "title": "Staff",
+      "description": "The staff records linked to {{name}}.",
+      "empty": "{{name}} is not linked to a staff record.",
+      "inactive": "Inactive",
+      "open": "Open the staff list"
+    },
+    "classes": {
+      "title": "Classes",
+      "description": "The classes {{name}} is a member of.",
+      "empty": "{{name}} is not a member of any class.",
+      "label": "{{courseType}}, {{day}} {{time}}",
+      "openLabel": "{{label}} ({{term}})",
+      "since": "Member since {{date}}",
+      "retired": "Retired"
+    }
   }
 }

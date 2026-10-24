@@ -5,14 +5,16 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { type FamilyDependent, removeDependentMutation } from '@/api/queries';
 import { Button } from '@/components/ui/button';
-import { FormError } from '@/features/auth/FormError';
+import { ProblemAlert } from '@/components/ProblemAlert';
 import { fullName } from './personForm';
 
 /**
  * Asks before removing a dependent from the signed-in person's family and
- * says what happens: a child with another guardian (`guardians`, their
- * names as a list) stays with them; one without is deleted, which the API
- * refuses while it has bookings or class memberships.
+ * says what happens: a managed dependent (own account, staff link, or a
+ * guardian of someone itself) and a child with another guardian
+ * (`guardians`, their names as a list) stay registered; one without is
+ * deleted, which the API refuses while it has bookings or class memberships
+ * (409 `in-use`).
  */
 export function RemoveDependent({
   id,
@@ -46,16 +48,16 @@ export function RemoveDependent({
         {t('dependents.confirm.question', { name })}
       </p>
       <p>
-        {dependent.guardians.length > 0
-          ? t('dependents.confirm.unlink', { givenName: dependent.givenName, guardians })
-          : t('dependents.confirm.delete', { givenName: dependent.givenName })}
+        {dependent.managed
+          ? t('dependents.confirm.managed', { givenName: dependent.givenName })
+          : dependent.guardians.length > 0
+            ? t('dependents.confirm.unlink', { givenName: dependent.givenName, guardians })
+            : t('dependents.confirm.delete', { givenName: dependent.givenName })}
       </p>
-      <FormError
+      <ProblemAlert
         error={remove.error}
-        messages={{
-          404: t('dependents.notFound'),
-          409: t('dependents.confirm.inUse', { name }),
-        }}
+        conflicts={{ 'in-use': t('dependents.confirm.inUse', { name }) }}
+        messages={{ 404: t('dependents.notFound') }}
       />
       <div className="flex flex-wrap gap-2">
         <Button

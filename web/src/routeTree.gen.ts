@@ -25,6 +25,8 @@ import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
 import { Route as AdminCourseTypesRouteImport } from './routes/admin.course-types'
 import { Route as AdminLocationsRouteImport } from './routes/admin.locations'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
+import { Route as AdminPersonsIndexRouteImport } from './routes/admin.persons.index'
+import { Route as AdminPersonsPersonIdRouteImport } from './routes/admin.persons.$personId'
 import { Route as AdminTermsIndexRouteImport } from './routes/admin.terms.index'
 import { Route as AdminTermsTermIdClassesRouteImport } from './routes/admin.terms.$termId.classes'
 
@@ -108,6 +110,16 @@ const AdminStaffRoute = AdminStaffRouteImport.update({
   path: '/staff',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminPersonsIndexRoute = AdminPersonsIndexRouteImport.update({
+  id: '/persons/',
+  path: '/persons/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPersonsPersonIdRoute = AdminPersonsPersonIdRouteImport.update({
+  id: '/persons/$personId',
+  path: '/persons/$personId',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminTermsIndexRoute = AdminTermsIndexRouteImport.update({
   id: '/terms/',
   path: '/terms/',
@@ -136,6 +148,8 @@ export interface FileRoutesByFullPath {
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/persons/$personId': typeof AdminPersonsPersonIdRoute
+  '/admin/persons/': typeof AdminPersonsIndexRoute
   '/admin/terms/': typeof AdminTermsIndexRoute
   '/admin/terms/$termId/classes': typeof AdminTermsTermIdClassesRoute
 }
@@ -155,6 +169,8 @@ export interface FileRoutesByTo {
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin': typeof AdminIndexRoute
+  '/admin/persons/$personId': typeof AdminPersonsPersonIdRoute
+  '/admin/persons': typeof AdminPersonsIndexRoute
   '/admin/terms': typeof AdminTermsIndexRoute
   '/admin/terms/$termId/classes': typeof AdminTermsTermIdClassesRoute
 }
@@ -176,6 +192,8 @@ export interface FileRoutesById {
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/persons/$personId': typeof AdminPersonsPersonIdRoute
+  '/admin/persons/': typeof AdminPersonsIndexRoute
   '/admin/terms/': typeof AdminTermsIndexRoute
   '/admin/terms/$termId/classes': typeof AdminTermsTermIdClassesRoute
 }
@@ -198,6 +216,8 @@ export interface FileRouteTypes {
     | '/admin/locations'
     | '/admin/staff'
     | '/admin/'
+    | '/admin/persons/$personId'
+    | '/admin/persons/'
     | '/admin/terms/'
     | '/admin/terms/$termId/classes'
   fileRoutesByTo: FileRoutesByTo
@@ -217,6 +237,8 @@ export interface FileRouteTypes {
     | '/admin/locations'
     | '/admin/staff'
     | '/admin'
+    | '/admin/persons/$personId'
+    | '/admin/persons'
     | '/admin/terms'
     | '/admin/terms/$termId/classes'
   id:
@@ -237,6 +259,8 @@ export interface FileRouteTypes {
     | '/admin/locations'
     | '/admin/staff'
     | '/admin/'
+    | '/admin/persons/$personId'
+    | '/admin/persons/'
     | '/admin/terms/'
     | '/admin/terms/$termId/classes'
   fileRoutesById: FileRoutesById
@@ -369,6 +393,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminStaffRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/persons/': {
+      id: '/admin/persons/'
+      path: '/persons'
+      fullPath: '/admin/persons/'
+      preLoaderRoute: typeof AdminPersonsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/persons/$personId': {
+      id: '/admin/persons/$personId'
+      path: '/persons/$personId'
+      fullPath: '/admin/persons/$personId'
+      preLoaderRoute: typeof AdminPersonsPersonIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/terms/': {
       id: '/admin/terms/'
       path: '/terms'
@@ -392,6 +430,8 @@ interface AdminRouteChildren {
   AdminLocationsRoute: typeof AdminLocationsRoute
   AdminStaffRoute: typeof AdminStaffRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  AdminPersonsPersonIdRoute: typeof AdminPersonsPersonIdRoute
+  AdminPersonsIndexRoute: typeof AdminPersonsIndexRoute
   AdminTermsIndexRoute: typeof AdminTermsIndexRoute
   AdminTermsTermIdClassesRoute: typeof AdminTermsTermIdClassesRoute
 }
@@ -402,6 +442,8 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminLocationsRoute: AdminLocationsRoute,
   AdminStaffRoute: AdminStaffRoute,
   AdminIndexRoute: AdminIndexRoute,
+  AdminPersonsPersonIdRoute: AdminPersonsPersonIdRoute,
+  AdminPersonsIndexRoute: AdminPersonsIndexRoute,
   AdminTermsIndexRoute: AdminTermsIndexRoute,
   AdminTermsTermIdClassesRoute: AdminTermsTermIdClassesRoute,
 }

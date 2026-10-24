@@ -4,6 +4,7 @@ import type { Me } from '@/api/client';
 import i18n from '@/i18n';
 import {
   accounts,
+  conflict,
   family,
   ids,
   meAdmin,
@@ -619,6 +620,20 @@ describe('family', () => {
     expect((error as ApiError).status).toBe(409);
     expect(queryClient.getQueryState(familyQuery.queryKey)?.isInvalidated).toBe(false);
     expect(queryClient.getQueryData(meQuery.queryKey)).toEqual(meMember);
+  });
+
+  it('asks for the family again when the dependent became managed (409 managed)', async () => {
+    mockApiPut({ '/api/v1/family/dependents/{personId}': conflict('managed') });
+    const queryClient = familyClient();
+
+    await expect(
+      new MutationObserver(queryClient, updateDependentMutation(queryClient)).mutate({
+        personId: lina.id,
+        body: person,
+      }),
+    ).rejects.toThrow();
+
+    expect(queryClient.getQueryState(familyQuery.queryKey)?.isInvalidated).toBe(true);
   });
 
   it('asks for the family again when the dependent has left it (404)', async () => {

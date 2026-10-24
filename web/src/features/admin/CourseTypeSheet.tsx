@@ -16,7 +16,7 @@ import {
 import { TextareaField } from './crud/fields';
 import { showServerErrors, useAdminErrorText } from './crud/form';
 import { FormSheet, FormSheetActions, FormSheetHeader } from './crud/FormSheet';
-import { ProblemAlert } from './crud/ProblemAlert';
+import { ProblemAlert } from '@/components/ProblemAlert';
 
 /** What the sheet edits: a new course type or an existing one. */
 export type CourseTypeTarget = { mode: 'add' } | { mode: 'edit'; courseType: CourseType };

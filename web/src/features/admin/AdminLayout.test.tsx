@@ -56,6 +56,7 @@ function renderAdmin(at: string, { accounts }: { accounts?: () => ReactElement }
         section('/course-types', 'Course types section'),
         section('/staff', 'Staff section'),
         section('/terms', 'Terms section'),
+        section('/persons', 'Persons section'),
         section('/accounts', 'Accounts section', accounts),
       ]),
     ]),
@@ -107,6 +108,7 @@ describe('AdminLayout', () => {
     );
     expect(nav.getByRole('link', { name: 'Staff' })).toHaveAttribute('href', '/admin/staff');
     expect(nav.getByRole('link', { name: 'Timetable' })).toHaveAttribute('href', '/admin/terms');
+    expect(nav.getByRole('link', { name: 'Persons' })).toHaveAttribute('href', '/admin/persons');
     expect(nav.queryByRole('link', { name: 'Accounts' })).not.toBeInTheDocument();
     expect(screen.getByText('Locations section')).toBeInTheDocument();
   });
@@ -138,6 +140,7 @@ describe('AdminLayout', () => {
       'Course types',
       'Staff',
       'Timetable',
+      'Persons',
       'Accounts',
     ]);
     await user.click(nav.getByRole('link', { name: 'Accounts' }));
@@ -194,6 +197,7 @@ describe('AdminLayout', () => {
     expect(nav.getByRole('link', { name: 'Kursarten' })).toBeInTheDocument();
     expect(nav.getByRole('link', { name: 'Personal' })).toBeInTheDocument();
     expect(nav.getByRole('link', { name: 'Stundenplan' })).toBeInTheDocument();
+    expect(nav.getByRole('link', { name: 'Personen' })).toBeInTheDocument();
     expect(nav.getByRole('link', { name: 'Konten' })).toBeInTheDocument();
   });
 });

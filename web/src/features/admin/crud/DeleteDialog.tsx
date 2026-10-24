@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ConfirmDelete } from './ConfirmDelete';
-import { conflictReason } from './form';
+import { conflictReason } from '@/api/conflict';
 
 /** A delete mutation of the catalogue, such as deleteRoomMutation: its variable is the id. */
 export type DeleteMutation = (queryClient: QueryClient) => UseMutationOptions<void, Error, string>;
@@ -51,6 +51,7 @@ export function DeleteDialog<T>({
   mutation,
   texts,
   inUseAction,
+  onDeleted,
   onClose,
 }: {
   target: T | null;
@@ -59,6 +60,8 @@ export function DeleteDialog<T>({
   mutation: DeleteMutation;
   texts: (record: T) => DeleteTexts;
   inUseAction?: (record: T) => InUseAction<T> | undefined;
+  /** Called after the delete, before the dialog closes (e.g. to leave the record's page). */
+  onDeleted?: (record: T) => void;
   onClose: () => void;
 }) {
   // Keep the texts while the dialog animates out.
@@ -79,6 +82,7 @@ export function DeleteDialog<T>({
       texts={texts(shown)}
       inUseAction={inUseAction?.(shown)}
       open={open}
+      onDeleted={onDeleted}
       onClose={onClose}
     />
   );
@@ -91,6 +95,7 @@ function DeleteConfirm<T>({
   texts,
   inUseAction,
   open,
+  onDeleted,
   onClose,
 }: {
   record: T;
@@ -99,6 +104,7 @@ function DeleteConfirm<T>({
   texts: DeleteTexts;
   inUseAction: InUseAction<T> | undefined;
   open: boolean;
+  onDeleted: ((record: T) => void) | undefined;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -144,6 +150,7 @@ function DeleteConfirm<T>({
         remove.mutate(recordId, {
           onSuccess: () => {
             toast.success(texts.deleted);
+            onDeleted?.(record);
             onClose();
           },
         });

@@ -11,8 +11,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import type { ConflictReason } from './form';
-import { ProblemAlert } from './ProblemAlert';
+import type { ConflictReason } from '@/api/conflict';
+import { ProblemAlert } from '@/components/ProblemAlert';
 
 /**
  * Asks before deleting a record. A refused delete keeps the dialog open and

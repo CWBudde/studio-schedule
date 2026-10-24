@@ -11,7 +11,7 @@ import { SelectField, SwitchField } from './crud/fields';
 import { showServerErrors, useAdminErrorText } from './crud/form';
 import { FormSheet, FormSheetActions, FormSheetHeader } from './crud/FormSheet';
 import { PersonField } from './crud/PersonField';
-import { ProblemAlert } from './crud/ProblemAlert';
+import { ProblemAlert } from '@/components/ProblemAlert';
 import { staffData, staffFields, staffSchema, type StaffValues, staffValues } from './staffForms';
 
 /** What the sheet edits: a new staff member or an existing one. */

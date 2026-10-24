@@ -8,6 +8,7 @@ import {
   type paths,
   type RegisterBody,
 } from './client';
+import { conflictReason } from './conflict';
 import type { components } from './schema';
 
 /** Error thrown by query functions when the API answers with a non-2xx status. */
@@ -343,14 +344,16 @@ const refreshFamily = (queryClient: QueryClient) =>
 
 /**
  * The errors of a dependent operation. A 404 means the dependent left the
- * family meanwhile (another guardian or the office removed the link), so the
- * family is asked again.
+ * family meanwhile (another guardian or the office removed the link), and a
+ * 409 `managed` that it got an account, a staff link or dependents of its own
+ * meanwhile and is read-only now: either way, the family is asked again.
  */
 function onDependentError(queryClient: QueryClient) {
   const signedOut = signedOutOn401(queryClient);
   return (error: Error) => {
     signedOut(error);
-    if (error instanceof ApiError && error.status === 404) void refreshFamily(queryClient);
+    const gone = error instanceof ApiError && error.status === 404;
+    if (gone || conflictReason(error) === 'managed') void refreshFamily(queryClient);
   };
 }
 
@@ -374,7 +377,11 @@ export const addDependentMutation = (queryClient: QueryClient) =>
     onError: signedOutOn401(queryClient),
   });
 
-/** Changes the data of one of the signed-in person's dependents (404 for anyone else). */
+/**
+ * Changes the data of one of the signed-in person's dependents (404 for
+ * anyone else); a managed dependent (own account, staff link, or a guardian
+ * of someone itself) is a 409 `managed`.
+ */
 export const updateDependentMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: ({ personId, body }: { personId: string; body: PersonData }) =>
@@ -388,7 +395,9 @@ export const updateDependentMutation = (queryClient: QueryClient) =>
 /**
  * Ends the signed-in person's guardianship of a dependent. One left without
  * a guardian is deleted, unless it has bookings or class memberships: then
- * the API answers 409 and nothing changes.
+ * the API answers 409 `in-use` and nothing changes. A managed dependent (own
+ * account, staff link, or a guardian of someone itself) is never deleted,
+ * only unlinked.
  */
 export const removeDependentMutation = (queryClient: QueryClient) =>
   mutationOptions({
@@ -483,6 +492,148 @@ export const personsQuery = (q: string) =>
         )
       ).items,
     staleTime: 30_000,
+  });
+
+/** Every field of a person, as the office sees it. */
+export type AdminPerson = components['schemas']['AdminPerson'];
+/** The fields of a person the office writes (create and update). */
+export type PersonRecord = components['schemas']['PersonRecord'];
+/** A person with its family links, account, staff links and class memberships (office). */
+export type PersonDetail = components['schemas']['PersonDetail'];
+/** The account of a person. */
+export type PersonAccount = components['schemas']['PersonAccount'];
+/** A new account of an existing person: its email and role. */
+export type PersonAccountData = PostBody<'/api/v1/admin/persons/{personId}/account'>;
+/** A class membership of a person, as the person's detail lists it. */
+export type PersonClass = components['schemas']['PersonClass'];
+
+/** A person with their guardians, dependents, account, staff links and classes (office). */
+export const personQuery = (personId: string) =>
+  queryOptions({
+    queryKey: [...adminQueryKey, 'person', personId],
+    queryFn: ({ signal }) =>
+      unwrap(
+        api.GET('/api/v1/admin/persons/{personId}', { params: { path: { personId } }, signal }),
+      ),
+  });
+
+/**
+ * After a write to persons: what the office sees of them is asked again
+ * (searches, details and the lists that name persons, all under the admin
+ * key), and so are the family and the signed-in account, which may name the
+ * person written.
+ */
+function refreshPersons(queryClient: QueryClient, { except }: { except?: string } = {}) {
+  // A deleted person's page is left; asking for it again would only find it gone.
+  const gone = except === undefined ? undefined : hashKey(personQuery(except).queryKey);
+  return Promise.all(
+    [adminQueryKey, familyQuery.queryKey, meQuery.queryKey].map((queryKey) =>
+      queryClient.invalidateQueries({ queryKey, predicate: (query) => query.queryHash !== gone }),
+    ),
+  );
+}
+
+/**
+ * The errors of a write to a person. A 404 means the person (or the link)
+ * is gone meanwhile, and a 409 that something changed meanwhile, such as a
+ * guardian or an account added elsewhere: either way, the persons are asked
+ * again.
+ */
+function onPersonError(queryClient: QueryClient) {
+  const signedOut = signedOutOn401(queryClient);
+  return (error: Error) => {
+    signedOut(error);
+    if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
+      void refreshPersons(queryClient);
+    }
+  };
+}
+
+/** Adds a person without an account (office). */
+export const createPersonMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: PersonRecord) => unwrap(api.POST('/api/v1/admin/persons', { body })),
+    onSuccess: () => refreshPersons(queryClient),
+    onError: onPersonError(queryClient),
+  });
+
+/**
+ * Replaces every field of a person (office), including the email and the
+ * notes; the email of the person's account, its login name, stays.
+ */
+export const updatePersonMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ personId, body }: { personId: string; body: PersonRecord }) =>
+      unwrap(api.PUT('/api/v1/admin/persons/{personId}', { params: { path: { personId } }, body })),
+    onSuccess: () => refreshPersons(queryClient),
+    onError: onPersonError(queryClient),
+  });
+
+/**
+ * Deletes a person (office), e.g. one added by mistake. While an account, a
+ * staff link, bookings, class memberships or a guardian link in either
+ * direction refer to the person, it is a 409 `in-use` and nothing changes.
+ */
+export const deletePersonMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (personId: string) =>
+      expectOk(api.DELETE('/api/v1/admin/persons/{personId}', { params: { path: { personId } } })),
+    onSuccess: (_: void, personId: string) => refreshPersons(queryClient, { except: personId }),
+    onError: onPersonError(queryClient),
+  });
+
+/**
+ * Links a guardian to a person (office); a link that exists is a 409
+ * `duplicate`. An unknown guardian, the person itself or one of its
+ * dependents (at any depth, which would make a cycle) is a 422 on
+ * `body.guardianId`.
+ */
+export const addGuardianMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ personId, guardianId }: { personId: string; guardianId: string }) =>
+      unwrap(
+        api.POST('/api/v1/admin/persons/{personId}/guardians', {
+          params: { path: { personId } },
+          body: { guardianId },
+        }),
+      ),
+    onSuccess: () => refreshPersons(queryClient),
+    onError: onPersonError(queryClient),
+  });
+
+/** Ends a guardianship (office); the person stays, even without a guardian left. */
+export const removeGuardianMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ personId, guardianId }: { personId: string; guardianId: string }) =>
+      expectOk(
+        api.DELETE('/api/v1/admin/persons/{personId}/guardians/{guardianId}', {
+          params: { path: { personId, guardianId } },
+        }),
+      ),
+    onSuccess: () => refreshPersons(queryClient),
+    onError: onPersonError(queryClient),
+  });
+
+/**
+ * Creates an account for a person (office) and mails it an invitation (shown
+ * in the demo mailbox). A person with an account, or an email another
+ * account has, is a 409 `duplicate`; an admin account from the office a 403.
+ */
+export const createPersonAccountMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ personId, body }: { personId: string; body: PersonAccountData }) =>
+      unwrap(
+        api.POST('/api/v1/admin/persons/{personId}/account', {
+          params: { path: { personId } },
+          body,
+        }),
+      ),
+    onSuccess: () =>
+      Promise.all([
+        refreshPersons(queryClient),
+        queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey }),
+      ]),
+    onError: onPersonError(queryClient),
   });
 
 /**

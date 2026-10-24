@@ -491,3 +491,98 @@ test('the office adds and removes a class member', async ({ page }) => {
   await expect(page.getByText('Irene Inkwell has been removed from the class.')).toBeVisible();
   await expect(sheet.getByText('This class has no members yet.')).toBeVisible();
 });
+
+test('the office edits a person, links a guardian and creates an account with an invitation', async ({
+  page,
+}) => {
+  const office = await signInAs(page, 'Office');
+  await openAdministration(page, office);
+  await openSection(page, 'Persons');
+
+  const search = page.getByRole('searchbox', { name: 'Search persons' });
+  await search.fill('amberly ella');
+  await expect(page.getByRole('link', { name: /Amberly/ })).toHaveCount(1);
+  await page.getByRole('link', { name: 'Ella Amberly' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Ella Amberly' })).toBeVisible();
+  // Going back keeps the search.
+  await page.goBack();
+  await expect(search).toHaveValue('amberly ella');
+  await page.getByRole('link', { name: 'Ella Amberly' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Ella Amberly' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Edit the details of Ella Amberly' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit Ella Amberly' });
+  await edit.getByLabel('Phone (optional)').fill('+49 000 0000777');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(edit).toBeHidden();
+  await expect(page.getByText('Ella Amberly has been saved.')).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Details' }).getByText('+49 000 0000777'),
+  ).toBeVisible();
+
+  const guardians = page.getByRole('region', { name: 'Guardians' });
+  await expect(guardians.getByRole('link', { name: 'Clara Amberly' })).toBeVisible();
+  await guardians.getByRole('combobox', { name: 'Guardian' }).click();
+  await page.getByRole('combobox', { name: 'Search by name or email' }).fill('sara dunfield');
+  await page.getByRole('option', { name: /Sara Dunfield/ }).click();
+  await guardians.getByRole('button', { name: 'Add guardian' }).click();
+  await expect(page.getByText('Sara Dunfield is now a guardian of Ella Amberly.')).toBeVisible();
+  await expect(guardians.getByRole('link', { name: 'Sara Dunfield' })).toBeVisible();
+
+  const account = page.getByRole('region', { name: 'Account' });
+  await account.getByRole('button', { name: 'Create account' }).click();
+  const create = page.getByRole('dialog', { name: 'Create an account for Ella Amberly' });
+  await create.getByLabel('Email').fill('ella.amberly@example.org');
+  await create.getByRole('button', { name: 'Create and invite' }).click();
+  await expect(create).toBeHidden();
+  await expect(
+    page.getByText(
+      'Ella Amberly has an account now. The invitation has been sent to ella.amberly@example.org.',
+    ),
+  ).toBeVisible();
+  await expect(account.getByText('Unconfirmed')).toBeVisible();
+
+  await page
+    .getByRole('banner')
+    .getByRole('button', { name: /Demo mailbox/ })
+    .click();
+  const mailbox = page.getByRole('dialog', { name: 'Demo mailbox' });
+  const mail = mailbox.getByRole('article').filter({ hasText: 'ella.amberly@example.org' });
+  await expect(mail).toHaveCount(1);
+  await expect(mail).toContainText('has created an account for you');
+  await expect(mail.getByRole('link', { name: /reset-password\?token=/ })).toBeVisible();
+});
+
+test('the office deletes a person added by mistake, but not one with family links', async ({
+  page,
+}) => {
+  const office = await signInAs(page, 'Office');
+  await openAdministration(page, office);
+  await openSection(page, 'Persons');
+
+  await page.getByRole('button', { name: 'Add person' }).click();
+  const add = page.getByRole('dialog', { name: 'Add a person' });
+  await add.getByLabel('First name').fill('Quentin');
+  await add.getByLabel('Last name').fill('Mistaken');
+  await add.getByRole('button', { name: 'Add person' }).click();
+  await expect(add).toBeHidden();
+  await expect(page.getByRole('heading', { level: 1, name: 'Quentin Mistaken' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Delete Quentin Mistaken' }).click();
+  const confirm = page.getByRole('alertdialog', { name: 'Delete Quentin Mistaken?' });
+  await confirm.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByText('Quentin Mistaken has been deleted.')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Persons' })).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Search persons' }).fill('mistaken');
+  await expect(page.getByText('Nobody matches “mistaken”.')).toBeVisible();
+
+  // A child with guardians stays.
+  await page.getByRole('searchbox', { name: 'Search persons' }).fill('ella amberly');
+  await page.getByRole('link', { name: 'Ella Amberly' }).click();
+  await page.getByRole('button', { name: 'Delete Ella Amberly' }).click();
+  const refused = page.getByRole('alertdialog', { name: 'Delete Ella Amberly?' });
+  await refused.getByRole('button', { name: 'Delete' }).click();
+  await expect(refused.getByRole('alert')).toHaveText(
+    'Ella Amberly still has an account, a staff link, bookings, class memberships, guardians or children, so they cannot be deleted. Remove those first.',
+  );
+});

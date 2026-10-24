@@ -1,18 +1,7 @@
 import type { FieldError, FieldValues, Path, UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { ApiError } from '@/api/queries';
-import type { components } from '@/api/schema';
+import { conflictReason } from '@/api/conflict';
 import { invalidFields, useFieldErrorText } from '@/features/auth/form';
-
-/** Why the API refused a write with 409: something uses the record, or the name is taken. */
-export type ConflictReason = components['schemas']['Conflict']['reason'];
-
-/** The reason of a 409 answer of a catalogue write, if it was one. */
-export function conflictReason(error: unknown): ConflictReason | undefined {
-  if (!(error instanceof ApiError) || error.status !== 409) return undefined;
-  const reason = (error.body as { reason?: unknown } | undefined)?.reason;
-  return reason === 'in-use' || reason === 'duplicate' ? reason : undefined;
-}
 
 /**
  * Marks the fields of `form` that a refused write names: the fields of a
@@ -48,6 +37,12 @@ const adminErrors = [
   'termLessons',
   'choosePerson',
   'alreadyMember',
+  'birthDateFuture',
+  'selfGuardian',
+  'alreadyGuardian',
+  'guardianCycle',
+  'guardianInvalid',
+  'emailTaken',
 ] as const;
 type AdminErrorKey = (typeof adminErrors)[number];
 const isAdminErrorKey = (key: unknown): key is AdminErrorKey =>

@@ -37,6 +37,8 @@ export type TestPath =
   | '/confirm-email-change'
   | '/account'
   | '/admin/accounts'
+  | '/admin/persons'
+  | '/admin/persons/$personId'
   | '/admin/terms'
   | '/admin/terms/$termId/classes';
 
@@ -76,6 +78,8 @@ export function renderInRouter(
       route('/confirm-email-change'),
       route('/account'),
       route('/admin/accounts'),
+      route('/admin/persons'),
+      route('/admin/persons/$personId'),
       route('/admin/terms'),
       route('/admin/terms/$termId/classes'),
     ]),

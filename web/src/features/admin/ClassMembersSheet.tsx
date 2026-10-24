@@ -26,12 +26,13 @@ import {
   type ClassMemberValues,
   emptyClassMember,
 } from './classMemberForms';
-import { conflictReason, showServerErrors, useAdminErrorText } from './crud/form';
+import { conflictReason } from '@/api/conflict';
+import { showServerErrors, useAdminErrorText } from './crud/form';
 import { FormSheet, FormSheetHeader } from './crud/FormSheet';
 import { LoadError } from './crud/LoadError';
 import { personName } from './crud/person';
 import { PersonField } from './crud/PersonField';
-import { ProblemAlert } from './crud/ProblemAlert';
+import { ProblemAlert } from '@/components/ProblemAlert';
 
 /**
  * A sheet with the members of a class (`target`; closed while it is null):

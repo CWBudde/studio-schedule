@@ -19,8 +19,11 @@ import { useIsPhone } from './useIsPhone';
 export type DataTableProps<T extends RowData> = {
   /** The accessible name of the table (or of the card list on phones). */
   label: string;
-  /** The accessible name of the search box. */
-  searchLabel: string;
+  /**
+   * The accessible name of the search box over all columns; without one, the
+   * table has no search box (e.g. when the API searches).
+   */
+  searchLabel?: string;
   /** What to show when there are no rows at all. */
   empty: ReactNode;
   /** Stable column definitions (module scope or memoized). */
@@ -86,20 +89,22 @@ export function DataTable<T extends RowData>({
   const headers = new Map(table.getFlatHeaders().map((h) => [h.column.id, h]));
   return (
     <div className="space-y-3">
-      <div className="relative max-w-xs">
-        <Search
-          className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <Input
-          type="search"
-          aria-label={searchLabel}
-          placeholder={t('table.search')}
-          className="pl-8"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
+      {searchLabel && (
+        <div className="relative max-w-xs">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            type="search"
+            aria-label={searchLabel}
+            placeholder={t('table.search')}
+            className="pl-8"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+      )}
       {rows.length === 0 ? (
         <p className="rounded-xl border border-dashed px-4 py-8 text-center text-muted-foreground">
           {t('table.noMatches', { query })}

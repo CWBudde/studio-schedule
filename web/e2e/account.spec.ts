@@ -190,3 +190,76 @@ test('signs in in the language chosen for emails', async ({ page }) => {
   await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sprache ändern' })).toBeVisible();
 });
+
+/** Signs in with the demo account of a role from the login page shown; returns its name. */
+async function signInWithDemoAccount(page: Page, role: string): Promise<string> {
+  const button = page
+    .getByRole('region', { name: 'Demo accounts' })
+    .getByRole('button', { name: new RegExp(`^Sign in as .+ \\(${role}\\)$`) });
+  const label = (await button.getAttribute('aria-label')) ?? '';
+  const name = new RegExp(`^Sign in as (.+) \\(${role}\\)$`).exec(label)?.[1] ?? '';
+  expect(name).not.toBe('');
+  await button.click();
+  await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
+  return name;
+}
+
+test('a child with an account of their own is read-only and only unlinked', async ({ page }) => {
+  await gotoDemo(page, '/login');
+  const member = (
+    (await page
+      .getByRole('region', { name: 'Demo accounts' })
+      .getByRole('button', { name: /^Sign in as .+ \(Member\)$/ })
+      .getAttribute('aria-label')) ?? ''
+  ).replace(/^Sign in as (.+) \(Member\)$/, '$1');
+  expect(member).not.toBe('');
+
+  // The office creates an account for a child of the member.
+  const office = await signInWithDemoAccount(page, 'Office');
+  await page.getByRole('banner').getByRole('button', { name: office }).click();
+  await page.getByRole('menuitem', { name: 'Administration' }).click();
+  await page
+    .getByRole('navigation', { name: 'Administration' })
+    .getByRole('link', { name: 'Persons' })
+    .click();
+  await page.getByRole('searchbox', { name: 'Search persons' }).fill(member);
+  await page.getByRole('link', { name: member }).click();
+  const child = page.getByRole('region', { name: 'Children' }).getByRole('link').first();
+  const childName = ((await child.textContent()) ?? '').trim();
+  expect(childName).not.toBe('');
+  await child.click();
+  await expect(page.getByRole('heading', { level: 1, name: childName })).toBeVisible();
+  await page
+    .getByRole('region', { name: 'Account' })
+    .getByRole('button', { name: 'Create account' })
+    .click();
+  const create = page.getByRole('dialog', { name: `Create an account for ${childName}` });
+  await create.getByLabel('Email').fill(`${childName.replace(' ', '.').toLowerCase()}@example.net`);
+  await create.getByRole('button', { name: 'Create and invite' }).click();
+  await expect(create).toBeHidden();
+
+  // The member sees the child read-only and can only unlink it.
+  await page.getByRole('banner').getByRole('button', { name: office }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await page.getByRole('banner').getByRole('link', { name: 'Sign in' }).click();
+  await signInWithDemoAccount(page, 'Member');
+  await openAccount(page, member);
+  const entry = page
+    .getByRole('region', { name: 'Your children' })
+    .getByRole('listitem')
+    .filter({ has: page.getByText(childName, { exact: true }) });
+  const givenName = childName.split(' ')[0] ?? '';
+  await expect(entry).toContainText(
+    `These details are maintained by ${givenName} or the office, so you cannot change them.`,
+  );
+  await expect(entry.getByRole('button', { name: `Edit ${childName}` })).toHaveCount(0);
+
+  await entry.getByRole('button', { name: `Remove ${childName}` }).click();
+  const confirm = entry.getByRole('group', { name: `Remove ${childName} from your family?` });
+  await expect(confirm).toContainText(
+    `${givenName} stays registered and is only removed from your family.`,
+  );
+  await confirm.getByRole('button', { name: 'Yes, remove' }).click();
+  await expect(page.getByText(`${childName} has been removed from your family.`)).toBeVisible();
+  await expect(entry).toHaveCount(0);
+});

@@ -346,6 +346,7 @@ export const springClasses: Class[] = [
 ];
 
 type ClassMember = components['schemas']['ClassMember'];
+type PersonDetail = components['schemas']['PersonDetail'];
 
 /**
  * The members of the Monday ballet class as the office lists them
@@ -364,6 +365,80 @@ export const balletMembers: ClassMember[] = [
   },
   { person: { id: ids.personNoah, givenName: 'Noah', familyName: 'Sample' } },
 ];
+
+/**
+ * Persons as the office sees them in detail (GET /admin/persons/{personId}):
+ * Mia, a member with an account and her son Noah; Noah, a child in the
+ * Monday ballet class with Mia as his guardian; Alex, an instructor's person
+ * record with an account and a staff link.
+ */
+export const personDetails: Record<string, PersonDetail> = {
+  [ids.personMia]: {
+    id: ids.personMia,
+    givenName: 'Mia',
+    familyName: 'Sample',
+    email: 'mia.sample@example.org',
+    phone: '+49 000 0000201',
+    notes: 'Prefers to be called in the evening.',
+    guardians: [],
+    dependents: [persons[2]!],
+    account: {
+      id: id(351),
+      email: 'mia.sample@example.org',
+      role: 'member',
+      status: 'active',
+    },
+    staff: [],
+    classes: [],
+  },
+  [ids.personNoah]: {
+    id: ids.personNoah,
+    givenName: 'Noah',
+    familyName: 'Sample',
+    birthDate: '2015-04-09',
+    guardians: [persons[1]!],
+    dependents: [],
+    staff: [],
+    classes: [
+      {
+        classId: ids.classBallet,
+        termId: ids.termAutumn,
+        termName: 'Autumn 2026',
+        courseTypeName: 'Ballet',
+        weekday: 1,
+        startTime: '18:00',
+        retired: false,
+      },
+    ],
+  },
+  [ids.personAlex]: {
+    id: ids.personAlex,
+    givenName: 'Alex',
+    familyName: 'Example',
+    email: 'alex.example@example.com',
+    guardians: [],
+    dependents: [],
+    account: {
+      id: id(352),
+      email: 'alex.example@example.com',
+      role: 'instructor',
+      status: 'pending',
+    },
+    staff: [{ id: ids.staffAlex, displayName: 'Alex Example', kind: 'instructor', active: true }],
+    classes: [
+      {
+        classId: ids.classRetired,
+        termId: ids.termAutumn,
+        termName: 'Autumn 2026',
+        courseTypeName: 'Jazz',
+        weekday: 6,
+        startTime: '10:00',
+        retired: true,
+        since: '2026-08-31',
+      },
+    ],
+  },
+};
 
 /** The fictional member signed in in auth tests. */
 export const meMember: Me = {
@@ -427,14 +502,29 @@ export const family: Family = {
       familyName: 'Example',
       birthDate: '2017-03-14',
       guardians: [{ givenName: 'Paul', familyName: 'Example' }],
+      managed: false,
     },
     {
       id: id(332),
       givenName: 'Max',
       familyName: 'Example',
       guardians: [],
+      managed: false,
     },
   ],
+};
+
+/**
+ * A grown-up child of the member with an account of their own, which the
+ * office created: a managed dependent, read-only for the guardians.
+ */
+export const managedDependent: Family['dependents'][number] = {
+  id: id(333),
+  givenName: 'Jule',
+  familyName: 'Example',
+  birthDate: '2008-09-01',
+  guardians: [{ givenName: 'Paul', familyName: 'Example' }],
+  managed: true,
 };
 
 /**
@@ -490,13 +580,20 @@ export const accounts: AccountEntry[] = [
 ];
 
 /** A problem+json answer, as the API sends it for errors. */
-export const problem = (status: number, detail: string, errors?: { location: string }[]) => ({
+export const problem = (
+  status: number,
+  detail: string,
+  errors?: { location: string; message?: string }[],
+) => ({
   status,
   body: { status, title: 'Error', detail, type: 'about:blank', errors },
 });
 
-/** A 409 answer of a catalogue write: problem+json with a stable `reason`. */
-export const conflict = (reason: 'in-use' | 'duplicate', detail = 'conflict') => ({
+/** A 409 answer of a write: problem+json with a stable `reason`. */
+export const conflict = (
+  reason: 'in-use' | 'duplicate' | 'managed' | 'has-account',
+  detail = 'conflict',
+) => ({
   status: 409,
   body: { status: 409, title: 'Conflict', detail, type: 'about:blank', reason },
 });

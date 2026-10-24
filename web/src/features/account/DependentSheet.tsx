@@ -15,7 +15,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { FormError } from '@/features/auth/FormError';
+import { ProblemAlert } from '@/components/ProblemAlert';
 import { PersonFields } from './PersonFields';
 import {
   fullName,
@@ -124,8 +124,11 @@ function DependentForm({ target, onDone }: { target: DependentSheetTarget; onDon
         className="flex flex-col gap-4 px-4 pb-4"
         onSubmit={form.handleSubmit(onSubmit)}
       >
-        <FormError
+        <ProblemAlert
           error={save.error}
+          conflicts={{
+            managed: t('dependents.managedNow', { name: editing ? fullName(editing) : '' }),
+          }}
           messages={{ 404: t('dependents.notFound'), 422: tAuth('form.checkEntries') }}
         />
         <PersonFields form={form} today={today} self={false} />

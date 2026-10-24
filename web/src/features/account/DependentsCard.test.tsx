@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Toaster } from '@/components/ui/sonner';
 import i18n from '@/i18n';
 import {
+  conflict,
   family,
+  managedDependent,
   meMember,
   mockApiDelete,
   mockApiGet,
@@ -172,6 +174,101 @@ describe('DependentsCard', () => {
     expect(await sheet.findByText('This child is no longer in your family.')).toBeInTheDocument();
   });
 
+  describe('managed', () => {
+    const withJule = {
+      ...signedInMember,
+      '/api/v1/family': {
+        body: { ...family, dependents: [...family.dependents, managedDependent] },
+      },
+    };
+
+    it('shows a child whose details they or the office maintain read-only', async () => {
+      mockApiGet(withJule);
+
+      renderAccount();
+      const jule = await child('Jule Example');
+
+      expect(
+        jule.getByText(
+          'These details are maintained by Jule or the office, so you cannot change them.',
+        ),
+      ).toBeInTheDocument();
+      expect(jule.queryByRole('button', { name: 'Edit Jule Example' })).not.toBeInTheDocument();
+      expect(jule.getByRole('button', { name: 'Remove Jule Example' })).toBeInTheDocument();
+      // The others stay editable.
+      expect(
+        (await child('Lina Example')).getByRole('button', { name: 'Edit Lina Example' }),
+      ).toBeInTheDocument();
+    });
+
+    it('says that removing such a child only unlinks it', async () => {
+      mockApiGet(withJule);
+      const del = mockApiDelete({ '/api/v1/family/dependents/{personId}': { status: 204 } });
+      const user = userEvent.setup();
+
+      renderAccount();
+      const jule = await child('Jule Example');
+      await user.click(jule.getByRole('button', { name: 'Remove Jule Example' }));
+      const confirm = within(
+        jule.getByRole('group', { name: 'Remove Jule Example from your family?' }),
+      );
+      expect(
+        confirm.getByText('Jule stays registered and is only removed from your family.'),
+      ).toBeInTheDocument();
+      await user.click(confirm.getByRole('button', { name: 'Yes, remove' }));
+
+      expect(
+        await screen.findByText('Jule Example has been removed from your family.'),
+      ).toBeInTheDocument();
+      expect(del).toHaveBeenCalledWith('/api/v1/family/dependents/{personId}', {
+        params: { path: { personId: managedDependent.id } },
+      });
+    });
+
+    it('says when a child started to manage their own details meanwhile', async () => {
+      let managed = false;
+      mockApiGet({
+        ...signedInMember,
+        '/api/v1/family': () => ({
+          body: {
+            ...family,
+            dependents: family.dependents.map((d) => (d.id === lina.id ? { ...d, managed } : d)),
+          },
+        }),
+      });
+      mockApiPut({
+        '/api/v1/family/dependents/{personId}': () => {
+          managed = true;
+          return conflict('managed');
+        },
+      });
+      const user = userEvent.setup();
+
+      renderAccount();
+      await user.click(
+        (await child('Lina Example')).getByRole('button', { name: 'Edit Lina Example' }),
+      );
+      const sheet = within(await screen.findByRole('dialog', { name: 'Edit Lina Example' }));
+      await user.click(sheet.getByRole('button', { name: 'Save changes' }));
+
+      expect(
+        await sheet.findByText(
+          'The details of Lina Example are now maintained by them or the office, so you can no longer change them.',
+        ),
+      ).toBeInTheDocument();
+      // The family is asked again and shows the child read-only.
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(
+        await (
+          await child('Lina Example')
+        ).findByText(
+          'These details are maintained by Lina or the office, so you cannot change them.',
+        ),
+      ).toBeInTheDocument();
+    });
+  });
+
   describe('remove', () => {
     it('only unlinks a child that has another guardian, after asking', async () => {
       mockApiGet(signedInMember);
@@ -218,8 +315,8 @@ describe('DependentsCard', () => {
     it('explains a child that has bookings or class memberships', async () => {
       mockApiGet(signedInMember);
       mockApiDelete({
-        '/api/v1/family/dependents/{personId}': problem(
-          409,
+        '/api/v1/family/dependents/{personId}': conflict(
+          'in-use',
           'the dependent has bookings or class memberships',
         ),
       });

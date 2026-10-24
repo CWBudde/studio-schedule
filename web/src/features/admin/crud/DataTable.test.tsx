@@ -109,6 +109,13 @@ describe('DataTable', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
+  it('has no search box without a search label', () => {
+    renderTable({ searchLabel: undefined });
+
+    expect(screen.getByRole('table', { name: 'Studios' })).toBeInTheDocument();
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
+  });
+
   it('says when there is nothing yet', () => {
     renderTable({ data: [] });
 

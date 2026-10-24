@@ -53,6 +53,9 @@ export function AdminLayout() {
         <Link to="/admin/terms" className={sectionLink}>
           {t('nav.timetable')}
         </Link>
+        <Link to="/admin/persons" className={sectionLink}>
+          {t('nav.persons')}
+        </Link>
         {role === 'admin' && (
           <Link to="/admin/accounts" className={sectionLink}>
             {t('nav.accounts')}

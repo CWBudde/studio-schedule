@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { CircleAlert, Pencil, Trash2, UserRoundPlus } from 'lucide-react';
+import { CircleAlert, Pencil, Trash2, UserRoundCheck, UserRoundPlus } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { familyQuery, type FamilyDependent } from '@/api/queries';
@@ -13,9 +13,10 @@ import { fullName } from './personForm';
 import { RemoveDependent } from './RemoveDependent';
 
 /**
- * The signed-in person's dependents (children without their own login):
- * listed with their birth date and other guardians, added and edited in a
- * sheet, removed after an in-page confirmation.
+ * The signed-in person's dependents (children, usually without their own
+ * login): listed with their birth date and other guardians, added and edited
+ * in a sheet, removed after an in-page confirmation. A managed dependent (one
+ * with an account, a staff link or dependents of its own) is read-only here.
  */
 export function DependentsCard() {
   const { t } = useTranslation('account');
@@ -106,17 +107,26 @@ function DependentItem({ dependent, onEdit }: { dependent: FamilyDependent; onEd
               {t('dependents.otherGuardians', { names: guardians })}
             </p>
           )}
+          {dependent.managed && (
+            <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
+              <UserRoundCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              {t('dependents.managed', { givenName: dependent.givenName })}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label={t('dependents.editNamed', { name })}
-            onClick={onEdit}
-          >
-            <Pencil aria-hidden="true" />
-            {t('dependents.edit')}
-          </Button>
+          {/* The owner or the office maintains a managed dependent's data, not its guardians. */}
+          {!dependent.managed && (
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label={t('dependents.editNamed', { name })}
+              onClick={onEdit}
+            >
+              <Pencil aria-hidden="true" />
+              {t('dependents.edit')}
+            </Button>
+          )}
           <Button
             ref={removeButton}
             variant="outline"

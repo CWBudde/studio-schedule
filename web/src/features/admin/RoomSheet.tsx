@@ -10,7 +10,7 @@ import { TextField } from '@/features/auth/TextField';
 import { SelectField } from './crud/fields';
 import { showServerErrors, useAdminErrorText } from './crud/form';
 import { FormSheet, FormSheetActions, FormSheetHeader } from './crud/FormSheet';
-import { ProblemAlert } from './crud/ProblemAlert';
+import { ProblemAlert } from '@/components/ProblemAlert';
 import { roomFields, type RoomInput, roomSchema, roomValues } from './locationForms';
 
 /** What the sheet edits: a new room or an existing one. */

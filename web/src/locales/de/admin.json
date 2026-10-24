@@ -5,6 +5,7 @@
     "courseTypes": "Kursarten",
     "staff": "Personal",
     "timetable": "Stundenplan",
+    "persons": "Personen",
     "accounts": "Konten"
   },
   "noAccess": {
@@ -42,7 +43,13 @@
       "endBeforeStart": "Der letzte Tag darf nicht vor dem ersten liegen.",
       "termLessons": "Eine Stunde außerhalb dieser Daten hat begonnen, hat Buchungen oder wurde einzeln geändert und darf daher nicht herausfallen.",
       "choosePerson": "Bitte wähle eine Person.",
-      "alreadyMember": "Diese Person ist bereits Kursmitglied."
+      "alreadyMember": "Diese Person ist bereits Kursmitglied.",
+      "birthDateFuture": "Das Geburtsdatum darf nicht in der Zukunft liegen.",
+      "selfGuardian": "Eine Person kann nicht für sich selbst erziehungsberechtigt sein.",
+      "alreadyGuardian": "Diese Person ist bereits erziehungsberechtigt.",
+      "emailTaken": "Diese E-Mail-Adresse gehört bereits zu einem anderen Konto.",
+      "guardianCycle": "Ein Kind dieser Person kann nicht für sie erziehungsberechtigt sein.",
+      "guardianInvalid": "Diese Person kann hier nicht erziehungsberechtigt sein: Es gibt sie nicht mehr, oder sie ist ein Kind oder Enkelkind dieser Person."
     }
   },
   "delete": {
@@ -296,5 +303,118 @@
     "confirm": "{{name}} aus {{classLabel}} entfernen?",
     "removed": "{{name}} wurde aus dem Kurs entfernt.",
     "notFound": "{{name}} ist kein Mitglied dieses Kurses mehr."
+  },
+  "persons": {
+    "title": "Personen",
+    "description": "Alle Personen, die die Schule kennt: Mitglieder, Kinder, Eltern und Personal. Suche nach Name oder E-Mail und öffne eine Person, um ihre Daten, Familie, ihr Konto und ihre Kurse zu sehen und zu ändern.",
+    "search": "Personen suchen",
+    "searchPlaceholder": "Name oder E-Mail",
+    "table": "Personen",
+    "name": "Name",
+    "email": "E-Mail",
+    "empty": "Es gibt noch keine Personen.",
+    "noMatches": "Niemand passt zu „{{query}}“.",
+    "more": "Es werden die ersten {{count}} Personen angezeigt. Gib mehr ein, um die Liste einzugrenzen.",
+    "openLabel": "{{name}} öffnen",
+    "add": "Person hinzufügen",
+    "addTitle": "Person hinzufügen",
+    "addDescription": "Zum Beispiel ein zweites Elternteil oder der Personendatensatz einer Lehrkraft. Die Person bekommt kein Konto; das kannst du später anlegen.",
+    "editTitle": "{{name}} bearbeiten",
+    "editDescription": "Die E-Mail-Adresse hier dient der Kontaktaufnahme. Die Adresse, mit der sich ein Konto anmeldet, bleibt unverändert.",
+    "added": "{{name}} wurde hinzugefügt.",
+    "saved": "{{name}} wurde gespeichert.",
+    "notFound": "Diese Person gibt es nicht mehr.",
+    "delete": {
+      "button": "Löschen",
+      "label": "{{name}} löschen",
+      "title": "{{name}} löschen?",
+      "description": "Die Person wird endgültig gelöscht. Das geht nur, wenn nichts mehr auf sie verweist: kein Konto, kein Eintrag im Personal, keine Buchungen, Kursmitgliedschaften, Erziehungsberechtigten oder Kinder.",
+      "inUse": "{{name}} hat noch ein Konto, einen Eintrag im Personal, Buchungen, Kursmitgliedschaften, Erziehungsberechtigte oder Kinder und kann daher nicht gelöscht werden. Entferne diese zuerst.",
+      "deleted": "{{name}} wurde gelöscht."
+    },
+    "fields": {
+      "givenName": "Vorname",
+      "familyName": "Nachname",
+      "email": "E-Mail",
+      "phone": "Telefon",
+      "birthDate": "Geburtsdatum",
+      "notes": "Notizen",
+      "notesHint": "Nur das Büro sieht diese Notizen."
+    },
+    "detail": {
+      "all": "Alle Personen",
+      "loadError": "Diese Person konnte nicht geladen werden.",
+      "noPerson": "Diese Person gibt es nicht.",
+      "noPersonDescription": "Vielleicht ist der Link falsch. Suche die Person stattdessen.",
+      "details": "Daten",
+      "edit": "Daten bearbeiten",
+      "editLabel": "Daten von {{name}} bearbeiten"
+    },
+    "guardians": {
+      "title": "Erziehungsberechtigte",
+      "description": "Die Eltern oder anderen Erziehungsberechtigten, die für {{name}} buchen.",
+      "list": "Erziehungsberechtigte",
+      "empty": "{{name}} hat keine erziehungsberechtigte Person.",
+      "addLabel": "Erziehungsberechtigte Person hinzufügen",
+      "person": "Erziehungsberechtigte Person",
+      "add": "Hinzufügen",
+      "added": "{{guardian}} ist jetzt für {{name}} erziehungsberechtigt.",
+      "duplicate": "{{guardian}} ist bereits für {{name}} erziehungsberechtigt.",
+      "duplicateUnknown": "Diese Person ist bereits für {{name}} erziehungsberechtigt.",
+      "removeLabel": "{{guardian}} als erziehungsberechtigt entfernen",
+      "remove": "Entfernen",
+      "removing": "Wird entfernt…",
+      "keep": "Behalten",
+      "confirm": "{{guardian}} als erziehungsberechtigte Person von {{name}} entfernen?",
+      "lastGuardian": "{{givenName}} hat danach keine erziehungsberechtigte Person mehr, bleibt aber eingetragen.",
+      "removed": "{{guardian}} ist nicht mehr für {{name}} erziehungsberechtigt.",
+      "notFound": "{{guardian}} ist nicht mehr für {{name}} erziehungsberechtigt."
+    },
+    "dependents": {
+      "title": "Kinder",
+      "description": "Die Personen, für die {{name}} erziehungsberechtigt ist.",
+      "list": "Kinder",
+      "empty": "{{name}} ist für niemanden erziehungsberechtigt."
+    },
+    "account": {
+      "title": "Konto",
+      "description": "Der Zugang von {{name}}.",
+      "none": "{{name}} hat kein Konto und kann sich nicht anmelden.",
+      "email": "Anmeldeadresse",
+      "role": "Rolle",
+      "status": "Status",
+      "statuses": {
+        "pending": "Unbestätigt",
+        "active": "Aktiv",
+        "disabled": "Gesperrt"
+      },
+      "pendingHint": "Das Konto wird aktiv, sobald {{givenName}} die E-Mail-Adresse mit dem Link aus der Einladung oder der Registrierung bestätigt.",
+      "create": "Konto anlegen",
+      "createTitle": "Konto für {{name}} anlegen",
+      "createDescription": "{{givenName}} bekommt eine Einladung per E-Mail. Mit dem Link darin, 72 Stunden gültig, wird das Passwort festgelegt und das Konto aktiviert.",
+      "emailHint": "Mit dieser Adresse meldet sich das Konto an; dorthin geht auch die Einladung.",
+      "chooseRole": "Rolle wählen",
+      "submit": "Anlegen und einladen",
+      "created": "{{name}} hat jetzt ein Konto. Die Einladung wurde an {{email}} geschickt.",
+      "duplicate": "Diese E-Mail-Adresse gehört bereits zu einem anderen Konto. Wähle eine andere.",
+      "hasAccount": "{{name}} hat bereits ein Konto, vielleicht inzwischen angelegt. Schließe dieses Formular, um es zu sehen.",
+      "forbidden": "Nur Administratoren können Administrationskonten anlegen."
+    },
+    "staff": {
+      "title": "Personal",
+      "description": "Die Einträge im Personal, die mit {{name}} verknüpft sind.",
+      "empty": "{{name}} ist mit keinem Eintrag im Personal verknüpft.",
+      "inactive": "Inaktiv",
+      "open": "Zur Personalliste"
+    },
+    "classes": {
+      "title": "Kurse",
+      "description": "Die Kurse, in denen {{name}} Mitglied ist.",
+      "empty": "{{name}} ist in keinem Kurs Mitglied.",
+      "label": "{{courseType}}, {{day}} {{time}}",
+      "openLabel": "{{label}} ({{term}})",
+      "since": "Mitglied seit {{date}}",
+      "retired": "Stillgelegt"
+    }
   }
 }

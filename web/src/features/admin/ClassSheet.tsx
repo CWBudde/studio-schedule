@@ -31,7 +31,7 @@ import {
 import { SelectField } from './crud/fields';
 import { showServerErrors, useAdminErrorText } from './crud/form';
 import { FormSheet, FormSheetActions, FormSheetHeader } from './crud/FormSheet';
-import { ProblemAlert } from './crud/ProblemAlert';
+import { ProblemAlert } from '@/components/ProblemAlert';
 import { useClassLabel } from './useClassLabel';
 
 /** What the sheet edits: a new class of the term or an existing one. */

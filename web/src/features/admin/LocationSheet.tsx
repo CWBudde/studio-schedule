@@ -9,7 +9,7 @@ import { TextField } from '@/features/auth/TextField';
 import { TextareaField } from './crud/fields';
 import { showServerErrors, useAdminErrorText } from './crud/form';
 import { FormSheet, FormSheetActions, FormSheetHeader } from './crud/FormSheet';
-import { ProblemAlert } from './crud/ProblemAlert';
+import { ProblemAlert } from '@/components/ProblemAlert';
 import {
   locationData,
   locationFields,

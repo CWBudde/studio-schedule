@@ -1,5 +1,5 @@
 import { FormError } from '@/features/auth/FormError';
-import { type ConflictReason, conflictReason } from './form';
+import { type ConflictReason, conflictReason } from '@/api/conflict';
 
 /**
  * Why a write failed, in words: the sentence of `conflicts` for the reason
