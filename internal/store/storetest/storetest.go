@@ -42,6 +42,7 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 	t.Run("Timetable", func(t *testing.T) { testTimetable(t, newStore) })
 	t.Run("Lessons", func(t *testing.T) { testLessons(t, newStore) })
 	t.Run("Bookings", func(t *testing.T) { testBookings(t, newStore) })
+	t.Run("Waitlist", func(t *testing.T) { testWaitlist(t, newStore) })
 	t.Run("Outbox", func(t *testing.T) { testOutbox(t, newStore) })
 	t.Run("Audit", func(t *testing.T) { testAudit(t, newStore) })
 }

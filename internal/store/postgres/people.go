@@ -34,6 +34,8 @@ func (r settingsRepo) Get(ctx context.Context) (domain.Settings, error) {
 		CancellationCutoff: fromPgInterval(row.CancellationCutoff),
 		DefaultVisibleDays: int(row.DefaultVisibleDays),
 		LegalNotice:        row.LegalNotice.String,
+
+		WaitlistInviteExpiry: fromPgInterval(row.WaitlistInviteExpiry),
 	}, nil
 }
 
@@ -66,6 +68,8 @@ func (r settingsRepo) Put(ctx context.Context, s domain.Settings) error {
 		CancellationCutoff: pgInterval(s.CancellationCutoff),
 		DefaultVisibleDays: visibleDays,
 		LegalNotice:        pgText(s.LegalNotice),
+
+		WaitlistInviteExpiry: pgInterval(s.WaitlistInviteExpiry),
 	}))
 }
 

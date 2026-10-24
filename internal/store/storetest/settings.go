@@ -17,7 +17,8 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 		Currency: "EUR", ReceiptPrefix: "CS1",
 		ReleaseWeekday: time.Saturday, ReleaseTime: domain.TimeOfDay{Hour: 9, Minute: 30}, ReleaseWeeksAhead: 2,
 		BookingCutoff: 30 * time.Minute, CancellationCutoff: 12 * time.Hour, DefaultVisibleDays: 21,
-		LegalNotice: "Contract School, Example Street 1, 00000 Example Town",
+		LegalNotice:          "Contract School, Example Street 1, 00000 Example Town",
+		WaitlistInviteExpiry: 90 * time.Minute,
 	}
 	get := func(e *env) (domain.Settings, error) {
 		return query(e, func(ctx context.Context, tx store.Tx) (domain.Settings, error) { return tx.Settings().Get(ctx) })
@@ -50,6 +51,7 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 			updated.SchoolName = "Renamed School"
 			updated.BookingCutoff = 0
 			updated.LegalNotice = ""
+			updated.WaitlistInviteExpiry = 30 * 24 * time.Hour
 			put(e, updated)
 
 			got, err := get(e)

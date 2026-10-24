@@ -53,8 +53,12 @@ func TestSettingsValidate(t *testing.T) {
 			Currency: "EUR", ReceiptPrefix: "TS",
 			ReleaseWeekday: time.Sunday, ReleaseTime: domain.TimeOfDay{Hour: 18}, ReleaseWeeksAhead: 1,
 			BookingCutoff: 0, CancellationCutoff: 2 * time.Hour, DefaultVisibleDays: 14,
+			WaitlistInviteExpiry: 12 * time.Hour,
 		}
 	}, map[string]func(*domain.Settings){
+		"zero invite expiry":    func(s *domain.Settings) { s.WaitlistInviteExpiry = 0 },
+		"short invite expiry":   func(s *domain.Settings) { s.WaitlistInviteExpiry = 59 * time.Second },
+		"huge invite expiry":    func(s *domain.Settings) { s.WaitlistInviteExpiry = 31 * 24 * time.Hour },
 		"empty name":            func(s *domain.Settings) { s.SchoolName = "  " },
 		"empty timezone":        func(s *domain.Settings) { s.Timezone = "" },
 		"unknown timezone":      func(s *domain.Settings) { s.Timezone = "Mars/Olympus" },

@@ -104,6 +104,7 @@ type Tx interface {
 	Classes() ClassRepo
 	Lessons() LessonRepo
 	Bookings() BookingRepo
+	Waitlist() WaitlistRepo
 	Outbox() OutboxRepo
 	Audit() AuditRepo
 }
@@ -122,7 +123,8 @@ type PersonRepo interface {
 	Create(ctx context.Context, p domain.Person) error
 	Update(ctx context.Context, p domain.Person) error
 	// Delete fails with domain.ErrConflict while the person is referenced
-	// (account, staff, guardian link, class member, booking).
+	// (account, staff, guardian link, class member, booking). The person's
+	// waiting-list entries are deleted with it.
 	Delete(ctx context.Context, id domain.PersonID) error
 	// List returns all persons ordered by family name, given name and ID.
 	List(ctx context.Context) ([]domain.Person, error)
@@ -353,7 +355,8 @@ type LessonRepo interface {
 	// Update fails with domain.ErrConflict under the same rules as Create.
 	Update(ctx context.Context, l domain.Lesson) error
 	// Delete fails with domain.ErrConflict while bookings refer to the
-	// lesson, canceled ones included.
+	// lesson, canceled ones included. The lesson's waiting-list entries are
+	// deleted with it.
 	Delete(ctx context.Context, id domain.LessonID) error
 	// ListByClassStartingAfter returns the lessons of a class that start
 	// after the instant, whatever their slot date, ordered by StartsAt and
@@ -423,6 +426,38 @@ type BookingRepo interface {
 	AddEvent(ctx context.Context, e domain.BookingEvent) error
 	// ListEvents returns the history of a booking ordered by At and ID.
 	ListEvents(ctx context.Context, booking domain.BookingID) ([]domain.BookingEvent, error)
+}
+
+// WaitlistRepo stores the waiting-list entries of lessons (ADR 0010). A
+// person has at most one open (waiting or invited) entry per lesson, and an
+// invite token hash belongs to one entry. Entries go with their lesson and
+// their person (LessonRepo.Delete, PersonRepo.Delete).
+type WaitlistRepo interface {
+	Get(ctx context.Context, id domain.WaitlistEntryID) (domain.WaitlistEntry, error)
+	// GetByTokenHash finds the entry an invite token was sent for, whatever
+	// its status.
+	GetByTokenHash(ctx context.Context, hash [32]byte) (domain.WaitlistEntry, error)
+	// Create fails with domain.ErrDuplicate if the person has an open entry
+	// for the lesson, and with domain.ErrConflict (but not ErrDuplicate) if
+	// the ID or the token hash is taken or a referenced record does not
+	// exist.
+	Create(ctx context.Context, e domain.WaitlistEntry) error
+	// Update fails under the same rules as Create.
+	Update(ctx context.Context, e domain.WaitlistEntry) error
+	// ListByLesson returns the entries of a lesson, ended ones included,
+	// ordered by JoinedAt and ID: the order of the list.
+	ListByLesson(ctx context.Context, lesson domain.LessonID) ([]domain.WaitlistEntry, error)
+	// ListOpenByLessons returns the open (waiting or invited) entries of the
+	// given lessons, ordered by JoinedAt and ID.
+	ListOpenByLessons(ctx context.Context, lessons []domain.LessonID) ([]domain.WaitlistEntry, error)
+	// ListByPersons returns the entries of the given persons, ended ones
+	// included, ordered by JoinedAt and ID.
+	ListByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.WaitlistEntry, error)
+	// ListDueLessons returns, each once and ordered by ID, the lessons that
+	// have an invited entry whose invite expired at or before now, or that
+	// started at or before now and still have an open entry: the work of the
+	// waitlist-expiry job.
+	ListDueLessons(ctx context.Context, now time.Time) ([]domain.LessonID, error)
 }
 
 // OutboxRepo stores outgoing mails.

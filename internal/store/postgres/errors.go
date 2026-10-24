@@ -15,7 +15,7 @@ import (
 )
 
 // Constraints and unique indexes whose violation has a domain meaning beyond
-// "duplicate key" (see migrations/00001_core.sql, 00006, 00007 and 00008).
+// "duplicate key" (see migrations/00001_core.sql, 00006, 00007, 00008 and 00012).
 const (
 	constraintAccountEmail    = "accounts_email_key"
 	constraintAccountPerson   = "accounts_person_id_key"
@@ -26,6 +26,7 @@ const (
 	constraintLocationName    = "locations_name_key"
 	constraintRoomName        = "rooms_location_name_key"
 	constraintCourseTypeName  = "course_types_name_key"
+	constraintOpenWaitlist    = "waitlist_entries_one_open_key"
 )
 
 // conflicts describes the unique constraints above: the message, and the
@@ -47,6 +48,7 @@ var conflicts = map[string]struct {
 	constraintLocationName:    {"location name is taken", domain.ErrDuplicate},
 	constraintRoomName:        {"room name is taken at the location", domain.ErrDuplicate},
 	constraintCourseTypeName:  {"course type name is taken", domain.ErrDuplicate},
+	constraintOpenWaitlist:    {"person is on the waiting list of the lesson already", domain.ErrDuplicate},
 }
 
 // retryableError reports a serialization failure or deadlock. InTx retries

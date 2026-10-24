@@ -363,9 +363,18 @@ func TestWaitlistEntryValidate(t *testing.T) {
 			"zero person":  func(w *domain.WaitlistEntry) { w.PersonID = domain.PersonID{} },
 			"bad status":   func(w *domain.WaitlistEntry) { w.Status = "queued" },
 			"no joined at": func(w *domain.WaitlistEntry) { w.JoinedAt = time.Time{} },
-			"has token":    func(w *domain.WaitlistEntry) { w.InviteTokenHash[0] = 1 },
 			"has invite":   func(w *domain.WaitlistEntry) { w.InvitedAt = t0 },
+			"has expiry":   func(w *domain.WaitlistEntry) { w.ExpiresAt = t0.Add(time.Hour) },
 		})
+
+		// Back on the list after an invite, it keeps the old link's hash
+		// until a new invite replaces it.
+		w := waiting()
+		w.InviteTokenHash[0] = 1
+
+		if err := w.Validate(); err != nil {
+			t.Fatalf("waiting with the old link: %v", err)
+		}
 	})
 
 	t.Run("Invited", func(t *testing.T) {
@@ -383,6 +392,53 @@ func TestWaitlistEntryValidate(t *testing.T) {
 			"expires on invite": func(w *domain.WaitlistEntry) { w.ExpiresAt = w.InvitedAt },
 		})
 	})
+
+	t.Run("Accepted", func(t *testing.T) {
+		t.Parallel()
+		checkValidate(t, func() domain.WaitlistEntry {
+			w := waiting()
+			w.Status, w.InvitedAt, w.ExpiresAt = domain.WaitlistAccepted, t0.Add(time.Minute), t0.Add(time.Hour)
+			w.InviteTokenHash[0] = 1
+
+			return w
+		}, map[string]func(*domain.WaitlistEntry){
+			"no invite": func(w *domain.WaitlistEntry) {
+				w.InviteTokenHash, w.InvitedAt, w.ExpiresAt = [32]byte{}, time.Time{}, time.Time{}
+			},
+			"no token": func(w *domain.WaitlistEntry) { w.InviteTokenHash = [32]byte{} },
+		})
+	})
+
+	// An entry ends with or without the invite it had.
+	for _, status := range []domain.WaitlistStatus{domain.WaitlistExpired, domain.WaitlistWithdrawn} {
+		t.Run(string(status), func(t *testing.T) {
+			t.Parallel()
+
+			w := waiting()
+			w.Status = status
+
+			if err := w.Validate(); err != nil {
+				t.Fatalf("without an invite: %v", err)
+			}
+
+			w.InvitedAt, w.ExpiresAt = t0.Add(time.Minute), t0.Add(time.Hour)
+			w.InviteTokenHash[0] = 1
+
+			if err := w.Validate(); err != nil {
+				t.Fatalf("with an invite: %v", err)
+			}
+
+			w.ExpiresAt = time.Time{}
+			if err := w.Validate(); !errors.Is(err, domain.ErrValidation) {
+				t.Errorf("half an invite: want ErrValidation, got %v", err)
+			}
+
+			w.InvitedAt = time.Time{}
+			if err := w.Validate(); !errors.Is(err, domain.ErrValidation) {
+				t.Errorf("a token without its invite: want ErrValidation, got %v", err)
+			}
+		})
+	}
 }
 
 func TestPassValidate(t *testing.T) {

@@ -170,19 +170,20 @@ type Session struct {
 }
 
 type Setting struct {
-	ID                 bool
-	SchoolName         string
-	Timezone           string
-	DefaultLocale      string
-	Currency           string
-	ReceiptPrefix      string
-	ReleaseWeekday     int16
-	ReleaseTime        pgtype.Time
-	ReleaseWeeksAhead  int32
-	BookingCutoff      pgtype.Interval
-	CancellationCutoff pgtype.Interval
-	DefaultVisibleDays int32
-	LegalNotice        pgtype.Text
+	ID                   bool
+	SchoolName           string
+	Timezone             string
+	DefaultLocale        string
+	Currency             string
+	ReceiptPrefix        string
+	ReleaseWeekday       int16
+	ReleaseTime          pgtype.Time
+	ReleaseWeeksAhead    int32
+	BookingCutoff        pgtype.Interval
+	CancellationCutoff   pgtype.Interval
+	DefaultVisibleDays   int32
+	LegalNotice          pgtype.Text
+	WaitlistInviteExpiry pgtype.Interval
 }
 
 type Staff struct {
@@ -198,4 +199,17 @@ type Term struct {
 	Name     string
 	StartsOn pgtype.Date
 	EndsOn   pgtype.Date
+}
+
+type WaitlistEntry struct {
+	ID              pgtype.UUID
+	LessonID        pgtype.UUID
+	PersonID        pgtype.UUID
+	Status          string
+	JoinedAt        pgtype.Timestamptz
+	StayOnList      bool
+	JoinedBy        pgtype.UUID
+	InviteTokenHash []byte
+	InvitedAt       pgtype.Timestamptz
+	ExpiresAt       pgtype.Timestamptz
 }

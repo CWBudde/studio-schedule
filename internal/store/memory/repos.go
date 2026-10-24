@@ -153,6 +153,10 @@ func (r personRepo) Delete(_ context.Context, id domain.PersonID) error {
 		return conflict("person %s is referenced", id)
 	}
 
+	for _, e := range s.waitlist.filter(func(e domain.WaitlistEntry) bool { return e.PersonID == id }) {
+		s.waitlist.delete(r.tx.gen, e.ID)
+	}
+
 	s.persons.delete(r.tx.gen, id)
 
 	return nil
@@ -951,6 +955,10 @@ func (r lessonRepo) Delete(_ context.Context, id domain.LessonID) error {
 		return notFound("lesson")
 	case s.bookings.exists(func(b domain.Booking) bool { return b.LessonID == id }):
 		return conflict("lesson %s is booked", id)
+	}
+
+	for _, e := range s.waitlist.filter(func(e domain.WaitlistEntry) bool { return e.LessonID == id }) {
+		s.waitlist.delete(r.tx.gen, e.ID)
 	}
 
 	s.lessons.delete(r.tx.gen, id)

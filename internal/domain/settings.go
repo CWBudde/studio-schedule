@@ -33,6 +33,10 @@ type Settings struct {
 	BookingCutoff      time.Duration
 	CancellationCutoff time.Duration
 
+	// WaitlistInviteExpiry is how long a waiting-list invitation holds its
+	// place, never beyond the booking cutoff (ADR 0010).
+	WaitlistInviteExpiry time.Duration
+
 	// DefaultVisibleDays is the early access of signed-in members: they see
 	// the lessons they may see up to this many days after today, even if
 	// not released yet, unless their account overrides it (ADR 0003).
@@ -56,6 +60,10 @@ func (s Settings) Validate() error {
 		rule{s.ReleaseWeeksAhead >= 1 && s.ReleaseWeeksAhead <= maxWeeksAhead, "release weeks ahead must be between 1 and 52"},
 		rule{s.BookingCutoff >= 0 && s.BookingCutoff <= maxCutoff, "booking cutoff must be between 0 and 30 days"},
 		rule{s.CancellationCutoff >= 0 && s.CancellationCutoff <= maxCutoff, "cancellation cutoff must be between 0 and 30 days"},
+		rule{
+			s.WaitlistInviteExpiry >= minInviteExpiry && s.WaitlistInviteExpiry <= maxCutoff,
+			"waitlist invite expiry must be between 1 minute and 30 days",
+		},
 		rule{s.DefaultVisibleDays >= 1 && s.DefaultVisibleDays <= maxVisibleDays, "default visible days must be between 1 and 366"},
 	)
 	if err != nil {
@@ -75,6 +83,8 @@ const (
 	maxWeeksAhead  = 52
 	maxVisibleDays = 366
 	maxCutoff      = 30 * 24 * time.Hour
+	// minInviteExpiry keeps an invitation answerable at all.
+	minInviteExpiry = time.Minute
 )
 
 func validCurrency(s string) bool {
