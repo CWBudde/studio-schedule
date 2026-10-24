@@ -1,6 +1,6 @@
 import { MutationObserver, QueryClient, QueryObserver } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Me } from '@/api/client';
+import { api, type Me } from '@/api/client';
 import i18n from '@/i18n';
 import {
   accounts,
@@ -24,6 +24,8 @@ import {
 } from '@/test/mockApi';
 import {
   addDependentMutation,
+  bookLessonMutation,
+  cancelBookingMutation,
   allStaffQuery,
   ApiError,
   changePasswordMutation,
@@ -812,5 +814,143 @@ describe('family', () => {
     ).rejects.toThrow();
 
     expect(queryClient.getQueryData(meQuery.queryKey)).toBeNull();
+  });
+});
+
+describe('bookings', () => {
+  const nora = { personId: meMember.personId, name: 'Nora Example' };
+  const bookingId = '0190a000-0000-7000-8000-000000000601';
+
+  function bookingClient() {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(scheduleQuery(range).queryKey, schedule);
+    queryClient.setQueryData(lessonQuery(ids.lessonBallet).queryKey, schedule.lessons[0]);
+    queryClient.setQueryData(demoMailboxQuery.queryKey, []);
+    return queryClient;
+  }
+  const ballet = (queryClient: QueryClient) => ({
+    inSchedule: queryClient
+      .getQueryData(scheduleQuery(range).queryKey)
+      ?.lessons.find((l) => l.id === ids.lessonBallet),
+    detail: queryClient.getQueryData(lessonQuery(ids.lessonBallet).queryKey),
+  });
+
+  it('shows a booking in the schedule and the lesson before the API answers', async () => {
+    let seen: ReturnType<typeof ballet> | undefined;
+    const queryClient = bookingClient();
+    mockApiPost({
+      '/api/v1/lessons/{lessonId}/bookings': () => {
+        seen = ballet(queryClient);
+        return { status: 201, body: {} };
+      },
+    });
+
+    await new MutationObserver(queryClient, bookLessonMutation(queryClient)).mutate({
+      lessonId: ids.lessonBallet,
+      ...nora,
+    });
+
+    for (const lesson of [seen?.inSchedule, seen?.detail]) {
+      expect(lesson?.freePlaces).toBe(11);
+      expect(lesson?.bookedFor).toEqual([{ ...nora, bookingId: '' }]);
+    }
+    // Afterwards the API is asked again, the mailbox included (the confirmation mail).
+    expect(queryClient.getQueryState(scheduleQuery(range).queryKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(demoMailboxQuery.queryKey)?.isInvalidated).toBe(true);
+    // Other lessons stay as they were.
+    expect(queryClient.getQueryData(scheduleQuery(range).queryKey)?.lessons[2]).toBe(
+      schedule.lessons[2],
+    );
+  });
+
+  it('rolls a refused booking back', async () => {
+    const queryClient = bookingClient();
+    mockApiPost({ '/api/v1/lessons/{lessonId}/bookings': conflict('full') });
+
+    await expect(
+      new MutationObserver(queryClient, bookLessonMutation(queryClient)).mutate({
+        lessonId: ids.lessonBallet,
+        ...nora,
+      }),
+    ).rejects.toThrow(ApiError);
+
+    expect(ballet(queryClient).inSchedule).toEqual(schedule.lessons[0]);
+    expect(ballet(queryClient).detail).toEqual(schedule.lessons[0]);
+  });
+
+  it('undoes only its own change when overlapping writes fail', async () => {
+    const queryClient = bookingClient();
+    const booked = { ...schedule.lessons[0]!, freePlaces: 11, bookedFor: [{ ...nora, bookingId }] };
+    queryClient.setQueryData(scheduleQuery(range).queryKey, { ...schedule, lessons: [booked] });
+    queryClient.setQueryData(lessonQuery(ids.lessonBallet).queryKey, booked);
+    // Each request waits until the test lets it fail with a 409.
+    const answers: Record<string, (status: number) => void> = {};
+    vi.spyOn(api, 'POST').mockImplementation(
+      ((path: string) =>
+        new Promise((resolve) => {
+          answers[path] = (status) =>
+            resolve({
+              data: undefined,
+              error: { status, reason: 'full' },
+              response: new Response(null, { status }),
+            });
+        })) as unknown as typeof api.POST,
+    );
+    const lina = { personId: family.dependents[0]!.id, name: 'Lina Example' };
+
+    const book = new MutationObserver(queryClient, bookLessonMutation(queryClient))
+      .mutate({ lessonId: ids.lessonBallet, ...lina })
+      .catch(() => undefined);
+    await vi.waitFor(() => expect(answers['/api/v1/lessons/{lessonId}/bookings']).toBeDefined());
+    const cancel = new MutationObserver(queryClient, cancelBookingMutation(queryClient))
+      .mutate({ bookingId, lessonId: ids.lessonBallet })
+      .catch(() => undefined);
+    await vi.waitFor(() => expect(answers['/api/v1/bookings/{bookingId}/cancel']).toBeDefined());
+    for (const lesson of Object.values(ballet(queryClient))) {
+      expect(lesson?.freePlaces).toBe(11);
+      expect(lesson?.bookedFor).toEqual([{ ...lina, bookingId: '' }]);
+    }
+
+    answers['/api/v1/lessons/{lessonId}/bookings']!(409);
+    await book;
+    // The cancellation is still running: Nora stays canceled, Lina's booking is gone.
+    for (const lesson of Object.values(ballet(queryClient))) {
+      expect(lesson?.freePlaces).toBe(12);
+      expect(lesson).not.toHaveProperty('bookedFor');
+    }
+
+    answers['/api/v1/bookings/{bookingId}/cancel']!(409);
+    await cancel;
+    // No phantom booking: back to where both started.
+    expect(ballet(queryClient).inSchedule).toEqual(booked);
+    expect(ballet(queryClient).detail).toEqual(booked);
+  });
+
+  it('frees the place of a canceled booking at once and rolls back on refusal', async () => {
+    const queryClient = bookingClient();
+    const booked = { ...schedule.lessons[0]!, freePlaces: 11, bookedFor: [{ ...nora, bookingId }] };
+    queryClient.setQueryData(scheduleQuery(range).queryKey, { ...schedule, lessons: [booked] });
+    queryClient.setQueryData(lessonQuery(ids.lessonBallet).queryKey, booked);
+    let seen: ReturnType<typeof ballet> | undefined;
+    mockApiPost({
+      '/api/v1/bookings/{bookingId}/cancel': () => {
+        seen = ballet(queryClient);
+        return conflict('already-canceled');
+      },
+    });
+
+    await expect(
+      new MutationObserver(queryClient, cancelBookingMutation(queryClient)).mutate({
+        bookingId,
+        lessonId: ids.lessonBallet,
+      }),
+    ).rejects.toThrow(ApiError);
+
+    for (const lesson of [seen?.inSchedule, seen?.detail]) {
+      expect(lesson?.freePlaces).toBe(12);
+      expect(lesson).not.toHaveProperty('bookedFor');
+    }
+    expect(ballet(queryClient).inSchedule).toEqual(booked);
+    expect(ballet(queryClient).detail).toEqual(booked);
   });
 });

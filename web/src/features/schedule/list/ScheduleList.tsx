@@ -1,7 +1,7 @@
 import { CalendarClock, Clock, MapPin, UserRound, X } from 'lucide-react';
 import { useId, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { LessonSummary, Schedule } from '@/api/client';
+import type { Schedule, ScheduleLesson } from '@/api/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,11 +15,12 @@ import {
 } from '@/lib/schoolTime';
 import { useServerNow } from '@/lib/useNow';
 import { cn } from '@/lib/utils';
+import { AvailabilityBadges, hasAvailabilityBadges } from '../booking/AvailabilityBadges';
 import { clearedFilters, hasActiveFilter } from '../filters/filterParams';
 import { useScheduleSearch } from '../useScheduleSearch';
 import { VisibilityBadge } from '../visibility/VisibilityBadge';
 
-type Day = { date: SchoolDate; lessons: LessonSummary[] };
+type Day = { date: SchoolDate; lessons: ScheduleLesson[] };
 
 /** How a day heading is colored, by the day's distance from today. */
 type DayTone = 'past' | 'today' | 'tomorrow' | 'later';
@@ -38,8 +39,8 @@ function dayTone(date: SchoolDate, today: SchoolDate, tomorrow: SchoolDate): Day
 }
 
 /** Groups lessons by the school date they start on, keeping their order. */
-function groupByDay(lessons: LessonSummary[], timeZone: string): Day[] {
-  const days = new Map<SchoolDate, LessonSummary[]>();
+function groupByDay(lessons: ScheduleLesson[], timeZone: string): Day[] {
+  const days = new Map<SchoolDate, ScheduleLesson[]>();
   for (const lesson of lessons) {
     const date = schoolDateOf(lesson.startsAt, timeZone);
     const list = days.get(date);
@@ -143,7 +144,7 @@ function LessonCard({
   lang,
   onOpen,
 }: {
-  lesson: LessonSummary;
+  lesson: ScheduleLesson;
   past: boolean;
   dayLabel: string;
   timeZone: string;
@@ -152,6 +153,7 @@ function LessonCard({
 }) {
   const { t } = useTranslation('schedule');
   const detailsId = useId();
+  const availabilityId = useId();
   const canceled = lesson.status === 'canceled';
   // Canceled and ended lessons lose their accent colors.
   const quiet = canceled || past;
@@ -171,7 +173,9 @@ function LessonCard({
     <button
       type="button"
       aria-label={label}
-      aria-describedby={detailsId}
+      aria-describedby={
+        hasAvailabilityBadges(lesson, !quiet) ? `${detailsId} ${availabilityId}` : detailsId
+      }
       onClick={onOpen}
       data-canceled={canceled || undefined}
       data-past={past || undefined}
@@ -231,6 +235,7 @@ function LessonCard({
           </span>
         </span>
       </span>
+      <AvailabilityBadges id={availabilityId} lesson={lesson} showFree={!quiet} />
     </button>
   );
 }

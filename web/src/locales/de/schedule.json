@@ -109,5 +109,77 @@
     "releasedThrough": "Kurse sind bis einschließlich {{day}} veröffentlicht. Die nächsten folgen am {{release}}; Workshops werden früher veröffentlicht.",
     "earlyAccess": "Frühzugang: Als Mitglied siehst du Kurse schon bis einschließlich {{visible}}. Für alle sind sie bis einschließlich {{day}} veröffentlicht.",
     "staffView": "Als Teammitglied siehst du alle Stunden, auch versteckte und noch nicht veröffentlichte Kurse. Für alle sind Kurse bis einschließlich {{day}} veröffentlicht."
+  },
+  "booking": {
+    "title": "Buchung",
+    "placesLeft_one": "Noch {{count}} Platz frei",
+    "placesLeft_other": "Noch {{count}} Plätze frei",
+    "until": "Buchbar bis {{at}}",
+    "full": "Diese Stunde ist ausgebucht.",
+    "closed": {
+      "cutoff": "Die Buchung ist geschlossen.",
+      "release": "Noch nicht buchbar.",
+      "canceled": "Ausgefallene Stunden können nicht gebucht werden.",
+      "started": "Diese Stunde hat begonnen."
+    },
+    "signIn": "Zum Buchen anmelden",
+    "for": "Buchen für",
+    "you": "{{name}} (du)",
+    "book": "Buchen",
+    "booking": "Buchen…",
+    "booked": "Gebucht",
+    "bookedToast": "{{name}} ist gebucht.",
+    "mailHint": "Eine Bestätigung kommt per E-Mail.",
+    "cancel": "Buchung stornieren",
+    "cancelFor": "Buchung von {{name}} stornieren",
+    "cancelFollowing": "Auch folgende Wochen stornieren",
+    "cancelFollowingFor": "Auch die folgenden Wochen von {{name}} stornieren",
+    "confirm": {
+      "title": "Diese Buchung stornieren?",
+      "description": "{{name}} ist dann nicht mehr für {{lesson}} gebucht.",
+      "keep": "Buchung behalten",
+      "confirm": "Buchung stornieren",
+      "canceling": "Stornieren…",
+      "late": "Das zählt als späte Stornierung."
+    },
+    "canceled": "Die Buchung von {{name}} wurde storniert.",
+    "late": "Es war eine späte Stornierung.",
+    "following": {
+      "title": "Auch die folgenden Wochen stornieren?",
+      "description": "Diese Buchungen von {{name}} für diesen Kurs werden storniert:",
+      "loading": "Die Buchungen werden geladen…",
+      "late": "Spät",
+      "lateHint": "„Spät“ heißt: nach der Stornofrist vor der Stunde.",
+      "confirm_one": "{{count}} Buchung stornieren",
+      "confirm_other": "{{count}} Buchungen stornieren",
+      "canceling": "Stornieren…",
+      "keep": "Buchungen behalten",
+      "done_one": "{{count}} Buchung wurde storniert.",
+      "done_other": "{{count}} Buchungen wurden storniert.",
+      "doneLate_one": "{{count}} davon war eine späte Stornierung.",
+      "doneLate_other": "{{count}} davon waren späte Stornierungen."
+    },
+    "errors": {
+      "alreadyBooked": "{{name}} ist für diese Stunde schon gebucht.",
+      "full": "Diese Stunde ist ausgebucht.",
+      "closed": {
+        "cutoff": "Für diese Stunde ist die Buchung geschlossen.",
+        "release": "Diese Stunde ist noch nicht buchbar.",
+        "canceled": "Diese Stunde fällt aus und kann nicht gebucht werden.",
+        "started": "Diese Stunde hat begonnen und kann nicht mehr gebucht werden."
+      },
+      "alreadyCanceled": "Diese Buchung war schon storniert.",
+      "notFound": "Diese Stunde oder Buchung ist nicht mehr verfügbar.",
+      "started": "Die Stunde hat begonnen; die Buchung kann nicht mehr storniert werden.",
+      "failed": "Das hat nicht geklappt. Bitte versuche es noch einmal."
+    },
+    "badge": {
+      "free_one": "{{count}} frei",
+      "free_other": "{{count}} frei",
+      "full": "Ausgebucht",
+      "booked": "Gebucht",
+      "bookedFor": "Gebucht: {{names}}",
+      "you": "du"
+    }
   }
 }

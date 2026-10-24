@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { LessonSummary, Schedule } from '@/api/client';
+import type { Schedule, ScheduleLesson } from '@/api/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,7 +12,9 @@ import {
   startOfWeek,
   type SchoolDate,
 } from '@/lib/schoolTime';
+import { useServerNow } from '@/lib/useNow';
 import { cn } from '@/lib/utils';
+import { AvailabilityBadges, hasAvailabilityBadges } from '../booking/AvailabilityBadges';
 import { useScheduleSearch } from '../useScheduleSearch';
 import { VisibilityBadge } from '../visibility/VisibilityBadge';
 import { layoutWeek, MIN_BLOCK_MINUTES, type Placement, type TimeAxis } from './layout';
@@ -31,10 +33,13 @@ const hourLabel = (hour: number) => `${String(hour).padStart(2, '0')}:00`;
  */
 export function WeekGrid({
   schedule,
+  receivedAt,
   weekStart,
   today,
 }: {
   schedule: Schedule;
+  /** When the schedule arrived (client clock), to follow the server's clock. */
+  receivedAt: number;
   weekStart: SchoolDate;
   /** Today in the school time zone, as the page uses it for its default date. */
   today: SchoolDate;
@@ -44,6 +49,7 @@ export function WeekGrid({
   const { search, update } = useScheduleSearch();
   const id = useId();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const now = useServerNow(schedule.now, receivedAt);
 
   const tz = schedule.timezone;
   const week = useMemo(
@@ -136,6 +142,7 @@ export function WeekGrid({
                 startHour={startHour}
                 timeZone={tz}
                 lang={lang}
+                ended={Date.parse(p.item.endsAt) <= now}
                 selected={search.lesson === p.item.id}
                 onOpen={() => void update({ lesson: p.item.id })}
               />
@@ -231,21 +238,26 @@ function LessonBlock({
   startHour,
   timeZone,
   lang,
+  ended,
   selected,
   onOpen,
 }: {
-  placement: Placement<LessonSummary>;
+  placement: Placement<ScheduleLesson>;
   date: SchoolDate;
   startHour: number;
   timeZone: string;
   lang: string;
+  /** Whether the lesson is over; it then shows no free places. */
+  ended: boolean;
   selected: boolean;
   onOpen: () => void;
 }) {
   const { t } = useTranslation('schedule');
+  const availabilityId = useId();
   const { item: lesson, start, end, lane, lanes } = placement;
   const canceled = lesson.status === 'canceled';
   const workshop = lesson.kind === 'workshop';
+  const showFree = !canceled && !ended;
   const time = formatTimeRange(lesson.startsAt, lesson.endsAt, timeZone, lang);
   const label = [
     lesson.courseType.name,
@@ -264,6 +276,7 @@ function LessonBlock({
       type="button"
       aria-label={label}
       aria-haspopup="dialog"
+      aria-describedby={hasAvailabilityBadges(lesson, showFree) ? availabilityId : undefined}
       data-start={start}
       data-lane={lane}
       data-lanes={lanes}
@@ -292,6 +305,7 @@ function LessonBlock({
       {canceled && <Badge variant="destructive">{t('status.canceled')}</Badge>}
       {workshop && <Badge variant="outline">{t('kind.workshop')}</Badge>}
       <VisibilityBadge visibility={lesson.visibility} />
+      <AvailabilityBadges id={availabilityId} lesson={lesson} showFree={showFree} />
     </button>
   );
 }

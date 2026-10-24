@@ -116,7 +116,7 @@ test('the office edits a lesson in its sheet', async ({ page }) => {
   await expect(form).toBeHidden();
   await expect(page.getByText('The lesson has been saved.')).toBeVisible();
 
-  await expect(sheet.getByText('9 places')).toBeVisible();
+  await expect(sheet.getByText('9 places', { exact: true })).toBeVisible();
   await expect(sheet.getByText(/^Edited individually/)).toBeVisible();
 });
 

@@ -3,7 +3,7 @@
  * (wall-clock minutes in the school time zone) a lesson occupies, and how
  * overlapping lessons share a column.
  */
-import type { LessonSummary } from '@/api/client';
+import type { ScheduleLesson } from '@/api/client';
 import { addDays, minutesSinceMidnight, schoolDateOf, type SchoolDate } from '@/lib/schoolTime';
 
 export const MINUTES_PER_DAY = 24 * 60;
@@ -97,19 +97,19 @@ export function weekDays(weekStart: SchoolDate): SchoolDate[] {
 }
 
 export type WeekLayout = {
-  days: { date: SchoolDate; placements: Placement<LessonSummary>[] }[];
+  days: { date: SchoolDate; placements: Placement<ScheduleLesson>[] }[];
   axis: TimeAxis;
   isEmpty: boolean;
 };
 
 /** Lays out the lessons that fall into the week; others are ignored. */
 export function layoutWeek(
-  lessons: readonly LessonSummary[],
+  lessons: readonly ScheduleLesson[],
   weekStart: SchoolDate,
   timeZone: string,
 ): WeekLayout {
   const dates = weekDays(weekStart);
-  const byDate = new Map(dates.map((d) => [d, [] as (Interval & { item: LessonSummary })[]]));
+  const byDate = new Map(dates.map((d) => [d, [] as (Interval & { item: ScheduleLesson })[]]));
   for (const lesson of lessons) {
     const { date, start, end } = lessonInterval(lesson.startsAt, lesson.endsAt, timeZone);
     byDate.get(date)?.push({ item: lesson, start, end });

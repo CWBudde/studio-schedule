@@ -145,7 +145,12 @@ function ScheduleView({ timeZone }: { timeZone: string }) {
       {schedule.data ? (
         <>
           {view === 'week' ? (
-            <WeekGrid schedule={schedule.data} weekStart={start} today={today} />
+            <WeekGrid
+              schedule={schedule.data}
+              receivedAt={schedule.dataUpdatedAt}
+              weekStart={start}
+              today={today}
+            />
           ) : (
             <ScheduleList schedule={schedule.data} receivedAt={schedule.dataUpdatedAt} />
           )}

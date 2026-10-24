@@ -1,15 +1,23 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { LessonSummary, Schedule } from '@/api/client';
+import { api, type Schedule, type ScheduleLesson } from '@/api/client';
 import i18n from '@/i18n';
-import { ids, lessonBallet, lessonContemporary, lessonWorkshop, schedule } from '@/test/mockApi';
+import {
+  ids,
+  lessonBallet,
+  lessonContemporary,
+  lessonWorkshop,
+  meMember,
+  mockApiGet,
+  schedule,
+} from '@/test/mockApi';
 import { renderAtSchedule } from '@/test/utils';
 import type { ScheduleSearch } from '../search';
 import { ScheduleList } from './ScheduleList';
 
 /** Ballet at 00:30–01:30 Berlin on Tuesday 2026-10-27 (still Monday evening in New York and UTC). */
-const lessonLate: LessonSummary = {
+const lessonLate: ScheduleLesson = {
   ...lessonBallet,
   id: '0190a000-0000-7000-8000-000000000104',
   startsAt: '2026-10-26T23:30:00Z',
@@ -42,7 +50,68 @@ function day(name: string) {
   return within(screen.getByRole('region', { name }));
 }
 
+const lina = { personId: '0190a000-0000-7000-8000-000000000331', name: 'Lina Example' };
+const noraBooked = {
+  personId: meMember.personId,
+  name: 'Nora Example',
+  bookingId: '0190a000-0000-7000-8000-000000000601',
+};
+const linaBooked = { ...lina, bookingId: '0190a000-0000-7000-8000-000000000602' };
+
 describe('ScheduleList', () => {
+  it('shows the free places and whom of the family a lesson is booked for', async () => {
+    mockApiGet({ '/api/v1/auth/me': { body: meMember } });
+    renderList({
+      ...schedule,
+      lessons: [
+        { ...lessonBallet, freePlaces: 3, bookedFor: [noraBooked, linaBooked] },
+        { ...lessonContemporary, bookedFor: [noraBooked] },
+        { ...lessonWorkshop, freePlaces: 0, bookedFor: [linaBooked] },
+      ],
+    });
+
+    const ballet = await screen.findByRole('button', { name: /^Ballet/ });
+    expect(await within(ballet).findByText('Booked: you, Lina Example')).toBeInTheDocument();
+    expect(within(ballet).getByText('3 free')).toBeInTheDocument();
+    expect(ballet).toHaveAccessibleDescription(/3 free$/);
+    // A canceled lesson keeps its bookings but has no places to offer.
+    const contemporary = screen.getByRole('button', { name: /^Contemporary/ });
+    expect(within(contemporary).getByText('Booked')).toBeInTheDocument();
+    expect(within(contemporary).queryByText(/free$/)).not.toBeInTheDocument();
+    const workshop = screen.getByRole('button', { name: /^Jazz/ });
+    expect(within(workshop).getByText('Booked: Lina Example')).toBeInTheDocument();
+    expect(within(workshop).getByText('Full')).toBeInTheDocument();
+  });
+
+  it('shows a plain "Booked" until it knows who is signed in', async () => {
+    // GET /auth/me never answers.
+    vi.spyOn(api, 'GET').mockImplementation((() => new Promise(() => undefined)) as never);
+    renderList({ ...schedule, lessons: [{ ...lessonBallet, bookedFor: [noraBooked] }] });
+
+    const ballet = await screen.findByRole('button', { name: /^Ballet/ });
+    expect(within(ballet).getByText('Booked')).toBeInTheDocument();
+    expect(within(ballet).queryByText(/Nora/)).not.toBeInTheDocument();
+  });
+
+  it('refers only to badges it shows', async () => {
+    // Tuesday noon by the server: the ballet is over, nobody booked it.
+    renderList(schedule, undefined, '2026-10-27T11:00:00Z');
+
+    const ballet = await screen.findByRole('button', { name: /^Ballet/ });
+    expect(within(ballet).queryByText(/free$/)).not.toBeInTheDocument();
+    const ids = (ballet.getAttribute('aria-describedby') ?? '').split(' ');
+    expect(ids).toHaveLength(1);
+    expect(document.getElementById(ids[0]!)).not.toBeNull();
+  });
+
+  it('shows no booked badge for a lesson nobody of the family booked', async () => {
+    renderList(schedule);
+
+    const ballet = await screen.findByRole('button', { name: /^Ballet/ });
+    expect(within(ballet).getByText('12 free')).toBeInTheDocument();
+    expect(within(ballet).queryByText(/^Booked/)).not.toBeInTheDocument();
+  });
+
   it('groups lessons by school day with headings and times in the school time zone', async () => {
     renderList(withLate);
 

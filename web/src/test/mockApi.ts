@@ -6,10 +6,10 @@ import type {
   AuditEventEntry,
   DemoLogin,
   LessonDetail,
-  LessonSummary,
   MailboxMail,
   Me,
   Schedule,
+  ScheduleLesson,
 } from '@/api/client';
 
 type PersonMatch = components['schemas']['PersonMatch'];
@@ -170,8 +170,12 @@ export const courseTypes = [
   { id: ids.jazz, name: 'Jazz' },
 ];
 
-/** Regular ballet class, Monday 2026-10-26 18:00–19:30 in Berlin, with an accompanist. */
-export const lessonBallet: LessonSummary = {
+/**
+ * Regular ballet class, Monday 2026-10-26 18:00–19:30 in Berlin, with an
+ * accompanist. Like every fixture lesson, booking closes an hour before the
+ * start, and a cancellation from 24 hours before the start on is late.
+ */
+export const lessonBallet: ScheduleLesson = {
   id: ids.lessonBallet,
   classId: ids.classBallet,
   courseType: { id: ids.ballet, name: 'Ballet' },
@@ -181,15 +185,18 @@ export const lessonBallet: LessonSummary = {
   accompanist: { id: ids.staffSam, displayName: 'Sam Pianist' },
   startsAt: '2026-10-26T17:00:00Z',
   endsAt: '2026-10-26T18:30:00Z',
+  bookingClosesAt: '2026-10-26T16:00:00Z',
+  lateCancelFrom: '2026-10-25T17:00:00Z',
   status: 'scheduled',
   kind: 'regular',
   level: 'beginner',
   capacity: 12,
   visibility: 'public',
+  freePlaces: 12,
 };
 
 /** Canceled contemporary class, Tuesday 2026-10-27 17:00–18:00 in Berlin. */
-export const lessonContemporary: LessonSummary = {
+export const lessonContemporary: ScheduleLesson = {
   id: ids.lessonContemporary,
   classId: ids.classContemporary,
   courseType: { id: ids.contemporary, name: 'Contemporary' },
@@ -198,15 +205,17 @@ export const lessonContemporary: LessonSummary = {
   instructor: { id: ids.staffRiley, displayName: 'Riley Sample' },
   startsAt: '2026-10-27T16:00:00Z',
   endsAt: '2026-10-27T17:00:00Z',
+  bookingClosesAt: '2026-10-27T15:00:00Z',
   status: 'canceled',
   kind: 'regular',
   level: 'intermediate',
   capacity: 10,
   visibility: 'public',
+  freePlaces: 10,
 };
 
 /** One-off jazz workshop, Saturday 2026-11-07 14:00–17:00 in Berlin (no class, no level). */
-export const lessonWorkshop: LessonSummary = {
+export const lessonWorkshop: ScheduleLesson = {
   id: ids.lessonWorkshop,
   courseType: { id: ids.jazz, name: 'Jazz' },
   room: { id: ids.roomA, name: 'Room A' },
@@ -214,10 +223,13 @@ export const lessonWorkshop: LessonSummary = {
   instructor: { id: ids.staffRiley, displayName: 'Riley Sample' },
   startsAt: '2026-11-07T13:00:00Z',
   endsAt: '2026-11-07T16:00:00Z',
+  bookingClosesAt: '2026-11-07T12:00:00Z',
+  lateCancelFrom: '2026-11-06T13:00:00Z',
   status: 'scheduled',
   kind: 'workshop',
   capacity: 20,
   visibility: 'public',
+  freePlaces: 20,
 };
 
 /**
@@ -247,6 +259,7 @@ export const lessonBalletDetail: LessonDetail = {
  */
 export const lessonBalletOffice: LessonDetail = {
   ...lessonBalletDetail,
+  freePlaces: 10,
   admin: { detached: false, activeBookings: 2 },
 };
 
@@ -263,6 +276,7 @@ export const lessonWorkshopOffice: LessonDetail = {
  */
 export const lessonContemporaryOffice: LessonDetail = {
   ...lessonContemporary,
+  freePlaces: 9,
   admin: {
     detached: true,
     activeBookings: 1,

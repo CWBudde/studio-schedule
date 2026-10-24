@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { canAdminister } from '@/features/admin/access';
 import { formatDayHeading, formatTimeRange, formatTimestamp, schoolDateOf } from '@/lib/schoolTime';
 import { LessonActions } from '../admin/LessonActions';
+import { BookingSection } from '../booking/BookingSection';
 import { useScheduleSearch } from '../useScheduleSearch';
 import { VisibilityBadge } from '../visibility/VisibilityBadge';
 
@@ -207,6 +208,8 @@ function LessonDetails({ lesson, timeZone }: { lesson: LessonDetail; timeZone: s
           )}
           <Row label={t('detail.capacity')}>{t('detail.places', { count: lesson.capacity })}</Row>
         </dl>
+
+        <BookingSection lesson={lesson} timeZone={timeZone} />
 
         {canAdminister(me.data?.role) && <LessonActions lesson={lesson} timeZone={timeZone} />}
 

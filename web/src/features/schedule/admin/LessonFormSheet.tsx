@@ -13,7 +13,7 @@ import {
   courseTypesQuery,
   createLessonMutation,
   type LessonCreateData,
-  lessonStarted,
+  refusedAsStarted,
   type Location,
   locationsQuery,
   publicSettingsQuery,
@@ -198,7 +198,7 @@ function LessonForm({
   const [sentRoomId, setSentRoomId] = useState('');
   /** What a 422 means: the lesson has started, or the fields it marks need a look. */
   const problem422 = (error: unknown) =>
-    lessonStarted(error)
+    refusedAsStarted(error, 'path.lessonId')
       ? { 422: t('lessons.notChangeable') }
       : invalidFields(error, lessonFields).length > 0
         ? { 422: tAuth('form.checkEntries') }

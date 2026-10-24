@@ -10,6 +10,7 @@ export type { paths };
 type Schemas = components['schemas'];
 export type Schedule = Schemas['Schedule'];
 export type LessonSummary = Schemas['LessonSummary'];
+export type ScheduleLesson = Schemas['ScheduleLesson'];
 export type LessonDetail = Schemas['LessonDetail'];
 export type LessonLevel = NonNullable<LessonSummary['level']>;
 export type LessonKind = LessonSummary['kind'];

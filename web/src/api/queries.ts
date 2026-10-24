@@ -7,6 +7,8 @@ import {
   type Me,
   type paths,
   type RegisterBody,
+  type Schedule,
+  type ScheduleLesson,
 } from './client';
 import { conflictReason } from './conflict';
 import type { components } from './schema';
@@ -1052,13 +1054,17 @@ function refreshLessons(queryClient: QueryClient, { except }: { except?: string 
 }
 
 /**
- * Whether a lesson write was refused because the lesson has started: a 422
- * at `path.lessonId`.
+ * Whether a write was refused because the lesson has started: a 422 at the
+ * path parameter that names the lesson (`path.lessonId`, for lesson writes)
+ * or its booking (`path.bookingId`, for booking writes).
  */
-export function lessonStarted(error: unknown): boolean {
+export function refusedAsStarted(
+  error: unknown,
+  location: 'path.lessonId' | 'path.bookingId',
+): boolean {
   if (!(error instanceof ApiError) || error.status !== 422) return false;
   const body = error.body as { errors?: { location?: string }[] | null } | undefined;
-  return (body?.errors ?? []).some((e) => e.location === 'path.lessonId');
+  return (body?.errors ?? []).some((e) => e.location === location);
 }
 
 /**
@@ -1071,7 +1077,7 @@ function onLessonError(queryClient: QueryClient) {
   return (error: Error) => {
     signedOut(error);
     const gone = error instanceof ApiError && error.status === 404;
-    if (gone || lessonStarted(error)) void refreshLessons(queryClient);
+    if (gone || refusedAsStarted(error, 'path.lessonId')) void refreshLessons(queryClient);
   };
 }
 
@@ -1167,6 +1173,239 @@ export const cloneLessonsMutation = (queryClient: QueryClient) =>
       unwrap(api.POST('/api/v1/admin/lessons/clone', { body })),
     onSuccess: () => refreshLessons(queryClient),
     onError: signedOutOn401(queryClient),
+  });
+
+/** A booking of a lesson, as bookLesson and cancelBooking answer. */
+export type Booking = components['schemas']['Booking'];
+/** A person of the signed-in family with an active booking for a lesson. */
+export type BookedFor = components['schemas']['BookedFor'];
+/** The bookings cancelFollowing cancels (or would cancel), the requested one first. */
+export type FollowingCancellation = components['schemas']['FollowingCancellation'];
+
+/** What the schedule and the lesson queries know of the bookings of a lesson. */
+type Availability = Pick<ScheduleLesson, 'capacity' | 'freePlaces' | 'bookedFor'>;
+type AvailabilityPatch = <L extends Availability>(lesson: L) => L;
+
+/**
+ * The key of every booking write. While one is running, the others do not
+ * refresh the lessons when they settle (a refetch could drop its optimistic
+ * change); the last one refreshes them.
+ */
+const bookingMutationKey = ['bookings', 'write'] as const;
+
+/**
+ * Changes what the schedule and the lesson query show of a lesson's
+ * bookings, in every cached copy, e.g. before the API answers. Running
+ * fetches are canceled first, so they cannot overwrite the change.
+ */
+async function patchAvailability(
+  queryClient: QueryClient,
+  lessonId: string,
+  patch: AvailabilityPatch,
+): Promise<void> {
+  const lessonKey = lessonQuery(lessonId).queryKey;
+  await Promise.all(
+    [scheduleQueryKey, lessonKey].map((queryKey) => queryClient.cancelQueries({ queryKey })),
+  );
+  applyAvailability(queryClient, lessonId, patch);
+}
+
+/** Like patchAvailability, but at once, e.g. to undo an optimistic change. */
+function applyAvailability(queryClient: QueryClient, lessonId: string, patch: AvailabilityPatch) {
+  queryClient.setQueriesData<Schedule>(
+    { queryKey: scheduleQueryKey },
+    (schedule) =>
+      schedule && {
+        ...schedule,
+        lessons: schedule.lessons.map((l) => (l.id === lessonId ? patch(l) : l)),
+      },
+  );
+  queryClient.setQueryData(lessonQuery(lessonId).queryKey, (lesson) => lesson && patch(lesson));
+}
+
+/** The lesson's bookings without those `drop` matches (the key is left out once none are left). */
+function withoutBooked<L extends Availability>(
+  lesson: L,
+  drop: (b: BookedFor) => boolean,
+  freePlaces: number,
+): L {
+  const { bookedFor = [], ...rest } = lesson;
+  const left = bookedFor.filter((b) => !drop(b));
+  return (
+    left.length > 0 ? { ...rest, freePlaces, bookedFor: left } : { ...rest, freePlaces }
+  ) as L;
+}
+
+/**
+ * The optimistic booking of a person: one place fewer and the person
+ * booked under the empty booking ID (unknown until the API answers). A
+ * lesson that is full or has the person booked already stays as it is.
+ */
+const addPending =
+  (personId: string, name: string): AvailabilityPatch =>
+  (lesson) =>
+    lesson.freePlaces === 0 || lesson.bookedFor?.some((b) => b.personId === personId)
+      ? lesson
+      : {
+          ...lesson,
+          freePlaces: lesson.freePlaces - 1,
+          bookedFor: [...(lesson.bookedFor ?? []), { personId, name, bookingId: '' }],
+        };
+
+/** Undoes addPending, and only it: the pending booking of the person goes, its place is free. */
+const removePending =
+  (personId: string): AvailabilityPatch =>
+  (lesson) =>
+    lesson.bookedFor?.some((b) => b.personId === personId && b.bookingId === '')
+      ? withoutBooked(
+          lesson,
+          (b) => b.personId === personId && b.bookingId === '',
+          Math.min(lesson.capacity, lesson.freePlaces + 1),
+        )
+      : lesson;
+
+/** The booking `bookingId` gone, and its place free again. */
+const removeBooked =
+  (bookingId: string): AvailabilityPatch =>
+  (lesson) =>
+    lesson.bookedFor?.some((b) => b.bookingId === bookingId)
+      ? withoutBooked(
+          lesson,
+          (b) => b.bookingId === bookingId,
+          Math.min(lesson.capacity, lesson.freePlaces + 1),
+        )
+      : lesson;
+
+/** Undoes removeBooked, and only it: `entry` is booked again and takes its place back. */
+const restoreBooked =
+  (entry: BookedFor): AvailabilityPatch =>
+  (lesson) =>
+    lesson.bookedFor?.some((b) => b.personId === entry.personId)
+      ? lesson
+      : {
+          ...lesson,
+          freePlaces: Math.max(0, lesson.freePlaces - 1),
+          bookedFor: [...(lesson.bookedFor ?? []), entry],
+        };
+
+/** The lessons are asked again once no other booking write is running. */
+function refreshAfterBooking(queryClient: QueryClient) {
+  // The settling mutation itself still counts.
+  if (queryClient.isMutating({ mutationKey: bookingMutationKey }) > 1) return;
+  return refreshLessons(queryClient);
+}
+
+/** Whom to book for which lesson; `name` shows the person as booked until the API answers. */
+export type BookLessonVariables = { lessonId: string; personId: string; name: string };
+
+/**
+ * Books a lesson for the signed-in person or one of their dependents. The
+ * schedule and the lesson show the booking at once; if the API refuses it
+ * (409 `already-booked`, `full` or `closed` with a `why`, 404 for a lesson
+ * or person out of reach), exactly that change is undone, so other booking
+ * writes running at the same time keep theirs. Afterwards the lessons and
+ * the demo mailbox (the confirmation mail) are asked again.
+ */
+export const bookLessonMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationKey: bookingMutationKey,
+    mutationFn: ({ lessonId, personId }: BookLessonVariables) =>
+      unwrap(
+        api.POST('/api/v1/lessons/{lessonId}/bookings', {
+          params: { path: { lessonId } },
+          body: { personId },
+        }),
+      ),
+    onMutate: ({ lessonId, personId, name }: BookLessonVariables) =>
+      patchAvailability(queryClient, lessonId, addPending(personId, name)),
+    onError: (error: Error, { lessonId, personId }: BookLessonVariables) => {
+      applyAvailability(queryClient, lessonId, removePending(personId));
+      signedOutOn401(queryClient)(error);
+    },
+    onSettled: () => refreshAfterBooking(queryClient),
+  });
+
+/** Which booking to cancel, and its lesson (for the optimistic update). */
+export type CancelBookingVariables = { bookingId: string; lessonId: string };
+
+/** The cached entry of a booking, from the lesson query or any schedule. */
+function cachedBooking(
+  queryClient: QueryClient,
+  { bookingId, lessonId }: CancelBookingVariables,
+): BookedFor | undefined {
+  const lessons = [
+    queryClient.getQueryData(lessonQuery(lessonId).queryKey),
+    ...queryClient
+      .getQueriesData<Schedule>({ queryKey: scheduleQueryKey })
+      .flatMap(([, schedule]) => schedule?.lessons.filter((l) => l.id === lessonId) ?? []),
+  ];
+  return lessons.flatMap((l) => l?.bookedFor ?? []).find((b) => b.bookingId === bookingId);
+}
+
+/**
+ * Cancels a booking of the signed-in person or one of their dependents; the
+ * answer's `late` says whether it came after the cancellation cutoff. The
+ * place shows free at once; if the API refuses (409 `already-canceled`, a
+ * 422 on `path.bookingId` once the lesson has started, 404), exactly that
+ * change is undone. Afterwards the lessons and the demo mailbox are asked
+ * again.
+ */
+export const cancelBookingMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationKey: bookingMutationKey,
+    mutationFn: ({ bookingId }: CancelBookingVariables) =>
+      unwrap(api.POST('/api/v1/bookings/{bookingId}/cancel', { params: { path: { bookingId } } })),
+    onMutate: async (variables: CancelBookingVariables) => {
+      const entry = cachedBooking(queryClient, variables);
+      await patchAvailability(queryClient, variables.lessonId, removeBooked(variables.bookingId));
+      return { entry };
+    },
+    onError: (
+      error: Error,
+      { lessonId }: CancelBookingVariables,
+      context: { entry?: BookedFor } | undefined,
+    ) => {
+      if (context?.entry) applyAvailability(queryClient, lessonId, restoreBooked(context.entry));
+      signedOutOn401(queryClient)(error);
+    },
+    onSettled: () => refreshAfterBooking(queryClient),
+  });
+
+/**
+ * What cancelFollowingMutation would cancel now: the booking of a class
+ * lesson and the same person's later bookings of that class that have not
+ * started, each with its own `late` flag. Always asked anew.
+ */
+export const cancelFollowingPreviewQuery = (bookingId: string) =>
+  queryOptions({
+    queryKey: ['bookings', bookingId, 'cancel-following'],
+    queryFn: ({ signal }) =>
+      unwrap(
+        api.GET('/api/v1/bookings/{bookingId}/cancel-following', {
+          params: { path: { bookingId } },
+          signal,
+        }),
+      ),
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+/**
+ * Cancels a booking of a class lesson and the same person's later bookings
+ * of that class in one go; the answer lists what it canceled. The account
+ * gets one mail. Afterwards the lessons and the demo mailbox are asked again.
+ */
+export const cancelFollowingMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (bookingId: string) =>
+      unwrap(
+        api.POST('/api/v1/bookings/{bookingId}/cancel-following', {
+          params: { path: { bookingId } },
+        }),
+      ),
+    mutationKey: bookingMutationKey,
+    onError: signedOutOn401(queryClient),
+    onSettled: () => refreshAfterBooking(queryClient),
   });
 
 /**

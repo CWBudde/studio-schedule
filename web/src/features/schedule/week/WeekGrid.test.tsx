@@ -1,9 +1,16 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
-import type { LessonSummary, Schedule } from '@/api/client';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Schedule, ScheduleLesson } from '@/api/client';
 import i18n from '@/i18n';
-import { ids, lessonBallet, lessonContemporary, schedule } from '@/test/mockApi';
+import {
+  ids,
+  lessonBallet,
+  lessonContemporary,
+  meMember,
+  mockApiGet,
+  schedule,
+} from '@/test/mockApi';
 import { todayIn } from '@/lib/schoolTime';
 import { renderAtSchedule } from '@/test/utils';
 import { WeekGrid } from './WeekGrid';
@@ -14,7 +21,7 @@ async function blockIn(day: string, courseType: RegExp) {
   return within(column).getByRole('button', { name: courseType });
 }
 
-function lessonAt(id: number, name: string, startsAt: string, minutes = 60): LessonSummary {
+function lessonAt(id: number, name: string, startsAt: string, minutes = 60): ScheduleLesson {
   return {
     ...lessonBallet,
     id: `0190a000-0000-7000-8000-${String(id).padStart(12, '0')}`,
@@ -24,12 +31,73 @@ function lessonAt(id: number, name: string, startsAt: string, minutes = 60): Les
   };
 }
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe('WeekGrid', () => {
+  it("shows no free places on ended lessons, by the server's clock", async () => {
+    // The device is days behind; the server says Monday 20:00 in Berlin, after the ballet.
+    renderAtSchedule(
+      <WeekGrid
+        schedule={{ ...schedule, now: '2026-10-26T19:00:00Z' }}
+        receivedAt={Date.parse('2026-10-23T10:00:00Z')}
+        weekStart="2026-10-26"
+        today="2026-10-26"
+      />,
+      { from: '2026-10-26' },
+    );
+
+    const ballet = await blockIn('Mon 26', /Ballet/);
+    expect(within(ballet).queryByText(/free$|^Full$/)).not.toBeInTheDocument();
+    // Nothing to describe it, so nothing it refers to.
+    expect(ballet).not.toHaveAttribute('aria-describedby');
+  });
+
+  it('marks free places and bookings of the family on the blocks', async () => {
+    mockApiGet({ '/api/v1/auth/me': { body: meMember } });
+    renderAtSchedule(
+      <WeekGrid
+        schedule={{
+          ...schedule,
+          lessons: [
+            {
+              ...lessonBallet,
+              freePlaces: 0,
+              bookedFor: [
+                {
+                  personId: '0190a000-0000-7000-8000-000000000331',
+                  name: 'Lina Example',
+                  bookingId: '0190a000-0000-7000-8000-000000000601',
+                },
+              ],
+            },
+            lessonContemporary,
+          ],
+        }}
+        today={todayIn('Europe/Berlin', schedule.now)}
+        receivedAt={Date.now()}
+        weekStart="2026-10-26"
+      />,
+      { from: '2026-10-26' },
+    );
+
+    const ballet = await blockIn('Mon 26', /Ballet/);
+    expect(await within(ballet).findByText('Booked: Lina Example')).toBeInTheDocument();
+    expect(within(ballet).getByText('Full')).toBeInTheDocument();
+    expect(ballet).toHaveAccessibleDescription('Booked: Lina Example Full');
+    // The name stays as it was: the badges describe the block.
+    expect(ballet).toHaveAccessibleName('Ballet, Monday, October 26, 18:00–19:30, Room A');
+    const contemporary = await blockIn('Tue 27', /Contemporary/);
+    expect(within(contemporary).queryByText(/free$|^Full$/)).not.toBeInTheDocument();
+  });
+
   it('places lessons by school date and wall-clock time in the school zone', async () => {
     renderAtSchedule(
       <WeekGrid
         schedule={schedule}
         today={todayIn('Europe/Berlin', schedule.now)}
+        receivedAt={Date.now()}
         weekStart="2026-10-26"
       />,
       {
@@ -74,6 +142,7 @@ describe('WeekGrid', () => {
       <WeekGrid
         schedule={autumn}
         today={todayIn('Europe/Berlin', autumn.now)}
+        receivedAt={Date.now()}
         weekStart="2026-10-19"
       />,
     );
@@ -96,6 +165,7 @@ describe('WeekGrid', () => {
       <WeekGrid
         schedule={spring}
         today={todayIn('Europe/Berlin', spring.now)}
+        receivedAt={Date.now()}
         weekStart="2027-03-22"
       />,
     );
@@ -113,6 +183,7 @@ describe('WeekGrid', () => {
       <WeekGrid
         schedule={late}
         today={todayIn('Europe/Berlin', late.now)}
+        receivedAt={Date.now()}
         weekStart="2026-10-26"
       />,
     );
@@ -135,6 +206,7 @@ describe('WeekGrid', () => {
       <WeekGrid
         schedule={busy}
         today={todayIn('Europe/Berlin', busy.now)}
+        receivedAt={Date.now()}
         weekStart="2026-10-26"
       />,
     );
@@ -154,6 +226,7 @@ describe('WeekGrid', () => {
       <WeekGrid
         schedule={workshopWeek}
         today={todayIn('Europe/Berlin', workshopWeek.now)}
+        receivedAt={Date.now()}
         weekStart="2026-11-02"
       />,
     );
@@ -175,6 +248,7 @@ describe('WeekGrid', () => {
       <WeekGrid
         schedule={restricted}
         today={todayIn('Europe/Berlin', restricted.now)}
+        receivedAt={Date.now()}
         weekStart="2026-10-26"
       />,
     );
@@ -193,6 +267,7 @@ describe('WeekGrid', () => {
       <WeekGrid
         schedule={schedule}
         today={todayIn('Europe/Berlin', schedule.now)}
+        receivedAt={Date.now()}
         weekStart="2026-10-26"
       />,
       {
@@ -217,6 +292,7 @@ describe('WeekGrid', () => {
       <WeekGrid
         schedule={{ ...schedule, lessons: [] }}
         today="2026-10-23"
+        receivedAt={Date.now()}
         weekStart="2026-10-19"
       />,
     );
@@ -237,6 +313,7 @@ describe('WeekGrid', () => {
       <WeekGrid
         schedule={schedule}
         today={todayIn('Europe/Berlin', schedule.now)}
+        receivedAt={Date.now()}
         weekStart="2026-10-26"
       />,
       {
@@ -260,6 +337,7 @@ describe('WeekGrid', () => {
       <WeekGrid
         schedule={{ ...schedule, lessons: [] }}
         today="2026-10-23"
+        receivedAt={Date.now()}
         weekStart="2026-10-26"
       />,
     );
@@ -284,6 +362,7 @@ describe('WeekGrid', () => {
       <WeekGrid
         schedule={schedule}
         today={todayIn('Europe/Berlin', schedule.now)}
+        receivedAt={Date.now()}
         weekStart="2026-10-26"
       />,
     );

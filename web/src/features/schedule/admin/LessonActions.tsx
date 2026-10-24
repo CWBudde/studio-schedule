@@ -10,7 +10,7 @@ import { roomTakenBy } from '@/api/conflict';
 import {
   cancelLessonMutation,
   deleteLessonMutation,
-  lessonStarted,
+  refusedAsStarted,
   restoreLessonMutation,
   updateLessonMutation,
 } from '@/api/queries';
@@ -101,7 +101,9 @@ export function LessonActions({ lesson, timeZone }: { lesson: LessonDetail; time
           error={visibility.error}
           messages={{
             404: t('lessons.notFound'),
-            ...(lessonStarted(visibility.error) ? { 422: t('lessons.notChangeable') } : {}),
+            ...(refusedAsStarted(visibility.error, 'path.lessonId')
+              ? { 422: t('lessons.notChangeable') }
+              : {}),
           }}
         />
       )}
@@ -239,7 +241,7 @@ function ConfirmAction({
           messages={{
             404: t('lessons.notFound'),
             // A 422 at the lesson means it has started; one at a field, that it needs a look.
-            ...(lessonStarted(error)
+            ...(refusedAsStarted(error, 'path.lessonId')
               ? { 422: t('lessons.notChangeable') }
               : invalidFields(error, fields).length > 0
                 ? { 422: tAuth('form.checkEntries') }
