@@ -324,3 +324,42 @@ with a top-level `reason`: `not-started` (attendance before the start: `setAtten
 `addLessonParticipant`, `updateLessonParticipant`, `removeLessonParticipant`, `setAttendance`,
 `markAllAttended`). The `errors` list keeps the location. A 422 about the request body has no
 `reason`. The client reads `problem.reason` of a 422 response, as it reads it of a 409.
+
+## Amendment (2026-10-25): My lessons
+
+A signed-in account sees the bookings and waiting-list entries of its family, the same persons it
+books for: its own person and all its dependents, managed ones included. Both operations are at the
+access level `signedIn`; a person outside the family never shows.
+
+**Upcoming** (`listMyLessons`, `GET /api/v1/my/lessons`, `{timezone, now, upcoming, waitlist}`).
+`upcoming` are the active bookings of lessons that are not over (`endsAt > now`, so a lesson in
+progress is still listed), by the lessons' start, then by booking time. Each has the booking (as
+`bookLesson` returns it), the person's name, the lesson's summary as in the schedule (status
+`canceled` for a lesson the school canceled, whose booking stays booked), `lateCancelFrom` and
+`canCancel` (the booking is active and its lesson has not started: the rule of `cancelBooking`).
+Canceled bookings of lessons ahead are not listed; the history has them once their lessons are over.
+`waitlist` are the open entries of lessons that have not started (the job ends them at the start),
+by the lessons' start and then the caller first, each with the entry as in the schedule's
+`waitlist` (status, `expired` for an invite past its expiry, `position`, `expiresAt`,
+`stayOnList`), the lesson's summary and `bookingClosesAt`.
+
+**History** (`listMyLessonHistory`, `GET /api/v1/my/lessons/history?before=`, `{timezone, now,
+before, items, nextBefore, hasMore}`). The bookings of every status (booked when nobody took
+attendance, attended, no-show, canceled with its `late` flag; a lesson the school canceled by its
+status) of lessons that are over (`endsAt <= now`) and started in `[nextBefore, before)`, the
+newest first. A page is **three calendar months** in the school time zone: `before` defaults to now
+(a later one is now), `nextBefore` is three months earlier and the `before` of the next page, and
+`hasMore` says whether any older booking exists (one query with limit 1). Pages have a fixed length
+rather than a fixed number of items, so a page may be empty while `hasMore` is true; three months of
+a family's bookings are few enough to send at once.
+
+**Visibility.** A booking is listed whatever its lesson's visibility: a hidden or unreleased lesson
+the office booked the family into is still theirs, although the schedule does not show it to them.
+
+**Cost.** A fixed number of queries per request, whatever the number of bookings: the family (two),
+the bookings by persons and lesson times (`Bookings().ListByPersons`, a join on the lessons, served by
+`bookings_person_idx`; the upcoming list asks for the active ones only), the lessons by ID
+(`Lessons().ListByIDs`) and their references (the catalog, and only the classes they belong to,
+`Classes().ListByIDs`); for the upcoming list also the family's open entries
+(`Waitlist().ListOpenByPersons`) and the open entries of their lessons for the positions. The
+bookings come by lesson start, then lesson, so a family's bookings of one lesson stay together.

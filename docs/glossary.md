@@ -31,6 +31,7 @@ where it differs.
 | Participants       | Participants        | Teilnehmende          | A lesson's bookings and waiting list, for its staff (ADR 0009)          |
 | Attendance         | Attendance          | Anwesenheit           | `attended` / `no_show`; instructors until the day's end, then office    |
 | `WaitlistEntry`    | Waiting list        | Warteliste            | Timed invites instead of "notify all"                                   |
+| My lessons         | My lessons          | Meine Stunden         | A family's upcoming bookings, waiting-list entries and history (0009)   |
 | `Pass`             | Pass                | Karte (z. B. 10er)    | Prepaid visits, formerly "Credits"                                      |
 | `Receipt`          | Receipt             | Quittung / Beleg      | Gapless numbering per year; corrections via cancellation receipt        |
 | Release window     | Release             | Freischaltung         | Next weeks become bookable at a configured weekday/time                 |
