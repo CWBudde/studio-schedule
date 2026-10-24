@@ -168,3 +168,80 @@ themselves cannot deadlock.
 - The availability costs extra queries per request, independent of the schedule's size: one for
   visitors (the counts), four for signed-in callers (the counts, the caller's person, their
   dependents and the family's bookings).
+
+## Amendment (2026-10-24): staff actions
+
+The office, and an instructor or accompanist on the lessons they teach (ADR 0007, amendment), manage
+a lesson's participants. All operations are at the access level `staff` and check in the service
+who may act on which lesson: the office and admins on every lesson; anyone else only on a lesson
+whose instructor or accompanist is an **active** staff member linked to their person
+(`staff.person_id`). Any other lesson, and a staff account without such a link, gets a 404, like a
+stranger's family (ADR 0008).
+
+**Booking source `staff`.** Bookings that staff make have the source `staff` (migration 00013 adds it
+to the CHECK). The booking event names who: the real account, the admin when impersonating.
+
+**Guests.** A booking has a person or a guest. A guest has a name and an optional email
+(`bookings.guest_email` is nullable since 00013); only staff add guests. A guest with an email gets
+the confirmation, the cancellation and the lesson mails (ADR 0007) in the school's default
+language, greeted by name; one without an email gets nothing. Guests are not unique per lesson.
+
+**Trial.** `bookings.trial` (since Phase 1) marks a trial lesson; `bookings.trial_note` (00013) is an
+optional note for the instructor (at most 500 characters), and only a trial booking has one (a note
+without the flag is a 422 on `trialNote`). No limits on trials yet.
+
+**Participants** (`listLessonParticipants`, `GET /api/v1/lessons/{lessonId}/participants`). Every
+booking of the lesson, canceled ones included, ordered by booking time, with the participant's name,
+a guest marker, status, source, trial and note, the late flag and the times; and the lesson's
+waiting list, ended entries included, in its order, with position and status (an invite whose expiry
+has passed shows as `expired`), plus the capacity, the active bookings, the held places, the free
+places and the waiting entries. _Contact data_ is kept simple: `contactEmail` is the head of the
+person's mail chain (their confirmed account, else their own address, else their first guardian's
+confirmed account; ADR 0007) or a guest's address, and `contactPhone` is the person's phone, else
+the phone of their first guardian who has one (guardians ordered by name). A disabled account has
+no `contactEmail`. It costs a fixed number of queries per lesson.
+
+**Window.** Staff ignore the release window and the booking cutoff. Instructors and accompanists add,
+mark trials, remove and take attendance **until the end of the lesson's school day** (midnight after
+its start in the school time zone, or the lesson's end if that is later; `dayOverAt` in the list);
+afterwards it is a 422 on the path (`path.lessonId` or `path.bookingId`), and the office makes the
+change, which may at any time. Nobody adds to a lesson the school canceled (409 `closed` with why
+`canceled`).
+
+**Add** (`addLessonParticipant`, `POST /api/v1/lessons/{lessonId}/participants`, body `{personId |
+guest {name, email?}, trial?, trialNote?, confirmOverCapacity?}`, 201). Under the lesson lock, after
+settling the waiting list like `bookLesson` (ADR 0010): a person with an active booking is a 409
+`already-booked`; a lesson whose active bookings and the places held by others' invites fill its
+capacity is a 409 `full`, unless `confirmOverCapacity` is set, which the booking event records as
+`override`. A person whose own invite holds a place takes it (the invite is `accepted`, the event
+notes `waitlist`); any other open entry of the person is withdrawn. Before the start, the person's
+recipient chain (ADR 0010) or a guest with an email gets `booking-confirmed`; a walk-in after the
+start gets no mail. Both or neither of `personId` and `guest` is a 422 on `body`, an unknown person a
+422 on `body.personId`, a bad guest a 422 on `body.guest.name` or `body.guest.email`.
+
+**Trial update** (`updateLessonParticipant`, `PUT /api/v1/bookings/{bookingId}/participant`, body
+`{trial, trialNote?}`) sets the flag and the note of an active booking (a canceled one is a 409
+`already-canceled`); it records no event, as the status does not change.
+
+**Remove** (`removeLessonParticipant`, `POST /api/v1/bookings/{bookingId}/remove`) cancels through
+the shared `cancelBooking`: never late, not released (a class member is booked again when the office
+changes their membership), with the staff account as actor, and the freed place goes to the waiting
+list. Also after the start (a walk-in added by mistake), within the window. Before the start, the
+participant's recipients get `booking-canceled`; after it, nobody. A canceled booking is a 409
+`already-canceled`.
+
+**Attendance** (`setAttendance`, `POST /api/v1/bookings/{bookingId}/attendance`, body `{status:
+attended | no_show | booked}`; `markAllAttended`, `POST /api/v1/lessons/{lessonId}/attendance/all`,
+which sets every `booked` booking to `attended` and returns those it changed). From the lesson's
+start (before it a 422 on the path), within the window; a lesson the school canceled is a 409
+`closed` with why `canceled`, a canceled booking a 409 `already-canceled`. Every change adds a
+booking event with the new status and the actor; setting the status a booking has changes nothing.
+`booked` sets the attendance back to unknown. A no-show is only a status until Phase 6 (passes).
+
+**History** (`listBookingEvents`, `GET /api/v1/bookings/{bookingId}/events`, office only): every event
+of a booking, oldest first, with status, `late`, `override`, `note` and the actor's account, name and
+email (none for the system).
+
+**Demo.** Felix Keysworth, the demo accompanist, has an instructor account (signing in by email, as
+the login page lists Alina for instructors), and Alina's ballet workshop, which Felix accompanies,
+has a guest with an email, one without and a trial with a note, added by Alina.

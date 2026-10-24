@@ -792,7 +792,7 @@ func (s *BookingService) mail(
 		return err
 	}
 
-	return mailBookings(ctx, tx, s.ids, s.mails, settings, loc, now, template, []recipient{r}, person, bookings)
+	return mailBookings(ctx, tx, s.ids, s.mails, settings, loc, now, template, []recipient{r}, fullName(person), bookings)
 }
 
 // actingRecipient returns the acting account p as the recipient of the
@@ -811,12 +811,12 @@ func actingRecipient(ctx context.Context, tx store.Tx, p Principal) (recipient, 
 	return recipient{email: acc.Email, locale: acc.Locale, givenName: me.GivenName, account: true}, nil
 }
 
-// mailBookings renders template about the bookings of person with mails
-// for each recipient, in its language (else the school's default; ADR
-// 0008), and queues it.
+// mailBookings renders template about the bookings of the participant (a
+// person's full name, or a guest's name) with mails for each recipient, in
+// its language (else the school's default; ADR 0008), and queues it.
 func mailBookings(
 	ctx context.Context, tx store.Tx, src ids.Source, mails MailRenderer, settings domain.Settings,
-	loc *time.Location, now time.Time, template string, recipients []recipient, person domain.Person,
+	loc *time.Location, now time.Time, template string, recipients []recipient, participant string,
 	bookings []FollowingBooking,
 ) error {
 	if len(bookings) == 0 || len(recipients) == 0 {
@@ -865,7 +865,7 @@ func mailBookings(
 
 	return sendMails(ctx, tx, src, mails, settings, now, recipients, template, func(r recipient) any {
 		return mail.BookingData{
-			SchoolName: settings.SchoolName, GivenName: r.givenName, Participant: fullName(person), Lessons: lessons,
+			SchoolName: settings.SchoolName, GivenName: r.givenName, Participant: participant, Lessons: lessons,
 		}
 	})
 }

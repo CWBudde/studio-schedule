@@ -21,13 +21,15 @@ where it differs.
 | Invitation         | Invitation          | Einladung             | Mail with a password link for an account the office creates             |
 | `Booking`          | Booking             | Buchung               | Formerly "Teilnahme"; actions "Eintragen" (book) / "Austragen" (cancel) |
 | `BookingEvent`     | Booking history     | Buchungsverlauf       | Audit trail of status changes, with time and acting account             |
-| Booking source     | (not shown)         | (nicht sichtbar)      | `self` or `member` (auto-enrolment); staff bookings later (ADR 0009)    |
+| Booking source     | (not shown)         | (nicht sichtbar)      | `self`, `member` (auto-enrolment) or `staff` (ADR 0009)                 |
 | Late cancellation  | Late cancellation   | Späte Absage          | Canceled after the cancellation cutoff; allowed, flagged (ADR 0009)     |
 | Auto-enrolment     | Auto-enrolment      | Automatische Buchung  | Class members are booked into their class's lessons (ADR 0009)          |
 | Release a date     | Release this date   | Termin freigeben      | A class member cancels one lesson; the place goes to others (0009)      |
 | Pause (membership) | Paused until        | Pausiert bis          | Class member canceled the following weeks up to a date (0009)           |
-| Guest booking      | Guest               | Gast / extern         | Booking without an account (name + email)                               |
-| Trial              | Trial lesson        | Probestunde           |                                                                         |
+| Guest booking      | Guest               | Gast / extern         | Booking without a person record: a name, optional email (staff only)    |
+| Trial              | Trial lesson        | Probestunde           | Flag on a booking, with an optional note for the instructor             |
+| Participants       | Participants        | Teilnehmende          | A lesson's bookings and waiting list, for its staff (ADR 0009)          |
+| Attendance         | Attendance          | Anwesenheit           | `attended` / `no_show`; instructors until the day's end, then office    |
 | `WaitlistEntry`    | Waiting list        | Warteliste            | Timed invites instead of "notify all"                                   |
 | `Pass`             | Pass                | Karte (z. B. 10er)    | Prepaid visits, formerly "Credits"                                      |
 | `Receipt`          | Receipt             | Quittung / Beleg      | Gapless numbering per year; corrections via cancellation receipt        |

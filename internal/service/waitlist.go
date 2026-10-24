@@ -428,7 +428,7 @@ func (s *WaitlistService) Accept(ctx context.Context, p Principal, id domain.Wai
 		}
 
 		return mailBookings(ctx, tx, s.w.ids, s.w.mails.Renderer, settings, loc, now, mail.TemplateBookingConfirmed,
-			[]recipient{me}, who, []FollowingBooking{{Booking: b, Lesson: l}})
+			[]recipient{me}, fullName(who), []FollowingBooking{{Booking: b, Lesson: l}})
 	})
 	if err != nil {
 		return domain.Booking{}, fmt.Errorf("accept waiting list entry %v: %w", id, err)
@@ -575,7 +575,7 @@ func (s *WaitlistService) AcceptInvite(ctx context.Context, token string) (Invit
 		}
 
 		return mailBookings(ctx, tx, s.w.ids, s.w.mails.Renderer, settings, loc, now, mail.TemplateBookingConfirmed,
-			recipients, out.Person, []FollowingBooking{{Booking: b, Lesson: l}})
+			recipients, fullName(out.Person), []FollowingBooking{{Booking: b, Lesson: l}})
 	})
 	if err != nil {
 		return InviteView{}, fmt.Errorf("accept waiting list invite: %w", err)

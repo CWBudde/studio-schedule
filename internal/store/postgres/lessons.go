@@ -166,8 +166,8 @@ func toBooking(row sqlc.Booking) domain.Booking {
 		BookedAt:   fromPgInstant(row.BookedAt),
 		CanceledAt: fromPgInstant(row.CanceledAt),
 		Late:       row.Late,
-
-		Released: row.Released,
+		Released:   row.Released,
+		TrialNote:  row.TrialNote.String,
 	}
 }
 
@@ -185,8 +185,8 @@ func bookingParams(b domain.Booking) sqlc.CreateBookingParams {
 		BookedAt:   pgInstant(b.BookedAt),
 		CanceledAt: pgInstant(b.CanceledAt),
 		Late:       b.Late,
-
-		Released: b.Released,
+		Released:   b.Released,
+		TrialNote:  pgText(b.TrialNote),
 	}
 }
 

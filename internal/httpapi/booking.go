@@ -83,7 +83,7 @@ type Booking struct {
 	LessonID   domain.LessonID  `doc:"The lesson."                    json:"lessonId"`
 	PersonID   domain.PersonID  `doc:"The booked person."             json:"personId"`
 	Status     string           `doc:"State of the booking."          enum:"booked,canceled,attended,no_show" json:"status"`
-	Source     string           `doc:"How the booking came about: by a member, or as a class member's automatic booking." enum:"self,member" json:"source"`
+	Source     string           `doc:"How the booking came about: self, by a member; member, a class member's automatic booking; staff, by the office or the lesson's instructor or accompanist." enum:"self,member,staff" json:"source"`
 	BookedAt   time.Time        `doc:"When the booking was made."     json:"bookedAt"`
 	CanceledAt time.Time        `doc:"When it was canceled, if so."   json:"canceledAt,omitzero"`
 	Late       bool             `doc:"Whether the cancellation came after the cancellation cutoff." json:"late"`

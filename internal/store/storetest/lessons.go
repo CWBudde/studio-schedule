@@ -261,6 +261,7 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 				full.Status = domain.BookingCanceled
 				full.Source = domain.BookingSourceMember
 				full.Trial = true
+				full.TrialNote = "First class after a knee injury"
 				full.Prepaid = true
 				full.CanceledAt = t0.Add(-30 * time.Minute)
 				full.Late = true
@@ -281,14 +282,16 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 			create: func(ctx context.Context, tx store.Tx, b domain.Booking) error { return tx.Bookings().Create(ctx, b) },
 			update: func(ctx context.Context, tx store.Tx, b domain.Booking) error { return tx.Bookings().Update(ctx, b) },
 			fixtures: func(e *env) (domain.Booking, domain.Booking) {
+				// A walk-in guest without an email, whom staff booked.
 				guest := domain.Booking{
 					ID: newID[domain.BookingID](e), LessonID: e.lesson(e.setting(), t0, 5).ID,
-					GuestName: "Gina Guest", GuestEmail: "gina@example.org", Status: domain.BookingBooked,
-					Source: domain.BookingSourceSelf, BookedAt: t0,
+					GuestName: "Gina Guest", Status: domain.BookingBooked, Source: domain.BookingSourceStaff, BookedAt: t0,
 				}
 				attended := guest
+				attended.GuestEmail = "gina@example.org"
 				attended.Status = domain.BookingAttended
 				attended.Trial = true
+				attended.TrialNote = "Danced jazz before"
 				valid(e.t, guest)
 				valid(e.t, attended)
 

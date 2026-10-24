@@ -48,8 +48,9 @@ type Dataset struct {
 	ClassMembers []domain.ClassMember
 	Lessons      []domain.Lesson
 	// Bookings are the automatic bookings of the class members in the
-	// lessons of their classes and the members' own bookings of the full
-	// workshop, each with its event in BookingEvents.
+	// lessons of their classes, the members' own bookings of the full
+	// workshop and the participants an instructor added to her workshop,
+	// each with its event in BookingEvents.
 	Bookings      []domain.Booking
 	BookingEvents []domain.BookingEvent
 	// WaitlistEntries are the waiting list of the full workshop.

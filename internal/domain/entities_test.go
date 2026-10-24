@@ -301,7 +301,8 @@ func TestBookingValidate(t *testing.T) {
 			"bad status":            func(b *domain.Booking) { b.Status = "maybe" },
 			"no source":             func(b *domain.Booking) { b.Source = "" },
 			"bad source":            func(b *domain.Booking) { b.Source = "robot" },
-			"staff source":          func(b *domain.Booking) { b.Source = "staff" }, // not before the staff actions
+			"guest email only":      func(b *domain.Booking) { b.PersonID, b.GuestEmail = domain.PersonID{}, "g@example.org" },
+			"note without trial":    func(b *domain.Booking) { b.TrialNote = "First time" },
 			"late not canceled":     func(b *domain.Booking) { b.Late = true },
 			"released not canceled": func(b *domain.Booking) { b.Released = true },
 			"no booked at":          func(b *domain.Booking) { b.BookedAt = time.Time{} },
@@ -322,9 +323,25 @@ func TestBookingValidate(t *testing.T) {
 
 			return b
 		}, map[string]func(*domain.Booking){
-			"no name":   func(b *domain.Booking) { b.GuestName = " " },
-			"no email":  func(b *domain.Booking) { b.GuestEmail = "" },
-			"bad email": func(b *domain.Booking) { b.GuestEmail = "guest@" },
+			"no name":      func(b *domain.Booking) { b.GuestName = " " },
+			"padded name":  func(b *domain.Booking) { b.GuestName = " Guest Example" },
+			"bad email":    func(b *domain.Booking) { b.GuestEmail = "guest@" },
+			"padded email": func(b *domain.Booking) { b.GuestEmail = "guest@example.org " },
+		})
+	})
+
+	t.Run("StaffGuestWithoutEmail", func(t *testing.T) {
+		t.Parallel()
+		checkValidate(t, func() domain.Booking {
+			b := member()
+			b.PersonID, b.GuestName, b.Source = domain.PersonID{}, "Walk-in Example", domain.BookingSourceStaff
+			b.Trial, b.TrialNote = true, "First ballet class; tell her about the barre."
+
+			return b
+		}, map[string]func(*domain.Booking){
+			"note without trial": func(b *domain.Booking) { b.Trial = false },
+			"padded note":        func(b *domain.Booking) { b.TrialNote = "note " },
+			"long note":          func(b *domain.Booking) { b.TrialNote = strings.Repeat("ä", domain.MaxTrialNoteLength+1) },
 		})
 	})
 

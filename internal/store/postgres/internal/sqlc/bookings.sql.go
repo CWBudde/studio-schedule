@@ -87,9 +87,9 @@ func (q *Queries) CountActiveBookingsByLessons(ctx context.Context, lessons []pg
 const createBooking = `-- name: CreateBooking :exec
 INSERT INTO bookings (
     id, lesson_id, person_id, guest_name, guest_email, status, source, trial, prepaid, booked_at, canceled_at,
-    late, released
+    late, released, trial_note
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 )
 `
 
@@ -107,6 +107,7 @@ type CreateBookingParams struct {
 	CanceledAt pgtype.Timestamptz
 	Late       bool
 	Released   bool
+	TrialNote  pgtype.Text
 }
 
 func (q *Queries) CreateBooking(ctx context.Context, arg CreateBookingParams) error {
@@ -124,6 +125,7 @@ func (q *Queries) CreateBooking(ctx context.Context, arg CreateBookingParams) er
 		arg.CanceledAt,
 		arg.Late,
 		arg.Released,
+		arg.TrialNote,
 	)
 	return err
 }
@@ -161,7 +163,7 @@ func (q *Queries) DeleteBookingsByLessonAndSource(ctx context.Context, arg Delet
 }
 
 const getBooking = `-- name: GetBooking :one
-SELECT id, lesson_id, person_id, guest_name, guest_email, status, trial, prepaid, booked_at, canceled_at, source, late, released FROM bookings WHERE id = $1
+SELECT id, lesson_id, person_id, guest_name, guest_email, status, trial, prepaid, booked_at, canceled_at, source, late, released, trial_note FROM bookings WHERE id = $1
 `
 
 func (q *Queries) GetBooking(ctx context.Context, id pgtype.UUID) (Booking, error) {
@@ -181,12 +183,13 @@ func (q *Queries) GetBooking(ctx context.Context, id pgtype.UUID) (Booking, erro
 		&i.Source,
 		&i.Late,
 		&i.Released,
+		&i.TrialNote,
 	)
 	return i, err
 }
 
 const listActiveBookingsByLessonsAndPersons = `-- name: ListActiveBookingsByLessonsAndPersons :many
-SELECT id, lesson_id, person_id, guest_name, guest_email, status, trial, prepaid, booked_at, canceled_at, source, late, released FROM bookings
+SELECT id, lesson_id, person_id, guest_name, guest_email, status, trial, prepaid, booked_at, canceled_at, source, late, released, trial_note FROM bookings
 WHERE lesson_id = ANY($1::uuid[]) AND person_id = ANY($2::uuid[])
     AND status <> 'canceled'
 ORDER BY booked_at, id
@@ -220,6 +223,7 @@ func (q *Queries) ListActiveBookingsByLessonsAndPersons(ctx context.Context, arg
 			&i.Source,
 			&i.Late,
 			&i.Released,
+			&i.TrialNote,
 		); err != nil {
 			return nil, err
 		}
@@ -265,7 +269,7 @@ func (q *Queries) ListBookingEvents(ctx context.Context, bookingID pgtype.UUID) 
 }
 
 const listBookingsByLesson = `-- name: ListBookingsByLesson :many
-SELECT id, lesson_id, person_id, guest_name, guest_email, status, trial, prepaid, booked_at, canceled_at, source, late, released FROM bookings WHERE lesson_id = $1 ORDER BY booked_at, id
+SELECT id, lesson_id, person_id, guest_name, guest_email, status, trial, prepaid, booked_at, canceled_at, source, late, released, trial_note FROM bookings WHERE lesson_id = $1 ORDER BY booked_at, id
 `
 
 func (q *Queries) ListBookingsByLesson(ctx context.Context, lessonID pgtype.UUID) ([]Booking, error) {
@@ -291,6 +295,7 @@ func (q *Queries) ListBookingsByLesson(ctx context.Context, lessonID pgtype.UUID
 			&i.Source,
 			&i.Late,
 			&i.Released,
+			&i.TrialNote,
 		); err != nil {
 			return nil, err
 		}
@@ -303,7 +308,7 @@ func (q *Queries) ListBookingsByLesson(ctx context.Context, lessonID pgtype.UUID
 }
 
 const listBookingsByLessonsAndPersons = `-- name: ListBookingsByLessonsAndPersons :many
-SELECT id, lesson_id, person_id, guest_name, guest_email, status, trial, prepaid, booked_at, canceled_at, source, late, released FROM bookings
+SELECT id, lesson_id, person_id, guest_name, guest_email, status, trial, prepaid, booked_at, canceled_at, source, late, released, trial_note FROM bookings
 WHERE lesson_id = ANY($1::uuid[]) AND person_id = ANY($2::uuid[])
 ORDER BY booked_at, id
 `
@@ -336,6 +341,7 @@ func (q *Queries) ListBookingsByLessonsAndPersons(ctx context.Context, arg ListB
 			&i.Source,
 			&i.Late,
 			&i.Released,
+			&i.TrialNote,
 		); err != nil {
 			return nil, err
 		}
@@ -350,7 +356,7 @@ func (q *Queries) ListBookingsByLessonsAndPersons(ctx context.Context, arg ListB
 const updateBooking = `-- name: UpdateBooking :execrows
 UPDATE bookings
 SET lesson_id = $2, person_id = $3, guest_name = $4, guest_email = $5, status = $6, source = $7, trial = $8,
-    prepaid = $9, booked_at = $10, canceled_at = $11, late = $12, released = $13
+    prepaid = $9, booked_at = $10, canceled_at = $11, late = $12, released = $13, trial_note = $14
 WHERE id = $1
 `
 
@@ -368,6 +374,7 @@ type UpdateBookingParams struct {
 	CanceledAt pgtype.Timestamptz
 	Late       bool
 	Released   bool
+	TrialNote  pgtype.Text
 }
 
 func (q *Queries) UpdateBooking(ctx context.Context, arg UpdateBookingParams) (int64, error) {
@@ -385,6 +392,7 @@ func (q *Queries) UpdateBooking(ctx context.Context, arg UpdateBookingParams) (i
 		arg.CanceledAt,
 		arg.Late,
 		arg.Released,
+		arg.TrialNote,
 	)
 	if err != nil {
 		return 0, err

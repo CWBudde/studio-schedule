@@ -349,9 +349,12 @@ func TestDemoMemberBookings(t *testing.T) {
 	t.Parallel()
 
 	d := seed.Demo()
-	// The members' own bookings of the full workshop: TestDemoFullWorkshop.
+	// The members' own bookings of the full workshop: TestDemoFullWorkshop;
+	// the staff's: TestDemoStaffBookings.
 	full := fullWorkshop(t, d)
-	d.Bookings = slices.DeleteFunc(d.Bookings, func(b domain.Booking) bool { return b.LessonID == full.ID })
+	d.Bookings = slices.DeleteFunc(d.Bookings, func(b domain.Booking) bool {
+		return b.LessonID == full.ID || b.Source == domain.BookingSourceStaff
+	})
 	d.BookingEvents = slices.DeleteFunc(d.BookingEvents, func(e domain.BookingEvent) bool {
 		return !slices.ContainsFunc(d.Bookings, func(b domain.Booking) bool { return b.ID == e.BookingID })
 	})
@@ -523,14 +526,79 @@ func TestDemoCounts(t *testing.T) {
 		roles[a.Role]++
 	}
 
-	for _, r := range []domain.Role{domain.RoleInstructor, domain.RoleOffice, domain.RoleAdmin} {
-		if roles[r] != 1 {
-			t.Errorf("want one %s account, got %d", r, roles[r])
+	// Two instructor accounts: Alina (the demo login) and the accompanist
+	// Felix, who signs in by email.
+	for r, want := range map[domain.Role]int{domain.RoleInstructor: 2, domain.RoleOffice: 1, domain.RoleAdmin: 1} {
+		if roles[r] != want {
+			t.Errorf("want %d %s accounts, got %d", want, r, roles[r])
 		}
 	}
 
 	if roles[domain.RoleMember] < 10 {
 		t.Errorf("want at least 10 member accounts, got %d", roles[domain.RoleMember])
+	}
+}
+
+// TestDemoStaffBookings checks the participants that Alina added to her
+// ballet workshop, accompanied by Felix, in every demo (ADR 0009,
+// amendment): a guest with an email, one without, and a trial with a note,
+// by her account; and that both have instructor accounts linked to their
+// staff records, Alina being the demo's instructor login.
+func TestDemoStaffBookings(t *testing.T) {
+	t.Parallel()
+
+	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
+		d := seed.DemoAt(anchor)
+		staff := index(d.Staff, func(s domain.Staff) domain.StaffID { return s.ID })
+		accounts := index(d.Accounts, func(a domain.Account) domain.PersonID { return a.PersonID })
+		lessons := index(d.Lessons, func(l domain.Lesson) domain.LessonID { return l.ID })
+
+		var guests, guestsWithEmail, trials int
+
+		for _, b := range d.Bookings {
+			if b.Source != domain.BookingSourceStaff {
+				continue
+			}
+
+			l := lessons[b.LessonID]
+			instructor, accompanist := staff[l.InstructorID], staff[l.AccompanistID]
+
+			if l.Kind != domain.LessonWorkshop || instructor.DisplayName != "Alina Starling" ||
+				accompanist.DisplayName != "Felix Keysworth" || !b.BookedAt.Before(l.StartsAt) {
+				t.Errorf("%v: staff booking %+v in lesson %+v", anchor, b, l)
+			}
+
+			i := slices.IndexFunc(d.BookingEvents, func(e domain.BookingEvent) bool { return e.BookingID == b.ID })
+			if i < 0 || d.BookingEvents[i].ActorAccountID != accounts[instructor.PersonID].ID {
+				t.Errorf("%v: booking %v has no event by Alina's account", anchor, b.ID)
+			}
+
+			for _, p := range []domain.PersonID{instructor.PersonID, accompanist.PersonID} {
+				if accounts[p].Role != domain.RoleInstructor {
+					t.Errorf("%v: staff person %v has account %+v, want an instructor", anchor, p, accounts[p])
+				}
+			}
+
+			switch {
+			case b.PersonID.IsZero() && b.GuestEmail != "":
+				guestsWithEmail++
+			case b.PersonID.IsZero():
+				guests++
+			case b.Trial && b.TrialNote != "":
+				trials++
+			}
+		}
+
+		if guests != 1 || guestsWithEmail != 1 || trials != 1 {
+			t.Errorf("%v: %d guests without and %d with an email, %d trials; want one each", anchor, guests,
+				guestsWithEmail, trials)
+		}
+	}
+
+	if logins := seed.DemoLogins(); !slices.ContainsFunc(logins, func(l seed.Login) bool {
+		return l.Role == domain.RoleInstructor && l.Email == "alina.starling@example.net"
+	}) {
+		t.Errorf("demo logins %+v, want Alina as the instructor", logins)
 	}
 }
 

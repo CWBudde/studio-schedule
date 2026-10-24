@@ -172,7 +172,8 @@ type LessonRestoreInput struct {
 	Body     *LessonRestoreData `required:"false"`
 }
 
-// LessonRefInput is the request of deleteLesson.
+// LessonRefInput is the request of deleteLesson and of the operations on a
+// lesson's participants.
 type LessonRefInput struct {
 	LessonID domain.LessonID `doc:"The lesson." path:"lessonId"`
 }

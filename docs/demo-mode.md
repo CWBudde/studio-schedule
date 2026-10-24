@@ -44,9 +44,12 @@ term runs from three weeks before that day to about ten months after it, class m
 term's first day, and three one-off public workshops follow 3, 17 and 24 days after it. The seeded
 class lessons of the week up to the visit carry the members' automatic bookings, and the lesson
 generation at startup books the members into every later lesson it creates (ADR 0009), so class
-lessons show fewer free places than workshops, which nobody is booked into, except one: a small
+lessons show fewer free places than workshops, which nobody is booked into, except two: a small
 tap workshop 10 days after the visit is booked up by members and has two members on its waiting
-list (ADR 0010; nobody of the demo logins' families), so the demo shows a full lesson. The demo
+list (ADR 0010; nobody of the demo logins' families), so the demo shows a full lesson. Alina's
+ballet workshop (24 days after the visit, accompanied by Felix) has the participants she added
+herself (ADR 0009, amendment): a guest with an email, a walk-in guest without one, and Ute
+Tallowfield on a trial with a note. The demo
 releases one week ahead, so the later workshops always lie beyond the release window; they are visible
 because workshops are published early. `scripts/wasm-smoke.mjs` checks this.
 
@@ -126,7 +129,10 @@ The demo is a _demo installation_ (`app.Deps.Demo`, also set for `serve` without
   `GET /api/v1/demo/logins` lists one account per role (member, instructor, office, admin) for the
   login page. One more is a managed dependent (ADR 0008): Sophie Hollowmere, a teenager with an
   account of her own (`sophie.hollowmere@example.com`), who books her classes herself; the admin
-  can also "sign in as" her from Accounts.
+  can also "sign in as" her from Accounts. Another is the accompanist Felix Keysworth
+  (`felix.keysworth@example.net`, an instructor account linked to his staff record), who sees the
+  participants of the lessons he accompanies; he is not on the login page, which lists the first
+  account of each role (Alina Starling for instructors), so he signs in by email.
 - **Mailbox:** nothing is ever delivered. `GET /api/v1/demo/mailbox` lists the outbox, and the
   mailbox panel in the header shows it, so a visitor can register, open the confirmation link and
   sign in.

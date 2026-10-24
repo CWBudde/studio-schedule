@@ -56,6 +56,7 @@ type Booking struct {
 	Source     string
 	Late       bool
 	Released   bool
+	TrialNote  pgtype.Text
 }
 
 type BookingEvent struct {

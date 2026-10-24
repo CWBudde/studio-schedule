@@ -37,12 +37,14 @@ type Deps struct {
 	Lessons   *service.LessonService
 	Bookings  *service.BookingService
 	Waitlist  *service.WaitlistService
-	Auth      *service.AuthService
-	Family    *service.FamilyService
-	Persons   *service.PersonService
-	Outbox    *service.OutboxService
-	Version   string
-	Logger    *slog.Logger
+	// Participants are the staff actions on the participants of lessons.
+	Participants *service.ParticipantService
+	Auth         *service.AuthService
+	Family       *service.FamilyService
+	Persons      *service.PersonService
+	Outbox       *service.OutboxService
+	Version      string
+	Logger       *slog.Logger
 	// SecureCookies sets the Secure attribute on the session cookie; off
 	// only for local development over plain HTTP.
 	SecureCookies bool
@@ -93,6 +95,7 @@ func Register(api huma.API, deps Deps) {
 	registerLessonAdmin(api, h)
 	registerBookings(api, h)
 	registerWaitlist(api, h)
+	registerParticipants(api, h)
 	registerAuth(api, h)
 	registerCredentials(api, h)
 	registerFamily(api, h)

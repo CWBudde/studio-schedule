@@ -33,7 +33,8 @@ type recipient struct {
 // is confirmed, else their own address, else the addresses of the confirmed
 // accounts of their guardians that are not disabled; an unconfirmed or
 // disabled guardian account gets nothing, and so does a guardian without an
-// account. For a guest, the guest's address. Each address appears once,
+// account. For a guest, the guest's address, if they gave one, in the
+// school's default language (guestRecipient). Each address appears once,
 // ignoring case, with every booked person it is mailed for; an address that
 // is an account's and also a person's own is mailed as the account's.
 func lessonRecipients(ctx context.Context, tx store.Tx, lesson domain.LessonID) ([]recipient, error) {
@@ -78,7 +79,9 @@ func lessonRecipients(ctx context.Context, tx store.Tx, lesson domain.LessonID) 
 
 	for _, b := range bookings {
 		if b.PersonID.IsZero() {
-			add(recipient{email: b.GuestEmail, givenName: b.GuestName}, b.GuestName)
+			if r, ok := guestRecipient(b); ok {
+				add(r, b.GuestName)
+			}
 
 			continue
 		}
@@ -89,6 +92,18 @@ func lessonRecipients(ctx context.Context, tx store.Tx, lesson domain.LessonID) 
 	}
 
 	return out, nil
+}
+
+// guestRecipient returns the guest of booking b as the recipient of the
+// mails about it, greeted by their name, in the school's default language
+// (no account has a language for them); false for a guest without an
+// email (ADR 0009, amendment).
+func guestRecipient(b domain.Booking) (recipient, bool) {
+	if b.GuestEmail == "" {
+		return recipient{}, false
+	}
+
+	return recipient{email: b.GuestEmail, givenName: b.GuestName, participants: []string{b.GuestName}}, true
 }
 
 // mailsGuardians reports whether mail about booked person p goes to p's

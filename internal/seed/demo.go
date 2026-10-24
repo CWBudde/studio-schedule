@@ -3,6 +3,7 @@ package seed
 import (
 	"cmp"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -35,7 +36,8 @@ func Demo() Dataset { return DemoAt(FixedDemoAnchor) }
 // anchor: two locations, their rooms, staff, course types, one term around
 // anchor with its weekly classes, members with their families and accounts,
 // and a few one-off workshops in the weeks after anchor, one of them full
-// with a waiting list (ADR 0010). Of the weekly
+// with a waiting list (ADR 0010), and one with guests and a trial that its
+// instructor added (ADR 0009, amendment). Of the weekly
 // classes it has the lessons of the week up to and including anchor
 // (history), with the automatic bookings of the class members, as the
 // lesson generator would have created them; the generator creates the
@@ -111,6 +113,7 @@ func demoAt(anchor domain.Date) (Dataset, error) {
 	b.history(anchor)
 	b.memberBookings()
 	b.fullWorkshop(anchor, demoFullWorkshop)
+	b.staffBookings(anchor, demoStaffBookings)
 
 	return b.d, nil
 }
@@ -223,7 +226,9 @@ var demoHouseholds = []householdSpec{
 	// Staff and office.
 	{"Starling", "example.net", []adultSpec{{"Alina", domain.RoleInstructor, ""}}, nil},
 	{"Quillon", "", []adultSpec{{"Sofia", "", ""}}, nil},
-	{"Keysworth", "", []adultSpec{{"Felix", "", ""}}, nil},
+	// Felix accompanies; his instructor account sees the lessons he plays
+	// for. Alina comes first, so she stays the demo's instructor login.
+	{"Keysworth", "example.net", []adultSpec{{"Felix", domain.RoleInstructor, ""}}, nil},
 	{"Ledgerby", "example.net", []adultSpec{{"Olga", domain.RoleOffice, ""}}, nil},
 	{"Keystone", "example.net", []adultSpec{{"Arno", domain.RoleAdmin, ""}}, nil},
 }
@@ -458,6 +463,34 @@ var demoFullWorkshop = fullWorkshopSpec{
 	workshop: workshopSpec{10, at(13, 30), 90, "Studio C", "Tap", "Nina Tapworth", "", 4, ""},
 	booked:   []string{"Irene Inkwell", "Kai Lanternby", "Oskar Nettlebury", "Rhea Pinecrest"},
 	waiting:  []waitingSpec{{"Vera Rushwick", true}, {"Wanda Sparrowhill", false}},
+}
+
+// staffBookingsSpec is what an instructor added to her first workshop: a
+// booking per participant, by her account, the evening before the anchor.
+type staffBookingsSpec struct {
+	instructor   string
+	participants []participantSpec
+}
+
+// participantSpec is a guest (name, optional email) or a person, optionally
+// on a trial with a note.
+type participantSpec struct {
+	guest, email string
+	person       string
+	trial        bool
+	note         string
+}
+
+// demoStaffBookings shows the staff actions in the participant list of
+// Alina's ballet workshop: a guest with an email, a walk-in guest without
+// one, and a trial with a note for her.
+var demoStaffBookings = staffBookingsSpec{
+	instructor: "Alina Starling",
+	participants: []participantSpec{
+		{guest: "Mara Gastfield", email: "mara.gastfield@example.com"},
+		{guest: "Pia Walkby"},
+		{person: "Ute Tallowfield", trial: true, note: "First ballet class in years; mind her left knee."},
+	},
 }
 
 // ----------------------------------------------------------------- builder
@@ -700,6 +733,50 @@ func (b *builder) fullWorkshop(anchor domain.Date, spec fullWorkshopSpec) {
 			ID: ids.New[domain.WaitlistEntryID](b.seq), LessonID: l.ID, PersonID: person,
 			Status: domain.WaitlistWaiting, JoinedAt: joinedAt.Add(time.Duration(i) * 30 * time.Minute),
 			StayOnList: w.stayOnList, JoinedBy: b.accountOf(person),
+		})
+	}
+}
+
+// staffBookings adds the bookings of spec to the first workshop of its
+// instructor, each with its event by the instructor's account (source
+// staff, ADR 0009, amendment).
+func (b *builder) staffBookings(anchor domain.Date, spec staffBookingsSpec) {
+	staff := lookup(b.staff, spec.instructor)
+
+	var person domain.PersonID
+
+	for _, s := range b.d.Staff {
+		if s.ID == staff {
+			person = s.PersonID
+		}
+	}
+
+	actor := b.accountOf(person)
+
+	i := slices.IndexFunc(b.d.Lessons, func(l domain.Lesson) bool {
+		return l.Kind == domain.LessonWorkshop && l.InstructorID == staff
+	})
+	if i < 0 {
+		panic("seed: no workshop of " + spec.instructor)
+	}
+
+	l := b.d.Lessons[i]
+	bookedAt := anchor.AddDays(-1).At(at(17, 0), b.loc)
+
+	for i, p := range spec.participants {
+		booking := domain.Booking{
+			ID: ids.New[domain.BookingID](b.seq), LessonID: l.ID, GuestName: p.guest, GuestEmail: p.email,
+			Status: domain.BookingBooked, Source: domain.BookingSourceStaff, Trial: p.trial, TrialNote: p.note,
+			BookedAt: bookedAt.Add(time.Duration(i) * time.Minute),
+		}
+		if p.person != "" {
+			booking.PersonID = lookup(b.persons, p.person)
+		}
+
+		b.d.Bookings = append(b.d.Bookings, booking)
+		b.d.BookingEvents = append(b.d.BookingEvents, domain.BookingEvent{
+			ID: ids.New[domain.BookingEventID](b.seq), BookingID: booking.ID, At: booking.BookedAt,
+			Status: domain.BookingBooked, ActorAccountID: actor,
 		})
 	}
 }

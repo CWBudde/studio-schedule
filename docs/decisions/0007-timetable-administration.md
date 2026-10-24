@@ -220,3 +220,13 @@ the change as described above. A canceled lesson keeps its bookings (ADR 0009).
   by a member's override moves along when the capacity stays.
 - Taking back a released date creates a `self` booking (ADR 0009), which keeps its lesson like any
   other booking of a member.
+
+## Amendment (2026-10-24): instructors write participants
+
+Lessons stay the office's: instructors and accompanists get no write access to lessons, classes or
+terms. From Phase 4 they **write the participants of their own lessons**: add persons and guests,
+mark trials, remove participants and take attendance (ADR 0009, amendment). "Their own" means the
+lesson's instructor or accompanist is an active staff member whose `staff.person_id` is the
+signed-in account's person; the office acts on every lesson, and any other lesson is a 404. The
+operations are at the access level `staff` (ADR 0005), which checks the role; the service checks the
+lesson.
