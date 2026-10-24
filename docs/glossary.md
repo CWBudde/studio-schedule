@@ -7,7 +7,7 @@ where it differs.
 | ------------------ | ------------------- | --------------------- | ----------------------------------------------------------------------- |
 | `Lesson`           | Lesson              | Stunde                | A concrete, dated occurrence (formerly "Unterrichtsstunde")             |
 | `Class`            | Class               | Kurs                  | A recurring weekly template that generates lessons (formerly "Klasse")  |
-| `ClassMember`      | Class member        | Kursmitglied          | Fixed enrolment in a class; auto-booked into its lessons                |
+| `ClassMember`      | Class member        | Kursmitglied          | Fixed enrolment in a class, "since" a date; auto-booked from Phase 4    |
 | `Term`             | Term                | Zeitraum / Saison     | Date range for a timetable, e.g. a summer timetable ("Sommertanzplan")  |
 | `CourseType`       | Course type / style | Stilrichtung          | Catalogue entry with description; name unique (ADR 0007)                |
 | `Level`            | Level               | Niveau                | e.g. beginner, intermediate, advanced, professional, open               |
@@ -30,6 +30,9 @@ where it differs.
 | Calendar feed      | Calendar feed       | Kalender-Abo          | iCal URL with a secret token                                            |
 | In use             | In use              | In Verwendung         | Still referenced, so it cannot be deleted (409 `in-use`; ADR 0007)      |
 | Retire             | Retire / deactivate | Stilllegen            | Hide from future use instead of deleting what is referenced (ADR 0007)  |
+| Duplicate          | Already taken       | Bereits vergeben      | Name taken or person already a member (409 `duplicate`; ADR 0007)       |
+| Slot date          | (not shown)         | (nicht sichtbar)      | School date a generated lesson belongs to (`lessons.slot_date`)         |
+| Follow             | (not shown)         | (nicht sichtbar)      | An unedited future lesson follows class and term edits (ADR 0007)       |
 
 Roles: `guest` (not logged in) · `member` (Mitglied) · `instructor` (Lehrkraft) · `office` (Büro) ·
 `admin` (Administration).

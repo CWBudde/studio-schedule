@@ -292,8 +292,9 @@ Goal: people can sign up and log in; staff can maintain the timetable.
       admin UI. Order: decisions and the two foundations first, then the entity slices (each slice
       is backend + UI + tests and can run in parallel; regenerate `api/openapi.json`,
       `schema.d.ts` and `routeTree.gen.ts` after merging), then demo and e2e (2026-10-24) —
-      partial: ADR 0007, both foundations, locations and rooms, staff, course types and classes
-      are done; terms, class members, demo and e2e remain
+      partial: ADR 0007, both foundations, every entity slice (locations and rooms, staff, course
+      types, terms, classes, class members) and their tests are done; the demo's "Reset demo"
+      remains
   - [x] ADR 0007 "Timetable administration": `office` writes catalogue and timetable (admins
         inherit it), what an edit of a class or term does to its generated lessons (proposed:
         future, untouched lessons follow the class; past and individually edited lessons stay),
@@ -342,9 +343,15 @@ Goal: people can sign up and log in; staff can maintain the timetable.
         (2026-10-24) — `createCourseType`, `updateCourseType`, `deleteCourseType`; names unique
         ignoring case (migration 00007, which renames existing case duplicates; 409
         `duplicate`), 409 `in-use` while classes or lessons use one; e2e in `admin.spec.ts`
-  - [ ] Terms: create, edit name and date range (refused when it would orphan classes or booked
+  - [x] Terms: create, edit name and date range (refused when it would orphan classes or booked
         lessons, per ADR 0007), delete while empty; overlapping terms allowed or not per ADR;
-        `/admin/terms`
+        `/admin/terms` (2026-10-24) — `createTerm`, `updateTerm`, `deleteTerm`
+        (`service/term_admin.go`); new dates delete the future lessons they leave out that still
+        follow their class and have no bookings, and refuse with a 422 on `startsOn`/`endsOn` while
+        such a lesson has started, has bookings or was edited; longer dates generate the lessons
+        ahead; a term with classes is a 409 `in-use` (no retired state); terms may overlap and
+        names need not be unique; `Terms().Lock` orders term edits, class edits and generation;
+        `/admin/terms` adds, edits and deletes terms; e2e in `admin.spec.ts`
   - [x] Classes: create and edit within a term (course type, room, instructor, accompanist, level,
         weekday, start, duration, capacity defaulting to the room's), delete or retire;
         `/admin/terms/{id}/classes` as a weekly overview reusing the `/classes` layout
@@ -368,18 +375,22 @@ Goal: people can sign up and log in; staff can maintain the timetable.
           below their active bookings is a 422 on `capacity`), within their Monday-based week;
           edited lessons stay; generation creates only lessons that have not started (ADR 0003
           amended, the demo seeds its past week itself)
-  - [ ] Class members: list, add and remove persons with an optional "since" date; an office-only
+  - [x] Class members: list, add and remove persons with an optional "since" date; an office-only
         person search (`listPersons`, name and email) for the combobox; adding twice is a 409;
-        no booking side effects until Phase 4
+        no booking side effects until Phase 4 (2026-10-24) — `listClassMembers`,
+        `addClassMember` (409 `duplicate`, a 422 on an unknown `personId`), `removeClassMember`
+        (`service/class_members.go`); a "Members" sheet per class on `/admin/terms/{id}/classes`
+        with the person combobox and a "since" date; e2e in `admin.spec.ts`
   - [ ] Demo: the demo office account can do every action above; edits live in the worker's memory
         store until a reload, and the open Phase 1 item ("Reset demo" button, optional IndexedDB
         snapshot) lands with this slice
-  - [ ] Tests and docs: every new operation pinned in `internal/app/access_test.go`; service tests
+  - [x] Tests and docs: every new operation pinned in `internal/app/access_test.go`; service tests
         per entity (validation, 409 reasons, lesson sync); component tests per admin page; e2e
         "office edits a class and the schedule shows the change" on desktop and phone; glossary
-        and architecture updated (2026-10-24) — partial: pinned operations, service, component
-        and e2e tests exist per finished slice (the class e2e included); terms and class members
-        remain, and the glossary has no admin terms yet
+        and architecture updated (2026-10-24) — every admin operation is pinned, each slice has
+        service, HTTP, component and e2e tests (`admin.spec.ts`, desktop and mobile); the
+        glossary has duplicate, slot date and follow, the architecture notes how class and term
+        edits fill lessons, ADR 0007 has the term and member rules
 - [ ] Lesson administration: edit, cancel (notifies booked participants), hide, add one-off/special
       lessons, clone day, clone week. Builds on the class-to-lesson sync of Admin CRUD
   - [ ] ADR 0007 (extended): an individually edited lesson is detached from its class, so neither

@@ -100,6 +100,9 @@ sessions and email links) and, when a mailer is configured, `deliver-mail` (ever
 once at startup (the demo before it answers its first request), then on its interval; Go timers
 work in `js/wasm`, so both targets use the same code. Jobs must be idempotent: the generator reads
 the existing lessons of each class and creates only the missing slots that have not started yet.
+Office edits of a class or a term run the same per-class fill inside their own transaction, under
+the class lock, after moving or deleting the future lessons the edit affects
+([ADR 0007](decisions/0007-timetable-administration.md)).
 
 ## API contract
 

@@ -44,7 +44,9 @@ person link).
   nothing refers to (one created by mistake) can be deleted. Deactivated staff disappear from the
   public lists and filters but stay on their lessons, past and future. Deactivating is allowed
   while they still teach; the office reassigns their classes.
-- A class or term with past lessons is retired, not deleted. A class can be deleted, with its
+- A class with past lessons is retired, not deleted. A term has no retired state: it ends by its
+  date, and is deleted only while it has no classes; otherwise the delete is `in-use`, and the
+  office deletes or retires its classes (2026-10-24). A class can be deleted, with its
   lessons, while none of them has started or been booked and it has no members; otherwise the
   delete is `in-use`. A retired class (`classes.retired`) generates no more lessons, leaves the
   public timetable, stays in the office's list and can be reactivated. Retiring deletes its future
@@ -73,9 +75,26 @@ slot link of ADR 0003: every generated lesson keeps the school date of its slot 
 - A weekly class has at most one lesson a week: generation skips a Monday-based week that has a
   lesson of the class, wherever it lies in that week.
 - A class edit and lesson generation lock the class row (`Classes().Lock`), so generation never
-  sees a half-moved class.
+  sees a half-moved class. A term edit, a class edit or creation, and generation lock the term
+  row first (`Terms().Lock`), so nothing fills slots from a term's old dates (2026-10-24).
 - After the edit, the class's missing lessons of the horizon are generated, as for a new class.
 - A class stays in its term; the term is not part of the edit.
+
+**Terms and their lessons.** A term's new date range takes the lessons of its classes along in the
+same transaction (2026-10-24). Term names need not be unique.
+
+- A lesson whose slot date the new range leaves out is deleted while it lies ahead, follows its
+  class and has no bookings.
+- A lesson left out that has started, has bookings or was edited one by one refuses the new range
+  with a 422 on `startsOn` or `endsOn`, whichever leaves it out. The office moves or cancels it
+  first; history never ends up outside its term.
+- A longer range gets the class's missing lessons of the horizon that have not started, as after a
+  class edit (ADR 0003: generation does not create the past).
+
+**Class members.** The office enrolls persons in a class with an optional "since" date and ends a
+membership by removing it. A person is a member once (409 `duplicate`); an unknown person is a 422
+on `personId`. A class with members cannot be deleted. Memberships do not book anyone until Phase
+4 (2026-10-24).
 
 **Concurrency.** The last write wins. There is no `If-Match` or version column: the office is a
 few people, and a stale form overwrites at most what the same person could have changed.
