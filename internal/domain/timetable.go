@@ -67,6 +67,17 @@ type ClassMember struct {
 	ClassID  ClassID
 	PersonID PersonID
 	Since    Date // optional
+	// PausedUntil is the last school date of a pause (ADR 0009): the member
+	// is not booked automatically into lessons up to it. Zero for none.
+	PausedUntil Date
+}
+
+// ActiveOn reports whether the membership has begun on the school date d
+// and is not paused then: its Since is empty or not after d, and its pause,
+// if any, ended before d. Members are booked into the lessons of
+// the slot dates they are active on (ADR 0009).
+func (m ClassMember) ActiveOn(d Date) bool {
+	return (m.Since.IsZero() || m.Since.Compare(d) <= 0) && (m.PausedUntil.IsZero() || m.PausedUntil.Compare(d) < 0)
 }
 
 // Validate checks the enrolment for consistency. All errors wrap
@@ -76,5 +87,6 @@ func (m ClassMember) Validate() error {
 		rule{!m.ClassID.IsZero(), "class member class must be set"},
 		rule{!m.PersonID.IsZero(), "class member person must be set"},
 		on("since", optionalDate(m.Since), "invalid class member start date"),
+		on("pausedUntil", optionalDate(m.PausedUntil), "invalid class member pause date"),
 	)
 }

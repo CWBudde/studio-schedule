@@ -182,8 +182,37 @@ func TestTimetableValidate(t *testing.T) {
 			"zero class":  func(m *domain.ClassMember) { m.ClassID = domain.ClassID{} },
 			"zero person": func(m *domain.ClassMember) { m.PersonID = domain.PersonID{} },
 			"bad since":   func(m *domain.ClassMember) { m.Since = domain.Date{Year: 2026, Month: 2, Day: 31} },
+			"bad pause":   func(m *domain.ClassMember) { m.PausedUntil = domain.Date{Year: 2026, Month: 2, Day: 31} },
 		})
 	})
+}
+
+func TestClassMemberActiveOn(t *testing.T) {
+	t.Parallel()
+
+	day := domain.Date{Year: 2026, Month: time.November, Day: 3}
+	always := domain.ClassMember{}
+	since := domain.ClassMember{Since: day}
+	paused := domain.ClassMember{Since: day.AddDays(-30), PausedUntil: day}
+
+	for _, c := range []struct {
+		m    domain.ClassMember
+		d    domain.Date
+		want bool
+	}{
+		{always, day.AddDays(-400), true},
+		{since, day.AddDays(-1), false},
+		{since, day, true},
+		{since, day.AddDays(1), true},
+		{paused, day.AddDays(-31), false},
+		{paused, day.AddDays(-30), false},
+		{paused, day, false},
+		{paused, day.AddDays(1), true},
+	} {
+		if got := c.m.ActiveOn(c.d); got != c.want {
+			t.Errorf("%+v.ActiveOn(%s) = %v, want %v", c.m, c.d, got, c.want)
+		}
+	}
 }
 
 func TestLessonValidate(t *testing.T) {
@@ -265,18 +294,19 @@ func TestBookingValidate(t *testing.T) {
 	t.Run("Member", func(t *testing.T) {
 		t.Parallel()
 		checkValidate(t, member, map[string]func(*domain.Booking){
-			"zero id":           func(b *domain.Booking) { b.ID = domain.BookingID{} },
-			"zero lesson":       func(b *domain.Booking) { b.LessonID = domain.LessonID{} },
-			"person and guest":  func(b *domain.Booking) { b.GuestName = "Guest" },
-			"neither":           func(b *domain.Booking) { b.PersonID = domain.PersonID{} },
-			"bad status":        func(b *domain.Booking) { b.Status = "maybe" },
-			"no source":         func(b *domain.Booking) { b.Source = "" },
-			"bad source":        func(b *domain.Booking) { b.Source = "robot" },
-			"staff source":      func(b *domain.Booking) { b.Source = "staff" }, // not before the staff actions
-			"late not canceled": func(b *domain.Booking) { b.Late = true },
-			"no booked at":      func(b *domain.Booking) { b.BookedAt = time.Time{} },
-			"canceled no time":  func(b *domain.Booking) { b.Status = domain.BookingCanceled },
-			"time not canceled": func(b *domain.Booking) { b.CanceledAt = t0.Add(time.Hour) },
+			"zero id":               func(b *domain.Booking) { b.ID = domain.BookingID{} },
+			"zero lesson":           func(b *domain.Booking) { b.LessonID = domain.LessonID{} },
+			"person and guest":      func(b *domain.Booking) { b.GuestName = "Guest" },
+			"neither":               func(b *domain.Booking) { b.PersonID = domain.PersonID{} },
+			"bad status":            func(b *domain.Booking) { b.Status = "maybe" },
+			"no source":             func(b *domain.Booking) { b.Source = "" },
+			"bad source":            func(b *domain.Booking) { b.Source = "robot" },
+			"staff source":          func(b *domain.Booking) { b.Source = "staff" }, // not before the staff actions
+			"late not canceled":     func(b *domain.Booking) { b.Late = true },
+			"released not canceled": func(b *domain.Booking) { b.Released = true },
+			"no booked at":          func(b *domain.Booking) { b.BookedAt = time.Time{} },
+			"canceled no time":      func(b *domain.Booking) { b.Status = domain.BookingCanceled },
+			"time not canceled":     func(b *domain.Booking) { b.CanceledAt = t0.Add(time.Hour) },
 			"canceled early": func(b *domain.Booking) {
 				b.Status, b.CanceledAt = domain.BookingCanceled, t0.Add(-time.Hour)
 			},

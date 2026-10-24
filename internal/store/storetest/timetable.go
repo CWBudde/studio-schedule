@@ -109,7 +109,10 @@ func testTimetable(t *testing.T, newStore func(*testing.T) store.Store) {
 		"Members": func(e *env) {
 			c := e.class(e.setting(), time.Thursday, domain.TimeOfDay{Hour: 17})
 			p1, p2 := e.person("Lea", "Member"), e.person("Max", "Member")
-			m2 := domain.ClassMember{ClassID: c.ID, PersonID: p2.ID, Since: domain.Date{Year: 2026, Month: time.March, Day: 5}}
+			m2 := domain.ClassMember{
+				ClassID: c.ID, PersonID: p2.ID, Since: domain.Date{Year: 2026, Month: time.March, Day: 5},
+				PausedUntil: domain.Date{Year: 2026, Month: time.April, Day: 30},
+			}
 			m1 := domain.ClassMember{ClassID: c.ID, PersonID: p1.ID}
 
 			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
@@ -138,6 +141,22 @@ func testTimetable(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Classes().Delete(ctx, c.ID) })
 			wantErr(e.t, err, domain.ErrConflict)
+
+			// UpdateMember replaces the dates, and clears them.
+			m1.Since, m1.PausedUntil = domain.Date{Year: 2026, Month: time.May, Day: 4}, domain.Date{Year: 2026, Month: time.June, Day: 1}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Classes().UpdateMember(ctx, m1) })
+			wantSlice(e.t, list(), []domain.ClassMember{m1, m2})
+
+			m2.Since, m2.PausedUntil = domain.Date{}, domain.Date{}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Classes().UpdateMember(ctx, m2) })
+			wantSlice(e.t, list(), []domain.ClassMember{m1, m2})
+
+			stranger := domain.ClassMember{ClassID: c.ID, PersonID: e.person("Sam", "Stranger").ID}
+			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Classes().UpdateMember(ctx, stranger) })
+			wantErr(e.t, err, domain.ErrNotFound)
+
+			err = e.read(func(ctx context.Context, tx store.Tx) error { return tx.Classes().UpdateMember(ctx, m1) })
+			wantErr(e.t, err, store.ErrReadOnly)
 
 			err = e.read(func(ctx context.Context, tx store.Tx) error { return tx.Classes().RemoveMember(ctx, c.ID, p1.ID) })
 			wantErr(e.t, err, store.ErrReadOnly)

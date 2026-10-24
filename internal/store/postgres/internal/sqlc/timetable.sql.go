@@ -12,17 +12,23 @@ import (
 )
 
 const addClassMember = `-- name: AddClassMember :exec
-INSERT INTO class_members (class_id, person_id, since) VALUES ($1, $2, $3)
+INSERT INTO class_members (class_id, person_id, since, paused_until) VALUES ($1, $2, $3, $4)
 `
 
 type AddClassMemberParams struct {
-	ClassID  pgtype.UUID
-	PersonID pgtype.UUID
-	Since    pgtype.Date
+	ClassID     pgtype.UUID
+	PersonID    pgtype.UUID
+	Since       pgtype.Date
+	PausedUntil pgtype.Date
 }
 
 func (q *Queries) AddClassMember(ctx context.Context, arg AddClassMemberParams) error {
-	_, err := q.db.Exec(ctx, addClassMember, arg.ClassID, arg.PersonID, arg.Since)
+	_, err := q.db.Exec(ctx, addClassMember,
+		arg.ClassID,
+		arg.PersonID,
+		arg.Since,
+		arg.PausedUntil,
+	)
 	return err
 }
 
@@ -154,7 +160,7 @@ func (q *Queries) GetTerm(ctx context.Context, id pgtype.UUID) (Term, error) {
 }
 
 const listClassMembers = `-- name: ListClassMembers :many
-SELECT class_id, person_id, since FROM class_members WHERE class_id = $1 ORDER BY person_id
+SELECT class_id, person_id, since, paused_until FROM class_members WHERE class_id = $1 ORDER BY person_id
 `
 
 func (q *Queries) ListClassMembers(ctx context.Context, classID pgtype.UUID) ([]ClassMember, error) {
@@ -166,7 +172,12 @@ func (q *Queries) ListClassMembers(ctx context.Context, classID pgtype.UUID) ([]
 	var items []ClassMember
 	for rows.Next() {
 		var i ClassMember
-		if err := rows.Scan(&i.ClassID, &i.PersonID, &i.Since); err != nil {
+		if err := rows.Scan(
+			&i.ClassID,
+			&i.PersonID,
+			&i.Since,
+			&i.PausedUntil,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -215,7 +226,7 @@ func (q *Queries) ListClassesByTerm(ctx context.Context, termID pgtype.UUID) ([]
 }
 
 const listPersonClassMemberships = `-- name: ListPersonClassMemberships :many
-SELECT class_id, person_id, since FROM class_members WHERE person_id = $1 ORDER BY class_id
+SELECT class_id, person_id, since, paused_until FROM class_members WHERE person_id = $1 ORDER BY class_id
 `
 
 func (q *Queries) ListPersonClassMemberships(ctx context.Context, personID pgtype.UUID) ([]ClassMember, error) {
@@ -227,7 +238,12 @@ func (q *Queries) ListPersonClassMemberships(ctx context.Context, personID pgtyp
 	var items []ClassMember
 	for rows.Next() {
 		var i ClassMember
-		if err := rows.Scan(&i.ClassID, &i.PersonID, &i.Since); err != nil {
+		if err := rows.Scan(
+			&i.ClassID,
+			&i.PersonID,
+			&i.Since,
+			&i.PausedUntil,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -360,6 +376,30 @@ func (q *Queries) UpdateClass(ctx context.Context, arg UpdateClassParams) (int64
 		arg.Duration,
 		arg.Capacity,
 		arg.Retired,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateClassMember = `-- name: UpdateClassMember :execrows
+UPDATE class_members SET since = $3, paused_until = $4 WHERE class_id = $1 AND person_id = $2
+`
+
+type UpdateClassMemberParams struct {
+	ClassID     pgtype.UUID
+	PersonID    pgtype.UUID
+	Since       pgtype.Date
+	PausedUntil pgtype.Date
+}
+
+func (q *Queries) UpdateClassMember(ctx context.Context, arg UpdateClassMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateClassMember,
+		arg.ClassID,
+		arg.PersonID,
+		arg.Since,
+		arg.PausedUntil,
 	)
 	if err != nil {
 		return 0, err

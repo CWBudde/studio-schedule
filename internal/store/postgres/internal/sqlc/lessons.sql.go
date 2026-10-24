@@ -154,6 +154,53 @@ func (q *Queries) ListLessonsByClass(ctx context.Context, arg ListLessonsByClass
 	return items, nil
 }
 
+const listLessonsByClassStartingAfter = `-- name: ListLessonsByClassStartingAfter :many
+SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date, detached, cancel_note, canceled_at, canceled_by FROM lessons WHERE class_id = $1 AND starts_at > $2 ORDER BY starts_at, id
+`
+
+type ListLessonsByClassStartingAfterParams struct {
+	ClassID  pgtype.UUID
+	StartsAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListLessonsByClassStartingAfter(ctx context.Context, arg ListLessonsByClassStartingAfterParams) ([]Lesson, error) {
+	rows, err := q.db.Query(ctx, listLessonsByClassStartingAfter, arg.ClassID, arg.StartsAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Lesson
+	for rows.Next() {
+		var i Lesson
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClassID,
+			&i.CourseTypeID,
+			&i.RoomID,
+			&i.InstructorID,
+			&i.AccompanistID,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.Status,
+			&i.Visibility,
+			&i.Kind,
+			&i.Capacity,
+			&i.SlotDate,
+			&i.Detached,
+			&i.CancelNote,
+			&i.CanceledAt,
+			&i.CanceledBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLessonsInRange = `-- name: ListLessonsInRange :many
 SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date, detached, cancel_note, canceled_at, canceled_by FROM lessons
 WHERE starts_at >= $1 AND starts_at < $2

@@ -168,8 +168,16 @@ func (r classRepo) ListByTerm(ctx context.Context, term domain.TermID) ([]domain
 
 func (r classRepo) AddMember(ctx context.Context, m domain.ClassMember) error {
 	return mapErr(r.q.AddClassMember(ctx, sqlc.AddClassMemberParams{
-		ClassID: pgID(m.ClassID), PersonID: pgID(m.PersonID), Since: pgDate(m.Since),
+		ClassID: pgID(m.ClassID), PersonID: pgID(m.PersonID), Since: pgDate(m.Since), PausedUntil: pgDate(m.PausedUntil),
 	}))
+}
+
+func (r classRepo) UpdateMember(ctx context.Context, m domain.ClassMember) error {
+	n, err := r.q.UpdateClassMember(ctx, sqlc.UpdateClassMemberParams{
+		ClassID: pgID(m.ClassID), PersonID: pgID(m.PersonID), Since: pgDate(m.Since), PausedUntil: pgDate(m.PausedUntil),
+	})
+
+	return affected("class member", n, err)
 }
 
 func (r classRepo) RemoveMember(ctx context.Context, class domain.ClassID, person domain.PersonID) error {
@@ -195,5 +203,7 @@ func toClassMember(row sqlc.ClassMember) domain.ClassMember {
 		ClassID:  fromPgID[domain.ClassID](row.ClassID),
 		PersonID: fromPgID[domain.PersonID](row.PersonID),
 		Since:    fromPgDate(row.Since),
+
+		PausedUntil: fromPgDate(row.PausedUntil),
 	}
 }

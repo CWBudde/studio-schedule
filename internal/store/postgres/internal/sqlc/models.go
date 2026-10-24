@@ -55,6 +55,7 @@ type Booking struct {
 	CanceledAt pgtype.Timestamptz
 	Source     string
 	Late       bool
+	Released   bool
 }
 
 type BookingEvent struct {
@@ -84,9 +85,10 @@ type Class struct {
 }
 
 type ClassMember struct {
-	ClassID  pgtype.UUID
-	PersonID pgtype.UUID
-	Since    pgtype.Date
+	ClassID     pgtype.UUID
+	PersonID    pgtype.UUID
+	Since       pgtype.Date
+	PausedUntil pgtype.Date
 }
 
 type CourseType struct {

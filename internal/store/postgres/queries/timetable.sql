@@ -43,7 +43,10 @@ DELETE FROM classes WHERE id = $1;
 SELECT * FROM classes WHERE term_id = $1 ORDER BY weekday, start_time, id;
 
 -- name: AddClassMember :exec
-INSERT INTO class_members (class_id, person_id, since) VALUES ($1, $2, $3);
+INSERT INTO class_members (class_id, person_id, since, paused_until) VALUES ($1, $2, $3, $4);
+
+-- name: UpdateClassMember :execrows
+UPDATE class_members SET since = $3, paused_until = $4 WHERE class_id = $1 AND person_id = $2;
 
 -- name: RemoveClassMember :execrows
 DELETE FROM class_members WHERE class_id = $1 AND person_id = $2;

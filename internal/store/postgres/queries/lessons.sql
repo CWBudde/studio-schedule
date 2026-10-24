@@ -27,6 +27,9 @@ SELECT * FROM lessons
 WHERE starts_at >= sqlc.arg(from_time) AND starts_at < sqlc.arg(to_time)
 ORDER BY starts_at, id;
 
+-- name: ListLessonsByClassStartingAfter :many
+SELECT * FROM lessons WHERE class_id = $1 AND starts_at > $2 ORDER BY starts_at, id;
+
 -- name: ListLessonsByClass :many
 SELECT * FROM lessons
 WHERE class_id = sqlc.arg(class_id)

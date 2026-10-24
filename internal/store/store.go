@@ -332,6 +332,9 @@ type ClassRepo interface {
 	// member and with domain.ErrConflict if the class or person does not
 	// exist.
 	AddMember(ctx context.Context, m domain.ClassMember) error
+	// UpdateMember replaces the dates of a membership; a person who is not
+	// a member is domain.ErrNotFound.
+	UpdateMember(ctx context.Context, m domain.ClassMember) error
 	RemoveMember(ctx context.Context, class domain.ClassID, person domain.PersonID) error
 	// ListMembers returns the members of a class ordered by person ID.
 	ListMembers(ctx context.Context, class domain.ClassID) ([]domain.ClassMember, error)
@@ -352,6 +355,10 @@ type LessonRepo interface {
 	// Delete fails with domain.ErrConflict while bookings refer to the
 	// lesson, canceled ones included.
 	Delete(ctx context.Context, id domain.LessonID) error
+	// ListByClassStartingAfter returns the lessons of a class that start
+	// after the instant, whatever their slot date, ordered by StartsAt and
+	// ID.
+	ListByClassStartingAfter(ctx context.Context, class domain.ClassID, after time.Time) ([]domain.Lesson, error)
 	// ListByClass returns the lessons of a class whose slot date is from or
 	// later (all of them for a zero from), ordered by StartsAt and ID.
 	ListByClass(ctx context.Context, class domain.ClassID, from domain.Date) ([]domain.Lesson, error)
@@ -397,6 +404,19 @@ type BookingRepo interface {
 	ListActiveByLessonsAndPersons(
 		ctx context.Context, lessons []domain.LessonID, persons []domain.PersonID,
 	) ([]domain.Booking, error)
+
+	// ListByLessonsAndPersons returns the bookings of any of the given
+	// persons in any of the given lessons, canceled ones included, ordered by
+	// BookedAt and ID.
+	ListByLessonsAndPersons(
+		ctx context.Context, lessons []domain.LessonID, persons []domain.PersonID,
+	) ([]domain.Booking, error)
+	// DeleteByLessonAndSource deletes the bookings of a lesson that came
+	// about by source, canceled ones included, together with their events,
+	// and returns how many bookings it deleted. The office's timetable edits
+	// delete a lesson with its automatic class member bookings this way
+	// (ADR 0007, ADR 0009).
+	DeleteByLessonAndSource(ctx context.Context, lesson domain.LessonID, source domain.BookingSource) (int, error)
 
 	// AddEvent appends to the history of a booking. It fails with
 	// domain.ErrConflict if the booking or the actor account does not exist.

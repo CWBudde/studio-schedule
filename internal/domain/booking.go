@@ -65,6 +65,12 @@ type Booking struct {
 	// Late marks a cancellation after the cancellation cutoff (ADR 0009);
 	// only a canceled booking can be late.
 	Late bool
+	// Released marks a cancellation by the person or their family that
+	// gives up the date (ADR 0009): it keeps a class member from being
+	// booked into the lesson automatically again. The office ending a
+	// membership or a member's pause does not release. Only a canceled
+	// booking can be released.
+	Released bool
 }
 
 // Validate checks the booking for consistency. All errors wrap
@@ -82,6 +88,7 @@ func (b Booking) Validate() error {
 		rule{b.Status.Valid(), "invalid booking status"},
 		rule{b.Source.Valid(), "invalid booking source"},
 		rule{!b.Late || b.Status == BookingCanceled, "only a canceled booking can be late"},
+		rule{!b.Released || b.Status == BookingCanceled, "only a canceled booking can be released"},
 		rule{!b.BookedAt.IsZero(), "booking time must be set"},
 		rule{(b.Status == BookingCanceled) == !b.CanceledAt.IsZero(), "cancellation time must be set exactly for canceled bookings"},
 		rule{notBefore(b.CanceledAt, b.BookedAt), "booking cannot be canceled before it was made"},

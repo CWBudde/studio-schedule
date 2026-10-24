@@ -99,6 +99,16 @@ func (r lessonRepo) Delete(ctx context.Context, id domain.LessonID) error {
 	return affected("lesson", n, err)
 }
 
+func (r lessonRepo) ListByClassStartingAfter(
+	ctx context.Context, class domain.ClassID, after time.Time,
+) ([]domain.Lesson, error) {
+	rows, err := r.q.ListLessonsByClassStartingAfter(ctx, sqlc.ListLessonsByClassStartingAfterParams{
+		ClassID: pgID(class), StartsAt: pgtype.Timestamptz{Time: instant(after), Valid: true},
+	})
+
+	return convertRows(rows, err, toLesson)
+}
+
 func (r lessonRepo) ListByClass(ctx context.Context, class domain.ClassID, from domain.Date) ([]domain.Lesson, error) {
 	rows, err := r.q.ListLessonsByClass(ctx, sqlc.ListLessonsByClassParams{ClassID: pgID(class), FromSlot: pgDate(from)})
 
@@ -156,6 +166,8 @@ func toBooking(row sqlc.Booking) domain.Booking {
 		BookedAt:   fromPgInstant(row.BookedAt),
 		CanceledAt: fromPgInstant(row.CanceledAt),
 		Late:       row.Late,
+
+		Released: row.Released,
 	}
 }
 
@@ -173,6 +185,8 @@ func bookingParams(b domain.Booking) sqlc.CreateBookingParams {
 		BookedAt:   pgInstant(b.BookedAt),
 		CanceledAt: pgInstant(b.CanceledAt),
 		Late:       b.Late,
+
+		Released: b.Released,
 	}
 }
 
@@ -234,6 +248,36 @@ func (r bookingRepo) ListActiveByLessonsAndPersons(
 	})
 
 	return convertRows(rows, err, toBooking)
+}
+
+func (r bookingRepo) ListByLessonsAndPersons(
+	ctx context.Context, lessons []domain.LessonID, persons []domain.PersonID,
+) ([]domain.Booking, error) {
+	rows, err := r.q.ListBookingsByLessonsAndPersons(ctx, sqlc.ListBookingsByLessonsAndPersonsParams{
+		Lessons: pgIDs(lessons), Persons: pgIDs(persons),
+	})
+
+	return convertRows(rows, err, toBooking)
+}
+
+func (r bookingRepo) DeleteByLessonAndSource(
+	ctx context.Context, lesson domain.LessonID, source domain.BookingSource,
+) (int, error) {
+	err := r.q.DeleteBookingEventsByLessonAndSource(ctx, sqlc.DeleteBookingEventsByLessonAndSourceParams{
+		LessonID: pgID(lesson), Source: string(source),
+	})
+	if err != nil {
+		return 0, mapErr(err)
+	}
+
+	n, err := r.q.DeleteBookingsByLessonAndSource(ctx, sqlc.DeleteBookingsByLessonAndSourceParams{
+		LessonID: pgID(lesson), Source: string(source),
+	})
+	if err != nil {
+		return 0, mapErr(err)
+	}
+
+	return int(n), nil
 }
 
 func (r bookingRepo) AddEvent(ctx context.Context, e domain.BookingEvent) error {

@@ -106,10 +106,13 @@ func fullStore(t *testing.T) *Store {
 			break
 		}
 
-		for id := range st.state.lessons.rows {
-			lesson = id
+		// A workshop: the demo's class lessons have member bookings.
+		for id, l := range st.state.lessons.rows {
+			if l.ClassID.IsZero() {
+				lesson = id
 
-			break
+				break
+			}
 		}
 
 		booking := domain.Booking{

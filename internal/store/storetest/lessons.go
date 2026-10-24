@@ -126,6 +126,29 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Delete(ctx, booked.ID) })
 			wantErr(e.t, err, domain.ErrConflict)
 		},
+		"ListByClassStartingAfter": func(e *env) {
+			s := e.setting()
+			c := e.class(s, time.Monday, domain.TimeOfDay{Hour: 9})
+			other := e.class(s, time.Tuesday, domain.TimeOfDay{Hour: 9})
+
+			e.classLesson(s, c, slot0.AddDays(-7), t0.Add(-7*24*time.Hour))
+			e.classLesson(s, c, slot0, t0) // starts exactly at the bound: not after it
+			third := e.classLesson(s, c, slot0.AddDays(14), t0.Add(14*24*time.Hour))
+			// A lesson of an earlier slot that the office moved into the future.
+			moved := e.classLesson(s, c, slot0.AddDays(-14), t0.Add(time.Hour))
+			e.classLesson(s, other, slot0.AddDays(1), t0.Add(24*time.Hour))
+			e.lesson(s, t0.Add(2*time.Hour), 5)
+
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+				return tx.Lessons().ListByClassStartingAfter(ctx, c.ID, t0)
+			})
+			wantSlice(e.t, got, []domain.Lesson{moved, third})
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+				return tx.Lessons().ListByClassStartingAfter(ctx, c.ID, t0.Add(30*24*time.Hour))
+			})
+			wantSlice(e.t, got, nil)
+		},
 		"ListByClass": func(e *env) {
 			s := e.setting()
 			c := e.class(s, time.Monday, domain.TimeOfDay{Hour: 9})
@@ -241,6 +264,7 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 				full.Prepaid = true
 				full.CanceledAt = t0.Add(-30 * time.Minute)
 				full.Late = true
+				full.Released = true
 				valid(e.t, full)
 
 				return minimal, full
@@ -435,6 +459,129 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantSlice(e.t, list([]domain.LessonID{l2.ID}, []domain.PersonID{me.ID}), nil)
 			wantSlice(e.t, list(nil, []domain.PersonID{me.ID}), nil)
 			wantSlice(e.t, list([]domain.LessonID{l1.ID}, nil), nil)
+		},
+		"ListByLessonsAndPersons": func(e *env) {
+			s := e.setting()
+			l1, l2, l3 := e.lesson(s, t0, 5), e.lesson(s, t0.Add(time.Hour), 5), e.lesson(s, t0.Add(2*time.Hour), 5)
+			me, child, stranger := e.person("Mia", "Member"), e.person("Kim", "Member"), e.person("Sam", "Stranger")
+
+			late := e.booking(l1, me, t0.Add(-time.Hour))
+			early := e.booking(l2, child, t0.Add(-2*time.Hour))
+			e.booking(l1, stranger, t0.Add(-3*time.Hour)) // not asked for
+			e.booking(l3, me, t0.Add(-3*time.Hour))       // lesson not asked for
+
+			// Canceled ones are included.
+			canceled := e.booking(l2, me, t0.Add(-4*time.Hour))
+			canceled.Status, canceled.CanceledAt, canceled.Released = domain.BookingCanceled, t0.Add(-90*time.Minute), true
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Update(ctx, canceled) })
+
+			guest := domain.Booking{
+				ID: newID[domain.BookingID](e), LessonID: l1.ID, GuestName: "Gina Guest",
+				GuestEmail: "gina@example.org", Status: domain.BookingBooked, Source: domain.BookingSourceSelf,
+				BookedAt: t0.Add(-5 * time.Hour),
+			}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Create(ctx, guest) })
+
+			list := func(lessons []domain.LessonID, persons []domain.PersonID) []domain.Booking {
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Booking, error) {
+					return tx.Bookings().ListByLessonsAndPersons(ctx, lessons, persons)
+				})
+			}
+
+			wantSlice(e.t, list([]domain.LessonID{l1.ID, l2.ID}, []domain.PersonID{me.ID, child.ID}),
+				[]domain.Booking{canceled, early, late})
+			wantSlice(e.t, list(nil, []domain.PersonID{me.ID}), nil)
+			wantSlice(e.t, list([]domain.LessonID{l1.ID}, nil), nil)
+		},
+		"DeleteByLessonAndSource": func(e *env) {
+			s := e.setting()
+			l, other := e.lesson(s, t0, 5), e.lesson(s, t0.Add(time.Hour), 5)
+			actor := e.account(e.person("Olga", "Office"), "olga@example.org")
+
+			member := func(lesson domain.Lesson, p domain.Person) domain.Booking {
+				b := e.newBooking(lesson, p, t0.Add(-3*time.Hour))
+				b.Source = domain.BookingSourceMember
+				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Create(ctx, b) })
+
+				return b
+			}
+
+			active := member(l, e.person("Ann", "Member"))
+			released := member(l, e.person("Ben", "Member"))
+			released.Status, released.CanceledAt, released.Late = domain.BookingCanceled, t0.Add(-time.Hour), true
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Update(ctx, released) })
+
+			self := e.booking(l, e.person("Cy", "Self"), t0.Add(-2*time.Hour))
+			elsewhere := member(other, e.person("Di", "Member"))
+
+			for _, b := range []domain.Booking{active, released, self, elsewhere} {
+				ev := domain.BookingEvent{
+					ID: newID[domain.BookingEventID](e), BookingID: b.ID, At: b.BookedAt, Status: domain.BookingBooked,
+					ActorAccountID: actor.ID,
+				}
+				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().AddEvent(ctx, ev) })
+			}
+
+			deleteBy := func(lesson domain.Lesson, source domain.BookingSource) int {
+				var n int
+
+				e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+					var err error
+					n, err = tx.Bookings().DeleteByLessonAndSource(ctx, lesson.ID, source)
+
+					return err
+				})
+
+				return n
+			}
+
+			// The lesson's member bookings go with their events, canceled
+			// ones included; other sources and other lessons stay.
+			wantEqual(e.t, deleteBy(l, domain.BookingSourceMember), 2)
+
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Booking, error) {
+				return tx.Bookings().ListByLesson(ctx, l.ID)
+			})
+			wantSlice(e.t, got, []domain.Booking{self})
+
+			for _, b := range []domain.Booking{active, released} {
+				err := e.read(func(ctx context.Context, tx store.Tx) error {
+					_, err := tx.Bookings().Get(ctx, b.ID)
+
+					return err
+				})
+				wantErr(e.t, err, domain.ErrNotFound)
+
+				events := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.BookingEvent, error) {
+					return tx.Bookings().ListEvents(ctx, b.ID)
+				})
+				wantEqual(e.t, len(events), 0)
+			}
+
+			for _, b := range []domain.Booking{self, elsewhere} {
+				events := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.BookingEvent, error) {
+					return tx.Bookings().ListEvents(ctx, b.ID)
+				})
+				wantEqual(e.t, len(events), 1)
+			}
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Booking, error) {
+				return tx.Bookings().ListByLesson(ctx, other.ID)
+			})
+			wantSlice(e.t, got, []domain.Booking{elsewhere})
+
+			// Nothing left to delete; then the lesson without member
+			// bookings goes once its other booking is gone too.
+			wantEqual(e.t, deleteBy(l, domain.BookingSourceMember), 0)
+			wantEqual(e.t, deleteBy(l, domain.BookingSourceSelf), 1)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Delete(ctx, l.ID) })
+
+			err := e.read(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Bookings().DeleteByLessonAndSource(ctx, other.ID, domain.BookingSourceMember)
+
+				return err
+			})
+			wantErr(e.t, err, store.ErrReadOnly)
 		},
 		"LockSerialisesTheLastPlace": func(e *env) {
 			// Every capacity check runs under the lesson lock, so of many

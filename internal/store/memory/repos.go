@@ -838,6 +838,22 @@ func (r classRepo) AddMember(_ context.Context, m domain.ClassMember) error {
 	return nil
 }
 
+func (r classRepo) UpdateMember(_ context.Context, m domain.ClassMember) error {
+	s := &r.tx.state
+	if err := r.tx.checkWritable(); err != nil {
+		return err
+	}
+
+	key := memberKey{m.ClassID, m.PersonID}
+	if !s.classMembers.has(key) {
+		return notFound("class member")
+	}
+
+	s.classMembers.put(r.tx.gen, key, m)
+
+	return nil
+}
+
 func (r classRepo) RemoveMember(_ context.Context, class domain.ClassID, person domain.PersonID) error {
 	s := &r.tx.state
 	if err := r.tx.checkWritable(); err != nil {
@@ -940,6 +956,17 @@ func (r lessonRepo) Delete(_ context.Context, id domain.LessonID) error {
 	s.lessons.delete(r.tx.gen, id)
 
 	return nil
+}
+
+func (r lessonRepo) ListByClassStartingAfter(
+	_ context.Context, class domain.ClassID, after time.Time,
+) ([]domain.Lesson, error) {
+	after = instant(after)
+	lessons := r.tx.state.lessons.filter(func(l domain.Lesson) bool { return l.ClassID == class && l.StartsAt.After(after) })
+
+	return sorted(lessons, func(a, b domain.Lesson) int {
+		return cmp.Or(a.StartsAt.Compare(b.StartsAt), compareID(a.ID, b.ID))
+	}), nil
 }
 
 func (r lessonRepo) ListByClass(_ context.Context, class domain.ClassID, from domain.Date) ([]domain.Lesson, error) {
@@ -1086,6 +1113,48 @@ func (r bookingRepo) ListActiveByLessonsAndPersons(
 	return sorted(bookings, func(a, b domain.Booking) int {
 		return cmp.Or(a.BookedAt.Compare(b.BookedAt), compareID(a.ID, b.ID))
 	}), nil
+}
+
+func (r bookingRepo) ListByLessonsAndPersons(
+	_ context.Context, lessons []domain.LessonID, persons []domain.PersonID,
+) ([]domain.Booking, error) {
+	wantedLessons, wantedPersons := setOf(lessons), setOf(persons)
+	bookings := r.tx.state.bookings.filter(func(b domain.Booking) bool {
+		_, lessonOK := wantedLessons[b.LessonID]
+		_, personOK := wantedPersons[b.PersonID]
+
+		return lessonOK && personOK && !b.PersonID.IsZero()
+	})
+
+	return sorted(bookings, func(a, b domain.Booking) int {
+		return cmp.Or(a.BookedAt.Compare(b.BookedAt), compareID(a.ID, b.ID))
+	}), nil
+}
+
+func (r bookingRepo) DeleteByLessonAndSource(
+	_ context.Context, lesson domain.LessonID, source domain.BookingSource,
+) (int, error) {
+	s := &r.tx.state
+	if err := r.tx.checkWritable(); err != nil {
+		return 0, err
+	}
+
+	bookings := s.bookings.filter(func(b domain.Booking) bool { return b.LessonID == lesson && b.Source == source })
+	gone := make(map[domain.BookingID]bool, len(bookings))
+
+	for _, b := range bookings {
+		gone[b.ID] = true
+	}
+
+	for _, e := range s.bookingEvents.filter(func(e domain.BookingEvent) bool { return gone[e.BookingID] }) {
+		s.bookingEvents.delete(r.tx.gen, e.ID)
+	}
+
+	for _, b := range bookings {
+		s.bookings.delete(r.tx.gen, b.ID)
+	}
+
+	return len(bookings), nil
 }
 
 func (r bookingRepo) AddEvent(_ context.Context, e domain.BookingEvent) error {

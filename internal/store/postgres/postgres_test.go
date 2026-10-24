@@ -16,6 +16,7 @@ import (
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/ids"
+	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/storetest"
 )
@@ -24,6 +25,50 @@ func TestContract(t *testing.T) {
 	t.Parallel()
 
 	storetest.Run(t, func(t *testing.T) store.Store { return newTestStore(t) })
+}
+
+// TestLoadDemo loads the demo data, member bookings included, under the
+// constraints of the schema (`studio-schedule seed`).
+func TestLoadDemo(t *testing.T) {
+	t.Parallel()
+
+	st := newTestStore(t)
+	if err := seed.LoadDemo(t.Context(), st); err != nil {
+		t.Fatal(err)
+	}
+
+	want := seed.Demo()
+
+	var bookings, events int
+
+	err := st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		for _, l := range want.Lessons {
+			bs, err := tx.Bookings().ListByLesson(ctx, l.ID)
+			if err != nil {
+				return err
+			}
+
+			bookings += len(bs)
+
+			for _, b := range bs {
+				es, err := tx.Bookings().ListEvents(ctx, b.ID)
+				if err != nil {
+					return err
+				}
+
+				events += len(es)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if bookings != len(want.Bookings) || events != len(want.BookingEvents) || bookings == 0 {
+		t.Fatalf("%d bookings and %d events, want %d and %d", bookings, events, len(want.Bookings), len(want.BookingEvents))
+	}
 }
 
 func TestMigrationsRoundTrip(t *testing.T) {
@@ -421,8 +466,8 @@ func TestUniqueNamesMigration(t *testing.T) {
 	t.Cleanup(func() { _ = m.Close() })
 
 	for _, want := range []string{
-		"00010_booking_rules.sql", "00009_lesson_admin.sql", "00008_lesson_slots.sql",
-		"00007_course_type_unique_names.sql",
+		"00011_class_member_bookings.sql", "00010_booking_rules.sql", "00009_lesson_admin.sql",
+		"00008_lesson_slots.sql", "00007_course_type_unique_names.sql",
 		"00006_catalog_unique_names.sql",
 	} {
 		if res, err := m.Down(ctx); err != nil || res.Name != want {
@@ -488,7 +533,9 @@ func TestLessonSlotsMigration(t *testing.T) {
 
 	t.Cleanup(func() { _ = m.Close() })
 
-	for _, want := range []string{"00010_booking_rules.sql", "00009_lesson_admin.sql", "00008_lesson_slots.sql"} {
+	for _, want := range []string{
+		"00011_class_member_bookings.sql", "00010_booking_rules.sql", "00009_lesson_admin.sql", "00008_lesson_slots.sql",
+	} {
 		if res, err := m.Down(ctx); err != nil || res.Name != want {
 			t.Fatalf("down = %+v, %v; want %s rolled back", res, err, want)
 		}
