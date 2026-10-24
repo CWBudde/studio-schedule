@@ -218,9 +218,19 @@ func testWaitlist(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantSlice(e.t, got, nil)
 
 			got = mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.WaitlistEntry, error) {
-				return tx.Waitlist().ListByPersons(ctx, []domain.PersonID{ana.ID, bea.ID})
+				return tx.Waitlist().ListOpenByPersons(ctx, []domain.PersonID{ana.ID, bea.ID, newID[domain.PersonID](e)})
 			})
-			wantSlice(e.t, got, []domain.WaitlistEntry{ended, early, tie2, late})
+			wantSlice(e.t, got, []domain.WaitlistEntry{early, tie2, late})
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.WaitlistEntry, error) {
+				return tx.Waitlist().ListOpenByPersons(ctx, []domain.PersonID{cid.ID})
+			})
+			wantSlice(e.t, got, []domain.WaitlistEntry{tie1, invited})
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.WaitlistEntry, error) {
+				return tx.Waitlist().ListOpenByPersons(ctx, nil)
+			})
+			wantSlice(e.t, got, nil)
 		},
 		"ListDueLessons": func(e *env) {
 			s := e.setting()

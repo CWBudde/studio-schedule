@@ -823,6 +823,10 @@ func (r classRepo) ListByTerm(_ context.Context, term domain.TermID) ([]domain.C
 	}), nil
 }
 
+func (r classRepo) ListByIDs(_ context.Context, ids []domain.ClassID) ([]domain.Class, error) {
+	return sorted(byIDs(r.tx.state.classes.get, ids), func(a, b domain.Class) int { return compareID(a.ID, b.ID) }), nil
+}
+
 func (r classRepo) AddMember(_ context.Context, m domain.ClassMember) error {
 	s := &r.tx.state
 	if err := r.tx.checkWritable(); err != nil {
@@ -1001,6 +1005,12 @@ func (r lessonRepo) ListRange(_ context.Context, from, to time.Time) ([]domain.L
 	})
 
 	return sorted(lessons, func(a, b domain.Lesson) int {
+		return cmp.Or(a.StartsAt.Compare(b.StartsAt), compareID(a.ID, b.ID))
+	}), nil
+}
+
+func (r lessonRepo) ListByIDs(_ context.Context, ids []domain.LessonID) ([]domain.Lesson, error) {
+	return sorted(byIDs(r.tx.state.lessons.get, ids), func(a, b domain.Lesson) int {
 		return cmp.Or(a.StartsAt.Compare(b.StartsAt), compareID(a.ID, b.ID))
 	}), nil
 }
@@ -1193,6 +1203,50 @@ func (r bookingRepo) ListByLessonsAndPersons(
 	return sorted(bookings, func(a, b domain.Booking) int {
 		return cmp.Or(a.BookedAt.Compare(b.BookedAt), compareID(a.ID, b.ID))
 	}), nil
+}
+
+func (r bookingRepo) ListByPersons(_ context.Context, q store.BookingQuery) ([]domain.Booking, error) {
+	// Bounds get the precision of stored instants, as in PostgreSQL.
+	startsFrom, startsBefore := instant(q.StartsFrom), instant(q.StartsBefore)
+	endsAfter, endsBy := instant(q.EndsAfter), instant(q.EndsBy)
+	wanted := setOf(q.Persons)
+	lessons := map[domain.LessonID]domain.Lesson{}
+
+	bookings := r.tx.state.bookings.filter(func(b domain.Booking) bool {
+		if _, ok := wanted[b.PersonID]; !ok || b.PersonID.IsZero() || (q.Active && !active(b)) {
+			return false
+		}
+
+		l, ok := r.tx.state.lessons.get(b.LessonID)
+		if !ok {
+			return false
+		}
+
+		lessons[l.ID] = l
+
+		return (startsFrom.IsZero() || !l.StartsAt.Before(startsFrom)) &&
+			(startsBefore.IsZero() || l.StartsAt.Before(startsBefore)) &&
+			(endsAfter.IsZero() || l.EndsAt.After(endsAfter)) &&
+			(endsBy.IsZero() || !l.EndsAt.After(endsBy))
+	})
+
+	bookings = sorted(bookings, func(a, b domain.Booking) int {
+		c := cmp.Or(
+			lessons[a.LessonID].StartsAt.Compare(lessons[b.LessonID].StartsAt), compareID(a.LessonID, b.LessonID),
+			a.BookedAt.Compare(b.BookedAt), compareID(a.ID, b.ID),
+		)
+		if q.Desc {
+			return -c
+		}
+
+		return c
+	})
+
+	if q.Limit > 0 && len(bookings) > q.Limit {
+		bookings = bookings[:q.Limit]
+	}
+
+	return bookings, nil
 }
 
 func (r bookingRepo) DeleteByLessonAndSource(

@@ -100,13 +100,13 @@ func (r waitlistRepo) ListOpenByLessons(_ context.Context, lessons []domain.Less
 	}), byJoined), nil
 }
 
-func (r waitlistRepo) ListByPersons(_ context.Context, persons []domain.PersonID) ([]domain.WaitlistEntry, error) {
+func (r waitlistRepo) ListOpenByPersons(_ context.Context, persons []domain.PersonID) ([]domain.WaitlistEntry, error) {
 	wanted := setOf(persons)
 
 	return sorted(r.tx.state.waitlist.filter(func(e domain.WaitlistEntry) bool {
 		_, ok := wanted[e.PersonID]
 
-		return ok
+		return ok && e.Open()
 	}), byJoined), nil
 }
 

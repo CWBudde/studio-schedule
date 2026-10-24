@@ -55,6 +55,36 @@ SELECT * FROM bookings
 WHERE lesson_id = ANY(sqlc.arg(lessons)::uuid[]) AND person_id = ANY(sqlc.arg(persons)::uuid[])
 ORDER BY booked_at, id;
 
+-- ListBookingsByPersons and ListBookingsByPersonsDesc are one query in two
+-- directions (sqlc cannot parametrize ORDER BY): keep their WHERE clauses
+-- identical, and their orders each other's reverse.
+
+-- name: ListBookingsByPersons :many
+-- A NULL bound is left out, a NULL limit is none.
+SELECT b.* FROM bookings b
+JOIN lessons l ON l.id = b.lesson_id
+WHERE b.person_id = ANY(sqlc.arg(persons)::uuid[])
+    AND (NOT sqlc.arg(active_only)::boolean OR b.status <> 'canceled')
+    AND (sqlc.narg(starts_from)::timestamptz IS NULL OR l.starts_at >= sqlc.narg(starts_from))
+    AND (sqlc.narg(starts_before)::timestamptz IS NULL OR l.starts_at < sqlc.narg(starts_before))
+    AND (sqlc.narg(ends_after)::timestamptz IS NULL OR l.ends_at > sqlc.narg(ends_after))
+    AND (sqlc.narg(ends_by)::timestamptz IS NULL OR l.ends_at <= sqlc.narg(ends_by))
+ORDER BY l.starts_at, l.id, b.booked_at, b.id
+LIMIT sqlc.narg(max_rows)::integer;
+
+-- name: ListBookingsByPersonsDesc :many
+-- ListBookingsByPersons, newest first.
+SELECT b.* FROM bookings b
+JOIN lessons l ON l.id = b.lesson_id
+WHERE b.person_id = ANY(sqlc.arg(persons)::uuid[])
+    AND (NOT sqlc.arg(active_only)::boolean OR b.status <> 'canceled')
+    AND (sqlc.narg(starts_from)::timestamptz IS NULL OR l.starts_at >= sqlc.narg(starts_from))
+    AND (sqlc.narg(starts_before)::timestamptz IS NULL OR l.starts_at < sqlc.narg(starts_before))
+    AND (sqlc.narg(ends_after)::timestamptz IS NULL OR l.ends_at > sqlc.narg(ends_after))
+    AND (sqlc.narg(ends_by)::timestamptz IS NULL OR l.ends_at <= sqlc.narg(ends_by))
+ORDER BY l.starts_at DESC, l.id DESC, b.booked_at DESC, b.id DESC
+LIMIT sqlc.narg(max_rows)::integer;
+
 -- name: AddBookingEvent :exec
 INSERT INTO booking_events (id, booking_id, at, status, actor_account_id, note, late, override)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8);

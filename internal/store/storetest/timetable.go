@@ -88,6 +88,26 @@ func testTimetable(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			wantSlice(e.t, got, []domain.Class{sun, monEarly, monLate, monLate2, satEarly})
 		},
+		"ListByIDs": func(e *env) {
+			s := e.setting()
+			first := e.class(s, time.Saturday, domain.TimeOfDay{Hour: 9})
+			second := e.class(s, time.Monday, domain.TimeOfDay{Hour: 9})
+			e.class(s, time.Sunday, domain.TimeOfDay{Hour: 11}) // not asked for
+
+			list := func(ids ...domain.ClassID) []domain.Class {
+				e.t.Helper()
+
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Class, error) {
+					return tx.Classes().ListByIDs(ctx, ids)
+				})
+			}
+
+			// Each once, by ID (the sequence hands them out in order);
+			// unknown IDs are left out.
+			wantSlice(e.t, list(second.ID, newID[domain.ClassID](e), first.ID, second.ID),
+				[]domain.Class{first, second})
+			wantSlice(e.t, list(), nil)
+		},
 		"MissingReferenceIsConflict": func(e *env) {
 			s := e.setting()
 			for name, mutate := range map[string]func(*domain.Class){

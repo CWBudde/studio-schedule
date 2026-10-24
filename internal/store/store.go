@@ -324,6 +324,9 @@ type ClassRepo interface {
 	// ListByTerm returns the classes of a term ordered by weekday (Sunday
 	// first), start time and ID.
 	ListByTerm(ctx context.Context, term domain.TermID) ([]domain.Class, error)
+	// ListByIDs returns the classes with the given IDs, each once and
+	// ordered by ID. IDs that do not exist are left out.
+	ListByIDs(ctx context.Context, ids []domain.ClassID) ([]domain.Class, error)
 	// Lock returns the class and locks it until the transaction ends (in
 	// PostgreSQL: SELECT … FOR UPDATE). Class edits and lesson generation
 	// lock a class before they read or change its lessons, so they never
@@ -369,6 +372,9 @@ type LessonRepo interface {
 	// ListRange returns the lessons with from <= StartsAt < to, ordered by
 	// StartsAt and ID.
 	ListRange(ctx context.Context, from, to time.Time) ([]domain.Lesson, error)
+	// ListByIDs returns the lessons with the given IDs, each once and
+	// ordered by StartsAt and ID. IDs that do not exist are left out.
+	ListByIDs(ctx context.Context, ids []domain.LessonID) ([]domain.Lesson, error)
 	// ListByStaff returns the lessons with from <= StartsAt < to whose
 	// instructor or accompanist is one of the staff members, ordered by
 	// StartsAt and ID.
@@ -423,6 +429,12 @@ type BookingRepo interface {
 	ListByLessonsAndPersons(
 		ctx context.Context, lessons []domain.LessonID, persons []domain.PersonID,
 	) ([]domain.Booking, error)
+	// ListByPersons returns the bookings of q.Persons (only the active ones
+	// with q.Active) whose lessons lie within the bounds of q, ordered by
+	// the lesson's StartsAt and ID, so that the bookings of a lesson stay
+	// together, then by BookedAt and ID: all ascending, or all descending
+	// with q.Desc. A positive q.Limit caps how many it returns.
+	ListByPersons(ctx context.Context, q BookingQuery) ([]domain.Booking, error)
 	// DeleteByLessonAndSource deletes the bookings of a lesson that came
 	// about by source, canceled ones included, together with their events,
 	// and returns how many bookings it deleted. The office's timetable edits
@@ -435,6 +447,23 @@ type BookingRepo interface {
 	AddEvent(ctx context.Context, e domain.BookingEvent) error
 	// ListEvents returns the history of a booking ordered by At and ID.
 	ListEvents(ctx context.Context, booking domain.BookingID) ([]domain.BookingEvent, error)
+}
+
+// BookingQuery selects the bookings of persons by when their lessons take
+// place (BookingRepo.ListByPersons). A zero instant leaves its bound out.
+type BookingQuery struct {
+	Persons []domain.PersonID
+	// Active keeps the active (not canceled) bookings only.
+	Active bool
+	// StartsFrom <= the lesson's StartsAt < StartsBefore.
+	StartsFrom, StartsBefore time.Time
+	// EndsAfter < the lesson's EndsAt <= EndsBy: EndsAfter keeps the
+	// lessons not over at that instant, EndsBy those over by then.
+	EndsAfter, EndsBy time.Time
+	// Desc orders the newest lessons first.
+	Desc bool
+	// Limit, if positive, is the most bookings returned.
+	Limit int
 }
 
 // BookingCounts counts the active (not canceled) bookings of a lesson.
@@ -468,9 +497,9 @@ type WaitlistRepo interface {
 	// ListOpenByLessons returns the open (waiting or invited) entries of the
 	// given lessons, ordered by JoinedAt and ID.
 	ListOpenByLessons(ctx context.Context, lessons []domain.LessonID) ([]domain.WaitlistEntry, error)
-	// ListByPersons returns the entries of the given persons, ended ones
-	// included, ordered by JoinedAt and ID.
-	ListByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.WaitlistEntry, error)
+	// ListOpenByPersons returns the open (waiting or invited) entries of
+	// the given persons, ordered by JoinedAt and ID.
+	ListOpenByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.WaitlistEntry, error)
 	// ListDueLessons returns, each once and ordered by ID, the lessons that
 	// have an invited entry whose invite expired at or before now, or that
 	// started at or before now and still have an open entry: the work of the

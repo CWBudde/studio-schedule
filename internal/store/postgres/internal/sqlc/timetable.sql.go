@@ -188,6 +188,43 @@ func (q *Queries) ListClassMembers(ctx context.Context, classID pgtype.UUID) ([]
 	return items, nil
 }
 
+const listClassesByIDs = `-- name: ListClassesByIDs :many
+SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time, duration, capacity, retired FROM classes WHERE id = ANY($1::uuid[]) ORDER BY id
+`
+
+func (q *Queries) ListClassesByIDs(ctx context.Context, ids []pgtype.UUID) ([]Class, error) {
+	rows, err := q.db.Query(ctx, listClassesByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Class
+	for rows.Next() {
+		var i Class
+		if err := rows.Scan(
+			&i.ID,
+			&i.TermID,
+			&i.CourseTypeID,
+			&i.RoomID,
+			&i.InstructorID,
+			&i.AccompanistID,
+			&i.Level,
+			&i.Weekday,
+			&i.StartTime,
+			&i.Duration,
+			&i.Capacity,
+			&i.Retired,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listClassesByTerm = `-- name: ListClassesByTerm :many
 SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time, duration, capacity, retired FROM classes WHERE term_id = $1 ORDER BY weekday, start_time, id
 `

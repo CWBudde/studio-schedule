@@ -42,6 +42,9 @@ DELETE FROM classes WHERE id = $1;
 -- name: ListClassesByTerm :many
 SELECT * FROM classes WHERE term_id = $1 ORDER BY weekday, start_time, id;
 
+-- name: ListClassesByIDs :many
+SELECT * FROM classes WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY id;
+
 -- name: AddClassMember :exec
 INSERT INTO class_members (class_id, person_id, since, paused_until) VALUES ($1, $2, $3, $4);
 

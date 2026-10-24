@@ -25,9 +25,9 @@ SELECT * FROM waitlist_entries
 WHERE lesson_id = ANY(sqlc.arg(lessons)::uuid[]) AND status IN ('waiting', 'invited')
 ORDER BY joined_at, id;
 
--- name: ListWaitlistEntriesByPersons :many
+-- name: ListOpenWaitlistEntriesByPersons :many
 SELECT * FROM waitlist_entries
-WHERE person_id = ANY(sqlc.arg(persons)::uuid[])
+WHERE person_id = ANY(sqlc.arg(persons)::uuid[]) AND status IN ('waiting', 'invited')
 ORDER BY joined_at, id;
 
 -- name: ListDueWaitlistLessons :many

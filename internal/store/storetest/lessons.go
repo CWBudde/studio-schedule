@@ -3,6 +3,7 @@ package storetest
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -118,6 +119,26 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantSlice(e.t, list(third.ID, s.instructor.ID), []domain.Lesson{accompanied, both, own, foreign})
 
 			wantSlice(e.t, list(newID[domain.StaffID](e)), nil)
+			wantSlice(e.t, list(), nil)
+		},
+		"ListByIDs": func(e *env) {
+			s := e.setting()
+			late := e.lesson(s, t0.Add(time.Hour), 5)
+			tie2 := e.lesson(s, t0, 5)
+			tie1 := e.lesson(s, t0, 5)         // a later ID: after tie2
+			e.lesson(s, t0.Add(-time.Hour), 5) // not asked for
+
+			list := func(ids ...domain.LessonID) []domain.Lesson {
+				e.t.Helper()
+
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+					return tx.Lessons().ListByIDs(ctx, ids)
+				})
+			}
+
+			// Each once, by start and ID; unknown IDs are left out.
+			wantSlice(e.t, list(late.ID, tie1.ID, newID[domain.LessonID](e), tie2.ID, late.ID),
+				[]domain.Lesson{tie2, tie1, late})
 			wantSlice(e.t, list(), nil)
 		},
 		"ClassSlotIsUnique": func(e *env) {
@@ -596,6 +617,87 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 				[]domain.Booking{canceled, early, late})
 			wantSlice(e.t, list(nil, []domain.PersonID{me.ID}), nil)
 			wantSlice(e.t, list([]domain.LessonID{l1.ID}, nil), nil)
+		},
+		"ListByPersons": func(e *env) {
+			s := e.setting()
+			me, child, stranger := e.person("Mia", "Member"), e.person("Kim", "Member"), e.person("Sam", "Stranger")
+
+			// Lessons of an hour: early ends at t0, now (t0 + 30m) is
+			// within running, late starts at t0 + 2h.
+			early := e.lesson(s, t0.Add(-time.Hour), 5)
+			running := e.lesson(s, t0, 5)
+			parallel := e.lesson(s, t0, 5) // same start, a later ID
+			late := e.lesson(s, t0.Add(2*time.Hour), 5)
+			last := e.lesson(s, t0.Add(48*time.Hour), 5)
+
+			mine := e.booking(running, me, t0.Add(-3*time.Hour))
+			childsNow := e.booking(running, child, t0.Add(-2*time.Hour))
+			// Booked between the two of running, but listed after them: the
+			// bookings of a lesson stay together.
+			inParallel := e.booking(parallel, me, t0.Add(-150*time.Minute))
+			childsLate := e.booking(late, child, t0.Add(-4*time.Hour))
+			mineLate := e.booking(late, me, t0.Add(-4*time.Hour)) // same lesson and time: after it by ID
+			e.booking(running, stranger, t0.Add(-5*time.Hour))    // someone else's
+
+			// Canceled ones are included, as is a booking again after it.
+			canceled := e.booking(early, me, t0.Add(-6*time.Hour))
+			canceled.Status, canceled.CanceledAt = domain.BookingCanceled, t0.Add(-5*time.Hour)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Update(ctx, canceled) })
+			again := e.booking(early, me, t0.Add(-4*time.Hour))
+			final := e.booking(last, child, t0.Add(-time.Hour))
+
+			guest := domain.Booking{
+				ID: newID[domain.BookingID](e), LessonID: running.ID, GuestName: "Gina Guest",
+				Status: domain.BookingBooked, Source: domain.BookingSourceStaff, BookedAt: t0.Add(-time.Hour),
+			}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Create(ctx, guest) })
+
+			family := []domain.PersonID{me.ID, child.ID}
+			list := func(q store.BookingQuery) []domain.Booking {
+				e.t.Helper()
+
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Booking, error) {
+					return tx.Bookings().ListByPersons(ctx, q)
+				})
+			}
+
+			all := []domain.Booking{canceled, again, mine, childsNow, inParallel, childsLate, mineLate, final}
+			wantSlice(e.t, list(store.BookingQuery{Persons: family}), all)
+
+			reversed := slices.Clone(all)
+			slices.Reverse(reversed)
+			wantSlice(e.t, list(store.BookingQuery{Persons: family, Desc: true}), reversed)
+
+			// Start bounds are half-open: from t0 up to (not including)
+			// t0 + 48h.
+			wantSlice(e.t, list(store.BookingQuery{Persons: family, StartsFrom: t0, StartsBefore: t0.Add(48 * time.Hour)}),
+				[]domain.Booking{mine, childsNow, inParallel, childsLate, mineLate})
+			wantSlice(e.t, list(store.BookingQuery{
+				Persons: family, StartsFrom: t0.Add(-time.Hour).Add(time.Microsecond), StartsBefore: t0,
+			}), nil)
+
+			// The lessons not over at t0 + 30m, and those over by t0 (early
+			// ends exactly then).
+			wantSlice(e.t, list(store.BookingQuery{Persons: family, EndsAfter: t0.Add(30 * time.Minute)}),
+				[]domain.Booking{mine, childsNow, inParallel, childsLate, mineLate, final})
+			wantSlice(e.t, list(store.BookingQuery{Persons: family, EndsAfter: t0.Add(time.Hour)}),
+				[]domain.Booking{childsLate, mineLate, final})
+			wantSlice(e.t, list(store.BookingQuery{Persons: family, EndsBy: t0}), []domain.Booking{canceled, again})
+			wantSlice(e.t, list(store.BookingQuery{Persons: family, EndsBy: t0.Add(-time.Microsecond)}), nil)
+
+			// The limit cuts after the order, both ways.
+			wantSlice(e.t, list(store.BookingQuery{Persons: family, Limit: 3}), []domain.Booking{canceled, again, mine})
+			wantSlice(e.t, list(store.BookingQuery{Persons: family, Desc: true, Limit: 2, StartsBefore: t0}),
+				[]domain.Booking{again, canceled})
+
+			// Active leaves the canceled ones out.
+			wantSlice(e.t, list(store.BookingQuery{Persons: family, Active: true}), all[1:])
+			wantSlice(e.t, list(store.BookingQuery{Persons: family, Active: true, Desc: true, StartsBefore: t0}),
+				[]domain.Booking{again})
+
+			wantSlice(e.t, list(store.BookingQuery{Persons: []domain.PersonID{child.ID}, EndsBy: t0.Add(time.Hour)}),
+				[]domain.Booking{childsNow})
+			wantSlice(e.t, list(store.BookingQuery{}), nil)
 		},
 		"DeleteByLessonAndSource": func(e *env) {
 			s := e.setting()

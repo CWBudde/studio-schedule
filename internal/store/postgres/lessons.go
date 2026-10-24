@@ -125,6 +125,12 @@ func (r lessonRepo) ListRange(ctx context.Context, from, to time.Time) ([]domain
 	return convertRows(rows, err, toLesson)
 }
 
+func (r lessonRepo) ListByIDs(ctx context.Context, ids []domain.LessonID) ([]domain.Lesson, error) {
+	rows, err := r.q.ListLessonsByIDs(ctx, pgIDs(ids))
+
+	return convertRows(rows, err, toLesson)
+}
+
 func (r lessonRepo) ListByStaff(
 	ctx context.Context, staff []domain.StaffID, from, to time.Time,
 ) ([]domain.Lesson, error) {
@@ -287,6 +293,28 @@ func (r bookingRepo) ListByLessonsAndPersons(
 	rows, err := r.q.ListBookingsByLessonsAndPersons(ctx, sqlc.ListBookingsByLessonsAndPersonsParams{
 		Lessons: pgIDs(lessons), Persons: pgIDs(persons),
 	})
+
+	return convertRows(rows, err, toBooking)
+}
+
+func (r bookingRepo) ListByPersons(ctx context.Context, q store.BookingQuery) ([]domain.Booking, error) {
+	var limit pgtype.Int4
+	if q.Limit > 0 {
+		limit = pgtype.Int4{Int32: rowLimit(q.Limit), Valid: true}
+	}
+
+	args := sqlc.ListBookingsByPersonsParams{
+		Persons: pgIDs(q.Persons), ActiveOnly: q.Active, StartsFrom: pgInstant(q.StartsFrom), StartsBefore: pgInstant(q.StartsBefore),
+		EndsAfter: pgInstant(q.EndsAfter), EndsBy: pgInstant(q.EndsBy), MaxRows: limit,
+	}
+
+	if q.Desc {
+		rows, err := r.q.ListBookingsByPersonsDesc(ctx, sqlc.ListBookingsByPersonsDescParams(args))
+
+		return convertRows(rows, err, toBooking)
+	}
+
+	rows, err := r.q.ListBookingsByPersons(ctx, args)
 
 	return convertRows(rows, err, toBooking)
 }

@@ -158,12 +158,14 @@ func (q *Queries) ListOpenWaitlistEntriesByLessons(ctx context.Context, lessons 
 	return items, nil
 }
 
-const listWaitlistEntriesByLesson = `-- name: ListWaitlistEntriesByLesson :many
-SELECT id, lesson_id, person_id, status, joined_at, stay_on_list, joined_by, invite_token_hash, invited_at, expires_at FROM waitlist_entries WHERE lesson_id = $1 ORDER BY joined_at, id
+const listOpenWaitlistEntriesByPersons = `-- name: ListOpenWaitlistEntriesByPersons :many
+SELECT id, lesson_id, person_id, status, joined_at, stay_on_list, joined_by, invite_token_hash, invited_at, expires_at FROM waitlist_entries
+WHERE person_id = ANY($1::uuid[]) AND status IN ('waiting', 'invited')
+ORDER BY joined_at, id
 `
 
-func (q *Queries) ListWaitlistEntriesByLesson(ctx context.Context, lessonID pgtype.UUID) ([]WaitlistEntry, error) {
-	rows, err := q.db.Query(ctx, listWaitlistEntriesByLesson, lessonID)
+func (q *Queries) ListOpenWaitlistEntriesByPersons(ctx context.Context, persons []pgtype.UUID) ([]WaitlistEntry, error) {
+	rows, err := q.db.Query(ctx, listOpenWaitlistEntriesByPersons, persons)
 	if err != nil {
 		return nil, err
 	}
@@ -193,14 +195,12 @@ func (q *Queries) ListWaitlistEntriesByLesson(ctx context.Context, lessonID pgty
 	return items, nil
 }
 
-const listWaitlistEntriesByPersons = `-- name: ListWaitlistEntriesByPersons :many
-SELECT id, lesson_id, person_id, status, joined_at, stay_on_list, joined_by, invite_token_hash, invited_at, expires_at FROM waitlist_entries
-WHERE person_id = ANY($1::uuid[])
-ORDER BY joined_at, id
+const listWaitlistEntriesByLesson = `-- name: ListWaitlistEntriesByLesson :many
+SELECT id, lesson_id, person_id, status, joined_at, stay_on_list, joined_by, invite_token_hash, invited_at, expires_at FROM waitlist_entries WHERE lesson_id = $1 ORDER BY joined_at, id
 `
 
-func (q *Queries) ListWaitlistEntriesByPersons(ctx context.Context, persons []pgtype.UUID) ([]WaitlistEntry, error) {
-	rows, err := q.db.Query(ctx, listWaitlistEntriesByPersons, persons)
+func (q *Queries) ListWaitlistEntriesByLesson(ctx context.Context, lessonID pgtype.UUID) ([]WaitlistEntry, error) {
+	rows, err := q.db.Query(ctx, listWaitlistEntriesByLesson, lessonID)
 	if err != nil {
 		return nil, err
 	}

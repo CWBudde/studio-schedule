@@ -398,6 +398,144 @@ func (q *Queries) ListBookingsByLessonsAndPersons(ctx context.Context, arg ListB
 	return items, nil
 }
 
+const listBookingsByPersons = `-- name: ListBookingsByPersons :many
+
+SELECT b.id, b.lesson_id, b.person_id, b.guest_name, b.guest_email, b.status, b.trial, b.prepaid, b.booked_at, b.canceled_at, b.source, b.late, b.released, b.trial_note FROM bookings b
+JOIN lessons l ON l.id = b.lesson_id
+WHERE b.person_id = ANY($1::uuid[])
+    AND (NOT $2::boolean OR b.status <> 'canceled')
+    AND ($3::timestamptz IS NULL OR l.starts_at >= $3)
+    AND ($4::timestamptz IS NULL OR l.starts_at < $4)
+    AND ($5::timestamptz IS NULL OR l.ends_at > $5)
+    AND ($6::timestamptz IS NULL OR l.ends_at <= $6)
+ORDER BY l.starts_at, l.id, b.booked_at, b.id
+LIMIT $7::integer
+`
+
+type ListBookingsByPersonsParams struct {
+	Persons      []pgtype.UUID
+	ActiveOnly   bool
+	StartsFrom   pgtype.Timestamptz
+	StartsBefore pgtype.Timestamptz
+	EndsAfter    pgtype.Timestamptz
+	EndsBy       pgtype.Timestamptz
+	MaxRows      pgtype.Int4
+}
+
+// ListBookingsByPersons and ListBookingsByPersonsDesc are one query in two
+// directions (sqlc cannot parametrize ORDER BY): keep their WHERE clauses
+// identical, and their orders each other's reverse.
+// A NULL bound is left out, a NULL limit is none.
+func (q *Queries) ListBookingsByPersons(ctx context.Context, arg ListBookingsByPersonsParams) ([]Booking, error) {
+	rows, err := q.db.Query(ctx, listBookingsByPersons,
+		arg.Persons,
+		arg.ActiveOnly,
+		arg.StartsFrom,
+		arg.StartsBefore,
+		arg.EndsAfter,
+		arg.EndsBy,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Booking
+	for rows.Next() {
+		var i Booking
+		if err := rows.Scan(
+			&i.ID,
+			&i.LessonID,
+			&i.PersonID,
+			&i.GuestName,
+			&i.GuestEmail,
+			&i.Status,
+			&i.Trial,
+			&i.Prepaid,
+			&i.BookedAt,
+			&i.CanceledAt,
+			&i.Source,
+			&i.Late,
+			&i.Released,
+			&i.TrialNote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBookingsByPersonsDesc = `-- name: ListBookingsByPersonsDesc :many
+SELECT b.id, b.lesson_id, b.person_id, b.guest_name, b.guest_email, b.status, b.trial, b.prepaid, b.booked_at, b.canceled_at, b.source, b.late, b.released, b.trial_note FROM bookings b
+JOIN lessons l ON l.id = b.lesson_id
+WHERE b.person_id = ANY($1::uuid[])
+    AND (NOT $2::boolean OR b.status <> 'canceled')
+    AND ($3::timestamptz IS NULL OR l.starts_at >= $3)
+    AND ($4::timestamptz IS NULL OR l.starts_at < $4)
+    AND ($5::timestamptz IS NULL OR l.ends_at > $5)
+    AND ($6::timestamptz IS NULL OR l.ends_at <= $6)
+ORDER BY l.starts_at DESC, l.id DESC, b.booked_at DESC, b.id DESC
+LIMIT $7::integer
+`
+
+type ListBookingsByPersonsDescParams struct {
+	Persons      []pgtype.UUID
+	ActiveOnly   bool
+	StartsFrom   pgtype.Timestamptz
+	StartsBefore pgtype.Timestamptz
+	EndsAfter    pgtype.Timestamptz
+	EndsBy       pgtype.Timestamptz
+	MaxRows      pgtype.Int4
+}
+
+// ListBookingsByPersons, newest first.
+func (q *Queries) ListBookingsByPersonsDesc(ctx context.Context, arg ListBookingsByPersonsDescParams) ([]Booking, error) {
+	rows, err := q.db.Query(ctx, listBookingsByPersonsDesc,
+		arg.Persons,
+		arg.ActiveOnly,
+		arg.StartsFrom,
+		arg.StartsBefore,
+		arg.EndsAfter,
+		arg.EndsBy,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Booking
+	for rows.Next() {
+		var i Booking
+		if err := rows.Scan(
+			&i.ID,
+			&i.LessonID,
+			&i.PersonID,
+			&i.GuestName,
+			&i.GuestEmail,
+			&i.Status,
+			&i.Trial,
+			&i.Prepaid,
+			&i.BookedAt,
+			&i.CanceledAt,
+			&i.Source,
+			&i.Late,
+			&i.Released,
+			&i.TrialNote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateBooking = `-- name: UpdateBooking :execrows
 UPDATE bookings
 SET lesson_id = $2, person_id = $3, guest_name = $4, guest_email = $5, status = $6, source = $7, trial = $8,

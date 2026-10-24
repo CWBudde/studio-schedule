@@ -166,6 +166,12 @@ func (r classRepo) ListByTerm(ctx context.Context, term domain.TermID) ([]domain
 	return convertRows(rows, err, toClass)
 }
 
+func (r classRepo) ListByIDs(ctx context.Context, ids []domain.ClassID) ([]domain.Class, error) {
+	rows, err := r.q.ListClassesByIDs(ctx, pgIDs(ids))
+
+	return convertRows(rows, err, toClass)
+}
+
 func (r classRepo) AddMember(ctx context.Context, m domain.ClassMember) error {
 	return mapErr(r.q.AddClassMember(ctx, sqlc.AddClassMemberParams{
 		ClassID: pgID(m.ClassID), PersonID: pgID(m.PersonID), Since: pgDate(m.Since), PausedUntil: pgDate(m.PausedUntil),
