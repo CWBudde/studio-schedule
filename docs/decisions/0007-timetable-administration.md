@@ -159,13 +159,29 @@ an `office` operation; instructors get no write access (they are notified from P
   generation would create it again. A one-off lesson can be deleted while it has not started (422
   on `path.lessonId`, as for an edit) and no booking refers to it, canceled ones included (409
   `in-use` otherwise).
-- _Cloning_ (decided now, built later). The office copies the scheduled lessons of a day or a
-  Monday-based week to another future date or week whose lessons have not started, in any term.
-  Copies are one-off lessons that keep kind and visibility and never take bookings along. A source
-  lesson is skipped when its class has a slot in the target week within its term (generation
-  covers it), and when its room is taken there (room overlap as above). A preview lists every
-  skipped lesson with the reason before anything is created. Cloned regular lessons follow the
-  release window like any regular lesson.
+- _Cloning._ The office copies the scheduled lessons of a school day or a Monday-based week to
+  another day or week, in any term (`previewLessonClone`, `cloneLessons`). A week's source and
+  target are Mondays; the target differs from the source and does not lie before today (for a week:
+  its Monday, so the current week is refused unless today is Monday), each a 422 on the field. The
+  source may lie in the past. Copies are one-off lessons (no class, not detached) at the same
+  school-local wall-clock time, so 17:00 stays 17:00 across a DST change, with the course type,
+  room, staff, length, capacity, kind and visibility of the source; never bookings, never a
+  cancellation. Canceled source lessons are left out. A source lesson is skipped, in this order, as
+  `class-slot` when its class (not retired) has a slot in the target week within its term
+  (generation covers it, whether or not it has run), as `started` when the copy would not start in
+  the future (a target of today), as `staff-inactive` when its instructor or accompanist is no
+  longer active (former staff; creating or editing a lesson does not check this), and as
+  `room-taken` when another lesson that is not canceled, a lesson that generation will create for a
+  class (not retired, a slot within its term that has not started, no lesson of the class in that
+  week yet, e.g. beyond the horizon), or an earlier copy of the same clone (in the order of the
+  source lessons) uses the room at an overlapping time, naming that lesson like the 409 (a copy
+  without its ID in a preview, with `copyOf`, its source; a lesson not generated yet without ID and
+  `copyOf`, with its `classId`). Generation does not check rooms, so a copy must not take a room a
+  class will fill. So the same clone applied twice creates nothing the second time. The preview
+  lists the copies and every skipped lesson with its reason; the clone recomputes it in one
+  transaction, locking the terms and classes it reads in generation's order (all terms first, then
+  their classes), and only adds lessons. Nobody is mailed. Cloned regular lessons follow the release
+  window like any regular lesson.
 
 **Concurrency.** The last write wins. There is no `If-Match` or version column: the office is a
 few people, and a stale form overwrites at most what the same person could have changed.

@@ -409,7 +409,7 @@ Goal: people can sign up and log in; staff can maintain the timetable.
         service, HTTP, component and e2e tests (`admin.spec.ts`, desktop and mobile); the
         glossary has duplicate, slot date and follow, the architecture notes how class and term
         edits fill lessons, ADR 0007 has the term and member rules
-- [ ] Lesson administration: edit, cancel (notifies booked participants), hide, add one-off/special
+- [x] Lesson administration: edit, cancel (notifies booked participants), hide, add one-off/special
       lessons, clone day, clone week. Builds on the class-to-lesson sync of Admin CRUD
   - [x] ADR 0007 (extended): an individually edited lesson is detached from its class, so neither
         class edits nor generation touch it again; generated lessons are canceled, never deleted
@@ -440,21 +440,26 @@ Goal: people can sign up and log in; staff can maintain the timetable.
         staff, time, capacity, visibility; published early per ADR 0003; delete while unbooked
         (2026-10-24) — `createLesson`, `deleteLesson` (409 `generated` for a class lesson, `in-use`
         while booked); "New lesson" in the schedule toolbar; e2e in `lesson-admin.spec.ts`
-  - [ ] Clone day and clone week: pick source and target, preview what would be created and what
+  - [x] Clone day and clone week: pick source and target, preview what would be created and what
         is skipped (same room and time taken), then apply in one transaction; only adds, never
-        deletes; lessons keep their wall-clock time across DST
-  - [ ] Tests: cancellation mail golden files, clone across a DST change, generation leaves
+        deletes; lessons keep their wall-clock time across DST (2026-10-24) — `previewLessonClone`
+        and `cloneLessons` (`service/lesson_clone.go`); skips `class-slot`, `started`,
+        `staff-inactive` and `room-taken` (also by a class lesson generation will create, or by
+        another copy); "Clone…" in the schedule toolbar with preview and result; e2e in
+        `lesson-admin.spec.ts`
+  - [x] Tests: cancellation mail golden files, clone across a DST change, generation leaves
         detached and moved lessons alone, e2e "office cancels a lesson and it shows as canceled"
         (2026-10-24) — partial: golden files, `TestUpdateLesson` (generation and class sync leave
-        detached lessons alone) and the cancel e2e exist; the clone DST test remains; the demo has
-        no bookings yet, so the e2e cannot show the cancellation mail (Phase 4)
-- [ ] UI: login, registration, confirm, reset; profile (person data, dependents, password, language);
+        detached lessons alone) and the cancel e2e exist; `TestCloneDay` clones across the October
+        DST change; the demo has no bookings yet, so no e2e shows the cancellation mail (Phase 4)
+- [x] UI: login, registration, confirm, reset; profile (person data, dependents, password, language);
       admin area with shadcn data tables and forms (react-hook-form + zod, schemas derived from the
       OpenAPI types) (2026-10-23) — partial: login, registration and confirm pages, the signed-in
       header, the admin account list (`/admin/accounts`, with "sign in as"), the reset pages and the
       account settings for password and email, the profile's person data, dependents and
       language, and the `/admin` layout with locations and rooms, staff and course types are done;
-      the rest of the admin area remains
+      the rest of the admin area remains; (2026-10-24) the admin area is complete with the audit
+      log and the lesson administration in the schedule
   - [x] Profile: person data card on `/account` (name, phone, birth date) using `getMyFamily`
         (2026-10-23) — `ProfileCard`; the header's name follows a change; editable while
         impersonating
@@ -467,11 +472,12 @@ Goal: people can sign up and log in; staff can maintain the timetable.
         the UI switches to it after sign-in (2026-10-23) — `accounts.locale` (migration 00005),
         `updateLocale` and `me.locale`; mails use the account's language, then the request's, then
         the school's; login and email confirmation switch the UI (e2e)
-  - [ ] Admin area: covered by the subtasks of Admin CRUD and Lesson administration; the audit log
+  - [x] Admin area: covered by the subtasks of Admin CRUD and Lesson administration; the audit log
         page (`/admin/audit`, admins) lists `audit_events` (2026-10-24) — partial: `/admin/audit`
         (`listAuditEvents`, admin) lists the latest 200 events with actor and account resolved in
         two queries (`Accounts().ListByIDs`, `Persons().ListByIDs`) and a client-side search;
-        e2e in `admin.spec.ts`; Lesson administration remains
+        e2e in `admin.spec.ts`; the lesson actions live in the schedule's lesson sheet and toolbar
+        (Lesson administration)
 - [x] Demo: login page lists demo accounts per role (member, instructor, office, admin)
       (2026-10-23) — `GET /api/v1/demo/logins` in demo installations (WASM demo, `serve` without a
       database); one click signs in
