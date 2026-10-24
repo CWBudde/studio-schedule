@@ -345,7 +345,7 @@ func (s *LessonService) mailRecipients(
 		return err
 	}
 
-	return sendMails(ctx, tx, s.ids, s.mails, settings, now, recipients, template, func(r recipient) any {
+	return sendMails(ctx, tx, s.ids, s.mails, settings, now, recipients, template, mailOpts{}, func(r recipient) any {
 		return data(mail.LessonData{
 			SchoolName: settings.SchoolName, GivenName: r.givenName, Participants: r.participants,
 			CourseType: ct.Name, StartsAt: l.StartsAt.In(loc), EndsAt: l.EndsAt.In(loc),

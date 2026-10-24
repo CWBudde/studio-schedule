@@ -44,6 +44,7 @@ var dateFormats = map[string]dateFormat{
 //     e.g. "Tuesday, 27 October 2026" or "Dienstag, 27. Oktober 2026".
 //   - clock formats its time of day, e.g. "18:00".
 //   - join joins names with ", ".
+//   - lines splits a text into its lines, for line breaks in HTML.
 func funcs(locale string) map[string]any {
 	f, ok := dateFormats[locale]
 
@@ -57,5 +58,6 @@ func funcs(locale string) map[string]any {
 		},
 		"clock": func(t time.Time) string { return t.Format("15:04") },
 		"join":  func(names []string) string { return strings.Join(names, ", ") },
+		"lines": func(text string) []string { return strings.Split(text, "\n") },
 	}
 }

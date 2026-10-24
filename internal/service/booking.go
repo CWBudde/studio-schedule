@@ -855,7 +855,7 @@ func mailBookings(
 		})
 	}
 
-	return sendMails(ctx, tx, src, mails, settings, now, recipients, template, func(r recipient) any {
+	return sendMails(ctx, tx, src, mails, settings, now, recipients, template, mailOpts{}, func(r recipient) any {
 		return mail.BookingData{
 			SchoolName: settings.SchoolName, GivenName: r.givenName, Participant: participant, Guest: r.guest,
 			Lessons: lessons,

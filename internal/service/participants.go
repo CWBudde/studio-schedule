@@ -63,20 +63,53 @@ func manages(ctx context.Context, tx store.Tx, p Principal, l domain.Lesson) err
 		return nil
 	}
 
-	if p.Role.Staff() && !p.PersonID.IsZero() {
-		staff, err := tx.Staff().ListByPerson(ctx, p.PersonID)
+	if p.Role.Staff() {
+		own, err := ownStaff(ctx, tx, p.PersonID)
 		if err != nil {
 			return err
 		}
 
-		if slices.ContainsFunc(staff, func(s domain.Staff) bool {
-			return s.Active && (s.ID == l.InstructorID || s.ID == l.AccompanistID)
-		}) {
+		if _, role := roleIn(l, own); role != TeachOffice {
 			return nil
 		}
 	}
 
 	return fmt.Errorf("%w: lesson %v", domain.ErrNotFound, l.ID)
+}
+
+// ownStaff returns the active staff records linked to person (none for a
+// zero person), ordered like StaffRepo.List: whose lessons the person's
+// account teaches or accompanies.
+func ownStaff(ctx context.Context, tx store.Tx, person domain.PersonID) ([]domain.Staff, error) {
+	if person.IsZero() {
+		return nil, nil
+	}
+
+	staff, err := tx.Staff().ListByPerson(ctx, person)
+	if err != nil {
+		return nil, err
+	}
+
+	return slices.DeleteFunc(staff, func(s domain.Staff) bool { return !s.Active }), nil
+}
+
+// roleIn returns the part of the staff records own in lesson l, with the
+// record: its instructor, else its accompanist, else TeachOffice (none of
+// them; a zero record).
+func roleIn(l domain.Lesson, own []domain.Staff) (domain.Staff, TeachRole) {
+	for _, s := range own {
+		if s.ID == l.InstructorID {
+			return s, TeachInstructor
+		}
+	}
+
+	for _, s := range own {
+		if !l.AccompanistID.IsZero() && s.ID == l.AccompanistID {
+			return s, TeachAccompanist
+		}
+	}
+
+	return domain.Staff{}, TeachOffice
 }
 
 // dayOverAt is when the attendance window of lesson l ends for its

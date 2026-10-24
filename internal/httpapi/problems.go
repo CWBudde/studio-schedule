@@ -41,6 +41,33 @@ type Conflict struct {
 	Why    string          `doc:"Why the lesson cannot be booked; only with reason closed. cutoff: the booking cutoff before the start has passed; release: members may not book the lesson yet, or at all (staff book under member rules); canceled: the school canceled the lesson; started: the lesson has started or is over." enum:"cutoff,release,canceled,started" json:"why,omitempty"`
 }
 
+// Reasons of an Invalid request (ADR 0009, amendment).
+const (
+	reasonNotStarted = "not-started"
+	reasonDayOver    = "day-over"
+)
+
+// Invalid is the problem document of a 422 about the state of the target
+// rather than the request body, which the UI can explain without its own
+// clock: Reason says why. A 422 about the body has no reason.
+type Invalid struct {
+	huma.ErrorModel
+
+	Reason string `doc:"Why the target cannot be changed now; absent for a 422 about the request body. not-started: the lesson has not started, so attendance cannot be taken yet; day-over: the lesson's school day is over, so its instructor and accompanist no longer change its participants (the office does)." enum:"not-started,day-over" json:"reason,omitempty"`
+}
+
+// invalid is the 422 Invalid with reason, its message located at the path
+// parameter at.
+func invalid(reason, msg, at string) *Invalid {
+	return &Invalid{
+		ErrorModel: huma.ErrorModel{
+			Title: http.StatusText(http.StatusUnprocessableEntity), Status: http.StatusUnprocessableEntity,
+			Detail: "validation failed", Errors: []*huma.ErrorDetail{{Message: msg, Location: at}},
+		},
+		Reason: reason,
+	}
+}
+
 // ConflictLesson names the lesson of a room-taken conflict.
 type ConflictLesson struct {
 	ID         domain.LessonID `doc:"Lesson ID."          json:"id"`
@@ -61,20 +88,29 @@ func conflict(reason, detail string) *Conflict {
 // error as the default response, which Huma would otherwise drop once an
 // operation lists a response of its own.
 func withConflict(api huma.API, op huma.Operation) huma.Operation {
-	registry := api.OpenAPI().Components.Schemas
-	problem := func(t reflect.Type, description string) *huma.Response {
-		return &huma.Response{
-			Description: description,
-			Content: map[string]*huma.MediaType{
-				"application/problem+json": {Schema: registry.Schema(t, true, t.Name())},
-			},
-		}
-	}
-
 	op.Responses = map[string]*huma.Response{
-		"409":     problem(reflect.TypeFor[Conflict](), http.StatusText(http.StatusConflict)),
-		"default": problem(reflect.TypeFor[huma.ErrorModel](), "Error"),
+		"409":     problem(api, reflect.TypeFor[Conflict](), http.StatusText(http.StatusConflict)),
+		"default": problem(api, reflect.TypeFor[huma.ErrorModel](), "Error"),
 	}
 
 	return op
+}
+
+// withInvalid documents the Invalid of an operation as its 422, on top of
+// withConflict.
+func withInvalid(api huma.API, op huma.Operation) huma.Operation {
+	op = withConflict(api, op)
+	op.Responses["422"] = problem(api, reflect.TypeFor[Invalid](), http.StatusText(http.StatusUnprocessableEntity))
+
+	return op
+}
+
+// problem is a problem+json response with the schema of t.
+func problem(api huma.API, t reflect.Type, description string) *huma.Response {
+	return &huma.Response{
+		Description: description,
+		Content: map[string]*huma.MediaType{
+			"application/problem+json": {Schema: api.OpenAPI().Components.Schemas.Schema(t, true, t.Name())},
+		},
+	}
 }

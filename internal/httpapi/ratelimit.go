@@ -124,11 +124,15 @@ func forget(l *ratelimit.Limiter, key string) {
 	}
 }
 
-func tooManyRequests(retry time.Duration) error {
+func tooManyRequests(retry time.Duration) error { return tooMany("attempts", retry) }
+
+// tooMany is the 429 for too many of what, with the seconds until the next
+// is allowed, at least 1, as Retry-After.
+func tooMany(what string, retry time.Duration) error {
 	secs := strconv.Itoa(max(1, int((retry+time.Second-1)/time.Second)))
 
 	return huma.ErrorWithHeaders(
-		huma.Error429TooManyRequests("too many attempts; try again in "+secs+" seconds"),
+		huma.Error429TooManyRequests("too many "+what+"; try again in "+secs+" seconds"),
 		http.Header{"Retry-After": []string{secs}},
 	)
 }

@@ -24,7 +24,7 @@ func registerParticipants(api huma.API, h *handlers) {
 			op.Method = http.MethodPost
 		}
 
-		return withConflict(api, op)
+		return withInvalid(api, op)
 	}
 
 	register(api, AccessStaff, huma.Operation{
@@ -47,7 +47,7 @@ func registerParticipants(api huma.API, h *handlers) {
 			"lesson as staff (source `staff`), optionally as a `trial` with a `trialNote`. Unlike " +
 			"`bookLesson`, the release window and the booking cutoff do not apply, and the lesson may have " +
 			"started: instructors and accompanists add until the end of the lesson's school day (afterwards " +
-			"a 422 on `path.lessonId`), the office at any time. A lesson the school canceled is a 409 " +
+			"a 422 on `path.lessonId` with reason `day-over`), the office at any time. A lesson the school canceled is a 409 " +
 			"`closed` with why `canceled`. A person booked already is a 409 `already-booked`; a lesson whose " +
 			"active bookings and the places held by others' waiting-list invites fill its capacity a 409 " +
 			"`full`, unless `confirmOverCapacity` is set (the booking event records the override). A person " +
@@ -66,7 +66,7 @@ func registerParticipants(api huma.API, h *handlers) {
 		Summary:     "Mark a participant's trial",
 		Description: "Sets whether an active booking is a trial, and its note for the instructor (a note " +
 			"without `trial` is a 422 on `body.trialNote`). Same access and time window as " +
-			"`addLessonParticipant` (a 422 on `path.bookingId` once the day is over for instructors); a " +
+			"`addLessonParticipant` (a 422 on `path.bookingId` with reason `day-over` once the day is over for instructors); a " +
 			"canceled booking is a 409 `already-canceled`.",
 	}), h.updateLessonParticipant)
 
@@ -77,7 +77,7 @@ func registerParticipants(api huma.API, h *handlers) {
 		Description: "Cancels a booking of the lesson as staff: never late, and a person's date is released, so " +
 			"a later change of their class membership does not book them into it again. Its place goes to the " +
 			"waiting list. After the start too (a walk-in added by mistake), until the end of the lesson's " +
-			"school day for instructors and accompanists (afterwards a 422 on `path.bookingId`), at any time " +
+			"school day for instructors and accompanists (afterwards a 422 on `path.bookingId` with reason `day-over`), at any time " +
 			"for the office, and on a lesson the school canceled. Before the start of a lesson that takes " +
 			"place, the participant's mail recipients get the cancellation; for a canceled lesson nobody is " +
 			"mailed or invited. A canceled booking is a 409 `already-canceled`; a booking of a lesson of " +
@@ -89,8 +89,8 @@ func registerParticipants(api huma.API, h *handlers) {
 		Path:        BasePath + "/bookings/{bookingId}/attendance",
 		Summary:     "Take attendance",
 		Description: "Sets an active booking to `attended`, `no_show` or back to `booked` (unknown). From the " +
-			"lesson's start on (before it a 422 on `path.bookingId`), until the end of its school day for " +
-			"instructors and accompanists (afterwards a 422 on `path.bookingId`), at any time after the start " +
+			"lesson's start on (before it a 422 on `path.bookingId` with reason `not-started`), until the end of its school day for " +
+			"instructors and accompanists (afterwards a 422 on `path.bookingId` with reason `day-over`), at any time after the start " +
 			"for the office. Each change adds a booking event. A canceled booking is a 409 " +
 			"`already-canceled`, a lesson the school canceled a 409 `closed` with why `canceled`.",
 	}), h.setAttendance)
@@ -100,7 +100,7 @@ func registerParticipants(api huma.API, h *handlers) {
 		Path:        BasePath + "/lessons/{lessonId}/attendance/all",
 		Summary:     "Mark everyone attended",
 		Description: "Sets every booking of the lesson whose attendance is unknown (`booked`) to `attended`, " +
-			"under the rules of `setAttendance` (the 422s on `path.lessonId`), and returns the bookings it " +
+			"under the rules of `setAttendance` (the 422s on `path.lessonId` with reason `not-started` or `day-over`), and returns the bookings it " +
 			"changed.",
 	}), h.markAllAttended)
 
@@ -463,18 +463,15 @@ func staffBookingBody(b domain.Booking) StaffBooking {
 }
 
 // participantError maps the errors of the staff actions: the end of the
-// instructors' window and attendance before the start to a 422 at the path
-// parameter at, the rest like bookingError.
+// instructors' window and attendance before the start to a 422 Invalid at
+// the path parameter at with reason day-over or not-started, the rest like
+// bookingError.
 func (h *handlers) participantError(ctx context.Context, err error, at string) error {
 	switch {
 	case errors.Is(err, service.ErrDayOver):
-		return huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
-			Message: "the lesson's day is over; the office changes it now", Location: at,
-		})
+		return invalid(reasonDayOver, "the lesson's day is over; the office changes it now", at)
 	case errors.Is(err, service.ErrLessonNotStarted):
-		return huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
-			Message: "the lesson has not started", Location: at,
-		})
+		return invalid(reasonNotStarted, "the lesson has not started", at)
 	}
 
 	return h.bookingError(ctx, err)

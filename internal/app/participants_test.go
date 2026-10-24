@@ -171,10 +171,16 @@ func TestParticipants(t *testing.T) {
 		t.Errorf("note without trial at %q", got)
 	}
 
-	// Attendance opens at the start.
-	if got := location(a.expect(http.StatusUnprocessableEntity, http.MethodPost, booking(claraBooking, "attendance"),
-		`{"status":"attended"}`, alina)); got != "path.bookingId" {
-		t.Errorf("attendance before the start at %q", got)
+	// Attendance opens at the start: the 422 says why, for the UI.
+	early := a.expect(http.StatusUnprocessableEntity, http.MethodPost, booking(claraBooking, "attendance"),
+		`{"status":"attended"}`, alina)
+	if got := location(early); got != "path.bookingId" || reason(early) != "not-started" {
+		t.Errorf("attendance before the start at %q, reason %q", got, reason(early))
+	}
+
+	if r := reason(a.expect(http.StatusUnprocessableEntity, http.MethodPost, "/api/v1/lessons/"+own+"/attendance/all",
+		"", alina)); r != "not-started" {
+		t.Errorf("all attended before the start: reason %q", r)
 	}
 
 	// Removing Gina before the start tells her.
@@ -227,14 +233,32 @@ func TestParticipants(t *testing.T) {
 	// After the lesson's day, only the office changes it.
 	a.clock.advance(6 * time.Hour)
 
-	if got := location(a.expect(http.StatusUnprocessableEntity, http.MethodPost, booking(claraBooking, "attendance"),
-		`{"status":"attended"}`, alina)); got != "path.bookingId" {
-		t.Errorf("attendance after the day at %q", got)
+	late := a.expect(http.StatusUnprocessableEntity, http.MethodPost, booking(claraBooking, "attendance"),
+		`{"status":"attended"}`, alina)
+	if got := location(late); got != "path.bookingId" || reason(late) != "day-over" {
+		t.Errorf("attendance after the day at %q, reason %q", got, reason(late))
 	}
 
-	if got := location(a.expect(http.StatusUnprocessableEntity, http.MethodPost, list(own),
-		`{"guest":{"name":"Late Guest"}}`, alina)); got != "path.lessonId" {
-		t.Errorf("add after the day at %q", got)
+	late = a.expect(http.StatusUnprocessableEntity, http.MethodPost, list(own), `{"guest":{"name":"Late Guest"}}`, alina)
+	if got := location(late); got != "path.lessonId" || reason(late) != "day-over" {
+		t.Errorf("add after the day at %q, reason %q", got, reason(late))
+	}
+
+	for _, path := range []string{booking(claraBooking, "remove"), "/api/v1/lessons/" + own + "/attendance/all"} {
+		if r := reason(a.expect(http.StatusUnprocessableEntity, http.MethodPost, path, "", felix)); r != "day-over" {
+			t.Errorf("%s after the day: reason %q", path, r)
+		}
+	}
+
+	if r := reason(a.expect(http.StatusUnprocessableEntity, http.MethodPut, booking(claraBooking, "participant"),
+		`{"trial":true}`, felix)); r != "day-over" {
+		t.Errorf("trial after the day: reason %q", r)
+	}
+
+	// A 422 about the request body has no reason.
+	if r := reason(a.expect(http.StatusUnprocessableEntity, http.MethodPut, booking(claraBooking, "participant"),
+		`{"trial":false,"trialNote":"note"}`, office)); r != "" {
+		t.Errorf("body 422 with reason %q", r)
 	}
 
 	a.expect(http.StatusOK, http.MethodPost, booking(claraBooking, "attendance"), `{"status":"attended"}`, office)

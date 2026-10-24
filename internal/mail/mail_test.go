@@ -25,6 +25,7 @@ func TestMessageValidate(t *testing.T) {
 
 	textOnly := valid
 	textOnly.HTML = ""
+	textOnly.ReplyTo = "ivy@example.org"
 
 	if err := textOnly.Validate(); err != nil {
 		t.Fatalf("Validate() without HTML = %v, want nil", err)
@@ -44,6 +45,8 @@ func TestMessageValidate(t *testing.T) {
 		{"subject with LF", func(m *mail.Message) { m.Subject = "Hi\nBcc: eve@example.org" }},
 		{"subject too long", func(m *mail.Message) { m.Subject = strings.Repeat("a", mail.MaxSubjectLen+1) }},
 		{"no text", func(m *mail.Message) { m.Text = "\n" }},
+		{"reply-to with display name", func(m *mail.Message) { m.ReplyTo = "Ivy <ivy@example.org>" }},
+		{"reply-to with newline", func(m *mail.Message) { m.ReplyTo = "ivy@example.org\r\nBcc: eve@example.org" }},
 	}
 
 	for _, tt := range tests {

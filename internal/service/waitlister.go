@@ -501,7 +501,7 @@ func (w waitlister) send(
 	ctx context.Context, tx store.Tx, settings domain.Settings, now time.Time, recipients []recipient, template string,
 	data func(recipient) any,
 ) error {
-	return sendMails(ctx, tx, w.ids, w.mails.Renderer, settings, now, recipients, template, data)
+	return sendMails(ctx, tx, w.ids, w.mails.Renderer, settings, now, recipients, template, mailOpts{}, data)
 }
 
 // lessonPlace is what the waiting-list mails name of a lesson besides its

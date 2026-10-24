@@ -255,6 +255,11 @@ func (s *Sender) buildMessage(m mail.Message) ([]byte, error) {
 
 	header("From", s.from.String())
 	header("To", (&netmail.Address{Address: m.To}).String())
+
+	if m.ReplyTo != "" {
+		header("Reply-To", (&netmail.Address{Address: m.ReplyTo}).String())
+	}
+
 	header("Subject", mime.QEncoding.Encode("utf-8", m.Subject))
 	header("Date", s.clock.Now().Format(time.RFC1123Z))
 	header("Message-ID", "<"+id+"@"+domainOf(s.from.Address)+">")

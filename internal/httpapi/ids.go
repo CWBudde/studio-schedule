@@ -48,6 +48,7 @@ var idTypes = []reflect.Type{
 	reflect.TypeFor[domain.SessionID](),
 	reflect.TypeFor[domain.OutboxMailID](),
 	reflect.TypeFor[domain.AuditEventID](),
+	reflect.TypeFor[domain.LessonNoticeID](),
 }
 
 // registerIDSchemas makes every domain ID type a `{type: string, format:

@@ -1,0 +1,18 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+{{.Sender}} sends a message about this lesson at {{.SchoolName}}:
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}
+{{.Room}}, {{.Location}}
+Booked for: {{join .Participants}}
+{{- if .Canceled}}
+The lesson is canceled.
+{{- end}}
+
+{{.Message}}
+
+To answer {{.Sender}}, reply to this mail.
+
+Kind regards,
+{{.SchoolName}}

@@ -45,6 +45,7 @@ type MailboxMail struct {
 	Text      string              `doc:"Plain text body."                       json:"text"`
 	HTML      string              `doc:"HTML body; absent for text-only mails." json:"html,omitempty"`
 	Template  string              `doc:"Template the mail was rendered from."   json:"template,omitempty"`
+	ReplyTo   string              `doc:"Address replies go to; absent if the sender's." json:"replyTo,omitempty"`
 	CreatedAt time.Time           `doc:"When the mail was written."             json:"createdAt"`
 	Status    string              `doc:"Delivery state." enum:"pending,sent,failed" json:"status"`
 }
@@ -72,7 +73,7 @@ func (h *handlers) listDemoMailbox(ctx context.Context, _ *struct{}) (*DemoMailb
 	for i, m := range mails {
 		out.Body.Mails[i] = MailboxMail{
 			ID: m.ID, To: m.To, Subject: m.Subject, Text: m.Text, HTML: m.HTML, Template: m.Template,
-			CreatedAt: m.CreatedAt, Status: string(m.Status()),
+			ReplyTo: m.ReplyTo, CreatedAt: m.CreatedAt, Status: string(m.Status()),
 		}
 	}
 

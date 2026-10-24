@@ -129,6 +129,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 		Bookings:       service.NewBookingService(deps.Store, deps.Clock, deps.IDs, mails),
 		Waitlist:       service.NewWaitlistService(deps.Store, deps.Clock, deps.IDs, mails),
 		Participants:   service.NewParticipantService(deps.Store, deps.Clock, deps.IDs, mails),
+		Teach:          service.NewTeachService(deps.Store, deps.Clock, deps.IDs, renderer),
 		Auth:           newAuthService(deps, renderer),
 		Family:         service.NewFamilyService(deps.Store, deps.Clock, deps.IDs, mails),
 		Persons:        service.NewPersonService(deps.Store, deps.Clock, deps.IDs, mails),

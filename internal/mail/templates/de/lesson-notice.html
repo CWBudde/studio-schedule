@@ -1,0 +1,8 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>{{.Sender}} schickt eine Nachricht zu dieser Stunde bei {{.SchoolName}}:</p>
+<p><strong>{{.CourseType}}</strong><br>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr<br>{{.Room}}, {{.Location}}<br>Gebucht für: {{join .Participants}}{{if .Canceled}}<br>Die Stunde fällt aus.{{end}}</p>
+<p style="margin:16px 0;padding:8px 16px;border-left:4px solid #d4d4d8;">{{range $i, $line := lines .Message}}{{if $i}}<br>{{end}}{{$line}}{{end}}</p>
+<p>Um {{.Sender}} zu antworten, antworte einfach auf diese Mail.</p>
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

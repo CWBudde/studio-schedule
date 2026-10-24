@@ -1,0 +1,1 @@
+{{.SchoolName}}: Message about {{.CourseType}} on {{date .StartsAt}}

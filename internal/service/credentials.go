@@ -363,7 +363,7 @@ func (s *AuthService) notifyEmailChanged(
 		return fmt.Errorf("render %s mail: %v", mail.TemplateEmailChanged, err) //nolint:errorlint // see sendLink
 	}
 
-	return enqueueMail(ctx, tx, s.ids, s.clock.Now(), old, mail.TemplateEmailChanged, rendered)
+	return enqueueMail(ctx, tx, s.ids, s.clock.Now(), old, mail.TemplateEmailChanged, mailOpts{}, rendered)
 }
 
 // linkMail describes a mail with a single-use link.
@@ -419,7 +419,7 @@ func (s *AuthService) sendLink(ctx context.Context, tx store.Tx, acc domain.Acco
 		return fmt.Errorf("render %s mail: %v", m.template, err) //nolint:errorlint // see above
 	}
 
-	return enqueueMail(ctx, tx, s.ids, now, m.to, m.template, rendered)
+	return enqueueMail(ctx, tx, s.ids, now, m.to, m.template, mailOpts{}, rendered)
 }
 
 // linkToken returns a valid, unexpired token of purpose and its account. A

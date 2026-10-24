@@ -1,0 +1,18 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+{{.Sender}} schickt eine Nachricht zu dieser Stunde bei {{.SchoolName}}:
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr
+{{.Room}}, {{.Location}}
+Gebucht für: {{join .Participants}}
+{{- if .Canceled}}
+Die Stunde fällt aus.
+{{- end}}
+
+{{.Message}}
+
+Um {{.Sender}} zu antworten, antworte einfach auf diese Mail.
+
+Viele Grüße
+{{.SchoolName}}

@@ -634,6 +634,7 @@ func TestRenderAllTemplates(t *testing.T) {
 		mail.TemplateBookingCanceled:  canceledData(t),
 		mail.TemplateWaitlistInvite:   waitlistInviteData(t),
 		mail.TemplateWaitlistExpired:  waitlistExpiredData(t, true),
+		mail.TemplateLessonNotice:     noticeData(t),
 	}
 
 	for _, name := range mail.TemplateNames() {

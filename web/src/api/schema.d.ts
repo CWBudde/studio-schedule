@@ -547,7 +547,7 @@ export interface paths {
         put?: never;
         /**
          * Take attendance
-         * @description Sets an active booking to `attended`, `no_show` or back to `booked` (unknown). From the lesson's start on (before it a 422 on `path.bookingId`), until the end of its school day for instructors and accompanists (afterwards a 422 on `path.bookingId`), at any time after the start for the office. Each change adds a booking event. A canceled booking is a 409 `already-canceled`, a lesson the school canceled a 409 `closed` with why `canceled`.
+         * @description Sets an active booking to `attended`, `no_show` or back to `booked` (unknown). From the lesson's start on (before it a 422 on `path.bookingId` with reason `not-started`), until the end of its school day for instructors and accompanists (afterwards a 422 on `path.bookingId` with reason `day-over`), at any time after the start for the office. Each change adds a booking event. A canceled booking is a 409 `already-canceled`, a lesson the school canceled a 409 `closed` with why `canceled`.
          */
         post: operations["setAttendance"];
         delete?: never;
@@ -610,7 +610,7 @@ export interface paths {
         get?: never;
         /**
          * Mark a participant's trial
-         * @description Sets whether an active booking is a trial, and its note for the instructor (a note without `trial` is a 422 on `body.trialNote`). Same access and time window as `addLessonParticipant` (a 422 on `path.bookingId` once the day is over for instructors); a canceled booking is a 409 `already-canceled`.
+         * @description Sets whether an active booking is a trial, and its note for the instructor (a note without `trial` is a 422 on `body.trialNote`). Same access and time window as `addLessonParticipant` (a 422 on `path.bookingId` with reason `day-over` once the day is over for instructors); a canceled booking is a 409 `already-canceled`.
          */
         put: operations["updateLessonParticipant"];
         post?: never;
@@ -631,7 +631,7 @@ export interface paths {
         put?: never;
         /**
          * Remove a participant
-         * @description Cancels a booking of the lesson as staff: never late, and a person's date is released, so a later change of their class membership does not book them into it again. Its place goes to the waiting list. After the start too (a walk-in added by mistake), until the end of the lesson's school day for instructors and accompanists (afterwards a 422 on `path.bookingId`), at any time for the office, and on a lesson the school canceled. Before the start of a lesson that takes place, the participant's mail recipients get the cancellation; for a canceled lesson nobody is mailed or invited. A canceled booking is a 409 `already-canceled`; a booking of a lesson of others a 404.
+         * @description Cancels a booking of the lesson as staff: never late, and a person's date is released, so a later change of their class membership does not book them into it again. Its place goes to the waiting list. After the start too (a walk-in added by mistake), until the end of the lesson's school day for instructors and accompanists (afterwards a 422 on `path.bookingId` with reason `day-over`), at any time for the office, and on a lesson the school canceled. Before the start of a lesson that takes place, the participant's mail recipients get the cancellation; for a canceled lesson nobody is mailed or invited. A canceled booking is a 409 `already-canceled`; a booking of a lesson of others a 404.
          */
         post: operations["removeLessonParticipant"];
         delete?: never;
@@ -959,7 +959,7 @@ export interface paths {
         put?: never;
         /**
          * Mark everyone attended
-         * @description Sets every booking of the lesson whose attendance is unknown (`booked`) to `attended`, under the rules of `setAttendance` (the 422s on `path.lessonId`), and returns the bookings it changed.
+         * @description Sets every booking of the lesson whose attendance is unknown (`booked`) to `attended`, under the rules of `setAttendance` (the 422s on `path.lessonId` with reason `not-started` or `day-over`), and returns the bookings it changed.
          */
         post: operations["markAllAttended"];
         delete?: never;
@@ -1008,6 +1008,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lessons/{lessonId}/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Message a lesson's participants
+         * @description Mails the plain-text `message` (line breaks normalized to `\n`, trimmed, 1 to 1000 characters, no control characters but line breaks and tabs, no invisible format characters but the zero-width joiners; a 422 on `body.message` otherwise) to everyone booked for the lesson: the mail recipients of every active booking and the guests with an email, each address once, each in its language. The mail names the sender as the schedule does if they teach or accompany the lesson, else by their name, and replies go to the sender's address (the admin's while signed in as someone else). Same access as `listLessonParticipants` (a 404 on others' lessons); lessons that are over or canceled too. An account sends at most 5 notices an hour, and a lesson gets at most 3 a school day, from anyone: beyond that a 429 with `Retry-After`. Returns how many addresses were mailed; a lesson without any counts no notice.
+         */
+        post: operations["notifyParticipants"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lessons/{lessonId}/participants": {
         parameters: {
             query?: never;
@@ -1023,7 +1043,7 @@ export interface paths {
         put?: never;
         /**
          * Add a participant
-         * @description Books a person (`personId`) or a guest (`guest`, a name and an optional email) into the lesson as staff (source `staff`), optionally as a `trial` with a `trialNote`. Unlike `bookLesson`, the release window and the booking cutoff do not apply, and the lesson may have started: instructors and accompanists add until the end of the lesson's school day (afterwards a 422 on `path.lessonId`), the office at any time. A lesson the school canceled is a 409 `closed` with why `canceled`. A person booked already is a 409 `already-booked`; a lesson whose active bookings and the places held by others' waiting-list invites fill its capacity a 409 `full`, unless `confirmOverCapacity` is set (the booking event records the override). A person whose own invite holds a place takes it without the confirmation (an override if the lesson has been overbooked since); any other entry of the person on the lesson's waiting list ends. Before the lesson starts, the person's mail recipients, or a guest with an email (in the school's language, asked to contact the school to cancel), get the confirmation. Lessons of others are a 404, an unknown person a 422 on `body.personId`.
+         * @description Books a person (`personId`) or a guest (`guest`, a name and an optional email) into the lesson as staff (source `staff`), optionally as a `trial` with a `trialNote`. Unlike `bookLesson`, the release window and the booking cutoff do not apply, and the lesson may have started: instructors and accompanists add until the end of the lesson's school day (afterwards a 422 on `path.lessonId` with reason `day-over`), the office at any time. A lesson the school canceled is a 409 `closed` with why `canceled`. A person booked already is a 409 `already-booked`; a lesson whose active bookings and the places held by others' waiting-list invites fill its capacity a 409 `full`, unless `confirmOverCapacity` is set (the booking event records the override). A person whose own invite holds a place takes it without the confirmation (an override if the lesson has been overbooked since); any other entry of the person on the lesson's waiting list ends. Before the lesson starts, the person's mail recipients, or a guest with an email (in the school's language, asked to contact the school to cancel), get the confirmation. Lessons of others are a 404, an unknown person a 422 on `body.personId`.
          */
         post: operations["addLessonParticipant"];
         delete?: never;
@@ -1271,6 +1291,26 @@ export interface paths {
          * @description Deletes a staff member that no class or lesson refers to; a referenced one is a 409 `in-use` and can be deactivated instead.
          */
         delete: operations["deleteStaff"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the lessons I teach
+         * @description Returns the lessons that start in a range of school dates, by default the week before today, today and the week after (at most 31 days), with their counts and attendance state. An instructor or accompanist gets the lessons their active staff records (linked to their person) teach or accompany, none without a link; the office every lesson. `staffId` keeps one staff member's lessons (for an instructor, only their own). Canceled and hidden lessons are included.
+         */
+        get: operations["listTeachLessons"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2181,6 +2221,44 @@ export interface components {
             /** @description Given name of the admin. */
             givenName: string;
         };
+        Invalid: {
+            /**
+             * @description A human-readable explanation specific to this occurrence of the problem.
+             * @example Property foo is required but is missing.
+             */
+            detail?: string;
+            /** @description Optional list of individual error details */
+            errors?: components["schemas"]["ErrorDetail"][] | null;
+            /**
+             * Format: uri
+             * @description A URI reference that identifies the specific occurrence of the problem.
+             * @example https://example.com/error-log/abc123
+             */
+            instance?: string;
+            /**
+             * @description Why the target cannot be changed now; absent for a 422 about the request body. not-started: the lesson has not started, so attendance cannot be taken yet; day-over: the lesson's school day is over, so its instructor and accompanist no longer change its participants (the office does).
+             * @enum {string}
+             */
+            reason?: "not-started" | "day-over";
+            /**
+             * Format: int64
+             * @description HTTP status code
+             * @example 400
+             */
+            status?: number;
+            /**
+             * @description A short, human-readable summary of the problem type. This value should not change between occurrences of the error.
+             * @example Bad Request
+             */
+            title?: string;
+            /**
+             * Format: uri
+             * @description A URI reference to human-readable documentation for the error.
+             * @default about:blank
+             * @example https://example.com/errors/example
+             */
+            type: string;
+        };
         JoinWaitlistData: {
             /**
              * Format: uuid
@@ -2685,6 +2763,8 @@ export interface components {
              * @description Mail ID.
              */
             id: string;
+            /** @description Address replies go to; absent if the sender's. */
+            replyTo?: string;
             /**
              * @description Delivery state.
              * @enum {string}
@@ -2728,6 +2808,17 @@ export interface components {
              * @enum {string}
              */
             role: "member" | "instructor" | "office" | "admin";
+        };
+        NotifyData: {
+            /** @description The message, plain text; line breaks are kept. At most 1000 characters once its line breaks are normalized and the space around it is trimmed. */
+            message: string;
+        };
+        NotifyOutputBody: {
+            /**
+             * Format: int64
+             * @description How many addresses the message was mailed to.
+             */
+            recipients: number;
         };
         PersonAccount: {
             /** @description Email address (login name). */
@@ -3197,6 +3288,124 @@ export interface components {
             displayName: string;
             /** Format: uuid */
             id: string;
+        };
+        TeachLesson: {
+            /** @description Accompanist; absent if the lesson has none. */
+            accompanist?: components["schemas"]["StaffRef"];
+            /**
+             * Format: int64
+             * @description Active (not canceled) bookings; more than the capacity after an override.
+             */
+            active: number;
+            /** @description Whether the caller may take attendance now: the lesson takes place and has started, and for instructors and accompanists its day is not over. */
+            attendanceOpen: boolean;
+            /** @description Whether the lesson takes place, has started and has no active booking whose attendance is unknown (booked). */
+            attendanceTaken: boolean;
+            /**
+             * Format: int64
+             * @description Maximum number of participants.
+             */
+            capacity: number;
+            /**
+             * Format: uuid
+             * @description Weekly class the lesson belongs to; absent for one-off lessons.
+             */
+            classId?: string;
+            courseType: components["schemas"]["CourseTypeRef"];
+            /**
+             * Format: date-time
+             * @description When the attendance window of instructors and accompanists ends (see listLessonParticipants).
+             */
+            dayOverAt: string;
+            /**
+             * Format: date-time
+             * @description End instant (UTC).
+             */
+            endsAt: string;
+            /**
+             * Format: int64
+             * @description Capacity minus active bookings and held places, at least 0.
+             */
+            freePlaces: number;
+            /**
+             * Format: int64
+             * @description Active bookings of guests.
+             */
+            guests: number;
+            /**
+             * Format: int64
+             * @description Places held by open waiting-list invites.
+             */
+            held: number;
+            /**
+             * Format: uuid
+             * @description Lesson ID.
+             */
+            id: string;
+            instructor: components["schemas"]["StaffRef"];
+            /**
+             * @description Regular lesson or special format.
+             * @enum {string}
+             */
+            kind: "regular" | "workshop" | "private";
+            /**
+             * @description Level of the class; absent for one-off lessons.
+             * @enum {string}
+             */
+            level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            location: components["schemas"]["LocationRef"];
+            /**
+             * @description The caller's part: instructor or accompanist of the lesson, or office for a lesson of others.
+             * @enum {string}
+             */
+            role: "instructor" | "accompanist" | "office";
+            room: components["schemas"]["RoomRef"];
+            /**
+             * Format: date-time
+             * @description Start instant (UTC).
+             */
+            startsAt: string;
+            /**
+             * @description Whether the lesson takes place.
+             * @enum {string}
+             */
+            status: "scheduled" | "canceled";
+            /**
+             * Format: int64
+             * @description Active bookings that are trial lessons.
+             */
+            trials: number;
+            /**
+             * @description Who may see the lesson: everyone, signed-in members, or staff only.
+             * @enum {string}
+             */
+            visibility: "public" | "members" | "hidden";
+            /**
+             * Format: int64
+             * @description Waiting-list entries waiting for an invite.
+             */
+            waiting: number;
+        };
+        TeachLessons: {
+            /**
+             * Format: date
+             * @description First school date of the range.
+             */
+            from: string;
+            /** @description The lessons, ordered by start. */
+            lessons: components["schemas"]["TeachLesson"][];
+            /**
+             * Format: date-time
+             * @description Server time the response was computed at.
+             */
+            now: string;
+            /** @description IANA time zone of the school; school dates and times are local to it. */
+            timezone: string;
+            /**
+             * Format: date
+             * @description School date after the last day of the range.
+             */
+            to: string;
         };
         Term: {
             /**
@@ -4361,6 +4570,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Conflict"];
                 };
             };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Invalid"];
+                };
+            };
             /** @description Error */
             default: {
                 headers: {
@@ -4536,6 +4754,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Conflict"];
                 };
             };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Invalid"];
+                };
+            };
             /** @description Error */
             default: {
                 headers: {
@@ -4575,6 +4802,15 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Invalid"];
                 };
             };
             /** @description Error */
@@ -5396,6 +5632,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Conflict"];
                 };
             };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Invalid"];
+                };
+            };
             /** @description Error */
             default: {
                 headers: {
@@ -5497,6 +5742,42 @@ export interface operations {
             };
         };
     };
+    notifyParticipants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The lesson. */
+                lessonId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotifyData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listLessonParticipants: {
         parameters: {
             query?: never;
@@ -5561,6 +5842,15 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Invalid"];
                 };
             };
             /** @description Error */
@@ -6222,6 +6512,42 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listTeachLessons: {
+        parameters: {
+            query?: {
+                /** @description First school date of the range; default: a week before today. */
+                from?: string;
+                /** @description School date after the last day of the range (exclusive); at most 31 days after from; default: 15 days after from. */
+                to?: string;
+                /** @description Only lessons with this staff member as instructor or accompanist. */
+                staffId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeachLessons"];
                 };
             };
             /** @description Error */

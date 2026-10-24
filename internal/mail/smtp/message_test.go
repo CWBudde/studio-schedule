@@ -135,6 +135,10 @@ func TestBuildMessageMultipart(t *testing.T) {
 		t.Errorf("MIME-Version = %q", got)
 	}
 
+	if _, ok := msg.Header["Reply-To"]; ok {
+		t.Errorf("Reply-To = %q without one in the message", msg.Header.Get("Reply-To"))
+	}
+
 	mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
 	if err != nil || mediaType != "multipart/alternative" {
 		t.Fatalf("Content-Type = %q (%v)", msg.Header.Get("Content-Type"), err)
@@ -166,6 +170,25 @@ func TestBuildMessageMultipart(t *testing.T) {
 
 	if _, err := mr.NextRawPart(); !errors.Is(err, io.EOF) {
 		t.Errorf("want exactly two parts, NextPart = %v", err)
+	}
+}
+
+// TestBuildMessageReplyTo sets the Reply-To header of a lesson notice.
+func TestBuildMessageReplyTo(t *testing.T) {
+	t.Parallel()
+
+	s := newTestSender(t, Config{})
+	m := testMessage()
+	m.ReplyTo = "ivy@example.org"
+
+	raw, err := s.buildMessage(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	replyTo, err := parse(t, raw).Header.AddressList("Reply-To")
+	if err != nil || len(replyTo) != 1 || replyTo[0].Address != m.ReplyTo || replyTo[0].Name != "" {
+		t.Errorf("Reply-To = %v (%v)", replyTo, err)
 	}
 }
 

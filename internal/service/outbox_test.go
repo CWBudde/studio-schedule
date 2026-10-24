@@ -106,6 +106,28 @@ func TestOutboxDelivers(t *testing.T) {
 	}
 }
 
+// TestOutboxDeliversReplyTo passes a mail's Reply-To address on to the
+// mailer (lesson notices, ADR 0009).
+func TestOutboxDeliversReplyTo(t *testing.T) {
+	t.Parallel()
+
+	f, mailer, o := outboxFixture(t)
+	queued := f.onlyMail()
+
+	err := f.st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		queued.ReplyTo = "ivy@example.org"
+
+		return tx.Outbox().Update(ctx, queued)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if n := deliver(t, o); n != 1 || len(mailer.sent) != 1 || mailer.sent[0].ReplyTo != "ivy@example.org" {
+		t.Fatalf("sent %+v, want the Reply-To", mailer.sent)
+	}
+}
+
 func TestOutboxRetriesThenGivesUp(t *testing.T) {
 	t.Parallel()
 

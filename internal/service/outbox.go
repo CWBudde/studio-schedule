@@ -36,14 +36,23 @@ func mailRetryDelay(attempts int) time.Duration {
 	return mailRetryDelays[min(max(attempts, 1), len(mailRetryDelays))-1]
 }
 
+// mailOpts are the optional parts of a queued mail; the zero value has
+// none.
+type mailOpts struct {
+	// replyTo is the address replies go to, e.g. the staff member who sent
+	// a lesson notice; empty for the sender's.
+	replyTo string
+}
+
 // enqueueMail writes a rendered mail to the outbox in tx; the outbox job
 // sends it after the transaction commits.
 func enqueueMail(
-	ctx context.Context, tx store.Tx, src ids.Source, now time.Time, to, template string, r mail.Rendered,
+	ctx context.Context, tx store.Tx, src ids.Source, now time.Time, to, template string, opts mailOpts,
+	r mail.Rendered,
 ) error {
 	m := domain.OutboxMail{
 		ID: ids.New[domain.OutboxMailID](src), To: to, Subject: r.Subject, Text: r.Text, HTML: r.HTML,
-		Template: template, CreatedAt: now, NextAttemptAt: now,
+		Template: template, CreatedAt: now, NextAttemptAt: now, ReplyTo: opts.replyTo,
 	}
 	if err := m.Validate(); err != nil {
 		return fmt.Errorf("outbox mail: %w", err)
@@ -54,10 +63,10 @@ func enqueueMail(
 
 // sendMails renders template with mails for each recipient, with the data
 // that data makes of it, in the recipient's language (else the school's
-// default; ADR 0008), and queues it at now.
+// default; ADR 0008), and queues it with opts at now.
 func sendMails(
 	ctx context.Context, tx store.Tx, src ids.Source, mails MailRenderer, settings domain.Settings, now time.Time,
-	recipients []recipient, template string, data func(recipient) any,
+	recipients []recipient, template string, opts mailOpts, data func(recipient) any,
 ) error {
 	for _, r := range recipients {
 		rendered, err := mails.Render(cmp.Or(r.locale, settings.DefaultLocale), template, data(r))
@@ -67,7 +76,7 @@ func sendMails(
 			return fmt.Errorf("render %s mail: %v", template, err) //nolint:errorlint // see above
 		}
 
-		err = enqueueMail(ctx, tx, src, now, r.email, template, rendered)
+		err = enqueueMail(ctx, tx, src, now, r.email, template, opts, rendered)
 
 		switch {
 		case errors.Is(err, domain.ErrValidation):
@@ -111,7 +120,9 @@ func (s *OutboxService) Deliver(ctx context.Context) (int, error) {
 			return sent, err
 		}
 
-		sendErr := s.mailer.Send(ctx, mail.Message{To: m.To, Subject: m.Subject, Text: m.Text, HTML: m.HTML})
+		sendErr := s.mailer.Send(ctx, mail.Message{
+			To: m.To, Subject: m.Subject, Text: m.Text, HTML: m.HTML, ReplyTo: m.ReplyTo,
+		})
 		if sendErr != nil && ctx.Err() != nil {
 			// Shutting down: the claim expires and the mail is retried.
 			return sent, ctx.Err()

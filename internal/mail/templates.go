@@ -51,6 +51,10 @@ const (
 	// taken in time and whether they stay on the list. Data:
 	// WaitlistExpiredData.
 	TemplateWaitlistExpired = "waitlist-expired"
+	// TemplateLessonNotice brings a message from a lesson's instructor,
+	// accompanist or the office to those booked for it (ADR 0009,
+	// amendment); replies go to the sender. Data: LessonNoticeData.
+	TemplateLessonNotice = "lesson-notice"
 )
 
 // TemplateNames returns all template names.
@@ -58,7 +62,7 @@ func TemplateNames() []string {
 	return []string{
 		TemplateConfirmEmail, TemplateResetPassword, TemplateChangeEmail, TemplateEmailChanged, TemplateInvite,
 		TemplateLessonCanceled, TemplateLessonRestored, TemplateLessonChanged, TemplateBookingConfirmed,
-		TemplateBookingCanceled, TemplateWaitlistInvite, TemplateWaitlistExpired,
+		TemplateBookingCanceled, TemplateWaitlistInvite, TemplateWaitlistExpired, TemplateLessonNotice,
 	}
 }
 
@@ -173,6 +177,37 @@ func (d LessonChangedData) Validate() error {
 	if d.PreviousStartsAt.IsZero() || !d.PreviousEndsAt.After(d.PreviousStartsAt) ||
 		strings.TrimSpace(d.PreviousRoom) == "" || strings.TrimSpace(d.PreviousLocation) == "" {
 		return fmt.Errorf("%w: the previous start, end, room and location must be set", domain.ErrValidation)
+	}
+
+	return nil
+}
+
+// LessonNoticeData is the data of TemplateLessonNotice: the lesson, who
+// wrote the message, and the message. LessonData.Note is not used.
+type LessonNoticeData struct {
+	LessonData
+
+	// Canceled tells that the school canceled the lesson.
+	Canceled bool
+	// Sender is the name of the staff member who wrote the message.
+	Sender string
+	// Message is the plain text of the message. The templates keep its
+	// line breaks and escape it in the HTML part.
+	Message string
+}
+
+// Validate checks the data before rendering. All errors wrap
+// domain.ErrValidation.
+func (d LessonNoticeData) Validate() error {
+	if err := d.LessonData.Validate(); err != nil {
+		return err
+	}
+
+	switch {
+	case strings.TrimSpace(d.Sender) == "":
+		return fmt.Errorf("%w: a notice needs a sender", domain.ErrValidation)
+	case strings.TrimSpace(d.Message) == "":
+		return fmt.Errorf("%w: a notice needs a message", domain.ErrValidation)
 	}
 
 	return nil

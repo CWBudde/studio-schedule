@@ -32,6 +32,8 @@ type Message struct {
 	Text string
 	// HTML is the HTML body; empty means a text-only mail.
 	HTML string
+	// ReplyTo is a bare address replies go to; empty means the sender.
+	ReplyTo string
 }
 
 // Validate checks that the message can be sent as is. All errors wrap
@@ -40,6 +42,8 @@ func (m Message) Validate() error {
 	switch {
 	case !bareAddress(m.To):
 		return fmt.Errorf("%w: mail recipient must be a single bare address", domain.ErrValidation)
+	case m.ReplyTo != "" && !bareAddress(m.ReplyTo):
+		return fmt.Errorf("%w: reply-to must be a single bare address", domain.ErrValidation)
 	case strings.TrimSpace(m.Subject) == "":
 		return fmt.Errorf("%w: mail subject must not be empty", domain.ErrValidation)
 	case strings.ContainsAny(m.Subject, "\r\n"):
