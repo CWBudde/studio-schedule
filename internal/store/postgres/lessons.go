@@ -29,6 +29,10 @@ func toLesson(row sqlc.Lesson) domain.Lesson {
 		Visibility:    domain.LessonVisibility(row.Visibility),
 		Kind:          domain.LessonKind(row.Kind),
 		Capacity:      int(row.Capacity),
+		Detached:      row.Detached,
+		CancelNote:    row.CancelNote.String,
+		CanceledAt:    fromPgInstant(row.CanceledAt),
+		CanceledBy:    fromPgID[domain.AccountID](row.CanceledBy),
 	}
 }
 
@@ -53,6 +57,10 @@ func lessonParams(l domain.Lesson) (sqlc.CreateLessonParams, error) {
 		Kind:          string(l.Kind),
 		Capacity:      capacity,
 		SlotDate:      pgDate(l.SlotDate),
+		Detached:      l.Detached,
+		CancelNote:    pgText(l.CancelNote),
+		CanceledAt:    pgInstant(l.CanceledAt),
+		CanceledBy:    pgID(l.CanceledBy),
 	}, nil
 }
 
@@ -101,6 +109,19 @@ func (r lessonRepo) ListRange(ctx context.Context, from, to time.Time) ([]domain
 	rows, err := r.q.ListLessonsInRange(ctx, sqlc.ListLessonsInRangeParams{
 		FromTime: pgtype.Timestamptz{Time: instant(from), Valid: true},
 		ToTime:   pgtype.Timestamptz{Time: instant(to), Valid: true},
+	})
+
+	return convertRows(rows, err, toLesson)
+}
+
+func (r lessonRepo) ListRoomOverlaps(
+	ctx context.Context, room domain.RoomID, from, to time.Time, exclude domain.LessonID,
+) ([]domain.Lesson, error) {
+	rows, err := r.q.ListRoomOverlaps(ctx, sqlc.ListRoomOverlapsParams{
+		RoomID:    pgID(room),
+		FromTime:  pgtype.Timestamptz{Time: instant(from), Valid: true},
+		ToTime:    pgtype.Timestamptz{Time: instant(to), Valid: true},
+		ExcludeID: pgID(exclude),
 	})
 
 	return convertRows(rows, err, toLesson)

@@ -105,6 +105,10 @@ type Lesson struct {
 	Kind          string
 	Capacity      int32
 	SlotDate      pgtype.Date
+	Detached      bool
+	CancelNote    pgtype.Text
+	CanceledAt    pgtype.Timestamptz
+	CanceledBy    pgtype.UUID
 }
 
 type Location struct {

@@ -2,6 +2,7 @@ package domain_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -187,13 +188,7 @@ func TestTimetableValidate(t *testing.T) {
 func TestLessonValidate(t *testing.T) {
 	t.Parallel()
 
-	checkValidate(t, func() domain.Lesson {
-		return domain.Lesson{
-			ID: newID[domain.LessonID](), CourseTypeID: newID[domain.CourseTypeID](), RoomID: newID[domain.RoomID](),
-			InstructorID: newID[domain.StaffID](), StartsAt: t0, EndsAt: t0.Add(time.Hour),
-			Status: domain.LessonScheduled, Visibility: domain.VisibilityPublic, Kind: domain.LessonRegular, Capacity: 12,
-		}
-	}, map[string]func(*domain.Lesson){
+	checkValidate(t, lessonFixture, map[string]func(*domain.Lesson){
 		"zero id":             func(l *domain.Lesson) { l.ID = domain.LessonID{} },
 		"zero course type":    func(l *domain.Lesson) { l.CourseTypeID = domain.CourseTypeID{} },
 		"zero room":           func(l *domain.Lesson) { l.RoomID = domain.RoomID{} },
@@ -210,7 +205,50 @@ func TestLessonValidate(t *testing.T) {
 		"bad slot": func(l *domain.Lesson) {
 			l.ClassID, l.SlotDate = newID[domain.ClassID](), domain.Date{Year: 2026, Month: time.February, Day: 30}
 		},
+		"detached one-off":           func(l *domain.Lesson) { l.Detached = true },
+		"note on a scheduled lesson": func(l *domain.Lesson) { l.CancelNote = "Rain" },
+		"canceled time on a scheduled lesson": func(l *domain.Lesson) {
+			l.CanceledAt = t0.Add(-time.Hour)
+		},
+		"canceler on a scheduled lesson": func(l *domain.Lesson) { l.CanceledBy = newID[domain.AccountID]() },
+		"blank note": func(l *domain.Lesson) {
+			l.Status, l.CancelNote = domain.LessonCanceled, "  "
+		},
+		"long note": func(l *domain.Lesson) {
+			l.Status, l.CancelNote = domain.LessonCanceled, strings.Repeat("ä", domain.MaxCancelNoteLength+1)
+		},
 	})
+
+	// A detached lesson of a class, and a canceled lesson with or without
+	// details, are valid.
+	for name, l := range map[string]domain.Lesson{
+		"detached": func() domain.Lesson {
+			l := lessonFixture()
+			l.ClassID, l.SlotDate, l.Detached = newID[domain.ClassID](), domain.Date{Year: 2026, Month: time.September, Day: 7}, true
+
+			return l
+		}(),
+		"canceled": func() domain.Lesson { l := lessonFixture(); l.Status = domain.LessonCanceled; return l }(),
+		"canceled with details": func() domain.Lesson {
+			l := lessonFixture()
+			l.Status, l.CancelNote = domain.LessonCanceled, strings.Repeat("ä", domain.MaxCancelNoteLength)
+			l.CanceledAt, l.CanceledBy = t0.Add(-time.Hour), newID[domain.AccountID]()
+
+			return l
+		}(),
+	} {
+		if err := l.Validate(); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+func lessonFixture() domain.Lesson {
+	return domain.Lesson{
+		ID: newID[domain.LessonID](), CourseTypeID: newID[domain.CourseTypeID](), RoomID: newID[domain.RoomID](),
+		InstructorID: newID[domain.StaffID](), StartsAt: t0, EndsAt: t0.Add(time.Hour),
+		Status: domain.LessonScheduled, Visibility: domain.VisibilityPublic, Kind: domain.LessonRegular, Capacity: 12,
+	}
 }
 
 func TestBookingValidate(t *testing.T) {

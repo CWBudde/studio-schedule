@@ -14,9 +14,9 @@ import (
 const createLesson = `-- name: CreateLesson :exec
 INSERT INTO lessons (
     id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status,
-    visibility, kind, capacity, slot_date
+    visibility, kind, capacity, slot_date, detached, cancel_note, canceled_at, canceled_by
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
 )
 `
 
@@ -34,6 +34,10 @@ type CreateLessonParams struct {
 	Kind          string
 	Capacity      int32
 	SlotDate      pgtype.Date
+	Detached      bool
+	CancelNote    pgtype.Text
+	CanceledAt    pgtype.Timestamptz
+	CanceledBy    pgtype.UUID
 }
 
 func (q *Queries) CreateLesson(ctx context.Context, arg CreateLessonParams) error {
@@ -51,6 +55,10 @@ func (q *Queries) CreateLesson(ctx context.Context, arg CreateLessonParams) erro
 		arg.Kind,
 		arg.Capacity,
 		arg.SlotDate,
+		arg.Detached,
+		arg.CancelNote,
+		arg.CanceledAt,
+		arg.CanceledBy,
 	)
 	return err
 }
@@ -68,7 +76,7 @@ func (q *Queries) DeleteLesson(ctx context.Context, id pgtype.UUID) (int64, erro
 }
 
 const getLesson = `-- name: GetLesson :one
-SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date FROM lessons WHERE id = $1
+SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date, detached, cancel_note, canceled_at, canceled_by FROM lessons WHERE id = $1
 `
 
 func (q *Queries) GetLesson(ctx context.Context, id pgtype.UUID) (Lesson, error) {
@@ -88,12 +96,16 @@ func (q *Queries) GetLesson(ctx context.Context, id pgtype.UUID) (Lesson, error)
 		&i.Kind,
 		&i.Capacity,
 		&i.SlotDate,
+		&i.Detached,
+		&i.CancelNote,
+		&i.CanceledAt,
+		&i.CanceledBy,
 	)
 	return i, err
 }
 
 const listLessonsByClass = `-- name: ListLessonsByClass :many
-SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date FROM lessons
+SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date, detached, cancel_note, canceled_at, canceled_by FROM lessons
 WHERE class_id = $1
   AND ($2::date IS NULL OR slot_date >= $2::date)
 ORDER BY starts_at, id
@@ -127,6 +139,10 @@ func (q *Queries) ListLessonsByClass(ctx context.Context, arg ListLessonsByClass
 			&i.Kind,
 			&i.Capacity,
 			&i.SlotDate,
+			&i.Detached,
+			&i.CancelNote,
+			&i.CanceledAt,
+			&i.CanceledBy,
 		); err != nil {
 			return nil, err
 		}
@@ -139,7 +155,7 @@ func (q *Queries) ListLessonsByClass(ctx context.Context, arg ListLessonsByClass
 }
 
 const listLessonsInRange = `-- name: ListLessonsInRange :many
-SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date FROM lessons
+SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date, detached, cancel_note, canceled_at, canceled_by FROM lessons
 WHERE starts_at >= $1 AND starts_at < $2
 ORDER BY starts_at, id
 `
@@ -172,6 +188,69 @@ func (q *Queries) ListLessonsInRange(ctx context.Context, arg ListLessonsInRange
 			&i.Kind,
 			&i.Capacity,
 			&i.SlotDate,
+			&i.Detached,
+			&i.CancelNote,
+			&i.CanceledAt,
+			&i.CanceledBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRoomOverlaps = `-- name: ListRoomOverlaps :many
+SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date, detached, cancel_note, canceled_at, canceled_by FROM lessons
+WHERE room_id = $1
+  AND status <> 'canceled'
+  AND starts_at < $2 AND ends_at > $3
+  AND ($4::uuid IS NULL OR id <> $4::uuid)
+ORDER BY starts_at, id
+`
+
+type ListRoomOverlapsParams struct {
+	RoomID    pgtype.UUID
+	ToTime    pgtype.Timestamptz
+	FromTime  pgtype.Timestamptz
+	ExcludeID pgtype.UUID
+}
+
+func (q *Queries) ListRoomOverlaps(ctx context.Context, arg ListRoomOverlapsParams) ([]Lesson, error) {
+	rows, err := q.db.Query(ctx, listRoomOverlaps,
+		arg.RoomID,
+		arg.ToTime,
+		arg.FromTime,
+		arg.ExcludeID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Lesson
+	for rows.Next() {
+		var i Lesson
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClassID,
+			&i.CourseTypeID,
+			&i.RoomID,
+			&i.InstructorID,
+			&i.AccompanistID,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.Status,
+			&i.Visibility,
+			&i.Kind,
+			&i.Capacity,
+			&i.SlotDate,
+			&i.Detached,
+			&i.CancelNote,
+			&i.CanceledAt,
+			&i.CanceledBy,
 		); err != nil {
 			return nil, err
 		}
@@ -184,7 +263,7 @@ func (q *Queries) ListLessonsInRange(ctx context.Context, arg ListLessonsInRange
 }
 
 const lockLesson = `-- name: LockLesson :one
-SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date FROM lessons WHERE id = $1 FOR UPDATE
+SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date, detached, cancel_note, canceled_at, canceled_by FROM lessons WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockLesson(ctx context.Context, id pgtype.UUID) (Lesson, error) {
@@ -204,6 +283,10 @@ func (q *Queries) LockLesson(ctx context.Context, id pgtype.UUID) (Lesson, error
 		&i.Kind,
 		&i.Capacity,
 		&i.SlotDate,
+		&i.Detached,
+		&i.CancelNote,
+		&i.CanceledAt,
+		&i.CanceledBy,
 	)
 	return i, err
 }
@@ -212,7 +295,7 @@ const updateLesson = `-- name: UpdateLesson :execrows
 UPDATE lessons
 SET class_id = $2, course_type_id = $3, room_id = $4, instructor_id = $5, accompanist_id = $6,
     starts_at = $7, ends_at = $8, status = $9, visibility = $10, kind = $11, capacity = $12,
-    slot_date = $13
+    slot_date = $13, detached = $14, cancel_note = $15, canceled_at = $16, canceled_by = $17
 WHERE id = $1
 `
 
@@ -230,6 +313,10 @@ type UpdateLessonParams struct {
 	Kind          string
 	Capacity      int32
 	SlotDate      pgtype.Date
+	Detached      bool
+	CancelNote    pgtype.Text
+	CanceledAt    pgtype.Timestamptz
+	CanceledBy    pgtype.UUID
 }
 
 func (q *Queries) UpdateLesson(ctx context.Context, arg UpdateLessonParams) (int64, error) {
@@ -247,6 +334,10 @@ func (q *Queries) UpdateLesson(ctx context.Context, arg UpdateLessonParams) (int
 		arg.Kind,
 		arg.Capacity,
 		arg.SlotDate,
+		arg.Detached,
+		arg.CancelNote,
+		arg.CanceledAt,
+		arg.CanceledBy,
 	)
 	if err != nil {
 		return 0, err

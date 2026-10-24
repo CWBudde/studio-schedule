@@ -421,7 +421,8 @@ func TestUniqueNamesMigration(t *testing.T) {
 	t.Cleanup(func() { _ = m.Close() })
 
 	for _, want := range []string{
-		"00008_lesson_slots.sql", "00007_course_type_unique_names.sql", "00006_catalog_unique_names.sql",
+		"00009_lesson_admin.sql", "00008_lesson_slots.sql", "00007_course_type_unique_names.sql",
+		"00006_catalog_unique_names.sql",
 	} {
 		if res, err := m.Down(ctx); err != nil || res.Name != want {
 			t.Fatalf("down = %+v, %v; want %s rolled back", res, err, want)
@@ -472,8 +473,8 @@ func TestUniqueNamesMigration(t *testing.T) {
 }
 
 // TestLessonSlotsMigration upgrades a database with generated and one-off
-// lessons (00008): a class lesson gets the school date of its start as its
-// slot, a one-off none.
+// lessons (00008, 00009): a class lesson gets the school date of its start as
+// its slot, a one-off none, and neither is detached.
 func TestLessonSlotsMigration(t *testing.T) {
 	t.Parallel()
 
@@ -486,8 +487,10 @@ func TestLessonSlotsMigration(t *testing.T) {
 
 	t.Cleanup(func() { _ = m.Close() })
 
-	if res, err := m.Down(ctx); err != nil || res.Name != "00008_lesson_slots.sql" {
-		t.Fatalf("down = %+v, %v; want 00008 rolled back", res, err)
+	for _, want := range []string{"00009_lesson_admin.sql", "00008_lesson_slots.sql"} {
+		if res, err := m.Down(ctx); err != nil || res.Name != want {
+			t.Fatalf("down = %+v, %v; want %s rolled back", res, err, want)
+		}
 	}
 
 	const (
@@ -533,6 +536,14 @@ func TestLessonSlotsMigration(t *testing.T) {
 		if err != nil || slot.String != want {
 			t.Errorf("slot of %s = %q, %v; want %q", id, slot.String, err, want)
 		}
+	}
+
+	// 00009 starts every lesson undetached and without cancellation details.
+	var attached int
+	if err := m.db.QueryRowContext(ctx, `SELECT count(*) FROM lessons
+		WHERE NOT detached AND cancel_note IS NULL AND canceled_at IS NULL AND canceled_by IS NULL`,
+	).Scan(&attached); err != nil || attached != 2 {
+		t.Errorf("undetached lessons = %d, %v; want 2", attached, err)
 	}
 }
 

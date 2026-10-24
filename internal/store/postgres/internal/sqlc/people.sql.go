@@ -242,6 +242,39 @@ func (q *Queries) ListAccountsByIDs(ctx context.Context, ids []pgtype.UUID) ([]A
 	return items, nil
 }
 
+const listAccountsByPersons = `-- name: ListAccountsByPersons :many
+SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at, locale FROM accounts WHERE person_id = ANY($1::uuid[]) ORDER BY lower(email), id
+`
+
+func (q *Queries) ListAccountsByPersons(ctx context.Context, persons []pgtype.UUID) ([]Account, error) {
+	rows, err := q.db.Query(ctx, listAccountsByPersons, persons)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Account
+	for rows.Next() {
+		var i Account
+		if err := rows.Scan(
+			&i.ID,
+			&i.PersonID,
+			&i.Email,
+			&i.Role,
+			&i.VisibleDays,
+			&i.DisabledAt,
+			&i.ConfirmedAt,
+			&i.Locale,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDependents = `-- name: ListDependents :many
 SELECT p.id, p.given_name, p.family_name, p.email, p.phone, p.birth_date, p.notes
 FROM person_guardians g
@@ -268,6 +301,33 @@ func (q *Queries) ListDependents(ctx context.Context, guardianID pgtype.UUID) ([
 			&i.BirthDate,
 			&i.Notes,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGuardianLinks = `-- name: ListGuardianLinks :many
+SELECT guardian_id, dependent_id
+FROM person_guardians
+WHERE dependent_id = ANY($1::uuid[])
+ORDER BY dependent_id, guardian_id
+`
+
+func (q *Queries) ListGuardianLinks(ctx context.Context, dependents []pgtype.UUID) ([]PersonGuardian, error) {
+	rows, err := q.db.Query(ctx, listGuardianLinks, dependents)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PersonGuardian
+	for rows.Next() {
+		var i PersonGuardian
+		if err := rows.Scan(&i.GuardianID, &i.DependentID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -33,6 +33,10 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 				full.Visibility = domain.VisibilityMembers
 				full.Kind = domain.LessonWorkshop
 				full.Capacity = 30
+				full.Detached = true
+				full.CancelNote = "Studio closed"
+				full.CanceledAt = t0.Add(-time.Hour)
+				full.CanceledBy = e.account(e.person("Olga", "Office"), "office@example.org").ID
 				valid(e.t, full)
 
 				return minimal, full
@@ -149,6 +153,48 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			wantSlice(e.t, got, []domain.Lesson{past, first, second, third})
 		},
+		"ListRoomOverlaps": func(e *env) {
+			s := e.setting()
+			other := e.room(e.location("South Studio"), "Room B")
+			at := func(start time.Time, d time.Duration, mutate func(*domain.Lesson)) domain.Lesson {
+				l := e.newLesson(s, start, 5)
+				l.EndsAt = start.Add(d)
+				if mutate != nil {
+					mutate(&l)
+				}
+				valid(e.t, l)
+				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Create(ctx, l) })
+
+				return l
+			}
+
+			// Query [t0+1h, t0+2h) in s.room.
+			from, to := t0.Add(time.Hour), t0.Add(2*time.Hour)
+			at(t0, time.Hour, nil)                                 // ends at from: no overlap
+			at(to, time.Hour, nil)                                 // starts at to: no overlap
+			early := at(t0.Add(30*time.Minute), time.Hour, nil)    // overlaps the start
+			late := at(t0.Add(90*time.Minute), time.Hour, nil)     // overlaps the end
+			around := at(t0.Add(30*time.Minute), 3*time.Hour, nil) // covers it
+			inside := at(t0.Add(70*time.Minute), 10*time.Minute, nil)
+			at(from, time.Hour, func(l *domain.Lesson) { l.RoomID = other.ID }) // another room
+			at(from, time.Hour, func(l *domain.Lesson) { l.Status = domain.LessonCanceled })
+
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+				return tx.Lessons().ListRoomOverlaps(ctx, s.room.ID, from, to, domain.LessonID{})
+			})
+			wantSlice(e.t, got, []domain.Lesson{early, around, inside, late})
+
+			// The lesson being edited does not overlap itself.
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+				return tx.Lessons().ListRoomOverlaps(ctx, s.room.ID, from, to, around.ID)
+			})
+			wantSlice(e.t, got, []domain.Lesson{early, inside, late})
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+				return tx.Lessons().ListRoomOverlaps(ctx, other.ID, t0.Add(-time.Hour), t0, domain.LessonID{})
+			})
+			wantSlice(e.t, got, nil)
+		},
 		"MissingReferenceIsConflict": func(e *env) {
 			s := e.setting()
 			for name, mutate := range map[string]func(*domain.Lesson){
@@ -157,6 +203,9 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 				"room":        func(l *domain.Lesson) { l.RoomID = newID[domain.RoomID](e) },
 				"instructor":  func(l *domain.Lesson) { l.InstructorID = newID[domain.StaffID](e) },
 				"accompanist": func(l *domain.Lesson) { l.AccompanistID = newID[domain.StaffID](e) },
+				"canceler": func(l *domain.Lesson) {
+					l.Status, l.CanceledAt, l.CanceledBy = domain.LessonCanceled, t0, newID[domain.AccountID](e)
+				},
 			} {
 				l := e.newLesson(s, t0, 5)
 				mutate(&l)

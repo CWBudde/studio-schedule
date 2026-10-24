@@ -113,6 +113,40 @@ func testPersons(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			wantSlice(e.t, deps, []domain.Person{kid1})
 		},
+		"ListGuardianLinks": func(e *env) {
+			links := func(dependents ...domain.PersonID) []domain.Guardian {
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Guardian, error) {
+					return tx.Persons().ListGuardianLinks(ctx, dependents)
+				})
+			}
+			parent := e.person("Paula", "Parent")
+			other := e.person("Otto", "Parent")
+			kid1 := e.person("Alex", "Child")
+			kid2 := e.person("Zara", "Child")
+			kid3 := e.person("Nora", "Child")
+			all := []domain.Guardian{
+				{GuardianID: parent.ID, DependentID: kid1.ID},
+				{GuardianID: other.ID, DependentID: kid1.ID},
+				{GuardianID: parent.ID, DependentID: kid2.ID},
+				{GuardianID: other.ID, DependentID: kid3.ID},
+			}
+
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				for _, g := range all {
+					if err := tx.Persons().AddGuardian(ctx, g); err != nil {
+						return err
+					}
+				}
+
+				return nil
+			})
+
+			// Ordered by dependent and guardian ID, each link once; persons
+			// without guardians and missing IDs simply add nothing.
+			wantSlice(e.t, links(kid2.ID, parent.ID, kid1.ID, newID[domain.PersonID](e), kid2.ID), all[:3])
+			wantSlice(e.t, links(), nil)
+			wantSlice(e.t, links(parent.ID), nil)
+		},
 		"GuardianConflicts": func(e *env) {
 			parent := e.person("Paula", "Parent")
 			kid := e.person("Kim", "Child")
@@ -317,6 +351,25 @@ func testAccounts(t *testing.T, newStore func(*testing.T) store.Store) {
 				return tx.Accounts().GetByPerson(ctx, none.ID)
 			})
 			wantErr(e.t, err, domain.ErrNotFound)
+		},
+		"ListByPersons": func(e *env) {
+			byPersons := func(ids ...domain.PersonID) []domain.Account {
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Account, error) {
+					return tx.Accounts().ListByPersons(ctx, ids)
+				})
+			}
+			c := e.account(e.person("C", "C"), "carl@example.org")
+			b := e.account(e.person("B", "B"), "Bea@example.org")
+			a := e.account(e.person("A", "A"), "anna@example.org")
+			e.account(e.person("D", "D"), "dora@example.org")
+			none := e.person("N", "N")
+
+			// Ordered like List, each account once; persons without an
+			// account and missing IDs simply absent.
+			wantSlice(e.t, byPersons(c.PersonID, none.ID, newID[domain.PersonID](e), a.PersonID, b.PersonID, c.PersonID),
+				[]domain.Account{a, b, c})
+			wantSlice(e.t, byPersons(), nil)
+			wantSlice(e.t, byPersons(none.ID), nil)
 		},
 		"OneAccountPerPerson": func(e *env) {
 			a := e.account(e.person("Ada", "Account"), "ada@example.org")

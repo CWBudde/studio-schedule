@@ -217,6 +217,20 @@ func (r personRepo) ListGuardians(_ context.Context, dependent domain.PersonID) 
 	}), nil
 }
 
+func (r personRepo) ListGuardianLinks(_ context.Context, dependents []domain.PersonID) ([]domain.Guardian, error) {
+	var out []domain.Guardian
+
+	for g := range r.tx.state.guardians.rows {
+		if slices.Contains(dependents, g.DependentID) {
+			out = append(out, g)
+		}
+	}
+
+	return sorted(out, func(a, b domain.Guardian) int {
+		return cmp.Or(compareID(a.DependentID, b.DependentID), compareID(a.GuardianID, b.GuardianID))
+	}), nil
+}
+
 // linked returns the persons that pick selects from the guardian links,
 // ordered like List.
 func (r personRepo) linked(pick func(domain.Guardian) (domain.PersonID, bool)) []domain.Person {
@@ -316,6 +330,12 @@ func (r accountRepo) List(context.Context) ([]domain.Account, error) {
 
 func (r accountRepo) ListByIDs(_ context.Context, ids []domain.AccountID) ([]domain.Account, error) {
 	return sorted(byIDs(r.tx.state.accounts.get, ids), compareAccounts), nil
+}
+
+func (r accountRepo) ListByPersons(_ context.Context, persons []domain.PersonID) ([]domain.Account, error) {
+	return sorted(r.tx.state.accounts.filter(func(a domain.Account) bool {
+		return slices.Contains(persons, a.PersonID)
+	}), compareAccounts), nil
 }
 
 func (r accountRepo) MaxVisibleDays(context.Context) (int, error) {
@@ -875,12 +895,13 @@ func (r lessonRepo) Update(_ context.Context, l domain.Lesson) error {
 
 func (r lessonRepo) put(l domain.Lesson) error {
 	s := &r.tx.state
-	l.StartsAt, l.EndsAt = instant(l.StartsAt), instant(l.EndsAt)
+	l.StartsAt, l.EndsAt, l.CanceledAt = instant(l.StartsAt), instant(l.EndsAt), instant(l.CanceledAt)
 
 	switch {
 	case (!l.ClassID.IsZero() && !s.classes.has(l.ClassID)) || !s.courseTypes.has(l.CourseTypeID) ||
 		!s.rooms.has(l.RoomID) || !s.staff.has(l.InstructorID) ||
-		(!l.AccompanistID.IsZero() && !s.staff.has(l.AccompanistID)):
+		(!l.AccompanistID.IsZero() && !s.staff.has(l.AccompanistID)) ||
+		(!l.CanceledBy.IsZero() && !s.accounts.has(l.CanceledBy)):
 		return conflict("lesson references a missing record")
 	case !l.ClassID.IsZero() && s.lessons.exists(func(o domain.Lesson) bool {
 		return o.ID != l.ID && o.ClassID == l.ClassID && o.SlotDate == l.SlotDate
@@ -926,6 +947,20 @@ func (r lessonRepo) ListRange(_ context.Context, from, to time.Time) ([]domain.L
 	from, to = instant(from), instant(to)
 	lessons := r.tx.state.lessons.filter(func(l domain.Lesson) bool {
 		return !l.StartsAt.Before(from) && l.StartsAt.Before(to)
+	})
+
+	return sorted(lessons, func(a, b domain.Lesson) int {
+		return cmp.Or(a.StartsAt.Compare(b.StartsAt), compareID(a.ID, b.ID))
+	}), nil
+}
+
+func (r lessonRepo) ListRoomOverlaps(
+	_ context.Context, room domain.RoomID, from, to time.Time, exclude domain.LessonID,
+) ([]domain.Lesson, error) {
+	from, to = instant(from), instant(to)
+	lessons := r.tx.state.lessons.filter(func(l domain.Lesson) bool {
+		return l.RoomID == room && l.Status != domain.LessonCanceled && l.ID != exclude &&
+			l.StartsAt.Before(to) && l.EndsAt.After(from)
 	})
 
 	return sorted(lessons, func(a, b domain.Lesson) int {

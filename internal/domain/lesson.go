@@ -3,6 +3,7 @@ package domain
 import (
 	"slices"
 	"time"
+	"unicode/utf8"
 )
 
 // LessonStatus tells whether a lesson takes place.
@@ -73,7 +74,20 @@ type Lesson struct {
 	Visibility    LessonVisibility
 	Kind          LessonKind
 	Capacity      int
+	// Detached marks a lesson of a class that the office edited one by
+	// one: it no longer follows edits of its class or term (ADR 0007).
+	// Only a lesson of a class can be detached.
+	Detached bool
+	// CancelNote, CanceledAt and CanceledBy record the office's
+	// cancellation (ADR 0007); all optional, and only on a canceled
+	// lesson.
+	CancelNote string
+	CanceledAt time.Time
+	CanceledBy AccountID
 }
+
+// MaxCancelNoteLength is the longest cancellation note, in characters.
+const MaxCancelNoteLength = 500
 
 // Validate checks the lesson for consistency. All errors wrap ErrValidation.
 func (l Lesson) Validate() error {
@@ -81,15 +95,23 @@ func (l Lesson) Validate() error {
 		rule{!l.ID.IsZero(), "lesson id must be set"},
 		rule{l.ClassID.IsZero() == l.SlotDate.IsZero(), "a lesson has a slot date exactly when it has a class"},
 		rule{optionalDate(l.SlotDate), "invalid lesson slot date"},
-		rule{!l.CourseTypeID.IsZero(), "lesson course type must be set"},
-		rule{!l.RoomID.IsZero(), "lesson room must be set"},
-		rule{!l.InstructorID.IsZero(), "lesson instructor must be set"},
-		rule{l.AccompanistID.IsZero() || l.AccompanistID != l.InstructorID, "accompanist must differ from the instructor"},
+		on("courseTypeId", !l.CourseTypeID.IsZero(), "lesson course type must be set"),
+		on("roomId", !l.RoomID.IsZero(), "lesson room must be set"),
+		on("instructorId", !l.InstructorID.IsZero(), "lesson instructor must be set"),
+		on("accompanistId", l.AccompanistID.IsZero() || l.AccompanistID != l.InstructorID,
+			"accompanist must differ from the instructor"),
 		rule{!l.StartsAt.IsZero(), "lesson start must be set"},
 		rule{l.EndsAt.After(l.StartsAt), "lesson must end after it starts"},
 		rule{l.Status.Valid(), "invalid lesson status"},
-		rule{l.Visibility.Valid(), "invalid lesson visibility"},
-		rule{l.Kind.Valid(), "invalid lesson kind"},
-		rule{l.Capacity > 0, "lesson capacity must be positive"},
+		on("visibility", l.Visibility.Valid(), "invalid lesson visibility"),
+		on("kind", l.Kind.Valid(), "invalid lesson kind"),
+		on("capacity", l.Capacity > 0, "lesson capacity must be positive"),
+		rule{!l.Detached || !l.ClassID.IsZero(), "only a lesson of a class can be detached"},
+		rule{
+			l.Status == LessonCanceled || (l.CancelNote == "" && l.CanceledAt.IsZero() && l.CanceledBy.IsZero()),
+			"only a canceled lesson has cancellation details",
+		},
+		on("note", l.CancelNote == "" || !blank(l.CancelNote), "the note must not be blank"),
+		on("note", utf8.RuneCountInString(l.CancelNote) <= MaxCancelNoteLength, "the note is too long"),
 	)
 }

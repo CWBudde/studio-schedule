@@ -149,6 +149,9 @@ type PersonRepo interface {
 	ListDependents(ctx context.Context, guardian domain.PersonID) ([]domain.Person, error)
 	// ListGuardians returns the guardians of a dependent ordered like List.
 	ListGuardians(ctx context.Context, dependent domain.PersonID) ([]domain.Person, error)
+	// ListGuardianLinks returns the guardian links of the given dependents,
+	// each once and ordered by dependent and guardian ID.
+	ListGuardianLinks(ctx context.Context, dependents []domain.PersonID) ([]domain.Guardian, error)
 }
 
 // AccountRepo stores login accounts. Emails are unique ignoring the case of
@@ -171,6 +174,9 @@ type AccountRepo interface {
 	// ListByIDs returns the accounts with the given IDs, each once and
 	// ordered like List. IDs that do not exist are left out.
 	ListByIDs(ctx context.Context, ids []domain.AccountID) ([]domain.Account, error)
+	// ListByPersons returns the accounts of the given persons, each once and
+	// ordered like List. Persons without an account are left out.
+	ListByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.Account, error)
 	// MaxVisibleDays returns the largest VisibleDays override of any
 	// account, or 0 if none has one.
 	MaxVisibleDays(ctx context.Context) (int, error)
@@ -338,7 +344,8 @@ type ClassRepo interface {
 type LessonRepo interface {
 	Get(ctx context.Context, id domain.LessonID) (domain.Lesson, error)
 	// Create fails with domain.ErrConflict if the class already has a lesson
-	// for the same slot date, or a referenced record does not exist.
+	// for the same slot date, or a referenced record (the canceling account
+	// included) does not exist.
 	Create(ctx context.Context, l domain.Lesson) error
 	// Update fails with domain.ErrConflict under the same rules as Create.
 	Update(ctx context.Context, l domain.Lesson) error
@@ -351,6 +358,12 @@ type LessonRepo interface {
 	// ListRange returns the lessons with from <= StartsAt < to, ordered by
 	// StartsAt and ID.
 	ListRange(ctx context.Context, from, to time.Time) ([]domain.Lesson, error)
+	// ListRoomOverlaps returns the lessons in the room that are not
+	// canceled and overlap [from, to) (StartsAt < to and EndsAt > from),
+	// except the lesson exclude (none if zero), ordered by StartsAt and ID.
+	ListRoomOverlaps(
+		ctx context.Context, room domain.RoomID, from, to time.Time, exclude domain.LessonID,
+	) ([]domain.Lesson, error)
 	// Lock returns the lesson and locks it until the transaction ends (in
 	// PostgreSQL: SELECT … FOR UPDATE). Every capacity check and booking
 	// change of a lesson must run under this lock. It needs a ReadWrite

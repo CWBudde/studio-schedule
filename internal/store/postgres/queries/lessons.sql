@@ -7,16 +7,16 @@ SELECT * FROM lessons WHERE id = $1 FOR UPDATE;
 -- name: CreateLesson :exec
 INSERT INTO lessons (
     id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status,
-    visibility, kind, capacity, slot_date
+    visibility, kind, capacity, slot_date, detached, cancel_note, canceled_at, canceled_by
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
 );
 
 -- name: UpdateLesson :execrows
 UPDATE lessons
 SET class_id = $2, course_type_id = $3, room_id = $4, instructor_id = $5, accompanist_id = $6,
     starts_at = $7, ends_at = $8, status = $9, visibility = $10, kind = $11, capacity = $12,
-    slot_date = $13
+    slot_date = $13, detached = $14, cancel_note = $15, canceled_at = $16, canceled_by = $17
 WHERE id = $1;
 
 -- name: DeleteLesson :execrows
@@ -31,4 +31,12 @@ ORDER BY starts_at, id;
 SELECT * FROM lessons
 WHERE class_id = sqlc.arg(class_id)
   AND (sqlc.narg(from_slot)::date IS NULL OR slot_date >= sqlc.narg(from_slot)::date)
+ORDER BY starts_at, id;
+
+-- name: ListRoomOverlaps :many
+SELECT * FROM lessons
+WHERE room_id = sqlc.arg(room_id)
+  AND status <> 'canceled'
+  AND starts_at < sqlc.arg(to_time) AND ends_at > sqlc.arg(from_time)
+  AND (sqlc.narg(exclude_id)::uuid IS NULL OR id <> sqlc.narg(exclude_id)::uuid)
 ORDER BY starts_at, id;

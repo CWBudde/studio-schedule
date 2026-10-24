@@ -188,6 +188,16 @@ func (r personRepo) ListGuardians(ctx context.Context, dependent domain.PersonID
 	return toPersons(r.q.ListGuardians(ctx, pgID(dependent)))
 }
 
+func (r personRepo) ListGuardianLinks(ctx context.Context, dependents []domain.PersonID) ([]domain.Guardian, error) {
+	rows, err := r.q.ListGuardianLinks(ctx, pgIDs(dependents))
+
+	return convertRows(rows, err, func(row sqlc.PersonGuardian) domain.Guardian {
+		return domain.Guardian{
+			GuardianID: fromPgID[domain.PersonID](row.GuardianID), DependentID: fromPgID[domain.PersonID](row.DependentID),
+		}
+	})
+}
+
 // ---------------------------------------------------------------- accounts
 
 type accountRepo struct{ q *sqlc.Queries }
@@ -278,6 +288,12 @@ func (r accountRepo) List(ctx context.Context) ([]domain.Account, error) {
 
 func (r accountRepo) ListByIDs(ctx context.Context, ids []domain.AccountID) ([]domain.Account, error) {
 	rows, err := r.q.ListAccountsByIDs(ctx, pgIDs(ids))
+
+	return convertRows(rows, err, toAccount)
+}
+
+func (r accountRepo) ListByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.Account, error) {
+	rows, err := r.q.ListAccountsByPersons(ctx, pgIDs(persons))
 
 	return convertRows(rows, err, toAccount)
 }
