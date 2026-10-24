@@ -579,6 +579,14 @@ func (r termRepo) Get(_ context.Context, id domain.TermID) (domain.Term, error) 
 	return t, nil
 }
 
+func (r termRepo) Lock(ctx context.Context, id domain.TermID) (domain.Term, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return domain.Term{}, err
+	}
+
+	return r.Get(ctx, id)
+}
+
 func (r termRepo) Create(_ context.Context, t domain.Term) error {
 	s := &r.tx.state
 	if err := r.tx.checkWritable(); err != nil {

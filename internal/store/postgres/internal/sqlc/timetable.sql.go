@@ -267,6 +267,22 @@ func (q *Queries) LockClass(ctx context.Context, id pgtype.UUID) (Class, error) 
 	return i, err
 }
 
+const lockTerm = `-- name: LockTerm :one
+SELECT id, name, starts_on, ends_on FROM terms WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockTerm(ctx context.Context, id pgtype.UUID) (Term, error) {
+	row := q.db.QueryRow(ctx, lockTerm, id)
+	var i Term
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.StartsOn,
+		&i.EndsOn,
+	)
+	return i, err
+}
+
 const removeClassMember = `-- name: RemoveClassMember :execrows
 DELETE FROM class_members WHERE class_id = $1 AND person_id = $2
 `

@@ -94,7 +94,8 @@ func (q *Queries) GetLesson(ctx context.Context, id pgtype.UUID) (Lesson, error)
 
 const listLessonsByClass = `-- name: ListLessonsByClass :many
 SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date FROM lessons
-WHERE class_id = $1 AND slot_date >= $2
+WHERE class_id = $1
+  AND ($2::date IS NULL OR slot_date >= $2::date)
 ORDER BY starts_at, id
 `
 

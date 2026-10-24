@@ -125,7 +125,7 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 			c := e.class(s, time.Monday, domain.TimeOfDay{Hour: 9})
 			other := e.class(s, time.Tuesday, domain.TimeOfDay{Hour: 9})
 
-			e.classLesson(s, c, slot0.AddDays(-7), t0.Add(-7*24*time.Hour))
+			past := e.classLesson(s, c, slot0.AddDays(-7), t0.Add(-7*24*time.Hour))
 			first := e.classLesson(s, c, slot0, t0)
 			third := e.classLesson(s, c, slot0.AddDays(14), t0.Add(14*24*time.Hour))
 			// Moved before the lesson of the slot before it.
@@ -142,6 +142,12 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 				return tx.Lessons().ListByClass(ctx, c.ID, slot0.AddDays(22))
 			})
 			wantSlice(e.t, got, nil)
+
+			// A zero date lists them all.
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+				return tx.Lessons().ListByClass(ctx, c.ID, domain.Date{})
+			})
+			wantSlice(e.t, got, []domain.Lesson{past, first, second, third})
 		},
 		"MissingReferenceIsConflict": func(e *env) {
 			s := e.setting()

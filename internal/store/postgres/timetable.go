@@ -116,6 +116,15 @@ func (r classRepo) Get(ctx context.Context, id domain.ClassID) (domain.Class, er
 
 // Lock reads the class with SELECT … FOR UPDATE. In a read-only transaction
 // PostgreSQL rejects the statement (SQLSTATE 25006, store.ErrReadOnly).
+func (r termRepo) Lock(ctx context.Context, id domain.TermID) (domain.Term, error) {
+	row, err := r.q.LockTerm(ctx, pgID(id))
+	if err != nil {
+		return domain.Term{}, notFound("term", err)
+	}
+
+	return toTerm(row), nil
+}
+
 func (r classRepo) Lock(ctx context.Context, id domain.ClassID) (domain.Class, error) {
 	row, err := r.q.LockClass(ctx, pgID(id))
 	if err != nil {

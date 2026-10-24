@@ -174,6 +174,33 @@ func testTimetable(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			wantErr(e.t, err, domain.ErrNotFound)
 		},
+		"TermLock": func(e *env) {
+			tm := e.term("Autumn", domain.Date{Year: 2026, Month: time.September, Day: 1})
+
+			var got domain.Term
+
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				var err error
+				got, err = tx.Terms().Lock(ctx, tm.ID)
+
+				return err
+			})
+			wantEqual(e.t, got, tm)
+
+			err := e.read(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Terms().Lock(ctx, tm.ID)
+
+				return err
+			})
+			wantErr(e.t, err, store.ErrReadOnly)
+
+			err = e.write(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Terms().Lock(ctx, newID[domain.TermID](e))
+
+				return err
+			})
+			wantErr(e.t, err, domain.ErrNotFound)
+		},
 		"DeleteClassWithLessonIsConflict": func(e *env) {
 			s := e.setting()
 			c := e.class(s, time.Monday, domain.TimeOfDay{Hour: 9})

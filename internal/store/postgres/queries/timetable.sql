@@ -1,6 +1,9 @@
 -- name: GetTerm :one
 SELECT * FROM terms WHERE id = $1;
 
+-- name: LockTerm :one
+SELECT * FROM terms WHERE id = $1 FOR UPDATE;
+
 -- name: CreateTerm :exec
 INSERT INTO terms (id, name, starts_on, ends_on) VALUES ($1, $2, $3, $4);
 

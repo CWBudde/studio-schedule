@@ -271,6 +271,12 @@ type TermRepo interface {
 	Delete(ctx context.Context, id domain.TermID) error
 	// List returns all terms ordered by start date and ID.
 	List(ctx context.Context) ([]domain.Term, error)
+	// Lock returns the term and locks it until the transaction ends (in
+	// PostgreSQL: SELECT … FOR UPDATE). Whatever generates or deletes
+	// lessons from a term's dates locks the term before its classes, so a
+	// change of the dates is either complete or not begun. It needs a
+	// ReadWrite transaction and fails with ErrReadOnly otherwise.
+	Lock(ctx context.Context, id domain.TermID) (domain.Term, error)
 }
 
 // ClassRepo stores weekly classes and their members.
@@ -313,7 +319,7 @@ type LessonRepo interface {
 	// lesson, canceled ones included.
 	Delete(ctx context.Context, id domain.LessonID) error
 	// ListByClass returns the lessons of a class whose slot date is from or
-	// later, ordered by StartsAt and ID.
+	// later (all of them for a zero from), ordered by StartsAt and ID.
 	ListByClass(ctx context.Context, class domain.ClassID, from domain.Date) ([]domain.Lesson, error)
 	// ListRange returns the lessons with from <= StartsAt < to, ordered by
 	// StartsAt and ID.

@@ -29,5 +29,6 @@ ORDER BY starts_at, id;
 
 -- name: ListLessonsByClass :many
 SELECT * FROM lessons
-WHERE class_id = sqlc.arg(class_id) AND slot_date >= sqlc.arg(from_slot)
+WHERE class_id = sqlc.arg(class_id)
+  AND (sqlc.narg(from_slot)::date IS NULL OR slot_date >= sqlc.narg(from_slot)::date)
 ORDER BY starts_at, id;
