@@ -1,9 +1,9 @@
 import type { Locator } from '@playwright/test';
 import { addDays, expect, gotoDemo, type Page, test } from './fixtures';
 
-// The demo seed has no bookings (there is no booking endpoint before Phase 4),
-// so these tests see "nobody gets a mail" and cannot check the cancellation
-// mail in the demo mailbox; the mails are covered by the Go tests.
+// The demo books class members into every lesson of their classes, so these
+// tests change a lesson of the one class without members and see "nobody
+// gets a mail"; the cancellation mails are covered by the Go tests.
 
 /** Signs in with the office's demo account from the login page and opens the schedule. */
 async function signInAsOffice(page: Page): Promise<void> {
@@ -25,15 +25,18 @@ async function signInAsOffice(page: Page): Promise<void> {
 }
 
 /**
- * Opens a public, regular lesson two to four weeks ahead (it has not
- * started) and returns its card's name and the sheet.
+ * Opens a public, regular lesson without bookings two to four weeks ahead
+ * (it has not started) and returns its card's name and the sheet.
  */
 async function openComingLesson(page: Page): Promise<{ name: string; sheet: Locator }> {
   await page.getByRole('button', { name: 'Next 14 days' }).click();
-  // Plain cards: no status, kind or visibility after the time.
+  // The Saturday creative dance class is the seed's one class without
+  // members, so its lessons are unbooked on any weekday (members are booked
+  // into every lesson of their classes). The 14 days always have a Saturday.
+  // A plain card: no status, kind or visibility after the time.
   const card = page
     .getByRole('main')
-    .getByRole('button', { name: /\d{2}:\d{2}–\d{2}:\d{2}$/ })
+    .getByRole('button', { name: /^Creative Dance, Saturday, .+, 10:00–10:45$/ })
     .first();
   await expect(card).toBeVisible();
   const name = (await card.getAttribute('aria-label')) ?? '';
