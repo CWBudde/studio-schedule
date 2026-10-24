@@ -44,7 +44,9 @@ term runs from three weeks before that day to about ten months after it, class m
 term's first day, and three one-off public workshops follow 3, 17 and 24 days after it. The seeded
 class lessons of the week up to the visit carry the members' automatic bookings, and the lesson
 generation at startup books the members into every later lesson it creates (ADR 0009), so class
-lessons show fewer free places than workshops, which nobody is booked into. The demo
+lessons show fewer free places than workshops, which nobody is booked into, except one: a small
+tap workshop 10 days after the visit is booked up by members and has two members on its waiting
+list (ADR 0010; nobody of the demo logins' families), so the demo shows a full lesson. The demo
 releases one week ahead, so the later workshops always lie beyond the release window; they are visible
 because workshops are published early. `scripts/wasm-smoke.mjs` checks this.
 
@@ -133,7 +135,9 @@ The demo is a _demo installation_ (`app.Deps.Demo`, also set for `serve` without
   shows the difference. The admin can open Accounts and "sign in as" another account; a banner
   leads back ([ADR 0005](decisions/0005-rbac-and-impersonation.md)).
 - **Mail links:** the Worker passes the app's URL (with the `#/` route prefix) to Go as the
-  `APP_URL` environment variable.
+  `APP_URL` environment variable. This includes the waiting-list invites
+  (`#/waitlist/accept?token=…`), which the `waitlist-expiry` job (every minute, in the Worker too)
+  ends when they run out.
 
 Real installations answer both endpoints with 404
 ([ADR 0004](decisions/0004-accounts-sessions-and-mail.md)).

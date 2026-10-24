@@ -546,18 +546,24 @@ no repository yet.
   - [ ] Office and instructor operations on a lesson's participants: add a person or a guest,
         mark trial, remove; booking beyond capacity needs an explicit override that is recorded in
         the booking event
-- [ ] Waitlist: join and leave; when a spot frees up, the next entry gets a **timed invite** (random
+- [x] Waitlist: join and leave; when a spot frees up, the next entry gets a **timed invite** (random
       token, only the hash stored, expiry configurable); accepting books under the lesson lock;
       expired invites move on to the next entry; "stay on list" option (decision record required)
-  - [ ] ADR "Waiting list": invite expiry setting, what "stay on list" means, whether accepting
-        needs a sign-in, invites stop at the booking cutoff
-  - [ ] Store: `WaitlistRepo` (migration, both stores, contract cases incl. ordering by
-        `JoinedAt` and lookup by token hash)
-  - [ ] Join and leave (self and dependents); position in the list shown to the member
-  - [ ] Invite: every transaction that frees a place invites the next waiting entry and queues the
+  - [x] ADR "Waiting list": invite expiry setting, what "stay on list" means, whether accepting
+        needs a sign-in, invites stop at the booking cutoff (2026-10-24) — ADR 0010: an invite
+        holds the place, 12 h by default and never past the cutoff; the mail link opens a confirm
+        page that accepts without a sign-in; "stay on the list" re-queues at the end
+  - [x] Store: `WaitlistRepo` (migration, both stores, contract cases incl. ordering by
+        `JoinedAt` and lookup by token hash) (2026-10-24) — migration 00012
+        (`waitlist_entries`, `settings.waitlist_invite_expiry`)
+  - [x] Join and leave (self and dependents); position in the list shown to the member
+        (2026-10-24) — `joinWaitlist`, `leaveWaitlist`; the lesson sheet shows the position
+  - [x] Invite: every transaction that frees a place invites the next waiting entry and queues the
         invite mail; accepting books under the lesson lock and fails cleanly when the invite has
-        expired
-  - [ ] Expiry job (`internal/jobs`, both targets): expires due invites and invites the next entry
+        expired (2026-10-24) — `service/waitlister.go`; accept in the app or by link
+        (`/waitlist/accept`); booking and joining settle the list first; e2e `waitlist.spec.ts`
+  - [x] Expiry job (`internal/jobs`, both targets): expires due invites and invites the next entry
+        (2026-10-24) — `waitlist-expiry`, every minute, one transaction per lesson
 - [ ] Instructor view: today's lessons, participant list, attendance check (attended / no-show),
       notify participants
   - [ ] `/teach`: today's and the next lessons of the signed-in instructor (office sees all), with
@@ -570,13 +576,13 @@ no repository yet.
   - [ ] `/my-lessons` for the account and its dependents: upcoming with cancel, history with
         status, waitlist entries
   - [ ] Booking history (`listBookingEvents`, office) in the participant list of the lesson sheet
-- [ ] UI: book/cancel from schedule and detail views, for-whom selector (family), waitlist state,
+- [x] UI: book/cancel from schedule and detail views, for-whom selector (family), waitlist state,
       optimistic updates with rollback, toast feedback
-  - [ ] Lesson sheet: book / cancel / join waitlist with a for-whom selector when the account has
+  - [x] Lesson sheet: book / cancel / join waitlist with a for-whom selector when the account has
         dependents; states for full, closed, late cancellation and canceled lessons (2026-10-24) —
-        partial: `features/schedule/booking/BookingSection.tsx` books and cancels with the
+        `features/schedule/booking/BookingSection.tsx` books and cancels with the
         selector, warns before a late cancellation and offers "also cancel following weeks";
-        joining the waitlist remains
+        joins, leaves, accepts and declines the waiting list
   - [x] List and week grid: free-place and booked badges; optimistic update with rollback on a
         409, toasts with the reason (2026-10-24) — `AvailabilityBadges`; e2e `booking.spec.ts`
 - [ ] Tests: concurrent booking (contract suite, both stores), cutoffs, waitlist invite
