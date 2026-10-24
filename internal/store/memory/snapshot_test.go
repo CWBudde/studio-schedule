@@ -100,19 +100,28 @@ func fullStore(t *testing.T) *Store {
 			person  domain.PersonID
 		)
 
-		for id, a := range st.state.accounts.rows {
-			account, person = id, a.PersonID
+		// The first account and one-off lesson (the demo's class lessons
+		// have member bookings), by ID, whose person is not booked into it
+		// yet: the demo books persons into some one-off lessons too.
+		accounts := sorted(st.state.accounts.filter(all), func(a, b domain.Account) int { return compareID(a.ID, b.ID) })
+		oneOffs := sorted(st.state.lessons.filter(func(l domain.Lesson) bool { return l.ClassID.IsZero() }),
+			func(a, b domain.Lesson) int { return compareID(a.ID, b.ID) })
 
-			break
+	pick:
+		for _, a := range accounts {
+			for _, l := range oneOffs {
+				if !st.state.bookings.exists(func(b domain.Booking) bool {
+					return b.LessonID == l.ID && b.PersonID == a.PersonID
+				}) {
+					account, person, lesson = a.ID, a.PersonID, l.ID
+
+					break pick
+				}
+			}
 		}
 
-		// A workshop: the demo's class lessons have member bookings.
-		for id, l := range st.state.lessons.rows {
-			if l.ClassID.IsZero() {
-				lesson = id
-
-				break
-			}
+		if lesson.IsZero() {
+			return errors.New("no account and one-off lesson without a booking")
 		}
 
 		booking := domain.Booking{
