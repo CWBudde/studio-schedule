@@ -118,12 +118,13 @@ Goal: a production-grade persistence layer with two interchangeable implementati
       `domain.ID[K]` with one alias per table, canonical-only parsing; `ids.Source` with `V7`
       (prod) and a deterministic `Sequence` (tests, seed); forbidigo bans `uuid.New*` outside
       `internal/ids`; `app.Deps.IDs` (default `V7`) feeds the lesson generator
-- [ ] Domain entities and validation for all tables in the domain model (no behaviour yet)
+- [x] Domain entities and validation for all tables in the domain model (no behaviour yet)
       (2026-10-23) — plain structs with `Validate()` for every business table, string enums with
       `Valid()`, value types `Money`/`Date`/`TimeOfDay`, `Settings` extended (currency, receipt
       prefix, release rule, cutoffs, visible days); conventions in ADR 0002. `sessions`,
-      `password_resets`, `outbox_emails` and `receipt_counters` arrive with Phases 3/6/7.
-      partial: visible in the demo with the seed dataset
+      `password_resets`, `outbox_emails` and `receipt_counters` arrive with Phases 3/6/7. The
+      seed shows what has a repository; bookings, passes, waitlist and receipts reach the demo
+      with their phases (2026-10-24)
 - [x] `store` interfaces per aggregate. Explicit ordering on every list method, no generic query
       builder (2026-10-23) — settings, persons + guardians, accounts, locations, rooms, staff,
       course types, terms, classes + members, lessons, bookings + events; waitlist, passes,
@@ -150,10 +151,10 @@ Goal: a production-grade persistence layer with two interchangeable implementati
   - [x] Passes the contract suite (local: docker; CI: Postgres service container) (2026-10-23) —
         testcontainers `postgres:18-alpine` or `STUDIO_TEST_DATABASE_URL`, one cloned database
         per test
-- [ ] Config: env + flags (`DATABASE_URL`, `HTTP_ADDR`, `BASE_URL`, `SMTP_*`, `SESSION_*`), no
-      hard-coded secrets, `.env.example` (2026-10-23) — `internal/config`: flag > env > default,
-      validation, redacted logging; `serve --addr/--database-url/--base-url`. partial: `SMTP_*` and
-      `SESSION_*` arrive with the mailer and sessions in Phase 3
+- [x] Config: env + flags (`DATABASE_URL`, `HTTP_ADDR`, `BASE_URL`, `SMTP_*`), no hard-coded
+      secrets, `.env.example` (2026-10-23) — `internal/config`: flag > env > default, validation,
+      redacted logging; `serve --addr/--database-url/--base-url`; `SMTP_*` and `TRUSTED_PROXIES`
+      came with Phase 3 (2026-10-24). No `SESSION_*`: ADR 0004 fixes the session lifetimes
 - [x] `seed` command plus a deterministic fictional demo dataset (school, rooms, staff, course types,
       a term with ~25 weekly classes, members with families) (2026-10-23) — `internal/seed`: 2
       locations, 5 rooms, 9 staff, 9 course types, a term with 26 classes, 3 one-off workshops,
@@ -227,11 +228,11 @@ Goal: anyone can browse the published timetable. This is the first real demo val
 
 Goal: people can sign up and log in; staff can maintain the timetable.
 
-- [ ] Persons and family: guardians manage dependents (children without their own login). The
+- [x] Persons and family: guardians manage dependents (children without their own login). The
       store already has persons and guardian links (`AddGuardian`, `ListDependents`,
-      `ListGuardians`); no service, operation or page uses them yet (2026-10-23) — partial: ADR
-      0008, `service.FamilyService` with `/api/v1/family` and the `/account` profile are done; the
-      office view remains
+      `ListGuardians`); no service, operation or page uses them yet (2026-10-23) — ADR 0008,
+      `service.FamilyService` with `/api/v1/family`, the `/account` profile and the office's
+      `/admin/persons` (2026-10-24)
   - [x] ADR "Families and dependents": a guardian sees and edits only their own person and their
         dependents (office sees everyone); how a second guardian is linked (proposed: office only
         in Phase 3); removing a dependent unlinks it and deletes the person only while nothing
@@ -244,14 +245,27 @@ Goal: people can sign up and log in; staff can maintain the timetable.
         `updateDependent`, `removeDependent`; each dependent lists its other guardians; removing
         the last guardian deletes the person, or answers 409 while bookings or class memberships
         refer to it; a birth date after today (school zone) is a 422 on `body.birthDate`
-  - [ ] Office: person list and detail with family links (`/admin/persons`), add and remove a
+  - [x] Office: person list and detail with family links (`/admin/persons`), add and remove a
         guardian link; shares `listPersons` with the class-member subtask of Admin CRUD
-  - [ ] A dependent with their own account (ADR 0008, created by the office): the guardian's
+        (2026-10-24) — `getPerson`, `createPerson`, `updatePerson` (email and notes included),
+        `deletePerson` (409 `in-use` while anything refers to the person), `addGuardian` (a cycle
+        is a 422 on `guardianId`; links are written under `Persons().Lock`) and `removeGuardian`
+        (the office's removal keeps the person); `createPersonAccount` creates an unconfirmed
+        account with a 72-hour invitation (EN/DE mail) whose link sets the password (409
+        `has-account`, `duplicate` for a taken email; only admins create admins);
+        `/admin/persons` searches through `?q=`, the detail page shows guardians, children,
+        account, staff links and classes; e2e in `admin.spec.ts`
+  - [x] A dependent with their own account (ADR 0008, created by the office): the guardian's
         removal only unlinks it (today `Persons().Delete` fails on the account and the API answers
         a misleading 409), and the guardian no longer edits the data its owner manages
-  - [ ] A dependent the office linked to a staff record (`personId` on staff, 2026-10-24): removing
+        (2026-10-24) — a "managed" dependent (own account, staff link or dependents of its own,
+        `managed` in `getMyFamily`) is only unlinked and its edit is a 409 `managed`; other
+        refusals are the `Conflict` 409 `in-use`; ADR 0008 amended (whether guardians book for a
+        managed dependent is open for the Phase 4 booking ADR); e2e in `account.spec.ts`
+  - [x] A dependent the office linked to a staff record (`personId` on staff, 2026-10-24): removing
         it fails on the staff link, but `ErrDependentInUse` names only bookings and class
-        memberships; say why, or only unlink it like a dependent with an account
+        memberships; say why, or only unlink it like a dependent with an account (2026-10-24) —
+        a staff link makes the dependent managed, so it is only unlinked
   - [x] Demo: a demo family account with two children; tests for the guardian check (a stranger's
         dependent is a 404, not a 403) in service and HTTP tests (2026-10-23) — the demo member
         Clara Amberly has Ella and Finn (Tom is a second guardian, Hanna Birchmoor's Mia is a class
@@ -438,10 +452,11 @@ Goal: people can sign up and log in; staff can maintain the timetable.
 - [x] Demo: login page lists demo accounts per role (member, instructor, office, admin)
       (2026-10-23) — `GET /api/v1/demo/logins` in demo installations (WASM demo, `serve` without a
       database); one click signs in
-- [ ] Tests: auth flows, RBAC matrix per endpoint, mail rendering snapshots, e2e (login, admin edits a
-      class) (2026-10-23) — partial: auth flow tests (service and HTTP), mail golden files, the RBAC
+- [x] Tests: auth flows, RBAC matrix per endpoint, mail rendering snapshots, e2e (login, admin edits a
+      class) (2026-10-23) — auth flow tests (service and HTTP), mail golden files, the RBAC
       matrix (`internal/app/access_test.go`) and e2e sign-in, registration, impersonation, password
-      reset and account settings exist; "admin edits a class" remains
+      reset and account settings; "office edits a class and the schedule shows the change" in
+      `admin.spec.ts` (2026-10-24)
 
 ## Phase 4 — Booking & waiting list
 
@@ -456,6 +471,8 @@ no repository yet.
       3); `BookingCutoff` closes booking that long before the start; after `CancellationCutoff` a
       cancellation is allowed but flagged late (or refused); how class membership becomes bookings;
       what a canceled lesson does to its bookings
+  - [ ] Open from ADR 0008: may guardians book for a managed dependent (own account, staff link
+        or dependents of its own)?
 - [ ] Book a lesson for yourself or a dependent, as one transaction:
       `InTx → Lessons().Lock → CountActive < capacity → Insert → booking_event → outbox`; booking
       cutoff and release window enforced; duplicate booking is a conflict

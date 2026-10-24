@@ -66,7 +66,11 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   middleware answers 401/403 before the handler runs. Admin impersonation lives in
   `service/impersonation.go`. What a caller _sees_ (e.g. schedule visibility) stays in the services.
 - **Family:** `service.FamilyService` (`/api/v1/family`): own person data and dependents; a guardian
-  reaches only their dependents (`dependentOf`, a 404 for anyone else; ADR 0008).
+  reaches only their dependents (`dependentOf`, a 404 for anyone else; ADR 0008). A managed
+  dependent (own account, staff link or dependents of its own) is read-only for guardians and only
+  unlinked. The office's person administration and invitations are `service.PersonService`
+  (`service/persons.go`, `service/invite.go`, `/api/v1/admin/persons`); guardian links are written
+  under `Persons().Lock`.
 - **Admin writes:** the office maintains catalogue and timetable (`service/catalog_admin.go`,
   `httpapi/catalog_admin.go`; classes in `service/class_admin.go`, whose edits move the future
   lessons along in `class_sync.go`, terms in `service/term_admin.go`, whose new dates delete or
