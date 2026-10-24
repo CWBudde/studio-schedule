@@ -16,7 +16,7 @@ import (
 func Jobs(deps Deps) *jobs.Runner {
 	deps = deps.withDefaults()
 	lessons := service.NewLessonGenerator(deps.Store, deps.Clock, deps.IDs)
-	auth := newAuthService(deps)
+	auth := newAuthService(deps, newRenderer())
 
 	all := []jobs.Job{{
 		Name:  "generate-lessons",

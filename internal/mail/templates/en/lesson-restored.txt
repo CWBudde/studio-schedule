@@ -1,0 +1,14 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+Good news: this lesson at {{.SchoolName}} takes place after all. Please note its time and
+place, which may have changed since the cancellation:
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}
+{{.Room}}, {{.Location}}
+Booked for: {{join .Participants}}
+
+Your booking still stands.
+
+Kind regards,
+{{.SchoolName}}

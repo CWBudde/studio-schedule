@@ -732,6 +732,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lessons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a one-off lesson
+         * @description Adds a lesson without a class, e.g. a workshop or a private lesson, which are published early; a regular one follows the release window. An unknown course type, room or staff member is a 422 on the field that names it. A start that is not in the future is a 409 `past` unless `confirmPast` is set. Another lesson in the room at an overlapping time is a 409 `room-taken` naming it, unless `confirmRoomOverlap` is set.
+         */
+        post: operations["createLesson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lessons/{lessonId}": {
         parameters: {
             query?: never;
@@ -741,11 +761,59 @@ export interface paths {
         };
         /**
          * Published lesson
-         * @description Returns one lesson the caller may see (see getSchedule). Lessons that do not exist or are not visible are reported alike as not found.
+         * @description Returns one lesson the caller may see (see getSchedule). Lessons that do not exist or are not visible are reported alike as not found. Office and admin accounts also get `admin`: the detached flag, the active bookings and the cancellation details.
          */
         get: operations["getLesson"];
-        put?: never;
+        /**
+         * Update a lesson
+         * @description Replaces the time, room, staff, capacity, visibility and kind of a lesson that has not started (422 on `path.lessonId` otherwise); course type and class stay. A lesson of a class is detached from it: class and term edits leave it alone from then on. A capacity below the active bookings is a 422 on `capacity`. A new start in the past is a 409 `past` unless `confirmPast` is set. A new time or room is checked like in `createLesson` (409 `room-taken`). A new start or room of a scheduled lesson mails everyone with an active booking, unless it now starts in the past.
+         */
+        put: operations["updateLesson"];
         post?: never;
+        /**
+         * Delete a one-off lesson
+         * @description Deletes a one-off lesson that has not started (422 on `path.lessonId` otherwise) and that no booking refers to (409 `in-use` otherwise). A lesson of a class is canceled instead (409 `generated`): generation would create it again.
+         */
+        delete: operations["deleteLesson"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lessons/{lessonId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a lesson
+         * @description Cancels a lesson that has not started (422 on `path.lessonId` otherwise), with an optional note, and mails everyone with an active booking. The bookings stay. A canceled lesson stays as it is, note included, started or not.
+         */
+        post: operations["cancelLesson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lessons/{lessonId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore a canceled lesson
+         * @description Lets a canceled lesson that has not started take place after all (422 on `path.lessonId` otherwise) and mails everyone with an active booking its current time and room. Another lesson in the room at an overlapping time is a 409 `room-taken` naming it, unless `confirmRoomOverlap` is set; the body is optional. The lesson stays detached from its class. A scheduled lesson stays as it is, started or not.
+         */
+        post: operations["restoreLesson"];
         delete?: never;
         options?: never;
         head?: never;
@@ -857,7 +925,7 @@ export interface paths {
         };
         /**
          * Published schedule
-         * @description Returns the lessons that start in a range of school dates, as the caller may see them. Visitors who are not signed in see public lessons that are released, plus one-off lessons and special formats, which are published early. Members also see lessons for members, and regular lessons up to visibleUntil (early access). Staff see every lesson, hidden and unreleased ones included. Canceled lessons are included with their status.
+         * @description Returns the lessons that start in a range of school dates, as the caller may see them. Visitors who are not signed in see public lessons that are released, plus workshops and private lessons, which are published early. Members also see lessons for members, and regular lessons up to visibleUntil (early access). Staff see every lesson, hidden and unreleased ones included. Canceled lessons are included with their status.
          */
         get: operations["getSchedule"];
         put?: never;
@@ -1037,6 +1105,12 @@ export interface components {
         AccountList: {
             /** @description Accounts ordered by email. */
             items: components["schemas"]["AccountEntry"][];
+        };
+        AccountRef: {
+            /** Format: uuid */
+            id: string;
+            /** @description Given and family name of the account's person. */
+            name: string;
         };
         AdminPerson: {
             /**
@@ -1313,11 +1387,13 @@ export interface components {
              * @example https://example.com/error-log/abc123
              */
             instance?: string;
+            /** @description The lesson that uses the room; only with reason room-taken. */
+            lesson?: components["schemas"]["ConflictLesson"];
             /**
-             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already.
+             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted.
              * @enum {string}
              */
-            reason: "in-use" | "duplicate" | "managed" | "has-account";
+            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated";
             /**
              * Format: int64
              * @description HTTP status code
@@ -1336,6 +1412,24 @@ export interface components {
              * @example https://example.com/errors/example
              */
             type: string;
+        };
+        ConflictLesson: {
+            courseType: components["schemas"]["CourseTypeRef"];
+            /**
+             * Format: date-time
+             * @description End instant (UTC).
+             */
+            endsAt: string;
+            /**
+             * Format: uuid
+             * @description Lesson ID.
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description Start instant (UTC).
+             */
+            startsAt: string;
         };
         CourseType: {
             /** @description Description, if any. */
@@ -1508,9 +1602,140 @@ export interface components {
             /** @description Given name of the admin. */
             givenName: string;
         };
+        LessonAdmin: {
+            /**
+             * Format: int64
+             * @description Number of bookings that are not canceled.
+             */
+            activeBookings: number;
+            /** @description Note of the cancellation, if any. */
+            cancelNote?: string;
+            /**
+             * Format: date-time
+             * @description When the lesson was canceled, if recorded.
+             */
+            canceledAt?: string;
+            /** @description Who canceled the lesson, if recorded. */
+            canceledBy?: components["schemas"]["AccountRef"];
+            /** @description Whether the lesson was edited one by one and no longer follows its class. */
+            detached: boolean;
+        };
+        LessonCancelData: {
+            /** @description Optional note for those booked, e.g. the reason; at most 500 characters (Unicode code points) after trimming surrounding white space, a 422 on body.note otherwise. */
+            note?: string;
+        };
+        LessonCreateData: {
+            /**
+             * Format: uuid
+             * @description Accompanist, if any.
+             */
+            accompanistId?: string;
+            /**
+             * Format: int64
+             * @description Maximum number of participants.
+             */
+            capacity: number;
+            /** @description Save even if the lesson starts in the past (skips the 409 past). */
+            confirmPast?: boolean;
+            /** @description Save even if another lesson uses the room at an overlapping time (skips the 409 room-taken). */
+            confirmRoomOverlap?: boolean;
+            /**
+             * Format: uuid
+             * @description Course type taught.
+             */
+            courseTypeId: string;
+            /**
+             * Format: date
+             * @description School date of the lesson.
+             */
+            date: string;
+            /**
+             * Format: int64
+             * @description Length in minutes; the lesson ends on its day.
+             */
+            durationMinutes: number;
+            /**
+             * Format: uuid
+             * @description Instructor.
+             */
+            instructorId: string;
+            /**
+             * @description Regular lesson or special format; workshops and private lessons are published early.
+             * @enum {string}
+             */
+            kind: "regular" | "workshop" | "private";
+            /**
+             * Format: uuid
+             * @description Room.
+             */
+            roomId: string;
+            /**
+             * @description Start time (HH:MM) in the school time zone.
+             * @example 18:00
+             */
+            startTime: string;
+            /**
+             * @description Who may see the lesson.
+             * @enum {string}
+             */
+            visibility: "public" | "members" | "hidden";
+        };
+        LessonData: {
+            /**
+             * Format: uuid
+             * @description Accompanist, if any.
+             */
+            accompanistId?: string;
+            /**
+             * Format: int64
+             * @description Maximum number of participants.
+             */
+            capacity: number;
+            /** @description Save even if the lesson starts in the past (skips the 409 past). */
+            confirmPast?: boolean;
+            /** @description Save even if another lesson uses the room at an overlapping time (skips the 409 room-taken). */
+            confirmRoomOverlap?: boolean;
+            /**
+             * Format: date
+             * @description School date of the lesson.
+             */
+            date: string;
+            /**
+             * Format: int64
+             * @description Length in minutes; the lesson ends on its day.
+             */
+            durationMinutes: number;
+            /**
+             * Format: uuid
+             * @description Instructor.
+             */
+            instructorId: string;
+            /**
+             * @description Regular lesson or special format; workshops and private lessons are published early.
+             * @enum {string}
+             */
+            kind: "regular" | "workshop" | "private";
+            /**
+             * Format: uuid
+             * @description Room.
+             */
+            roomId: string;
+            /**
+             * @description Start time (HH:MM) in the school time zone.
+             * @example 18:00
+             */
+            startTime: string;
+            /**
+             * @description Who may see the lesson.
+             * @enum {string}
+             */
+            visibility: "public" | "members" | "hidden";
+        };
         LessonDetail: {
             /** @description Accompanist; absent if the lesson has none. */
             accompanist?: components["schemas"]["StaffRef"];
+            /** @description What the office sees beyond the schedule; only for office and admin accounts. */
+            admin?: components["schemas"]["LessonAdmin"];
             /**
              * Format: int64
              * @description Maximum number of participants.
@@ -1564,6 +1789,10 @@ export interface components {
              * @enum {string}
              */
             visibility: "public" | "members" | "hidden";
+        };
+        LessonRestoreData: {
+            /** @description Restore even if another lesson uses the room at an overlapping time (skips the 409 room-taken). */
+            confirmRoomOverlap?: boolean;
         };
         LessonSummary: {
             /** @description Accompanist; absent if the lesson has none. */
@@ -3547,6 +3776,48 @@ export interface operations {
             };
         };
     };
+    createLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LessonCreateData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonDetail"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     getLesson: {
         parameters: {
             query?: never;
@@ -3566,6 +3837,180 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LessonDetail"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The lesson. */
+                lessonId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LessonData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonDetail"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The lesson. */
+                lessonId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    cancelLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The lesson. */
+                lessonId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LessonCancelData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonDetail"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    restoreLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The lesson. */
+                lessonId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LessonRestoreData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonDetail"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
                 };
             };
             /** @description Error */

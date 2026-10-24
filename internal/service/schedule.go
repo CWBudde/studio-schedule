@@ -71,6 +71,9 @@ type ScheduledLesson struct {
 	Room                    domain.Room
 	Location                domain.Location
 	Instructor, Accompanist domain.Staff
+	// Admin is what the office sees beyond the schedule; nil for
+	// everyone else.
+	Admin *LessonAdmin
 }
 
 // Schedule is the published timetable of a date range as one viewer sees
@@ -167,7 +170,8 @@ func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQ
 
 // Lesson returns one lesson p may see; a zero p is a guest. A lesson that
 // does not exist or is not visible fails alike with domain.ErrNotFound, so
-// the response does not reveal hidden or unreleased lessons.
+// the response does not reveal hidden or unreleased lessons. Office and
+// admin accounts also get the lesson's Admin details.
 func (s *ScheduleService) Lesson(ctx context.Context, p Principal, id domain.LessonID) (ScheduledLesson, error) {
 	now := s.clock.Now()
 
@@ -186,6 +190,17 @@ func (s *ScheduleService) Lesson(ctx context.Context, p Principal, id domain.Les
 
 		if !viewerOf(p, settings, loc, now).sees(l, ComputeReleaseWindow(settings, loc, now)) {
 			return domain.ErrNotFound
+		}
+
+		if p.Role.AtLeast(domain.RoleOffice) {
+			active, err := tx.Bookings().CountActive(ctx, l.ID)
+			if err != nil {
+				return err
+			}
+
+			out, err = adminLesson(ctx, tx, l, active)
+
+			return err
 		}
 
 		refs, err := loadRefsOf(ctx, tx, l)

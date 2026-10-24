@@ -146,6 +146,29 @@ func TestTermDates(t *testing.T) {
 		}
 	})
 
+	t.Run("an earlier end deletes edited and canceled lessons without bookings", func(t *testing.T) {
+		t.Parallel()
+
+		f, svc, c := setup(t)
+
+		edited := f.lessonAt(t, c.ID, "2026-11-03")
+		edited.Capacity = 4
+		canceled := f.lessonAt(t, c.ID, "2026-11-10")
+		canceled.Status, canceled.Detached = domain.LessonCanceled, true
+		canceled.CanceledAt = mustInstant(t, now)
+		f.write(t, func(ctx context.Context, tx store.Tx) error {
+			return errors.Join(tx.Lessons().Update(ctx, edited), tx.Lessons().Update(ctx, canceled))
+		})
+
+		if _, err := svc.UpdateTerm(ctx, f.term.ID, f.termData(t, "2026-09-01", "2026-11-01")); err != nil {
+			t.Fatal(err)
+		}
+
+		if got := lessonStarts(f.classLessons(t, c.ID)); !slices.Equal(got, all[:2]) {
+			t.Fatalf("lessons start at %v, want %v", got, all[:2])
+		}
+	})
+
 	t.Run("a later start deletes the lessons before it", func(t *testing.T) {
 		t.Parallel()
 
@@ -203,16 +226,6 @@ func TestTermDates(t *testing.T) {
 			prepare: func(t *testing.T, f *genFixture, c domain.Class) {
 				t.Helper()
 				f.book(t, f.lessonAt(t, c.ID, "2026-11-10"), 1)
-			},
-			startsOn: "2026-09-01", endsOn: "2026-11-01", field: "endsOn",
-		},
-		"a lesson was edited": {
-			prepare: func(t *testing.T, f *genFixture, c domain.Class) {
-				t.Helper()
-
-				edited := f.lessonAt(t, c.ID, "2026-11-10")
-				edited.Capacity = 4
-				f.write(t, func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Update(ctx, edited) })
 			},
 			startsOn: "2026-09-01", endsOn: "2026-11-01", field: "endsOn",
 		},

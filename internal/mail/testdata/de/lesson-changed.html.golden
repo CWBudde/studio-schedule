@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;">
+<div style="max-width:560px;margin:0 auto;padding:24px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;color:#18181b;background-color:#ffffff;">
+<p>Hallo Anna,</p>
+<p>diese Stunde bei Studio Example wurde geändert:</p>
+<p><strong>Imaginary Ballet</strong><br>Neu: <strong>Mittwoch, 28. Oktober 2026, 19:30–20:45 Uhr, Room Two, Studio Nowhere</strong><br>Bisher: <s>Dienstag, 27. Oktober 2026, 18:00–19:15 Uhr, Room One, Studio Nowhere</s><br>Gebucht für: Anna Example, Mia Example</p>
+<p>Deine Buchung gilt für den neuen Termin. Passt dir die Änderung nicht, melde dich bitte bei Studio Example.</p>
+<p>Viele Grüße<br>Studio Example</p>
+</div>
+</body>
+</html>

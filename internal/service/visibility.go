@@ -69,8 +69,8 @@ func (v viewer) visibleUntil(w ReleaseWindow) time.Time {
 }
 
 // visibleToGuest reports whether a visitor who is not signed in may see l
-// (ADR 0003): the lesson must be public and released. One-off lessons and
-// kinds other than regular are published early and ignore the window.
+// (ADR 0003): the lesson must be public and released. Kinds other than
+// regular are published early and ignore the window.
 // Canceled lessons stay visible; callers show their status.
 func visibleToGuest(l domain.Lesson, w ReleaseWindow) bool {
 	if l.Visibility != domain.VisibilityPublic {
@@ -80,8 +80,9 @@ func visibleToGuest(l domain.Lesson, w ReleaseWindow) bool {
 	return l.StartsAt.Before(w.ReleasedUntil) || publishedEarly(l)
 }
 
-// publishedEarly reports whether l ignores the release window: one-off
-// lessons and kinds other than regular.
+// publishedEarly reports whether l ignores the release window: workshops
+// and private lessons, whether of a class or one-off (ADR 0003, amended
+// 2026-10-24). A regular one-off lesson follows the window.
 func publishedEarly(l domain.Lesson) bool {
-	return l.ClassID.IsZero() || l.Kind != domain.LessonRegular
+	return l.Kind != domain.LessonRegular
 }

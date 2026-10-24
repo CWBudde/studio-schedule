@@ -3,8 +3,11 @@ package httpapi
 import (
 	"net/http"
 	"reflect"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/cwbudde/studio-schedule/internal/domain"
 )
 
 // Reasons of a Conflict (ADR 0007, ADR 0008).
@@ -13,6 +16,9 @@ const (
 	reasonDuplicate  = "duplicate"
 	reasonManaged    = "managed"
 	reasonHasAccount = "has-account"
+	reasonRoomTaken  = "room-taken"
+	reasonPast       = "past"
+	reasonGenerated  = "generated"
 )
 
 // Conflict is the problem document of a 409 the UI can explain: Reason
@@ -20,7 +26,16 @@ const (
 type Conflict struct {
 	huma.ErrorModel
 
-	Reason string `doc:"in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already." enum:"in-use,duplicate,managed,has-account" json:"reason"`
+	Reason string          `doc:"in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted." enum:"in-use,duplicate,managed,has-account,room-taken,past,generated" json:"reason"`
+	Lesson *ConflictLesson `doc:"The lesson that uses the room; only with reason room-taken." json:"lesson,omitempty"`
+}
+
+// ConflictLesson names the lesson of a room-taken conflict.
+type ConflictLesson struct {
+	ID         domain.LessonID `doc:"Lesson ID."          json:"id"`
+	StartsAt   time.Time       `doc:"Start instant (UTC)." json:"startsAt"`
+	EndsAt     time.Time       `doc:"End instant (UTC)."   json:"endsAt"`
+	CourseType CourseTypeRef   `json:"courseType"`
 }
 
 func conflict(reason, detail string) *Conflict {

@@ -1,0 +1,9 @@
+{{define "content" -}}
+<p>Hello{{with .GivenName}} {{.}}{{end}},</p>
+<p>Unfortunately, this lesson at {{.SchoolName}} is canceled:</p>
+<p><strong>{{.CourseType}}</strong><br>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}<br>{{.Room}}, {{.Location}}<br>Booked for: {{join .Participants}}</p>
+{{- with .Note}}
+<p>Note from {{$.SchoolName}}: {{.}}</p>
+{{- end}}
+<p>Kind regards,<br>{{.SchoolName}}</p>
+{{- end}}

@@ -42,8 +42,8 @@ func (s *TimetableService) CreateTerm(ctx context.Context, d TermData) (domain.T
 }
 
 // UpdateTerm replaces a term's name and dates. The lessons of its classes
-// that the new range leaves out are deleted while they lie ahead, follow
-// their class and have no bookings; any other lesson left out is a
+// that the new range leaves out are deleted while they lie ahead and have
+// no bookings; a lesson left out that has started or is booked is a
 // validation error on the date that leaves it out (fitLessons). A longer
 // range gets the lessons of the rolling horizon that have not started.
 func (s *TimetableService) UpdateTerm(ctx context.Context, id domain.TermID, d TermData) (domain.Term, error) {
@@ -104,10 +104,12 @@ func (s *TimetableService) DeleteTerm(ctx context.Context, id domain.TermID) err
 // t.
 //
 // A lesson whose slot lies outside the range is deleted while it lies
-// ahead, follows its class (see follows) and has no bookings. A lesson
-// outside that has started, was edited one by one or is booked refuses the
-// new range with a validation error on startsOn or endsOn, whichever leaves
-// it out: the office moves or cancels it first.
+// ahead and has no bookings, whether it follows its class, was edited one
+// by one (detached) or is canceled: nobody is booked into it, so nobody
+// misses it (ADR 0007). A lesson outside that has started or is booked
+// refuses the new range with a validation error on startsOn or endsOn,
+// whichever leaves it out: history never ends up outside its term, and the
+// office handles the bookings first.
 func (s *TimetableService) fitLessons(ctx context.Context, tx store.Tx, t domain.Term) error {
 	settings, loc, err := loadSchool(ctx, tx)
 	if errors.Is(err, ErrNoSchool) {
@@ -141,7 +143,7 @@ func (s *TimetableService) fitLessons(ctx context.Context, tx store.Tx, t domain
 
 		for _, l := range lessons {
 			if field := outside(t, l.SlotDate); field != "" {
-				if err := s.leave(ctx, tx, c, l.ID, field, now, loc); err != nil {
+				if err := leave(ctx, tx, l.ID, field, now); err != nil {
 					return err
 				}
 			}
@@ -168,13 +170,10 @@ func outside(t domain.Term, d domain.Date) string {
 	return ""
 }
 
-// leave deletes lesson id of class c, which the term's field leaves out, or
-// refuses the term with a validation error on field; see fitLessons. It
-// locks the lesson first, as every booking check must.
-func (s *TimetableService) leave(
-	ctx context.Context, tx store.Tx, c domain.Class, id domain.LessonID, field string, now time.Time,
-	loc *time.Location,
-) error {
+// leave deletes lesson id, which the term's field leaves out, or refuses
+// the term with a validation error on field; see fitLessons. It locks the
+// lesson first, as every booking check must.
+func leave(ctx context.Context, tx store.Tx, id domain.LessonID, field string, now time.Time) error {
 	l, err := tx.Lessons().Lock(ctx, id)
 	if err != nil {
 		return err
@@ -192,8 +191,6 @@ func (s *TimetableService) leave(
 		why = "has started"
 	case booked:
 		why = "has bookings"
-	case !follows(l, c, loc):
-		why = "was edited"
 	default:
 		return tx.Lessons().Delete(ctx, l.ID)
 	}

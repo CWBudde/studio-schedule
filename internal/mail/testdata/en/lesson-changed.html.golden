@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;">
+<div style="max-width:560px;margin:0 auto;padding:24px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;color:#18181b;background-color:#ffffff;">
+<p>Hello Anna,</p>
+<p>This lesson at Studio Example has changed:</p>
+<p><strong>Imaginary Ballet</strong><br>Now: <strong>Wednesday, 28 October 2026, 19:30–20:45, Room Two, Studio Nowhere</strong><br>Before: <s>Tuesday, 27 October 2026, 18:00–19:15, Room One, Studio Nowhere</s><br>Booked for: Anna Example, Mia Example</p>
+<p>Your booking moves with the lesson. If the change does not suit you, contact Studio Example.</p>
+<p>Kind regards,<br>Studio Example</p>
+</div>
+</body>
+</html>

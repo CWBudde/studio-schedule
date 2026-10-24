@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
 )
@@ -26,12 +27,22 @@ const (
 	// TemplateInvite tells a person that the school created an account for
 	// them and sends the link to choose its password. Data: LinkData.
 	TemplateInvite = "invite"
+	// TemplateLessonCanceled tells those booked for a lesson that it is
+	// canceled, with the school's note. Data: LessonData.
+	TemplateLessonCanceled = "lesson-canceled"
+	// TemplateLessonRestored tells those booked for a canceled lesson that
+	// it takes place after all. Data: LessonData.
+	TemplateLessonRestored = "lesson-restored"
+	// TemplateLessonChanged tells those booked for a lesson that its start
+	// or room changed. Data: LessonChangedData.
+	TemplateLessonChanged = "lesson-changed"
 )
 
 // TemplateNames returns all template names.
 func TemplateNames() []string {
 	return []string{
 		TemplateConfirmEmail, TemplateResetPassword, TemplateChangeEmail, TemplateEmailChanged, TemplateInvite,
+		TemplateLessonCanceled, TemplateLessonRestored, TemplateLessonChanged,
 	}
 }
 
@@ -82,6 +93,70 @@ func (d EmailChangedData) Validate() error {
 		return fmt.Errorf("%w: school name must not be empty", domain.ErrValidation)
 	case strings.TrimSpace(d.NewEmail) == "":
 		return fmt.Errorf("%w: new email address must not be empty", domain.ErrValidation)
+	}
+
+	return nil
+}
+
+// LessonData is the data of the mails about one lesson:
+// TemplateLessonCanceled and TemplateLessonRestored. The templates format
+// StartsAt and EndsAt in their own location, which must be the school's
+// time zone.
+type LessonData struct {
+	// SchoolName is the school that sends the mail.
+	SchoolName string
+	// GivenName greets the recipient; empty means a greeting without name.
+	GivenName string
+	// Participants are the names of the booked persons the mail is about:
+	// the recipient, their dependents, or a guest.
+	Participants []string
+	// CourseType names what is taught.
+	CourseType string
+	// StartsAt and EndsAt are the lesson's times in the school's time zone.
+	StartsAt, EndsAt time.Time
+	// Room and Location say where the lesson takes place.
+	Room, Location string
+	// Note is the school's note on a cancellation; optional.
+	Note string
+}
+
+// Validate checks the data before rendering. All errors wrap
+// domain.ErrValidation.
+func (d LessonData) Validate() error {
+	switch {
+	case strings.TrimSpace(d.SchoolName) == "":
+		return fmt.Errorf("%w: school name must not be empty", domain.ErrValidation)
+	case len(d.Participants) == 0:
+		return fmt.Errorf("%w: a lesson mail needs a participant", domain.ErrValidation)
+	case strings.TrimSpace(d.CourseType) == "" || strings.TrimSpace(d.Room) == "" ||
+		strings.TrimSpace(d.Location) == "":
+		return fmt.Errorf("%w: course type, room and location must not be empty", domain.ErrValidation)
+	case d.StartsAt.IsZero() || !d.EndsAt.After(d.StartsAt):
+		return fmt.Errorf("%w: a lesson must end after it starts", domain.ErrValidation)
+	}
+
+	return nil
+}
+
+// LessonChangedData is the data of TemplateLessonChanged: the lesson as it
+// is now, and its previous start, end and room.
+type LessonChangedData struct {
+	LessonData
+
+	PreviousStartsAt, PreviousEndsAt time.Time
+	PreviousRoom, PreviousLocation   string
+}
+
+// Validate checks the data before rendering. All errors wrap
+// domain.ErrValidation.
+func (d LessonChangedData) Validate() error {
+	if err := d.LessonData.Validate(); err != nil {
+		return err
+	}
+
+	if d.PreviousStartsAt.IsZero() || !d.PreviousEndsAt.After(d.PreviousStartsAt) ||
+		strings.TrimSpace(d.PreviousRoom) == "" || strings.TrimSpace(d.PreviousLocation) == "" {
+		return fmt.Errorf("%w: the previous start, end, room and location must be set", domain.ErrValidation)
 	}
 
 	return nil

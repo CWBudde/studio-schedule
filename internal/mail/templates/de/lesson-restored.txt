@@ -1,0 +1,14 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+gute Nachricht: Diese Stunde bei {{.SchoolName}} findet doch statt. Bitte beachte Zeit und
+Ort, sie können sich seit der Absage geändert haben:
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr
+{{.Room}}, {{.Location}}
+Gebucht für: {{join .Participants}}
+
+Deine Buchung bleibt bestehen.
+
+Viele Grüße
+{{.SchoolName}}

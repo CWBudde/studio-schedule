@@ -1,0 +1,13 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+diese Stunde bei {{.SchoolName}} wurde geändert:
+
+{{.CourseType}}
+Neu:     {{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr, {{.Room}}, {{.Location}}
+Bisher:  {{date .PreviousStartsAt}}, {{clock .PreviousStartsAt}}–{{clock .PreviousEndsAt}} Uhr, {{.PreviousRoom}}, {{.PreviousLocation}}
+Gebucht für: {{join .Participants}}
+
+Deine Buchung gilt für den neuen Termin. Passt dir die Änderung nicht, melde dich bitte bei {{.SchoolName}}.
+
+Viele Grüße
+{{.SchoolName}}

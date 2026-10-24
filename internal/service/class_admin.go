@@ -190,6 +190,29 @@ var (
 // classReferences checks that the course type, room and staff of c exist
 // and returns c with its staff.
 func classReferences(ctx context.Context, tx store.Tx, c domain.Class) (TimetableClass, error) {
+	instructor, accompanist, err := checkReferences(ctx, tx, references{
+		CourseTypeID: c.CourseTypeID, RoomID: c.RoomID, InstructorID: c.InstructorID, AccompanistID: c.AccompanistID,
+	})
+	if err != nil {
+		return TimetableClass{}, err
+	}
+
+	return TimetableClass{Class: c, Instructor: instructor, Accompanist: accompanist}, nil
+}
+
+// references are what a class or a lesson refers to; AccompanistID is
+// zero for none.
+type references struct {
+	CourseTypeID  domain.CourseTypeID
+	RoomID        domain.RoomID
+	InstructorID  domain.StaffID
+	AccompanistID domain.StaffID
+}
+
+// checkReferences checks that the course type, room and staff of r exist,
+// reporting a missing one on the field that names it, and returns the
+// staff (a zero accompanist for none).
+func checkReferences(ctx context.Context, tx store.Tx, r references) (instructor, accompanist domain.Staff, err error) {
 	known := func(err, unknown error) error {
 		if errors.Is(err, domain.ErrNotFound) {
 			return unknown
@@ -198,28 +221,25 @@ func classReferences(ctx context.Context, tx store.Tx, c domain.Class) (Timetabl
 		return err
 	}
 
-	if _, err := tx.CourseTypes().Get(ctx, c.CourseTypeID); err != nil {
-		return TimetableClass{}, known(err, errUnknownCourseType)
+	if _, err := tx.CourseTypes().Get(ctx, r.CourseTypeID); err != nil {
+		return domain.Staff{}, domain.Staff{}, known(err, errUnknownCourseType)
 	}
 
-	if _, err := tx.Rooms().Get(ctx, c.RoomID); err != nil {
-		return TimetableClass{}, known(err, errUnknownRoom)
+	if _, err := tx.Rooms().Get(ctx, r.RoomID); err != nil {
+		return domain.Staff{}, domain.Staff{}, known(err, errUnknownRoom)
 	}
 
-	tc := TimetableClass{Class: c}
-
-	var err error
-	if tc.Instructor, err = tx.Staff().Get(ctx, c.InstructorID); err != nil {
-		return TimetableClass{}, known(err, errUnknownInstructor)
+	if instructor, err = tx.Staff().Get(ctx, r.InstructorID); err != nil {
+		return domain.Staff{}, domain.Staff{}, known(err, errUnknownInstructor)
 	}
 
-	if !c.AccompanistID.IsZero() {
-		if tc.Accompanist, err = tx.Staff().Get(ctx, c.AccompanistID); err != nil {
-			return TimetableClass{}, known(err, errUnknownAccompanist)
+	if !r.AccompanistID.IsZero() {
+		if accompanist, err = tx.Staff().Get(ctx, r.AccompanistID); err != nil {
+			return domain.Staff{}, domain.Staff{}, known(err, errUnknownAccompanist)
 		}
 	}
 
-	return tc, nil
+	return instructor, accompanist, nil
 }
 
 // hasBookings reports whether bookings refer to the lesson, canceled ones

@@ -1,0 +1,1 @@
+{{.SchoolName}}: {{.CourseType}} on {{date .StartsAt}} takes place after all

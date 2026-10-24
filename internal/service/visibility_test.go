@@ -28,7 +28,7 @@ func TestVisibleToGuest(t *testing.T) {
 		earlyShown bool
 	}{
 		{"regular class lesson", domain.ClassID{1}, domain.LessonRegular, false},
-		{"one-off regular lesson", domain.ClassID{}, domain.LessonRegular, true},
+		{"one-off regular lesson", domain.ClassID{}, domain.LessonRegular, false},
 		{"workshop of a class", domain.ClassID{1}, domain.LessonWorkshop, true},
 		{"one-off workshop", domain.ClassID{}, domain.LessonWorkshop, true},
 		{"private lesson", domain.ClassID{}, domain.LessonPrivate, true},

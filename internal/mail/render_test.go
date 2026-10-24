@@ -622,11 +622,14 @@ func TestRenderAllTemplates(t *testing.T) {
 	r := newRenderer(t)
 
 	samples := map[string]any{
-		mail.TemplateConfirmEmail:  confirmData(),
-		mail.TemplateResetPassword: resetData(),
-		mail.TemplateChangeEmail:   changeEmailData(),
-		mail.TemplateEmailChanged:  emailChangedData(),
-		mail.TemplateInvite:        inviteData(),
+		mail.TemplateConfirmEmail:   confirmData(),
+		mail.TemplateResetPassword:  resetData(),
+		mail.TemplateChangeEmail:    changeEmailData(),
+		mail.TemplateEmailChanged:   emailChangedData(),
+		mail.TemplateInvite:         inviteData(),
+		mail.TemplateLessonCanceled: lessonData(t),
+		mail.TemplateLessonRestored: lessonRestoredData(t),
+		mail.TemplateLessonChanged:  lessonChangedData(t),
 	}
 
 	for _, name := range mail.TemplateNames() {

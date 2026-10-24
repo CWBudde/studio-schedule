@@ -1,0 +1,13 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+This lesson at {{.SchoolName}} has changed:
+
+{{.CourseType}}
+Now:    {{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}, {{.Room}}, {{.Location}}
+Before: {{date .PreviousStartsAt}}, {{clock .PreviousStartsAt}}–{{clock .PreviousEndsAt}}, {{.PreviousRoom}}, {{.PreviousLocation}}
+Booked for: {{join .Participants}}
+
+Your booking moves with the lesson. If the change does not suit you, contact {{.SchoolName}}.
+
+Kind regards,
+{{.SchoolName}}

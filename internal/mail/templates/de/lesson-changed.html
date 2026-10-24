@@ -1,0 +1,7 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>diese Stunde bei {{.SchoolName}} wurde geändert:</p>
+<p><strong>{{.CourseType}}</strong><br>Neu: <strong>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr, {{.Room}}, {{.Location}}</strong><br>Bisher: <s>{{date .PreviousStartsAt}}, {{clock .PreviousStartsAt}}–{{clock .PreviousEndsAt}} Uhr, {{.PreviousRoom}}, {{.PreviousLocation}}</s><br>Gebucht für: {{join .Participants}}</p>
+<p>Deine Buchung gilt für den neuen Termin. Passt dir die Änderung nicht, melde dich bitte bei {{.SchoolName}}.</p>
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

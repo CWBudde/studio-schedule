@@ -117,12 +117,15 @@ func New(deps Deps) (http.Handler, huma.API) {
 	cfg.Transformers = append(cfg.Transformers, maskServerErrors(deps.Logger))
 	api := humachi.New(router, cfg)
 
+	renderer := newRenderer()
+
 	httpapi.Register(api, httpapi.Deps{
 		Settings:       service.NewSettingsService(deps.Store),
 		Catalog:        service.NewCatalogService(deps.Store, deps.IDs),
 		Timetable:      service.NewTimetableService(deps.Store, deps.Clock, deps.IDs),
 		Schedule:       service.NewScheduleService(deps.Store, deps.Clock),
-		Auth:           newAuthService(deps),
+		Lessons:        service.NewLessonService(deps.Store, deps.Clock, deps.IDs, renderer),
+		Auth:           newAuthService(deps, renderer),
 		Family:         service.NewFamilyService(deps.Store, deps.Clock, deps.IDs),
 		Persons:        service.NewPersonService(deps.Store, deps.Clock, deps.IDs),
 		Outbox:         service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer),
@@ -259,12 +262,18 @@ func demoLogins(logins []seed.Login) []httpapi.DemoLogin {
 
 // newAuthService builds the AuthService of deps. The mail templates are
 // embedded, so failing to parse them is a bug.
-func newAuthService(deps Deps) *service.AuthService {
+// newRenderer parses the mail templates; they are embedded, so an error is
+// a bug of the build.
+func newRenderer() *mail.Renderer {
 	renderer, err := mail.NewRenderer()
 	if err != nil {
 		panic("app: mail templates: " + err.Error())
 	}
 
+	return renderer
+}
+
+func newAuthService(deps Deps, renderer *mail.Renderer) *service.AuthService {
 	return service.NewAuthService(deps.Store, deps.Clock, deps.IDs, deps.Hasher, renderer, deps.AppURL)
 }
 

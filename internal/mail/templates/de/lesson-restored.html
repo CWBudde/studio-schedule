@@ -1,0 +1,7 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>gute Nachricht: Diese Stunde bei {{.SchoolName}} findet doch statt. Bitte beachte Zeit und Ort, sie können sich seit der Absage geändert haben:</p>
+<p><strong>{{.CourseType}}</strong><br>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr<br>{{.Room}}, {{.Location}}<br>Gebucht für: {{join .Participants}}</p>
+<p>Deine Buchung bleibt bestehen.</p>
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

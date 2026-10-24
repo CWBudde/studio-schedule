@@ -1,0 +1,9 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>leider fällt diese Stunde bei {{.SchoolName}} aus:</p>
+<p><strong>{{.CourseType}}</strong><br>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr<br>{{.Room}}, {{.Location}}<br>Gebucht für: {{join .Participants}}</p>
+{{- with .Note}}
+<p>Hinweis von {{$.SchoolName}}: {{.}}</p>
+{{- end}}
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

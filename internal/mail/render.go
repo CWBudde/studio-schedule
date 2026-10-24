@@ -103,17 +103,21 @@ func NewRenderer() (*Renderer, error) {
 func parseSet(fsys fs.FS, loc, name string) (templateSet, error) {
 	base := path.Join(loc, name)
 
-	subject, err := texttemplate.New(name+".subject.txt").Option("missingkey=error").ParseFS(fsys, base+".subject.txt")
+	fn := funcs(loc)
+
+	subject, err := texttemplate.New(name+".subject.txt").Funcs(fn).Option("missingkey=error").
+		ParseFS(fsys, base+".subject.txt")
 	if err != nil {
 		return templateSet{}, err
 	}
 
-	text, err := texttemplate.New(name+".txt").Option("missingkey=error").ParseFS(fsys, base+".txt")
+	text, err := texttemplate.New(name+".txt").Funcs(fn).Option("missingkey=error").ParseFS(fsys, base+".txt")
 	if err != nil {
 		return templateSet{}, err
 	}
 
 	html, err := htmltemplate.New(layoutFile).
+		Funcs(fn).
 		Funcs(htmltemplate.FuncMap{"lang": func() string { return loc }}).
 		Option("missingkey=error").
 		ParseFS(fsys, layoutFile, base+".html")

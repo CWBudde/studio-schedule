@@ -1,0 +1,15 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+leider fällt diese Stunde bei {{.SchoolName}} aus:
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr
+{{.Room}}, {{.Location}}
+Gebucht für: {{join .Participants}}
+{{- with .Note}}
+
+Hinweis von {{$.SchoolName}}: {{.}}
+{{- end}}
+
+Viele Grüße
+{{.SchoolName}}

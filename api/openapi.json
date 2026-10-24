@@ -67,6 +67,24 @@
         ],
         "type": "object"
       },
+      "AccountRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "description": "Given and family name of the account's person.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
       "AdminPerson": {
         "additionalProperties": false,
         "properties": {
@@ -622,13 +640,20 @@
             "format": "uri",
             "type": "string"
           },
+          "lesson": {
+            "$ref": "#/components/schemas/ConflictLesson",
+            "description": "The lesson that uses the room; only with reason room-taken."
+          },
           "reason": {
-            "description": "in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already.",
+            "description": "in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted.",
             "enum": [
               "in-use",
               "duplicate",
               "managed",
-              "has-account"
+              "has-account",
+              "room-taken",
+              "past",
+              "generated"
             ],
             "type": "string"
           },
@@ -659,6 +684,36 @@
         },
         "required": [
           "reason"
+        ],
+        "type": "object"
+      },
+      "ConflictLesson": {
+        "additionalProperties": false,
+        "properties": {
+          "courseType": {
+            "$ref": "#/components/schemas/CourseTypeRef"
+          },
+          "endsAt": {
+            "description": "End instant (UTC).",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "Lesson ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "startsAt": {
+            "description": "Start instant (UTC).",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "startsAt",
+          "endsAt",
+          "courseType"
         ],
         "type": "object"
       },
@@ -1073,12 +1128,232 @@
         ],
         "type": "object"
       },
+      "LessonAdmin": {
+        "additionalProperties": false,
+        "properties": {
+          "activeBookings": {
+            "description": "Number of bookings that are not canceled.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "cancelNote": {
+            "description": "Note of the cancellation, if any.",
+            "type": "string"
+          },
+          "canceledAt": {
+            "description": "When the lesson was canceled, if recorded.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "canceledBy": {
+            "$ref": "#/components/schemas/AccountRef",
+            "description": "Who canceled the lesson, if recorded."
+          },
+          "detached": {
+            "description": "Whether the lesson was edited one by one and no longer follows its class.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "detached",
+          "activeBookings"
+        ],
+        "type": "object"
+      },
+      "LessonCancelData": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "description": "Optional note for those booked, e.g. the reason; at most 500 characters (Unicode code points) after trimming surrounding white space, a 422 on body.note otherwise.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "LessonCreateData": {
+        "additionalProperties": false,
+        "properties": {
+          "accompanistId": {
+            "description": "Accompanist, if any.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "capacity": {
+            "description": "Maximum number of participants.",
+            "format": "int64",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "confirmPast": {
+            "description": "Save even if the lesson starts in the past (skips the 409 past).",
+            "type": "boolean"
+          },
+          "confirmRoomOverlap": {
+            "description": "Save even if another lesson uses the room at an overlapping time (skips the 409 room-taken).",
+            "type": "boolean"
+          },
+          "courseTypeId": {
+            "description": "Course type taught.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "date": {
+            "description": "School date of the lesson.",
+            "format": "date",
+            "type": "string"
+          },
+          "durationMinutes": {
+            "description": "Length in minutes; the lesson ends on its day.",
+            "format": "int64",
+            "maximum": 1440,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "instructorId": {
+            "description": "Instructor.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "description": "Regular lesson or special format; workshops and private lessons are published early.",
+            "enum": [
+              "regular",
+              "workshop",
+              "private"
+            ],
+            "type": "string"
+          },
+          "roomId": {
+            "description": "Room.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "startTime": {
+            "description": "Start time (HH:MM) in the school time zone.",
+            "examples": [
+              "18:00"
+            ],
+            "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+            "type": "string"
+          },
+          "visibility": {
+            "description": "Who may see the lesson.",
+            "enum": [
+              "public",
+              "members",
+              "hidden"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "courseTypeId",
+          "date",
+          "startTime",
+          "durationMinutes",
+          "roomId",
+          "instructorId",
+          "capacity",
+          "visibility",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "LessonData": {
+        "additionalProperties": false,
+        "properties": {
+          "accompanistId": {
+            "description": "Accompanist, if any.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "capacity": {
+            "description": "Maximum number of participants.",
+            "format": "int64",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "confirmPast": {
+            "description": "Save even if the lesson starts in the past (skips the 409 past).",
+            "type": "boolean"
+          },
+          "confirmRoomOverlap": {
+            "description": "Save even if another lesson uses the room at an overlapping time (skips the 409 room-taken).",
+            "type": "boolean"
+          },
+          "date": {
+            "description": "School date of the lesson.",
+            "format": "date",
+            "type": "string"
+          },
+          "durationMinutes": {
+            "description": "Length in minutes; the lesson ends on its day.",
+            "format": "int64",
+            "maximum": 1440,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "instructorId": {
+            "description": "Instructor.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "description": "Regular lesson or special format; workshops and private lessons are published early.",
+            "enum": [
+              "regular",
+              "workshop",
+              "private"
+            ],
+            "type": "string"
+          },
+          "roomId": {
+            "description": "Room.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "startTime": {
+            "description": "Start time (HH:MM) in the school time zone.",
+            "examples": [
+              "18:00"
+            ],
+            "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+            "type": "string"
+          },
+          "visibility": {
+            "description": "Who may see the lesson.",
+            "enum": [
+              "public",
+              "members",
+              "hidden"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "startTime",
+          "durationMinutes",
+          "roomId",
+          "instructorId",
+          "capacity",
+          "visibility",
+          "kind"
+        ],
+        "type": "object"
+      },
       "LessonDetail": {
         "additionalProperties": false,
         "properties": {
           "accompanist": {
             "$ref": "#/components/schemas/StaffRef",
             "description": "Accompanist; absent if the lesson has none."
+          },
+          "admin": {
+            "$ref": "#/components/schemas/LessonAdmin",
+            "description": "What the office sees beyond the schedule; only for office and admin accounts."
           },
           "capacity": {
             "description": "Maximum number of participants.",
@@ -1177,6 +1452,16 @@
           "location",
           "instructor"
         ],
+        "type": "object"
+      },
+      "LessonRestoreData": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmRoomOverlap": {
+            "description": "Restore even if another lesson uses the room at an overlapping time (skips the 409 room-taken).",
+            "type": "boolean"
+          }
+        },
         "type": "object"
       },
       "LessonSummary": {
@@ -4267,9 +4552,109 @@
         "x-access": "public"
       }
     },
+    "/api/v1/lessons": {
+      "post": {
+        "description": "Adds a lesson without a class, e.g. a workshop or a private lesson, which are published early; a regular one follows the release window. An unknown course type, room or staff member is a 422 on the field that names it. A start that is not in the future is a 409 `past` unless `confirmPast` is set. Another lesson in the room at an overlapping time is a 409 `room-taken` naming it, unless `confirmRoomOverlap` is set.",
+        "operationId": "createLesson",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LessonCreateData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonDetail"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create a one-off lesson",
+        "tags": [
+          "lessons"
+        ],
+        "x-access": "office"
+      }
+    },
     "/api/v1/lessons/{lessonId}": {
+      "delete": {
+        "description": "Deletes a one-off lesson that has not started (422 on `path.lessonId` otherwise) and that no booking refers to (409 `in-use` otherwise). A lesson of a class is canceled instead (409 `generated`): generation would create it again.",
+        "operationId": "deleteLesson",
+        "parameters": [
+          {
+            "description": "The lesson.",
+            "in": "path",
+            "name": "lessonId",
+            "required": true,
+            "schema": {
+              "description": "The lesson.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete a one-off lesson",
+        "tags": [
+          "lessons"
+        ],
+        "x-access": "office"
+      },
       "get": {
-        "description": "Returns one lesson the caller may see (see getSchedule). Lessons that do not exist or are not visible are reported alike as not found.",
+        "description": "Returns one lesson the caller may see (see getSchedule). Lessons that do not exist or are not visible are reported alike as not found. Office and admin accounts also get `admin`: the detached flag, the active bookings and the cancellation details.",
         "operationId": "getLesson",
         "parameters": [
           {
@@ -4311,6 +4696,201 @@
           "schedule"
         ],
         "x-access": "public"
+      },
+      "put": {
+        "description": "Replaces the time, room, staff, capacity, visibility and kind of a lesson that has not started (422 on `path.lessonId` otherwise); course type and class stay. A lesson of a class is detached from it: class and term edits leave it alone from then on. A capacity below the active bookings is a 422 on `capacity`. A new start in the past is a 409 `past` unless `confirmPast` is set. A new time or room is checked like in `createLesson` (409 `room-taken`). A new start or room of a scheduled lesson mails everyone with an active booking, unless it now starts in the past.",
+        "operationId": "updateLesson",
+        "parameters": [
+          {
+            "description": "The lesson.",
+            "in": "path",
+            "name": "lessonId",
+            "required": true,
+            "schema": {
+              "description": "The lesson.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LessonData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update a lesson",
+        "tags": [
+          "lessons"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/lessons/{lessonId}/cancel": {
+      "post": {
+        "description": "Cancels a lesson that has not started (422 on `path.lessonId` otherwise), with an optional note, and mails everyone with an active booking. The bookings stay. A canceled lesson stays as it is, note included, started or not.",
+        "operationId": "cancelLesson",
+        "parameters": [
+          {
+            "description": "The lesson.",
+            "in": "path",
+            "name": "lessonId",
+            "required": true,
+            "schema": {
+              "description": "The lesson.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LessonCancelData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Cancel a lesson",
+        "tags": [
+          "lessons"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/lessons/{lessonId}/restore": {
+      "post": {
+        "description": "Lets a canceled lesson that has not started take place after all (422 on `path.lessonId` otherwise) and mails everyone with an active booking its current time and room. Another lesson in the room at an overlapping time is a 409 `room-taken` naming it, unless `confirmRoomOverlap` is set; the body is optional. The lesson stays detached from its class. A scheduled lesson stays as it is, started or not.",
+        "operationId": "restoreLesson",
+        "parameters": [
+          {
+            "description": "The lesson.",
+            "in": "path",
+            "name": "lessonId",
+            "required": true,
+            "schema": {
+              "description": "The lesson.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LessonRestoreData"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Restore a canceled lesson",
+        "tags": [
+          "lessons"
+        ],
+        "x-access": "office"
       }
     },
     "/api/v1/locations": {
@@ -4722,7 +5302,7 @@
     },
     "/api/v1/schedule": {
       "get": {
-        "description": "Returns the lessons that start in a range of school dates, as the caller may see them. Visitors who are not signed in see public lessons that are released, plus one-off lessons and special formats, which are published early. Members also see lessons for members, and regular lessons up to visibleUntil (early access). Staff see every lesson, hidden and unreleased ones included. Canceled lessons are included with their status.",
+        "description": "Returns the lessons that start in a range of school dates, as the caller may see them. Visitors who are not signed in see public lessons that are released, plus workshops and private lessons, which are published early. Members also see lessons for members, and regular lessons up to visibleUntil (early access). Staff see every lesson, hidden and unreleased ones included. Canceled lessons are included with their status.",
         "operationId": "getSchedule",
         "parameters": [
           {

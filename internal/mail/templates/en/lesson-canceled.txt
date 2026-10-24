@@ -1,0 +1,15 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+Unfortunately, this lesson at {{.SchoolName}} is canceled:
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}
+{{.Room}}, {{.Location}}
+Booked for: {{join .Participants}}
+{{- with .Note}}
+
+Note from {{$.SchoolName}}: {{.}}
+{{- end}}
+
+Kind regards,
+{{.SchoolName}}

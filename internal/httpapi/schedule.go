@@ -17,8 +17,8 @@ func registerSchedule(api huma.API, h *handlers) {
 		Path:        BasePath + "/schedule",
 		Summary:     "Published schedule",
 		Description: "Returns the lessons that start in a range of school dates, as the caller may see " +
-			"them. Visitors who are not signed in see public lessons that are released, plus one-off " +
-			"lessons and special formats, which are published early. Members also see lessons for " +
+			"them. Visitors who are not signed in see public lessons that are released, plus workshops " +
+			"and private lessons, which are published early. Members also see lessons for " +
 			"members, and regular lessons up to visibleUntil (early access). Staff see every lesson, " +
 			"hidden and unreleased ones included. Canceled lessons are included with their status.",
 		Tags: []string{"schedule"},
@@ -29,7 +29,7 @@ func registerSchedule(api huma.API, h *handlers) {
 		Method:      "GET",
 		Path:        BasePath + "/lessons/{lessonId}",
 		Summary:     "Published lesson",
-		Description: "Returns one lesson the caller may see (see getSchedule). Lessons that do not exist or are not visible are reported alike as not found.",
+		Description: "Returns one lesson the caller may see (see getSchedule). Lessons that do not exist or are not visible are reported alike as not found. Office and admin accounts also get `admin`: the detached flag, the active bookings and the cancellation details.",
 		Tags:        []string{"schedule"},
 	}, h.getLesson)
 }
@@ -75,12 +75,29 @@ type LessonSummary struct {
 	Accompanist *StaffRef       `doc:"Accompanist; absent if the lesson has none." json:"accompanist,omitempty"`
 }
 
-// LessonDetail is the response body of getLesson.
+// LessonDetail is the response body of getLesson and of the lesson writes.
 type LessonDetail struct {
 	LessonSummary
 
-	CourseTypeDescription string `doc:"Description of the course type." json:"courseTypeDescription,omitempty"`
-	LocationAddress       string `doc:"Postal address of the location." json:"locationAddress,omitempty"`
+	CourseTypeDescription string       `doc:"Description of the course type." json:"courseTypeDescription,omitempty"`
+	LocationAddress       string       `doc:"Postal address of the location." json:"locationAddress,omitempty"`
+	Admin                 *LessonAdmin `doc:"What the office sees beyond the schedule; only for office and admin accounts." json:"admin,omitempty"`
+}
+
+// LessonAdmin is what the office sees of a lesson beyond the schedule (ADR
+// 0007).
+type LessonAdmin struct {
+	Detached       bool        `doc:"Whether the lesson was edited one by one and no longer follows its class." json:"detached"`
+	ActiveBookings int         `doc:"Number of bookings that are not canceled." json:"activeBookings"`
+	CancelNote     string      `doc:"Note of the cancellation, if any."          json:"cancelNote,omitempty"`
+	CanceledAt     time.Time   `doc:"When the lesson was canceled, if recorded." json:"canceledAt,omitzero"`
+	CanceledBy     *AccountRef `doc:"Who canceled the lesson, if recorded."      json:"canceledBy,omitempty"`
+}
+
+// AccountRef names an account by its person.
+type AccountRef struct {
+	ID   domain.AccountID `json:"id"`
+	Name string           `doc:"Given and family name of the account's person." json:"name"`
 }
 
 // CourseTypeRef names a course type.
@@ -156,11 +173,28 @@ func (h *handlers) getLesson(ctx context.Context, in *LessonInput) (*LessonOutpu
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	return &LessonOutput{Body: LessonDetail{
+	return &LessonOutput{Body: lessonDetail(sl)}, nil
+}
+
+func lessonDetail(sl service.ScheduledLesson) LessonDetail {
+	out := LessonDetail{
 		LessonSummary:         lessonSummary(sl),
 		CourseTypeDescription: sl.CourseType.Description,
 		LocationAddress:       sl.Location.Address,
-	}}, nil
+	}
+
+	if a := sl.Admin; a != nil {
+		out.Admin = &LessonAdmin{
+			Detached: a.Detached, ActiveBookings: a.ActiveBookings, CancelNote: a.CancelNote,
+			CanceledAt: a.CanceledAt.UTC(),
+		}
+
+		if !a.CanceledBy.AccountID.IsZero() {
+			out.Admin.CanceledBy = &AccountRef{ID: a.CanceledBy.AccountID, Name: a.CanceledBy.Name}
+		}
+	}
+
+	return out
 }
 
 // query converts the parameters into a service query.

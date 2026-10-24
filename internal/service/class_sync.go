@@ -15,8 +15,8 @@ import (
 // the rolling horizon that have not started yet. old is the zero class for a
 // new one.
 //
-// A future lesson follows the class while it still is what old generated:
-// scheduled, public and regular, in a slot on old's weekday at its start,
+// A future lesson follows the class while it is not detached and still is
+// what old generated: scheduled, public and regular, in a slot on old's weekday at its start,
 // with old's course type, room, staff and capacity. Anything else was
 // edited one by one and stays, like every lesson that has started. A
 // follower moves to the new weekday within its Monday-based week and takes
@@ -141,11 +141,12 @@ func (s *TimetableService) follow(
 }
 
 // follows reports whether lesson l still is what class c generated for its
-// slot.
+// slot: it is not detached (ADR 0007), and its fields are what c generates.
+// The second part covers lessons edited before the detached flag existed.
 func follows(l domain.Lesson, c domain.Class, loc *time.Location) bool {
 	start := l.SlotDate.At(c.StartTime, loc)
 
-	return l.SlotDate.Weekday() == c.Weekday &&
+	return !l.Detached && l.SlotDate.Weekday() == c.Weekday &&
 		l.Status == domain.LessonScheduled && l.Visibility == domain.VisibilityPublic &&
 		l.Kind == domain.LessonRegular && l.StartsAt.Equal(start) && l.EndsAt.Equal(start.Add(c.Duration)) &&
 		l.CourseTypeID == c.CourseTypeID && l.RoomID == c.RoomID && l.InstructorID == c.InstructorID &&
