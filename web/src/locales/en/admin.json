@@ -53,7 +53,11 @@
       "guardianInvalid": "This person cannot be a guardian here: they no longer exist, or they are a child or grandchild of this person.",
       "date": "Enter a date.",
       "lessonMidnight": "The lesson must end by midnight.",
-      "lessonBookedCapacity": "More people have booked this lesson than that."
+      "lessonBookedCapacity": "More people have booked this lesson than that.",
+      "monday": "Choose a Monday.",
+      "cloneSame": "Choose another date than the one to copy from.",
+      "clonePast": "The date cannot lie in the past.",
+      "cloneWeekBegun": "This week has begun already; choose a later one."
     }
   },
   "delete": {
@@ -523,5 +527,46 @@
     "past": "This lesson is in the past",
     "pastDescription": "Save it anyway to record it; nobody gets a mail about a lesson in the past.",
     "restoreAnyway": "Restore anyway"
+  },
+  "clone": {
+    "open": "Clone…",
+    "title": "Clone lessons",
+    "description": "Copy the scheduled lessons of a day or a week to another day or week. The copies are one-off lessons without bookings; nobody gets a mail.",
+    "unit": "Copy",
+    "day": "One day",
+    "week": "One week",
+    "source": "Copy from",
+    "target": "Copy to",
+    "mondayHint": "A Monday: the week runs from Monday to Sunday.",
+    "weekRange": "{{from}} to {{to}}",
+    "preview": "Preview",
+    "previewing": "Loading preview…",
+    "previewTitle": "Preview",
+    "created_one": "Will be created: {{count}} lesson",
+    "created_other": "Will be created: {{count}} lessons",
+    "skipped_one": "Skipped: {{count}} lesson",
+    "skipped_other": "Skipped: {{count}} lessons",
+    "nothing": "There are no scheduled lessons to copy here.",
+    "nothingToCreate": "Nothing would be created.",
+    "apply_one": "Clone {{count}} lesson",
+    "apply_other": "Clone {{count}} lessons",
+    "applying": "Cloning…",
+    "resultTitle": "Result",
+    "done_one": "{{count}} lesson has been cloned.",
+    "done_other": "{{count}} lessons have been cloned.",
+    "doneCreated_one": "Created: {{count}} lesson",
+    "doneCreated_other": "Created: {{count}} lessons",
+    "changed": "Something changed since the preview, so the result differs from it.",
+    "close": "Close",
+    "from": "Copy of {{day}}",
+    "reasons": {
+      "classSlot": "Its class already has this lesson in the target week.",
+      "started": "The copy would start at a time that has passed.",
+      "staffInactive": "Its instructor or accompanist is no longer active.",
+      "roomTaken": "{{room}} is taken: {{lesson}} uses the room.",
+      "roomTakenUnknown": "{{room}} is taken at that time.",
+      "roomTakenByCopy": "{{room}} is taken by another copy in this clone, the copy of {{lesson}}.",
+      "roomTakenByAnyCopy": "{{room}} is taken by another copy in this clone."
+    }
   }
 }

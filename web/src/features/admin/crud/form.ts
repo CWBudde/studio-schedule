@@ -46,6 +46,10 @@ const adminErrors = [
   'date',
   'lessonMidnight',
   'lessonBookedCapacity',
+  'monday',
+  'cloneSame',
+  'clonePast',
+  'cloneWeekBegun',
 ] as const;
 type AdminErrorKey = (typeof adminErrors)[number];
 const isAdminErrorKey = (key: unknown): key is AdminErrorKey =>

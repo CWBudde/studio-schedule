@@ -186,3 +186,66 @@ test('the office records a one-off lesson in the past after a confirmation', asy
   ).toBeVisible();
   await expect(sheet.getByRole('button', { name: 'Edit' })).toBeDisabled();
 });
+
+/** A school date as the schedule's day headings name it, e.g. "Monday, November 16". */
+const dayHeading = (date: string) =>
+  new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${date}T00:00:00Z`));
+
+test('the office clones a day and the copies show in the schedule', async ({ page }) => {
+  await signInAsOffice(page);
+  // A one-off lesson at 07:00, when no class runs, is the one lesson of
+  // that day the clone copies.
+  const source = addDays(schoolToday(), 20);
+  const target = addDays(source, 7);
+  const added = await addTapWorkshop(page, source, '07:00');
+  await expect(added).toBeHidden();
+  const lesson = page.getByRole('dialog', { name: 'Tap' });
+  await lesson.getByRole('button', { name: 'Close' }).click();
+  await expect(lesson).toBeHidden();
+
+  await page.getByRole('button', { name: 'Clone…' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Clone lessons' });
+  await expect(sheet.getByRole('radio', { name: 'One day' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await sheet.getByLabel('Copy from').fill(source);
+  await sheet.getByLabel('Copy to').fill(target);
+  await sheet.getByRole('button', { name: 'Preview' }).click();
+
+  const preview = sheet.getByRole('region', { name: 'Preview' });
+  const planned = preview.getByRole('list', { name: 'Will be created: 1 lesson' });
+  const copy = planned.getByRole('listitem');
+  await expect(copy.getByText('Tap', { exact: true })).toBeVisible();
+  await expect(copy.getByText(`${dayHeading(target)}, 07:00–07:45`)).toBeVisible();
+  await expect(copy.getByText(`Copy of ${dayHeading(source)}`)).toBeVisible();
+  // The weekly classes of that day (none on a Sunday) are made by their classes in the target week.
+  const skipped = preview
+    .getByRole('list', { name: /^Skipped: \d+ lessons?$/ })
+    .getByRole('listitem');
+  await expect(
+    skipped.filter({ hasNotText: 'Its class already has this lesson in the target week.' }),
+  ).toHaveCount(0);
+  await preview.getByRole('button', { name: 'Clone 1 lesson' }).click();
+
+  const result = sheet.getByRole('region', { name: 'Result' });
+  await expect(result.getByRole('list', { name: 'Created: 1 lesson' })).toContainText('Tap');
+  await expect(page.getByText('1 lesson has been cloned.')).toBeVisible();
+  await result.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toBeHidden();
+
+  // Days 14 to 27 from today show both the lesson and its copy.
+  await page.getByRole('button', { name: 'Next 14 days' }).click();
+  for (const date of [source, target]) {
+    await expect(
+      page
+        .getByRole('region', { name: dayHeading(date) })
+        .getByRole('button', { name: `Tap, ${dayHeading(date)}, 07:00–07:45, Workshop` }),
+    ).toBeVisible();
+  }
+});

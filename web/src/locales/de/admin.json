@@ -53,7 +53,11 @@
       "guardianInvalid": "Diese Person kann hier nicht erziehungsberechtigt sein: Es gibt sie nicht mehr, oder sie ist ein Kind oder Enkelkind dieser Person.",
       "date": "Gib ein Datum ein.",
       "lessonMidnight": "Die Stunde muss bis Mitternacht enden.",
-      "lessonBookedCapacity": "Diese Stunde hat mehr Buchungen als das."
+      "lessonBookedCapacity": "Diese Stunde hat mehr Buchungen als das.",
+      "monday": "Wähle einen Montag.",
+      "cloneSame": "Wähle ein anderes Datum als das, von dem kopiert wird.",
+      "clonePast": "Das Datum darf nicht in der Vergangenheit liegen.",
+      "cloneWeekBegun": "Diese Woche hat schon begonnen; wähle eine spätere."
     }
   },
   "delete": {
@@ -523,5 +527,46 @@
     "past": "Diese Stunde liegt in der Vergangenheit",
     "pastDescription": "Speichere sie trotzdem, um sie festzuhalten; über eine vergangene Stunde bekommt niemand eine E-Mail.",
     "restoreAnyway": "Trotzdem wieder ansetzen"
+  },
+  "clone": {
+    "open": "Kopieren…",
+    "title": "Stunden kopieren",
+    "description": "Kopiere die angesetzten Stunden eines Tages oder einer Woche auf einen anderen Tag oder in eine andere Woche. Die Kopien sind Einzeltermine ohne Buchungen; niemand bekommt eine E-Mail.",
+    "unit": "Kopieren",
+    "day": "Einen Tag",
+    "week": "Eine Woche",
+    "source": "Kopieren von",
+    "target": "Kopieren nach",
+    "mondayHint": "Ein Montag: Die Woche geht von Montag bis Sonntag.",
+    "weekRange": "{{from}} bis {{to}}",
+    "preview": "Vorschau",
+    "previewing": "Vorschau wird geladen…",
+    "previewTitle": "Vorschau",
+    "created_one": "Wird angelegt: {{count}} Stunde",
+    "created_other": "Wird angelegt: {{count}} Stunden",
+    "skipped_one": "Übersprungen: {{count}} Stunde",
+    "skipped_other": "Übersprungen: {{count}} Stunden",
+    "nothing": "Hier gibt es keine angesetzten Stunden zum Kopieren.",
+    "nothingToCreate": "Es würde nichts angelegt.",
+    "apply_one": "{{count}} Stunde kopieren",
+    "apply_other": "{{count}} Stunden kopieren",
+    "applying": "Wird kopiert…",
+    "resultTitle": "Ergebnis",
+    "done_one": "{{count}} Stunde wurde kopiert.",
+    "done_other": "{{count}} Stunden wurden kopiert.",
+    "doneCreated_one": "Angelegt: {{count}} Stunde",
+    "doneCreated_other": "Angelegt: {{count}} Stunden",
+    "changed": "Seit der Vorschau hat sich etwas geändert, daher weicht das Ergebnis von ihr ab.",
+    "close": "Schließen",
+    "from": "Kopie von {{day}}",
+    "reasons": {
+      "classSlot": "Ihr Kurs hat diese Stunde in der Zielwoche bereits.",
+      "started": "Die Kopie würde zu einer vergangenen Zeit beginnen.",
+      "staffInactive": "Die Lehrkraft oder Begleitung ist nicht mehr aktiv.",
+      "roomTaken": "{{room}} ist belegt: {{lesson}} nutzt den Raum.",
+      "roomTakenUnknown": "{{room}} ist zu dieser Zeit belegt.",
+      "roomTakenByCopy": "{{room}} ist durch eine andere Kopie dieses Kopiervorgangs belegt, die Kopie von {{lesson}}.",
+      "roomTakenByAnyCopy": "{{room}} ist durch eine andere Kopie dieses Kopiervorgangs belegt."
+    }
   }
 }

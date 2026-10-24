@@ -14,7 +14,7 @@ import {
   startOfWeek,
   todayIn,
 } from '@/lib/schoolTime';
-import { NewLesson } from './admin/NewLesson';
+import { OfficeActions } from './admin/OfficeActions';
 import { ReleaseCountdown } from './countdown/ReleaseCountdown';
 import { LessonSheet } from './detail/LessonSheet';
 import { ScheduleFilters } from './filters/ScheduleFilters';
@@ -139,7 +139,7 @@ function ScheduleView({ timeZone }: { timeZone: string }) {
           </nav>
         )}
 
-        <NewLesson />
+        <OfficeActions shown={start} view={view} today={today} timeZone={timeZone} />
       </div>
 
       {schedule.data ? (

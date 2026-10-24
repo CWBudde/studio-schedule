@@ -1140,6 +1140,35 @@ export const deleteLessonMutation = (queryClient: QueryClient) =>
     onError: onLessonError(queryClient),
   });
 
+/** A clone of a school day or a Monday-based week to another (previewLessonClone, cloneLessons). */
+export type LessonCloneData = PostBody<'/api/v1/admin/lessons/clone'>;
+/** What a clone creates (or would create, in a preview) and the source lessons it skips. */
+export type LessonClone = components['schemas']['LessonClone'];
+
+/**
+ * What cloneLessonsMutation would create and skip now, without changing
+ * anything (office). The answer may be stale by the time the clone runs.
+ */
+export const previewLessonCloneMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: LessonCloneData) =>
+      unwrap(api.POST('/api/v1/admin/lessons/clone/preview', { body })),
+    onError: signedOutOn401(queryClient),
+  });
+
+/**
+ * Copies the scheduled lessons of a day or a week as one-off lessons
+ * (office); the answer lists what it really created and skipped. Nobody is
+ * mailed, but the schedule and the lessons are asked again.
+ */
+export const cloneLessonsMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: LessonCloneData) =>
+      unwrap(api.POST('/api/v1/admin/lessons/clone', { body })),
+    onSuccess: () => refreshLessons(queryClient),
+    onError: signedOutOn401(queryClient),
+  });
+
 /**
  * The mails of the demo mailbox, newest first; null when the installation is
  * not a demo (404). In a demo it is refetched whenever a view of it mounts;
