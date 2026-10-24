@@ -67,7 +67,7 @@ Phase 1 refines this outline. "Legacy" names are listed in [docs/glossary.md](do
 | Accounts      | `accounts` (case-insensitive email, role enum, visible-days override), `sessions` (hashed token), `password_resets`   |
 | Catalogue     | `locations`, `rooms` (capacity), `staff` (instructor / accompanist), `course_types`                                   |
 | Timetable     | `terms` (date ranges, e.g. a summer timetable), `classes` (weekly template), `class_members`                          |
-| Lessons       | `lessons` (instants, status, visibility, kind, capacity; unique `(class_id, starts_at)`)                              |
+| Lessons       | `lessons` (instants, status, visibility, kind, capacity; class slot date, unique `(class_id, slot_date)`)             |
 | Booking       | `bookings` (person or guest; booked / cancelled / attended / no_show; trial, prepaid), `booking_events` (audit)       |
 | Waitlist      | `waitlist_entries` (hashed random invite token, expiry)                                                               |
 | Passes        | `pass_types`, `passes` (`visits_remaining >= 0`), `pass_redemptions` (unique booking)                                 |
@@ -292,8 +292,8 @@ Goal: people can sign up and log in; staff can maintain the timetable.
       admin UI. Order: decisions and the two foundations first, then the entity slices (each slice
       is backend + UI + tests and can run in parallel; regenerate `api/openapi.json`,
       `schema.d.ts` and `routeTree.gen.ts` after merging), then demo and e2e (2026-10-24) —
-      partial: ADR 0007, both foundations, locations and rooms, staff and course types are done;
-      terms, classes, class members, demo and e2e remain
+      partial: ADR 0007, both foundations, locations and rooms, staff, course types and classes
+      are done; terms, class members, demo and e2e remain
   - [x] ADR 0007 "Timetable administration": `office` writes catalogue and timetable (admins
         inherit it), what an edit of a class or term does to its generated lessons (proposed:
         future, untouched lessons follow the class; past and individually edited lessons stay),
@@ -345,15 +345,29 @@ Goal: people can sign up and log in; staff can maintain the timetable.
   - [ ] Terms: create, edit name and date range (refused when it would orphan classes or booked
         lessons, per ADR 0007), delete while empty; overlapping terms allowed or not per ADR;
         `/admin/terms`
-  - [ ] Classes: create and edit within a term (course type, room, instructor, accompanist, level,
+  - [x] Classes: create and edit within a term (course type, room, instructor, accompanist, level,
         weekday, start, duration, capacity defaulting to the room's), delete or retire;
         `/admin/terms/{id}/classes` as a weekly overview reusing the `/classes` layout
-    - [ ] Store: `Lessons().ListByClass(class, from)` and `Lessons().Delete`, plus the
+        (2026-10-24) — `createClass`, `updateClass`, `deleteClass` and the office's
+        `listAllClasses` (retired ones included); unknown references are 422s on their field; a
+        class with members, started or booked lessons is a 409 `in-use` and is retired instead
+        (`classes.retired`: no new lessons, hidden from the public `/classes`, reactivatable);
+        a read-only `/admin/terms` links to each term's `/admin/terms/{id}/classes`, a weekly
+        overview on `WeekList` with a class sheet (capacity prefilled from the room), a retired
+        badge and "Retire instead" in the delete dialog; e2e in `admin.spec.ts`
+    - [x] Store: `Lessons().ListByClass(class, from)` and `Lessons().Delete`, plus the
           lesson-to-slot link or watermark from ADR 0003 so a moved lesson is not re-created;
-          contract cases in `storetest` for both stores
-    - [ ] Service: an edit updates or re-creates the class's future generated lessons in the same
+          contract cases in `storetest` for both stores (2026-10-24) — `lessons.slot_date`
+          (migration 00008, backfilled in the school time zone; unique `(class_id, slot_date)`
+          replaces `(class_id, starts_at)`), `Classes().Lock`; generation keys on the class and
+          the week, so a moved lesson is not re-created
+    - [x] Service: an edit updates or re-creates the class's future generated lessons in the same
           transaction (time zone and DST through `Date.At`), then generation fills the rest; tests
-          across a DST change and for lessons that must not move
+          across a DST change and for lessons that must not move (2026-10-24) — future lessons
+          that still equal what the class generated follow it, booked ones included (a capacity
+          below their active bookings is a 422 on `capacity`), within their Monday-based week;
+          edited lessons stay; generation creates only lessons that have not started (ADR 0003
+          amended, the demo seeds its past week itself)
   - [ ] Class members: list, add and remove persons with an optional "since" date; an office-only
         person search (`listPersons`, name and email) for the combobox; adding twice is a 409;
         no booking side effects until Phase 4
@@ -363,7 +377,9 @@ Goal: people can sign up and log in; staff can maintain the timetable.
   - [ ] Tests and docs: every new operation pinned in `internal/app/access_test.go`; service tests
         per entity (validation, 409 reasons, lesson sync); component tests per admin page; e2e
         "office edits a class and the schedule shows the change" on desktop and phone; glossary
-        and architecture updated
+        and architecture updated (2026-10-24) — partial: pinned operations, service, component
+        and e2e tests exist per finished slice (the class e2e included); terms and class members
+        remain, and the glossary has no admin terms yet
 - [ ] Lesson administration: edit, cancel (notifies booked participants), hide, add one-off/special
       lessons, clone day, clone week. Builds on the class-to-lesson sync of Admin CRUD
   - [ ] ADR 0007 (extended): an individually edited lesson is detached from its class, so neither

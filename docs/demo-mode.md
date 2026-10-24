@@ -84,7 +84,8 @@ countdown, early-published workshops, deep links and German. Any console error f
 `just e2e-install` once to download the browser.
 
 Lessons are generated with random IDs on every start, so a link to a lesson works only within the
-visit that produced it.
+visit that produced it. Generation creates only lessons that have not started (ADR 0003); the seed
+brings the lessons of the week before the visit, so the schedule has a recent past.
 
 ## Constraints to keep in mind
 

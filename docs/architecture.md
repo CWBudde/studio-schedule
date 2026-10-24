@@ -99,7 +99,7 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
 sessions and email links) and, when a mailer is configured, `deliver-mail` (every minute). The server and the WASM build run every job
 once at startup (the demo before it answers its first request), then on its interval; Go timers
 work in `js/wasm`, so both targets use the same code. Jobs must be idempotent: the generator reads
-the existing lessons of its range and creates only the missing ones.
+the existing lessons of each class and creates only the missing slots that have not started yet.
 
 ## API contract
 

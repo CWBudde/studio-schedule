@@ -47,10 +47,16 @@ Phase 4, booking enforces the same window on the server.
 the term's inclusive range (classes have no range of their own). A lesson starts at
 `date.At(class.StartTime, schoolZone)`, which is wall-clock time: an 18:00 class is at 18:00 before
 and after a DST change. A wall-clock time that happens twice resolves to the earlier instant, one
-that does not exist moves forward by the gap. Generation is idempotent on `(class_id, starts_at)`:
-it reads the existing lessons of the range and creates only the missing ones, so it never relies on
-a failed insert (which would abort a PostgreSQL transaction). The horizon rolls: from 7 days ago to
+that does not exist moves forward by the gap. Each lesson remembers its slot: the school date it was
+generated for (`lessons.slot_date`, NULL for one-off lessons), which stays when the lesson moves.
+Generation is idempotent on `(class_id, slot_date)`: it reads the existing lessons of each class and
+creates only the missing ones (a week with a lesson of the class has its lesson, ADR 0007), so it never relies on a failed insert (which would abort a PostgreSQL
+transaction), and a moved lesson is not created again. The horizon rolls: from today to
 `max(7·(ReleaseWeeksAhead + 2), DefaultVisibleDays) + 7` days ahead, refreshed by an hourly job.
+Generation creates only lessons that have not started: a lesson nobody could see before its start
+did not take place, and a class created today has no history (amended 2026-10-24; the horizon
+reached 7 days back before). The demo seed brings the past week of its classes itself. Retired
+classes (ADR 0007) generate nothing.
 
 **Background jobs.** One `internal/jobs` runner with a Go ticker per job serves both targets; Go
 timers work in `js/wasm`. The server and the WASM build run every job once at startup (WASM before
@@ -58,12 +64,13 @@ it answers the first request), then on their interval.
 
 ## Consequences
 
-- A lesson that an admin moves to a different start is re-created by the next generation run.
-  Phase 3 lesson administration needs a per-class "generated through" watermark or a link between
-  a lesson and its slot.
+- A lesson that moves to a different start keeps its slot, so generation does not re-create it
+  (the slot link, added with the class administration of ADR 0007, 2026-10-24).
+- Only weeks of downtime could skip a lesson: generation reaches weeks ahead, and does not fill
+  the past.
 - There is no "publish early" switch for a single regular lesson; Phase 3 can add one if needed.
 - Two server instances generating at the same moment can both see a lesson as missing; the
-  second insert then fails on the unique `(class_id, starts_at)` key and that run rolls back.
+  second insert then fails on the unique `(class_id, slot_date)` key and that run rolls back.
   The next run fills the gap. Running several instances needs a retry on conflict or an
   advisory lock around generation.
 - The web demo seeds its term and workshops relative to the day of the visit (`seed.LoadDemoAt`),

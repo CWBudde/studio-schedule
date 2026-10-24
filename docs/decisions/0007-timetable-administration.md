@@ -44,7 +44,12 @@ person link).
   nothing refers to (one created by mistake) can be deleted. Deactivated staff disappear from the
   public lists and filters but stay on their lessons, past and future. Deactivating is allowed
   while they still teach; the office reassigns their classes.
-- A class or term with past lessons is retired, not deleted.
+- A class or term with past lessons is retired, not deleted. A class can be deleted, with its
+  lessons, while none of them has started or been booked and it has no members; otherwise the
+  delete is `in-use`. A retired class (`classes.retired`) generates no more lessons, leaves the
+  public timetable, stays in the office's list and can be reactivated. Retiring deletes its future
+  lessons that follow it (below) and have no bookings; booked ones stay until lesson
+  administration cancels them.
 
 **Names.** Location names and course type names are unique within the school, and room names
 within their location, ignoring case. Staff display names are not unique.
@@ -53,7 +58,24 @@ within their location, ignoring case. Staff display names are not unique.
 the future and were not edited individually; they follow the class in the same transaction.
 Lessons in the past and lessons that were edited one by one stay as they are. Terms may overlap,
 e.g. a summer workshop term within the regular term. The class-to-lesson link this needs is the
-watermark or slot link ADR 0003 asks for, and it comes with the class slice.
+slot link of ADR 0003: every generated lesson keeps the school date of its slot (2026-10-24).
+
+- A future lesson _follows_ its class while it still is what the class generated: scheduled,
+  public and regular, at its slot's start and end, with the class's course type, room, staff and
+  capacity. Anything else counts as edited one by one; no separate flag is needed until lesson
+  administration adds one.
+- A follower takes the new time, room, staff and capacity, keeping its wall-clock time across DST.
+  Its bookings move with it. A capacity below the active bookings of a follower is a 422 on
+  `capacity`.
+- A new weekday moves a follower within its Monday-based week. When that slot has passed, lies
+  outside the term, or the week has a lesson that stays, the follower is deleted, or stays as it
+  is while it has bookings. A lesson left on an earlier weekday follows no more.
+- A weekly class has at most one lesson a week: generation skips a Monday-based week that has a
+  lesson of the class, wherever it lies in that week.
+- A class edit and lesson generation lock the class row (`Classes().Lock`), so generation never
+  sees a half-moved class.
+- After the edit, the class's missing lessons of the horizon are generated, as for a new class.
+- A class stays in its term; the term is not part of the edit.
 
 **Concurrency.** The last write wins. There is no `If-Match` or version column: the office is a
 few people, and a stale form overwrites at most what the same person could have changed.
