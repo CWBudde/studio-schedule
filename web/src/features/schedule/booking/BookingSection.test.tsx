@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, type LessonDetail } from '@/api/client';
-import { type Booking, scheduleQuery } from '@/api/queries';
+import { type Booking, scheduleQuery, type WaitlistFor } from '@/api/queries';
 import { Toaster } from '@/components/ui/sonner';
 import i18n from '@/i18n';
 import {
@@ -13,6 +13,7 @@ import {
   lessonContemporary,
   meMember,
   type MockRequest,
+  mockApiDelete,
   mockApiGet,
   mockApiPost,
   problem,
@@ -203,13 +204,17 @@ describe('BookingSection', () => {
     );
   });
 
-  it('says when the lesson is full and does not book', async () => {
+  it('says when the lesson is full and offers the waiting list instead of booking', async () => {
     mockMember({ lesson: () => ({ ...lessonBalletDetail, freePlaces: 0 }) });
 
     const { section } = await openBooking();
 
     expect(section.getByText('This lesson is full.')).toBeInTheDocument();
-    expect(await section.findByRole('button', { name: 'Book' })).toBeDisabled();
+    expect(await section.findByRole('button', { name: 'Join the waiting list' })).toBeEnabled();
+    expect(section.queryByRole('button', { name: 'Book' })).not.toBeInTheDocument();
+    expect(
+      section.getByRole('checkbox', { name: 'Stay on the list if I miss an invite' }),
+    ).not.toBeChecked();
   });
 
   it.each([
@@ -631,5 +636,383 @@ describe('BookingSection', () => {
     expect(
       section.getByRole('button', { name: 'Buchung von Nora Example stornieren' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('BookingSection waiting list', () => {
+  const entryId = '0190a000-0000-7000-8000-000000000701';
+  const full = { ...lessonBalletDetail, freePlaces: 0 };
+  /** The full ballet lesson with `entries` of the family on its waiting list. */
+  const waitingBallet = (...entries: WaitlistFor[]): LessonDetail => ({
+    ...full,
+    waitlist: entries,
+  });
+  const noraWaiting = (position = 3): WaitlistFor => ({
+    personId: nora.id,
+    name: nora.name,
+    entryId,
+    status: 'waiting',
+    position,
+    stayOnList: true,
+  });
+  // Friday 22:00 in Berlin, ten hours after the fixtures' "now".
+  const invitedUntil = '2026-10-23T20:00:00Z';
+  const invitedOf = (who: { id: string; name: string }, stayOnList = false): WaitlistFor => ({
+    personId: who.id,
+    name: who.name,
+    entryId,
+    status: 'invited',
+    expiresAt: invitedUntil,
+    stayOnList,
+  });
+
+  it('joins the waiting list of a full lesson, staying on it, and shows the position', async () => {
+    let current: LessonDetail = full;
+    mockMember({ lesson: () => current });
+    const post = mockApiPost({
+      '/api/v1/lessons/{lessonId}/waitlist': () => {
+        current = waitingBallet(noraWaiting(3));
+        return {
+          status: 201,
+          body: {
+            id: entryId,
+            lessonId: ids.lessonBallet,
+            personId: nora.id,
+            status: 'waiting',
+            stayOnList: true,
+            joinedAt: '2026-10-23T10:00:00Z',
+            position: 3,
+          },
+        };
+      },
+    });
+    const user = userEvent.setup();
+
+    const { section } = await openBooking();
+    await user.click(
+      section.getByRole('checkbox', { name: 'Stay on the list if I miss an invite' }),
+    );
+    await user.click(await section.findByRole('button', { name: 'Join the waiting list' }));
+
+    expect(post).toHaveBeenCalledWith('/api/v1/lessons/{lessonId}/waitlist', {
+      params: { path: { lessonId: ids.lessonBallet } },
+      body: { personId: nora.id, stayOnList: true },
+    });
+    expect(
+      await screen.findAllByText('Nora Example is on the waiting list, position 3.'),
+    ).not.toHaveLength(0);
+    expect(await section.findByText('Waiting, position 3')).toBeInTheDocument();
+    expect(
+      section.getByRole('button', { name: 'Leave the waiting list for Nora Example' }),
+    ).toBeEnabled();
+    // Nobody else to put on the list.
+    expect(
+      section.queryByRole('button', { name: 'Join the waiting list' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('joins without staying on the list by default, for the chosen dependent', async () => {
+    mockMember({ lesson: () => full, fam: family });
+    const post = mockApiPost({
+      '/api/v1/lessons/{lessonId}/waitlist': {
+        status: 201,
+        body: {
+          id: entryId,
+          lessonId: ids.lessonBallet,
+          personId: lina.id,
+          status: 'waiting',
+          stayOnList: false,
+          joinedAt: '2026-10-23T10:00:00Z',
+          position: 1,
+        },
+      },
+    });
+    const user = userEvent.setup();
+
+    const { section } = await openBooking();
+    const select = await section.findByRole('combobox', { name: 'Join for' });
+    await user.click(select);
+    await user.click(await screen.findByRole('option', { name: 'Lina Example' }));
+    await user.click(section.getByRole('button', { name: 'Join the waiting list' }));
+
+    expect(post).toHaveBeenCalledWith('/api/v1/lessons/{lessonId}/waitlist', {
+      params: { path: { lessonId: ids.lessonBallet } },
+      body: { personId: lina.id, stayOnList: false },
+    });
+    expect(
+      await screen.findAllByText('Lina Example is on the waiting list, position 1.'),
+    ).not.toHaveLength(0);
+  });
+
+  it('says why joining failed', async () => {
+    mockMember({ lesson: () => full });
+    mockApiPost({ '/api/v1/lessons/{lessonId}/waitlist': conflict('already-waiting') });
+    const user = userEvent.setup();
+
+    const { section } = await openBooking();
+    await user.click(await section.findByRole('button', { name: 'Join the waiting list' }));
+
+    expect(
+      await screen.findAllByText('Nora Example is on the waiting list already.'),
+    ).not.toHaveLength(0);
+  });
+
+  it('shows a closed lesson instead of the waiting list when the API says so', async () => {
+    mockMember({ lesson: () => full });
+    mockApiPost({
+      '/api/v1/lessons/{lessonId}/waitlist': conflict('closed', 'closed', { why: 'release' }),
+    });
+    const user = userEvent.setup();
+
+    const { section } = await openBooking();
+    await user.click(await section.findByRole('button', { name: 'Join the waiting list' }));
+
+    expect(await section.findByText('Not bookable yet.')).toBeInTheDocument();
+    expect(
+      section.queryByRole('button', { name: 'Join the waiting list' }),
+    ).not.toBeInTheDocument();
+    expect(section.getByRole('button', { name: 'Book' })).toBeDisabled();
+  });
+
+  it('leaves the waiting list', async () => {
+    let current = waitingBallet(noraWaiting(2));
+    mockMember({ lesson: () => current });
+    const del = mockApiDelete({
+      '/api/v1/waitlist/{entryId}': () => {
+        current = full;
+        return { status: 204 };
+      },
+    });
+    const user = userEvent.setup();
+
+    const { section } = await openBooking();
+    expect(section.getByText('Waiting, position 2')).toBeInTheDocument();
+    await user.click(
+      section.getByRole('button', { name: 'Leave the waiting list for Nora Example' }),
+    );
+
+    expect(del).toHaveBeenCalledWith('/api/v1/waitlist/{entryId}', {
+      params: { path: { entryId } },
+    });
+    expect(await screen.findAllByText('Nora Example has left the waiting list.')).not.toHaveLength(
+      0,
+    );
+    expect(await section.findByRole('button', { name: 'Join the waiting list' })).toBeEnabled();
+    expect(section.queryByText('Waiting, position 2')).not.toBeInTheDocument();
+  });
+
+  it('accepts an invite, which books the place', async () => {
+    let current = waitingBallet(invitedOf(nora));
+    mockMember({ lesson: () => current });
+    const post = mockApiPost({
+      '/api/v1/waitlist/{entryId}/accept': () => {
+        current = bookedBallet();
+        return { body: bookingOf(nora.id) };
+      },
+    });
+    const user = userEvent.setup();
+
+    const { section } = await openBooking();
+    expect(section.getByText('Invited')).toBeInTheDocument();
+    // The expiry in school time, whatever the test's zone.
+    expect(
+      section.getByText('A place is reserved for you until Fri, Oct 23, 22:00.'),
+    ).toBeInTheDocument();
+    // The person is not offered for booking or joining again.
+    expect(
+      section.queryByRole('button', { name: 'Join the waiting list' }),
+    ).not.toBeInTheDocument();
+    await user.click(section.getByRole('button', { name: 'Accept the place for Nora Example' }));
+
+    expect(post).toHaveBeenCalledWith('/api/v1/waitlist/{entryId}/accept', {
+      params: { path: { entryId } },
+    });
+    expect(await screen.findAllByText('Nora Example is booked.')).not.toHaveLength(0);
+    expect(await section.findByText('Booked')).toBeInTheDocument();
+    expect(section.queryByText('Invited')).not.toBeInTheDocument();
+  });
+
+  it('shows the invite of a dependent by name', async () => {
+    mockMember({ lesson: () => waitingBallet(invitedOf(lina)), fam: family });
+
+    const { section } = await openBooking();
+
+    expect(
+      await section.findByText('A place is reserved for Lina Example until Fri, Oct 23, 22:00.'),
+    ).toBeInTheDocument();
+    expect(
+      section.getByRole('button', { name: 'Decline the place for Lina Example' }),
+    ).toBeEnabled();
+  });
+
+  it('declines an invite and says when the person is back on the list', async () => {
+    let current = waitingBallet(invitedOf(nora, true));
+    mockMember({ lesson: () => current });
+    const post = mockApiPost({
+      '/api/v1/waitlist/{entryId}/decline': () => {
+        current = waitingBallet(noraWaiting(2));
+        return {
+          body: {
+            id: entryId,
+            lessonId: ids.lessonBallet,
+            personId: nora.id,
+            status: 'waiting',
+            stayOnList: true,
+            joinedAt: '2026-10-23T10:00:00Z',
+            position: 2,
+          },
+        };
+      },
+    });
+    const user = userEvent.setup();
+
+    const { section } = await openBooking();
+    await user.click(section.getByRole('button', { name: 'Decline the place for Nora Example' }));
+
+    expect(post).toHaveBeenCalledWith('/api/v1/waitlist/{entryId}/decline', {
+      params: { path: { entryId } },
+    });
+    expect(
+      await screen.findAllByText('Nora Example is back on the waiting list, position 2.'),
+    ).not.toHaveLength(0);
+    expect(await section.findByText('Waiting, position 2')).toBeInTheDocument();
+  });
+
+  it('says when an invite ran out while accepting', async () => {
+    mockMember({ lesson: () => waitingBallet(invitedOf(nora)) });
+    mockApiPost({ '/api/v1/waitlist/{entryId}/accept': conflict('invite-expired') });
+    const user = userEvent.setup();
+
+    const { section } = await openBooking();
+    await user.click(section.getByRole('button', { name: 'Accept the place for Nora Example' }));
+
+    expect(await screen.findAllByText('The invite has run out.')).not.toHaveLength(0);
+  });
+
+  it("shows an invite as expired once the server's clock passes it", async () => {
+    // Friday 23:00 in Berlin: an hour after the invite ran out.
+    vi.setSystemTime(new Date('2026-10-23T21:00:00Z'));
+    mockMember({ lesson: () => waitingBallet(invitedOf(nora, true)) });
+
+    const { section } = await openBooking();
+
+    expect(section.getByText('Invite expired')).toBeInTheDocument();
+    expect(
+      section.getByText('The invite has run out; Nora Example goes back to the end of the list.'),
+    ).toBeInTheDocument();
+    expect(
+      section.queryByRole('button', { name: 'Accept the place for Nora Example' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers a person again whose invite ran out without staying on the list', async () => {
+    mockMember({
+      lesson: () => waitingBallet({ ...invitedOf(nora), status: 'expired', expiresAt: undefined }),
+    });
+
+    const { section } = await openBooking();
+
+    expect(section.getByText('Invite expired')).toBeInTheDocument();
+    expect(section.getByText('The invite has run out.')).toBeInTheDocument();
+    expect(await section.findByRole('button', { name: 'Join the waiting list' })).toBeEnabled();
+  });
+
+  it("offers a person again once an ending invite passes its expiry by the server's clock", async () => {
+    vi.setSystemTime(new Date('2026-10-23T21:00:00Z'));
+    mockMember({ lesson: () => waitingBallet(invitedOf(nora)) });
+
+    const { section } = await openBooking();
+
+    expect(await section.findByRole('button', { name: 'Join the waiting list' })).toBeEnabled();
+  });
+
+  it('keeps a person who stays on the list from joining again after a missed invite', async () => {
+    mockMember({
+      lesson: () => waitingBallet({ ...invitedOf(nora, true), status: 'expired' }),
+    });
+
+    const { section } = await openBooking();
+
+    expect(section.getByText('Invite expired')).toBeInTheDocument();
+    expect(
+      section.queryByRole('button', { name: 'Join the waiting list' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows an invite without an expiry', async () => {
+    mockMember({ lesson: () => waitingBallet({ ...invitedOf(nora), expiresAt: undefined }) });
+
+    const { section } = await openBooking();
+
+    expect(await section.findByText('A place is reserved for you.')).toBeInTheDocument();
+  });
+
+  it('starts "stay on the list" unchecked for each person and after a join', async () => {
+    let current: LessonDetail = full;
+    mockMember({ lesson: () => current, fam: family });
+    mockApiPost({
+      '/api/v1/lessons/{lessonId}/waitlist': () => {
+        current = waitingBallet(noraWaiting(1));
+        return {
+          status: 201,
+          body: {
+            id: entryId,
+            lessonId: ids.lessonBallet,
+            personId: nora.id,
+            status: 'waiting',
+            stayOnList: true,
+            joinedAt: '2026-10-23T10:00:00Z',
+            position: 1,
+          },
+        };
+      },
+    });
+    const user = userEvent.setup();
+
+    const { section } = await openBooking();
+    const stay = () =>
+      section.getByRole('checkbox', { name: 'Stay on the list if I miss an invite' });
+    await user.click(stay());
+    expect(stay()).toBeChecked();
+    // Another person: unchecked.
+    await user.click(await section.findByRole('combobox', { name: 'Join for' }));
+    await user.click(await screen.findByRole('option', { name: 'Lina Example' }));
+    expect(stay()).not.toBeChecked();
+    // Back to Nora, checked again, and joined: the next person starts unchecked.
+    await user.click(section.getByRole('combobox', { name: 'Join for' }));
+    await user.click(await screen.findByRole('option', { name: 'Nora Example (you)' }));
+    expect(stay()).toBeChecked();
+    await user.click(section.getByRole('button', { name: 'Join the waiting list' }));
+
+    expect(await section.findByText('Waiting, position 1')).toBeInTheDocument();
+    expect(section.getByRole('combobox', { name: 'Join for' })).toHaveTextContent('Lina Example');
+    expect(stay()).not.toBeChecked();
+  });
+
+  it('does not turn a running booking of the last place into a join', async () => {
+    mockMember({ lesson: () => ({ ...lessonBalletDetail, freePlaces: 1 }), fam: family });
+    const answer = deferred<unknown>();
+    vi.spyOn(api, 'POST').mockImplementation((() => answer.promise) as unknown as typeof api.POST);
+    const user = userEvent.setup();
+
+    const { section } = await openBooking();
+    await user.click(await section.findByRole('button', { name: 'Book' }));
+
+    // Nora takes the last place for now; Lina is next, but nothing is offered meanwhile.
+    expect(await section.findByText('Booked')).toBeInTheDocument();
+    expect(section.getByRole('button', { name: 'Booking…' })).toBeDisabled();
+    expect(
+      section.queryByRole('button', { name: 'Join the waiting list' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers nothing on the waiting list once the lesson has started', async () => {
+    vi.setSystemTime(new Date('2026-10-26T17:30:00Z'));
+    mockMember({ lesson: () => waitingBallet(noraWaiting(1)) });
+
+    const { section } = await openBooking();
+
+    expect(section.getByText('Waiting, position 1')).toBeInTheDocument();
+    expect(section.queryByRole('button', { name: /waiting list/ })).not.toBeInTheDocument();
   });
 });

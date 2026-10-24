@@ -7,8 +7,10 @@ import type { components } from './schema';
  * account already, another lesson uses the room then, a lesson would be in
  * the past, a lesson of a class is to be deleted rather than canceled, the
  * person is booked already, the lesson (or a class, for its members) is
- * full, the lesson is closed for booking (see closedWhy), or the booking is
- * canceled already.
+ * full, the lesson is closed for booking (see closedWhy), the booking is
+ * canceled already, or a waiting-list write does not fit the entry: the
+ * lesson has a free place, the person waits already, the entry has no
+ * invite, its invite ran out or was used, or it left the list.
  */
 export type ConflictReason = components['schemas']['Conflict']['reason'];
 
@@ -24,6 +26,12 @@ const conflictReasons: readonly ConflictReason[] = [
   'full',
   'closed',
   'already-canceled',
+  'not-full',
+  'already-waiting',
+  'not-invited',
+  'invite-expired',
+  'invite-used',
+  'not-waiting',
 ];
 
 /** The lesson that uses the room, named by a 409 `room-taken`. */

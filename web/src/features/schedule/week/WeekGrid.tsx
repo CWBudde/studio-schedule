@@ -143,6 +143,7 @@ export function WeekGrid({
                 timeZone={tz}
                 lang={lang}
                 ended={Date.parse(p.item.endsAt) <= now}
+                now={now}
                 selected={search.lesson === p.item.id}
                 onOpen={() => void update({ lesson: p.item.id })}
               />
@@ -239,6 +240,7 @@ function LessonBlock({
   timeZone,
   lang,
   ended,
+  now,
   selected,
   onOpen,
 }: {
@@ -249,6 +251,8 @@ function LessonBlock({
   lang: string;
   /** Whether the lesson is over; it then shows no free places. */
   ended: boolean;
+  /** The server's clock, in ms. */
+  now: number;
   selected: boolean;
   onOpen: () => void;
 }) {
@@ -276,7 +280,7 @@ function LessonBlock({
       type="button"
       aria-label={label}
       aria-haspopup="dialog"
-      aria-describedby={hasAvailabilityBadges(lesson, showFree) ? availabilityId : undefined}
+      aria-describedby={hasAvailabilityBadges(lesson, showFree, now) ? availabilityId : undefined}
       data-start={start}
       data-lane={lane}
       data-lanes={lanes}
@@ -305,7 +309,7 @@ function LessonBlock({
       {canceled && <Badge variant="destructive">{t('status.canceled')}</Badge>}
       {workshop && <Badge variant="outline">{t('kind.workshop')}</Badge>}
       <VisibilityBadge visibility={lesson.visibility} />
-      <AvailabilityBadges id={availabilityId} lesson={lesson} showFree={showFree} />
+      <AvailabilityBadges id={availabilityId} lesson={lesson} showFree={showFree} now={now} />
     </button>
   );
 }

@@ -83,6 +83,80 @@ describe('ScheduleList', () => {
     expect(within(workshop).getByText('Full')).toBeInTheDocument();
   });
 
+  it('shows whom of the family a lesson has on its waiting list or invited', async () => {
+    mockApiGet({ '/api/v1/auth/me': { body: meMember } });
+    renderList({
+      ...schedule,
+      lessons: [
+        {
+          ...lessonBallet,
+          freePlaces: 0,
+          waitlist: [
+            {
+              ...noraBooked,
+              entryId: noraBooked.bookingId,
+              status: 'waiting',
+              position: 2,
+              stayOnList: false,
+            },
+          ],
+        },
+        {
+          ...lessonWorkshop,
+          freePlaces: 0,
+          waitlist: [
+            {
+              ...lina,
+              entryId: linaBooked.bookingId,
+              status: 'invited',
+              expiresAt: '2026-10-24T10:00:00Z',
+              stayOnList: false,
+            },
+          ],
+        },
+      ],
+    });
+
+    const ballet = await screen.findByRole('button', { name: /^Ballet/ });
+    expect(within(ballet).getByText('Waiting list')).toBeInTheDocument();
+    expect(ballet).toHaveAccessibleDescription(/Waiting list Full$/);
+    const workshop = screen.getByRole('button', { name: /^Jazz/ });
+    expect(await within(workshop).findByText('Invited: Lina Example')).toBeInTheDocument();
+    expect(workshop).toHaveAccessibleDescription(/Invited: Lina Example Full$/);
+  });
+
+  it("drops the invited badge once the invite has run out by the server's clock", async () => {
+    mockApiGet({ '/api/v1/auth/me': { body: meMember } });
+    renderList(
+      {
+        ...schedule,
+        lessons: [
+          {
+            ...lessonWorkshop,
+            freePlaces: 0,
+            waitlist: [
+              {
+                ...lina,
+                entryId: linaBooked.bookingId,
+                status: 'invited',
+                expiresAt: '2026-10-24T10:00:00Z',
+                stayOnList: false,
+              },
+            ],
+          },
+        ],
+      },
+      undefined,
+      // Saturday noon in Berlin: two hours after the invite ran out.
+      '2026-10-24T12:00:00Z',
+    );
+
+    const workshop = await screen.findByRole('button', { name: /^Jazz/ });
+    expect(within(workshop).getByText('Full')).toBeInTheDocument();
+    expect(within(workshop).queryByText(/^Invited/)).not.toBeInTheDocument();
+    expect(workshop).toHaveAccessibleDescription(/Full$/);
+  });
+
   it('shows a plain "Booked" until it knows who is signed in', async () => {
     // GET /auth/me never answers.
     vi.spyOn(api, 'GET').mockImplementation((() => new Promise(() => undefined)) as never);

@@ -4,6 +4,7 @@ import { CircleAlert, CircleCheck, LinkIcon, MailCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { confirmEmailChangeMutation, meQuery } from '@/api/queries';
+import { LinkPageCard } from '@/components/LinkPageCard';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -84,22 +85,14 @@ function AddressTaken() {
 function EmailChanged({ email }: { email: string | undefined }) {
   const { t } = useTranslation('auth');
   return (
-    <Card className="mx-auto w-full max-w-md">
-      <CardHeader>
-        <div className="mb-2 flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <CircleCheck className="size-5" aria-hidden="true" />
-        </div>
-        <CardTitle>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            {t('confirmEmailChange.successTitle')}
-          </h1>
-        </CardTitle>
-        <CardDescription role="status">
-          {email
-            ? t('confirmEmailChange.successSignedIn', { email })
-            : t('confirmEmailChange.success')}
-        </CardDescription>
-      </CardHeader>
+    <LinkPageCard
+      icon={<CircleCheck />}
+      title={t('confirmEmailChange.successTitle')}
+      description={
+        email ? t('confirmEmailChange.successSignedIn', { email }) : t('confirmEmailChange.success')
+      }
+      status
+    >
       <CardFooter>
         <Button asChild>
           {email ? (
@@ -109,30 +102,24 @@ function EmailChanged({ email }: { email: string | undefined }) {
           )}
         </Button>
       </CardFooter>
-    </Card>
+    </LinkPageCard>
   );
 }
 
 function InvalidLink() {
   const { t } = useTranslation('auth');
   return (
-    <Card className="mx-auto w-full max-w-md">
-      <CardHeader>
-        <div className="mb-2 flex size-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-          <LinkIcon className="size-5" aria-hidden="true" />
-        </div>
-        <CardTitle>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            {t('confirmEmailChange.invalidTitle')}
-          </h1>
-        </CardTitle>
-        <CardDescription>{t('confirmEmailChange.invalid')}</CardDescription>
-      </CardHeader>
+    <LinkPageCard
+      icon={<LinkIcon />}
+      tone="destructive"
+      title={t('confirmEmailChange.invalidTitle')}
+      description={t('confirmEmailChange.invalid')}
+    >
       <CardFooter>
         <Button asChild>
           <Link to="/account">{t('confirmEmailChange.toAccount')}</Link>
         </Button>
       </CardFooter>
-    </Card>
+    </LinkPageCard>
   );
 }

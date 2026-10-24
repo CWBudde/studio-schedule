@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { resetPasswordMutation } from '@/api/queries';
+import { LinkPageCard } from '@/components/LinkPageCard';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -94,47 +95,35 @@ export function ResetPasswordPage() {
 function PasswordChanged() {
   const { t } = useTranslation('auth');
   return (
-    <Card className="mx-auto w-full max-w-md">
-      <CardHeader>
-        <div className="mb-2 flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <CircleCheck className="size-5" aria-hidden="true" />
-        </div>
-        <CardTitle>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            {t('resetPassword.successTitle')}
-          </h1>
-        </CardTitle>
-        <CardDescription role="status">{t('resetPassword.success')}</CardDescription>
-      </CardHeader>
+    <LinkPageCard
+      icon={<CircleCheck />}
+      title={t('resetPassword.successTitle')}
+      description={t('resetPassword.success')}
+      status
+    >
       <CardFooter>
         <Button asChild>
           <Link to="/login">{t('resetPassword.signIn')}</Link>
         </Button>
       </CardFooter>
-    </Card>
+    </LinkPageCard>
   );
 }
 
 function InvalidLink() {
   const { t } = useTranslation('auth');
   return (
-    <Card className="mx-auto w-full max-w-md">
-      <CardHeader>
-        <div className="mb-2 flex size-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-          <LinkIcon className="size-5" aria-hidden="true" />
-        </div>
-        <CardTitle>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            {t('resetPassword.invalidTitle')}
-          </h1>
-        </CardTitle>
-        <CardDescription>{t('resetPassword.invalid')}</CardDescription>
-      </CardHeader>
+    <LinkPageCard
+      icon={<LinkIcon />}
+      tone="destructive"
+      title={t('resetPassword.invalidTitle')}
+      description={t('resetPassword.invalid')}
+    >
       <CardFooter>
         <Button asChild>
           <Link to="/forgot-password">{t('resetPassword.requestNew')}</Link>
         </Button>
       </CardFooter>
-    </Card>
+    </LinkPageCard>
   );
 }

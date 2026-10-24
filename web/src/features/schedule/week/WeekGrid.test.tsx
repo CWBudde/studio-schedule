@@ -92,6 +92,43 @@ describe('WeekGrid', () => {
     expect(within(contemporary).queryByText(/free$|^Full$/)).not.toBeInTheDocument();
   });
 
+  it('marks waiting-list entries of the family on the blocks, and refers to them', async () => {
+    mockApiGet({ '/api/v1/auth/me': { body: meMember } });
+    renderAtSchedule(
+      <WeekGrid
+        schedule={{
+          ...schedule,
+          // Monday 20:00 in Berlin: the ballet is over, its free places mean nothing.
+          now: '2026-10-26T19:00:00Z',
+          lessons: [
+            {
+              ...lessonBallet,
+              freePlaces: 0,
+              waitlist: [
+                {
+                  personId: '0190a000-0000-7000-8000-000000000331',
+                  name: 'Lina Example',
+                  entryId: '0190a000-0000-7000-8000-000000000701',
+                  status: 'waiting',
+                  position: 1,
+                  stayOnList: true,
+                },
+              ],
+            },
+          ],
+        }}
+        today="2026-10-26"
+        receivedAt={Date.now()}
+        weekStart="2026-10-26"
+      />,
+      { from: '2026-10-26' },
+    );
+
+    const ballet = await blockIn('Mon 26', /Ballet/);
+    expect(await within(ballet).findByText('Waiting list: Lina Example')).toBeInTheDocument();
+    expect(ballet).toHaveAccessibleDescription('Waiting list: Lina Example');
+  });
+
   it('places lessons by school date and wall-clock time in the school zone', async () => {
     renderAtSchedule(
       <WeekGrid

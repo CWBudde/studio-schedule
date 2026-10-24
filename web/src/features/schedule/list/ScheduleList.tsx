@@ -124,6 +124,7 @@ function DaySection({
             <LessonCard
               lesson={lesson}
               past={Date.parse(lesson.endsAt) <= now}
+              now={now}
               dayLabel={heading}
               timeZone={timeZone}
               lang={lang}
@@ -139,6 +140,7 @@ function DaySection({
 function LessonCard({
   lesson,
   past,
+  now,
   dayLabel,
   timeZone,
   lang,
@@ -146,6 +148,8 @@ function LessonCard({
 }: {
   lesson: ScheduleLesson;
   past: boolean;
+  /** The server's clock, in ms. */
+  now: number;
   dayLabel: string;
   timeZone: string;
   lang: string;
@@ -174,7 +178,7 @@ function LessonCard({
       type="button"
       aria-label={label}
       aria-describedby={
-        hasAvailabilityBadges(lesson, !quiet) ? `${detailsId} ${availabilityId}` : detailsId
+        hasAvailabilityBadges(lesson, !quiet, now) ? `${detailsId} ${availabilityId}` : detailsId
       }
       onClick={onOpen}
       data-canceled={canceled || undefined}
@@ -235,7 +239,7 @@ function LessonCard({
           </span>
         </span>
       </span>
-      <AvailabilityBadges id={availabilityId} lesson={lesson} showFree={!quiet} />
+      <AvailabilityBadges id={availabilityId} lesson={lesson} showFree={!quiet} now={now} />
     </button>
   );
 }

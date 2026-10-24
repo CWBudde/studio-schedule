@@ -3,7 +3,7 @@ import { closedWhy, conflictReason } from '@/api/conflict';
 import { ApiError, refusedAsStarted, refusedAt } from '@/api/queries';
 
 /**
- * Why a booking write failed, in words: every 409 reason (and the `why` of a
+ * Why a booking or waiting-list write failed, in words: every 409 reason (and the `why` of a
  * `closed`), a 404, a 422 for a lesson that has started or an end date
  * before the lesson, or a general sentence. `name` is the person the write was for.
  */
@@ -17,6 +17,12 @@ export function useBookingErrorText(): (error: unknown, name: string) => string 
     if (reason === 'full') return t('booking.errors.full');
     if (reason === 'closed') return t('booking.errors.closed.cutoff');
     if (reason === 'already-canceled') return t('booking.errors.alreadyCanceled');
+    if (reason === 'not-full') return t('booking.errors.notFull');
+    if (reason === 'already-waiting') return t('booking.errors.alreadyWaiting', { name });
+    if (reason === 'not-invited') return t('booking.errors.notInvited', { name });
+    if (reason === 'invite-expired') return t('booking.errors.inviteExpired');
+    if (reason === 'invite-used') return t('booking.errors.inviteUsed');
+    if (reason === 'not-waiting') return t('booking.errors.notWaiting', { name });
     if (error instanceof ApiError && error.status === 404) return t('booking.errors.notFound');
     if (refusedAsStarted(error, 'path.bookingId')) return t('booking.errors.started');
     if (refusedAt(error, 'query.until') || refusedAt(error, 'body.until')) {

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { confirmEmailMutation } from '@/api/queries';
+import { LinkPageCard } from '@/components/LinkPageCard';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -89,23 +90,17 @@ export function ConfirmPage() {
 function InvalidLink() {
   const { t } = useTranslation('auth');
   return (
-    <Card className="mx-auto w-full max-w-md">
-      <CardHeader>
-        <div className="mb-2 flex size-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-          <LinkIcon className="size-5" aria-hidden="true" />
-        </div>
-        <CardTitle>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            {t('confirm.invalidTitle')}
-          </h1>
-        </CardTitle>
-        <CardDescription>{t('confirm.invalid')}</CardDescription>
-      </CardHeader>
+    <LinkPageCard
+      icon={<LinkIcon />}
+      tone="destructive"
+      title={t('confirm.invalidTitle')}
+      description={t('confirm.invalid')}
+    >
       <CardFooter>
         <Button asChild>
           <Link to="/register">{t('confirm.registerAgain')}</Link>
         </Button>
       </CardFooter>
-    </Card>
+    </LinkPageCard>
   );
 }

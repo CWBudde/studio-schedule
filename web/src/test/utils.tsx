@@ -35,6 +35,7 @@ export type TestPath =
   | '/forgot-password'
   | '/reset-password'
   | '/confirm-email-change'
+  | '/waitlist/accept'
   | '/account'
   | '/admin/accounts'
   | '/admin/persons'
@@ -76,6 +77,7 @@ export function renderInRouter(
       route('/forgot-password'),
       route('/reset-password'),
       route('/confirm-email-change'),
+      route('/waitlist/accept'),
       route('/account'),
       route('/admin/accounts'),
       route('/admin/persons'),

@@ -1468,6 +1468,132 @@ export const cancelFollowingMutation = (queryClient: QueryClient) =>
     onSettled: () => refreshAfterBooking(queryClient),
   });
 
+/** An entry of a lesson's waiting list, as joinWaitlist and declineWaitlistInvite answer. */
+export type WaitlistEntry = components['schemas']['WaitlistEntry'];
+/** A person of the signed-in family on a lesson's waiting list, as the schedule and the lesson show them. */
+export type WaitlistFor = components['schemas']['WaitlistFor'];
+/**
+ * What the link of a waiting-list invite stands for (getWaitlistInvite);
+ * state `waiting`: the invite ran out, but the entry is back on the list,
+ * at `position`.
+ */
+export type WaitlistInvite = components['schemas']['WaitlistInvite'];
+
+/** Who joins which lesson's waiting list; `name` is for the messages. */
+export type JoinWaitlistVariables = {
+  lessonId: string;
+  personId: string;
+  name: string;
+  stayOnList: boolean;
+};
+
+/**
+ * Puts the signed-in person or a dependent on the waiting list of a full
+ * lesson (409 `not-full`, `already-waiting`, `already-booked`, or `closed`
+ * with a `why`; 404 for a lesson or person out of reach). No optimistic
+ * change: afterwards the lessons and the demo mailbox are asked again.
+ */
+export const joinWaitlistMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationKey: bookingMutationKey,
+    mutationFn: ({ lessonId, personId, stayOnList }: JoinWaitlistVariables) =>
+      unwrap(
+        api.POST('/api/v1/lessons/{lessonId}/waitlist', {
+          params: { path: { lessonId } },
+          body: { personId, stayOnList },
+        }),
+      ),
+    onError: signedOutOn401(queryClient),
+    onSettled: () => refreshAfterBooking(queryClient),
+  });
+
+/** A waiting-list entry of the family to act on; `name` is for the messages. */
+export type WaitlistEntryVariables = { entryId: string; name: string };
+
+/**
+ * Takes an entry of the family off its waiting list (409 `not-waiting` once
+ * it ended); a place its invite held goes to the next. Afterwards the
+ * lessons and the demo mailbox are asked again.
+ */
+export const leaveWaitlistMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationKey: bookingMutationKey,
+    mutationFn: ({ entryId }: WaitlistEntryVariables) =>
+      expectOk(api.DELETE('/api/v1/waitlist/{entryId}', { params: { path: { entryId } } })),
+    onError: signedOutOn401(queryClient),
+    onSettled: () => refreshAfterBooking(queryClient),
+  });
+
+/**
+ * Takes the place an invite of the family holds: books the person and
+ * returns the booking (409 `not-invited`, `invite-expired`, `invite-used`,
+ * or `closed` with a `why`). Afterwards the lessons and the demo mailbox
+ * (the confirmation) are asked again.
+ */
+export const acceptWaitlistInviteMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationKey: bookingMutationKey,
+    mutationFn: ({ entryId }: WaitlistEntryVariables) =>
+      unwrap(api.POST('/api/v1/waitlist/{entryId}/accept', { params: { path: { entryId } } })),
+    onError: signedOutOn401(queryClient),
+    onSettled: () => refreshAfterBooking(queryClient),
+  });
+
+/**
+ * Gives up the place an invite of the family holds; the answer is the entry
+ * as it is now (back at the end of the list with `stayOnList`, else
+ * expired). Fails like acceptWaitlistInviteMutation. Afterwards the lessons
+ * and the demo mailbox are asked again.
+ */
+export const declineWaitlistInviteMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationKey: bookingMutationKey,
+    mutationFn: ({ entryId }: WaitlistEntryVariables) =>
+      unwrap(api.POST('/api/v1/waitlist/{entryId}/decline', { params: { path: { entryId } } })),
+    onError: signedOutOn401(queryClient),
+    onSettled: () => refreshAfterBooking(queryClient),
+  });
+
+/**
+ * The invite of a mailed waiting-list link: the lesson, the person's given
+ * name, the expiry and its state. No sign-in needed; it changes nothing. An
+ * unknown token is a 404, too many lookups a 429 (neither is asked again).
+ * Asked once per page: not again on focus, reconnect or retry.
+ */
+export const waitlistInviteQuery = (token: string) =>
+  queryOptions({
+    queryKey: ['waitlist-invite', token],
+    queryFn: ({ signal }) =>
+      unwrap(api.GET('/api/v1/waitlist-invites/{token}', { params: { path: { token } }, signal })),
+    // Each lookup counts against the link's rate limit: ask once, keep the
+    // answer (an accept replaces it, a refused one asks again).
+    retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+/**
+ * Takes the place of a mailed invite without a sign-in, the token being the
+ * proof; the answer is the invite as it is now (state `accepted`), which
+ * replaces the cached one. A 409 (`invite-expired`, `invite-used`, `closed`)
+ * asks for the invite again, which then says what happened. Afterwards the
+ * lessons and the demo mailbox are asked again.
+ */
+export const acceptWaitlistInviteByTokenMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (token: string) =>
+      unwrap(api.POST('/api/v1/waitlist-invites/{token}', { params: { path: { token } } })),
+    onSuccess: (invite: WaitlistInvite, token: string) =>
+      queryClient.setQueryData(waitlistInviteQuery(token).queryKey, invite),
+    onError: (error: Error, token: string) => {
+      if (conflictReason(error)) {
+        void queryClient.invalidateQueries({ queryKey: waitlistInviteQuery(token).queryKey });
+      }
+    },
+    onSettled: () => refreshLessons(queryClient),
+  });
+
 /**
  * The mails of the demo mailbox, newest first; null when the installation is
  * not a demo (404). In a demo it is refetched whenever a view of it mounts;

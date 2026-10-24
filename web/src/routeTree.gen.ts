@@ -26,6 +26,7 @@ import { Route as AdminAuditRouteImport } from './routes/admin.audit'
 import { Route as AdminCourseTypesRouteImport } from './routes/admin.course-types'
 import { Route as AdminLocationsRouteImport } from './routes/admin.locations'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
+import { Route as WaitlistAcceptRouteImport } from './routes/waitlist.accept'
 import { Route as AdminPersonsIndexRouteImport } from './routes/admin.persons.index'
 import { Route as AdminPersonsPersonIdRouteImport } from './routes/admin.persons.$personId'
 import { Route as AdminTermsIndexRouteImport } from './routes/admin.terms.index'
@@ -116,6 +117,11 @@ const AdminStaffRoute = AdminStaffRouteImport.update({
   path: '/staff',
   getParentRoute: () => AdminRoute,
 } as any)
+const WaitlistAcceptRoute = WaitlistAcceptRouteImport.update({
+  id: '/waitlist/accept',
+  path: '/waitlist/accept',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminPersonsIndexRoute = AdminPersonsIndexRouteImport.update({
   id: '/persons/',
   path: '/persons/',
@@ -154,6 +160,7 @@ export interface FileRoutesByFullPath {
   '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/staff': typeof AdminStaffRoute
+  '/waitlist/accept': typeof WaitlistAcceptRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/persons/$personId': typeof AdminPersonsPersonIdRoute
   '/admin/persons/': typeof AdminPersonsIndexRoute
@@ -176,6 +183,7 @@ export interface FileRoutesByTo {
   '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/staff': typeof AdminStaffRoute
+  '/waitlist/accept': typeof WaitlistAcceptRoute
   '/admin': typeof AdminIndexRoute
   '/admin/persons/$personId': typeof AdminPersonsPersonIdRoute
   '/admin/persons': typeof AdminPersonsIndexRoute
@@ -200,6 +208,7 @@ export interface FileRoutesById {
   '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/staff': typeof AdminStaffRoute
+  '/waitlist/accept': typeof WaitlistAcceptRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/persons/$personId': typeof AdminPersonsPersonIdRoute
   '/admin/persons/': typeof AdminPersonsIndexRoute
@@ -225,6 +234,7 @@ export interface FileRouteTypes {
     | '/admin/course-types'
     | '/admin/locations'
     | '/admin/staff'
+    | '/waitlist/accept'
     | '/admin/'
     | '/admin/persons/$personId'
     | '/admin/persons/'
@@ -247,6 +257,7 @@ export interface FileRouteTypes {
     | '/admin/course-types'
     | '/admin/locations'
     | '/admin/staff'
+    | '/waitlist/accept'
     | '/admin'
     | '/admin/persons/$personId'
     | '/admin/persons'
@@ -270,6 +281,7 @@ export interface FileRouteTypes {
     | '/admin/course-types'
     | '/admin/locations'
     | '/admin/staff'
+    | '/waitlist/accept'
     | '/admin/'
     | '/admin/persons/$personId'
     | '/admin/persons/'
@@ -289,6 +301,7 @@ export interface RootRouteChildren {
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ScheduleRoute: typeof ScheduleRoute
+  WaitlistAcceptRoute: typeof WaitlistAcceptRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -412,6 +425,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminStaffRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/waitlist/accept': {
+      id: '/waitlist/accept'
+      path: '/waitlist/accept'
+      fullPath: '/waitlist/accept'
+      preLoaderRoute: typeof WaitlistAcceptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/persons/': {
       id: '/admin/persons/'
       path: '/persons'
@@ -483,6 +503,7 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ScheduleRoute: ScheduleRoute,
+  WaitlistAcceptRoute: WaitlistAcceptRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
