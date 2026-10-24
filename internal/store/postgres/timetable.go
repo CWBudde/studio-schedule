@@ -181,11 +181,19 @@ func (r classRepo) RemoveMember(ctx context.Context, class domain.ClassID, perso
 func (r classRepo) ListMembers(ctx context.Context, class domain.ClassID) ([]domain.ClassMember, error) {
 	rows, err := r.q.ListClassMembers(ctx, pgID(class))
 
-	return convertRows(rows, err, func(row sqlc.ClassMember) domain.ClassMember {
-		return domain.ClassMember{
-			ClassID:  fromPgID[domain.ClassID](row.ClassID),
-			PersonID: fromPgID[domain.PersonID](row.PersonID),
-			Since:    fromPgDate(row.Since),
-		}
-	})
+	return convertRows(rows, err, toClassMember)
+}
+
+func (r classRepo) ListMemberships(ctx context.Context, person domain.PersonID) ([]domain.ClassMember, error) {
+	rows, err := r.q.ListPersonClassMemberships(ctx, pgID(person))
+
+	return convertRows(rows, err, toClassMember)
+}
+
+func toClassMember(row sqlc.ClassMember) domain.ClassMember {
+	return domain.ClassMember{
+		ClassID:  fromPgID[domain.ClassID](row.ClassID),
+		PersonID: fromPgID[domain.PersonID](row.PersonID),
+		Since:    fromPgDate(row.Since),
+	}
 }

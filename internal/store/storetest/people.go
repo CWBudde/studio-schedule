@@ -3,6 +3,7 @@ package storetest
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -103,11 +104,12 @@ func testPersons(t *testing.T, newStore func(*testing.T) store.Store) {
 			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Persons().AddGuardian(ctx, link) })
 
 			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Persons().AddGuardian(ctx, link) })
-			wantErr(e.t, err, domain.ErrConflict)
+			wantErr(e.t, err, domain.ErrDuplicate)
 
 			missing := domain.Guardian{GuardianID: parent.ID, DependentID: newID[domain.PersonID](e)}
 			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Persons().AddGuardian(ctx, missing) })
 			wantErr(e.t, err, domain.ErrConflict)
+			wantNotErr(e.t, err, domain.ErrDuplicate)
 
 			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Persons().RemoveGuardian(ctx, missing) })
 			wantErr(e.t, err, domain.ErrNotFound)
@@ -115,6 +117,20 @@ func testPersons(t *testing.T, newStore func(*testing.T) store.Store) {
 			err = e.read(func(ctx context.Context, tx store.Tx) error { return tx.Persons().RemoveGuardian(ctx, link) })
 			wantErr(e.t, err, store.ErrReadOnly)
 		},
+		"Lock": func(e *env) {
+			a, b := e.person("Ada", "Lock"), e.person("Bea", "Lock")
+
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Lock(ctx, b.ID, a.ID, b.ID) })
+
+			err := e.write(func(ctx context.Context, tx store.Tx) error {
+				return tx.Persons().Lock(ctx, a.ID, newID[domain.PersonID](e))
+			})
+			wantErr(e.t, err, domain.ErrNotFound)
+
+			err = e.read(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Lock(ctx, a.ID) })
+			wantErr(e.t, err, store.ErrReadOnly)
+		},
+		"LockSerialisesChecks": func(e *env) { testPersonLock(e) },
 		"DeleteReferencedIsConflict": func(e *env) {
 			deleteFails := func(id domain.PersonID) {
 				e.t.Helper()
@@ -234,7 +250,7 @@ func testAccounts(t *testing.T, newStore func(*testing.T) store.Store) {
 				Email: "ada@EXAMPLE.org", Role: domain.RoleMember,
 			}
 			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Accounts().Create(ctx, other) })
-			wantErr(e.t, err, domain.ErrConflict)
+			wantErr(e.t, err, domain.ErrDuplicate)
 		},
 		"OnlyASCIICaseIsFolded": func(e *env) {
 			// Like PostgreSQL's lower() under collation "C": "Ä" and "ä" differ.
@@ -261,24 +277,44 @@ func testAccounts(t *testing.T, newStore func(*testing.T) store.Store) {
 			b.Email = "ADA@example.org"
 
 			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Accounts().Update(ctx, b) })
-			wantErr(e.t, err, domain.ErrConflict)
+			wantErr(e.t, err, domain.ErrDuplicate)
 
 			// Changing only the case of the own email is fine.
 			b.Email = "BEA@example.org"
 			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Accounts().Update(ctx, b) })
+		},
+		"GetByPerson": func(e *env) {
+			e.account(e.person("Bea", "Other"), "bea@example.org")
+			a := e.account(e.person("Ada", "Account"), "ada@example.org")
+
+			got, err := query(e, func(ctx context.Context, tx store.Tx) (domain.Account, error) {
+				return tx.Accounts().GetByPerson(ctx, a.PersonID)
+			})
+			if err != nil {
+				e.t.Fatalf("GetByPerson: %v", err)
+			}
+
+			wantEqual(e.t, got, a)
+
+			none := e.person("Nia", "None")
+			_, err = query(e, func(ctx context.Context, tx store.Tx) (domain.Account, error) {
+				return tx.Accounts().GetByPerson(ctx, none.ID)
+			})
+			wantErr(e.t, err, domain.ErrNotFound)
 		},
 		"OneAccountPerPerson": func(e *env) {
 			a := e.account(e.person("Ada", "Account"), "ada@example.org")
 			second := domain.Account{ID: newID[domain.AccountID](e), PersonID: a.PersonID, Email: "ada2@example.org", Role: domain.RoleMember}
 
 			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Accounts().Create(ctx, second) })
-			wantErr(e.t, err, domain.ErrConflict)
+			wantErr(e.t, err, domain.ErrDuplicate)
 		},
 		"MissingPersonIsConflict": func(e *env) {
 			a := domain.Account{ID: newID[domain.AccountID](e), PersonID: newID[domain.PersonID](e), Email: "x@example.org", Role: domain.RoleMember}
 
 			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Accounts().Create(ctx, a) })
 			wantErr(e.t, err, domain.ErrConflict)
+			wantNotErr(e.t, err, domain.ErrDuplicate)
 		},
 		"ListOrder": func(e *env) {
 			c := e.account(e.person("C", "C"), "carl@example.org")
@@ -289,4 +325,54 @@ func testAccounts(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantSlice(e.t, got, []domain.Account{a, b, c})
 		},
 	})
+}
+
+// testPersonLock lets concurrent transactions lock two persons, in either
+// order, read a counter kept in one of them and write it back increased.
+// Without the lock, or with a lock order that deadlocks, increments would
+// get lost or transactions fail.
+func testPersonLock(e *env) {
+	const attempts = 12
+
+	a, b := e.person("Ada", "Counter"), e.person("Bea", "Counter")
+
+	var (
+		wg   sync.WaitGroup
+		errs = make([]error, attempts)
+	)
+
+	for i := range attempts {
+		wg.Go(func() {
+			errs[i] = e.write(func(ctx context.Context, tx store.Tx) error {
+				ids := []domain.PersonID{a.ID, b.ID}
+				if i%2 == 1 {
+					ids = []domain.PersonID{b.ID, a.ID}
+				}
+
+				if err := tx.Persons().Lock(ctx, ids...); err != nil {
+					return err
+				}
+
+				p, err := tx.Persons().Get(ctx, a.ID)
+				if err != nil {
+					return err
+				}
+
+				p.Notes += "x"
+
+				return tx.Persons().Update(ctx, p)
+			})
+		})
+	}
+
+	wg.Wait()
+
+	for _, err := range errs {
+		if err != nil {
+			e.t.Fatalf("unexpected error: %v", err)
+		}
+	}
+
+	got := mustQuery(e, func(ctx context.Context, tx store.Tx) (domain.Person, error) { return tx.Persons().Get(ctx, a.ID) })
+	wantEqual(e.t, len(got.Notes), attempts)
 }

@@ -214,6 +214,30 @@ func (q *Queries) ListClassesByTerm(ctx context.Context, termID pgtype.UUID) ([]
 	return items, nil
 }
 
+const listPersonClassMemberships = `-- name: ListPersonClassMemberships :many
+SELECT class_id, person_id, since FROM class_members WHERE person_id = $1 ORDER BY class_id
+`
+
+func (q *Queries) ListPersonClassMemberships(ctx context.Context, personID pgtype.UUID) ([]ClassMember, error) {
+	rows, err := q.db.Query(ctx, listPersonClassMemberships, personID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClassMember
+	for rows.Next() {
+		var i ClassMember
+		if err := rows.Scan(&i.ClassID, &i.PersonID, &i.Since); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTerms = `-- name: ListTerms :many
 SELECT id, name, starts_on, ends_on FROM terms ORDER BY starts_on, id
 `

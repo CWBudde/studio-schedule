@@ -50,3 +50,6 @@ DELETE FROM class_members WHERE class_id = $1 AND person_id = $2;
 
 -- name: ListClassMembers :many
 SELECT * FROM class_members WHERE class_id = $1 ORDER BY person_id;
+
+-- name: ListPersonClassMemberships :many
+SELECT * FROM class_members WHERE person_id = $1 ORDER BY class_id;

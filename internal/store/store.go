@@ -126,9 +126,20 @@ type PersonRepo interface {
 	Delete(ctx context.Context, id domain.PersonID) error
 	// List returns all persons ordered by family name, given name and ID.
 	List(ctx context.Context) ([]domain.Person, error)
+	// Lock locks the persons until the transaction ends (in PostgreSQL:
+	// SELECT … FOR UPDATE, in ID order, so that two transactions locking
+	// the same persons in another order do not deadlock). Whatever checks
+	// the links of a person before it changes them locks the person first:
+	// the guardian links (no cycles), and what makes a dependent managed
+	// (its account, staff links and own dependents) or keeps it from being
+	// deleted. It fails with domain.ErrNotFound if a person does not exist,
+	// which leaves the transaction usable. It needs a ReadWrite transaction
+	// and fails with ErrReadOnly otherwise.
+	Lock(ctx context.Context, ids ...domain.PersonID) error
 
 	// AddGuardian links a guardian to a dependent. It fails with
-	// domain.ErrConflict if the link exists or a person does not exist.
+	// domain.ErrDuplicate if the link exists and with domain.ErrConflict if
+	// a person does not exist.
 	AddGuardian(ctx context.Context, g domain.Guardian) error
 	RemoveGuardian(ctx context.Context, g domain.Guardian) error
 	// ListDependents returns the dependents of a guardian ordered like List.
@@ -144,10 +155,13 @@ type AccountRepo interface {
 	Get(ctx context.Context, id domain.AccountID) (domain.Account, error)
 	// GetByEmail finds an account by email, ignoring ASCII case.
 	GetByEmail(ctx context.Context, email string) (domain.Account, error)
-	// Create fails with domain.ErrConflict if the ID, the email or the person
-	// is taken, or the person does not exist.
+	// GetByPerson finds the account of a person.
+	GetByPerson(ctx context.Context, person domain.PersonID) (domain.Account, error)
+	// Create fails with domain.ErrDuplicate if the email or the person has
+	// an account, and with domain.ErrConflict if the ID is taken or the
+	// person does not exist.
 	Create(ctx context.Context, a domain.Account) error
-	// Update fails with domain.ErrConflict under the same rules as Create.
+	// Update fails with the same errors as Create.
 	Update(ctx context.Context, a domain.Account) error
 	// List returns all accounts ordered by ASCII-lower-cased email and ID.
 	List(ctx context.Context) ([]domain.Account, error)
@@ -246,6 +260,9 @@ type StaffRepo interface {
 	Delete(ctx context.Context, id domain.StaffID) error
 	// List returns all staff ordered by display name and ID.
 	List(ctx context.Context) ([]domain.Staff, error)
+	// ListByPerson returns the staff members linked to a person, ordered
+	// like List.
+	ListByPerson(ctx context.Context, person domain.PersonID) ([]domain.Staff, error)
 }
 
 // CourseTypeRepo stores course types.
@@ -299,12 +316,16 @@ type ClassRepo interface {
 	// with ErrReadOnly otherwise.
 	Lock(ctx context.Context, id domain.ClassID) (domain.Class, error)
 
-	// AddMember fails with domain.ErrConflict if the person is already a
-	// member or the class or person does not exist.
+	// AddMember fails with domain.ErrDuplicate if the person is already a
+	// member and with domain.ErrConflict if the class or person does not
+	// exist.
 	AddMember(ctx context.Context, m domain.ClassMember) error
 	RemoveMember(ctx context.Context, class domain.ClassID, person domain.PersonID) error
 	// ListMembers returns the members of a class ordered by person ID.
 	ListMembers(ctx context.Context, class domain.ClassID) ([]domain.ClassMember, error)
+	// ListMemberships returns the class memberships of a person ordered by
+	// class ID.
+	ListMemberships(ctx context.Context, person domain.PersonID) ([]domain.ClassMember, error)
 }
 
 // LessonRepo stores lessons.

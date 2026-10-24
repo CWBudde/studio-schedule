@@ -163,6 +163,12 @@ func (r staffRepo) List(ctx context.Context) ([]domain.Staff, error) {
 	return convertRows(rows, err, toStaff)
 }
 
+func (r staffRepo) ListByPerson(ctx context.Context, person domain.PersonID) ([]domain.Staff, error) {
+	rows, err := r.q.ListStaffByPerson(ctx, pgID(person))
+
+	return convertRows(rows, err, toStaff)
+}
+
 // ---------------------------------------------------------------- course types
 
 type courseTypeRepo struct{ q *sqlc.Queries }

@@ -117,6 +117,14 @@ func wantErr(t *testing.T, err, target error) {
 	}
 }
 
+func wantNotErr(t *testing.T, err, target error) {
+	t.Helper()
+
+	if errors.Is(err, target) {
+		t.Fatalf("want an error other than %v, got %v", target, err)
+	}
+}
+
 func wantEqual[T comparable](t *testing.T, got, want T) {
 	t.Helper()
 

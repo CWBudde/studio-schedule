@@ -2,7 +2,10 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/store/postgres/internal/sqlc"
@@ -127,6 +130,32 @@ func (r personRepo) Delete(ctx context.Context, id domain.PersonID) error {
 	return affected("person", n, err)
 }
 
+// Lock reads the persons with SELECT … FOR UPDATE, ordered by ID. A missing
+// person returns no row, which aborts nothing. In a read-only transaction
+// PostgreSQL rejects the statement (SQLSTATE 25006, store.ErrReadOnly).
+func (r personRepo) Lock(ctx context.Context, ids ...domain.PersonID) error {
+	want := make(map[domain.PersonID]bool, len(ids))
+	params := make([]pgtype.UUID, 0, len(ids))
+
+	for _, id := range ids {
+		if !want[id] {
+			want[id] = true
+			params = append(params, pgID(id))
+		}
+	}
+
+	locked, err := r.q.LockPersons(ctx, params)
+	if err != nil {
+		return mapErr(err)
+	}
+
+	if len(locked) != len(params) {
+		return fmt.Errorf("person: %w", domain.ErrNotFound)
+	}
+
+	return nil
+}
+
 func (r personRepo) List(ctx context.Context) ([]domain.Person, error) {
 	return toPersons(r.q.ListPersons(ctx))
 }
@@ -183,6 +212,15 @@ func (r accountRepo) Get(ctx context.Context, id domain.AccountID) (domain.Accou
 
 func (r accountRepo) GetByEmail(ctx context.Context, email string) (domain.Account, error) {
 	row, err := r.q.GetAccountByEmail(ctx, email)
+	if err != nil {
+		return domain.Account{}, notFound("account", err)
+	}
+
+	return toAccount(row), nil
+}
+
+func (r accountRepo) GetByPerson(ctx context.Context, person domain.PersonID) (domain.Account, error) {
+	row, err := r.q.GetAccountByPerson(ctx, pgID(person))
 	if err != nil {
 		return domain.Account{}, notFound("account", err)
 	}

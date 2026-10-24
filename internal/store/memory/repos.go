@@ -126,6 +126,22 @@ func (r personRepo) Delete(_ context.Context, id domain.PersonID) error {
 	return nil
 }
 
+// Lock needs no lock of its own: the store mutex already serialises every
+// transaction.
+func (r personRepo) Lock(_ context.Context, ids ...domain.PersonID) error {
+	if err := r.tx.checkWritable(); err != nil {
+		return err
+	}
+
+	for _, id := range ids {
+		if !r.tx.state.persons.has(id) {
+			return notFound("person")
+		}
+	}
+
+	return nil
+}
+
 func (r personRepo) List(context.Context) ([]domain.Person, error) {
 	return sorted(r.tx.state.persons.filter(all), comparePersons), nil
 }
@@ -140,7 +156,7 @@ func (r personRepo) AddGuardian(_ context.Context, g domain.Guardian) error {
 	case !s.persons.has(g.GuardianID) || !s.persons.has(g.DependentID):
 		return conflict("guardian link references a missing person")
 	case s.guardians.has(g):
-		return conflict("guardian link exists")
+		return fmt.Errorf("guardian link exists: %w", domain.ErrDuplicate)
 	}
 
 	s.guardians.put(r.tx.gen, g, struct{}{})
@@ -212,6 +228,15 @@ func (r accountRepo) GetByEmail(_ context.Context, email string) (domain.Account
 	return found[0], nil
 }
 
+func (r accountRepo) GetByPerson(_ context.Context, person domain.PersonID) (domain.Account, error) {
+	found := r.tx.state.accounts.filter(func(a domain.Account) bool { return a.PersonID == person })
+	if len(found) == 0 {
+		return domain.Account{}, notFound("account")
+	}
+
+	return found[0], nil
+}
+
 func (r accountRepo) Create(_ context.Context, a domain.Account) error {
 	if err := r.tx.checkWritable(); err != nil {
 		return err
@@ -243,9 +268,9 @@ func (r accountRepo) put(a domain.Account) error {
 	case !s.persons.has(a.PersonID):
 		return conflict("account references a missing person")
 	case s.accounts.exists(func(o domain.Account) bool { return o.ID != a.ID && foldASCII(o.Email) == foldASCII(a.Email) }):
-		return conflict("account email is taken")
+		return fmt.Errorf("account email is taken: %w", domain.ErrDuplicate)
 	case s.accounts.exists(func(o domain.Account) bool { return o.ID != a.ID && o.PersonID == a.PersonID }):
-		return conflict("person already has an account")
+		return fmt.Errorf("person already has an account: %w", domain.ErrDuplicate)
 	}
 
 	a.ConfirmedAt = instant(a.ConfirmedAt)
@@ -488,9 +513,15 @@ func (r staffRepo) Delete(_ context.Context, id domain.StaffID) error {
 }
 
 func (r staffRepo) List(context.Context) ([]domain.Staff, error) {
-	return sorted(r.tx.state.staff.filter(all), func(a, b domain.Staff) int {
-		return cmp.Or(strings.Compare(a.DisplayName, b.DisplayName), compareID(a.ID, b.ID))
-	}), nil
+	return sorted(r.tx.state.staff.filter(all), compareStaff), nil
+}
+
+func (r staffRepo) ListByPerson(_ context.Context, person domain.PersonID) ([]domain.Staff, error) {
+	return sorted(r.tx.state.staff.filter(func(st domain.Staff) bool { return st.PersonID == person }), compareStaff), nil
+}
+
+func compareStaff(a, b domain.Staff) int {
+	return cmp.Or(strings.Compare(a.DisplayName, b.DisplayName), compareID(a.ID, b.ID))
 }
 
 type courseTypeRepo struct{ tx *tx }
@@ -737,7 +768,7 @@ func (r classRepo) AddMember(_ context.Context, m domain.ClassMember) error {
 	case !s.classes.has(m.ClassID) || !s.persons.has(m.PersonID):
 		return conflict("class member references a missing record")
 	case s.classMembers.has(key):
-		return conflict("person is already a member")
+		return fmt.Errorf("person is already a member: %w", domain.ErrDuplicate)
 	}
 
 	s.classMembers.put(r.tx.gen, key, m)
@@ -765,6 +796,12 @@ func (r classRepo) ListMembers(_ context.Context, class domain.ClassID) ([]domai
 	members := r.tx.state.classMembers.filter(func(m domain.ClassMember) bool { return m.ClassID == class })
 
 	return sorted(members, func(a, b domain.ClassMember) int { return compareID(a.PersonID, b.PersonID) }), nil
+}
+
+func (r classRepo) ListMemberships(_ context.Context, person domain.PersonID) ([]domain.ClassMember, error) {
+	members := r.tx.state.classMembers.filter(func(m domain.ClassMember) bool { return m.PersonID == person })
+
+	return sorted(members, func(a, b domain.ClassMember) int { return compareID(a.ClassID, b.ClassID) }), nil
 }
 
 // ---------------------------------------------------------------- lessons

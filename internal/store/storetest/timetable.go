@@ -128,12 +128,13 @@ func testTimetable(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantSlice(e.t, list(), []domain.ClassMember{m1, m2})
 
 			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Classes().AddMember(ctx, m1) })
-			wantErr(e.t, err, domain.ErrConflict)
+			wantErr(e.t, err, domain.ErrDuplicate)
 
 			err = e.write(func(ctx context.Context, tx store.Tx) error {
 				return tx.Classes().AddMember(ctx, domain.ClassMember{ClassID: c.ID, PersonID: newID[domain.PersonID](e)})
 			})
 			wantErr(e.t, err, domain.ErrConflict)
+			wantNotErr(e.t, err, domain.ErrDuplicate)
 
 			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Classes().Delete(ctx, c.ID) })
 			wantErr(e.t, err, domain.ErrConflict)
@@ -146,6 +147,31 @@ func testTimetable(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Classes().RemoveMember(ctx, c.ID, p1.ID) })
 			wantErr(e.t, err, domain.ErrNotFound)
+		},
+		"Memberships": func(e *env) {
+			s := e.setting()
+			c1, c2 := e.class(s, time.Monday, domain.TimeOfDay{Hour: 17}), e.class(s, time.Tuesday, domain.TimeOfDay{Hour: 17})
+			p, other := e.person("Lea", "Member"), e.person("Max", "Member")
+			m1 := domain.ClassMember{ClassID: c1.ID, PersonID: p.ID, Since: domain.Date{Year: 2026, Month: time.March, Day: 5}}
+			m2 := domain.ClassMember{ClassID: c2.ID, PersonID: p.ID}
+
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				for _, m := range []domain.ClassMember{m2, {ClassID: c1.ID, PersonID: other.ID}, m1} {
+					if err := tx.Classes().AddMember(ctx, m); err != nil {
+						return err
+					}
+				}
+
+				return nil
+			})
+
+			memberships := func(id domain.PersonID) []domain.ClassMember {
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.ClassMember, error) {
+					return tx.Classes().ListMemberships(ctx, id)
+				})
+			}
+			wantSlice(e.t, memberships(p.ID), []domain.ClassMember{m1, m2}) // c1 has the smaller ID
+			wantSlice(e.t, memberships(e.person("Nia", "None").ID), nil)
 		},
 		"Lock": func(e *env) {
 			c := e.class(e.setting(), time.Monday, domain.TimeOfDay{Hour: 9})

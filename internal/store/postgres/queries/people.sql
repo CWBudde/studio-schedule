@@ -13,6 +13,11 @@ WHERE id = $1;
 -- name: DeletePerson :execrows
 DELETE FROM persons WHERE id = $1;
 
+-- name: LockPersons :many
+-- In ID order, so that concurrent transactions lock the same persons in the
+-- same order.
+SELECT id FROM persons WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY id FOR UPDATE;
+
 -- name: ListPersons :many
 SELECT * FROM persons ORDER BY family_name, given_name, id;
 
@@ -43,6 +48,9 @@ SELECT * FROM accounts WHERE id = $1;
 -- The parameter needs collation "C" as well, so that lower() folds ASCII
 -- letters only and the expression matches accounts_email_key.
 SELECT * FROM accounts WHERE lower(email) = lower(sqlc.arg(email)::text COLLATE "C");
+
+-- name: GetAccountByPerson :one
+SELECT * FROM accounts WHERE person_id = $1;
 
 -- name: CreateAccount :exec
 INSERT INTO accounts (id, person_id, email, role, visible_days, confirmed_at, disabled_at, locale)

@@ -137,6 +137,26 @@ func (q *Queries) GetAccountByEmail(ctx context.Context, email string) (Account,
 	return i, err
 }
 
+const getAccountByPerson = `-- name: GetAccountByPerson :one
+SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at, locale FROM accounts WHERE person_id = $1
+`
+
+func (q *Queries) GetAccountByPerson(ctx context.Context, personID pgtype.UUID) (Account, error) {
+	row := q.db.QueryRow(ctx, getAccountByPerson, personID)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.PersonID,
+		&i.Email,
+		&i.Role,
+		&i.VisibleDays,
+		&i.DisabledAt,
+		&i.ConfirmedAt,
+		&i.Locale,
+	)
+	return i, err
+}
+
 const getPerson = `-- name: GetPerson :one
 SELECT id, given_name, family_name, email, phone, birth_date, notes FROM persons WHERE id = $1
 `
@@ -286,6 +306,32 @@ func (q *Queries) ListPersons(ctx context.Context) ([]Person, error) {
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockPersons = `-- name: LockPersons :many
+SELECT id FROM persons WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE
+`
+
+// In ID order, so that concurrent transactions lock the same persons in the
+// same order.
+func (q *Queries) LockPersons(ctx context.Context, ids []pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, lockPersons, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

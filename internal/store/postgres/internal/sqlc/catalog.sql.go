@@ -324,6 +324,36 @@ func (q *Queries) ListStaff(ctx context.Context) ([]Staff, error) {
 	return items, nil
 }
 
+const listStaffByPerson = `-- name: ListStaffByPerson :many
+SELECT id, person_id, display_name, kind, active FROM staff WHERE person_id = $1 ORDER BY display_name, id
+`
+
+func (q *Queries) ListStaffByPerson(ctx context.Context, personID pgtype.UUID) ([]Staff, error) {
+	rows, err := q.db.Query(ctx, listStaffByPerson, personID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Staff
+	for rows.Next() {
+		var i Staff
+		if err := rows.Scan(
+			&i.ID,
+			&i.PersonID,
+			&i.DisplayName,
+			&i.Kind,
+			&i.Active,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateCourseType = `-- name: UpdateCourseType :execrows
 UPDATE course_types SET name = $2, description = $3 WHERE id = $1
 `

@@ -126,6 +126,27 @@ func testCatalogue(t *testing.T, newStore func(*testing.T) store.Store) {
 				return tx.CourseTypes().List(ctx)
 			}), []domain.CourseType{c1, c2})
 		},
+		"StaffByPerson": func(e *env) {
+			p, other := e.person("Sam", "Staff"), e.person("Oli", "Other")
+			linked := func(name string, person domain.PersonID) domain.Staff {
+				s := domain.Staff{ID: newID[domain.StaffID](e), PersonID: person, DisplayName: name, Kind: domain.StaffInstructor}
+				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Staff().Create(ctx, s) })
+
+				return s
+			}
+
+			zed, amy := linked("Zed", p.ID), linked("Amy", p.ID)
+			linked("Oli", other.ID)
+			e.staffMember("Nobody") // no person
+
+			byPerson := func(id domain.PersonID) []domain.Staff {
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Staff, error) {
+					return tx.Staff().ListByPerson(ctx, id)
+				})
+			}
+			wantSlice(e.t, byPerson(p.ID), []domain.Staff{amy, zed})
+			wantSlice(e.t, byPerson(e.person("Nia", "None").ID), nil)
+		},
 		"DuplicateNames": func(e *env) {
 			main, other := e.location("Main Hall"), e.location("Side Hall")
 

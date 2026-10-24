@@ -145,7 +145,11 @@ func TestMapErr(t *testing.T) {
 		err  error
 		want error
 	}{
-		"unique":             {pg(pgerrcode.UniqueViolation, constraintAccountEmail), domain.ErrConflict},
+		"unique":             {pg(pgerrcode.UniqueViolation, constraintLessonClassSlot), domain.ErrConflict},
+		"class member":       {pg(pgerrcode.UniqueViolation, constraintClassMember), domain.ErrDuplicate},
+		"account email":      {pg(pgerrcode.UniqueViolation, constraintAccountEmail), domain.ErrDuplicate},
+		"account person":     {pg(pgerrcode.UniqueViolation, constraintAccountPerson), domain.ErrDuplicate},
+		"guardian link":      {pg(pgerrcode.UniqueViolation, constraintGuardianLink), domain.ErrDuplicate},
 		"duplicate name":     {pg(pgerrcode.UniqueViolation, constraintRoomName), domain.ErrDuplicate},
 		"foreign key":        {pg(pgerrcode.ForeignKeyViolation, "rooms_location_id_fkey"), domain.ErrConflict},
 		"restrict":           {pg(pgerrcode.RestrictViolation, "rooms_location_id_fkey"), domain.ErrConflict},

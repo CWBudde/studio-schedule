@@ -46,6 +46,9 @@ DELETE FROM staff WHERE id = $1;
 -- name: ListStaff :many
 SELECT * FROM staff ORDER BY display_name, id;
 
+-- name: ListStaffByPerson :many
+SELECT * FROM staff WHERE person_id = $1 ORDER BY display_name, id;
+
 -- name: GetCourseType :one
 SELECT * FROM course_types WHERE id = $1;
 
