@@ -10,6 +10,7 @@ import {
 import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { type ScheduleSearch, validateScheduleSearch } from '@/features/schedule/search';
+import { type TeachSearch, validateTeachSearch } from '@/features/teach/search';
 
 function testQueryClient() {
   return new QueryClient({
@@ -29,6 +30,7 @@ export function renderWithQuery(ui: ReactElement) {
 export type TestPath =
   | '/'
   | '/schedule'
+  | '/teach'
   | '/login'
   | '/register'
   | '/confirm'
@@ -56,13 +58,19 @@ export function renderInRouter(
   const queryClient = testQueryClient();
   const rootRoute = createRootRoute({ component: Outlet });
   const page = (path: TestPath) => () => (at === path ? ui : null);
-  const route = (path: Exclude<TestPath, '/schedule'>) =>
+  const route = (path: Exclude<TestPath, '/schedule' | '/teach'>) =>
     createRoute({ getParentRoute: () => rootRoute, path, component: page(path) });
   const scheduleRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/schedule',
     validateSearch: validateScheduleSearch,
     component: page('/schedule'),
+  });
+  const teachRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/teach',
+    validateSearch: validateTeachSearch,
+    component: page('/teach'),
   });
   const query = new URLSearchParams(
     Object.entries(search).filter((e): e is [string, string] => e[1] !== undefined),
@@ -71,6 +79,7 @@ export function renderInRouter(
     routeTree: rootRoute.addChildren([
       route('/'),
       scheduleRoute,
+      teachRoute,
       route('/login'),
       route('/register'),
       route('/confirm'),
@@ -101,4 +110,9 @@ export function renderInRouter(
 /** Renders ui as the /schedule page with the given search params (see renderInRouter). */
 export function renderAtSchedule(ui: ReactElement, search: ScheduleSearch = {}) {
   return renderInRouter(ui, { at: '/schedule', search });
+}
+
+/** Renders ui as the /teach page with the given search params (see renderInRouter). */
+export function renderAtTeach(ui: ReactElement, search: TeachSearch = {}) {
+  return renderInRouter(ui, { at: '/teach', search });
 }

@@ -7,7 +7,8 @@
   "nav": {
     "label": "Main",
     "schedule": "Schedule",
-    "classes": "Classes"
+    "classes": "Classes",
+    "teach": "Teaching"
   },
   "a11y": {
     "skipToContent": "Skip to content"
@@ -31,6 +32,7 @@
       "description": "This demo sends no real email. The mails the app would send are listed here, newest first.",
       "empty": "No mails yet.",
       "to": "To",
+      "replyTo": "Reply to",
       "sentAt": "Written",
       "status": {
         "pending": "Pending",

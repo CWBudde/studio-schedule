@@ -20,6 +20,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ScheduleRouteImport } from './routes/schedule'
+import { Route as TeachRouteImport } from './routes/teach'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
@@ -85,6 +86,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const ScheduleRoute = ScheduleRouteImport.update({
   id: '/schedule',
   path: '/schedule',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TeachRoute = TeachRouteImport.update({
+  id: '/teach',
+  path: '/teach',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -155,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/schedule': typeof ScheduleRoute
+  '/teach': typeof TeachRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/course-types': typeof AdminCourseTypesRoute
@@ -178,6 +185,7 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/schedule': typeof ScheduleRoute
+  '/teach': typeof TeachRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/course-types': typeof AdminCourseTypesRoute
@@ -203,6 +211,7 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/schedule': typeof ScheduleRoute
+  '/teach': typeof TeachRoute
   '/admin/accounts': typeof AdminAccountsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/course-types': typeof AdminCourseTypesRoute
@@ -229,6 +238,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/schedule'
+    | '/teach'
     | '/admin/accounts'
     | '/admin/audit'
     | '/admin/course-types'
@@ -252,6 +262,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/schedule'
+    | '/teach'
     | '/admin/accounts'
     | '/admin/audit'
     | '/admin/course-types'
@@ -276,6 +287,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/schedule'
+    | '/teach'
     | '/admin/accounts'
     | '/admin/audit'
     | '/admin/course-types'
@@ -301,6 +313,7 @@ export interface RootRouteChildren {
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ScheduleRoute: typeof ScheduleRoute
+  TeachRoute: typeof TeachRoute
   WaitlistAcceptRoute: typeof WaitlistAcceptRoute
 }
 
@@ -381,6 +394,13 @@ declare module '@tanstack/react-router' {
       path: '/schedule'
       fullPath: '/schedule'
       preLoaderRoute: typeof ScheduleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/teach': {
+      id: '/teach'
+      path: '/teach'
+      fullPath: '/teach'
+      preLoaderRoute: typeof TeachRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -503,6 +523,7 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ScheduleRoute: ScheduleRoute,
+  TeachRoute: TeachRoute,
   WaitlistAcceptRoute: WaitlistAcceptRoute,
 }
 export const routeTree = rootRouteImport

@@ -1,9 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { UserRoundCog, Undo2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useMe } from '@/api/useMe';
 import { toast } from 'sonner';
-import { useBackendStatus } from '@/api/backendStatus';
-import { meQuery, stopImpersonationMutation } from '@/api/queries';
+import { stopImpersonationMutation } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -13,8 +13,7 @@ import { Button } from '@/components/ui/button';
 export function ImpersonationBanner() {
   const { t } = useTranslation('auth');
   const queryClient = useQueryClient();
-  const backend = useBackendStatus();
-  const me = useQuery({ ...meQuery, enabled: backend.state === 'ready' });
+  const me = useMe();
   const stop = useMutation(stopImpersonationMutation(queryClient));
 
   const impersonator = me.data?.impersonator;

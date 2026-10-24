@@ -100,6 +100,28 @@ export const scheduleQuery = (params: ScheduleParams) =>
       ),
   });
 
+/** A lesson of the instructor view (/teach), with the caller's role and the counts. */
+export type TeachLesson = components['schemas']['TeachLesson'];
+/** The lessons of the instructor view in a range of school dates. */
+export type TeachLessons = components['schemas']['TeachLessons'];
+export type TeachParams = NonNullable<paths['/api/v1/teach']['get']['parameters']['query']>;
+
+/** Prefix of every instructor-view query key (refreshed after every lesson or booking write). */
+export const teachQueryKey = ['teach'] as const;
+
+/**
+ * The lessons a staff member teaches that start in a range of school dates
+ * (`to` is exclusive, at most 31 days; without `from` the week before today
+ * through the week after, as the server's clock has it). The office gets
+ * every lesson, or with `staffId` one staff member's.
+ */
+export const teachLessonsQuery = (params: TeachParams) =>
+  queryOptions({
+    queryKey: [...teachQueryKey, params],
+    queryFn: ({ signal }) =>
+      unwrap(api.GET('/api/v1/teach', { params: { query: params }, signal })),
+  });
+
 /** One published lesson. Unknown and invisible lessons fail alike with status 404. */
 export const lessonQuery = (lessonId: string) =>
   queryOptions({
@@ -652,7 +674,8 @@ export const createPersonAccountMutation = (queryClient: QueryClient) =>
 /**
  * After a write to the catalogue: the lists are asked again (the public ones
  * feed the schedule's filters), and so is what shows catalogue names (the
- * schedule, lessons, classes).
+ * schedule, the instructor view, lessons, classes); a staff member's person
+ * link also decides whose lessons the instructor view lists.
  */
 function refreshCatalogue(queryClient: QueryClient) {
   return Promise.all(
@@ -663,6 +686,7 @@ function refreshCatalogue(queryClient: QueryClient) {
       staffQuery.queryKey,
       allStaffQuery.queryKey,
       scheduleQueryKey,
+      teachQueryKey,
       ['lesson'],
       ['terms'],
     ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
@@ -856,11 +880,12 @@ export const classDataOf = (c: ClassEntry, retired = c.retired): ClassData => ({
 
 /**
  * After a write to a class: its lessons changed as well, so the classes
- * (under the terms' key), the schedule and the lessons are asked again.
+ * (under the terms' key), the schedule, the instructor view and the lessons
+ * are asked again.
  */
 function refreshTimetable(queryClient: QueryClient) {
   return Promise.all(
-    [['terms'], scheduleQueryKey, ['lesson']].map((queryKey) =>
+    [['terms'], scheduleQueryKey, teachQueryKey, ['lesson']].map((queryKey) =>
       queryClient.invalidateQueries({ queryKey }),
     ),
   );
@@ -1079,14 +1104,14 @@ export type LessonCancelData = PostBody<'/api/v1/lessons/{lessonId}/cancel'>;
 export type LessonRestoreData = components['schemas']['LessonRestoreData'];
 
 /**
- * After a write to a lesson: the schedule and the lessons are asked again,
- * but for `except` (a deleted lesson, which would only be found gone), and
+ * After a write to a lesson: the schedule, the instructor view and the
+ * lessons are asked again, but for `except` (a deleted lesson, which would only be found gone), and
  * so is the demo mailbox, as a write may mail those booked.
  */
 function refreshLessons(queryClient: QueryClient, { except }: { except?: string } = {}) {
   const gone = except === undefined ? undefined : hashKey(lessonQuery(except).queryKey);
   return Promise.all(
-    [scheduleQueryKey, ['lesson'], demoMailboxQuery.queryKey].map((queryKey) =>
+    [scheduleQueryKey, teachQueryKey, ['lesson'], demoMailboxQuery.queryKey].map((queryKey) =>
       queryClient.invalidateQueries({ queryKey, predicate: (query) => query.queryHash !== gone }),
     ),
   );
@@ -1779,6 +1804,35 @@ export const markAllAttendedMutation = (queryClient: QueryClient) =>
       ).items,
     onError: signedOutOn401(queryClient),
     onSettled: () => refreshAfterParticipants(queryClient),
+  });
+
+/** The longest message to a lesson's participants, in characters (code points, as the API counts). */
+export const maxNoticeMessage = 1000;
+
+/** What to tell whom: the lesson and the message (plain text). */
+export type NotifyParticipantsVariables = { lessonId: string; message: string };
+
+/**
+ * Mails a message to the participants of a lesson (staff; notifyParticipants)
+ * and returns to how many addresses it went (0: nobody could be reached). A
+ * 422 on `body.message` for a message the API refuses, a 429 with
+ * Retry-After beyond the limits (5 an hour per account, 3 a school day per
+ * lesson), a 404 for a lesson the caller does not teach. Afterwards the demo
+ * mailbox is asked again.
+ */
+export const notifyParticipantsMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: async ({ lessonId, message }: NotifyParticipantsVariables) =>
+      (
+        await unwrap(
+          api.POST('/api/v1/lessons/{lessonId}/notify', {
+            params: { path: { lessonId } },
+            body: { message },
+          }),
+        )
+      ).recipients,
+    onError: signedOutOn401(queryClient),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey }),
   });
 
 /**

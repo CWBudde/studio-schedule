@@ -31,7 +31,6 @@ import { showServerErrors, useAdminErrorText } from '@/features/admin/crud/form'
 import { invalidFields } from '@/features/auth/form';
 import { formatDayHeading, formatTimeRange, schoolDateOf } from '@/lib/schoolTime';
 import { useNow } from '@/lib/useNow';
-import { useScheduleSearch } from '../useScheduleSearch';
 import { RoomTakenNotice } from './ConfirmNotice';
 import { cancelSchema, type CancelValues, lessonDataOf } from './lessonForms';
 import { LessonFormSheet } from './LessonFormSheet';
@@ -45,11 +44,19 @@ type Open = 'edit' | 'hide' | 'cancel' | 'restore' | 'delete' | null;
  * unhide, cancel or restore, delete a one-off lesson). Nothing can be
  * changed once the lesson has started.
  */
-export function LessonActions({ lesson, timeZone }: { lesson: LessonDetail; timeZone: string }) {
+export function LessonActions({
+  lesson,
+  timeZone,
+  onDeleted,
+}: {
+  lesson: LessonDetail;
+  timeZone: string;
+  /** Called once the lesson is deleted, e.g. to close the sheet. */
+  onDeleted: () => void;
+}) {
   const { t, i18n } = useTranslation('admin');
   const lang = i18n.resolvedLanguage ?? 'en';
   const queryClient = useQueryClient();
-  const { update: updateSearch } = useScheduleSearch();
   const [open, setOpen] = useState<Open>(null);
   const visibility = useMutation(updateLessonMutation(queryClient));
   const headingId = useId();
@@ -180,7 +187,7 @@ export function LessonActions({ lesson, timeZone }: { lesson: LessonDetail; time
           deleted: t('lessons.deleted'),
           conflicts: { generated: t('lessons.generated') },
         })}
-        onDeleted={() => void updateSearch({ lesson: undefined }, { replace: true })}
+        onDeleted={onDeleted}
         onClose={() => setOpen(null)}
       />
     </section>

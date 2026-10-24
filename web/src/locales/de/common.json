@@ -7,7 +7,8 @@
   "nav": {
     "label": "Hauptnavigation",
     "schedule": "Stundenplan",
-    "classes": "Kurse"
+    "classes": "Kurse",
+    "teach": "Unterricht"
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"
@@ -31,6 +32,7 @@
       "description": "Diese Demo verschickt keine echten E-Mails. Hier stehen die Mails, die die App senden würde, die neueste zuerst.",
       "empty": "Noch keine Mails.",
       "to": "An",
+      "replyTo": "Antwort an",
       "sentAt": "Erstellt",
       "status": {
         "pending": "Ausstehend",

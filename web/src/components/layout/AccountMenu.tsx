@@ -1,10 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { LogIn, LogOut, Settings, ShieldCheck, UserRound, UsersRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useMe } from '@/api/useMe';
 import { toast } from 'sonner';
-import { useBackendStatus } from '@/api/backendStatus';
-import { logoutMutation, meQuery } from '@/api/queries';
+import { logoutMutation } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -21,8 +21,7 @@ export function AccountMenu() {
   const { t } = useTranslation('auth');
   const { t: tAdmin } = useTranslation('admin');
   const queryClient = useQueryClient();
-  const backend = useBackendStatus();
-  const me = useQuery({ ...meQuery, enabled: backend.state === 'ready' });
+  const me = useMe();
   const logout = useMutation(logoutMutation(queryClient));
 
   // Neither while unknown, so "Sign in" does not flash for a signed-in person.

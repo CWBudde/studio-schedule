@@ -6,12 +6,14 @@ import deAdmin from './locales/de/admin.json';
 import deAuth from './locales/de/auth.json';
 import de from './locales/de/common.json';
 import deSchedule from './locales/de/schedule.json';
+import deTeach from './locales/de/teach.json';
 import deTimetable from './locales/de/timetable.json';
 import enAccount from './locales/en/account.json';
 import enAdmin from './locales/en/admin.json';
 import enAuth from './locales/en/auth.json';
 import en from './locales/en/common.json';
 import enSchedule from './locales/en/schedule.json';
+import enTeach from './locales/en/teach.json';
 import enTimetable from './locales/en/timetable.json';
 
 export const supportedLanguages = ['en', 'de'] as const;
@@ -26,6 +28,7 @@ export const resources = {
     account: enAccount,
     timetable: enTimetable,
     admin: enAdmin,
+    teach: enTeach,
   },
   de: {
     common: de,
@@ -34,6 +37,7 @@ export const resources = {
     account: deAccount,
     timetable: deTimetable,
     admin: deAdmin,
+    teach: deTeach,
   },
 } as const;
 
@@ -43,7 +47,7 @@ void i18n
   .init({
     resources,
     defaultNS,
-    ns: [defaultNS, 'schedule', 'auth', 'account', 'timetable', 'admin'],
+    ns: [defaultNS, 'schedule', 'auth', 'account', 'timetable', 'admin', 'teach'],
     fallbackLng: 'en',
     supportedLngs: supportedLanguages,
     nonExplicitSupportedLngs: true,

@@ -1,0 +1,69 @@
+{
+  "title": "Unterricht",
+  "intro": "Die Stunden, die du gibst, von einer Woche zurück bis eine Woche voraus. Öffne eine Stunde für ihre Teilnehmenden und die Anwesenheit.",
+  "introOffice": "Alle Stunden der Schule, von einer Woche zurück bis eine Woche voraus. Wähle eine Lehrkraft, um nur ihre zu sehen.",
+  "noAccess": "Nur Lehrkräfte, das Büro und Administratoren können diese Seite sehen.",
+  "loading": "Stunden werden geladen…",
+  "loadError": "Die Stunden konnten nicht geladen werden.",
+  "empty": "An diesen Tagen gibt es keine Stunden.",
+  "emptyAhead": "An diesen Tagen gibt es keine weiteren Stunden.",
+  "freeToday": "Heute keine Stunden.",
+  "range": {
+    "label": "Zeitraum",
+    "previous": "Vorherige 2 Wochen",
+    "next": "Nächste 2 Wochen",
+    "today": "Heute",
+    "shown": "{{from}} – {{to}}"
+  },
+  "staff": {
+    "label": "Lehrkraft",
+    "all": "Alle Lehrkräfte",
+    "inactive": "{{name}} (ehemals)"
+  },
+  "earlier": {
+    "toggle_one": "Früher: {{count}} Stunde",
+    "toggle_other": "Früher: {{count}} Stunden",
+    "missing_one": "{{count}} ohne Anwesenheit",
+    "missing_other": "{{count}} ohne Anwesenheit"
+  },
+  "role": {
+    "instructor": "Lehrkraft",
+    "accompanist": "Korrepetition"
+  },
+  "counts": {
+    "booked": "{{active}}/{{capacity}} gebucht",
+    "waiting_one": "{{count}} wartet",
+    "waiting_other": "{{count}} warten",
+    "trials_one": "{{count}} Probestunde",
+    "trials_other": "{{count}} Probestunden",
+    "guests_one": "{{count}} Gast",
+    "guests_other": "{{count}} Gäste"
+  },
+  "attendance": {
+    "open": "Anwesenheit offen",
+    "taken": "Anwesenheit erfasst",
+    "missing": "Anwesenheit fehlt"
+  },
+  "notify": {
+    "open": "Teilnehmenden schreiben",
+    "openFor": "Teilnehmenden schreiben: {{lesson}}",
+    "title": "Teilnehmenden schreiben",
+    "description": "{{lesson}}. Die Nachricht geht per E-Mail an alle Gebuchten (oder ihre Erziehungsberechtigten) und an Gäste mit Adresse; Antworten kommen bei dir an.",
+    "message": "Nachricht",
+    "counter_one": "{{count}} von {{max}} Zeichen",
+    "counter_other": "{{count}} von {{max}} Zeichen",
+    "cancel": "Abbrechen",
+    "send": "Senden",
+    "sending": "Wird gesendet…",
+    "sent_one": "An {{count}} Empfänger gesendet.",
+    "sent_other": "An {{count}} Empfänger gesendet.",
+    "nobody": "Niemand war erreichbar: Keine teilnehmende Person hat eine E-Mail-Adresse.",
+    "errors": {
+      "required": "Schreibe eine Nachricht.",
+      "tooLong": "Die Nachricht ist zu lang: höchstens {{max}} Zeichen.",
+      "invalid": "So kann die Nachricht nicht gesendet werden: Verwende reinen Text mit höchstens {{max}} Zeichen.",
+      "tooMany": "Zu viele Nachrichten.",
+      "notFound": "Diese Stunde gehört nicht (mehr) zu deinen."
+    }
+  }
+}

@@ -1,6 +1,8 @@
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { useMe } from '@/api/useMe';
 import { DemoMailbox } from '@/features/demo/DemoMailbox';
+import { canTeach } from '@/features/teach/access';
 import { AccountMenu } from './AccountMenu';
 import { BrandMark } from './BrandMark';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -12,6 +14,7 @@ const navLink =
 
 export function AppHeader() {
   const { t } = useTranslation();
+  const me = useMe();
 
   // Two hairlines at the bottom, like the rule under a programme's masthead.
   return (
@@ -36,6 +39,11 @@ export function AppHeader() {
           <Link to="/classes" className={navLink}>
             {t('nav.classes')}
           </Link>
+          {canTeach(me.data?.role) && (
+            <Link to="/teach" className={navLink}>
+              {t('nav.teach')}
+            </Link>
+          )}
         </nav>
         <div className="flex min-w-0 items-center gap-1">
           <DemoMailbox />

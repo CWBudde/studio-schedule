@@ -39,6 +39,31 @@ describe('AppHeader', () => {
     expect(nav.getByRole('link', { name: 'Classes' })).toHaveAttribute('href', '/classes');
   });
 
+  it('links staff to the instructor view', async () => {
+    for (const me of [{ ...meMember, role: 'instructor' as const }, meOffice, meAdmin]) {
+      mockApiGet({ ...notDemo, '/api/v1/auth/me': { body: me } });
+      const rendered = renderInRouter(<AppHeader />);
+
+      const nav = within(await screen.findByRole('navigation', { name: 'Main' }));
+      expect(await nav.findByRole('link', { name: 'Teaching' })).toHaveAttribute('href', '/teach');
+      rendered.unmount();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it.each([
+    ['members', { '/api/v1/auth/me': { body: meMember } }, 'button', 'Nora Example'],
+    ['visitors', signedOut, 'link', 'Sign in'],
+  ] as const)('has no instructor view for %s', async (_, fixtures, role, name) => {
+    mockApiGet({ ...notDemo, ...fixtures });
+
+    renderInRouter(<AppHeader />);
+
+    // The account menu shows once `me` has answered.
+    expect(await screen.findByRole(role, { name })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Teaching' })).not.toBeInTheDocument();
+  });
+
   it('shows the signed-in person and signs out from the account menu', async () => {
     mockApiGet({ ...notDemo, '/api/v1/auth/me': { body: meMember } });
     const post = mockApiPost({ '/api/v1/auth/logout': { status: 204 } });

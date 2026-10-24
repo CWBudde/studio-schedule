@@ -159,6 +159,12 @@ function MailItem({ mail, timeZone }: { mail: MailboxMail; timeZone: string }) {
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
         <dt>{t('demo.mailbox.to')}</dt>
         <dd className="min-w-0 truncate">{mail.to}</dd>
+        {mail.replyTo && (
+          <>
+            <dt>{t('demo.mailbox.replyTo')}</dt>
+            <dd className="min-w-0 truncate">{mail.replyTo}</dd>
+          </>
+        )}
         <dt>{t('demo.mailbox.sentAt')}</dt>
         <dd>
           <time dateTime={mail.createdAt}>{formatDateTime(mail.createdAt, timeZone, lang)}</time>

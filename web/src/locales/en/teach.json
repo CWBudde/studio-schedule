@@ -1,0 +1,69 @@
+{
+  "title": "Teaching",
+  "intro": "The lessons you teach, from a week back to a week ahead. Open a lesson for its participants and attendance.",
+  "introOffice": "Every lesson of the school, from a week back to a week ahead. Choose a staff member to see only theirs.",
+  "noAccess": "Only instructors, the office and administrators can see this page.",
+  "loading": "Loading the lessons…",
+  "loadError": "The lessons could not be loaded.",
+  "empty": "No lessons on these days.",
+  "emptyAhead": "No more lessons on these days.",
+  "freeToday": "No lessons today.",
+  "range": {
+    "label": "Date range",
+    "previous": "Previous 2 weeks",
+    "next": "Next 2 weeks",
+    "today": "Today",
+    "shown": "{{from}} – {{to}}"
+  },
+  "staff": {
+    "label": "Staff",
+    "all": "All staff",
+    "inactive": "{{name}} (former)"
+  },
+  "earlier": {
+    "toggle_one": "Earlier: {{count}} lesson",
+    "toggle_other": "Earlier: {{count}} lessons",
+    "missing_one": "{{count}} without attendance",
+    "missing_other": "{{count}} without attendance"
+  },
+  "role": {
+    "instructor": "Instructor",
+    "accompanist": "Accompanist"
+  },
+  "counts": {
+    "booked": "{{active}}/{{capacity}} booked",
+    "waiting_one": "{{count}} waiting",
+    "waiting_other": "{{count}} waiting",
+    "trials_one": "{{count}} trial",
+    "trials_other": "{{count}} trials",
+    "guests_one": "{{count}} guest",
+    "guests_other": "{{count}} guests"
+  },
+  "attendance": {
+    "open": "Attendance open",
+    "taken": "Attendance taken",
+    "missing": "Attendance missing"
+  },
+  "notify": {
+    "open": "Message participants",
+    "openFor": "Message participants of {{lesson}}",
+    "title": "Message participants",
+    "description": "{{lesson}}. The message goes by email to everyone booked (or their guardians) and to guests with an address; replies come to you.",
+    "message": "Message",
+    "counter_one": "{{count}} of {{max}} characters",
+    "counter_other": "{{count}} of {{max}} characters",
+    "cancel": "Cancel",
+    "send": "Send",
+    "sending": "Sending…",
+    "sent_one": "Sent to {{count}} recipient.",
+    "sent_other": "Sent to {{count}} recipients.",
+    "nobody": "Nobody could be reached: no participant has an email address.",
+    "errors": {
+      "required": "Write a message.",
+      "tooLong": "The message is too long: at most {{max}} characters.",
+      "invalid": "The message cannot be sent like this: use plain text of at most {{max}} characters.",
+      "tooMany": "Too many messages.",
+      "notFound": "This lesson is not one of yours (any more)."
+    }
+  }
+}

@@ -28,13 +28,32 @@ import { VisibilityBadge } from '../visibility/VisibilityBadge';
 const isNotFound = (error: unknown) => error instanceof ApiError && error.status === 404;
 
 /**
- * Details of the lesson in the `lesson` search param, in a sheet. The param
- * makes the sheet a deep link; closing the sheet removes it.
+ * Details of the lesson in the `lesson` search param of /schedule, in a
+ * sheet. The param makes the sheet a deep link; closing the sheet removes it.
  */
 export function LessonSheet() {
-  const { t } = useTranslation('schedule');
   const { search, update } = useScheduleSearch();
-  const lessonId = search.lesson;
+  return (
+    <LessonDetailSheet
+      lessonId={search.lesson}
+      onClose={() => void update({ lesson: undefined }, { replace: true })}
+    />
+  );
+}
+
+/**
+ * Details of a lesson in a sheet, open while `lessonId` is set: the lesson,
+ * booking, the participants for staff and the office's actions. `onClose`
+ * is called when the sheet is closed and when the office deletes the lesson.
+ */
+export function LessonDetailSheet({
+  lessonId,
+  onClose,
+}: {
+  lessonId: string | undefined;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation('schedule');
 
   // Keep showing the last lesson while the sheet animates out.
   const [shownId, setShownId] = useState(lessonId);
@@ -44,7 +63,7 @@ export function LessonSheet() {
     <Sheet
       open={lessonId !== undefined}
       onOpenChange={(open) => {
-        if (!open) void update({ lesson: undefined }, { replace: true });
+        if (!open) onClose();
       }}
     >
       <SheetContent
@@ -52,7 +71,7 @@ export function LessonSheet() {
         showCloseButton={false}
         className="w-full overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-md"
       >
-        {shownId !== undefined && <LessonSheetBody lessonId={shownId} />}
+        {shownId !== undefined && <LessonSheetBody lessonId={shownId} onDeleted={onClose} />}
         <SheetClose asChild>
           <Button variant="ghost" size="icon-sm" className="absolute top-3 right-3">
             <XIcon aria-hidden="true" />
@@ -64,7 +83,7 @@ export function LessonSheet() {
   );
 }
 
-function LessonSheetBody({ lessonId }: { lessonId: string }) {
+function LessonSheetBody({ lessonId, onDeleted }: { lessonId: string; onDeleted: () => void }) {
   const { t } = useTranslation('schedule');
   const settings = useQuery(publicSettingsQuery);
   const lesson = useQuery(lessonQuery(lessonId));
@@ -128,10 +147,20 @@ function LessonSheetBody({ lessonId }: { lessonId: string }) {
     );
   }
 
-  return <LessonDetails lesson={lesson.data} timeZone={settings.data.timezone} />;
+  return (
+    <LessonDetails lesson={lesson.data} timeZone={settings.data.timezone} onDeleted={onDeleted} />
+  );
 }
 
-function LessonDetails({ lesson, timeZone }: { lesson: LessonDetail; timeZone: string }) {
+function LessonDetails({
+  lesson,
+  timeZone,
+  onDeleted,
+}: {
+  lesson: LessonDetail;
+  timeZone: string;
+  onDeleted: () => void;
+}) {
   const { t, i18n } = useTranslation('schedule');
   const { t: tAdmin } = useTranslation('admin');
   const lang = i18n.resolvedLanguage ?? 'en';
@@ -216,7 +245,9 @@ function LessonDetails({ lesson, timeZone }: { lesson: LessonDetail; timeZone: s
 
         <ParticipantsSection lesson={lesson} timeZone={timeZone} label={label} />
 
-        {canAdminister(me.data?.role) && <LessonActions lesson={lesson} timeZone={timeZone} />}
+        {canAdminister(me.data?.role) && (
+          <LessonActions lesson={lesson} timeZone={timeZone} onDeleted={onDeleted} />
+        )}
 
         {lesson.courseTypeDescription && (
           <section aria-labelledby="lesson-about" className="space-y-1">

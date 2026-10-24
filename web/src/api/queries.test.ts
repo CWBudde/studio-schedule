@@ -37,6 +37,7 @@ import {
   createLessonMutation,
   deleteLessonMutation,
   deleteStaffMutation,
+  deleteTermMutation,
   demoMailboxQuery,
   lessonQuery,
   familyQuery,
@@ -54,6 +55,7 @@ import {
   scheduleQuery,
   staffQuery,
   stopImpersonationMutation,
+  teachLessonsQuery,
   updateDependentMutation,
   updateLessonMutation,
   updateLocaleMutation,
@@ -66,6 +68,15 @@ afterEach(() => {
 });
 
 const range = { from: '2026-10-26', to: '2026-11-09' };
+
+/** An instructor view without lessons, as cached data. */
+const teachLessons = {
+  timezone: 'Europe/Berlin',
+  now: '2026-10-23T10:00:00Z',
+  from: '2026-10-16',
+  to: '2026-10-31',
+  lessons: [],
+};
 
 /**
  * A query client with the admin signed in, a cached schedule that is not
@@ -216,6 +227,7 @@ describe('catalogue administration', () => {
     queryClient.setQueryData(allStaffQuery.queryKey, staffEntries);
     queryClient.setQueryData(courseTypesQuery.queryKey, []);
     queryClient.setQueryData(scheduleQuery(range).queryKey, schedule);
+    queryClient.setQueryData(teachLessonsQuery({}).queryKey, teachLessons);
     return queryClient;
   }
 
@@ -243,7 +255,7 @@ describe('catalogue administration', () => {
     });
   });
 
-  it('refreshes the public staff list, the office list and the schedule after a staff write', async () => {
+  it('refreshes the staff lists, the schedule and the instructor view after a staff write', async () => {
     const put = mockApiPut({
       '/api/v1/staff/{staffId}': ({ body }) => ({
         body: { id: ids.staffRiley, ...(body as object) },
@@ -265,6 +277,7 @@ describe('catalogue administration', () => {
       staffQuery.queryKey,
       allStaffQuery.queryKey,
       scheduleQuery(range).queryKey,
+      teachLessonsQuery({}).queryKey,
     ]) {
       expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
     }
@@ -299,6 +312,22 @@ describe('catalogue administration', () => {
   });
 });
 
+describe('timetable administration', () => {
+  it('refreshes the classes, the schedule and the instructor view after a term write', async () => {
+    mockApiDelete({ '/api/v1/terms/{termId}': { status: 204 } });
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(['terms'], []);
+    queryClient.setQueryData(scheduleQuery(range).queryKey, schedule);
+    queryClient.setQueryData(teachLessonsQuery({}).queryKey, teachLessons);
+
+    await new MutationObserver(queryClient, deleteTermMutation(queryClient)).mutate(ids.termPast);
+
+    for (const key of [['terms'], scheduleQuery(range).queryKey, teachLessonsQuery({}).queryKey]) {
+      expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+    }
+  });
+});
+
 describe('lesson administration', () => {
   /** A client with the schedule, two lessons and the demo mailbox cached. */
   function lessonClient() {
@@ -307,6 +336,7 @@ describe('lesson administration', () => {
     queryClient.setQueryData(lessonQuery(ids.lessonBallet).queryKey, lessonBalletOffice);
     queryClient.setQueryData(lessonQuery(ids.lessonWorkshop).queryKey, lessonWorkshopOffice);
     queryClient.setQueryData(demoMailboxQuery.queryKey, []);
+    queryClient.setQueryData(teachLessonsQuery({}).queryKey, teachLessons);
     return queryClient;
   }
   const invalidated = (queryClient: QueryClient, key: readonly unknown[]) =>
@@ -323,7 +353,7 @@ describe('lesson administration', () => {
     kind: 'regular' as const,
   };
 
-  it('updates a lesson and refreshes the schedule, the lessons and the mailbox', async () => {
+  it('updates a lesson and refreshes the schedule, the instructor view, the lessons and the mailbox', async () => {
     const put = mockApiPut({ '/api/v1/lessons/{lessonId}': { body: lessonBalletOffice } });
     const queryClient = lessonClient();
 
@@ -337,6 +367,7 @@ describe('lesson administration', () => {
       body,
     });
     expect(invalidated(queryClient, scheduleQuery(range).queryKey)).toBe(true);
+    expect(invalidated(queryClient, teachLessonsQuery({}).queryKey)).toBe(true);
     expect(invalidated(queryClient, lessonQuery(ids.lessonBallet).queryKey)).toBe(true);
     expect(invalidated(queryClient, demoMailboxQuery.queryKey)).toBe(true);
   });

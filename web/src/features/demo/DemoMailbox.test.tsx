@@ -61,6 +61,28 @@ describe('DemoMailbox', () => {
     const external = mail.getByRole('link', { name: 'https://example.org/help' });
     expect(external).toHaveAttribute('target', '_blank');
     expect(external).toHaveAttribute('rel', 'noopener noreferrer');
+    // No address to reply to but the sender's.
+    expect(mail.queryByText('Reply to')).not.toBeInTheDocument();
+  });
+
+  it('shows the address replies go to, if the mail has one', async () => {
+    mockMailbox([
+      {
+        ...confirmationMail(appUrl),
+        subject: 'Message about Ballet',
+        template: 'lesson_notice',
+        replyTo: 'alex.example@example.com',
+      },
+    ]);
+    const user = userEvent.setup();
+
+    renderInRouter(<DemoMailbox />);
+    await user.click(await screen.findByRole('button', { name: 'Demo mailbox (1 mail)' }));
+
+    const sheet = within(await screen.findByRole('dialog', { name: 'Demo mailbox' }));
+    const mail = within(sheet.getByRole('article', { name: 'Message about Ballet' }));
+    expect(mail.getByText('Reply to')).toBeInTheDocument();
+    expect(mail.getByText('alex.example@example.com')).toBeInTheDocument();
   });
 
   it('follows a link to the app within the app and closes', async () => {

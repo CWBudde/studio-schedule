@@ -1,11 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
 import { Link, Outlet } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { meQuery } from '@/api/queries';
-import { Skeleton } from '@/components/ui/skeleton';
+import type { Role } from '@/api/client';
 import { canAdminister } from './access';
-import { LoadError } from './crud/LoadError';
-import { NoAccess } from './NoAccess';
+import { RoleGate } from './RoleGate';
 
 const sectionLink =
   'shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none data-[status=active]:bg-muted data-[status=active]:text-foreground';
@@ -17,24 +14,15 @@ const sectionLink =
  */
 export function AdminLayout() {
   const { t } = useTranslation('admin');
-  const me = useQuery(meQuery);
-  const role = me.data?.role;
+  return (
+    <RoleGate allow={canAdminister} noAccess={t('noAccess.office')}>
+      {(me) => <Administration role={me.role} />}
+    </RoleGate>
+  );
+}
 
-  if (me.isPending) {
-    return (
-      <div role="status" className="space-y-3">
-        <span className="sr-only">{t('loading')}</span>
-        <Skeleton className="h-9 w-48" aria-hidden="true" />
-        <Skeleton className="h-40 w-full" aria-hidden="true" />
-      </div>
-    );
-  }
-  // A failed check (network, 5xx) is no answer about the role; signed out is null, not an error.
-  if (me.data === undefined && me.isError) {
-    return <LoadError message={t('access.loadError')} onRetry={() => void me.refetch()} />;
-  }
-  if (!canAdminister(role)) return <NoAccess page message={t('noAccess.office')} />;
-
+function Administration({ role }: { role: Role }) {
+  const { t } = useTranslation('admin');
   return (
     <div className="space-y-6">
       <nav

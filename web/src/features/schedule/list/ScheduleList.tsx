@@ -9,46 +9,18 @@ import {
   formatDateTime,
   formatDayHeading,
   formatTimeRange,
-  type SchoolDate,
-  schoolDateOf,
   todayIn,
 } from '@/lib/schoolTime';
 import { useServerNow } from '@/lib/useNow';
 import { cn } from '@/lib/utils';
 import { AvailabilityBadges, hasAvailabilityBadges } from '../booking/AvailabilityBadges';
+import { DayHeading } from './DayHeading';
+import { type Day as DayOf, type DayTone, dayTone, groupByDay } from './days';
 import { clearedFilters, hasActiveFilter } from '../filters/filterParams';
 import { useScheduleSearch } from '../useScheduleSearch';
 import { VisibilityBadge } from '../visibility/VisibilityBadge';
 
-type Day = { date: SchoolDate; lessons: ScheduleLesson[] };
-
-/** How a day heading is colored, by the day's distance from today. */
-type DayTone = 'past' | 'today' | 'tomorrow' | 'later';
-
-const dayToneClass: Record<DayTone, string> = {
-  past: 'bg-muted text-foreground',
-  today: 'bg-day-today text-day-today-foreground',
-  tomorrow: 'bg-day-tomorrow text-day-tomorrow-foreground',
-  later: 'bg-day-later text-day-later-foreground',
-};
-
-function dayTone(date: SchoolDate, today: SchoolDate, tomorrow: SchoolDate): DayTone {
-  if (date < today) return 'past';
-  if (date === today) return 'today';
-  return date === tomorrow ? 'tomorrow' : 'later';
-}
-
-/** Groups lessons by the school date they start on, keeping their order. */
-function groupByDay(lessons: ScheduleLesson[], timeZone: string): Day[] {
-  const days = new Map<SchoolDate, ScheduleLesson[]>();
-  for (const lesson of lessons) {
-    const date = schoolDateOf(lesson.startsAt, timeZone);
-    const list = days.get(date);
-    if (list) list.push(lesson);
-    else days.set(date, [lesson]);
-  }
-  return Array.from(days, ([date, list]) => ({ date, lessons: list }));
-}
+type Day = DayOf<ScheduleLesson>;
 
 /**
  * The schedule as a feed of lesson cards grouped by school day, each day
@@ -103,21 +75,11 @@ function DaySection({
   lang: string;
   onOpen: (lessonId: string) => void;
 }) {
-  const { t } = useTranslation('schedule');
   const headingId = useId();
   const heading = formatDayHeading(day.date, lang);
   return (
     <section aria-labelledby={headingId} className="space-y-3">
-      <h2
-        id={headingId}
-        aria-current={tone === 'today' ? 'date' : undefined}
-        className={cn(
-          'sticky top-0 z-10 rounded-md px-4 py-2 font-heading text-xl font-medium tracking-tight shadow-[0_6px_16px_-12px_oklch(0.3_0.08_350/0.5)]',
-          dayToneClass[tone],
-        )}
-      >
-        {tone === 'today' || tone === 'tomorrow' ? t(`list.${tone}`, { day: heading }) : heading}
-      </h2>
+      <DayHeading id={headingId} date={day.date} tone={tone} />
       <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {day.lessons.map((lesson) => (
           <li key={lesson.id} className="flex">
