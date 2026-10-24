@@ -24,9 +24,10 @@ import (
 // Store is an in-memory implementation of store.Store. The zero value is not
 // usable; create one with New.
 type Store struct {
-	mu    sync.Mutex
-	gen   uint64 // incremented per read-write transaction
-	state state
+	mu       sync.Mutex
+	gen      uint64 // incremented per read-write transaction
+	state    state
+	onCommit func() // see OnCommit
 }
 
 // state is the complete data set. Tables are copied on write, so copying a
@@ -170,7 +171,12 @@ func (s *Store) InTx(ctx context.Context, mode store.TxMode, fn func(ctx context
 	}
 
 	if mode == store.ReadWrite {
+		notify := s.onCommit != nil && changed(&s.state, &t.state)
 		s.state = t.state
+
+		if notify {
+			s.onCommit()
+		}
 	}
 
 	return nil
