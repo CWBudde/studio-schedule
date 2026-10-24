@@ -567,17 +567,18 @@ no repository yet.
         (`/waitlist/accept`); booking and joining settle the list first; e2e `waitlist.spec.ts`
   - [x] Expiry job (`internal/jobs`, both targets): expires due invites and invites the next entry
         (2026-10-24) — `waitlist-expiry`, every minute, one transaction per lesson
-- [ ] Instructor view: today's lessons, participant list, attendance check (attended / no-show),
+- [x] Instructor view: today's lessons, participant list, attendance check (attended / no-show),
       notify participants
-  - [ ] `/teach`: today's and the next lessons of the signed-in instructor (office sees all), with
-        participants including guests and trials
+  - [x] `/teach`: today's and the next lessons of the signed-in instructor (office sees all), with
+        participants including guests and trials (2026-10-25) — `listTeachLessons`; two weeks
+        around today by day with attendance states, the office filters by staff; lessons open in
+        the lesson sheet with its participants; e2e `teach.spec.ts`
   - [x] Attendance: mark attended or no-show per participant and "all attended"; only from the
         lesson start on (2026-10-24) — `setAttendance`, `markAllAttended`; in the lesson sheet's
         participant list
-  - [ ] Notify participants: a short message to everyone booked, as mails through the outbox,
-        rate-limited (2026-10-24) — partial: `notifyParticipants` (Reply-To the sender, 5 per hour
-        per account, 3 per lesson per day) and `listTeachLessons` are built; the `/teach` page
-        remains
+  - [x] Notify participants: a short message to everyone booked, as mails through the outbox,
+        rate-limited (2026-10-24) — `notifyParticipants` (Reply-To the sender, 5 per hour per
+        account, 3 per lesson per day); "Message participants" on `/teach`
 - [ ] "My lessons" (upcoming, history), booking audit trail for office/admin
   - [ ] `/my-lessons` for the account and its dependents: upcoming with cancel, history with
         status, waitlist entries
