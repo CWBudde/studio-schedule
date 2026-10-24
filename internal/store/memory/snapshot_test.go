@@ -134,9 +134,12 @@ func fullStore(t *testing.T) *Store {
 				ID: ids.New[domain.BookingEventID](src), BookingID: booking.ID, At: at,
 				Status: domain.BookingBooked, ActorAccountID: account, Note: "booked",
 			}),
+			tx.Notices().Create(ctx, domain.LessonNotice{
+				ID: ids.New[domain.LessonNoticeID](src), LessonID: lesson, SenderID: account, SentAt: at, Recipients: 1,
+			}),
 			tx.Outbox().Create(ctx, domain.OutboxMail{
 				ID: ids.New[domain.OutboxMailID](src), To: "someone@example.org", Subject: "Hello",
-				Text: "Hello", CreatedAt: at, NextAttemptAt: at,
+				Text: "Hello", CreatedAt: at, NextAttemptAt: at, ReplyTo: "staff@example.org",
 			}),
 			tx.Audit().Create(ctx, domain.AuditEvent{
 				ID: ids.New[domain.AuditEventID](src), At: at, ActorID: account,

@@ -27,6 +27,16 @@ FROM bookings
 WHERE lesson_id = ANY(sqlc.arg(lessons)::uuid[]) AND status <> 'canceled'
 GROUP BY lesson_id;
 
+-- name: CountBookingsByLessons :many
+SELECT lesson_id,
+    count(*) AS active,
+    count(*) FILTER (WHERE trial) AS trials,
+    count(*) FILTER (WHERE person_id IS NULL) AS guests,
+    count(*) FILTER (WHERE status = 'booked') AS booked
+FROM bookings
+WHERE lesson_id = ANY(sqlc.arg(lessons)::uuid[]) AND status <> 'canceled'
+GROUP BY lesson_id;
+
 -- name: ListActiveBookingsByLessonsAndPersons :many
 SELECT * FROM bookings
 WHERE lesson_id = ANY(sqlc.arg(lessons)::uuid[]) AND person_id = ANY(sqlc.arg(persons)::uuid[])

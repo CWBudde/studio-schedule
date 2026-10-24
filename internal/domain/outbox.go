@@ -15,7 +15,10 @@ type OutboxMail struct {
 	Text    string
 	HTML    string // optional
 	// Template names the template the mail was rendered from (optional).
-	Template  string
+	Template string
+	// ReplyTo is the address replies go to (optional), e.g. the staff
+	// member who sent a lesson notice.
+	ReplyTo   string
 	CreatedAt time.Time
 	// Attempts counts the delivery attempts so far.
 	Attempts int
@@ -59,6 +62,7 @@ func (m OutboxMail) Validate() error {
 	return validate(
 		rule{!m.ID.IsZero(), "mail id must be set"},
 		rule{validEmail(m.To), "invalid mail recipient"},
+		rule{optionalEmail(m.ReplyTo), "invalid reply-to address"},
 		rule{!blank(m.Subject), "mail subject must not be empty"},
 		rule{!blank(m.Text), "mail text must not be empty"},
 		rule{!m.CreatedAt.IsZero(), "mail creation time must be set"},

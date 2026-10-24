@@ -693,6 +693,22 @@ func TestAuthValidate(t *testing.T) {
 		})
 	})
 
+	t.Run("LessonNotice", func(t *testing.T) {
+		t.Parallel()
+		checkValidate(t, func() domain.LessonNotice {
+			return domain.LessonNotice{
+				ID: newID[domain.LessonNoticeID](), LessonID: newID[domain.LessonID](),
+				SenderID: newID[domain.AccountID](), SentAt: t0, Recipients: 1,
+			}
+		}, map[string]func(*domain.LessonNotice){
+			"zero id":       func(n *domain.LessonNotice) { n.ID = domain.LessonNoticeID{} },
+			"no lesson":     func(n *domain.LessonNotice) { n.LessonID = domain.LessonID{} },
+			"no sender":     func(n *domain.LessonNotice) { n.SenderID = domain.AccountID{} },
+			"no time":       func(n *domain.LessonNotice) { n.SentAt = time.Time{} },
+			"no recipients": func(n *domain.LessonNotice) { n.Recipients = 0 },
+		})
+	})
+
 	t.Run("AccountToken", func(t *testing.T) {
 		t.Parallel()
 		checkValidate(t, func() domain.AccountToken {
@@ -733,6 +749,7 @@ func TestOutboxMailValidate(t *testing.T) {
 	checkValidate(t, pending, map[string]func(*domain.OutboxMail){
 		"zero id":        func(m *domain.OutboxMail) { m.ID = domain.OutboxMailID{} },
 		"bad recipient":  func(m *domain.OutboxMail) { m.To = "Ada <ada@example.org>" },
+		"bad reply-to":   func(m *domain.OutboxMail) { m.ReplyTo = "ada@" },
 		"no subject":     func(m *domain.OutboxMail) { m.Subject = "" },
 		"no text":        func(m *domain.OutboxMail) { m.Text = " " },
 		"no creation":    func(m *domain.OutboxMail) { m.CreatedAt = time.Time{} },

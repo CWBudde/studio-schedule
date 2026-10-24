@@ -77,6 +77,49 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			wantSlice(e.t, got, []domain.Lesson{atStart2, atStart1})
 		},
+		"ListByStaff": func(e *env) {
+			s := e.setting()
+			other, third := e.staffMember("Instructor Two"), e.staffMember("Pianist")
+
+			own := e.lesson(s, t0.Add(time.Hour), 5)
+			// Accompanying another instructor's lesson.
+			accompanied := e.newLesson(s, t0, 5)
+			accompanied.InstructorID, accompanied.AccompanistID = other.ID, s.instructor.ID
+			// Both of the asked staff members on one lesson: listed once.
+			both := e.newLesson(s, t0, 5)
+			both.InstructorID, both.AccompanistID = other.ID, third.ID
+			// Out of the range, and someone else's.
+			before := e.newLesson(s, t0.Add(-time.Microsecond), 5)
+			atEnd := e.newLesson(s, t0.Add(48*time.Hour), 5)
+			foreign := e.newLesson(s, t0.Add(time.Hour), 5)
+			foreign.InstructorID = third.ID
+
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				for _, l := range []domain.Lesson{accompanied, both, before, atEnd, foreign} {
+					if err := tx.Lessons().Create(ctx, l); err != nil {
+						return err
+					}
+				}
+
+				return nil
+			})
+
+			list := func(staff ...domain.StaffID) []domain.Lesson {
+				e.t.Helper()
+
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+					return tx.Lessons().ListByStaff(ctx, staff, t0, t0.Add(48*time.Hour))
+				})
+			}
+
+			wantSlice(e.t, list(s.instructor.ID), []domain.Lesson{accompanied, own})
+			// Same start: ordered by ID, which the sequence hands out in order.
+			wantSlice(e.t, list(other.ID, third.ID), []domain.Lesson{accompanied, both, foreign})
+			wantSlice(e.t, list(third.ID, s.instructor.ID), []domain.Lesson{accompanied, both, own, foreign})
+
+			wantSlice(e.t, list(newID[domain.StaffID](e)), nil)
+			wantSlice(e.t, list(), nil)
+		},
 		"ClassSlotIsUnique": func(e *env) {
 			s := e.setting()
 			c := e.class(s, time.Monday, domain.TimeOfDay{Hour: 9})
@@ -427,6 +470,64 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			if len(got) != 0 {
 				e.t.Fatalf("CountActiveByLessons(nil) = %v", got)
+			}
+		},
+		"CountsByLessons": func(e *env) {
+			s := e.setting()
+			l1, l2, l3 := e.lesson(s, t0, 5), e.lesson(s, t0.Add(time.Hour), 5), e.lesson(s, t0.Add(2*time.Hour), 5)
+			empty := e.lesson(s, t0.Add(3*time.Hour), 5)
+			p1, p2, p3, p4 := e.person("Ann", "One"), e.person("Ben", "Two"), e.person("Cy", "Three"), e.person("Di", "Four")
+
+			e.booking(l1, p1, t0.Add(-time.Hour))
+			trial := e.newBooking(l1, p2, t0.Add(-2*time.Hour))
+			trial.Trial, trial.TrialNote = true, "First time"
+			noShow := e.booking(l1, p3, t0.Add(-3*time.Hour))
+			canceled := e.newBooking(l1, p4, t0.Add(-4*time.Hour))
+			canceled.Trial = true
+			e.booking(l2, p1, t0.Add(-3*time.Hour))
+			e.booking(l3, p2, t0.Add(-5*time.Hour)) // a lesson not asked for
+			gone := e.booking(empty, p1, t0.Add(-5*time.Hour))
+
+			guest := domain.Booking{
+				ID: newID[domain.BookingID](e), LessonID: l2.ID, GuestName: "Gina Guest", Trial: true,
+				Status: domain.BookingAttended, Source: domain.BookingSourceStaff, BookedAt: t0.Add(-2 * time.Hour),
+			}
+			canceledGuest := domain.Booking{
+				ID: newID[domain.BookingID](e), LessonID: l2.ID, GuestName: "Gone Guest",
+				Status: domain.BookingCanceled, Source: domain.BookingSourceStaff, BookedAt: t0.Add(-2 * time.Hour),
+				CanceledAt: t0.Add(-time.Hour),
+			}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				noShow.Status = domain.BookingNoShow
+				canceled.Status, canceled.CanceledAt = domain.BookingCanceled, t0.Add(-90*time.Minute)
+				gone.Status, gone.CanceledAt = domain.BookingCanceled, t0.Add(-90*time.Minute)
+
+				return errors.Join(
+					tx.Bookings().Create(ctx, trial), tx.Bookings().Create(ctx, canceled),
+					tx.Bookings().Update(ctx, noShow), tx.Bookings().Update(ctx, gone),
+					tx.Bookings().Create(ctx, guest), tx.Bookings().Create(ctx, canceledGuest),
+				)
+			})
+
+			// Canceled bookings are left out, and so are lessons without an
+			// active booking and unknown ones.
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) (map[domain.LessonID]store.BookingCounts, error) {
+				return tx.Bookings().CountsByLessons(ctx, []domain.LessonID{l1.ID, l2.ID, empty.ID, newID[domain.LessonID](e)})
+			})
+
+			want := map[domain.LessonID]store.BookingCounts{
+				l1.ID: {Active: 3, Trials: 1, Guests: 0, Booked: 2},
+				l2.ID: {Active: 2, Trials: 1, Guests: 1, Booked: 1},
+			}
+			if len(got) != len(want) || got[l1.ID] != want[l1.ID] || got[l2.ID] != want[l2.ID] {
+				e.t.Fatalf("CountsByLessons = %+v, want %+v", got, want)
+			}
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) (map[domain.LessonID]store.BookingCounts, error) {
+				return tx.Bookings().CountsByLessons(ctx, nil)
+			})
+			if len(got) != 0 {
+				e.t.Fatalf("CountsByLessons(nil) = %+v", got)
 			}
 		},
 		"ListActiveByLessonsAndPersons": func(e *env) {

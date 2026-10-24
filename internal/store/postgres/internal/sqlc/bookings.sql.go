@@ -84,6 +84,51 @@ func (q *Queries) CountActiveBookingsByLessons(ctx context.Context, lessons []pg
 	return items, nil
 }
 
+const countBookingsByLessons = `-- name: CountBookingsByLessons :many
+SELECT lesson_id,
+    count(*) AS active,
+    count(*) FILTER (WHERE trial) AS trials,
+    count(*) FILTER (WHERE person_id IS NULL) AS guests,
+    count(*) FILTER (WHERE status = 'booked') AS booked
+FROM bookings
+WHERE lesson_id = ANY($1::uuid[]) AND status <> 'canceled'
+GROUP BY lesson_id
+`
+
+type CountBookingsByLessonsRow struct {
+	LessonID pgtype.UUID
+	Active   int64
+	Trials   int64
+	Guests   int64
+	Booked   int64
+}
+
+func (q *Queries) CountBookingsByLessons(ctx context.Context, lessons []pgtype.UUID) ([]CountBookingsByLessonsRow, error) {
+	rows, err := q.db.Query(ctx, countBookingsByLessons, lessons)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountBookingsByLessonsRow
+	for rows.Next() {
+		var i CountBookingsByLessonsRow
+		if err := rows.Scan(
+			&i.LessonID,
+			&i.Active,
+			&i.Trials,
+			&i.Guests,
+			&i.Booked,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createBooking = `-- name: CreateBooking :exec
 INSERT INTO bookings (
     id, lesson_id, person_id, guest_name, guest_email, status, source, trial, prepaid, booked_at, canceled_at,

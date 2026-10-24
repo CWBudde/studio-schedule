@@ -59,6 +59,7 @@ func testOutbox(t *testing.T, newStore func(*testing.T) store.Store) {
 				full.Attempts = 2
 				full.SentAt = t0.Add(time.Minute)
 				full.LastError = "450 mailbox busy"
+				full.ReplyTo = "ivy@example.org"
 				valid(e.t, minimal)
 				valid(e.t, full)
 

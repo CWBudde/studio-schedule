@@ -250,6 +250,8 @@ var codecs = []codec{
 		func(v domain.BookingEvent) domain.BookingEventID { return v.ID }),
 	rows("waitlist", func(s *state) *table[domain.WaitlistEntryID, domain.WaitlistEntry] { return &s.waitlist },
 		func(v domain.WaitlistEntry) domain.WaitlistEntryID { return v.ID }),
+	rows("notices", func(s *state) *table[domain.LessonNoticeID, domain.LessonNotice] { return &s.notices },
+		func(v domain.LessonNotice) domain.LessonNoticeID { return v.ID }),
 	rows("outbox", func(s *state) *table[domain.OutboxMailID, domain.OutboxMail] { return &s.outbox },
 		func(v domain.OutboxMail) domain.OutboxMailID { return v.ID }),
 	rows("audit", func(s *state) *table[domain.AuditEventID, domain.AuditEvent] { return &s.audit },

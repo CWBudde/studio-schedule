@@ -118,6 +118,14 @@ type Lesson struct {
 	CanceledBy    pgtype.UUID
 }
 
+type LessonNotice struct {
+	ID         pgtype.UUID
+	LessonID   pgtype.UUID
+	SenderID   pgtype.UUID
+	SentAt     pgtype.Timestamptz
+	Recipients int32
+}
+
 type Location struct {
 	ID      pgtype.UUID
 	Name    string
@@ -136,6 +144,7 @@ type OutboxMail struct {
 	NextAttemptAt pgtype.Timestamptz
 	SentAt        pgtype.Timestamptz
 	LastError     pgtype.Text
+	ReplyTo       pgtype.Text
 }
 
 type Person struct {

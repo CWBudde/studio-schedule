@@ -105,6 +105,7 @@ type Tx interface {
 	Lessons() LessonRepo
 	Bookings() BookingRepo
 	Waitlist() WaitlistRepo
+	Notices() LessonNoticeRepo
 	Outbox() OutboxRepo
 	Audit() AuditRepo
 }
@@ -356,7 +357,7 @@ type LessonRepo interface {
 	Update(ctx context.Context, l domain.Lesson) error
 	// Delete fails with domain.ErrConflict while bookings refer to the
 	// lesson, canceled ones included. The lesson's waiting-list entries are
-	// deleted with it.
+	// deleted with it; its notices stay, without the lesson.
 	Delete(ctx context.Context, id domain.LessonID) error
 	// ListByClassStartingAfter returns the lessons of a class that start
 	// after the instant, whatever their slot date, ordered by StartsAt and
@@ -368,6 +369,10 @@ type LessonRepo interface {
 	// ListRange returns the lessons with from <= StartsAt < to, ordered by
 	// StartsAt and ID.
 	ListRange(ctx context.Context, from, to time.Time) ([]domain.Lesson, error)
+	// ListByStaff returns the lessons with from <= StartsAt < to whose
+	// instructor or accompanist is one of the staff members, ordered by
+	// StartsAt and ID.
+	ListByStaff(ctx context.Context, staff []domain.StaffID, from, to time.Time) ([]domain.Lesson, error)
 	// ListRoomOverlaps returns the lessons in the room that are not
 	// canceled and overlap [from, to) (StartsAt < to and EndsAt > from),
 	// except the lesson exclude (none if zero), ordered by StartsAt and ID.
@@ -401,6 +406,10 @@ type BookingRepo interface {
 	// are not canceled, for each of the given lessons that has one; lessons
 	// without an active booking (or that do not exist) are left out.
 	CountActiveByLessons(ctx context.Context, lessons []domain.LessonID) (map[domain.LessonID]int, error)
+	// CountsByLessons returns, by lesson, the counts of the bookings that
+	// are not canceled, for each of the given lessons that has one; lessons
+	// without an active booking (or that do not exist) are left out.
+	CountsByLessons(ctx context.Context, lessons []domain.LessonID) (map[domain.LessonID]BookingCounts, error)
 	// ListActiveByLessonsAndPersons returns the bookings that are not
 	// canceled of any of the given persons in any of the given lessons,
 	// ordered by BookedAt and ID.
@@ -426,6 +435,15 @@ type BookingRepo interface {
 	AddEvent(ctx context.Context, e domain.BookingEvent) error
 	// ListEvents returns the history of a booking ordered by At and ID.
 	ListEvents(ctx context.Context, booking domain.BookingID) ([]domain.BookingEvent, error)
+}
+
+// BookingCounts counts the active (not canceled) bookings of a lesson.
+type BookingCounts struct {
+	Active int
+	// Trials, Guests and Booked count the active bookings that are trial
+	// lessons, that are a guest's (no person), and whose attendance is
+	// unknown (status booked).
+	Trials, Guests, Booked int
 }
 
 // WaitlistRepo stores the waiting-list entries of lessons (ADR 0010). A
@@ -458,6 +476,21 @@ type WaitlistRepo interface {
 	// started at or before now and still have an open entry: the work of the
 	// waitlist-expiry job.
 	ListDueLessons(ctx context.Context, now time.Time) ([]domain.LessonID, error)
+}
+
+// LessonNoticeRepo stores the notices staff sent to the participants of
+// lessons. A notice outlives its lesson with a zero LessonID
+// (LessonRepo.Delete).
+type LessonNoticeRepo interface {
+	// Create fails with domain.ErrConflict if the ID is taken or the lesson
+	// or the sender does not exist.
+	Create(ctx context.Context, n domain.LessonNotice) error
+	// ListBySender returns the notices the account sent at or after since,
+	// ordered by SentAt and ID.
+	ListBySender(ctx context.Context, sender domain.AccountID, since time.Time) ([]domain.LessonNotice, error)
+	// ListByLesson returns the notices sent about the lesson at or after
+	// since, ordered by SentAt and ID.
+	ListByLesson(ctx context.Context, lesson domain.LessonID, since time.Time) ([]domain.LessonNotice, error)
 }
 
 // OutboxRepo stores outgoing mails.

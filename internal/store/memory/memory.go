@@ -52,6 +52,7 @@ type state struct {
 	bookings      table[domain.BookingID, domain.Booking]
 	bookingEvents table[domain.BookingEventID, domain.BookingEvent]
 	waitlist      table[domain.WaitlistEntryID, domain.WaitlistEntry]
+	notices       table[domain.LessonNoticeID, domain.LessonNotice]
 	outbox        table[domain.OutboxMailID, domain.OutboxMail]
 	audit         table[domain.AuditEventID, domain.AuditEvent]
 }
@@ -206,6 +207,7 @@ func (t *tx) Classes() store.ClassRepo          { return classRepo{t} }
 func (t *tx) Lessons() store.LessonRepo         { return lessonRepo{t} }
 func (t *tx) Bookings() store.BookingRepo       { return bookingRepo{t} }
 func (t *tx) Waitlist() store.WaitlistRepo      { return waitlistRepo{t} }
+func (t *tx) Notices() store.LessonNoticeRepo   { return noticeRepo{t} }
 func (t *tx) Outbox() store.OutboxRepo          { return outboxRepo{t} }
 func (t *tx) Audit() store.AuditRepo            { return auditRepo{t} }
 

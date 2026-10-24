@@ -24,6 +24,7 @@ func toOutboxMail(row sqlc.OutboxMail) domain.OutboxMail {
 		NextAttemptAt: fromPgInstant(row.NextAttemptAt),
 		SentAt:        fromPgInstant(row.SentAt),
 		LastError:     row.LastError.String,
+		ReplyTo:       row.ReplyTo.String,
 	}
 }
 
@@ -58,6 +59,7 @@ func (r outboxRepo) Create(ctx context.Context, m domain.OutboxMail) error {
 		NextAttemptAt: pgInstant(m.NextAttemptAt),
 		SentAt:        pgInstant(m.SentAt),
 		LastError:     pgText(m.LastError),
+		ReplyTo:       pgText(m.ReplyTo),
 	}))
 }
 
@@ -79,6 +81,7 @@ func (r outboxRepo) Update(ctx context.Context, m domain.OutboxMail) error {
 		NextAttemptAt: pgInstant(m.NextAttemptAt),
 		SentAt:        pgInstant(m.SentAt),
 		LastError:     pgText(m.LastError),
+		ReplyTo:       pgText(m.ReplyTo),
 	})
 
 	return affected("outbox mail", n, err)

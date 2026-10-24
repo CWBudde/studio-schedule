@@ -14,8 +14,8 @@ import (
 const createOutboxMail = `-- name: CreateOutboxMail :exec
 INSERT INTO outbox_mails (
     id, recipient, subject, body_text, body_html, template, created_at,
-    attempts, next_attempt_at, sent_at, last_error
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    attempts, next_attempt_at, sent_at, last_error, reply_to
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 `
 
 type CreateOutboxMailParams struct {
@@ -30,6 +30,7 @@ type CreateOutboxMailParams struct {
 	NextAttemptAt pgtype.Timestamptz
 	SentAt        pgtype.Timestamptz
 	LastError     pgtype.Text
+	ReplyTo       pgtype.Text
 }
 
 func (q *Queries) CreateOutboxMail(ctx context.Context, arg CreateOutboxMailParams) error {
@@ -45,12 +46,13 @@ func (q *Queries) CreateOutboxMail(ctx context.Context, arg CreateOutboxMailPara
 		arg.NextAttemptAt,
 		arg.SentAt,
 		arg.LastError,
+		arg.ReplyTo,
 	)
 	return err
 }
 
 const getOutboxMail = `-- name: GetOutboxMail :one
-SELECT id, recipient, subject, body_text, body_html, template, created_at, attempts, next_attempt_at, sent_at, last_error FROM outbox_mails WHERE id = $1
+SELECT id, recipient, subject, body_text, body_html, template, created_at, attempts, next_attempt_at, sent_at, last_error, reply_to FROM outbox_mails WHERE id = $1
 `
 
 func (q *Queries) GetOutboxMail(ctx context.Context, id pgtype.UUID) (OutboxMail, error) {
@@ -68,12 +70,13 @@ func (q *Queries) GetOutboxMail(ctx context.Context, id pgtype.UUID) (OutboxMail
 		&i.NextAttemptAt,
 		&i.SentAt,
 		&i.LastError,
+		&i.ReplyTo,
 	)
 	return i, err
 }
 
 const listDueOutboxMails = `-- name: ListDueOutboxMails :many
-SELECT id, recipient, subject, body_text, body_html, template, created_at, attempts, next_attempt_at, sent_at, last_error FROM outbox_mails
+SELECT id, recipient, subject, body_text, body_html, template, created_at, attempts, next_attempt_at, sent_at, last_error, reply_to FROM outbox_mails
 WHERE sent_at IS NULL AND next_attempt_at IS NOT NULL AND next_attempt_at <= $1
 ORDER BY next_attempt_at, id
 LIMIT $2
@@ -107,6 +110,7 @@ func (q *Queries) ListDueOutboxMails(ctx context.Context, arg ListDueOutboxMails
 			&i.NextAttemptAt,
 			&i.SentAt,
 			&i.LastError,
+			&i.ReplyTo,
 		); err != nil {
 			return nil, err
 		}
@@ -119,7 +123,7 @@ func (q *Queries) ListDueOutboxMails(ctx context.Context, arg ListDueOutboxMails
 }
 
 const listOutboxMails = `-- name: ListOutboxMails :many
-SELECT id, recipient, subject, body_text, body_html, template, created_at, attempts, next_attempt_at, sent_at, last_error FROM outbox_mails ORDER BY created_at DESC, id DESC LIMIT $1
+SELECT id, recipient, subject, body_text, body_html, template, created_at, attempts, next_attempt_at, sent_at, last_error, reply_to FROM outbox_mails ORDER BY created_at DESC, id DESC LIMIT $1
 `
 
 func (q *Queries) ListOutboxMails(ctx context.Context, maxRows int32) ([]OutboxMail, error) {
@@ -143,6 +147,7 @@ func (q *Queries) ListOutboxMails(ctx context.Context, maxRows int32) ([]OutboxM
 			&i.NextAttemptAt,
 			&i.SentAt,
 			&i.LastError,
+			&i.ReplyTo,
 		); err != nil {
 			return nil, err
 		}
@@ -157,7 +162,7 @@ func (q *Queries) ListOutboxMails(ctx context.Context, maxRows int32) ([]OutboxM
 const updateOutboxMail = `-- name: UpdateOutboxMail :execrows
 UPDATE outbox_mails
 SET recipient = $2, subject = $3, body_text = $4, body_html = $5, template = $6, created_at = $7,
-    attempts = $8, next_attempt_at = $9, sent_at = $10, last_error = $11
+    attempts = $8, next_attempt_at = $9, sent_at = $10, last_error = $11, reply_to = $12
 WHERE id = $1
 `
 
@@ -173,6 +178,7 @@ type UpdateOutboxMailParams struct {
 	NextAttemptAt pgtype.Timestamptz
 	SentAt        pgtype.Timestamptz
 	LastError     pgtype.Text
+	ReplyTo       pgtype.Text
 }
 
 func (q *Queries) UpdateOutboxMail(ctx context.Context, arg UpdateOutboxMailParams) (int64, error) {
@@ -188,6 +194,7 @@ func (q *Queries) UpdateOutboxMail(ctx context.Context, arg UpdateOutboxMailPara
 		arg.NextAttemptAt,
 		arg.SentAt,
 		arg.LastError,
+		arg.ReplyTo,
 	)
 	if err != nil {
 		return 0, err

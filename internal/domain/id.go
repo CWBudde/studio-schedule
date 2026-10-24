@@ -85,6 +85,7 @@ type (
 	sessionKind       struct{}
 	outboxMailKind    struct{}
 	auditEventKind    struct{}
+	lessonNoticeKind  struct{}
 )
 
 // ID types, one per entity of the domain model.
@@ -151,4 +152,7 @@ type (
 
 	// AuditEventID identifies an audit event.
 	AuditEventID = ID[auditEventKind]
+
+	// LessonNoticeID identifies a lesson notice.
+	LessonNoticeID = ID[lessonNoticeKind]
 )

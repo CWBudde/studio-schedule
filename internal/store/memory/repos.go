@@ -10,6 +10,7 @@ import (
 	"uuid"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/store"
 )
 
 func notFound(what string) error { return fmt.Errorf("%s: %w", what, domain.ErrNotFound) }
@@ -961,6 +962,11 @@ func (r lessonRepo) Delete(_ context.Context, id domain.LessonID) error {
 		s.waitlist.delete(r.tx.gen, e.ID)
 	}
 
+	for _, n := range s.notices.filter(func(n domain.LessonNotice) bool { return n.LessonID == id }) {
+		n.LessonID = domain.LessonID{}
+		s.notices.put(r.tx.gen, n.ID, n)
+	}
+
 	s.lessons.delete(r.tx.gen, id)
 
 	return nil
@@ -992,6 +998,24 @@ func (r lessonRepo) ListRange(_ context.Context, from, to time.Time) ([]domain.L
 	from, to = instant(from), instant(to)
 	lessons := r.tx.state.lessons.filter(func(l domain.Lesson) bool {
 		return !l.StartsAt.Before(from) && l.StartsAt.Before(to)
+	})
+
+	return sorted(lessons, func(a, b domain.Lesson) int {
+		return cmp.Or(a.StartsAt.Compare(b.StartsAt), compareID(a.ID, b.ID))
+	}), nil
+}
+
+func (r lessonRepo) ListByStaff(
+	_ context.Context, staff []domain.StaffID, from, to time.Time,
+) ([]domain.Lesson, error) {
+	from, to = instant(from), instant(to)
+	wanted := setOf(staff)
+	lessons := r.tx.state.lessons.filter(func(l domain.Lesson) bool {
+		_, instructor := wanted[l.InstructorID]
+		_, accompanist := wanted[l.AccompanistID]
+
+		return (instructor || (accompanist && !l.AccompanistID.IsZero())) &&
+			!l.StartsAt.Before(from) && l.StartsAt.Before(to)
 	})
 
 	return sorted(lessons, func(a, b domain.Lesson) int {
@@ -1102,6 +1126,38 @@ func (r bookingRepo) CountActiveByLessons(_ context.Context, lessons []domain.Le
 		return ok && active(b)
 	}) {
 		out[b.LessonID]++
+	}
+
+	return out, nil
+}
+
+func (r bookingRepo) CountsByLessons(
+	_ context.Context, lessons []domain.LessonID,
+) (map[domain.LessonID]store.BookingCounts, error) {
+	out := map[domain.LessonID]store.BookingCounts{}
+	wanted := setOf(lessons)
+
+	for _, b := range r.tx.state.bookings.filter(func(b domain.Booking) bool {
+		_, ok := wanted[b.LessonID]
+
+		return ok && active(b)
+	}) {
+		c := out[b.LessonID]
+		c.Active++
+
+		if b.Trial {
+			c.Trials++
+		}
+
+		if b.PersonID.IsZero() {
+			c.Guests++
+		}
+
+		if b.Status == domain.BookingBooked {
+			c.Booked++
+		}
+
+		out[b.LessonID] = c
 	}
 
 	return out, nil

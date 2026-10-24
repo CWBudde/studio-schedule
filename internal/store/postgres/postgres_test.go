@@ -126,8 +126,8 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	wantStatus(true)
 	wantCheck(nil)
 
-	if n := tables(); n != 20 {
-		t.Fatalf("%d tables after up, want 20", n)
+	if n := tables(); n != 21 {
+		t.Fatalf("%d tables after up, want 21", n)
 	}
 
 	if res, err := m.Up(ctx); err != nil || len(res) != 0 {
@@ -466,8 +466,8 @@ func TestUniqueNamesMigration(t *testing.T) {
 	t.Cleanup(func() { _ = m.Close() })
 
 	for _, want := range []string{
-		"00013_staff_bookings.sql", "00012_waitlist.sql", "00011_class_member_bookings.sql", "00010_booking_rules.sql",
-		"00009_lesson_admin.sql",
+		"00014_lesson_notices.sql", "00013_staff_bookings.sql", "00012_waitlist.sql", "00011_class_member_bookings.sql",
+		"00010_booking_rules.sql", "00009_lesson_admin.sql",
 		"00008_lesson_slots.sql", "00007_course_type_unique_names.sql",
 		"00006_catalog_unique_names.sql",
 	} {
@@ -535,8 +535,8 @@ func TestLessonSlotsMigration(t *testing.T) {
 	t.Cleanup(func() { _ = m.Close() })
 
 	for _, want := range []string{
-		"00013_staff_bookings.sql", "00012_waitlist.sql", "00011_class_member_bookings.sql", "00010_booking_rules.sql",
-		"00009_lesson_admin.sql",
+		"00014_lesson_notices.sql", "00013_staff_bookings.sql", "00012_waitlist.sql", "00011_class_member_bookings.sql",
+		"00010_booking_rules.sql", "00009_lesson_admin.sql",
 		"00008_lesson_slots.sql",
 	} {
 		if res, err := m.Down(ctx); err != nil || res.Name != want {

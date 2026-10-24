@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/postgres/internal/sqlc"
 )
 
@@ -117,6 +118,18 @@ func (r lessonRepo) ListByClass(ctx context.Context, class domain.ClassID, from 
 
 func (r lessonRepo) ListRange(ctx context.Context, from, to time.Time) ([]domain.Lesson, error) {
 	rows, err := r.q.ListLessonsInRange(ctx, sqlc.ListLessonsInRangeParams{
+		FromTime: pgtype.Timestamptz{Time: instant(from), Valid: true},
+		ToTime:   pgtype.Timestamptz{Time: instant(to), Valid: true},
+	})
+
+	return convertRows(rows, err, toLesson)
+}
+
+func (r lessonRepo) ListByStaff(
+	ctx context.Context, staff []domain.StaffID, from, to time.Time,
+) ([]domain.Lesson, error) {
+	rows, err := r.q.ListLessonsByStaff(ctx, sqlc.ListLessonsByStaffParams{
+		Staff:    pgIDs(staff),
 		FromTime: pgtype.Timestamptz{Time: instant(from), Valid: true},
 		ToTime:   pgtype.Timestamptz{Time: instant(to), Valid: true},
 	})
@@ -235,6 +248,24 @@ func (r bookingRepo) CountActiveByLessons(
 	out := make(map[domain.LessonID]int, len(rows))
 	for _, row := range rows {
 		out[fromPgID[domain.LessonID](row.LessonID)] = int(row.Active)
+	}
+
+	return out, nil
+}
+
+func (r bookingRepo) CountsByLessons(
+	ctx context.Context, lessons []domain.LessonID,
+) (map[domain.LessonID]store.BookingCounts, error) {
+	rows, err := r.q.CountBookingsByLessons(ctx, pgIDs(lessons))
+	if err != nil {
+		return nil, mapErr(err)
+	}
+
+	out := make(map[domain.LessonID]store.BookingCounts, len(rows))
+	for _, row := range rows {
+		out[fromPgID[domain.LessonID](row.LessonID)] = store.BookingCounts{
+			Active: int(row.Active), Trials: int(row.Trials), Guests: int(row.Guests), Booked: int(row.Booked),
+		}
 	}
 
 	return out, nil
