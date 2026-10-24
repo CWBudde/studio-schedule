@@ -18,6 +18,7 @@ import (
 	netmail "net/mail"
 	netsmtp "net/smtp"
 	"net/textproto"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -202,9 +203,16 @@ func (s *Sender) tlsConfig() *tls.Config {
 }
 
 // fail wraps err for the failed step; if ctx has ended, the error wraps
-// ctx.Err() as well, because that is the actual cause.
+// ctx.Err() as well, because that is the actual cause. The connection's
+// deadline is ctx's deadline and can fire before ctx reports it, so a
+// deadline error counts as ctx's.
 func (s *Sender) fail(ctx context.Context, step string, err error) error {
-	if ctxErr := ctx.Err(); ctxErr != nil {
+	ctxErr := ctx.Err()
+	if ctxErr == nil && errors.Is(err, os.ErrDeadlineExceeded) {
+		ctxErr = context.DeadlineExceeded
+	}
+
+	if ctxErr != nil {
 		return fmt.Errorf("smtp %s %s:%d: %w (%w)", step, s.cfg.Host, s.cfg.Port, ctxErr, err)
 	}
 
