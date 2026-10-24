@@ -426,17 +426,28 @@ func lessonReferences(ctx context.Context, tx store.Tx, l domain.Lesson) error {
 // roomFree returns a *RoomTakenError for the first other lesson that is not
 // canceled and uses the room of l at an overlapping time.
 func roomFree(ctx context.Context, tx store.Tx, l domain.Lesson) error {
-	others, err := tx.Lessons().ListRoomOverlaps(ctx, l.RoomID, l.StartsAt, l.EndsAt, l.ID)
-	if err != nil || len(others) == 0 {
+	other, taken, err := roomTaker(ctx, tx, l)
+	if err != nil || !taken {
 		return err
 	}
 
-	ct, err := tx.CourseTypes().Get(ctx, others[0].CourseTypeID)
+	ct, err := tx.CourseTypes().Get(ctx, other.CourseTypeID)
 	if err != nil {
-		return fmt.Errorf("course type %v: %w", others[0].CourseTypeID, refErr(err))
+		return fmt.Errorf("course type %v: %w", other.CourseTypeID, refErr(err))
 	}
 
-	return &RoomTakenError{Lesson: others[0], CourseType: ct}
+	return &RoomTakenError{Lesson: other, CourseType: ct}
+}
+
+// roomTaker returns the first other lesson that is not canceled and uses
+// the room of l at an overlapping time, if there is one.
+func roomTaker(ctx context.Context, tx store.Tx, l domain.Lesson) (domain.Lesson, bool, error) {
+	others, err := tx.Lessons().ListRoomOverlaps(ctx, l.RoomID, l.StartsAt, l.EndsAt, l.ID)
+	if err != nil || len(others) == 0 {
+		return domain.Lesson{}, false, err
+	}
+
+	return others[0], true, nil
 }
 
 // adminLesson returns l with its references and what the office sees of it,

@@ -69,6 +69,14 @@ func (d Date) AddDays(n int) Date {
 	return Date{Year: t.Year(), Month: t.Month(), Day: t.Day()}
 }
 
+// DaysUntil returns the number of calendar days from d to o (negative if o
+// lies before d), so d.AddDays(d.DaysUntil(o)) == o.
+func (d Date) DaysUntil(o Date) int {
+	// Midnight UTC has no DST; Unix seconds, unlike time.Duration, cover
+	// the years 1 to 9999.
+	return int((o.utc().Unix() - d.utc().Unix()) / (24 * 60 * 60))
+}
+
 // Weekday returns the day of the week of d.
 func (d Date) Weekday() time.Weekday { return d.utc().Weekday() }
 

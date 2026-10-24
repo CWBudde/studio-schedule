@@ -62,6 +62,8 @@ var accessLevels = map[string]string{
 	"cancelLesson":         "office",
 	"restoreLesson":        "office",
 	"deleteLesson":         "office",
+	"previewLessonClone":   "office",
+	"cloneLessons":         "office",
 	"register":             "public",
 	"confirmEmail":         "public",
 	"login":                "public",

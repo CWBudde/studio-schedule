@@ -175,6 +175,45 @@ func TestDateAddDaysAndWeekday(t *testing.T) {
 	}
 }
 
+// TestDateDaysUntil counts calendar days, not 24-hour periods: across a
+// DST change in Europe/Berlin, month and year ends, a leap day and centuries.
+func TestDateDaysUntil(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		from, to string
+		want     int
+	}{
+		{"2026-10-22", "2026-10-29", 7},  // across the end of summer time
+		{"2026-03-28", "2026-03-30", 2},  // across its start
+		{"2026-10-29", "2026-10-22", -7}, // backwards
+		{"2026-10-23", "2026-10-23", 0},
+		{"2026-01-31", "2026-03-01", 29},
+		{"2028-02-28", "2028-03-01", 2}, // a leap day
+		{"2026-12-31", "2027-01-01", 1},
+		{"2026-10-23", "2027-10-23", 365},
+		{"0001-01-01", "9999-12-31", 3652058}, // beyond what time.Duration holds
+	} {
+		from, err := domain.ParseDate(tc.from)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		to, err := domain.ParseDate(tc.to)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got := from.DaysUntil(to); got != tc.want {
+			t.Errorf("%s.DaysUntil(%s) = %d, want %d", tc.from, tc.to, got, tc.want)
+		}
+
+		if got := from.AddDays(tc.want); got != to {
+			t.Errorf("%s.AddDays(%d) = %s, want %s", tc.from, tc.want, got, tc.to)
+		}
+	}
+}
+
 func TestDateAt(t *testing.T) {
 	t.Parallel()
 

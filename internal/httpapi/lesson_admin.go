@@ -80,6 +80,38 @@ func registerLessonAdmin(api huma.API, h *handlers) {
 			"`generated`): generation would create it again.",
 		DefaultStatus: http.StatusNoContent,
 	}), h.deleteLesson)
+
+	clone := func(op huma.Operation) huma.Operation {
+		op.Tags = []string{"lessons"}
+		op.Method = http.MethodPost
+
+		return op
+	}
+
+	register(api, AccessOffice, clone(huma.Operation{
+		OperationID: "previewLessonClone",
+		Path:        BasePath + "/admin/lessons/clone/preview",
+		Summary:     "Preview a clone of a day or a week",
+		Description: "Returns what `cloneLessons` would create and skip now, without changing anything.",
+	}), h.previewLessonClone)
+
+	register(api, AccessOffice, clone(huma.Operation{
+		OperationID: "cloneLessons",
+		Path:        BasePath + "/admin/lessons/clone",
+		Summary:     "Clone a day or a week",
+		Description: "Copies the scheduled lessons of a school day, or of a week from Monday to Sunday, to " +
+			"another day or week in one transaction. Each copy is a one-off lesson at the same school-local " +
+			"wall-clock time, with the course type, room, staff, length, capacity, kind and visibility of its " +
+			"source and no bookings. Canceled lessons are not copied. A source lesson is skipped with a " +
+			"reason: `class-slot` when its class has a slot in the target week within its term (generation " +
+			"makes that lesson), `started` when the copy would not start in the future, `staff-inactive` " +
+			"when its instructor or accompanist is no longer active, and `room-taken` when another lesson " +
+			"that is not canceled, a lesson of a class that generation has not created yet, or an earlier " +
+			"copy of the same clone uses the room at an overlapping time, checked in this order. Nothing is " +
+			"changed or deleted, and nobody is mailed. A week's dates " +
+			"must be Mondays (422 on `body.source` or `body.target`); a target equal to the source or before " +
+			"today (a week: its Monday) is a 422 on `body.target`.",
+	}), h.cloneLessons)
 }
 
 // LessonData is the editable part of a lesson.
@@ -143,6 +175,59 @@ type LessonRestoreInput struct {
 // LessonRefInput is the request of deleteLesson.
 type LessonRefInput struct {
 	LessonID domain.LessonID `doc:"The lesson." path:"lessonId"`
+}
+
+// LessonCloneData is the request body of previewLessonClone and
+// cloneLessons.
+type LessonCloneData struct {
+	Unit   string      `doc:"Copy one school day or a week from Monday to Sunday." enum:"day,week" json:"unit"`
+	Source domain.Date `doc:"School date to copy from; a Monday for a week."     format:"date"    json:"source"`
+	Target domain.Date `doc:"School date to copy to; a Monday for a week. It must differ from the source and not lie before today." format:"date" json:"target"`
+}
+
+// LessonCloneInput is the request of previewLessonClone and cloneLessons.
+type LessonCloneInput struct {
+	Body LessonCloneData
+}
+
+// LessonClone is the response body of previewLessonClone and cloneLessons.
+type LessonClone struct {
+	Created []LessonCloneCopy `doc:"Copies, ordered by the start of their source." json:"created" nullable:"false"`
+	Skipped []LessonCloneSkip `doc:"Scheduled source lessons that are not copied, ordered by start." json:"skipped" nullable:"false"`
+}
+
+// LessonCloneCopy is a copy a clone creates.
+type LessonCloneCopy struct {
+	ID       domain.LessonID `doc:"The new lesson; absent in a preview." json:"id,omitzero" required:"false"`
+	Source   LessonSummary   `doc:"The lesson copied. The copy has its course type, room, staff, capacity, kind and visibility, no class, no level and no bookings." json:"source"`
+	StartsAt time.Time       `doc:"Start instant of the copy (UTC)." json:"startsAt"`
+	EndsAt   time.Time       `doc:"End instant of the copy (UTC)."   json:"endsAt"`
+}
+
+// LessonCloneSkip is a source lesson a clone does not copy.
+type LessonCloneSkip struct {
+	Source   LessonSummary        `doc:"The lesson not copied." json:"source"`
+	StartsAt time.Time            `doc:"Start instant its copy would have had (UTC)." json:"startsAt"`
+	EndsAt   time.Time            `doc:"End instant its copy would have had (UTC)."   json:"endsAt"`
+	Reason   string               `doc:"Why it is not copied: its class makes the lesson of the target week (class-slot), the copy would not start in the future (started), its instructor or accompanist is no longer active (staff-inactive), or the room is taken (room-taken); checked in this order." enum:"class-slot,started,staff-inactive,room-taken" json:"reason"`
+	Lesson   *CloneConflictLesson `doc:"The lesson that uses the room; only with reason room-taken." json:"lesson,omitempty"`
+}
+
+// CloneConflictLesson names the lesson that takes the room of a copy: a
+// lesson that exists, a lesson of a class that generation has not created
+// yet, or another copy of the same clone.
+type CloneConflictLesson struct {
+	ID         domain.LessonID `doc:"Lesson ID; absent in a preview for a copy of the same clone, and for a lesson of a class that generation has not created yet." json:"id,omitzero" required:"false"`
+	ClassID    domain.ClassID  `doc:"Weekly class the lesson belongs to; absent for one-off lessons and copies. Without an ID and copyOf, the lesson is one this class's generation will create." json:"classId,omitzero" required:"false"`
+	CopyOf     domain.LessonID `doc:"Set when the lesson is a copy of the same clone: the lesson it copies." json:"copyOf,omitzero" required:"false"`
+	StartsAt   time.Time       `doc:"Start instant (UTC)." json:"startsAt"`
+	EndsAt     time.Time       `doc:"End instant (UTC)."   json:"endsAt"`
+	CourseType CourseTypeRef   `json:"courseType"`
+}
+
+// LessonCloneOutput is the response of previewLessonClone and cloneLessons.
+type LessonCloneOutput struct {
+	Body LessonClone
 }
 
 func (h *handlers) createLesson(ctx context.Context, in *LessonCreateInput) (*LessonOutput, error) {
@@ -221,4 +306,54 @@ func (d LessonData) service() service.LessonData {
 		Visibility: domain.LessonVisibility(d.Visibility), Kind: domain.LessonKind(d.Kind),
 		ConfirmRoomOverlap: d.ConfirmRoomOverlap, ConfirmPast: d.ConfirmPast,
 	}
+}
+
+func (h *handlers) previewLessonClone(ctx context.Context, in *LessonCloneInput) (*LessonCloneOutput, error) {
+	return h.cloneOutput(ctx)(h.deps.Lessons.PreviewClone(ctx, in.Body.service()))
+}
+
+func (h *handlers) cloneLessons(ctx context.Context, in *LessonCloneInput) (*LessonCloneOutput, error) {
+	return h.cloneOutput(ctx)(h.deps.Lessons.Clone(ctx, in.Body.service()))
+}
+
+func (h *handlers) cloneOutput(ctx context.Context) func(service.CloneResult, error) (*LessonCloneOutput, error) {
+	return func(r service.CloneResult, err error) (*LessonCloneOutput, error) {
+		if err != nil {
+			return nil, h.toHTTPError(ctx, err)
+		}
+
+		body := LessonClone{
+			Created: make([]LessonCloneCopy, 0, len(r.Created)),
+			Skipped: make([]LessonCloneSkip, 0, len(r.Skipped)),
+		}
+
+		for _, c := range r.Created {
+			body.Created = append(body.Created, LessonCloneCopy{
+				ID: c.ID, Source: lessonSummary(c.Source), StartsAt: c.StartsAt.UTC(), EndsAt: c.EndsAt.UTC(),
+			})
+		}
+
+		for _, k := range r.Skipped {
+			skip := LessonCloneSkip{
+				Source: lessonSummary(k.Source), StartsAt: k.StartsAt.UTC(), EndsAt: k.EndsAt.UTC(),
+				Reason: string(k.Reason),
+			}
+
+			if by := k.TakenBy; by != nil {
+				skip.Lesson = &CloneConflictLesson{
+					ID: by.Lesson.ID, ClassID: by.Lesson.ClassID, CopyOf: by.CopyOf, StartsAt: by.Lesson.StartsAt.UTC(),
+					EndsAt:     by.Lesson.EndsAt.UTC(),
+					CourseType: CourseTypeRef{ID: by.CourseType.ID, Name: by.CourseType.Name},
+				}
+			}
+
+			body.Skipped = append(body.Skipped, skip)
+		}
+
+		return &LessonCloneOutput{Body: body}, nil
+	}
+}
+
+func (d LessonCloneData) service() service.CloneRequest {
+	return service.CloneRequest{Unit: service.CloneUnit(d.Unit), Source: d.Source, Target: d.Target}
 }

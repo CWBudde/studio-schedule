@@ -84,6 +84,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/lessons/clone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clone a day or a week
+         * @description Copies the scheduled lessons of a school day, or of a week from Monday to Sunday, to another day or week in one transaction. Each copy is a one-off lesson at the same school-local wall-clock time, with the course type, room, staff, length, capacity, kind and visibility of its source and no bookings. Canceled lessons are not copied. A source lesson is skipped with a reason: `class-slot` when its class has a slot in the target week within its term (generation makes that lesson), `started` when the copy would not start in the future, `staff-inactive` when its instructor or accompanist is no longer active, and `room-taken` when another lesson that is not canceled, a lesson of a class that generation has not created yet, or an earlier copy of the same clone uses the room at an overlapping time, checked in this order. Nothing is changed or deleted, and nobody is mailed. A week's dates must be Mondays (422 on `body.source` or `body.target`); a target equal to the source or before today (a week: its Monday) is a 422 on `body.target`.
+         */
+        post: operations["cloneLessons"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/lessons/clone/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a clone of a day or a week
+         * @description Returns what `cloneLessons` would create and skip now, without changing anything.
+         */
+        post: operations["previewLessonClone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/persons": {
         parameters: {
             query?: never;
@@ -1361,6 +1401,34 @@ export interface components {
             /** @description Members ordered by family and given name. */
             items: components["schemas"]["ClassMember"][];
         };
+        CloneConflictLesson: {
+            /**
+             * Format: uuid
+             * @description Weekly class the lesson belongs to; absent for one-off lessons and copies. Without an ID and copyOf, the lesson is one this class's generation will create.
+             */
+            classId?: string;
+            /**
+             * Format: uuid
+             * @description Set when the lesson is a copy of the same clone: the lesson it copies.
+             */
+            copyOf?: string;
+            courseType: components["schemas"]["CourseTypeRef"];
+            /**
+             * Format: date-time
+             * @description End instant (UTC).
+             */
+            endsAt: string;
+            /**
+             * Format: uuid
+             * @description Lesson ID; absent in a preview for a copy of the same clone, and for a lesson of a class that generation has not created yet.
+             */
+            id?: string;
+            /**
+             * Format: date-time
+             * @description Start instant (UTC).
+             */
+            startsAt: string;
+        };
         ConfirmEmailChangeInputBody: {
             /** @description Language of the notice to the old address (BCP 47); defaults to the school's. */
             locale?: string;
@@ -1623,6 +1691,69 @@ export interface components {
         LessonCancelData: {
             /** @description Optional note for those booked, e.g. the reason; at most 500 characters (Unicode code points) after trimming surrounding white space, a 422 on body.note otherwise. */
             note?: string;
+        };
+        LessonClone: {
+            /** @description Copies, ordered by the start of their source. */
+            created: components["schemas"]["LessonCloneCopy"][];
+            /** @description Scheduled source lessons that are not copied, ordered by start. */
+            skipped: components["schemas"]["LessonCloneSkip"][];
+        };
+        LessonCloneCopy: {
+            /**
+             * Format: date-time
+             * @description End instant of the copy (UTC).
+             */
+            endsAt: string;
+            /**
+             * Format: uuid
+             * @description The new lesson; absent in a preview.
+             */
+            id?: string;
+            /** @description The lesson copied. The copy has its course type, room, staff, capacity, kind and visibility, no class, no level and no bookings. */
+            source: components["schemas"]["LessonSummary"];
+            /**
+             * Format: date-time
+             * @description Start instant of the copy (UTC).
+             */
+            startsAt: string;
+        };
+        LessonCloneData: {
+            /**
+             * Format: date
+             * @description School date to copy from; a Monday for a week.
+             */
+            source: string;
+            /**
+             * Format: date
+             * @description School date to copy to; a Monday for a week. It must differ from the source and not lie before today.
+             */
+            target: string;
+            /**
+             * @description Copy one school day or a week from Monday to Sunday.
+             * @enum {string}
+             */
+            unit: "day" | "week";
+        };
+        LessonCloneSkip: {
+            /**
+             * Format: date-time
+             * @description End instant its copy would have had (UTC).
+             */
+            endsAt: string;
+            /** @description The lesson that uses the room; only with reason room-taken. */
+            lesson?: components["schemas"]["CloneConflictLesson"];
+            /**
+             * @description Why it is not copied: its class makes the lesson of the target week (class-slot), the copy would not start in the future (started), its instructor or accompanist is no longer active (staff-inactive), or the room is taken (room-taken); checked in this order.
+             * @enum {string}
+             */
+            reason: "class-slot" | "started" | "staff-inactive" | "room-taken";
+            /** @description The lesson not copied. */
+            source: components["schemas"]["LessonSummary"];
+            /**
+             * Format: date-time
+             * @description Start instant its copy would have had (UTC).
+             */
+            startsAt: string;
         };
         LessonCreateData: {
             /**
@@ -2427,6 +2558,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClassMemberList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    cloneLessons: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LessonCloneData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonClone"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    previewLessonClone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LessonCloneData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonClone"];
                 };
             };
             /** @description Error */

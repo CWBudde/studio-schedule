@@ -142,13 +142,10 @@ func (g *LessonGenerator) generate(
 
 // fill creates the missing lessons of class c in term t for the slots on
 // the school dates in [from, to) that start after the given instant (any
-// start for the zero instant), and returns how many it created. A weekly
-// class has one lesson a week: a slot is missing while no lesson of the
-// class has a slot date in its Monday-based week, so a lesson that stayed
-// on an earlier weekday of the class still counts. It locks the class
-// first and works with the locked version, so a concurrent class edit
-// (UpdateClass, which locks it too) is either complete or not begun. The
-// caller has locked t (TermRepo.Lock).
+// start for the zero instant; see missingSlots), and returns how many it
+// created. It locks the class first and works with the locked version, so
+// a concurrent class edit (UpdateClass, which locks it too) is either
+// complete or not begun. The caller has locked t (TermRepo.Lock).
 func (g *LessonGenerator) fill(
 	ctx context.Context, tx store.Tx, c domain.Class, t domain.Term, from, to domain.Date, loc *time.Location,
 	after time.Time,
@@ -158,14 +155,45 @@ func (g *LessonGenerator) fill(
 		return 0, fmt.Errorf("lock class %s: %w", c.ID, err)
 	}
 
+	missing, err := missingLessons(ctx, tx, c, t, from, to, loc, after)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, l := range missing {
+		l.ID = ids.New[domain.LessonID](g.ids)
+
+		if err := l.Validate(); err != nil {
+			return 0, fmt.Errorf("lesson of class %s at %s: %w", c.ID, l.StartsAt, err)
+		}
+
+		if err := tx.Lessons().Create(ctx, l); err != nil {
+			return 0, fmt.Errorf("create lesson of class %s at %s: %w", c.ID, l.StartsAt, err)
+		}
+	}
+
+	return len(missing), nil
+}
+
+// missingLessons returns, without IDs, the lessons that generation creates
+// for class c in term t: one for each slot on the school dates in [from, to)
+// that starts after the given instant (any start for the zero instant) and
+// is missing. A weekly class has one lesson a week: a slot is missing while
+// no lesson of the class, canceled ones included, has a slot date in its
+// Monday-based week, so a lesson that stayed on an earlier weekday of the
+// class still counts. A retired class has none.
+func missingLessons(
+	ctx context.Context, tx store.Tx, c domain.Class, t domain.Term, from, to domain.Date, loc *time.Location,
+	after time.Time,
+) ([]domain.Lesson, error) {
 	slots := classSlots(c, t, from, to, loc)
 	if c.Retired || len(slots) == 0 {
-		return 0, nil
+		return nil, nil
 	}
 
 	existing, err := tx.Lessons().ListByClass(ctx, c.ID, weekOf(slots[0].Date))
 	if err != nil {
-		return 0, fmt.Errorf("list lessons of class %s: %w", c.ID, err)
+		return nil, fmt.Errorf("list lessons of class %s: %w", c.ID, err)
 	}
 
 	have := make(map[domain.Date]bool, len(existing))
@@ -173,50 +201,30 @@ func (g *LessonGenerator) fill(
 		have[weekOf(l.SlotDate)] = true
 	}
 
-	var created int
+	var missing []domain.Lesson
 
 	for _, s := range slots {
 		if have[weekOf(s.Date)] || !s.Start.After(after) {
 			continue
 		}
 
-		if err := g.create(ctx, tx, c, s); err != nil {
-			return 0, err
-		}
-
-		created++
+		missing = append(missing, domain.Lesson{
+			ClassID:       c.ID,
+			SlotDate:      s.Date,
+			CourseTypeID:  c.CourseTypeID,
+			RoomID:        c.RoomID,
+			InstructorID:  c.InstructorID,
+			AccompanistID: c.AccompanistID,
+			StartsAt:      s.Start,
+			EndsAt:        s.End,
+			Status:        domain.LessonScheduled,
+			Visibility:    domain.VisibilityPublic,
+			Kind:          domain.LessonRegular,
+			Capacity:      c.Capacity,
+		})
 	}
 
-	return created, nil
-}
-
-// create stores the lesson of class c in slot s.
-func (g *LessonGenerator) create(ctx context.Context, tx store.Tx, c domain.Class, s slot) error {
-	l := domain.Lesson{
-		ID:            ids.New[domain.LessonID](g.ids),
-		ClassID:       c.ID,
-		SlotDate:      s.Date,
-		CourseTypeID:  c.CourseTypeID,
-		RoomID:        c.RoomID,
-		InstructorID:  c.InstructorID,
-		AccompanistID: c.AccompanistID,
-		StartsAt:      s.Start,
-		EndsAt:        s.End,
-		Status:        domain.LessonScheduled,
-		Visibility:    domain.VisibilityPublic,
-		Kind:          domain.LessonRegular,
-		Capacity:      c.Capacity,
-	}
-
-	if err := l.Validate(); err != nil {
-		return fmt.Errorf("lesson of class %s at %s: %w", c.ID, s.Start, err)
-	}
-
-	if err := tx.Lessons().Create(ctx, l); err != nil {
-		return fmt.Errorf("create lesson of class %s at %s: %w", c.ID, s.Start, err)
-	}
-
-	return nil
+	return missing, nil
 }
 
 // slot is the school date and time of one lesson of a class.

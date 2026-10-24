@@ -570,6 +570,45 @@
         ],
         "type": "object"
       },
+      "CloneConflictLesson": {
+        "additionalProperties": false,
+        "properties": {
+          "classId": {
+            "description": "Weekly class the lesson belongs to; absent for one-off lessons and copies. Without an ID and copyOf, the lesson is one this class's generation will create.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "copyOf": {
+            "description": "Set when the lesson is a copy of the same clone: the lesson it copies.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "courseType": {
+            "$ref": "#/components/schemas/CourseTypeRef"
+          },
+          "endsAt": {
+            "description": "End instant (UTC).",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "Lesson ID; absent in a preview for a copy of the same clone, and for a lesson of a class that generation has not created yet.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "startsAt": {
+            "description": "Start instant (UTC).",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "startsAt",
+          "endsAt",
+          "courseType"
+        ],
+        "type": "object"
+      },
       "ConfirmEmailChangeInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -1168,6 +1207,129 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "LessonClone": {
+        "additionalProperties": false,
+        "properties": {
+          "created": {
+            "description": "Copies, ordered by the start of their source.",
+            "items": {
+              "$ref": "#/components/schemas/LessonCloneCopy"
+            },
+            "type": "array"
+          },
+          "skipped": {
+            "description": "Scheduled source lessons that are not copied, ordered by start.",
+            "items": {
+              "$ref": "#/components/schemas/LessonCloneSkip"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "created",
+          "skipped"
+        ],
+        "type": "object"
+      },
+      "LessonCloneCopy": {
+        "additionalProperties": false,
+        "properties": {
+          "endsAt": {
+            "description": "End instant of the copy (UTC).",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "The new lesson; absent in a preview.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/LessonSummary",
+            "description": "The lesson copied. The copy has its course type, room, staff, capacity, kind and visibility, no class, no level and no bookings."
+          },
+          "startsAt": {
+            "description": "Start instant of the copy (UTC).",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "startsAt",
+          "endsAt"
+        ],
+        "type": "object"
+      },
+      "LessonCloneData": {
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "description": "School date to copy from; a Monday for a week.",
+            "format": "date",
+            "type": "string"
+          },
+          "target": {
+            "description": "School date to copy to; a Monday for a week. It must differ from the source and not lie before today.",
+            "format": "date",
+            "type": "string"
+          },
+          "unit": {
+            "description": "Copy one school day or a week from Monday to Sunday.",
+            "enum": [
+              "day",
+              "week"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "source",
+          "target"
+        ],
+        "type": "object"
+      },
+      "LessonCloneSkip": {
+        "additionalProperties": false,
+        "properties": {
+          "endsAt": {
+            "description": "End instant its copy would have had (UTC).",
+            "format": "date-time",
+            "type": "string"
+          },
+          "lesson": {
+            "$ref": "#/components/schemas/CloneConflictLesson",
+            "description": "The lesson that uses the room; only with reason room-taken."
+          },
+          "reason": {
+            "description": "Why it is not copied: its class makes the lesson of the target week (class-slot), the copy would not start in the future (started), its instructor or accompanist is no longer active (staff-inactive), or the room is taken (room-taken); checked in this order.",
+            "enum": [
+              "class-slot",
+              "started",
+              "staff-inactive",
+              "room-taken"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/LessonSummary",
+            "description": "The lesson not copied."
+          },
+          "startsAt": {
+            "description": "Start instant its copy would have had (UTC).",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "startsAt",
+          "endsAt",
+          "reason"
+        ],
         "type": "object"
       },
       "LessonCreateData": {
@@ -2785,6 +2947,92 @@
         "summary": "List the members of a class",
         "tags": [
           "timetable"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/lessons/clone": {
+      "post": {
+        "description": "Copies the scheduled lessons of a school day, or of a week from Monday to Sunday, to another day or week in one transaction. Each copy is a one-off lesson at the same school-local wall-clock time, with the course type, room, staff, length, capacity, kind and visibility of its source and no bookings. Canceled lessons are not copied. A source lesson is skipped with a reason: `class-slot` when its class has a slot in the target week within its term (generation makes that lesson), `started` when the copy would not start in the future, `staff-inactive` when its instructor or accompanist is no longer active, and `room-taken` when another lesson that is not canceled, a lesson of a class that generation has not created yet, or an earlier copy of the same clone uses the room at an overlapping time, checked in this order. Nothing is changed or deleted, and nobody is mailed. A week's dates must be Mondays (422 on `body.source` or `body.target`); a target equal to the source or before today (a week: its Monday) is a 422 on `body.target`.",
+        "operationId": "cloneLessons",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LessonCloneData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonClone"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Clone a day or a week",
+        "tags": [
+          "lessons"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/lessons/clone/preview": {
+      "post": {
+        "description": "Returns what `cloneLessons` would create and skip now, without changing anything.",
+        "operationId": "previewLessonClone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LessonCloneData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonClone"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Preview a clone of a day or a week",
+        "tags": [
+          "lessons"
         ],
         "x-access": "office"
       }
