@@ -81,6 +81,25 @@ describe('createRequestHandler', () => {
     expect(new TextDecoder().decode(captured.body ?? undefined)).toBe('{"a":1}');
   });
 
+  it('reports responses that set cookies', async () => {
+    const api: GoBridgeAPI = {
+      fetch: async (req) => ({
+        status: 200,
+        headers: req.url === '/api/v1/auth/me' ? [['Set-Cookie', 'session=s2; Path=/']] : [],
+        body: null,
+      }),
+    };
+    const onCookies = vi.fn();
+    const handle = createRequestHandler(api, new CookieJar(), onCookies);
+
+    await handle(request({ method: 'GET', url: '/api/v1/schedule' }));
+    await handle(request({ method: 'POST', url: '/api/v1/admin/locations' }));
+    expect(onCookies).not.toHaveBeenCalled();
+
+    await handle(request({ method: 'GET', url: '/api/v1/auth/me' }));
+    expect(onCookies).toHaveBeenCalledTimes(1);
+  });
+
   it('turns Go errors into error replies', async () => {
     const api: GoBridgeAPI = {
       fetch: () => Promise.reject(new Error('boom')),

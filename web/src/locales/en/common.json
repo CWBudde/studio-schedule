@@ -20,7 +20,7 @@
   },
   "demo": {
     "label": "Demo mode",
-    "banner": "Demo mode: this app runs entirely in your browser (Go compiled to WebAssembly) with an in-memory database. Nothing is stored on a server and all changes are lost on reload.",
+    "banner": "Demo mode: this app runs entirely in your browser (Go compiled to WebAssembly) with an in-memory database. Nothing is stored on a server; your changes are kept in this browser until you reset the demo, which also moves the sample dates to today.",
     "learnMore": "Learn more",
     "learnMoreLabel": "Learn more about the live demo (opens GitHub in a new tab)",
     "mailbox": {
@@ -41,15 +41,33 @@
       "loadError": "Could not load the mails.",
       "retry": "Retry",
       "close": "Close"
+    },
+    "reset": {
+      "open": "Reset demo",
+      "title": "Reset the demo?",
+      "description": "This deletes everything you changed in this demo (edits, bookings, registered accounts and mails) and signs you out. The demo starts again with its sample data.",
+      "cancel": "Cancel",
+      "confirm": "Reset demo",
+      "resetting": "Resetting…"
+    },
+    "elsewhere": {
+      "title": "The demo is open in another tab",
+      "description": "The demo runs in one tab at a time, so your changes are saved in one place. Use it here instead? The other tab saves its changes and shows this notice.",
+      "useHere": "Use here"
+    },
+    "notices": {
+      "saveFailed": "Your changes to the demo cannot be saved in this browser (for example in a private window), so a reload starts the demo afresh.",
+      "resetFailed": "The demo could not be reset: its saved data could not be deleted. Please try again."
     }
   },
   "backend": {
     "starting": "Starting demo backend…",
     "startingHint": "The backend is being loaded into your browser. This usually takes just a moment.",
     "crashedTitle": "Demo crashed — reload",
-    "crashedDescription": "The in-browser backend stopped unexpectedly. Reload the page to start a fresh demo.",
+    "crashedDescription": "The in-browser backend stopped unexpectedly. Reload the page to start it again with your changes, or reset the demo to start over with the sample data.",
     "details": "Details: {{message}}",
-    "reload": "Reload"
+    "reload": "Reload",
+    "reset": "Reset demo"
   },
   "home": {
     "eyebrow": "Dance & ballet school",

@@ -137,5 +137,8 @@ describe('AppHeader', () => {
     });
     renderInRouter(<AppHeader />);
     expect(await screen.findByRole('button', { name: /Demo mailbox/ })).toBeInTheDocument();
+    // A demo server over HTTP keeps nothing in the browser, so there is
+    // nothing to reset (ResetDemo.test.tsx covers the web demo).
+    expect(screen.queryByRole('button', { name: 'Reset demo' })).not.toBeInTheDocument();
   });
 });

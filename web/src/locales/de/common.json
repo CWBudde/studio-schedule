@@ -20,7 +20,7 @@
   },
   "demo": {
     "label": "Demo-Modus",
-    "banner": "Demo-Modus: Diese App läuft vollständig in deinem Browser (Go, kompiliert zu WebAssembly) mit einer In-Memory-Datenbank. Nichts wird auf einem Server gespeichert und alle Änderungen gehen beim Neuladen verloren.",
+    "banner": "Demo-Modus: Diese App läuft vollständig in deinem Browser (Go, kompiliert zu WebAssembly) mit einer In-Memory-Datenbank. Nichts wird auf einem Server gespeichert; deine Änderungen bleiben in diesem Browser, bis du die Demo zurücksetzt. Dabei rücken auch die Beispieltermine auf heute.",
     "learnMore": "Mehr erfahren",
     "learnMoreLabel": "Mehr über die Live-Demo erfahren (öffnet GitHub in einem neuen Tab)",
     "mailbox": {
@@ -41,15 +41,33 @@
       "loadError": "Die Mails konnten nicht geladen werden.",
       "retry": "Erneut versuchen",
       "close": "Schließen"
+    },
+    "reset": {
+      "open": "Demo zurücksetzen",
+      "title": "Demo zurücksetzen?",
+      "description": "Dabei wird alles gelöscht, was du in dieser Demo geändert hast (Änderungen, Buchungen, registrierte Konten und Mails), und du wirst abgemeldet. Die Demo startet danach wieder mit ihren Beispieldaten.",
+      "cancel": "Abbrechen",
+      "confirm": "Demo zurücksetzen",
+      "resetting": "Wird zurückgesetzt…"
+    },
+    "elsewhere": {
+      "title": "Die Demo ist in einem anderen Tab geöffnet",
+      "description": "Die Demo läuft immer nur in einem Tab, damit deine Änderungen an einer Stelle gespeichert werden. Möchtest du sie hier verwenden? Der andere Tab speichert seine Änderungen und zeigt dann diesen Hinweis.",
+      "useHere": "Hier verwenden"
+    },
+    "notices": {
+      "saveFailed": "Deine Änderungen an der Demo können in diesem Browser nicht gespeichert werden (zum Beispiel in einem privaten Fenster); nach dem Neuladen beginnt die Demo von vorn.",
+      "resetFailed": "Die Demo konnte nicht zurückgesetzt werden, weil ihre gespeicherten Daten nicht gelöscht werden konnten. Bitte versuche es noch einmal."
     }
   },
   "backend": {
     "starting": "Demo-Backend wird gestartet…",
     "startingHint": "Das Backend wird in deinen Browser geladen. Das dauert normalerweise nur einen Moment.",
     "crashedTitle": "Demo abgestürzt — bitte neu laden",
-    "crashedDescription": "Das Backend im Browser wurde unerwartet beendet. Lade die Seite neu, um eine frische Demo zu starten.",
+    "crashedDescription": "Das Backend im Browser wurde unerwartet beendet. Lade die Seite neu, um es mit deinen Änderungen wieder zu starten, oder setze die Demo zurück, um mit den Beispieldaten neu zu beginnen.",
     "details": "Details: {{message}}",
-    "reload": "Neu laden"
+    "reload": "Neu laden",
+    "reset": "Demo zurücksetzen"
   },
   "home": {
     "eyebrow": "Tanz- & Ballettschule",

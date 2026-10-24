@@ -8,7 +8,8 @@
  * and Expires influence storage and matching (RFC 6265, simplified).
  */
 
-interface StoredCookie {
+/** A cookie as the jar keeps it, and as `save` returns it. */
+export interface StoredCookie {
   name: string;
   value: string;
   path: string;
@@ -68,7 +69,7 @@ export class CookieJar {
     }
 
     const cookiePath = path ?? defaultPath(requestPath);
-    const key = `${name}\u0000${cookiePath}`;
+    const key = keyOf(name, cookiePath);
 
     // Max-Age wins over Expires (RFC 6265 5.3 step 3).
     let expiresAt: number | null = null;
@@ -127,6 +128,28 @@ export class CookieJar {
   clear(): void {
     this.cookies.clear();
   }
+
+  /** The (non-expired) cookies as plain data, e.g. to keep them across page loads. */
+  save(): StoredCookie[] {
+    const now = this.now();
+    return [...this.cookies.values()]
+      .filter((c) => c.expiresAt === null || c.expiresAt > now)
+      .map((c) => ({ ...c }));
+  }
+
+  /** Replaces the jar's cookies with ones from `save`. */
+  load(cookies: readonly StoredCookie[]): void {
+    this.cookies.clear();
+    for (const c of cookies) {
+      this.cookies.set(keyOf(c.name, c.path), { ...c });
+    }
+    this.counter = Math.max(0, ...cookies.map((c) => c.createdAt + 1));
+  }
+}
+
+/** A cookie is identified by its name and path. */
+function keyOf(name: string, path: string): string {
+  return `${name}\u0000${path}`;
 }
 
 /** Strips query string and fragment from a path such as `/api/v1/x?y=1`. */

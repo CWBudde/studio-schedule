@@ -22,12 +22,14 @@ var errBadRequest = errors.New("wasmbridge: request must be an object")
 //
 //	fetch(req: {method, url, headers: [name, value][], body: Uint8Array | null})
 //	  → Promise<{status, headers: [name, value][], body: Uint8Array}>
+//	snapshot() → Promise<Uint8Array> (only if p.Snapshot is set)
+//	restored: boolean (p.Restored)
 //	version: string
 //	ready: true (set last)
 //
 // After registration it calls globalThis.__studioScheduleReady() if that is
 // a function. The caller must keep the Go program alive (select {}).
-func Register(h http.Handler, version string) {
+func Register(h http.Handler, version string, p Persistence) {
 	fetch := js.FuncOf(func(_ js.Value, args []js.Value) (result any) {
 		defer func() {
 			if rec := recover(); rec != nil {
@@ -67,12 +69,52 @@ func Register(h http.Handler, version string) {
 
 	api := js.Global().Get("Object").New()
 	api.Set("fetch", fetch)
+
+	if p.Snapshot != nil {
+		snapshot := js.FuncOf(func(js.Value, []js.Value) any {
+			return newPromise(func(resolve, reject js.Value) {
+				// Encoding takes a moment; let the promise return first.
+				go func() {
+					data, err := p.Snapshot()
+					if err != nil {
+						reject.Invoke(jsError(err))
+
+						return
+					}
+
+					resolve.Invoke(bytesToJS(data))
+				}()
+			})
+		})
+		funcs = append(funcs, snapshot)
+		api.Set("snapshot", snapshot)
+	}
+
+	api.Set("restored", p.Restored)
 	api.Set("version", version)
 	api.Set("ready", true)
 	js.Global().Set(GlobalName, api)
 
 	if cb := js.Global().Get("__studioScheduleReady"); cb.Type() == js.TypeFunction {
 		cb.Invoke()
+	}
+}
+
+// TakeSnapshot returns the saved data the worker left in SnapshotGlobal, or
+// nil, and removes the global.
+func TakeSnapshot() ([]byte, error) {
+	v := js.Global().Get(SnapshotGlobal)
+	js.Global().Delete(SnapshotGlobal)
+
+	return bytesFromJS(v)
+}
+
+// NotifyChanged tells the worker that data changed, by calling
+// globalThis.__studioScheduleChanged() if it is a function. It only schedules
+// a save there, so it may run while the store is locked.
+func NotifyChanged() {
+	if fn := js.Global().Get(ChangedGlobal); fn.Type() == js.TypeFunction {
+		fn.Invoke()
 	}
 }
 
@@ -168,13 +210,17 @@ func responseToJS(r Response) js.Value {
 		headers.SetIndex(i, js.ValueOf([]any{h[0], h[1]}))
 	}
 
-	body := js.Global().Get("Uint8Array").New(len(r.Body))
-	js.CopyBytesToJS(body, r.Body)
-
 	res := js.Global().Get("Object").New()
 	res.Set("status", r.Status)
 	res.Set("headers", headers)
-	res.Set("body", body)
+	res.Set("body", bytesToJS(r.Body))
 
 	return res
+}
+
+func bytesToJS(b []byte) js.Value {
+	out := js.Global().Get("Uint8Array").New(len(b))
+	js.CopyBytesToJS(out, b)
+
+	return out
 }

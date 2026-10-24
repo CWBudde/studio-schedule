@@ -12,7 +12,13 @@ export interface WorkerRequestMessage {
   body: ArrayBuffer | null;
 }
 
-export type MainToWorkerMessage = WorkerRequestMessage;
+/** Main thread -> worker: save pending changes now; answered by `flushed`. */
+export interface WorkerFlushMessage {
+  type: 'flush';
+  id: number;
+}
+
+export type MainToWorkerMessage = WorkerRequestMessage | WorkerFlushMessage;
 
 /** Worker -> main thread. */
 export type WorkerToMainMessage =
@@ -26,7 +32,10 @@ export type WorkerToMainMessage =
       headers: HeaderPairs;
       body: ArrayBuffer;
     }
-  | { type: 'error'; id: number; message: string };
+  | { type: 'error'; id: number; message: string }
+  | { type: 'flushed'; id: number }
+  /** Saving the demo's data failed (sent once): changes will not survive a reload. */
+  | { type: 'save-failed'; message: string };
 
 /** Request shape passed to the Go side: `StudioScheduleAPI.fetch(req)`. */
 export interface GoBridgeRequest {
@@ -48,4 +57,8 @@ export interface GoBridgeAPI {
   fetch(request: GoBridgeRequest): Promise<GoBridgeResponse>;
   /** Either `true` once ready, or a promise that resolves when ready. */
   ready?: boolean | PromiseLike<unknown>;
+  /** Encodes the whole store, to keep the demo's data across page loads. */
+  snapshot?(): Promise<Uint8Array>;
+  /** Whether the program started from the snapshot the worker handed over. */
+  restored?: boolean;
 }

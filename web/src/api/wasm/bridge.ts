@@ -1,19 +1,31 @@
 import type { BackendStatus } from '../backendStatus';
-import type { HeaderPairs, WorkerRequestMessage, WorkerToMainMessage } from './protocol';
+import type {
+  HeaderPairs,
+  MainToWorkerMessage,
+  WorkerRequestMessage,
+  WorkerToMainMessage,
+} from './protocol';
 
 /** The parts of `Worker` the bridge needs; lets tests pass a fake. */
 export interface WorkerPort {
-  postMessage(message: WorkerRequestMessage, transfer: Transferable[]): void;
+  postMessage(message: MainToWorkerMessage, transfer: Transferable[]): void;
   addEventListener(
     type: 'message',
     listener: (event: MessageEvent<WorkerToMainMessage>) => void,
   ): void;
   addEventListener(type: 'error', listener: (event: Event) => void): void;
+  /** Stops the worker at once (`Worker.terminate`). */
+  terminate?(): void;
 }
 
 interface Pending {
   resolve: (response: Response) => void;
   reject: (err: unknown) => void;
+}
+
+export interface WasmBridgeOptions {
+  /** Saving the demo's data failed; reported once. */
+  onSaveFailed?: (message: string) => void;
 }
 
 /** Statuses for which `new Response()` must not be given a body. */
@@ -34,10 +46,18 @@ export class WasmBridge {
   readonly ready: Promise<void>;
   private resolveReady!: () => void;
   private rejectReady!: (err: Error) => void;
+  private readonly flushes = new Map<number, () => void>();
+  private stopped = false;
+  private readonly options: WasmBridgeOptions;
 
-  constructor(port: WorkerPort, onStatus: (status: BackendStatus) => void = () => undefined) {
+  constructor(
+    port: WorkerPort,
+    onStatus: (status: BackendStatus) => void = () => undefined,
+    options: WasmBridgeOptions = {},
+  ) {
     this.port = port;
     this.onStatus = onStatus;
+    this.options = options;
     this.ready = new Promise<void>((resolve, reject) => {
       this.resolveReady = resolve;
       this.rejectReady = reject;
@@ -100,8 +120,50 @@ export class WasmBridge {
     });
   };
 
+  /**
+   * Asks the worker to save pending changes now. Resolves once they are
+   * saved, or after `timeoutMs` at the latest (a crashed backend never
+   * answers), so callers can always go on.
+   */
+  flush(timeoutMs = 2_000): Promise<void> {
+    if (this.stopped) return Promise.resolve();
+    const id = this.nextId++;
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(done, timeoutMs);
+      function done() {
+        clearTimeout(timer);
+        resolve();
+      }
+      this.flushes.set(id, done);
+      this.port.postMessage({ type: 'flush', id }, []);
+    }).finally(() => this.flushes.delete(id));
+  }
+
+  /**
+   * Stops the worker: nothing is saved any more. Requests still open fail,
+   * and later ones fail at once.
+   */
+  terminate(): void {
+    if (this.stopped) return;
+    this.stopped = true;
+    this.port.terminate?.();
+    const err = new TypeError('The demo backend was stopped');
+    this.fatalError ??= err;
+    this.rejectReady(err);
+    for (const pending of this.pending.values()) pending.reject(err);
+    this.pending.clear();
+    for (const done of this.flushes.values()) done();
+  }
+
   private handleMessage(msg: WorkerToMainMessage): void {
+    if (this.stopped) return;
     switch (msg.type) {
+      case 'flushed':
+        this.flushes.get(msg.id)?.();
+        break;
+      case 'save-failed':
+        this.options.onSaveFailed?.(msg.message);
+        break;
       case 'ready':
         this.resolveReady();
         this.onStatus({ state: 'ready' });

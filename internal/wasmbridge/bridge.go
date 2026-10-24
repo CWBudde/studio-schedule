@@ -44,6 +44,26 @@ type Response struct {
 
 var errBadURL = errors.New("wasmbridge: url must be a path starting with '/'")
 
+// SnapshotGlobal is the name of the global through which the worker hands
+// the saved data of an earlier visit to the Go program before it starts:
+// a Uint8Array, or absent.
+const SnapshotGlobal = "__studioScheduleSnapshot"
+
+// ChangedGlobal is the name of the function NotifyChanged calls: the worker
+// saves the data again soon after.
+const ChangedGlobal = "__studioScheduleChanged"
+
+// Persistence lets the worker keep the demo's data across page loads (see
+// docs/demo-mode.md): it saves Snapshot after changes (NotifyChanged) and
+// passes it back through SnapshotGlobal on the next start.
+type Persistence struct {
+	// Snapshot encodes the current data; nil disables saving.
+	Snapshot func() ([]byte, error)
+	// Restored reports whether the program started from the data the worker
+	// handed over. If not, the worker drops its saved state.
+	Restored bool
+}
+
 // NewHTTPRequest converts r into an *http.Request addressed to Host.
 // Absolute URLs are accepted, but only their path and query are used.
 func NewHTTPRequest(ctx context.Context, r Request) (*http.Request, error) {

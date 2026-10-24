@@ -111,6 +111,31 @@ describe('CookieJar', () => {
     expect(jar.getCookieHeader('/')).toBe('token=a=b==');
   });
 
+  it('saves its cookies and loads them into another jar', () => {
+    const { jar, advance } = jarAt();
+    jar.setCookie('old=1; Path=/', '/');
+    jar.setCookie('session=abc; Path=/; Max-Age=60', '/');
+    jar.setCookie('scoped=2; Path=/api', '/');
+
+    const saved = jar.save();
+    // What is saved survives structured cloning (IndexedDB).
+    const copy = structuredClone(saved);
+
+    let now = Date.UTC(2026, 0, 1);
+    const other = new CookieJar(() => now);
+    other.load(copy);
+    expect(other.getCookieHeader('/api/v1/me')).toBe('scoped=2; old=1; session=abc');
+
+    // Expiry and insertion order carry over.
+    now += 61_000;
+    expect(other.getCookieHeader('/')).toBe('old=1');
+    other.setCookie('later=3; Path=/', '/');
+    expect(other.getCookieHeader('/')).toBe('old=1; later=3');
+
+    advance(61_000);
+    expect(jar.save().map((c) => c.name)).toEqual(['old', 'scoped']);
+  });
+
   it('clears all cookies', () => {
     const { jar } = jarAt();
     jar.setCookie('a=1; Path=/', '/');

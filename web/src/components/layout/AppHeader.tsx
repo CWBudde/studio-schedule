@@ -4,6 +4,7 @@ import { DemoMailbox } from '@/features/demo/DemoMailbox';
 import { AccountMenu } from './AccountMenu';
 import { BrandMark } from './BrandMark';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { ResetDemo } from './ResetDemo';
 
 // Programme-style small capitals; the current page is underlined in the primary color.
 const navLink =
@@ -38,6 +39,7 @@ export function AppHeader() {
         </nav>
         <div className="flex min-w-0 items-center gap-1">
           <DemoMailbox />
+          <ResetDemo />
           <AccountMenu />
           <LanguageSwitcher />
         </div>

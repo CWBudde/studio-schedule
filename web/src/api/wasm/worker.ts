@@ -5,15 +5,32 @@
  *  1. fetch `${BASE_URL}wasm_exec.js` and evaluate it in the worker's global
  *     scope (see `loadGoRuntime` for why this is not importScripts/import()),
  *  2. instantiate `${BASE_URL}app.wasm` (streaming, ArrayBuffer fallback),
- *  3. start the Go program (`go.run`, not awaited: it resolves on exit),
- *  4. wait until Go signals readiness via `__studioScheduleReady()` or
+ *  3. hand the saved data of an earlier visit (IndexedDB, see persistence.ts)
+ *     to Go as `__studioScheduleSnapshot`, which Go restores before it
+ *     serves anything,
+ *  4. start the Go program (`go.run`, not awaited: it resolves on exit),
+ *  5. wait until Go signals readiness via `__studioScheduleReady()` or
  *     `StudioScheduleAPI.ready`, then post `{type: 'ready'}`.
  *
  * Requests that arrive before the backend is ready are queued. If the Go
- * program exits (or panics) a `{type: 'fatal'}` message is posted.
+ * program exits (or panics) a `{type: 'fatal'}` message is posted. After
+ * every committed change (Go calls `__studioScheduleChanged()`, also for the
+ * background jobs) and every new cookie, the store and the cookie jar are
+ * saved again; `{type: 'flush'}` saves at once. Only the active tab runs this
+ * worker (tabLock.ts); "Reset demo" stops it and deletes the data from the
+ * page (persistence.ts).
  */
 import { routerHistory } from '@/lib/env';
+import { CookieJar } from './cookieJar';
 import { createRequestHandler, errorMessage } from './host';
+import {
+  claimOrGiveUp,
+  clearSnapshot,
+  indexedDbStorage,
+  SNAPSHOT_FORMAT,
+  SnapshotSaver,
+  type Claim,
+} from './persistence';
 import type { GoBridgeAPI, MainToWorkerMessage, WorkerToMainMessage } from './protocol';
 
 /** Subset of the `Go` class defined by wasm_exec.js that we rely on. */
@@ -30,6 +47,10 @@ interface WasmGlobals {
   Go?: new () => GoRuntime;
   StudioScheduleAPI?: GoBridgeAPI;
   __studioScheduleReady?: () => void;
+  /** The saved store for Go to restore (internal/wasmbridge.SnapshotGlobal). */
+  __studioScheduleSnapshot?: Uint8Array;
+  /** Called by Go after each committed change (internal/wasmbridge.ChangedGlobal). */
+  __studioScheduleChanged?: () => void;
 }
 
 const g = globalThis as unknown as WasmGlobals;
@@ -39,6 +60,22 @@ const READY_POLL_MS = 25;
 
 let fatalSent = false;
 let goExited = false;
+
+/** The Go program is gone: nothing can be saved any more. */
+function goStopped(): void {
+  goExited = true;
+  saver?.stop();
+}
+
+const storage = indexedDbStorage();
+let saver: SnapshotSaver | null = null;
+/** A change committed before the saver exists (the seed, the first jobs). */
+let changedEarly = false;
+
+g.__studioScheduleChanged = () => {
+  if (saver) saver.schedule();
+  else changedEarly = true;
+};
 
 function post(msg: WorkerToMainMessage, transfer: Transferable[] = []): void {
   self.postMessage(msg, { transfer });
@@ -153,9 +190,13 @@ function readinessSignal(): { promise: Promise<GoBridgeAPI>; cancel: (err: Error
   return { promise, cancel: fail };
 }
 
-async function boot(): Promise<GoBridgeAPI> {
-  const Go = await loadGoRuntime();
+async function boot(): Promise<{ api: GoBridgeAPI; claimed: Claim | null }> {
+  // Claim the saved data (fencing out any earlier worker); if IndexedDB fails
+  // or hangs, start from the seed and tell the visitor that nothing is saved.
+  const [Go, claimed] = await Promise.all([loadGoRuntime(), claimOrGiveUp(storage)]);
+  if (!claimed) post({ type: 'save-failed', message: 'IndexedDB is not available' });
   const go = new Go();
+  if (claimed?.snapshot) g.__studioScheduleSnapshot = claimed.snapshot.store;
   // Links in mails (shown in the demo mailbox) point to the app's routes.
   go.env = { ...go.env, APP_URL: assetUrl(routerHistory === 'hash' ? '#/' : '') };
 
@@ -169,26 +210,61 @@ async function boot(): Promise<GoBridgeAPI> {
 
   go.run(instance).then(
     () => {
-      goExited = true;
+      goStopped();
       const message = `The demo backend stopped (exit code ${exitCode ?? 'unknown'})`;
       ready.cancel(new Error(message));
       fatal(message);
     },
     (err: unknown) => {
-      goExited = true;
+      goStopped();
       const message = `The demo backend crashed: ${errorMessage(err)}`;
       ready.cancel(new Error(message));
       fatal(message);
     },
   );
 
-  return ready.promise;
+  return { api: await ready.promise, claimed };
+}
+
+/**
+ * Picks up the session of the saved visit if Go restored its data, and saves
+ * both again after every change.
+ */
+async function persist(api: GoBridgeAPI, claimed: Claim | null): Promise<CookieJar> {
+  const jar = new CookieJar();
+  const saved = claimed?.snapshot;
+  if (saved && api.restored) {
+    jar.load(saved.cookies);
+  } else if (saved) {
+    // Go refused the data (another build): forget it, session included.
+    await clearSnapshot(storage).catch((err: unknown) =>
+      console.warn('[studio-schedule] could not delete old demo data', err),
+    );
+  }
+
+  const snapshot = api.snapshot?.bind(api);
+  if (snapshot && claimed && !goExited) {
+    saver = new SnapshotSaver(
+      storage,
+      claimed.epoch,
+      async () => ({
+        format: SNAPSHOT_FORMAT,
+        store: await snapshot(),
+        cookies: jar.save(),
+        savedAt: Date.now(),
+      }),
+      (err) => post({ type: 'save-failed', message: errorMessage(err) }),
+    );
+    if (changedEarly) saver.schedule();
+  }
+  return jar;
 }
 
 const handlerPromise = boot().then(
-  (api) => {
+  async ({ api, claimed }) => {
+    const jar = await persist(api, claimed);
     post({ type: 'ready' });
-    return createRequestHandler(api);
+    return createRequestHandler(api, jar, () => saver?.schedule());
   },
   (err: unknown) => {
     fatal(errorMessage(err));
@@ -200,6 +276,11 @@ handlerPromise.catch(() => undefined);
 
 self.addEventListener('message', (event: MessageEvent<MainToWorkerMessage>) => {
   const msg = event.data;
+  if (msg?.type === 'flush') {
+    const id = msg.id;
+    void (saver?.flush() ?? Promise.resolve()).then(() => post({ type: 'flushed', id }));
+    return;
+  }
   if (msg?.type !== 'request') return;
 
   handlerPromise

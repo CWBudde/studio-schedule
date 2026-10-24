@@ -4,6 +4,7 @@ import { AppFooter } from '@/components/layout/AppFooter';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { BackendGate } from '@/components/layout/BackendGate';
 import { DemoBanner } from '@/components/layout/DemoBanner';
+import { DemoNotices } from '@/components/layout/DemoNotices';
 import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
@@ -32,6 +33,7 @@ export function RootLayout() {
       </main>
       <AppFooter />
       <Toaster />
+      <DemoNotices />
     </div>
   );
 }

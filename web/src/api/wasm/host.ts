@@ -10,9 +10,15 @@ import type {
 /**
  * Worker-side request handling, kept free of worker globals so it can be unit
  * tested: applies the cookie jar, calls into Go and converts the result into
- * a transferable message.
+ * a transferable message. `onCookies` is called after a response that set a
+ * cookie, so the session is saved with the data (data changes are reported
+ * by Go itself, see worker.ts).
  */
-export function createRequestHandler(api: GoBridgeAPI, jar: CookieJar = new CookieJar()) {
+export function createRequestHandler(
+  api: GoBridgeAPI,
+  jar: CookieJar = new CookieJar(),
+  onCookies: () => void = () => undefined,
+) {
   return async function handle(msg: WorkerRequestMessage): Promise<WorkerToMainMessage> {
     const headers: HeaderPairs = msg.headers.filter(([name]) => name.toLowerCase() !== 'cookie');
     const cookie = jar.getCookieHeader(msg.url);
@@ -27,13 +33,16 @@ export function createRequestHandler(api: GoBridgeAPI, jar: CookieJar = new Cook
       });
 
       const responseHeaders: HeaderPairs = [];
+      let cookies = false;
       for (const [name, value] of normalizeHeaders(res.headers)) {
         if (name.toLowerCase() === 'set-cookie') {
           jar.setCookie(value, pathOnly(msg.url));
+          cookies = true;
         } else {
           responseHeaders.push([name, value]);
         }
       }
+      if (cookies) onCookies();
 
       return {
         type: 'response',

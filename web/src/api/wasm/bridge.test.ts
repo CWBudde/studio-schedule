@@ -3,18 +3,24 @@ import { describe, expect, it, vi } from 'vitest';
 import type { paths } from '../schema';
 import type { BackendStatus } from '../backendStatus';
 import { WasmBridge, type WorkerPort } from './bridge';
-import type { WorkerRequestMessage, WorkerToMainMessage } from './protocol';
+import type { MainToWorkerMessage, WorkerRequestMessage, WorkerToMainMessage } from './protocol';
 
 const encoder = new TextEncoder();
 
 /** In-memory stand-in for the Worker: records posts, lets tests emit replies. */
 class FakeWorker implements WorkerPort {
   readonly posted: { message: WorkerRequestMessage; transfer: Transferable[] }[] = [];
+  readonly flushes: number[] = [];
+  terminated = false;
   private readonly listeners = new Map<string, ((event: never) => void)[]>();
   /** Optional auto-responder, invoked for every posted request. */
   respond?: (message: WorkerRequestMessage) => WorkerToMainMessage | undefined;
 
-  postMessage(message: WorkerRequestMessage, transfer: Transferable[]): void {
+  postMessage(message: MainToWorkerMessage, transfer: Transferable[]): void {
+    if (message.type === 'flush') {
+      this.flushes.push(message.id);
+      return;
+    }
     this.posted.push({ message, transfer });
     const reply = this.respond?.(message);
     if (reply) queueMicrotask(() => this.emit(reply));
@@ -28,6 +34,10 @@ class FakeWorker implements WorkerPort {
     for (const listener of this.listeners.get('message') ?? []) {
       listener({ data: message } as never);
     }
+  }
+
+  terminate(): void {
+    this.terminated = true;
   }
 
   emitError(): void {
@@ -188,6 +198,58 @@ describe('WasmBridge', () => {
     await flush();
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('flushes pending saves, and gives up waiting after a timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const worker = new FakeWorker();
+      const bridge = new WasmBridge(worker);
+      worker.emit({ type: 'ready' });
+
+      let flushed = false;
+      const flush = bridge.flush(1_000).then(() => (flushed = true));
+      expect(worker.flushes).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(flushed).toBe(false);
+      worker.emit({ type: 'flushed', id: worker.flushes[0]! });
+      await flush;
+
+      // A crashed backend never answers.
+      let late = false;
+      const stuck = bridge.flush(1_000).then(() => (late = true));
+      await vi.advanceTimersByTimeAsync(999);
+      expect(late).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await stuck;
+      expect(late).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('terminates the worker and fails open and later requests', async () => {
+    const worker = new FakeWorker();
+    const bridge = new WasmBridge(worker);
+    worker.emit({ type: 'ready' });
+
+    const open = bridge.fetch('http://localhost/api/v1/health');
+    await flush();
+    const flushing = bridge.flush();
+    bridge.terminate();
+
+    expect(worker.terminated).toBe(true);
+    await expect(open).rejects.toThrow('stopped');
+    await expect(flushing).resolves.toBeUndefined();
+    await expect(bridge.fetch('http://localhost/api/v1/health')).rejects.toThrow('stopped');
+  });
+
+  it('reports a failed save', () => {
+    const worker = new FakeWorker();
+    const onSaveFailed = vi.fn();
+    new WasmBridge(worker, undefined, { onSaveFailed });
+    worker.emit({ type: 'save-failed', message: 'QuotaExceededError' });
+    expect(onSaveFailed).toHaveBeenCalledWith('QuotaExceededError');
   });
 
   it('works as the fetch implementation of openapi-fetch', async () => {

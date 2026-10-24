@@ -2,7 +2,11 @@ import { useSyncExternalStore } from 'react';
 import { transport } from '@/lib/env';
 
 export type BackendStatus =
-  { state: 'loading' } | { state: 'ready' } | { state: 'error'; message: string };
+  | { state: 'loading' }
+  | { state: 'ready' }
+  | { state: 'error'; message: string }
+  // The web demo runs in another tab (only one tab runs it at a time).
+  | { state: 'elsewhere' };
 
 type Listener = () => void;
 
