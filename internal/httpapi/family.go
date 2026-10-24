@@ -12,13 +12,20 @@ import (
 )
 
 func registerFamily(api huma.API, h *handlers) {
+	write := func(op huma.Operation) huma.Operation {
+		op.Tags = []string{"family"}
+
+		return withConflict(api, op)
+	}
+
 	register(api, AccessSignedIn, huma.Operation{
 		OperationID: "getMyFamily",
 		Method:      http.MethodGet,
 		Path:        BasePath + "/family",
 		Summary:     "Get my family",
-		Description: "Returns the signed-in person and their dependents (children without their own login), " +
-			"each with its other guardians.",
+		Description: "Returns the signed-in person and their dependents (usually children without their own " +
+			"login), each with its other guardians. A managed dependent, one with its own account or a staff " +
+			"link, is read-only here.",
 		Tags: []string{"family"},
 	}, h.getMyFamily)
 
@@ -41,27 +48,25 @@ func registerFamily(api huma.API, h *handlers) {
 		DefaultStatus: http.StatusCreated,
 	}, h.addDependent)
 
-	register(api, AccessSignedIn, huma.Operation{
+	register(api, AccessSignedIn, write(huma.Operation{
 		OperationID: "updateDependent",
 		Method:      http.MethodPut,
 		Path:        BasePath + "/family/dependents/{personId}",
 		Summary:     "Update a dependent",
-		Description: "Replaces the name, phone and birth date of one of the signed-in person's dependents. " +
-			"Anyone else's person is a 404.",
-		Tags: []string{"family"},
-	}, h.updateDependent)
+		Description: "Replaces the name, phone and birth date of one of the signed-in person's dependents. A " +
+			"managed dependent is a 409 `managed`; anyone else's person is a 404.",
+	}), h.updateDependent)
 
-	register(api, AccessSignedIn, huma.Operation{
+	register(api, AccessSignedIn, write(huma.Operation{
 		OperationID: "removeDependent",
 		Method:      http.MethodDelete,
 		Path:        BasePath + "/family/dependents/{personId}",
 		Summary:     "Remove a dependent",
 		Description: "Ends the signed-in person's guardianship. A dependent left without a guardian is " +
-			"deleted; while it has bookings or class memberships, that is a 409 and nothing changes. " +
-			"Anyone else's person is a 404.",
-		Tags:          []string{"family"},
+			"deleted, unless it is managed (it stays); while it has bookings or class memberships, that is " +
+			"a 409 `in-use` and nothing changes. Anyone else's person is a 404.",
 		DefaultStatus: http.StatusNoContent,
-	}, h.removeDependent)
+	}), h.removeDependent)
 }
 
 // PersonData is the person data a guardian edits.
@@ -88,6 +93,7 @@ type GuardianName struct {
 type FamilyDependent struct {
 	FamilyPerson
 	Guardians []GuardianName `doc:"The dependent's other guardians." json:"guardians" nullable:"false"`
+	Managed   bool           `doc:"Whether the dependent has its own account or a staff link: then it is read-only here, and removing it only ends the guardianship." json:"managed"`
 }
 
 // Family is the response body of getMyFamily.
@@ -138,7 +144,9 @@ func (h *handlers) getMyFamily(ctx context.Context, _ *struct{}) (*FamilyOutput,
 			guardians = append(guardians, GuardianName{GivenName: g.GivenName, FamilyName: g.FamilyName})
 		}
 
-		out.Dependents = append(out.Dependents, FamilyDependent{FamilyPerson: familyPerson(d.Person), Guardians: guardians})
+		out.Dependents = append(out.Dependents, FamilyDependent{
+			FamilyPerson: familyPerson(d.Person), Guardians: guardians, Managed: d.Managed,
+		})
 	}
 
 	return &FamilyOutput{Body: out}, nil
@@ -193,7 +201,9 @@ func (h *handlers) familyPerson(
 func (h *handlers) familyError(ctx context.Context, err error) error {
 	switch {
 	case errors.Is(err, service.ErrDependentInUse):
-		return huma.Error409Conflict("the dependent has bookings or class memberships")
+		return conflict(reasonInUse, "the dependent is still in use, e.g. by bookings or class memberships")
+	case errors.Is(err, service.ErrDependentManaged):
+		return conflict(reasonManaged, "the dependent's data is managed by its own account or the office")
 	default:
 		return h.toHTTPError(ctx, err)
 	}

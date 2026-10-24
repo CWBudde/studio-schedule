@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
+	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/seed"
@@ -121,4 +123,67 @@ func TestClassMembers(t *testing.T) {
 			t.Fatalf("remove twice: want ErrNotFound, got %v", err)
 		}
 	})
+}
+
+// racingMembers is a store whose AddMember fails with err, as when a
+// concurrent transaction wins a race after the service checked.
+type racingMembers struct {
+	store.Store
+
+	err error
+}
+
+func (s racingMembers) InTx(ctx context.Context, mode store.TxMode, fn func(context.Context, store.Tx) error) error {
+	return s.Store.InTx(ctx, mode, func(ctx context.Context, tx store.Tx) error {
+		return fn(ctx, racingMembersTx{Tx: tx, err: s.err})
+	})
+}
+
+type racingMembersTx struct {
+	store.Tx
+
+	err error
+}
+
+func (t racingMembersTx) Classes() store.ClassRepo { return racingClassRepo{t.Tx.Classes(), t.err} }
+
+type racingClassRepo struct {
+	store.ClassRepo
+
+	err error
+}
+
+func (r racingClassRepo) AddMember(context.Context, domain.ClassMember) error { return r.err }
+
+func TestAddClassMemberRaces(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newGenFixture(t, seed.DemoSettings())
+
+	c, err := f.timetable(t, "2026-10-19T10:00:00Z").CreateClass(ctx, f.term.ID, f.classData())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	zoe := domain.Person{ID: ids.New[domain.PersonID](f.seq), GivenName: "Zoe", FamilyName: "Example"}
+	f.write(t, func(ctx context.Context, tx store.Tx) error { return tx.Persons().Create(ctx, zoe) })
+
+	add := func(storeErr error) error {
+		svc := NewTimetableService(racingMembers{Store: f.st, err: storeErr}, clock.NewFixed(mustInstant(t, "2026-10-19T10:00:00Z")), f.seq)
+		_, err := svc.AddClassMember(ctx, domain.ClassMember{ClassID: c.ID, PersonID: zoe.ID})
+
+		return err
+	}
+
+	// A membership added meanwhile is a duplicate.
+	if err := add(fmt.Errorf("person is already a member: %w", domain.ErrDuplicate)); !errors.Is(err, domain.ErrDuplicate) {
+		t.Errorf("membership added meanwhile: %v, want ErrDuplicate", err)
+	}
+
+	// A class or person deleted meanwhile is gone, not a duplicate.
+	err = add(fmt.Errorf("foreign key violated: %w", domain.ErrConflict))
+	if !errors.Is(err, domain.ErrNotFound) || errors.Is(err, domain.ErrDuplicate) {
+		t.Errorf("reference deleted meanwhile: %v, want ErrNotFound and no ErrDuplicate", err)
+	}
 }

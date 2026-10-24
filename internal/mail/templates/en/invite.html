@@ -1,0 +1,9 @@
+{{define "content" -}}
+<p>Hello{{with .GivenName}} {{.}}{{end}},</p>
+<p>{{.SchoolName}} has created an account for you. To choose your password and activate the account, open this link.</p>
+<p><a href="{{.Link}}" style="display:inline-block;padding:10px 20px;border-radius:6px;background-color:#18181b;color:#ffffff;text-decoration:none;">Choose a password</a></p>
+<p>If the button does not work, open this link in your browser:<br><a href="{{.Link}}" style="color:#18181b;word-break:break-all;">{{.Link}}</a></p>
+<p>The link is valid for {{if eq .ExpiresHours 1}}1 hour{{else}}{{.ExpiresHours}} hours{{end}}. If it has expired, use “Forgot password?” on the sign-in page to get a new one.</p>
+<p>If you did not expect this email, you can ignore it.</p>
+<p>Kind regards,<br>{{.SchoolName}}</p>
+{{- end}}

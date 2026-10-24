@@ -104,8 +104,8 @@ func TestFamilyFlow(t *testing.T) {
 	}
 
 	problem := decode(t, a.expect(http.StatusConflict, http.MethodDelete, "/api/v1/family/dependents/"+mia, "", hanna))
-	if problem["detail"] != "the dependent has bookings or class memberships" {
-		t.Errorf("409 detail %v", problem["detail"])
+	if problem["detail"] != "the dependent is still in use, e.g. by bookings or class memberships" || problem["reason"] != "in-use" {
+		t.Errorf("409 %v, want reason in-use", problem)
 	}
 
 	a.expect(http.StatusNoContent, http.MethodDelete, "/api/v1/family/dependents/"+paula, "", clara)

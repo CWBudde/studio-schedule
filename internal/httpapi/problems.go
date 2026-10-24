@@ -7,10 +7,12 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 )
 
-// Reasons of a Conflict (ADR 0007).
+// Reasons of a Conflict (ADR 0007, ADR 0008).
 const (
-	reasonInUse     = "in-use"
-	reasonDuplicate = "duplicate"
+	reasonInUse      = "in-use"
+	reasonDuplicate  = "duplicate"
+	reasonManaged    = "managed"
+	reasonHasAccount = "has-account"
 )
 
 // Conflict is the problem document of a 409 the UI can explain: Reason
@@ -18,7 +20,7 @@ const (
 type Conflict struct {
 	huma.ErrorModel
 
-	Reason string `doc:"in-use: something still refers to the record; duplicate: the name is taken." enum:"in-use,duplicate" json:"reason"`
+	Reason string `doc:"in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already." enum:"in-use,duplicate,managed,has-account" json:"reason"`
 }
 
 func conflict(reason, detail string) *Conflict {

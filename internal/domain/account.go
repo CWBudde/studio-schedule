@@ -28,8 +28,8 @@ func (a Account) Validate() error {
 	return validate(
 		rule{!a.ID.IsZero(), "account id must be set"},
 		rule{!a.PersonID.IsZero(), "account person must be set"},
-		rule{validEmail(a.Email), "invalid account email"},
-		rule{a.Role.Valid() && a.Role != RoleGuest, "invalid account role"},
+		on("email", validEmail(a.Email), "invalid account email"),
+		on("role", a.Role.Valid() && a.Role != RoleGuest, "invalid account role"),
 		rule{a.VisibleDays >= 0 && a.VisibleDays <= maxVisibleDays, "visible days must be between 0 and 366"},
 		rule{a.Locale == "" || !blank(a.Locale), "account locale must not be blank"},
 	)

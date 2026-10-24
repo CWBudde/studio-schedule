@@ -16,7 +16,9 @@ where it differs.
 | `Person`           | Person              | Person                | Any human: member, child, guest                                         |
 | `Guardian`         | Parent / guardian   | Erziehungsberechtigte | Can manage and book for dependents ("Kinder")                           |
 | Dependent          | Child / dependent   | Kind                  | Person linked to a guardian, usually without an account (ADR 0008)      |
+| Managed dependent  | Managed dependent   | Eigenständig          | Dependent with an account, staff link or own dependents; read-only      |
 | `Account`          | Account             | Konto                 | Login of a person, with a role                                          |
+| Invitation         | Invitation          | Einladung             | Mail with a password link for an account the office creates             |
 | `Booking`          | Booking             | Buchung               | Formerly "Teilnahme"; actions "Eintragen" (book) / "Austragen" (cancel) |
 | `BookingEvent`     | Booking history     | Buchungsverlauf       | Audit trail of status changes, with time and acting account             |
 | Guest booking      | Guest               | Gast / extern         | Booking without an account (name + email)                               |

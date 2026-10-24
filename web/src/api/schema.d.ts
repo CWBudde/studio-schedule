@@ -77,8 +77,100 @@ export interface paths {
          */
         get: operations["listPersons"];
         put?: never;
-        post?: never;
+        /**
+         * Create a person
+         * @description Adds a person without an account, e.g. a second parent or a staff member's record.
+         */
+        post: operations["createPerson"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/persons/{personId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a person
+         * @description Returns every field of a person with its guardians, dependents, account, linked staff members and class memberships.
+         */
+        get: operations["getPerson"];
+        /**
+         * Update a person
+         * @description Replaces every field of a person, including the email and the office's notes. The email of the person's account, its login name, stays as it is.
+         */
+        put: operations["updatePerson"];
+        post?: never;
+        /**
+         * Delete a person
+         * @description Deletes a person, e.g. one created by mistake. While anything refers to it (an account, a staff link, bookings, class memberships, or a guardian link in either direction) that is a 409 `in-use` and nothing changes.
+         */
+        delete: operations["deletePerson"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/persons/{personId}/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an account for a person
+         * @description Creates an unconfirmed account without a password for an existing person and mails it an invitation, whose link (valid for 72 hours) sets the password and confirms the account. A person with an account is a 409 `has-account`, an email another account has a 409 `duplicate`. Only an admin may create an admin account; for the office that is a 403.
+         */
+        post: operations["createPersonAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/persons/{personId}/guardians": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a guardian
+         * @description Links a guardian to the person, e.g. a second parent. A guardian linked already is a 409 `duplicate`; an unknown guardian, the person itself, or one of its dependents (directly or through others, which would make the links a cycle) is a 422 on `guardianId`.
+         */
+        post: operations["addGuardian"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/persons/{personId}/guardians/{guardianId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a guardian
+         * @description Ends a guardianship. The person stays, even without a guardian left; a guardian who is not linked is a 404.
+         */
+        delete: operations["removeGuardian"];
         options?: never;
         head?: never;
         patch?: never;
@@ -525,7 +617,7 @@ export interface paths {
         };
         /**
          * Get my family
-         * @description Returns the signed-in person and their dependents (children without their own login), each with its other guardians.
+         * @description Returns the signed-in person and their dependents (usually children without their own login), each with its other guardians. A managed dependent, one with its own account or a staff link, is read-only here.
          */
         get: operations["getMyFamily"];
         put?: never;
@@ -566,13 +658,13 @@ export interface paths {
         get?: never;
         /**
          * Update a dependent
-         * @description Replaces the name, phone and birth date of one of the signed-in person's dependents. Anyone else's person is a 404.
+         * @description Replaces the name, phone and birth date of one of the signed-in person's dependents. A managed dependent is a 409 `managed`; anyone else's person is a 404.
          */
         put: operations["updateDependent"];
         post?: never;
         /**
          * Remove a dependent
-         * @description Ends the signed-in person's guardianship. A dependent left without a guardian is deleted; while it has bookings or class memberships, that is a 409 and nothing changes. Anyone else's person is a 404.
+         * @description Ends the signed-in person's guardianship. A dependent left without a guardian is deleted, unless it is managed (it stays); while it has bookings or class memberships, that is a 409 `in-use` and nothing changes. Anyone else's person is a 404.
          */
         delete: operations["removeDependent"];
         options?: never;
@@ -926,6 +1018,28 @@ export interface components {
             /** @description Accounts ordered by email. */
             items: components["schemas"]["AccountEntry"][];
         };
+        AdminPerson: {
+            /**
+             * Format: date
+             * @description Date of birth, if known; not in the future.
+             */
+            birthDate?: string;
+            /** @description Contact email, if any; not the login name. */
+            email?: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /**
+             * Format: uuid
+             * @description Person ID.
+             */
+            id: string;
+            /** @description The office's internal notes, if any. */
+            notes?: string;
+            /** @description Phone number, if any. */
+            phone?: string;
+        };
         ChangePasswordInputBody: {
             /** @description The current password. */
             currentPassword: string;
@@ -1145,10 +1259,10 @@ export interface components {
              */
             instance?: string;
             /**
-             * @description in-use: something still refers to the record; duplicate: the name is taken.
+             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already.
              * @enum {string}
              */
-            reason: "in-use" | "duplicate";
+            reason: "in-use" | "duplicate" | "managed" | "has-account";
             /**
              * Format: int64
              * @description HTTP status code
@@ -1281,6 +1395,8 @@ export interface components {
              * @description Person ID.
              */
             id: string;
+            /** @description Whether the dependent has its own account or a staff link: then it is read-only here, and removing it only ends the guardianship. */
+            managed: boolean;
             /** @description Phone number, if any. */
             phone?: string;
         };
@@ -1301,6 +1417,13 @@ export interface components {
             id: string;
             /** @description Phone number, if any. */
             phone?: string;
+        };
+        GuardianInputBody: {
+            /**
+             * Format: uuid
+             * @description The person to link as guardian.
+             */
+            guardianId: string;
         };
         GuardianName: {
             /** @description Family name. */
@@ -1529,6 +1652,70 @@ export interface components {
              */
             role: "member" | "instructor" | "office" | "admin";
         };
+        PersonAccount: {
+            /** @description Email address (login name). */
+            email: string;
+            /**
+             * Format: uuid
+             * @description Account ID.
+             */
+            id: string;
+            /**
+             * @description Role of the account.
+             * @enum {string}
+             */
+            role: "member" | "instructor" | "office" | "admin";
+            /**
+             * @description pending: the email is not confirmed yet (an invitation or a registration not completed); active: it may sign in; disabled: it may no longer sign in.
+             * @enum {string}
+             */
+            status: "pending" | "active" | "disabled";
+        };
+        PersonAccountInputBody: {
+            /**
+             * Format: email
+             * @description Email address; it becomes the login name and gets the invitation.
+             */
+            email: string;
+            /**
+             * @description Role of the account; only an admin may create an admin.
+             * @enum {string}
+             */
+            role: "member" | "instructor" | "office" | "admin";
+        };
+        PersonClass: {
+            /**
+             * Format: uuid
+             * @description Class ID.
+             */
+            classId: string;
+            /** @description Name of the class's course type. */
+            courseTypeName: string;
+            /** @description Whether the class is retired. */
+            retired: boolean;
+            /**
+             * Format: date
+             * @description Member since, if known.
+             */
+            since?: string;
+            /**
+             * @description Start time (HH:MM) in the school time zone.
+             * @example 18:00
+             */
+            startTime: string;
+            /**
+             * Format: uuid
+             * @description Term of the class.
+             */
+            termId: string;
+            /** @description Name of the term. */
+            termName: string;
+            /**
+             * Format: int64
+             * @description Day of the week, 0 = Sunday to 6 = Saturday.
+             */
+            weekday: number;
+        };
         PersonData: {
             /**
              * Format: date
@@ -1541,6 +1728,38 @@ export interface components {
             givenName: string;
             /** @description Phone number, if any. */
             phone?: string;
+        };
+        PersonDetail: {
+            /** @description The person's account, if any. */
+            account?: components["schemas"]["PersonAccount"];
+            /**
+             * Format: date
+             * @description Date of birth, if known; not in the future.
+             */
+            birthDate?: string;
+            /** @description Class memberships ordered by term, weekday and time. */
+            classes: components["schemas"]["PersonClass"][];
+            /** @description Dependents ordered by family and given name. */
+            dependents: components["schemas"]["PersonMatch"][];
+            /** @description Contact email, if any; not the login name. */
+            email?: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /** @description Guardians ordered by family and given name. */
+            guardians: components["schemas"]["PersonMatch"][];
+            /**
+             * Format: uuid
+             * @description Person ID.
+             */
+            id: string;
+            /** @description The office's internal notes, if any. */
+            notes?: string;
+            /** @description Phone number, if any. */
+            phone?: string;
+            /** @description Staff members linked to the person, by display name. */
+            staff: components["schemas"]["StaffEntry"][];
         };
         PersonMatch: {
             /** @description Email address, if known. */
@@ -1558,6 +1777,23 @@ export interface components {
         PersonMatchList: {
             /** @description Matching persons ordered by family and given name. */
             items: components["schemas"]["PersonMatch"][];
+        };
+        PersonRecord: {
+            /**
+             * Format: date
+             * @description Date of birth, if known; not in the future.
+             */
+            birthDate?: string;
+            /** @description Contact email, if any; not the login name. */
+            email?: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /** @description The office's internal notes, if any. */
+            notes?: string;
+            /** @description Phone number, if any. */
+            phone?: string;
         };
         PublicSettings: {
             /** @description Default UI locale (BCP 47 tag), e.g. en. */
@@ -1911,6 +2147,286 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PersonMatchList"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonRecord"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPerson"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The person. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonDetail"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updatePerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The person. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonRecord"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPerson"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deletePerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The person. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createPersonAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The person. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonAccountInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonAccount"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    addGuardian: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The dependent. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuardianInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonMatch"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    removeGuardian: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The dependent. */
+                personId: string;
+                /** @description The guardian. */
+                guardianId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -2826,6 +3342,15 @@ export interface operations {
                     "application/json": components["schemas"]["FamilyPerson"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
             /** @description Error */
             default: {
                 headers: {
@@ -2855,6 +3380,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
             };
             /** @description Error */
             default: {

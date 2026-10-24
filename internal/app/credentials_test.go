@@ -153,6 +153,13 @@ func TestChangePasswordAndEmailFlow(t *testing.T) {
 		t.Errorf("wrong password: %s, want an error at body.password", out)
 	}
 
+	// An address with a display name passes the schema but is no login name.
+	out = a.want(http.MethodPost, "/api/v1/auth/email",
+		`{"password":"battery staple","newEmail":"New <new.address@example.org>"}`, http.StatusUnprocessableEntity, c)
+	if !strings.Contains(string(out), `"location":"body.newEmail"`) {
+		t.Errorf("invalid new email: %s, want an error at body.newEmail", out)
+	}
+
 	a.want(http.MethodPost, "/api/v1/auth/email",
 		`{"password":"battery staple","newEmail":"new.address@example.org"}`, http.StatusAccepted, c)
 

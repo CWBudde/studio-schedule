@@ -362,20 +362,24 @@ func roomWriteErr(err error) error {
 // errUnknownPerson is a staff member's person that does not exist.
 var errUnknownPerson error = &domain.FieldError{Field: "personId", Msg: "person does not exist"}
 
-// linkedPerson returns the person a staff member links to, or the zero
-// person for a zero ID. An unknown person is a validation error on the field
+// linkedPerson locks and returns the person a staff member links to, or
+// the zero person for a zero ID. An unknown person is a validation error on the field
 // that names it.
 func linkedPerson(ctx context.Context, tx store.Tx, id domain.PersonID) (domain.Person, error) {
 	if id.IsZero() {
 		return domain.Person{}, nil
 	}
 
-	p, err := tx.Persons().Get(ctx, id)
+	// A staff link makes a dependent managed: under the lock, a guardian's
+	// edit or removal of the person waits for it (ADR 0008).
+	err := tx.Persons().Lock(ctx, id)
 	if errors.Is(err, domain.ErrNotFound) {
 		return domain.Person{}, errUnknownPerson
+	} else if err != nil {
+		return domain.Person{}, err
 	}
 
-	return p, err
+	return tx.Persons().Get(ctx, id)
 }
 
 // staffEntry adds the linked person to a stored staff member.

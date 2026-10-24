@@ -16,10 +16,10 @@ type Person struct {
 func (p Person) Validate() error {
 	return validate(
 		rule{!p.ID.IsZero(), "person id must be set"},
-		rule{!blank(p.GivenName), "given name must not be empty"},
-		rule{!blank(p.FamilyName), "family name must not be empty"},
-		rule{optionalEmail(p.Email), "invalid email"},
-		rule{optionalDate(p.BirthDate), "invalid birth date"},
+		on("givenName", !blank(p.GivenName), "given name must not be empty"),
+		on("familyName", !blank(p.FamilyName), "family name must not be empty"),
+		on("email", optionalEmail(p.Email), "invalid email"),
+		on("birthDate", optionalDate(p.BirthDate), "invalid birth date"),
 	)
 }
 
@@ -35,6 +35,6 @@ func (g Guardian) Validate() error {
 	return validate(
 		rule{!g.GuardianID.IsZero(), "guardian id must be set"},
 		rule{!g.DependentID.IsZero(), "dependent id must be set"},
-		rule{g.GuardianID != g.DependentID, "a person cannot be their own guardian"},
+		on("guardianId", g.GuardianID != g.DependentID, "a person cannot be their own guardian"),
 	)
 }

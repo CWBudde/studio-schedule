@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -301,5 +302,141 @@ func TestFamilyWhileImpersonating(t *testing.T) {
 
 	if _, err := f.svc.AddDependent(t.Context(), p, service.PersonData{GivenName: "Paula", FamilyName: "Amberly"}); err != nil {
 		t.Errorf("AddDependent while impersonating: %v", err)
+	}
+}
+
+// write runs fn in a read-write transaction of the fixture's store.
+func (f *familyFixture) write(fn func(ctx context.Context, tx store.Tx) error) {
+	f.t.Helper()
+
+	if err := f.st.InTx(f.t.Context(), store.ReadWrite, fn); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+// giveAccount creates an account for p, as the office does for a dependent
+// who grows up.
+func (f *familyFixture) giveAccount(p domain.Person, email string) {
+	f.t.Helper()
+
+	f.write(func(ctx context.Context, tx store.Tx) error {
+		return tx.Accounts().Create(ctx, domain.Account{
+			ID: ids.New[domain.AccountID](ids.V7{}), PersonID: p.ID, Email: email, Role: domain.RoleMember,
+		})
+	})
+}
+
+// linkStaff links a new staff member to p.
+func (f *familyFixture) linkStaff(p domain.Person) {
+	f.t.Helper()
+
+	f.write(func(ctx context.Context, tx store.Tx) error {
+		return tx.Staff().Create(ctx, domain.Staff{
+			ID: ids.New[domain.StaffID](ids.V7{}), PersonID: p.ID, DisplayName: p.GivenName, Kind: domain.StaffAccompanist,
+		})
+	})
+}
+
+// linkDependent makes p the guardian of a new person.
+func (f *familyFixture) linkDependent(p domain.Person) {
+	f.t.Helper()
+
+	f.write(func(ctx context.Context, tx store.Tx) error {
+		child := domain.Person{ID: ids.New[domain.PersonID](ids.V7{}), GivenName: "Nora", FamilyName: p.FamilyName}
+		if err := tx.Persons().Create(ctx, child); err != nil {
+			return err
+		}
+
+		return tx.Persons().AddGuardian(ctx, domain.Guardian{GuardianID: p.ID, DependentID: child.ID})
+	})
+}
+
+func TestManagedDependents(t *testing.T) {
+	t.Parallel()
+
+	for name, manage := range map[string]func(f *familyFixture, p domain.Person){
+		"own account": func(f *familyFixture, p domain.Person) { f.giveAccount(p, "lotta.birchmoor@example.com") },
+		"staff link":  func(f *familyFixture, p domain.Person) { f.linkStaff(p) },
+		// A teenager with a child of their own: deleting them would orphan it.
+		"guardian of someone": func(f *familyFixture, p domain.Person) { f.linkDependent(p) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newFamilyFixture(t)
+			p := f.principal(hanna)
+			lotta := f.person("Lotta", "Birchmoor") // Hanna is her only guardian; a class member
+			manage(f, lotta)
+
+			family, err := f.svc.Family(t.Context(), p)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for _, d := range family.Dependents {
+				if want := d.Person.ID == lotta.ID; d.Managed != want {
+					t.Errorf("%s managed = %v, want %v", d.Person.GivenName, d.Managed, want)
+				}
+			}
+
+			// The guardian no longer edits what its owner or the office manages.
+			_, err = f.svc.UpdateDependent(t.Context(), p, lotta.ID, service.PersonData{GivenName: "L", FamilyName: "B"})
+			wantIs(t, err, service.ErrDependentManaged)
+			wantIs(t, err, domain.ErrConflict)
+
+			if got := f.person("Lotta", "Birchmoor"); got != lotta {
+				t.Errorf("Lotta changed: %+v", got)
+			}
+
+			// Removing her only ends the guardianship, though Hanna was the
+			// last guardian and Lotta is enrolled.
+			if err := f.svc.RemoveDependent(t.Context(), p, lotta.ID); err != nil {
+				t.Fatalf("RemoveDependent: %v", err)
+			}
+
+			if !f.exists(lotta.ID) {
+				t.Error("the managed dependent was deleted")
+			}
+
+			if got := f.dependents(p); !slices.Equal(got, []string{"Mia"}) {
+				t.Errorf("Hanna's dependents %v, want Mia", got)
+			}
+		})
+	}
+}
+
+func TestDependentInUseIsInUse(t *testing.T) {
+	t.Parallel()
+
+	f := newFamilyFixture(t)
+
+	err := f.svc.RemoveDependent(t.Context(), f.principal(hanna), f.person("Mia", "Birchmoor").ID)
+	wantIs(t, err, service.ErrDependentInUse)
+	wantIs(t, err, domain.ErrInUse)
+}
+
+// TestRemoveDependentDeleteRefused checks the removal of a dependent whose
+// deletion the store refuses although the service found nothing that would
+// make it managed: it is in use, and nothing changes.
+func TestRemoveDependentDeleteRefused(t *testing.T) {
+	t.Parallel()
+
+	f := newFamilyFixture(t)
+	p := f.principal(clara)
+
+	added, err := f.svc.AddDependent(t.Context(), p, service.PersonData{GivenName: "Paula", FamilyName: "Amberly"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	clk := clock.NewFixed(time.Date(2026, time.October, 21, 22, 30, 0, 0, time.UTC))
+	refusing := service.NewFamilyService(racingStore{Store: f.st, deleteErr: fmt.Errorf("foreign key violated: %w", domain.ErrConflict)}, clk, ids.V7{})
+
+	err = refusing.RemoveDependent(t.Context(), p, added.ID)
+	wantIs(t, err, service.ErrDependentInUse)
+	wantIs(t, err, domain.ErrInUse)
+
+	if got := f.dependents(p); !slices.Contains(got, "Paula") {
+		t.Errorf("Clara's dependents %v: the refused removal changed something", got)
 	}
 }

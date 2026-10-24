@@ -119,7 +119,9 @@ func (h *handlers) toHTTPError(ctx context.Context, err error) error {
 	case errors.Is(err, domain.ErrInUse):
 		return conflict(reasonInUse, "the record is still in use")
 	case errors.Is(err, domain.ErrDuplicate):
-		return conflict(reasonDuplicate, "the name is taken")
+		// Operations whose duplicates the UI explains differently map
+		// their own errors first, e.g. createPersonAccount.
+		return conflict(reasonDuplicate, "a record with these values exists already")
 	case errors.Is(err, domain.ErrConflict):
 		return huma.Error409Conflict("conflict")
 	case errors.Is(err, domain.ErrUnauthorized):

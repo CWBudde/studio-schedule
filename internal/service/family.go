@@ -14,8 +14,16 @@ import (
 )
 
 // ErrDependentInUse reports that a dependent cannot be removed: the caller
-// is its last guardian and bookings or class memberships still refer to it.
-var ErrDependentInUse = fmt.Errorf("%w: the dependent has bookings or class memberships", domain.ErrConflict)
+// is its last guardian and something other than what makes it managed
+// still refers to it, such as bookings or class memberships.
+var ErrDependentInUse = fmt.Errorf("%w: the dependent is still in use, e.g. by bookings or class memberships",
+	domain.ErrInUse)
+
+// ErrDependentManaged rejects a guardian's change to a managed dependent:
+// one with its own account, linked to a staff member, or a guardian
+// itself, whose data its owner or the office maintains (ADR 0008).
+var ErrDependentManaged = fmt.Errorf("%w: the dependent's data is managed by its own account or the office",
+	domain.ErrConflict)
 
 // ErrFutureBirthDate reports a birth date after today in the school time
 // zone.
@@ -35,6 +43,10 @@ type Dependent struct {
 	Person domain.Person
 	// Guardians are the dependent's guardians except the caller.
 	Guardians []domain.Person
+	// Managed is set for a managed dependent: one with its own account,
+	// linked to a staff member, or a guardian of someone itself. The
+	// guardian may not edit it, and removing it only ends the guardianship.
+	Managed bool
 }
 
 // Family is the signed-in person and the dependents they manage.
@@ -80,8 +92,13 @@ func (s *FamilyService) Family(ctx context.Context, p Principal) (Family, error)
 				return err
 			}
 
+			managed, err := isManaged(ctx, tx, d.ID)
+			if err != nil {
+				return err
+			}
+
 			others := slices.DeleteFunc(guardians, func(g domain.Person) bool { return g.ID == p.PersonID })
-			f.Dependents = append(f.Dependents, Dependent{Person: d, Guardians: others})
+			f.Dependents = append(f.Dependents, Dependent{Person: d, Guardians: others, Managed: managed})
 		}
 
 		return nil
@@ -145,7 +162,8 @@ func (s *FamilyService) AddDependent(ctx context.Context, p Principal, d PersonD
 }
 
 // UpdateDependent changes the person data of one of p's dependents and
-// returns the person. Anyone else's person is domain.ErrNotFound.
+// returns the person. A managed dependent is ErrDependentManaged, anyone
+// else's person domain.ErrNotFound.
 func (s *FamilyService) UpdateDependent(
 	ctx context.Context, p Principal, id domain.PersonID, d PersonData,
 ) (domain.Person, error) {
@@ -155,6 +173,18 @@ func (s *FamilyService) UpdateDependent(
 		var err error
 		if person, err = dependentOf(ctx, tx, p.PersonID, id); err != nil {
 			return err
+		}
+
+		// Under the lock, nothing can make the dependent managed meanwhile.
+		if err := tx.Persons().Lock(ctx, id); err != nil {
+			return err
+		}
+
+		switch managed, err := isManaged(ctx, tx, id); {
+		case err != nil:
+			return err
+		case managed:
+			return ErrDependentManaged
 		}
 
 		if person, err = s.apply(ctx, tx, person, d); err != nil {
@@ -171,12 +201,19 @@ func (s *FamilyService) UpdateDependent(
 }
 
 // RemoveDependent ends p's guardianship of id. If no guardian is left, the
-// person is deleted as well; while bookings or class memberships refer to it,
-// that fails with ErrDependentInUse and nothing changes. Anyone else's
-// person is domain.ErrNotFound.
+// person is deleted as well, unless it is a managed dependent, which stays.
+// Then only bookings and class memberships can still refer to it; while
+// they do, that fails with ErrDependentInUse and nothing changes. Anyone
+// else's person is domain.ErrNotFound.
 func (s *FamilyService) RemoveDependent(ctx context.Context, p Principal, id domain.PersonID) error {
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		if _, err := dependentOf(ctx, tx, p.PersonID, id); err != nil {
+			return err
+		}
+
+		// Under the lock, nothing can make the dependent managed, or refer
+		// to it as a guardian, meanwhile.
+		if err := tx.Persons().Lock(ctx, id); err != nil {
 			return err
 		}
 
@@ -189,12 +226,19 @@ func (s *FamilyService) RemoveDependent(ctx context.Context, p Principal, id dom
 			return err
 		}
 
-		err = tx.Persons().Delete(ctx, id)
-		if errors.Is(err, domain.ErrConflict) {
-			return ErrDependentInUse
+		if managed, err := isManaged(ctx, tx, id); err != nil || managed {
+			return err
 		}
 
-		return err
+		// Accounts, staff links and guardian links are ruled out under the
+		// lock; whatever still refers to the person keeps it.
+		if err := tx.Persons().Delete(ctx, id); errors.Is(err, domain.ErrConflict) {
+			return fmt.Errorf("%w (%w)", ErrDependentInUse, err)
+		} else if err != nil {
+			return err
+		}
+
+		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("remove dependent: %w", err)
@@ -204,10 +248,19 @@ func (s *FamilyService) RemoveDependent(ctx context.Context, p Principal, id dom
 }
 
 // apply sets the editable fields of person from d and validates it. The
-// email and the office's notes stay as they are. A birth date must not lie
-// after today in the school time zone.
+// email and the office's notes stay as they are.
 func (s *FamilyService) apply(
 	ctx context.Context, tx store.Tx, person domain.Person, d PersonData,
+) (domain.Person, error) {
+	return applyPersonData(ctx, tx, s.clock, person, d)
+}
+
+// applyPersonData sets the fields of person in d, trimmed, and validates
+// the person. A birth date must not lie after today in the school time
+// zone. The guardians' FamilyService and the office's PersonService both
+// edit persons with it.
+func applyPersonData(
+	ctx context.Context, tx store.Tx, clk clock.Clock, person domain.Person, d PersonData,
 ) (domain.Person, error) {
 	person.GivenName = strings.TrimSpace(d.GivenName)
 	person.FamilyName = strings.TrimSpace(d.FamilyName)
@@ -218,18 +271,54 @@ func (s *FamilyService) apply(
 		return domain.Person{}, err
 	}
 
-	if !d.BirthDate.IsZero() {
-		_, loc, err := loadSchool(ctx, tx)
-		if err != nil {
-			return domain.Person{}, err
-		}
-
-		if d.BirthDate.Compare(domain.DateOf(s.clock.Now(), loc)) > 0 {
-			return domain.Person{}, ErrFutureBirthDate
-		}
+	if err := checkBirthDate(ctx, tx, clk, d.BirthDate); err != nil {
+		return domain.Person{}, err
 	}
 
 	return person, nil
+}
+
+// checkBirthDate fails with ErrFutureBirthDate for a birth date after today
+// in the school time zone. A zero date is fine.
+func checkBirthDate(ctx context.Context, tx store.Tx, clk clock.Clock, d domain.Date) error {
+	if d.IsZero() {
+		return nil
+	}
+
+	_, loc, err := loadSchool(ctx, tx)
+	if err != nil {
+		return err
+	}
+
+	if d.Compare(domain.DateOf(clk.Now(), loc)) > 0 {
+		return ErrFutureBirthDate
+	}
+
+	return nil
+}
+
+// isManaged reports whether person is a managed dependent: it has its own
+// account, is linked to a staff member, or is a guardian of someone itself,
+// so its owner or the office maintains its data, not a guardian, and a
+// guardian never deletes it (ADR 0008).
+func isManaged(ctx context.Context, tx store.Tx, person domain.PersonID) (bool, error) {
+	switch _, err := tx.Accounts().GetByPerson(ctx, person); {
+	case err == nil:
+		return true, nil
+	case !errors.Is(err, domain.ErrNotFound):
+		return false, err
+	}
+
+	switch staff, err := tx.Staff().ListByPerson(ctx, person); {
+	case err != nil:
+		return false, err
+	case len(staff) > 0:
+		return true, nil
+	}
+
+	dependents, err := tx.Persons().ListDependents(ctx, person)
+
+	return len(dependents) > 0, err
 }
 
 // dependentOf returns the person dependent if guardian is one of its

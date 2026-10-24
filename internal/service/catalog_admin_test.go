@@ -5,7 +5,9 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
+	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/service"
@@ -206,7 +208,7 @@ func TestStaffAdmin(t *testing.T) {
 	svc := service.NewCatalogService(st, ids.V7{})
 	ctx := t.Context()
 
-	persons := service.NewPersonService(st)
+	persons := service.NewPersonService(st, clock.NewFixed(time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)), ids.V7{})
 
 	found, err := persons.SearchPersons(ctx, "clara amberly")
 	if err != nil || len(found) != 1 {

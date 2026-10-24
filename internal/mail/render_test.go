@@ -54,6 +54,15 @@ func changeEmailData() mail.LinkData {
 	}
 }
 
+func inviteData() mail.LinkData {
+	return mail.LinkData{
+		SchoolName:   "Studio Example",
+		GivenName:    "Anna",
+		Link:         "https://schedule.example.org/reset-password?token=jkl012",
+		ExpiresHours: 72,
+	}
+}
+
 func emailChangedData() mail.EmailChangedData {
 	return mail.EmailChangedData{
 		SchoolName: "Studio Example",
@@ -103,6 +112,7 @@ func TestRenderGolden(t *testing.T) {
 		{mail.TemplateResetPassword, resetData()},
 		{mail.TemplateChangeEmail, changeEmailData()},
 		{mail.TemplateEmailChanged, emailChangedData()},
+		{mail.TemplateInvite, inviteData()},
 	}
 
 	for _, tt := range tests {
@@ -124,7 +134,7 @@ func TestRenderGolden(t *testing.T) {
 }
 
 // TestRenderAccountMailsContent checks the essential statements of the
-// password and email change mails in both parts and both locales.
+// password, email change and invite mails in both parts and both locales.
 func TestRenderAccountMailsContent(t *testing.T) {
 	t.Parallel()
 
@@ -149,6 +159,12 @@ func TestRenderAccountMailsContent(t *testing.T) {
 		{mail.TemplateChangeEmail, "de", changeEmailData(), []string{
 			"Anna", "Studio Example", changeEmailData().Link, "24 Stunden", "ändert sich nichts",
 		}, "Neue E-Mail-Adresse bestätigen"},
+		{mail.TemplateInvite, "en", inviteData(), []string{
+			"Anna", "Studio Example", inviteData().Link, "72 hours", "has created an account", "Forgot password?",
+		}, "Choose a password"},
+		{mail.TemplateInvite, "de", inviteData(), []string{
+			"Anna", "Studio Example", inviteData().Link, "72 Stunden", "ein Konto für dich angelegt", "Passwort vergessen?",
+		}, "Passwort wählen"},
 		{mail.TemplateEmailChanged, "en", emailChangedData(), []string{
 			"Anna", "Studio Example", "anna.new@example.org", "contact", "sign in",
 		}, ""},
@@ -610,6 +626,7 @@ func TestRenderAllTemplates(t *testing.T) {
 		mail.TemplateResetPassword: resetData(),
 		mail.TemplateChangeEmail:   changeEmailData(),
 		mail.TemplateEmailChanged:  emailChangedData(),
+		mail.TemplateInvite:        inviteData(),
 	}
 
 	for _, name := range mail.TemplateNames() {

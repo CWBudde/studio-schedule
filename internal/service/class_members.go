@@ -65,9 +65,14 @@ func (s *TimetableService) ClassMembers(ctx context.Context, class domain.ClassI
 	return entries, nil
 }
 
+// errMemberGone is a class or person that a transaction found and that a
+// concurrent one deleted before the membership was added.
+var errMemberGone = fmt.Errorf("%w: the class or the person was deleted meanwhile", domain.ErrNotFound)
+
 // AddClassMember enrolls a person in a class. An unknown class is
 // domain.ErrNotFound, an unknown person a validation error on personId, and
-// a person who is a member already domain.ErrDuplicate.
+// a person who is a member already domain.ErrDuplicate. A class or person
+// deleted by a concurrent request is domain.ErrNotFound as well.
 func (s *TimetableService) AddClassMember(ctx context.Context, m domain.ClassMember) (ClassMemberEntry, error) {
 	var e ClassMemberEntry
 
@@ -89,15 +94,15 @@ func (s *TimetableService) AddClassMember(ctx context.Context, m domain.ClassMem
 
 		e = ClassMemberEntry{ClassMember: m, Person: p}
 
-		// With the class and the person in place, the store's only conflict
-		// is a membership that exists.
-		if err := tx.Classes().AddMember(ctx, m); errors.Is(err, domain.ErrConflict) {
-			return fmt.Errorf("%w: %s is a member already (%w)", domain.ErrDuplicate, m.PersonID, err)
-		} else if err != nil {
+		switch err := tx.Classes().AddMember(ctx, m); {
+		case errors.Is(err, domain.ErrDuplicate):
+			return fmt.Errorf("%s is a member already: %w", m.PersonID, err)
+		case errors.Is(err, domain.ErrConflict):
+			// The class and the person were there a moment ago.
+			return errMemberGone
+		default:
 			return err
 		}
-
-		return nil
 	})
 	if err != nil {
 		return ClassMemberEntry{}, fmt.Errorf("add member to class %s: %w", m.ClassID, err)

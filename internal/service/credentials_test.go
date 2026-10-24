@@ -1,13 +1,17 @@
 package service_test
 
 import (
+	"context"
+	"errors"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/mail"
 	"github.com/cwbudde/studio-schedule/internal/service"
+	"github.com/cwbudde/studio-schedule/internal/store"
 )
 
 // link returns the token and recipient of the newest mail of template,
@@ -330,7 +334,9 @@ func TestChangeEmailRejected(t *testing.T) {
 
 	wantIs(t, f.svc.RequestEmailChange(t.Context(), p, "wrong password", "ada@example.net", ""), service.ErrWrongPassword)
 	wantIs(t, f.svc.RequestEmailChange(t.Context(), p, "correct horse", "ADA@example.org", ""), service.ErrSameEmail)
-	wantIs(t, f.svc.RequestEmailChange(t.Context(), p, "correct horse", "not an email", ""), domain.ErrValidation)
+	// The request names the address newEmail; a 422 points there.
+	wantField(t, f.svc.RequestEmailChange(t.Context(), p, "correct horse", "not an email", ""), "newEmail")
+	wantField(t, f.svc.RequestEmailChange(t.Context(), p, "correct horse", "Ada <ada@example.net>", ""), "newEmail")
 
 	if n := f.count(mail.TemplateChangeEmail); n != 0 {
 		t.Errorf("%d change mails sent, want none", n)
@@ -431,4 +437,37 @@ func TestChangeEmailEndsLinksToTheOldAddress(t *testing.T) {
 	}
 
 	wantIs(t, f.svc.ResetPassword(t.Context(), reset, "battery staple"), service.ErrInvalidToken)
+}
+
+// TestConfirmEmailChangeInvalidAddress checks that an unusable address in a
+// link is not reported on a field: the confirmation request has none.
+func TestConfirmEmailChangeInvalidAddress(t *testing.T) {
+	t.Parallel()
+
+	f := newAuthFixture(t)
+	f.signedUp("ada@example.org", domain.RoleMember)
+	acc := f.account("ada@example.org")
+	now := f.clock.Now()
+
+	err := f.st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return tx.AccountTokens().Create(ctx, domain.AccountToken{
+			Hash: domain.HashToken("bad-address"), AccountID: acc.ID, Purpose: domain.TokenChangeEmail,
+			Email: "not an email", CreatedAt: now, ExpiresAt: now.Add(time.Hour),
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = f.svc.ConfirmEmailChange(t.Context(), "bad-address", "")
+	wantIs(t, err, domain.ErrValidation)
+
+	var fe *domain.FieldError
+	if errors.As(err, &fe) {
+		t.Errorf("error on field %q, want none", fe.Field)
+	}
+
+	if got := f.account("ada@example.org").Email; got != "ada@example.org" {
+		t.Errorf("email = %q, want it unchanged", got)
+	}
 }

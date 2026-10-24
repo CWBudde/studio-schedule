@@ -1,0 +1,14 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+{{.SchoolName}} hat ein Konto für dich angelegt. Um dein Passwort zu
+wählen und das Konto zu aktivieren, öffne diesen Link:
+
+{{.Link}}
+
+Der Link ist {{if eq .ExpiresHours 1}}1 Stunde{{else}}{{.ExpiresHours}} Stunden{{end}} gültig. Ist er abgelaufen,
+fordere auf der Anmeldeseite über „Passwort vergessen?“ einen neuen an.
+
+Falls du diese E-Mail nicht erwartet hast, kannst du sie ignorieren.
+
+Viele Grüße
+{{.SchoolName}}

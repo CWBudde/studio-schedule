@@ -38,9 +38,10 @@ var (
 )
 
 // RequestPasswordReset mails a password-reset link to email if it belongs to
-// an account that may sign in. It succeeds either way, so it reveals nothing
-// about which accounts exist. A new link replaces older ones. The mail is in
-// the account's language, else in locale, else in the school's default.
+// an account that may sign in, or to an invited account whose invitation
+// expired. It succeeds either way, so it reveals nothing about which
+// accounts exist. A new link replaces older ones. The mail is in the
+// account's language, else in locale, else in the school's default.
 func (s *AuthService) RequestPasswordReset(ctx context.Context, email, locale string) error {
 	token, err := newToken()
 	if err != nil {
@@ -55,8 +56,10 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email, locale st
 			return nil
 		case err != nil:
 			return err
-		case !mayActAs(acc):
-			return nil
+		}
+
+		if ok, err := mayResetPassword(ctx, tx, acc); err != nil || !ok {
+			return err
 		}
 
 		return s.sendLink(ctx, tx, acc, token, linkMail{
@@ -72,7 +75,9 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email, locale st
 }
 
 // ResetPassword sets the password of the account a reset link was sent to.
-// It ends every session of the account and does not sign in.
+// It ends every session of the account and does not sign in. The link of
+// an invitation confirms the invited account as well: it proves the
+// address.
 func (s *AuthService) ResetPassword(ctx context.Context, token, password string) error {
 	if err := checkPassword(password); err != nil {
 		return err
@@ -99,6 +104,13 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, password string)
 			return err
 		}
 
+		if acc.ConfirmedAt.IsZero() {
+			acc.ConfirmedAt = s.clock.Now()
+			if err := tx.Accounts().Update(ctx, acc); err != nil {
+				return err
+			}
+		}
+
 		return s.setPassword(ctx, tx, acc.ID, hash, domain.SessionID{})
 	})
 	if err != nil {
@@ -109,14 +121,21 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, password string)
 }
 
 // resetAccount returns the account of a valid reset token; it must still be
-// allowed to sign in.
+// allowed to set its password (mayResetPassword).
 func (s *AuthService) resetAccount(ctx context.Context, tx store.Tx, token string) (domain.Account, error) {
 	_, acc, err := s.linkToken(ctx, tx, token, domain.TokenResetPassword)
-	if err == nil && !mayActAs(acc) {
-		err = ErrInvalidToken
+	if err != nil {
+		return domain.Account{}, err
 	}
 
-	return acc, err
+	switch ok, err := mayResetPassword(ctx, tx, acc); {
+	case err != nil:
+		return domain.Account{}, err
+	case !ok:
+		return domain.Account{}, ErrInvalidToken
+	}
+
+	return acc, nil
 }
 
 // ChangePassword replaces the password of p's account after checking the
@@ -249,7 +268,7 @@ func (s *AuthService) RequestEmailChange(ctx context.Context, p Principal, passw
 		moved.Email = newEmail
 
 		if err := moved.Validate(); err != nil {
-			return err
+			return atField(err, "newEmail")
 		}
 
 		switch _, err := tx.Accounts().GetByEmail(ctx, newEmail); {
@@ -297,11 +316,15 @@ func (s *AuthService) ConfirmEmailChange(ctx context.Context, token, locale stri
 		old := acc.Email
 		acc.Email = t.Email
 
+		// The address comes from the link, not from a field of the request.
 		if err := acc.Validate(); err != nil {
-			return err
+			return atField(err, "")
 		}
 
-		if err := tx.Accounts().Update(ctx, acc); err != nil {
+		switch err := tx.Accounts().Update(ctx, acc); {
+		case errors.Is(err, domain.ErrDuplicate):
+			return fmt.Errorf("%w (%w)", ErrEmailTaken, err) // taken meanwhile
+		case err != nil:
 			return err
 		}
 
@@ -421,4 +444,21 @@ func (s *AuthService) linkToken(
 	}
 
 	return t, acc, nil
+}
+
+// atField reports a validation error of an entity about one of its fields
+// on the request field that carried the value, e.g. an account's email on
+// newEmail; for field "" on the request as a whole, because no field of it
+// carried the value. Other errors pass unchanged.
+func atField(err error, field string) error {
+	var fe *domain.FieldError
+	if !errors.As(err, &fe) {
+		return err
+	}
+
+	if field == "" {
+		return fmt.Errorf("%w: %s", domain.ErrValidation, fe.Msg)
+	}
+
+	return &domain.FieldError{Field: field, Msg: fe.Msg}
 }

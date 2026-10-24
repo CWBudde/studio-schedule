@@ -67,6 +67,54 @@
         ],
         "type": "object"
       },
+      "AdminPerson": {
+        "additionalProperties": false,
+        "properties": {
+          "birthDate": {
+            "description": "Date of birth, if known; not in the future.",
+            "format": "date",
+            "type": "string"
+          },
+          "email": {
+            "description": "Contact email, if any; not the login name.",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "id": {
+            "description": "Person ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "notes": {
+            "description": "The office's internal notes, if any.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "phone": {
+            "description": "Phone number, if any.",
+            "maxLength": 50,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "givenName",
+          "familyName"
+        ],
+        "type": "object"
+      },
       "ChangePasswordInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -498,10 +546,12 @@
             "type": "string"
           },
           "reason": {
-            "description": "in-use: something still refers to the record; duplicate: the name is taken.",
+            "description": "in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already.",
             "enum": [
               "in-use",
-              "duplicate"
+              "duplicate",
+              "managed",
+              "has-account"
             ],
             "type": "string"
           },
@@ -807,6 +857,10 @@
             "format": "uuid",
             "type": "string"
           },
+          "managed": {
+            "description": "Whether the dependent has its own account or a staff link: then it is read-only here, and removing it only ends the guardianship.",
+            "type": "boolean"
+          },
           "phone": {
             "description": "Phone number, if any.",
             "maxLength": 50,
@@ -815,6 +869,7 @@
         },
         "required": [
           "guardians",
+          "managed",
           "id",
           "givenName",
           "familyName"
@@ -856,6 +911,20 @@
           "id",
           "givenName",
           "familyName"
+        ],
+        "type": "object"
+      },
+      "GuardianInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "guardianId": {
+            "description": "The person to link as guardian.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "guardianId"
         ],
         "type": "object"
       },
@@ -1340,6 +1409,129 @@
         ],
         "type": "object"
       },
+      "PersonAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "Email address (login name).",
+            "type": "string"
+          },
+          "id": {
+            "description": "Account ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "role": {
+            "description": "Role of the account.",
+            "enum": [
+              "member",
+              "instructor",
+              "office",
+              "admin"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "description": "pending: the email is not confirmed yet (an invitation or a registration not completed); active: it may sign in; disabled: it may no longer sign in.",
+            "enum": [
+              "pending",
+              "active",
+              "disabled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role",
+          "status"
+        ],
+        "type": "object"
+      },
+      "PersonAccountInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "Email address; it becomes the login name and gets the invitation.",
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "role": {
+            "description": "Role of the account; only an admin may create an admin.",
+            "enum": [
+              "member",
+              "instructor",
+              "office",
+              "admin"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "role"
+        ],
+        "type": "object"
+      },
+      "PersonClass": {
+        "additionalProperties": false,
+        "properties": {
+          "classId": {
+            "description": "Class ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "courseTypeName": {
+            "description": "Name of the class's course type.",
+            "type": "string"
+          },
+          "retired": {
+            "description": "Whether the class is retired.",
+            "type": "boolean"
+          },
+          "since": {
+            "description": "Member since, if known.",
+            "format": "date",
+            "type": "string"
+          },
+          "startTime": {
+            "description": "Start time (HH:MM) in the school time zone.",
+            "examples": [
+              "18:00"
+            ],
+            "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+            "type": "string"
+          },
+          "termId": {
+            "description": "Term of the class.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "termName": {
+            "description": "Name of the term.",
+            "type": "string"
+          },
+          "weekday": {
+            "description": "Day of the week, 0 = Sunday to 6 = Saturday.",
+            "format": "int64",
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "classId",
+          "termId",
+          "termName",
+          "courseTypeName",
+          "weekday",
+          "startTime",
+          "retired"
+        ],
+        "type": "object"
+      },
       "PersonData": {
         "additionalProperties": false,
         "properties": {
@@ -1367,6 +1559,90 @@
           }
         },
         "required": [
+          "givenName",
+          "familyName"
+        ],
+        "type": "object"
+      },
+      "PersonDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/PersonAccount",
+            "description": "The person's account, if any."
+          },
+          "birthDate": {
+            "description": "Date of birth, if known; not in the future.",
+            "format": "date",
+            "type": "string"
+          },
+          "classes": {
+            "description": "Class memberships ordered by term, weekday and time.",
+            "items": {
+              "$ref": "#/components/schemas/PersonClass"
+            },
+            "type": "array"
+          },
+          "dependents": {
+            "description": "Dependents ordered by family and given name.",
+            "items": {
+              "$ref": "#/components/schemas/PersonMatch"
+            },
+            "type": "array"
+          },
+          "email": {
+            "description": "Contact email, if any; not the login name.",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "guardians": {
+            "description": "Guardians ordered by family and given name.",
+            "items": {
+              "$ref": "#/components/schemas/PersonMatch"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "Person ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "notes": {
+            "description": "The office's internal notes, if any.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "phone": {
+            "description": "Phone number, if any.",
+            "maxLength": 50,
+            "type": "string"
+          },
+          "staff": {
+            "description": "Staff members linked to the person, by display name.",
+            "items": {
+              "$ref": "#/components/schemas/StaffEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "guardians",
+          "dependents",
+          "staff",
+          "classes",
+          "id",
           "givenName",
           "familyName"
         ],
@@ -1413,6 +1689,48 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "PersonRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "birthDate": {
+            "description": "Date of birth, if known; not in the future.",
+            "format": "date",
+            "type": "string"
+          },
+          "email": {
+            "description": "Contact email, if any; not the login name.",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "notes": {
+            "description": "The office's internal notes, if any.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "phone": {
+            "description": "Phone number, if any.",
+            "maxLength": 50,
+            "type": "string"
+          }
+        },
+        "required": [
+          "givenName",
+          "familyName"
         ],
         "type": "object"
       },
@@ -2116,6 +2434,396 @@
           }
         },
         "summary": "Search persons",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      },
+      "post": {
+        "description": "Adds a person without an account, e.g. a second parent or a staff member's record.",
+        "operationId": "createPerson",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonRecord"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPerson"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create a person",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/persons/{personId}": {
+      "delete": {
+        "description": "Deletes a person, e.g. one created by mistake. While anything refers to it (an account, a staff link, bookings, class memberships, or a guardian link in either direction) that is a 409 `in-use` and nothing changes.",
+        "operationId": "deletePerson",
+        "parameters": [
+          {
+            "description": "The person.",
+            "in": "path",
+            "name": "personId",
+            "required": true,
+            "schema": {
+              "description": "The person.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete a person",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      },
+      "get": {
+        "description": "Returns every field of a person with its guardians, dependents, account, linked staff members and class memberships.",
+        "operationId": "getPerson",
+        "parameters": [
+          {
+            "description": "The person.",
+            "in": "path",
+            "name": "personId",
+            "required": true,
+            "schema": {
+              "description": "The person.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get a person",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      },
+      "put": {
+        "description": "Replaces every field of a person, including the email and the office's notes. The email of the person's account, its login name, stays as it is.",
+        "operationId": "updatePerson",
+        "parameters": [
+          {
+            "description": "The person.",
+            "in": "path",
+            "name": "personId",
+            "required": true,
+            "schema": {
+              "description": "The person.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonRecord"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPerson"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update a person",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/persons/{personId}/account": {
+      "post": {
+        "description": "Creates an unconfirmed account without a password for an existing person and mails it an invitation, whose link (valid for 72 hours) sets the password and confirms the account. A person with an account is a 409 `has-account`, an email another account has a 409 `duplicate`. Only an admin may create an admin account; for the office that is a 403.",
+        "operationId": "createPersonAccount",
+        "parameters": [
+          {
+            "description": "The person.",
+            "in": "path",
+            "name": "personId",
+            "required": true,
+            "schema": {
+              "description": "The person.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonAccountInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonAccount"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create an account for a person",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/persons/{personId}/guardians": {
+      "post": {
+        "description": "Links a guardian to the person, e.g. a second parent. A guardian linked already is a 409 `duplicate`; an unknown guardian, the person itself, or one of its dependents (directly or through others, which would make the links a cycle) is a 422 on `guardianId`.",
+        "operationId": "addGuardian",
+        "parameters": [
+          {
+            "description": "The dependent.",
+            "in": "path",
+            "name": "personId",
+            "required": true,
+            "schema": {
+              "description": "The dependent.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuardianInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonMatch"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add a guardian",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/persons/{personId}/guardians/{guardianId}": {
+      "delete": {
+        "description": "Ends a guardianship. The person stays, even without a guardian left; a guardian who is not linked is a 404.",
+        "operationId": "removeGuardian",
+        "parameters": [
+          {
+            "description": "The dependent.",
+            "in": "path",
+            "name": "personId",
+            "required": true,
+            "schema": {
+              "description": "The dependent.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The guardian.",
+            "in": "path",
+            "name": "guardianId",
+            "required": true,
+            "schema": {
+              "description": "The guardian.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove a guardian",
         "tags": [
           "admin"
         ],
@@ -3186,7 +3894,7 @@
     },
     "/api/v1/family": {
       "get": {
-        "description": "Returns the signed-in person and their dependents (children without their own login), each with its other guardians.",
+        "description": "Returns the signed-in person and their dependents (usually children without their own login), each with its other guardians. A managed dependent, one with its own account or a staff link, is read-only here.",
         "operationId": "getMyFamily",
         "responses": {
           "200": {
@@ -3262,7 +3970,7 @@
     },
     "/api/v1/family/dependents/{personId}": {
       "delete": {
-        "description": "Ends the signed-in person's guardianship. A dependent left without a guardian is deleted; while it has bookings or class memberships, that is a 409 and nothing changes. Anyone else's person is a 404.",
+        "description": "Ends the signed-in person's guardianship. A dependent left without a guardian is deleted, unless it is managed (it stays); while it has bookings or class memberships, that is a 409 `in-use` and nothing changes. Anyone else's person is a 404.",
         "operationId": "removeDependent",
         "parameters": [
           {
@@ -3280,6 +3988,16 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "default": {
             "content": {
@@ -3299,7 +4017,7 @@
         "x-access": "signedIn"
       },
       "put": {
-        "description": "Replaces the name, phone and birth date of one of the signed-in person's dependents. Anyone else's person is a 404.",
+        "description": "Replaces the name, phone and birth date of one of the signed-in person's dependents. A managed dependent is a 409 `managed`; anyone else's person is a 404.",
         "operationId": "updateDependent",
         "parameters": [
           {
@@ -3334,6 +4052,16 @@
               }
             },
             "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "default": {
             "content": {

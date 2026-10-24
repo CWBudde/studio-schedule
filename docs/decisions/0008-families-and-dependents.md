@@ -60,3 +60,67 @@ mail template locale, or NULL for the school's default.
 - A family whose parents both have accounts needs the office once to link the second parent.
 - A child cannot be removed by a parent while enrolled; the 409 tells the parent to ask the office.
 - Server-initiated mails have a language without a request.
+
+## Amendment (2026-10-24): managed dependents and the office's persons view
+
+**Managed dependents.** A dependent that has its own account (one the office created for a grown-up
+child), is linked to a staff record, or is itself the guardian of someone (a young parent who is
+still linked to their own parents) is a _managed dependent_: its owner or the office maintains its
+data, not its guardians. The last case also keeps a guardian from deleting a person whose own
+dependents would lose their guardian; the same read-only rule applies, so that "managed" means one
+thing.
+
+- A guardian sees it in the family with `managed: true`, read-only. Editing it is a 409 with the
+  reason `managed`.
+- Removing it only ends the caller's guardianship. The person is never deleted by a guardian, even
+  when the caller was its last guardian. Before, the removal tried to delete the person and failed
+  on the account, staff link or guardian link with a 409 that named only bookings and class
+  memberships. Now only those two can refuse the removal of a dependent that is not managed.
+- The 409 of a refused removal (bookings, class memberships) is now the `Conflict` problem with the
+  reason `in-use` (ADR 0007), like the office's deletions.
+
+**Office** (`office`, under `/api/v1/admin/persons`). Next to the search (`listPersons`), the office
+sees a person with its guardians, dependents, account (email, role, status), staff links and class
+memberships (`getPerson`), creates persons and edits every field including the email and its notes
+(`createPerson`, `updatePerson`; a person's email is contact data, the account's email stays the
+login name). It links a guardian to a dependent (`addGuardian`; an existing link is a 409
+`duplicate`, an unknown person a 422 on `guardianId`) and removes the link (`removeGuardian`).
+Removing the last guardian keeps the person: the office decides what happens to it.
+
+- Guardian links never form a cycle. A guardian who is the person itself, or one of its dependents
+  (directly or through other dependents), is a 422 on `guardianId`.
+- A person deleted while the link is being added is a 404, not a `duplicate`.
+
+**Person lock.** Checks of a person's links run under a row lock on the person (`Persons().Lock`,
+`SELECT … FOR UPDATE` in ID order), like the lesson and term locks. `addGuardian` locks both persons
+and every dependent its cycle check walks through, so two concurrent links that would close a cycle
+together meet on a lock, and the second sees the first. A guardian's edit and removal of a
+dependent, `deletePerson`, `createPersonAccount` and linking a staff member to a person lock the
+person too, so nothing makes a dependent managed between the check and the write. A dependent's
+removal can then only be refused for what is not managed: its 409 `in-use` says "e.g. bookings or
+class memberships".
+
+**Deleting persons** (`deletePerson`, 2026-10-24; replaces "the office does not delete persons").
+The office deletes a person that nothing refers to, e.g. one created by mistake. While an account,
+a staff link, bookings, class memberships or a guardian link in either direction refer to it, the
+deletion is a 409 `in-use` and nothing changes. The office first removes what it can (guardian
+links, class memberships); accounts and bookings keep the person for good. Merging duplicate
+persons is still not planned.
+
+**Accounts for existing persons** (`createPersonAccount`). The office creates an account with an
+email and a role for a person who has none. Only an admin may create an admin account; for the
+office that is a 403. A person with an account is a 409 `has-account`, an email that another
+account has a 409 `duplicate`. The office is trusted, so it is told; ADR 0006's "same answer" rule covers the public
+flows only. A concurrent request that takes the email first is a 409 `duplicate` as well (the
+stores report a taken account email, a second account of a person, an existing guardian link and
+an existing class membership as `duplicate`), and a person deleted meanwhile is a 404. The account starts unconfirmed and
+without a password, so it cannot sign in, and a registration for its address leaves it alone
+(ADR 0004). An invitation mail (`invite`, en/de) carries a `reset-password` link valid for 72 hours.
+Setting the password with it confirms the account, since the link proves the address. A password
+reset is therefore also open to such an invited account (unconfirmed, enabled, without a password):
+when the invitation expires, "forgot password" sends a new link. An unconfirmed registration still
+confirms with its own link.
+
+**Open question for the Phase 4 booking ADR.** May a guardian book for a managed dependent, e.g. a
+teenager with their own login? `dependentOf` still admits every dependent; the booking ADR decides
+whether managed ones are excluded.

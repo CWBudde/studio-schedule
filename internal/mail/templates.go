@@ -23,15 +23,21 @@ const (
 	// TemplateEmailChanged tells the old address that the account's email
 	// address was changed. Data: EmailChangedData.
 	TemplateEmailChanged = "email-changed"
+	// TemplateInvite tells a person that the school created an account for
+	// them and sends the link to choose its password. Data: LinkData.
+	TemplateInvite = "invite"
 )
 
 // TemplateNames returns all template names.
 func TemplateNames() []string {
-	return []string{TemplateConfirmEmail, TemplateResetPassword, TemplateChangeEmail, TemplateEmailChanged}
+	return []string{
+		TemplateConfirmEmail, TemplateResetPassword, TemplateChangeEmail, TemplateEmailChanged, TemplateInvite,
+	}
 }
 
 // LinkData is the data of the templates that send a single-use link:
-// TemplateConfirmEmail, TemplateResetPassword and TemplateChangeEmail.
+// TemplateConfirmEmail, TemplateResetPassword, TemplateChangeEmail and
+// TemplateInvite.
 type LinkData struct {
 	// SchoolName is the school the account belongs to.
 	SchoolName string
