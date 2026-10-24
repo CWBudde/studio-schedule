@@ -695,7 +695,7 @@ func TestCancelFollowing(t *testing.T) {
 	svc := f.bookingService(t, now)
 	start := f.bookingIn(t, lessons[1], f.mia)
 
-	preview, err := svc.PreviewCancelFollowing(ctx, anna, start.ID)
+	preview, err := svc.PreviewCancelFollowing(ctx, anna, start.ID, domain.Date{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -715,7 +715,7 @@ func TestCancelFollowing(t *testing.T) {
 	}
 
 	want := []item{{lessons[1].ID, true}, {lessons[2].ID, false}, {lessons[4].ID, false}}
-	if got := summarize(preview); !slices.Equal(got, want) {
+	if got := summarize(preview.Bookings); !slices.Equal(got, want) {
 		t.Fatalf("preview %+v, want %+v", got, want)
 	}
 
@@ -723,16 +723,16 @@ func TestCancelFollowing(t *testing.T) {
 		t.Fatalf("the preview mailed %d times", n)
 	}
 
-	done, err := svc.CancelFollowing(ctx, anna, start.ID)
+	done, err := svc.CancelFollowing(ctx, anna, start.ID, domain.Date{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if got := summarize(done); !slices.Equal(got, want) {
+	if got := summarize(done.Bookings); !slices.Equal(got, want) {
 		t.Fatalf("canceled %+v, want %+v", got, want)
 	}
 
-	for _, fb := range done {
+	for _, fb := range done.Bookings {
 		got, events := f.booking(t, fb.Booking.ID)
 		if got.Status != domain.BookingCanceled || got.Late != fb.Late || len(events) != 1 || events[0].Late != fb.Late {
 			t.Errorf("stored %+v, events %+v", got, events)
@@ -755,21 +755,21 @@ func TestCancelFollowing(t *testing.T) {
 	}
 
 	t.Run("errors", func(t *testing.T) {
-		if _, err := svc.CancelFollowing(ctx, anna, start.ID); !errors.Is(err, ErrBookingCanceled) {
+		if _, err := svc.CancelFollowing(ctx, anna, start.ID, domain.Date{}); !errors.Is(err, ErrBookingCanceled) {
 			t.Errorf("again: want ErrBookingCanceled, got %v", err)
 		}
 
-		if _, err := svc.PreviewCancelFollowing(ctx, anna, f.bookingIn(t, oneOff, f.mia).ID); !errors.Is(err, ErrNotClassBooking) {
+		if _, err := svc.PreviewCancelFollowing(ctx, anna, f.bookingIn(t, oneOff, f.mia).ID, domain.Date{}); !errors.Is(err, ErrNotClassBooking) {
 			t.Errorf("one-off: want ErrNotClassBooking, got %v", err)
 		}
 
 		past := f.bookingIn(t, lessons[0], f.mia)
-		if _, err := svc.CancelFollowing(ctx, anna, past.ID); !errors.Is(err, ErrLessonStarted) {
+		if _, err := svc.CancelFollowing(ctx, anna, past.ID, domain.Date{}); !errors.Is(err, ErrLessonStarted) {
 			t.Errorf("started: want ErrLessonStarted, got %v", err)
 		}
 
 		annas := f.bookingIn(t, lessons[3], f.anna)
-		if _, err := svc.PreviewCancelFollowing(ctx, f.principal(t, f.olga), annas.ID); !errors.Is(err, domain.ErrNotFound) {
+		if _, err := svc.PreviewCancelFollowing(ctx, f.principal(t, f.olga), annas.ID, domain.Date{}); !errors.Is(err, domain.ErrNotFound) {
 			t.Errorf("stranger: want ErrNotFound, got %v", err)
 		}
 	})
@@ -822,12 +822,12 @@ func TestCancelFollowingMovedLesson(t *testing.T) {
 		return out
 	}
 
-	preview, err := svc.PreviewCancelFollowing(ctx, anna, start.ID)
+	preview, err := svc.PreviewCancelFollowing(ctx, anna, start.ID, domain.Date{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if got := lessonsOf(preview); !slices.Equal(got, want) {
+	if got := lessonsOf(preview.Bookings); !slices.Equal(got, want) {
 		t.Fatalf("preview %v, want %v: the requested booking first, then by start", got, want)
 	}
 
@@ -841,12 +841,12 @@ func TestCancelFollowingMovedLesson(t *testing.T) {
 	counting := &countingStore{Store: f.st}
 
 	done, err := NewBookingService(counting, clock.NewFixed(mustInstant(t, bookingNow)), f.seq, r).
-		CancelFollowing(ctx, anna, start.ID)
+		CancelFollowing(ctx, anna, start.ID, domain.Date{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if got := lessonsOf(done); !slices.Equal(got, want) {
+	if got := lessonsOf(done.Bookings); !slices.Equal(got, want) {
 		t.Fatalf("canceled %v, want %v", got, want)
 	}
 
@@ -947,13 +947,13 @@ func TestCancelFollowingConcurrentEdits(t *testing.T) {
 			return l
 		})
 
-		done, err := svc.CancelFollowing(t.Context(), f.principal(t, f.anna), f.bookingIn(t, lessons[0], f.mia).ID)
+		done, err := svc.CancelFollowing(t.Context(), f.principal(t, f.anna), f.bookingIn(t, lessons[0], f.mia).ID, domain.Date{})
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		got := make([]domain.LessonID, len(done))
-		for i, fb := range done {
+		got := make([]domain.LessonID, len(done.Bookings))
+		for i, fb := range done.Bookings {
 			got[i] = fb.Lesson.ID
 		}
 
@@ -978,7 +978,7 @@ func TestCancelFollowingConcurrentEdits(t *testing.T) {
 			return l
 		})
 
-		_, err := svc.CancelFollowing(t.Context(), f.principal(t, f.anna), f.bookingIn(t, lessons[0], f.mia).ID)
+		_, err := svc.CancelFollowing(t.Context(), f.principal(t, f.anna), f.bookingIn(t, lessons[0], f.mia).ID, domain.Date{})
 		if !errors.Is(err, ErrLessonStarted) {
 			t.Fatalf("want ErrLessonStarted, got %v", err)
 		}

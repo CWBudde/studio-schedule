@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -77,9 +78,10 @@ func registerTimetableAdmin(api huma.API, h *handlers) {
 		Path:        BasePath + "/classes/{classId}",
 		Summary:     "Update a class",
 		Description: "Replaces the fields of a class; its term stays. The future lessons that were not " +
-			"edited one by one follow, with their bookings; a capacity below the bookings of one of them is " +
-			"a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; " +
-			"its future lessons that still follow it and have no bookings are deleted.",
+			"edited one by one follow, with their bookings; a capacity below the class's member count or the " +
+			"bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and " +
+			"leaves the public timetable; its future lessons that still follow it and have no bookings but " +
+			"the automatic ones of class members are deleted with those.",
 	}), h.updateClass)
 
 	register(api, AccessOffice, write(huma.Operation{
@@ -87,7 +89,7 @@ func registerTimetableAdmin(api huma.API, h *handlers) {
 		Method:        http.MethodDelete,
 		Path:          BasePath + "/classes/{classId}",
 		Summary:       "Delete a class",
-		Description:   "Deletes a class with its lessons while none of them has started or been booked and it has no members; otherwise it is a 409 `in-use` and can be retired instead.",
+		Description:   "Deletes a class with its lessons while none of them has started or been booked (automatic bookings of former members aside) and it has no members; otherwise it is a 409 `in-use` and can be retired instead.",
 		DefaultStatus: http.StatusNoContent,
 	}), h.deleteClass)
 
@@ -105,17 +107,35 @@ func registerTimetableAdmin(api huma.API, h *handlers) {
 		Method:      http.MethodPost,
 		Path:        BasePath + "/classes/{classId}/members",
 		Summary:     "Add a class member",
-		Description: "Enrolls a person in a class. An unknown person is a 422 on `personId`, a person who is a " +
-			"member already a 409 `duplicate`.",
+		Description: "Enrolls a person in a class and books them into the class's lessons from `since` on that " +
+			"have not started, canceled ones included, even beyond a lesson's capacity, unless they have a " +
+			"booking for the lesson already (one canceled when an earlier membership ended aside). An unknown person is a 422 on `personId`, a person who is a " +
+			"member already a 409 `duplicate`, a retired class a 422 on `path.classId`, and a class whose " +
+			"members fill its capacity a 409 `full`.",
 		DefaultStatus: http.StatusCreated,
 	}), h.addClassMember)
 
 	register(api, AccessOffice, huma.Operation{
-		OperationID:   "removeClassMember",
-		Method:        http.MethodDelete,
-		Path:          BasePath + "/classes/{classId}/members/{personId}",
-		Summary:       "Remove a class member",
-		Description:   "Ends a person's membership in a class; a person who is not a member is a 404.",
+		OperationID: "updateClassMember",
+		Method:      http.MethodPut,
+		Path:        BasePath + "/classes/{classId}/members/{personId}",
+		Summary:     "Update a class member",
+		Description: "Replaces the dates of a membership: `since` and the end of a pause, `pausedUntil` (left " +
+			"out: not paused, which ends a pause). Then books the member into the class's lessons that have " +
+			"not started and that they are active on but have no booking for, as `addClassMember` does (a " +
+			"date they released stays released), after canceling their automatic bookings of those they " +
+			"are no longer active on (a new pause, a later `since`), without a mail. A person who is not a " +
+			"member is a 404, a retired class a 422 on `path.classId`.",
+		Tags: []string{"timetable"},
+	}, h.updateClassMember)
+
+	register(api, AccessOffice, huma.Operation{
+		OperationID: "removeClassMember",
+		Method:      http.MethodDelete,
+		Path:        BasePath + "/classes/{classId}/members/{personId}",
+		Summary:     "Remove a class member",
+		Description: "Ends a person's membership in a class and cancels their bookings of the class's lessons " +
+			"that have not started, without a mail; a person who is not a member is a 404.",
 		Tags:          []string{"timetable"},
 		DefaultStatus: http.StatusNoContent,
 	}, h.removeClassMember)
@@ -289,8 +309,22 @@ type ClassMemberData struct {
 
 // ClassMember is a person enrolled in a class.
 type ClassMember struct {
-	Person PersonMatch `doc:"The member."             json:"person"`
-	Since  domain.Date `doc:"Member since, if known." format:"date" json:"since,omitzero"`
+	Person      PersonMatch `doc:"The member."             json:"person"`
+	Since       domain.Date `doc:"Member since, if known." format:"date" json:"since,omitzero"`
+	PausedUntil domain.Date `doc:"The last day of the member's pause while it lasts (today or later): they are not booked automatically into lessons up to it." format:"date" json:"pausedUntil,omitzero"`
+}
+
+// ClassMemberUpdateData is the request body of updateClassMember.
+type ClassMemberUpdateData struct {
+	Since       domain.Date `doc:"Member since, if known."                          format:"date" json:"since,omitzero"       required:"false"`
+	PausedUntil domain.Date `doc:"The last day of the pause; left out: not paused." format:"date" json:"pausedUntil,omitzero" required:"false"`
+}
+
+// ClassMemberUpdateInput is the request of updateClassMember.
+type ClassMemberUpdateInput struct {
+	ClassID  domain.ClassID  `doc:"The class."  path:"classId"`
+	PersonID domain.PersonID `doc:"The member." path:"personId"`
+	Body     ClassMemberUpdateData
 }
 
 // ClassMemberList is the response body of listClassMembers.
@@ -335,18 +369,51 @@ func (h *handlers) listClassMembers(ctx context.Context, in *ClassRefInput) (*Cl
 }
 
 func (h *handlers) addClassMember(ctx context.Context, in *ClassMemberInput) (*ClassMemberOutput, error) {
-	m, err := h.deps.Timetable.AddClassMember(ctx, domain.ClassMember{
+	p, _ := principalFrom(ctx) // AccessOffice
+
+	m, err := h.deps.Timetable.AddClassMember(ctx, p, domain.ClassMember{
 		ClassID: in.ClassID, PersonID: in.Body.PersonID, Since: in.Body.Since,
 	})
 	if err != nil {
-		return nil, h.toHTTPError(ctx, err)
+		return nil, h.memberError(ctx, err)
+	}
+
+	return &ClassMemberOutput{Body: classMember(m)}, nil
+}
+
+// memberError maps the errors of the class member writes: a full class to
+// the 409 `full`, a retired one to a 422 on `path.classId`, and everything
+// else like toHTTPError.
+func (h *handlers) memberError(ctx context.Context, err error) error {
+	switch {
+	case errors.Is(err, service.ErrClassFull):
+		return conflict(reasonFull, "the class is full")
+	case errors.Is(err, service.ErrClassRetired):
+		return huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
+			Message: "the class is retired", Location: "path.classId",
+		})
+	}
+
+	return h.toHTTPError(ctx, err)
+}
+
+func (h *handlers) updateClassMember(ctx context.Context, in *ClassMemberUpdateInput) (*ClassMemberOutput, error) {
+	p, _ := principalFrom(ctx) // AccessOffice
+
+	m, err := h.deps.Timetable.UpdateClassMember(ctx, p, domain.ClassMember{
+		ClassID: in.ClassID, PersonID: in.PersonID, Since: in.Body.Since, PausedUntil: in.Body.PausedUntil,
+	})
+	if err != nil {
+		return nil, h.memberError(ctx, err)
 	}
 
 	return &ClassMemberOutput{Body: classMember(m)}, nil
 }
 
 func (h *handlers) removeClassMember(ctx context.Context, in *ClassMemberRefInput) (*struct{}, error) {
-	if err := h.deps.Timetable.RemoveClassMember(ctx, in.ClassID, in.PersonID); err != nil {
+	p, _ := principalFrom(ctx) // AccessOffice
+
+	if err := h.deps.Timetable.RemoveClassMember(ctx, p, in.ClassID, in.PersonID); err != nil {
 		return nil, h.toHTTPError(ctx, err)
 	}
 
@@ -354,5 +421,5 @@ func (h *handlers) removeClassMember(ctx context.Context, in *ClassMemberRefInpu
 }
 
 func classMember(m service.ClassMemberEntry) ClassMember {
-	return ClassMember{Person: personMatch(m.Person), Since: m.Since}
+	return ClassMember{Person: personMatch(m.Person), Since: m.Since, PausedUntil: m.PausedUntil}
 }

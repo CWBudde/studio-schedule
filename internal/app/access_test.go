@@ -54,6 +54,7 @@ var accessLevels = map[string]string{
 	"deleteClass":            "office",
 	"listClassMembers":       "office",
 	"addClassMember":         "office",
+	"updateClassMember":      "office",
 	"removeClassMember":      "office",
 	"getSchedule":            "public",
 	"getLesson":              "public",

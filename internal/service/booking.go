@@ -212,7 +212,7 @@ func (s *BookingService) Cancel(ctx context.Context, p Principal, id domain.Book
 
 		now := s.clock.Now()
 
-		canceled, err := s.cancel(ctx, tx, p, settings, now, l, b)
+		canceled, err := s.cancel(ctx, tx, p, settings, now, l, b, true)
 		if err != nil {
 			return err
 		}
@@ -228,12 +228,30 @@ func (s *BookingService) Cancel(ctx context.Context, p Principal, id domain.Book
 	return b, nil
 }
 
-// PreviewCancelFollowing returns what CancelFollowing would cancel now,
-// without changing anything.
+// FollowingCancellation is what CancelFollowing cancels, or would cancel.
+type FollowingCancellation struct {
+	// Bookings are the canceled bookings, the requested one first and the
+	// others by the start of their lessons.
+	Bookings []FollowingBooking
+	// Until is the last slot date canceled: the one asked for, or the last
+	// day of the class's term.
+	Until domain.Date
+	// PausedUntil is the end of the person's pause as a member of the class
+	// (Until), and zero for a person who is not a member (ADR 0009).
+	PausedUntil domain.Date
+}
+
+// errUntilBeforeLesson refuses an end date before the requested lesson.
+var errUntilBeforeLesson error = &domain.FieldError{
+	Field: "until", Msg: "the date must not be before the lesson's date",
+}
+
+// PreviewCancelFollowing returns what CancelFollowing would cancel now with
+// until, without changing anything.
 func (s *BookingService) PreviewCancelFollowing(
-	ctx context.Context, p Principal, id domain.BookingID,
-) ([]FollowingBooking, error) {
-	var out []FollowingBooking
+	ctx context.Context, p Principal, id domain.BookingID, until domain.Date,
+) (FollowingCancellation, error) {
+	var out FollowingCancellation
 
 	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 		settings, _, err := loadSchool(ctx, tx)
@@ -246,12 +264,12 @@ func (s *BookingService) PreviewCancelFollowing(
 			return err
 		}
 
-		out, err = following(ctx, tx, settings, s.clock.Now(), b)
+		out, err = following(ctx, tx, settings, s.clock.Now(), b, until)
 
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("preview cancel following of booking %v: %w", id, err)
+		return FollowingCancellation{}, fmt.Errorf("preview cancel following of booking %v: %w", id, err)
 	}
 
 	return out, nil
@@ -259,15 +277,19 @@ func (s *BookingService) PreviewCancelFollowing(
 
 // CancelFollowing cancels a booking of a class lesson (ErrNotClassBooking
 // for a one-off lesson) together with the person's other active bookings
-// of the same class from that lesson on, as far as their lessons have not
-// started, in one transaction; see Cancel for who may and the late flag.
-// It returns the canceled bookings, the requested one first and the others
-// by lesson start, and the acting account gets one mail listing them all
-// by start.
+// of the same class from that lesson on up to the slot date until, as far
+// as their lessons have not started, in one transaction; see Cancel for who
+// may and the late flag. A zero until means the last day of the class's
+// term; one before the requested lesson's slot date is a validation error on
+// until. A person who is a member of the class is paused until then: the
+// membership stays, and generation and enrollment book them again only into
+// lessons after it (ADR 0009). It returns the canceled bookings, the
+// requested one first and the others by lesson start, and the acting account
+// gets one mail listing them all by start.
 func (s *BookingService) CancelFollowing(
-	ctx context.Context, p Principal, id domain.BookingID,
-) ([]FollowingBooking, error) {
-	var out []FollowingBooking
+	ctx context.Context, p Principal, id domain.BookingID, until domain.Date,
+) (FollowingCancellation, error) {
+	var out FollowingCancellation
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		settings, loc, err := loadSchool(ctx, tx)
@@ -287,8 +309,10 @@ func (s *BookingService) CancelFollowing(
 			return err
 		}
 
-		if l.ClassID.IsZero() {
-			return ErrNotClassBooking
+		// The same checks, in the same order, as the preview's; they are
+		// repeated on the rows read under the locks below.
+		if err := followable(now, l, b); err != nil {
+			return err
 		}
 
 		// Lock the class first (term → class → lesson). Every transaction
@@ -297,7 +321,8 @@ func (s *BookingService) CancelFollowing(
 		// locks below cannot deadlock with them, whatever their order, and
 		// the class's lessons listed under it are complete. Single lesson
 		// edits may still change a start, so everything is decided from the
-		// rows read under the lesson locks.
+		// rows read under the lesson locks. The lock also keeps membership
+		// changes out while the pause is set.
 		if _, err := tx.Classes().Lock(ctx, l.ClassID); err != nil {
 			return err
 		}
@@ -306,7 +331,11 @@ func (s *BookingService) CancelFollowing(
 			return err
 		}
 
-		ahead, err := lessonsFrom(ctx, tx, now, l)
+		if out.Until, err = untilOf(ctx, tx, l, until); err != nil {
+			return err
+		}
+
+		ahead, err := lessonsFrom(ctx, tx, now, l, out.Until)
 		if err != nil {
 			return err
 		}
@@ -334,29 +363,97 @@ func (s *BookingService) CancelFollowing(
 			return err
 		}
 
-		out = nil // the callback may run more than once
+		m, member, err := membership(ctx, tx, l.ClassID, who.ID)
+		if err != nil {
+			return err
+		}
 
+		out.Bookings = nil // the callback may run more than once
+
+		// A member pauses rather than releasing the dates, so ending the
+		// pause books them again (ADR 0009).
 		for _, fb := range pickFollowing(settings, now, id, ahead, active) {
-			canceled, err := s.cancel(ctx, tx, p, settings, now, fb.Lesson, fb.Booking)
+			canceled, err := s.cancel(ctx, tx, p, settings, now, fb.Lesson, fb.Booking, !member)
 			if err != nil {
 				return err
 			}
 
-			out = append(out, canceled)
+			out.Bookings = append(out.Bookings, canceled)
+		}
+
+		if member {
+			m.PausedUntil = pausedUntil(m, out.Until)
+			if err := tx.Classes().UpdateMember(ctx, m); err != nil {
+				return err
+			}
+
+			out.PausedUntil = m.PausedUntil
 		}
 
 		// The mail lists the lessons by start; the response keeps the
 		// requested booking first.
-		mailed := slices.Clone(out)
+		mailed := slices.Clone(out.Bookings)
 		slices.SortStableFunc(mailed, func(a, b FollowingBooking) int { return byStart(a.Lesson, b.Lesson) })
 
 		return s.mail(ctx, tx, p, settings, loc, now, mail.TemplateBookingCanceled, who, mailed)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("cancel following of booking %v: %w", id, err)
+		return FollowingCancellation{}, fmt.Errorf("cancel following of booking %v: %w", id, err)
 	}
 
 	return out, nil
+}
+
+// untilOf returns the last slot date to cancel from lesson l of a class on:
+// until, or the last day of the class's term for a zero until. One before
+// l's slot date is errUntilBeforeLesson.
+func untilOf(ctx context.Context, tx store.Tx, l domain.Lesson, until domain.Date) (domain.Date, error) {
+	if until.IsZero() {
+		c, err := tx.Classes().Get(ctx, l.ClassID)
+		if err != nil {
+			return domain.Date{}, err
+		}
+
+		t, err := tx.Terms().Get(ctx, c.TermID)
+		if err != nil {
+			return domain.Date{}, err
+		}
+
+		until = t.EndsOn
+	}
+
+	if until.Compare(l.SlotDate) < 0 {
+		return domain.Date{}, errUntilBeforeLesson
+	}
+
+	return until, nil
+}
+
+// pausedUntil is the end of m's pause when it pauses until the school date
+// until: the later of until and a pause it has already.
+func pausedUntil(m domain.ClassMember, until domain.Date) domain.Date {
+	if m.PausedUntil.Compare(until) > 0 {
+		return m.PausedUntil
+	}
+
+	return until
+}
+
+// membership returns the membership of person in class, if any.
+func membership(
+	ctx context.Context, tx store.Tx, class domain.ClassID, person domain.PersonID,
+) (domain.ClassMember, bool, error) {
+	members, err := tx.Classes().ListMembers(ctx, class)
+	if err != nil {
+		return domain.ClassMember{}, false, err
+	}
+
+	i := slices.IndexFunc(members, func(m domain.ClassMember) bool { return m.PersonID == person })
+	if i < 0 {
+		return domain.ClassMember{}, false, nil
+	}
+
+	return members[i], true, nil
 }
 
 // bookable checks that p may book lesson l now (ADR 0009): a lesson p may
@@ -408,9 +505,12 @@ func lateCancellation(settings domain.Settings, now time.Time, l domain.Lesson) 
 }
 
 // cancel cancels booking b of the locked lesson l and records the event.
+// released says whether the cancellation gives up the date
+// (domain.Booking.Released): every cancellation of a member's family but a
+// class member's pause.
 func (s *BookingService) cancel(
 	ctx context.Context, tx store.Tx, p Principal, settings domain.Settings, now time.Time, l domain.Lesson,
-	b domain.Booking,
+	b domain.Booking, released bool,
 ) (FollowingBooking, error) {
 	switch {
 	case b.Status == domain.BookingCanceled:
@@ -419,32 +519,61 @@ func (s *BookingService) cancel(
 		return FollowingBooking{}, ErrLessonStarted
 	}
 
-	b.Status, b.CanceledAt, b.Late = domain.BookingCanceled, now, lateCancellation(settings, now, l)
-	if err := b.Validate(); err != nil {
+	b.Late, b.Released = lateCancellation(settings, now, l), released
+
+	b, err := cancelBooking(ctx, tx, s.ids, actorOf(p), now, b)
+	if err != nil {
 		return FollowingBooking{}, err
+	}
+
+	return FollowingBooking{Booking: b, Lesson: l, Late: b.Late}, nil
+}
+
+// cancelBooking cancels the active booking b, whose lesson the caller has
+// locked, at now, keeping the Late and Released flags the caller set,
+// and records the event with the actor (zero for the system). It frees the
+// place in the caller's transaction. Every cancellation goes through here:
+// a member's (BookingService.cancel) and the office's when a membership
+// ends (unenroll).
+func cancelBooking(
+	ctx context.Context, tx store.Tx, src ids.Source, actor domain.AccountID, now time.Time, b domain.Booking,
+) (domain.Booking, error) {
+	b.Status, b.CanceledAt = domain.BookingCanceled, now
+	if err := b.Validate(); err != nil {
+		return domain.Booking{}, err
 	}
 
 	if err := tx.Bookings().Update(ctx, b); err != nil {
-		return FollowingBooking{}, err
+		return domain.Booking{}, err
 	}
 
-	if err := s.addEvent(ctx, tx, p, b, now); err != nil {
-		return FollowingBooking{}, err
+	if err := recordEvent(ctx, tx, src, actor, now, b, false); err != nil {
+		return domain.Booking{}, err
 	}
 
 	// The place is free now. Once the waiting list exists (PLAN.md, Phase 4
 	// "Waitlist"), this transaction invites its next entry here, under the
 	// same lesson lock.
 
-	return FollowingBooking{Booking: b, Lesson: l, Late: b.Late}, nil
+	return b, nil
 }
 
 // addEvent records b's current status, with p's real account as the actor:
 // the admin when impersonating.
 func (s *BookingService) addEvent(ctx context.Context, tx store.Tx, p Principal, b domain.Booking, now time.Time) error {
+	return recordEvent(ctx, tx, s.ids, actorOf(p), now, b, false)
+}
+
+// recordEvent adds b's current status and late flag to its history, at now
+// by the actor (zero for the system), with the override flag of a booking
+// beyond the lesson's capacity.
+func recordEvent(
+	ctx context.Context, tx store.Tx, src ids.Source, actor domain.AccountID, now time.Time, b domain.Booking,
+	override bool,
+) error {
 	e := domain.BookingEvent{
-		ID: ids.New[domain.BookingEventID](s.ids), BookingID: b.ID, At: now, Status: b.Status,
-		ActorAccountID: cmp.Or(p.ImpersonatorID, p.AccountID), Late: b.Late,
+		ID: ids.New[domain.BookingEventID](src), BookingID: b.ID, At: now, Status: b.Status, ActorAccountID: actor,
+		Late: b.Late, Override: override,
 	}
 	if err := e.Validate(); err != nil {
 		return err
@@ -485,35 +614,51 @@ func ownBooking(
 	return who, b, nil
 }
 
-// following returns the active booking b of a class lesson that has not
-// started, followed by the person's other active bookings of the same class
-// whose lessons have the same or a later slot date and have not started, by
-// lesson start, each with whether canceling it now is late. It reads
-// without locks, for the preview.
+// following returns what CancelFollowing would cancel now with until: the
+// active booking b of a class lesson that has not started, followed by the
+// person's other active bookings of the same class whose lessons have the
+// same or a later slot date up to the effective until and have not started,
+// by lesson start, each with whether canceling it now is late, and whether
+// the person's membership would be paused. It reads without locks, for the
+// preview.
 func following(
-	ctx context.Context, tx store.Tx, settings domain.Settings, now time.Time, b domain.Booking,
-) ([]FollowingBooking, error) {
+	ctx context.Context, tx store.Tx, settings domain.Settings, now time.Time, b domain.Booking, until domain.Date,
+) (FollowingCancellation, error) {
 	l, err := tx.Lessons().Get(ctx, b.LessonID)
 	if err != nil {
-		return nil, err
+		return FollowingCancellation{}, err
 	}
 
 	if err := followable(now, l, b); err != nil {
-		return nil, err
+		return FollowingCancellation{}, err
 	}
 
-	ahead, err := lessonsFrom(ctx, tx, now, l)
+	var out FollowingCancellation
+
+	if out.Until, err = untilOf(ctx, tx, l, until); err != nil {
+		return FollowingCancellation{}, err
+	}
+
+	ahead, err := lessonsFrom(ctx, tx, now, l, out.Until)
 	if err != nil {
-		return nil, err
+		return FollowingCancellation{}, err
 	}
 
 	active, err := tx.Bookings().ListActiveByLessonsAndPersons(
 		ctx, slices.Collect(maps.Keys(ahead)), []domain.PersonID{b.PersonID})
 	if err != nil {
-		return nil, err
+		return FollowingCancellation{}, err
 	}
 
-	return pickFollowing(settings, now, b.ID, ahead, active), nil
+	out.Bookings = pickFollowing(settings, now, b.ID, ahead, active)
+
+	if m, member, err := membership(ctx, tx, l.ClassID, b.PersonID); err != nil {
+		return FollowingCancellation{}, err
+	} else if member {
+		out.PausedUntil = pausedUntil(m, out.Until)
+	}
+
+	return out, nil
 }
 
 // followable checks that the following weeks of booking b of lesson l can
@@ -533,8 +678,10 @@ func followable(now time.Time, l domain.Lesson, b domain.Booking) error {
 }
 
 // lessonsFrom returns, by ID, l and the lessons of its class with the same
-// or a later slot date that have not started now.
-func lessonsFrom(ctx context.Context, tx store.Tx, now time.Time, l domain.Lesson) (map[domain.LessonID]domain.Lesson, error) {
+// or a later slot date up to until that have not started now.
+func lessonsFrom(
+	ctx context.Context, tx store.Tx, now time.Time, l domain.Lesson, until domain.Date,
+) (map[domain.LessonID]domain.Lesson, error) {
 	lessons, err := tx.Lessons().ListByClass(ctx, l.ClassID, l.SlotDate)
 	if err != nil {
 		return nil, err
@@ -543,7 +690,7 @@ func lessonsFrom(ctx context.Context, tx store.Tx, now time.Time, l domain.Lesso
 	ahead := map[domain.LessonID]domain.Lesson{l.ID: l}
 
 	for _, c := range lessons {
-		if now.Before(c.StartsAt) {
+		if now.Before(c.StartsAt) && c.SlotDate.Compare(until) <= 0 {
 			ahead[c.ID] = c
 		}
 	}

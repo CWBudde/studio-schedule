@@ -311,6 +311,17 @@
         ],
         "type": "object"
       },
+      "CancelFollowingData": {
+        "additionalProperties": false,
+        "properties": {
+          "until": {
+            "description": "Last slot date to cancel; default: the last day of the class's term.",
+            "format": "date",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "CanceledBooking": {
         "additionalProperties": false,
         "properties": {
@@ -658,6 +669,11 @@
       "ClassMember": {
         "additionalProperties": false,
         "properties": {
+          "pausedUntil": {
+            "description": "The last day of the member's pause while it lasts (today or later): they are not booked automatically into lessons up to it.",
+            "format": "date",
+            "type": "string"
+          },
           "person": {
             "$ref": "#/components/schemas/PersonMatch",
             "description": "The member."
@@ -706,6 +722,22 @@
         "required": [
           "items"
         ],
+        "type": "object"
+      },
+      "ClassMemberUpdateData": {
+        "additionalProperties": false,
+        "properties": {
+          "pausedUntil": {
+            "description": "The last day of the pause; left out: not paused.",
+            "format": "date",
+            "type": "string"
+          },
+          "since": {
+            "description": "Member since, if known.",
+            "format": "date",
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "CloneConflictLesson": {
@@ -822,7 +854,7 @@
             "description": "The lesson that uses the room; only with reason room-taken."
           },
           "reason": {
-            "description": "in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings fill the lesson's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking is canceled already.",
+            "description": "in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking is canceled already.",
             "enum": [
               "in-use",
               "duplicate",
@@ -1246,10 +1278,21 @@
               "$ref": "#/components/schemas/CanceledBooking"
             },
             "type": "array"
+          },
+          "pausedUntil": {
+            "description": "Only for a member of the class: they stay a member, paused until this date (until), and are booked again automatically from the day after.",
+            "format": "date",
+            "type": "string"
+          },
+          "until": {
+            "description": "The last slot date canceled: the one asked for, or the last day of the class's term.",
+            "format": "date",
+            "type": "string"
           }
         },
         "required": [
-          "bookings"
+          "bookings",
+          "until"
         ],
         "type": "object"
       },
@@ -4417,7 +4460,7 @@
     },
     "/api/v1/bookings/{bookingId}/cancel-following": {
       "get": {
-        "description": "Returns what `cancelFollowing` would cancel now, without changing anything, and fails like it.",
+        "description": "Returns what `cancelFollowing` would cancel now with `until`, without changing anything, and fails like it (an `until` before the lesson's date is a 422 on `query.until`). Without `until`, the response names the default: the last day of the class's term.",
         "operationId": "previewCancelFollowing",
         "parameters": [
           {
@@ -4428,6 +4471,17 @@
             "schema": {
               "description": "The booking.",
               "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Last slot date to cancel; default: the last day of the class's term.",
+            "explode": false,
+            "in": "query",
+            "name": "until",
+            "schema": {
+              "description": "Last slot date to cancel; default: the last day of the class's term.",
+              "format": "date",
               "type": "string"
             }
           }
@@ -4471,7 +4525,7 @@
         "x-access": "signedIn"
       },
       "post": {
-        "description": "Cancels a booking of a class lesson together with the same person's other active bookings of that class from this lesson on whose lessons have not started, in one transaction, each `late` like in `cancelBooking`. A booking of a one-off lesson, or one whose lesson has started, is a 422 on `path.bookingId`; a canceled one a 409 `already-canceled`; any other person's a 404. The signed-in account gets one mail listing every canceled booking.",
+        "description": "Cancels a booking of a class lesson together with the same person's other active bookings of that class from this lesson on up to the slot date `until` (default: the last day of the class's term) whose lessons have not started, in one transaction, each `late` like in `cancelBooking`. A person who is a member of the class stays one but is paused until then: they are booked automatically again only into the lessons after it (`pausedUntil`). A booking of a one-off lesson, or one whose lesson has started, is a 422 on `path.bookingId`; an `until` before the lesson's date a 422 on `body.until`; a canceled booking a 409 `already-canceled`; any other person's a 404. The signed-in account gets one mail listing every canceled booking.",
         "operationId": "cancelFollowing",
         "parameters": [
           {
@@ -4486,6 +4540,15 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelFollowingData"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -4527,7 +4590,7 @@
     },
     "/api/v1/classes/{classId}": {
       "delete": {
-        "description": "Deletes a class with its lessons while none of them has started or been booked and it has no members; otherwise it is a 409 `in-use` and can be retired instead.",
+        "description": "Deletes a class with its lessons while none of them has started or been booked (automatic bookings of former members aside) and it has no members; otherwise it is a 409 `in-use` and can be retired instead.",
         "operationId": "deleteClass",
         "parameters": [
           {
@@ -4574,7 +4637,7 @@
         "x-access": "office"
       },
       "put": {
-        "description": "Replaces the fields of a class; its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons that still follow it and have no bookings are deleted.",
+        "description": "Replaces the fields of a class; its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the class's member count or the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons that still follow it and have no bookings but the automatic ones of class members are deleted with those.",
         "operationId": "updateClass",
         "parameters": [
           {
@@ -4640,7 +4703,7 @@
     },
     "/api/v1/classes/{classId}/members": {
       "post": {
-        "description": "Enrolls a person in a class. An unknown person is a 422 on `personId`, a person who is a member already a 409 `duplicate`.",
+        "description": "Enrolls a person in a class and books them into the class's lessons from `since` on that have not started, canceled ones included, even beyond a lesson's capacity, unless they have a booking for the lesson already (one canceled when an earlier membership ended aside). An unknown person is a 422 on `personId`, a person who is a member already a 409 `duplicate`, a retired class a 422 on `path.classId`, and a class whose members fill its capacity a 409 `full`.",
         "operationId": "addClassMember",
         "parameters": [
           {
@@ -4706,7 +4769,7 @@
     },
     "/api/v1/classes/{classId}/members/{personId}": {
       "delete": {
-        "description": "Ends a person's membership in a class; a person who is not a member is a 404.",
+        "description": "Ends a person's membership in a class and cancels their bookings of the class's lessons that have not started, without a mail; a person who is not a member is a 404.",
         "operationId": "removeClassMember",
         "parameters": [
           {
@@ -4748,6 +4811,71 @@
           }
         },
         "summary": "Remove a class member",
+        "tags": [
+          "timetable"
+        ],
+        "x-access": "office"
+      },
+      "put": {
+        "description": "Replaces the dates of a membership: `since` and the end of a pause, `pausedUntil` (left out: not paused, which ends a pause). Then books the member into the class's lessons that have not started and that they are active on but have no booking for, as `addClassMember` does (a date they released stays released), after canceling their automatic bookings of those they are no longer active on (a new pause, a later `since`), without a mail. A person who is not a member is a 404, a retired class a 422 on `path.classId`.",
+        "operationId": "updateClassMember",
+        "parameters": [
+          {
+            "description": "The class.",
+            "in": "path",
+            "name": "classId",
+            "required": true,
+            "schema": {
+              "description": "The class.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The member.",
+            "in": "path",
+            "name": "personId",
+            "required": true,
+            "schema": {
+              "description": "The member.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassMemberUpdateData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassMember"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update a class member",
         "tags": [
           "timetable"
         ],

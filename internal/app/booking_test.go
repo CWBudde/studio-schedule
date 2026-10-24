@@ -162,8 +162,19 @@ func TestBookings(t *testing.T) {
 	preview := decode(t, a.expect(http.StatusOK, http.MethodGet, followingPath, "", clara))
 	if items, _ := preview["bookings"].([]any); len(items) != 2 ||
 		items[0].(map[string]any)["lessonId"] != first || items[1].(map[string]any)["lessonId"] != second ||
-		items[0].(map[string]any)["late"] != false {
+		items[0].(map[string]any)["late"] != false || preview["until"] == nil {
 		t.Fatalf("preview %v", preview)
+	}
+
+	// An end date before the lesson is refused where it was given.
+	early := decode(t, a.expect(http.StatusUnprocessableEntity, http.MethodGet, followingPath+"?until=2000-01-01", "", clara))
+	if errs, _ := early["errors"].([]any); len(errs) != 1 || errs[0].(map[string]any)["location"] != "query.until" {
+		t.Errorf("preview until 2000-01-01: %v, want 422 on query.until", early)
+	}
+
+	early = decode(t, a.expect(http.StatusUnprocessableEntity, http.MethodPost, followingPath, `{"until":"2000-01-01"}`, clara))
+	if errs, _ := early["errors"].([]any); len(errs) != 1 || errs[0].(map[string]any)["location"] != "body.until" {
+		t.Errorf("cancel until 2000-01-01: %v, want 422 on body.until", early)
 	}
 
 	done := decode(t, a.expect(http.StatusOK, http.MethodPost, followingPath, "", clara))

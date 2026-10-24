@@ -62,6 +62,8 @@ func TestDemoDeterministic(t *testing.T) {
 	sameSlice(t, "accounts", a.Accounts, b.Accounts)
 	sameSlice(t, "class members", a.ClassMembers, b.ClassMembers)
 	sameSlice(t, "lessons", a.Lessons, b.Lessons)
+	sameSlice(t, "bookings", a.Bookings, b.Bookings)
+	sameSlice(t, "booking events", a.BookingEvents, b.BookingEvents)
 
 	anchor := domain.Date{Year: 2031, Month: time.March, Day: 9}
 	c, d := seed.DemoAt(anchor), seed.DemoAt(anchor)
@@ -335,6 +337,58 @@ func TestDemoValid(t *testing.T) {
 	validAll(t, d.Guardians)
 	validAll(t, d.Accounts)
 	validAll(t, d.ClassMembers)
+	validAll(t, d.Bookings)
+	validAll(t, d.BookingEvents)
+}
+
+// TestDemoMemberBookings checks that the class lessons of the demo have
+// the automatic bookings of exactly the members of their class, as
+// generation books them (ADR 0009), and the workshops none.
+func TestDemoMemberBookings(t *testing.T) {
+	t.Parallel()
+
+	d := seed.Demo()
+
+	booked := map[domain.LessonID][]domain.PersonID{}
+
+	for _, b := range d.Bookings {
+		if b.Source != domain.BookingSourceMember || b.Status != domain.BookingBooked {
+			t.Errorf("booking %+v, want a booked member booking", b)
+		}
+
+		booked[b.LessonID] = append(booked[b.LessonID], b.PersonID)
+	}
+
+	events := map[domain.BookingID]int{}
+	for _, e := range d.BookingEvents {
+		events[e.BookingID]++
+
+		if e.Status != domain.BookingBooked || !e.ActorAccountID.IsZero() || e.Override {
+			t.Errorf("event %+v, want a booked event of the system", e)
+		}
+	}
+
+	for _, b := range d.Bookings {
+		if events[b.ID] != 1 {
+			t.Errorf("booking %v has %d events, want one", b.ID, events[b.ID])
+		}
+	}
+
+	if len(d.Bookings) == 0 {
+		t.Fatal("the demo has no member bookings")
+	}
+
+	for _, l := range d.Lessons {
+		var want []domain.PersonID
+
+		for _, m := range d.ClassMembers {
+			if !l.ClassID.IsZero() && m.ClassID == l.ClassID && m.ActiveOn(l.SlotDate) {
+				want = append(want, m.PersonID)
+			}
+		}
+
+		sameSet(t, "members booked into lesson "+l.ID.String(), booked[l.ID], want)
+	}
 }
 
 func TestDemoCounts(t *testing.T) {
@@ -578,7 +632,8 @@ func TestDemoTimetableConflicts(t *testing.T) {
 }
 
 // TestDemoChildren checks that children (dependents) are minors with a
-// guardian, never hold an account and only share classes with children.
+// guardian, only share classes with children, and that only one teenager
+// holds an account (a managed dependent).
 func TestDemoChildren(t *testing.T) {
 	t.Parallel()
 
@@ -607,8 +662,11 @@ func TestDemoChildren(t *testing.T) {
 			t.Errorf("child %s %s: birth date %v is not a minor's", p.GivenName, p.FamilyName, p.BirthDate)
 		}
 
-		if p.Email != "" {
-			t.Errorf("child %s %s has an email", p.GivenName, p.FamilyName)
+		// Only a teenager has an email and an account of their own (a
+		// managed dependent, ADR 0008).
+		teen := domain.Date{Year: p.BirthDate.Year + 14, Month: p.BirthDate.Month, Day: p.BirthDate.Day}
+		if p.Email != "" && teen.Compare(termStart) > 0 {
+			t.Errorf("child %s %s under 14 has an email", p.GivenName, p.FamilyName)
 		}
 	}
 
@@ -616,10 +674,23 @@ func TestDemoChildren(t *testing.T) {
 		t.Fatal("no children in the demo data")
 	}
 
+	managed := 0
+
 	for _, a := range d.Accounts {
-		if children[a.PersonID] {
-			t.Errorf("account %q belongs to a child", a.Email)
+		if !children[a.PersonID] {
+			continue
 		}
+
+		managed++
+
+		p := d.Persons[slices.IndexFunc(d.Persons, func(p domain.Person) bool { return p.ID == a.PersonID })]
+		if a.Role != domain.RoleMember || p.Email != a.Email {
+			t.Errorf("child account %+v, want a member account with the child's email", a)
+		}
+	}
+
+	if managed != 1 {
+		t.Errorf("%d children with an account, want one managed dependent", managed)
 	}
 
 	// A class is either a children's or an adults' class.
@@ -781,6 +852,32 @@ func TestLoadDemoRoundTrip(t *testing.T) {
 		}
 
 		sameSet(t, "lessons", lessons, want.Lessons)
+
+		var (
+			bookings []domain.Booking
+			events   []domain.BookingEvent
+		)
+
+		for _, l := range lessons {
+			bs, err := tx.Bookings().ListByLesson(ctx, l.ID)
+			if err != nil {
+				return err
+			}
+
+			bookings = append(bookings, bs...)
+
+			for _, b := range bs {
+				es, err := tx.Bookings().ListEvents(ctx, b.ID)
+				if err != nil {
+					return err
+				}
+
+				events = append(events, es...)
+			}
+		}
+
+		sameSet(t, "bookings", bookings, want.Bookings)
+		sameSet(t, "booking events", events, want.BookingEvents)
 
 		return nil
 	})

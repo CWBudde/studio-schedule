@@ -23,8 +23,9 @@ import (
 // the new time, room, staff and capacity; its bookings move with it. A
 // follower whose new slot lies in the past or outside the term, or whose
 // week has a lesson that stays, and every follower of a retired class, is
-// deleted, or stays as it is while it has bookings. The class has at most
-// one lesson a week, so generation skips a week with a lesson that stays.
+// deleted with its automatic member bookings, or stays as it is while it
+// has other bookings (ADR 0009). The class has at most one lesson a week,
+// so generation skips a week with a lesson that stays.
 func (s *TimetableService) syncLessons(ctx context.Context, tx store.Tx, t domain.Term, old, c domain.Class) error {
 	settings, loc, err := loadSchool(ctx, tx)
 	if errors.Is(err, ErrNoSchool) {
@@ -96,8 +97,8 @@ func (s *TimetableService) moveFollowers(
 }
 
 // follow moves lesson id of class c to slot, starting at start, or, unless
-// it moves, deletes it while it has no bookings. It locks the lesson first,
-// as every capacity check must.
+// it moves, deletes it with its member bookings while it has no other
+// bookings. It locks the lesson first, as every capacity check must.
 func (s *TimetableService) follow(
 	ctx context.Context, tx store.Tx, id domain.LessonID, c domain.Class, slot domain.Date, start time.Time, moves bool,
 ) error {
@@ -106,20 +107,19 @@ func (s *TimetableService) follow(
 		return err
 	}
 
-	booked, err := hasBookings(ctx, tx, l.ID)
-	if err != nil {
-		return err
-	}
-
 	if !moves {
-		if booked {
-			return nil
+		kept, err := hasOwnBookings(ctx, tx, l.ID)
+		if err != nil || kept {
+			return err
 		}
 
-		return tx.Lessons().Delete(ctx, l.ID)
+		return deleteClassLesson(ctx, tx, l.ID)
 	}
 
-	if booked {
+	// Only a lower capacity can conflict with the bookings: a lesson booked
+	// beyond its capacity already (a member's override, ADR 0009) moves
+	// along when the capacity stays.
+	if c.Capacity < l.Capacity {
 		n, err := tx.Bookings().CountActive(ctx, l.ID)
 		if err != nil {
 			return err

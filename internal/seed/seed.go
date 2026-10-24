@@ -45,6 +45,10 @@ type Dataset struct {
 	Credentials  []domain.Credential
 	ClassMembers []domain.ClassMember
 	Lessons      []domain.Lesson
+	// Bookings are the automatic bookings of the class members in the
+	// lessons of their classes, each with its event in BookingEvents.
+	Bookings      []domain.Booking
+	BookingEvents []domain.BookingEvent
 }
 
 // LoadDemo writes the complete demo data set for FixedDemoAnchor (Demo)
@@ -153,6 +157,18 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 	for _, l := range d.Lessons {
 		if err := tx.Lessons().Create(ctx, l); err != nil {
 			return fmt.Errorf("lesson %v: %w", l.ID, err)
+		}
+	}
+
+	for _, b := range d.Bookings {
+		if err := tx.Bookings().Create(ctx, b); err != nil {
+			return fmt.Errorf("booking %v: %w", b.ID, err)
+		}
+	}
+
+	for _, e := range d.BookingEvents {
+		if err := tx.Bookings().AddEvent(ctx, e); err != nil {
+			return fmt.Errorf("booking event %v: %w", e.ID, err)
 		}
 	}
 

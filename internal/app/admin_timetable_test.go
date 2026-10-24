@@ -2,6 +2,7 @@ package app_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/cwbudde/studio-schedule/internal/app"
@@ -139,7 +140,9 @@ func TestAdminTerms(t *testing.T) {
 }
 
 // TestAdminClassMembers runs the office's class member writes over HTTP:
-// list, add (201, 409 `duplicate`, a 422 on an unknown person) and remove.
+// list, add (201, 409 `duplicate`, a 422 on an unknown person, 409 `full`
+// beyond the class's capacity) and remove, and the 422 on a class capacity
+// below its member count.
 func TestAdminClassMembers(t *testing.T) {
 	t.Parallel()
 
@@ -191,6 +194,66 @@ func TestAdminClassMembers(t *testing.T) {
 		t.Errorf("422 errors %v, want body.personId", unknown["errors"])
 	}
 
+	// The office pauses the membership and ends the pause.
+	a.expect(http.StatusForbidden, http.MethodPut, add+"/"+personID, `{}`, member)
+
+	paused := decode(t, a.expect(http.StatusOK, http.MethodPut, add+"/"+personID,
+		`{"since":"2026-09-07","pausedUntil":"2026-12-24"}`, office))
+	if paused["pausedUntil"] != "2026-12-24" || paused["since"] != "2026-09-07" {
+		t.Errorf("paused %v", paused)
+	}
+
+	resumed := decode(t, a.expect(http.StatusOK, http.MethodPut, add+"/"+personID, `{"since":"2026-09-07"}`, office))
+	if _, ok := resumed["pausedUntil"]; ok {
+		t.Errorf("resumed %v, want no pause", resumed)
+	}
+
 	a.expect(http.StatusNoContent, http.MethodDelete, add+"/"+personID, "", office)
 	a.expect(http.StatusNotFound, http.MethodDelete, add+"/"+personID, "", office)
+	a.expect(http.StatusNotFound, http.MethodPut, add+"/"+personID, `{}`, office)
+
+	// A class refuses members beyond its capacity, and a capacity below its
+	// member count (ADR 0009).
+	demo, _ := classes["items"].([]any)[0].(map[string]any)
+	instructor, _ := demo["instructor"].(map[string]any)["id"].(string)
+	classBody := func(capacity string) string {
+		return `{"courseTypeId":"` + demo["courseTypeId"].(string) + `","roomId":"` + demo["roomId"].(string) +
+			`","instructorId":"` + instructor + `","level":"open","weekday":3,"startTime":"20:15",` +
+			`"durationMinutes":45,"capacity":` + capacity + `,"retired":false}`
+	}
+	small := decode(t, a.expect(http.StatusCreated, http.MethodPost, "/api/v1/terms/"+termID+"/classes", classBody("1"), office))
+	smallID, _ := small["id"].(string)
+	smallAdd := "/api/v1/classes/" + smallID + "/members"
+
+	a.expect(http.StatusCreated, http.MethodPost, smallAdd, body, office)
+
+	others := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/persons?q=hanna", "", office))
+	otherID, _ := others["items"].([]any)[0].(map[string]any)["id"].(string)
+
+	full := decode(t, a.expect(http.StatusConflict, http.MethodPost, smallAdd, `{"personId":"`+otherID+`"}`, office))
+	if full["reason"] != "full" {
+		t.Errorf("409 %v, want reason full", full)
+	}
+
+	a.expect(http.StatusOK, http.MethodPut, "/api/v1/classes/"+smallID, classBody("2"), office)
+	a.expect(http.StatusCreated, http.MethodPost, smallAdd, `{"personId":"`+otherID+`"}`, office)
+
+	below := decode(t, a.expect(http.StatusUnprocessableEntity, http.MethodPut, "/api/v1/classes/"+smallID, classBody("1"), office))
+	if errs, _ := below["errors"].([]any); len(errs) != 1 || errs[0].(map[string]any)["location"] != "body.capacity" {
+		t.Errorf("422 errors %v, want body.capacity", below["errors"])
+	}
+
+	// A retired class takes no members.
+	a.expect(http.StatusOK, http.MethodPut, "/api/v1/classes/"+smallID,
+		strings.Replace(classBody("3"), `"retired":false`, `"retired":true`, 1), office)
+
+	retired := decode(t, a.expect(http.StatusUnprocessableEntity, http.MethodPost, smallAdd, `{"personId":"`+personID+`"}`, office))
+	if errs, _ := retired["errors"].([]any); len(errs) != 1 || errs[0].(map[string]any)["location"] != "path.classId" {
+		t.Errorf("422 errors %v, want path.classId", retired["errors"])
+	}
+
+	retired = decode(t, a.expect(http.StatusUnprocessableEntity, http.MethodPut, smallAdd+"/"+personID, `{}`, office))
+	if errs, _ := retired["errors"].([]any); len(errs) != 1 || errs[0].(map[string]any)["location"] != "path.classId" {
+		t.Errorf("update in a retired class: 422 errors %v, want path.classId", retired["errors"])
+	}
 }

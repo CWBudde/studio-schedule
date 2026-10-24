@@ -21,7 +21,8 @@ import (
 // creates only the missing ones, never relying on a failed insert. Lessons
 // that exist are left untouched, whatever their state, and a lesson that
 // moved keeps its slot, so the slot is not filled again. Retired classes get
-// no lessons.
+// no lessons. Each new lesson that has not started gets the class members
+// booked (ADR 0009).
 type LessonGenerator struct {
 	store store.Store
 	clock clock.Clock
@@ -143,9 +144,11 @@ func (g *LessonGenerator) generate(
 // fill creates the missing lessons of class c in term t for the slots on
 // the school dates in [from, to) that start after the given instant (any
 // start for the zero instant; see missingSlots), and returns how many it
-// created. It locks the class first and works with the locked version, so
-// a concurrent class edit (UpdateClass, which locks it too) is either
-// complete or not begun. The caller has locked t (TermRepo.Lock).
+// created. It books the class members into each new lesson that has not
+// started (bookMembers; ADR 0009). It locks the class first and works with
+// the locked version, so a concurrent class edit (UpdateClass, which locks
+// it too) is either complete or not begun. The caller has locked t
+// (TermRepo.Lock).
 func (g *LessonGenerator) fill(
 	ctx context.Context, tx store.Tx, c domain.Class, t domain.Term, from, to domain.Date, loc *time.Location,
 	after time.Time,
@@ -160,6 +163,17 @@ func (g *LessonGenerator) fill(
 		return 0, err
 	}
 
+	if len(missing) == 0 {
+		return 0, nil
+	}
+
+	members, err := tx.Classes().ListMembers(ctx, c.ID)
+	if err != nil {
+		return 0, fmt.Errorf("list members of class %s: %w", c.ID, err)
+	}
+
+	now := g.clock.Now()
+
 	for _, l := range missing {
 		l.ID = ids.New[domain.LessonID](g.ids)
 
@@ -169,6 +183,10 @@ func (g *LessonGenerator) fill(
 
 		if err := tx.Lessons().Create(ctx, l); err != nil {
 			return 0, fmt.Errorf("create lesson of class %s at %s: %w", c.ID, l.StartsAt, err)
+		}
+
+		if err := bookMembers(ctx, tx, g.ids, now, l, members); err != nil {
+			return 0, err
 		}
 	}
 

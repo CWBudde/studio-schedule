@@ -43,8 +43,8 @@ func (s *TimetableService) CreateTerm(ctx context.Context, d TermData) (domain.T
 
 // UpdateTerm replaces a term's name and dates. The lessons of its classes
 // that the new range leaves out are deleted while they lie ahead and have
-// no bookings; a lesson left out that has started or is booked is a
-// validation error on the date that leaves it out (fitLessons). A longer
+// no bookings but automatic member bookings, which go with them; a lesson
+// left out that has started or has other bookings is a validation error on the date that leaves it out (fitLessons). A longer
 // range gets the lessons of the rolling horizon that have not started.
 func (s *TimetableService) UpdateTerm(ctx context.Context, id domain.TermID, d TermData) (domain.Term, error) {
 	t := d.term(id)
@@ -106,8 +106,9 @@ func (s *TimetableService) DeleteTerm(ctx context.Context, id domain.TermID) err
 // A lesson whose slot lies outside the range is deleted while it lies
 // ahead and has no bookings, whether it follows its class, was edited one
 // by one (detached) or is canceled: nobody is booked into it, so nobody
-// misses it (ADR 0007). A lesson outside that has started or is booked
-// refuses the new range with a validation error on startsOn or endsOn,
+// misses it (ADR 0007). Automatic class member bookings do not count and go
+// with the lesson (ADR 0009). A lesson outside that has started or has
+// other bookings refuses the new range with a validation error on startsOn or endsOn,
 // whichever leaves it out: history never ends up outside its term, and the
 // office handles the bookings first.
 func (s *TimetableService) fitLessons(ctx context.Context, tx store.Tx, t domain.Term) error {
@@ -179,7 +180,7 @@ func leave(ctx context.Context, tx store.Tx, id domain.LessonID, field string, n
 		return err
 	}
 
-	booked, err := hasBookings(ctx, tx, l.ID)
+	booked, err := hasOwnBookings(ctx, tx, l.ID)
 	if err != nil {
 		return err
 	}
@@ -192,7 +193,7 @@ func leave(ctx context.Context, tx store.Tx, id domain.LessonID, field string, n
 	case booked:
 		why = "has bookings"
 	default:
-		return tx.Lessons().Delete(ctx, l.ID)
+		return deleteClassLesson(ctx, tx, l.ID)
 	}
 
 	return &domain.FieldError{

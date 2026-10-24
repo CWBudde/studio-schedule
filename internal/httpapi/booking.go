@@ -55,8 +55,9 @@ func registerBookings(api huma.API, h *handlers) {
 		Method:      http.MethodGet,
 		Path:        BasePath + "/bookings/{bookingId}/cancel-following",
 		Summary:     "Preview canceling the following weeks",
-		Description: "Returns what `cancelFollowing` would cancel now, without changing anything, and fails " +
-			"like it.",
+		Description: "Returns what `cancelFollowing` would cancel now with `until`, without changing anything, " +
+			"and fails like it (an `until` before the lesson's date is a 422 on `query.until`). Without " +
+			"`until`, the response names the default: the last day of the class's term.",
 		Tags: []string{"bookings"},
 	}), h.previewCancelFollowing)
 
@@ -65,10 +66,14 @@ func registerBookings(api huma.API, h *handlers) {
 		Path:        BasePath + "/bookings/{bookingId}/cancel-following",
 		Summary:     "Cancel the following weeks",
 		Description: "Cancels a booking of a class lesson together with the same person's other active " +
-			"bookings of that class from this lesson on whose lessons have not started, in one transaction, " +
-			"each `late` like in `cancelBooking`. A booking of a one-off lesson, or one whose lesson has " +
-			"started, is a 422 on `path.bookingId`; a canceled one a 409 `already-canceled`; any other " +
-			"person's a 404. The signed-in account gets one mail listing every canceled booking.",
+			"bookings of that class from this lesson on up to the slot date `until` (default: the last day " +
+			"of the class's term) whose lessons have not started, in one transaction, each `late` like in " +
+			"`cancelBooking`. A person who is a member of the class stays one but is paused until then: " +
+			"they are booked automatically again only into the lessons after it (`pausedUntil`). A booking " +
+			"of a one-off lesson, or one whose lesson has started, is a 422 on `path.bookingId`; an " +
+			"`until` before the lesson's date a 422 on `body.until`; a canceled booking a 409 " +
+			"`already-canceled`; any other person's a 404. The signed-in account gets one mail listing " +
+			"every canceled booking.",
 	}), h.cancelFollowing)
 }
 
@@ -117,7 +122,26 @@ type CanceledBooking struct {
 // FollowingCancellation is the response body of previewCancelFollowing and
 // cancelFollowing.
 type FollowingCancellation struct {
-	Bookings []CanceledBooking `doc:"The bookings, ordered by the start of their lessons; the requested one first." json:"bookings" nullable:"false"`
+	Bookings    []CanceledBooking `doc:"The bookings, ordered by the start of their lessons; the requested one first." json:"bookings" nullable:"false"`
+	Until       domain.Date       `doc:"The last slot date canceled: the one asked for, or the last day of the class's term." format:"date" json:"until"`
+	PausedUntil domain.Date       `doc:"Only for a member of the class: they stay a member, paused until this date (until), and are booked again automatically from the day after." format:"date" json:"pausedUntil,omitzero"`
+}
+
+// PreviewCancelFollowingInput is the request of previewCancelFollowing.
+type PreviewCancelFollowingInput struct {
+	BookingID domain.BookingID `doc:"The booking." path:"bookingId"`
+	Until     domain.Date      `doc:"Last slot date to cancel; default: the last day of the class's term." format:"date" query:"until"`
+}
+
+// CancelFollowingData is the request body of cancelFollowing.
+type CancelFollowingData struct {
+	Until domain.Date `doc:"Last slot date to cancel; default: the last day of the class's term." format:"date" json:"until,omitzero" required:"false"`
+}
+
+// CancelFollowingInput is the request of cancelFollowing.
+type CancelFollowingInput struct {
+	BookingID domain.BookingID `doc:"The booking." path:"bookingId"`
+	Body      *CancelFollowingData
 }
 
 // FollowingCancellationOutput is the response of previewCancelFollowing and
@@ -139,17 +163,22 @@ func (h *handlers) cancelBooking(ctx context.Context, in *BookingRefInput) (*Boo
 }
 
 func (h *handlers) previewCancelFollowing(
-	ctx context.Context, in *BookingRefInput,
+	ctx context.Context, in *PreviewCancelFollowingInput,
 ) (*FollowingCancellationOutput, error) {
 	p, _ := principalFrom(ctx)
 
-	return h.followingOutput(ctx)(h.deps.Bookings.PreviewCancelFollowing(ctx, p, in.BookingID))
+	return h.followingOutput(ctx, "query.until")(h.deps.Bookings.PreviewCancelFollowing(ctx, p, in.BookingID, in.Until))
 }
 
-func (h *handlers) cancelFollowing(ctx context.Context, in *BookingRefInput) (*FollowingCancellationOutput, error) {
+func (h *handlers) cancelFollowing(ctx context.Context, in *CancelFollowingInput) (*FollowingCancellationOutput, error) {
 	p, _ := principalFrom(ctx)
 
-	return h.followingOutput(ctx)(h.deps.Bookings.CancelFollowing(ctx, p, in.BookingID))
+	var until domain.Date
+	if in.Body != nil {
+		until = in.Body.Until
+	}
+
+	return h.followingOutput(ctx, "body.until")(h.deps.Bookings.CancelFollowing(ctx, p, in.BookingID, until))
 }
 
 func (h *handlers) bookingOutput(ctx context.Context) func(domain.Booking, error) (*BookingOutput, error) {
@@ -162,16 +191,27 @@ func (h *handlers) bookingOutput(ctx context.Context) func(domain.Booking, error
 	}
 }
 
+// followingOutput answers previewCancelFollowing and cancelFollowing; a bad
+// until is a 422 at untilAt, where the request carries it.
 func (h *handlers) followingOutput(
-	ctx context.Context,
-) func([]service.FollowingBooking, error) (*FollowingCancellationOutput, error) {
-	return func(fbs []service.FollowingBooking, err error) (*FollowingCancellationOutput, error) {
-		if err != nil {
+	ctx context.Context, untilAt string,
+) func(service.FollowingCancellation, error) (*FollowingCancellationOutput, error) {
+	return func(fc service.FollowingCancellation, err error) (*FollowingCancellationOutput, error) {
+		var field *domain.FieldError
+
+		switch {
+		case errors.As(err, &field) && field.Field == "until":
+			return nil, huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
+				Message: field.Msg, Location: untilAt,
+			})
+		case err != nil:
 			return nil, h.bookingError(ctx, err)
 		}
 
-		body := FollowingCancellation{Bookings: make([]CanceledBooking, 0, len(fbs))}
-		for _, fb := range fbs {
+		body := FollowingCancellation{
+			Bookings: make([]CanceledBooking, 0, len(fc.Bookings)), Until: fc.Until, PausedUntil: fc.PausedUntil,
+		}
+		for _, fb := range fc.Bookings {
 			body.Bookings = append(body.Bookings, CanceledBooking{
 				BookingID: fb.Booking.ID, LessonID: fb.Lesson.ID, StartsAt: fb.Lesson.StartsAt.UTC(),
 				EndsAt: fb.Lesson.EndsAt.UTC(), Late: fb.Late,

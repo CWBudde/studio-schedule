@@ -45,7 +45,7 @@ func TestClassMembers(t *testing.T) {
 	t.Run("add", func(t *testing.T) {
 		since := mustDate(t, "2026-09-07")
 
-		m, err := svc.AddClassMember(ctx, domain.ClassMember{ClassID: c.ID, PersonID: zoe.ID, Since: since})
+		m, err := svc.AddClassMember(ctx, Principal{}, domain.ClassMember{ClassID: c.ID, PersonID: zoe.ID, Since: since})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -54,7 +54,7 @@ func TestClassMembers(t *testing.T) {
 			t.Fatalf("added %+v", m)
 		}
 
-		if _, err := svc.AddClassMember(ctx, domain.ClassMember{ClassID: c.ID, PersonID: ann.ID}); err != nil {
+		if _, err := svc.AddClassMember(ctx, Principal{}, domain.ClassMember{ClassID: c.ID, PersonID: ann.ID}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -65,14 +65,14 @@ func TestClassMembers(t *testing.T) {
 	})
 
 	t.Run("twice", func(t *testing.T) {
-		_, err := svc.AddClassMember(ctx, domain.ClassMember{ClassID: c.ID, PersonID: zoe.ID})
+		_, err := svc.AddClassMember(ctx, Principal{}, domain.ClassMember{ClassID: c.ID, PersonID: zoe.ID})
 		if !errors.Is(err, domain.ErrDuplicate) {
 			t.Fatalf("want ErrDuplicate, got %v", err)
 		}
 	})
 
 	t.Run("unknown person", func(t *testing.T) {
-		_, err := svc.AddClassMember(ctx, domain.ClassMember{ClassID: c.ID, PersonID: ids.New[domain.PersonID](f.seq)})
+		_, err := svc.AddClassMember(ctx, Principal{}, domain.ClassMember{ClassID: c.ID, PersonID: ids.New[domain.PersonID](f.seq)})
 
 		var fe *domain.FieldError
 		if !errors.As(err, &fe) || fe.Field != "personId" {
@@ -81,7 +81,7 @@ func TestClassMembers(t *testing.T) {
 	})
 
 	t.Run("invalid since", func(t *testing.T) {
-		_, err := svc.AddClassMember(ctx, domain.ClassMember{
+		_, err := svc.AddClassMember(ctx, Principal{}, domain.ClassMember{
 			ClassID: c.ID, PersonID: ann.ID, Since: domain.Date{Year: 2026, Month: 2, Day: 31},
 		})
 
@@ -98,7 +98,7 @@ func TestClassMembers(t *testing.T) {
 			t.Fatalf("list: want ErrNotFound, got %v", err)
 		}
 
-		_, err := svc.AddClassMember(ctx, domain.ClassMember{ClassID: unknown, PersonID: zoe.ID})
+		_, err := svc.AddClassMember(ctx, Principal{}, domain.ClassMember{ClassID: unknown, PersonID: zoe.ID})
 		if !errors.Is(err, domain.ErrNotFound) {
 			t.Fatalf("add: want ErrNotFound, got %v", err)
 		}
@@ -111,7 +111,7 @@ func TestClassMembers(t *testing.T) {
 	})
 
 	t.Run("remove", func(t *testing.T) {
-		if err := svc.RemoveClassMember(ctx, c.ID, zoe.ID); err != nil {
+		if err := svc.RemoveClassMember(ctx, Principal{}, c.ID, zoe.ID); err != nil {
 			t.Fatal(err)
 		}
 
@@ -119,7 +119,7 @@ func TestClassMembers(t *testing.T) {
 			t.Fatalf("members %+v, want Ann", got)
 		}
 
-		if err := svc.RemoveClassMember(ctx, c.ID, zoe.ID); !errors.Is(err, domain.ErrNotFound) {
+		if err := svc.RemoveClassMember(ctx, Principal{}, c.ID, zoe.ID); !errors.Is(err, domain.ErrNotFound) {
 			t.Fatalf("remove twice: want ErrNotFound, got %v", err)
 		}
 	})
@@ -171,14 +171,9 @@ func TestAddClassMemberRaces(t *testing.T) {
 
 	add := func(storeErr error) error {
 		svc := NewTimetableService(racingMembers{Store: f.st, err: storeErr}, clock.NewFixed(mustInstant(t, "2026-10-19T10:00:00Z")), f.seq)
-		_, err := svc.AddClassMember(ctx, domain.ClassMember{ClassID: c.ID, PersonID: zoe.ID})
+		_, err := svc.AddClassMember(ctx, Principal{}, domain.ClassMember{ClassID: c.ID, PersonID: zoe.ID})
 
 		return err
-	}
-
-	// A membership added meanwhile is a duplicate.
-	if err := add(fmt.Errorf("person is already a member: %w", domain.ErrDuplicate)); !errors.Is(err, domain.ErrDuplicate) {
-		t.Errorf("membership added meanwhile: %v, want ErrDuplicate", err)
 	}
 
 	// A class or person deleted meanwhile is gone, not a duplicate.

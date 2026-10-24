@@ -36,9 +36,10 @@ func Demo() Dataset { return DemoAt(FixedDemoAnchor) }
 // anchor with its weekly classes, members with their families and accounts,
 // and a few one-off workshops in the weeks after anchor. Of the weekly
 // classes it has the lessons of the week up to and including anchor
-// (history); the lesson generator creates the later ones, but never the
-// past. It has no bookings. IDs come from a fresh ids.Sequence, so every call with the same
-// anchor returns identical data.
+// (history), with the automatic bookings of the class members, as the
+// lesson generator would have created them; the generator creates the
+// later ones, but never the past (ADR 0009). IDs come from a fresh
+// ids.Sequence, so every call with the same anchor returns identical data.
 //
 // DemoAt panics if the demo time zone cannot be loaded (no zoneinfo
 // database); LoadDemoAt reports that as an error instead.
@@ -107,6 +108,7 @@ func demoAt(anchor domain.Date) (Dataset, error) {
 	}
 
 	b.history(anchor)
+	b.memberBookings()
 
 	return b.d, nil
 }
@@ -134,10 +136,12 @@ type adultSpec struct {
 }
 
 // childSpec is a child of a household; the household's adults are its
-// guardians.
+// guardians. A teenager with a role has an account of their own, which
+// makes them a managed dependent (ADR 0008).
 type childSpec struct {
 	given string
 	born  domain.Date
+	role  domain.Role
 }
 
 // householdSpec is a family, a single adult or a staff member's person
@@ -154,47 +158,53 @@ var demoHouseholds = []householdSpec{
 	{
 		"Amberly", "example.org",
 		[]adultSpec{{"Clara", domain.RoleMember, "+49 000 0000101"}, {"Tom", domain.RoleMember, ""}},
-		[]childSpec{{"Ella", date(2016, time.April, 12)}, {"Finn", date(2019, time.September, 3)}},
+		[]childSpec{{"Ella", date(2016, time.April, 12), ""}, {"Finn", date(2019, time.September, 3), ""}},
 	},
 	{
 		"Birchmoor", "example.com",
 		[]adultSpec{{"Hanna", domain.RoleMember, "+49 000 0000102"}},
-		[]childSpec{{"Lotta", date(2014, time.February, 20)}, {"Mia", date(2020, time.June, 15)}},
+		[]childSpec{{"Lotta", date(2014, time.February, 20), ""}, {"Mia", date(2020, time.June, 15), ""}},
 	},
 	{
 		"Cloudsley", "example.org",
 		[]adultSpec{{"Jan", domain.RoleMember, ""}},
-		[]childSpec{{"Noah", date(2013, time.November, 8)}},
+		[]childSpec{{"Noah", date(2013, time.November, 8), ""}},
 	},
 	{
 		"Dunfield", "example.com",
 		[]adultSpec{{"Sara", domain.RoleMember, "+49 000 0000104"}, {"Ali", "", ""}},
-		[]childSpec{{"Leni", date(2017, time.January, 25)}},
+		[]childSpec{{"Leni", date(2017, time.January, 25), ""}},
 	},
 	{
 		"Elderwick", "example.org",
 		[]adultSpec{{"Petra", domain.RoleMember, ""}},
-		[]childSpec{{"Ida", date(2012, time.July, 30)}, {"Emil", date(2015, time.March, 14)}, {"Rosa", date(2018, time.October, 1)}},
+		[]childSpec{
+			{"Ida", date(2012, time.July, 30), ""},
+			{"Emil", date(2015, time.March, 14), ""},
+			{"Rosa", date(2018, time.October, 1), ""},
+		},
 	},
 	{
 		"Fernwhistle", "example.com",
 		[]adultSpec{{"Marta", domain.RoleMember, ""}, {"Lukas", domain.RoleMember, "+49 000 0000106"}},
-		[]childSpec{{"Jona", date(2011, time.May, 19)}},
+		[]childSpec{{"Jona", date(2011, time.May, 19), ""}},
 	},
 	{
 		"Gildenmoor", "example.org",
 		[]adultSpec{{"Yara", domain.RoleMember, ""}},
-		[]childSpec{{"Kira", date(2016, time.December, 2)}, {"Ben", date(2014, time.August, 22)}},
+		[]childSpec{{"Kira", date(2016, time.December, 2), ""}, {"Ben", date(2014, time.August, 22), ""}},
 	},
 	{
 		"Hollowmere", "example.com",
 		[]adultSpec{{"David", domain.RoleMember, ""}},
-		[]childSpec{{"Sophie", date(2010, time.March, 11)}},
+		// Sophie is a teenager with a login of her own: a managed
+		// dependent, who books her classes herself.
+		[]childSpec{{"Sophie", date(2010, time.March, 11), domain.RoleMember}},
 	},
 	{
 		"Ivorycombe", "example.org",
 		[]adultSpec{{"Nora", domain.RoleMember, "+49 000 0000109"}},
-		[]childSpec{{"Jakob", date(2015, time.July, 7)}},
+		[]childSpec{{"Jakob", date(2015, time.July, 7), ""}},
 	},
 
 	// Adults without children.
@@ -444,34 +454,12 @@ func (b *builder) household(h householdSpec) {
 	var guardians []domain.PersonID
 
 	for _, a := range h.adults {
-		p := domain.Person{GivenName: a.given, FamilyName: h.family, Phone: a.phone}
-		if a.role != "" {
-			p.Email = strings.ToLower(a.given + "." + h.family + "@" + h.host)
-		}
-
-		p = b.person(p)
+		p := b.person(domain.Person{GivenName: a.given, FamilyName: h.family, Phone: a.phone}, h.host, a.role)
 		guardians = append(guardians, p.ID)
-
-		if a.role != "" {
-			// Demo accounts are confirmed when the term starts and sign in
-			// with DemoPassword.
-			confirmed := b.termStart.At(domain.TimeOfDay{Hour: 9}, b.loc)
-			acc := domain.Account{
-				ID:          ids.New[domain.AccountID](b.seq),
-				PersonID:    p.ID,
-				Email:       p.Email,
-				Role:        a.role,
-				ConfirmedAt: confirmed,
-			}
-			b.d.Accounts = append(b.d.Accounts, acc)
-			b.d.Credentials = append(b.d.Credentials, domain.Credential{
-				AccountID: acc.ID, PasswordHash: demoPasswordHash, ChangedAt: confirmed,
-			})
-		}
 	}
 
 	for _, c := range h.children {
-		child := b.person(domain.Person{GivenName: c.given, FamilyName: h.family, BirthDate: c.born})
+		child := b.person(domain.Person{GivenName: c.given, FamilyName: h.family, BirthDate: c.born}, h.host, c.role)
 
 		for _, g := range guardians {
 			b.d.Guardians = append(b.d.Guardians, domain.Guardian{GuardianID: g, DependentID: child.ID})
@@ -479,10 +467,34 @@ func (b *builder) household(h householdSpec) {
 	}
 }
 
-func (b *builder) person(p domain.Person) domain.Person {
+// person adds p with an ID. With a role, p gets the email
+// given.family@host and an account with that role, confirmed when the term
+// starts, that signs in with DemoPassword.
+func (b *builder) person(p domain.Person, host string, role domain.Role) domain.Person {
+	if role != "" {
+		p.Email = strings.ToLower(p.GivenName + "." + p.FamilyName + "@" + host)
+	}
+
 	p.ID = ids.New[domain.PersonID](b.seq)
 	b.d.Persons = append(b.d.Persons, p)
 	b.persons[p.GivenName+" "+p.FamilyName] = p.ID
+
+	if role == "" {
+		return p
+	}
+
+	confirmed := b.termStart.At(domain.TimeOfDay{Hour: 9}, b.loc)
+	acc := domain.Account{
+		ID:          ids.New[domain.AccountID](b.seq),
+		PersonID:    p.ID,
+		Email:       p.Email,
+		Role:        role,
+		ConfirmedAt: confirmed,
+	}
+	b.d.Accounts = append(b.d.Accounts, acc)
+	b.d.Credentials = append(b.d.Credentials, domain.Credential{
+		AccountID: acc.ID, PasswordHash: demoPasswordHash, ChangedAt: confirmed,
+	})
 
 	return p
 }
@@ -573,6 +585,35 @@ func (b *builder) history(anchor domain.Date) {
 				Visibility:    domain.VisibilityPublic,
 				Kind:          domain.LessonRegular,
 				Capacity:      c.Capacity,
+			})
+		}
+	}
+}
+
+// memberBookings books the class members into the lessons of their
+// classes from their Since date on, as generation does: automatic member
+// bookings without an actor, made when the term starts (ADR 0009).
+func (b *builder) memberBookings() {
+	bookedAt := b.termStart.At(domain.TimeOfDay{Hour: 9}, b.loc)
+
+	for _, l := range b.d.Lessons {
+		if l.ClassID.IsZero() {
+			continue
+		}
+
+		for _, m := range b.d.ClassMembers {
+			if m.ClassID != l.ClassID || !m.ActiveOn(l.SlotDate) {
+				continue
+			}
+
+			booking := domain.Booking{
+				ID: ids.New[domain.BookingID](b.seq), LessonID: l.ID, PersonID: m.PersonID,
+				Status: domain.BookingBooked, Source: domain.BookingSourceMember, BookedAt: bookedAt,
+			}
+			b.d.Bookings = append(b.d.Bookings, booking)
+			b.d.BookingEvents = append(b.d.BookingEvents, domain.BookingEvent{
+				ID: ids.New[domain.BookingEventID](b.seq), BookingID: booking.ID, At: bookedAt,
+				Status: domain.BookingBooked,
 			})
 		}
 	}

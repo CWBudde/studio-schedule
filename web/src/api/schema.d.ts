@@ -545,13 +545,13 @@ export interface paths {
         };
         /**
          * Preview canceling the following weeks
-         * @description Returns what `cancelFollowing` would cancel now, without changing anything, and fails like it.
+         * @description Returns what `cancelFollowing` would cancel now with `until`, without changing anything, and fails like it (an `until` before the lesson's date is a 422 on `query.until`). Without `until`, the response names the default: the last day of the class's term.
          */
         get: operations["previewCancelFollowing"];
         put?: never;
         /**
          * Cancel the following weeks
-         * @description Cancels a booking of a class lesson together with the same person's other active bookings of that class from this lesson on whose lessons have not started, in one transaction, each `late` like in `cancelBooking`. A booking of a one-off lesson, or one whose lesson has started, is a 422 on `path.bookingId`; a canceled one a 409 `already-canceled`; any other person's a 404. The signed-in account gets one mail listing every canceled booking.
+         * @description Cancels a booking of a class lesson together with the same person's other active bookings of that class from this lesson on up to the slot date `until` (default: the last day of the class's term) whose lessons have not started, in one transaction, each `late` like in `cancelBooking`. A person who is a member of the class stays one but is paused until then: they are booked automatically again only into the lessons after it (`pausedUntil`). A booking of a one-off lesson, or one whose lesson has started, is a 422 on `path.bookingId`; an `until` before the lesson's date a 422 on `body.until`; a canceled booking a 409 `already-canceled`; any other person's a 404. The signed-in account gets one mail listing every canceled booking.
          */
         post: operations["cancelFollowing"];
         delete?: never;
@@ -570,13 +570,13 @@ export interface paths {
         get?: never;
         /**
          * Update a class
-         * @description Replaces the fields of a class; its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons that still follow it and have no bookings are deleted.
+         * @description Replaces the fields of a class; its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the class's member count or the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons that still follow it and have no bookings but the automatic ones of class members are deleted with those.
          */
         put: operations["updateClass"];
         post?: never;
         /**
          * Delete a class
-         * @description Deletes a class with its lessons while none of them has started or been booked and it has no members; otherwise it is a 409 `in-use` and can be retired instead.
+         * @description Deletes a class with its lessons while none of them has started or been booked (automatic bookings of former members aside) and it has no members; otherwise it is a 409 `in-use` and can be retired instead.
          */
         delete: operations["deleteClass"];
         options?: never;
@@ -595,7 +595,7 @@ export interface paths {
         put?: never;
         /**
          * Add a class member
-         * @description Enrolls a person in a class. An unknown person is a 422 on `personId`, a person who is a member already a 409 `duplicate`.
+         * @description Enrolls a person in a class and books them into the class's lessons from `since` on that have not started, canceled ones included, even beyond a lesson's capacity, unless they have a booking for the lesson already (one canceled when an earlier membership ended aside). An unknown person is a 422 on `personId`, a person who is a member already a 409 `duplicate`, a retired class a 422 on `path.classId`, and a class whose members fill its capacity a 409 `full`.
          */
         post: operations["addClassMember"];
         delete?: never;
@@ -612,11 +612,15 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /**
+         * Update a class member
+         * @description Replaces the dates of a membership: `since` and the end of a pause, `pausedUntil` (left out: not paused, which ends a pause). Then books the member into the class's lessons that have not started and that they are active on but have no booking for, as `addClassMember` does (a date they released stays released), after canceling their automatic bookings of those they are no longer active on (a new pause, a later `since`), without a mail. A person who is not a member is a 404, a retired class a 422 on `path.classId`.
+         */
+        put: operations["updateClassMember"];
         post?: never;
         /**
          * Remove a class member
-         * @description Ends a person's membership in a class; a person who is not a member is a 404.
+         * @description Ends a person's membership in a class and cancels their bookings of the class's lessons that have not started, without a mail; a person who is not a member is a 404.
          */
         delete: operations["removeClassMember"];
         options?: never;
@@ -1333,6 +1337,13 @@ export interface components {
              */
             status: "booked" | "canceled" | "attended" | "no_show";
         };
+        CancelFollowingData: {
+            /**
+             * Format: date
+             * @description Last slot date to cancel; default: the last day of the class's term.
+             */
+            until?: string;
+        };
         CanceledBooking: {
             /**
              * Format: uuid
@@ -1525,6 +1536,11 @@ export interface components {
             items: components["schemas"]["Class"][];
         };
         ClassMember: {
+            /**
+             * Format: date
+             * @description The last day of the member's pause while it lasts (today or later): they are not booked automatically into lessons up to it.
+             */
+            pausedUntil?: string;
             /** @description The member. */
             person: components["schemas"]["PersonMatch"];
             /**
@@ -1548,6 +1564,18 @@ export interface components {
         ClassMemberList: {
             /** @description Members ordered by family and given name. */
             items: components["schemas"]["ClassMember"][];
+        };
+        ClassMemberUpdateData: {
+            /**
+             * Format: date
+             * @description The last day of the pause; left out: not paused.
+             */
+            pausedUntil?: string;
+            /**
+             * Format: date
+             * @description Member since, if known.
+             */
+            since?: string;
         };
         CloneConflictLesson: {
             /**
@@ -1606,7 +1634,7 @@ export interface components {
             /** @description The lesson that uses the room; only with reason room-taken. */
             lesson?: components["schemas"]["ConflictLesson"];
             /**
-             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings fill the lesson's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking is canceled already.
+             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking is canceled already.
              * @enum {string}
              */
             reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled";
@@ -1791,6 +1819,16 @@ export interface components {
         FollowingCancellation: {
             /** @description The bookings, ordered by the start of their lessons; the requested one first. */
             bookings: components["schemas"]["CanceledBooking"][];
+            /**
+             * Format: date
+             * @description Only for a member of the class: they stay a member, paused until this date (until), and are booked again automatically from the day after.
+             */
+            pausedUntil?: string;
+            /**
+             * Format: date
+             * @description The last slot date canceled: the one asked for, or the last day of the class's term.
+             */
+            until: string;
         };
         GuardianInputBody: {
             /**
@@ -3678,7 +3716,10 @@ export interface operations {
     };
     previewCancelFollowing: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Last slot date to cancel; default: the last day of the class's term. */
+                until?: string;
+            };
             header?: never;
             path: {
                 /** @description The booking. */
@@ -3727,7 +3768,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CancelFollowingData"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -3874,6 +3919,44 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateClassMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The class. */
+                classId: string;
+                /** @description The member. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassMemberUpdateData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassMember"];
                 };
             };
             /** @description Error */

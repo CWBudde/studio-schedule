@@ -77,8 +77,9 @@ func (s *TimetableService) CreateClass(ctx context.Context, term domain.TermID, 
 
 // UpdateClass replaces a class's fields except its term. The future lessons
 // that still are what the class generated follow the edit (syncLessons); a
-// capacity below the active bookings of one of them is a validation error
-// on capacity.
+// capacity it lowers below the class's member count (ADR 0009) or below the
+// active bookings of one of those lessons is a validation error on
+// capacity.
 func (s *TimetableService) UpdateClass(ctx context.Context, id domain.ClassID, d ClassData) (TimetableClass, error) {
 	var tc TimetableClass
 
@@ -110,6 +111,20 @@ func (s *TimetableService) UpdateClass(ctx context.Context, id domain.ClassID, d
 			return err
 		}
 
+		members, err := tx.Classes().ListMembers(ctx, id)
+		if err != nil {
+			return err
+		}
+
+		// Only a lower capacity can conflict with the members: a class
+		// with more members than places from older data stays editable.
+		if c.Capacity < old.Capacity && len(members) > c.Capacity {
+			return &domain.FieldError{
+				Field: "capacity",
+				Msg:   fmt.Sprintf("the class has %d members, more than the capacity", len(members)),
+			}
+		}
+
 		if err := tx.Classes().Update(ctx, c); err != nil {
 			return err
 		}
@@ -125,7 +140,9 @@ func (s *TimetableService) UpdateClass(ctx context.Context, id domain.ClassID, d
 
 // DeleteClass deletes a class with its lessons while none of them has
 // started or been booked and the class has no members. Otherwise it is
-// domain.ErrInUse: such a class is retired instead (ADR 0007).
+// domain.ErrInUse: such a class is retired instead (ADR 0007). Automatic
+// member bookings, which removed members leave behind canceled, do not
+// count and go with the lessons (ADR 0009).
 func (s *TimetableService) DeleteClass(ctx context.Context, id domain.ClassID) error {
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		if _, err := tx.Classes().Lock(ctx, id); err != nil {
@@ -148,7 +165,7 @@ func (s *TimetableService) DeleteClass(ctx context.Context, id domain.ClassID) e
 
 		now := s.clock.Now()
 		for _, l := range lessons {
-			booked, err := hasBookings(ctx, tx, l.ID)
+			booked, err := hasOwnBookings(ctx, tx, l.ID)
 			if err != nil {
 				return err
 			}
@@ -159,7 +176,7 @@ func (s *TimetableService) DeleteClass(ctx context.Context, id domain.ClassID) e
 		}
 
 		for _, l := range lessons {
-			if err := tx.Lessons().Delete(ctx, l.ID); err != nil {
+			if err := deleteClassLesson(ctx, tx, l.ID); err != nil {
 				return err
 			}
 		}
@@ -243,7 +260,8 @@ func checkReferences(ctx context.Context, tx store.Tx, r references) (instructor
 }
 
 // hasBookings reports whether bookings refer to the lesson, canceled ones
-// included: they keep it from being deleted.
+// included: they keep a one-off lesson from being deleted. Lessons of a
+// class use hasOwnBookings.
 func hasBookings(ctx context.Context, tx store.Tx, id domain.LessonID) (bool, error) {
 	bookings, err := tx.Bookings().ListByLesson(ctx, id)
 
