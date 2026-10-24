@@ -452,7 +452,10 @@ Goal: people can sign up and log in; staff can maintain the timetable.
         `updateLocale` and `me.locale`; mails use the account's language, then the request's, then
         the school's; login and email confirmation switch the UI (e2e)
   - [ ] Admin area: covered by the subtasks of Admin CRUD and Lesson administration; the audit log
-        page (`/admin/audit`, admins) lists `audit_events`
+        page (`/admin/audit`, admins) lists `audit_events` (2026-10-24) — partial: `/admin/audit`
+        (`listAuditEvents`, admin) lists the latest 200 events with actor and account resolved in
+        two queries (`Accounts().ListByIDs`, `Persons().ListByIDs`) and a client-side search;
+        e2e in `admin.spec.ts`; Lesson administration remains
 - [x] Demo: login page lists demo accounts per role (member, instructor, office, admin)
       (2026-10-23) — `GET /api/v1/demo/logins` in demo installations (WASM demo, `serve` without a
       database); one click signs in
