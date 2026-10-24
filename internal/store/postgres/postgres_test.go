@@ -421,7 +421,8 @@ func TestUniqueNamesMigration(t *testing.T) {
 	t.Cleanup(func() { _ = m.Close() })
 
 	for _, want := range []string{
-		"00009_lesson_admin.sql", "00008_lesson_slots.sql", "00007_course_type_unique_names.sql",
+		"00010_booking_rules.sql", "00009_lesson_admin.sql", "00008_lesson_slots.sql",
+		"00007_course_type_unique_names.sql",
 		"00006_catalog_unique_names.sql",
 	} {
 		if res, err := m.Down(ctx); err != nil || res.Name != want {
@@ -487,7 +488,7 @@ func TestLessonSlotsMigration(t *testing.T) {
 
 	t.Cleanup(func() { _ = m.Close() })
 
-	for _, want := range []string{"00009_lesson_admin.sql", "00008_lesson_slots.sql"} {
+	for _, want := range []string{"00010_booking_rules.sql", "00009_lesson_admin.sql", "00008_lesson_slots.sql"} {
 		if res, err := m.Down(ctx); err != nil || res.Name != want {
 			t.Fatalf("down = %+v, %v; want %s rolled back", res, err, want)
 		}

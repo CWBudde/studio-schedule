@@ -18,6 +18,7 @@ func TestEnums(t *testing.T) {
 	t.Run("LessonVisibility", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.LessonVisibilities()) })
 	t.Run("LessonKind", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.LessonKinds()) })
 	t.Run("BookingStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.BookingStatuses()) })
+	t.Run("BookingSource", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.BookingSources()) })
 	t.Run("WaitlistStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.WaitlistStatuses()) })
 	t.Run("ReceiptKind", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.ReceiptKinds()) })
 	t.Run("Audience", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.Audiences()) })
@@ -257,7 +258,7 @@ func TestBookingValidate(t *testing.T) {
 	member := func() domain.Booking {
 		return domain.Booking{
 			ID: newID[domain.BookingID](), LessonID: newID[domain.LessonID](), PersonID: newID[domain.PersonID](),
-			Status: domain.BookingBooked, BookedAt: t0,
+			Status: domain.BookingBooked, Source: domain.BookingSourceSelf, BookedAt: t0,
 		}
 	}
 
@@ -269,6 +270,10 @@ func TestBookingValidate(t *testing.T) {
 			"person and guest":  func(b *domain.Booking) { b.GuestName = "Guest" },
 			"neither":           func(b *domain.Booking) { b.PersonID = domain.PersonID{} },
 			"bad status":        func(b *domain.Booking) { b.Status = "maybe" },
+			"no source":         func(b *domain.Booking) { b.Source = "" },
+			"bad source":        func(b *domain.Booking) { b.Source = "robot" },
+			"staff source":      func(b *domain.Booking) { b.Source = "staff" }, // not before the staff actions
+			"late not canceled": func(b *domain.Booking) { b.Late = true },
 			"no booked at":      func(b *domain.Booking) { b.BookedAt = time.Time{} },
 			"canceled no time":  func(b *domain.Booking) { b.Status = domain.BookingCanceled },
 			"time not canceled": func(b *domain.Booking) { b.CanceledAt = t0.Add(time.Hour) },
@@ -283,7 +288,7 @@ func TestBookingValidate(t *testing.T) {
 		checkValidate(t, func() domain.Booking {
 			b := member()
 			b.PersonID, b.GuestName, b.GuestEmail, b.Trial = domain.PersonID{}, "Guest Example", "guest@example.org", true
-			b.Status, b.CanceledAt = domain.BookingCanceled, t0.Add(time.Hour)
+			b.Status, b.CanceledAt, b.Late = domain.BookingCanceled, t0.Add(time.Hour), true
 
 			return b
 		}, map[string]func(*domain.Booking){
@@ -298,13 +303,14 @@ func TestBookingValidate(t *testing.T) {
 		checkValidate(t, func() domain.BookingEvent {
 			return domain.BookingEvent{
 				ID: newID[domain.BookingEventID](), BookingID: newID[domain.BookingID](),
-				At: t0, Status: domain.BookingAttended, ActorAccountID: newID[domain.AccountID](),
+				At: t0, Status: domain.BookingAttended, ActorAccountID: newID[domain.AccountID](), Override: true,
 			}
 		}, map[string]func(*domain.BookingEvent){
-			"zero id":      func(e *domain.BookingEvent) { e.ID = domain.BookingEventID{} },
-			"zero booking": func(e *domain.BookingEvent) { e.BookingID = domain.BookingID{} },
-			"no time":      func(e *domain.BookingEvent) { e.At = time.Time{} },
-			"bad status":   func(e *domain.BookingEvent) { e.Status = "" },
+			"late not canceled": func(e *domain.BookingEvent) { e.Late = true },
+			"zero id":           func(e *domain.BookingEvent) { e.ID = domain.BookingEventID{} },
+			"zero booking":      func(e *domain.BookingEvent) { e.BookingID = domain.BookingID{} },
+			"no time":           func(e *domain.BookingEvent) { e.At = time.Time{} },
+			"bad status":        func(e *domain.BookingEvent) { e.Status = "" },
 		})
 	})
 }

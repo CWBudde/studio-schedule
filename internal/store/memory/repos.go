@@ -18,6 +18,16 @@ func conflict(format string, args ...any) error {
 	return fmt.Errorf("%s: %w", fmt.Sprintf(format, args...), domain.ErrConflict)
 }
 
+// setOf returns the IDs as a set, for lookups in O(1).
+func setOf[I comparable](ids []I) map[I]struct{} {
+	out := make(map[I]struct{}, len(ids))
+	for _, id := range ids {
+		out[id] = struct{}{}
+	}
+
+	return out
+}
+
 // compareID orders IDs by their bytes, like PostgreSQL orders uuid values.
 func compareID[I domain.AnyID](a, b I) int { return uuid.UUID(a).Compare(uuid.UUID(b)) }
 
@@ -1027,7 +1037,7 @@ func (r bookingRepo) put(b domain.Booking) error {
 	case !b.PersonID.IsZero() && active(b) && s.bookings.exists(func(o domain.Booking) bool {
 		return o.ID != b.ID && o.LessonID == b.LessonID && o.PersonID == b.PersonID && active(o)
 	}):
-		return conflict("person already has an active booking for the lesson")
+		return fmt.Errorf("person already has an active booking for the lesson: %w", domain.ErrDuplicate)
 	}
 
 	s.bookings.put(r.tx.gen, b.ID, b)
@@ -1045,6 +1055,37 @@ func (r bookingRepo) ListByLesson(_ context.Context, lesson domain.LessonID) ([]
 
 func (r bookingRepo) CountActive(_ context.Context, lesson domain.LessonID) (int, error) {
 	return len(r.tx.state.bookings.filter(func(b domain.Booking) bool { return b.LessonID == lesson && active(b) })), nil
+}
+
+func (r bookingRepo) CountActiveByLessons(_ context.Context, lessons []domain.LessonID) (map[domain.LessonID]int, error) {
+	out := map[domain.LessonID]int{}
+	wanted := setOf(lessons)
+
+	for _, b := range r.tx.state.bookings.filter(func(b domain.Booking) bool {
+		_, ok := wanted[b.LessonID]
+
+		return ok && active(b)
+	}) {
+		out[b.LessonID]++
+	}
+
+	return out, nil
+}
+
+func (r bookingRepo) ListActiveByLessonsAndPersons(
+	_ context.Context, lessons []domain.LessonID, persons []domain.PersonID,
+) ([]domain.Booking, error) {
+	wantedLessons, wantedPersons := setOf(lessons), setOf(persons)
+	bookings := r.tx.state.bookings.filter(func(b domain.Booking) bool {
+		_, lessonOK := wantedLessons[b.LessonID]
+		_, personOK := wantedPersons[b.PersonID]
+
+		return lessonOK && personOK && active(b) && !b.PersonID.IsZero()
+	})
+
+	return sorted(bookings, func(a, b domain.Booking) int {
+		return cmp.Or(a.BookedAt.Compare(b.BookedAt), compareID(a.ID, b.ID))
+	}), nil
 }
 
 func (r bookingRepo) AddEvent(_ context.Context, e domain.BookingEvent) error {

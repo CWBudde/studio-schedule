@@ -2,6 +2,8 @@ package storetest
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -234,9 +236,11 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 				minimal := e.newBooking(e.lesson(e.setting(), t0, 5), e.person("Bo", "Booker"), t0.Add(-time.Hour))
 				full := minimal
 				full.Status = domain.BookingCanceled
+				full.Source = domain.BookingSourceMember
 				full.Trial = true
 				full.Prepaid = true
 				full.CanceledAt = t0.Add(-30 * time.Minute)
+				full.Late = true
 				valid(e.t, full)
 
 				return minimal, full
@@ -255,7 +259,8 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 			fixtures: func(e *env) (domain.Booking, domain.Booking) {
 				guest := domain.Booking{
 					ID: newID[domain.BookingID](e), LessonID: e.lesson(e.setting(), t0, 5).ID,
-					GuestName: "Gina Guest", GuestEmail: "gina@example.org", Status: domain.BookingBooked, BookedAt: t0,
+					GuestName: "Gina Guest", GuestEmail: "gina@example.org", Status: domain.BookingBooked,
+					Source: domain.BookingSourceSelf, BookedAt: t0,
 				}
 				attended := guest
 				attended.Status = domain.BookingAttended
@@ -274,9 +279,17 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 			p := e.person("Bo", "Booker")
 			first := e.booking(l, p, t0.Add(-3*time.Hour))
 
+			// A second active booking is a duplicate, which callers tell
+			// apart from a missing reference.
 			dup := e.newBooking(l, p, t0.Add(-2*time.Hour))
 			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Create(ctx, dup) })
+			wantErr(e.t, err, domain.ErrDuplicate)
+
+			gone := e.newBooking(l, p, t0.Add(-2*time.Hour))
+			gone.PersonID = newID[domain.PersonID](e)
+			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Create(ctx, gone) })
 			wantErr(e.t, err, domain.ErrConflict)
+			wantNotErr(e.t, err, domain.ErrDuplicate)
 
 			// After canceling, the person may book again.
 			first.Status, first.CanceledAt = domain.BookingCanceled, t0.Add(-150*time.Minute)
@@ -286,13 +299,14 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 			// Reactivating the canceled booking now conflicts.
 			first.Status, first.CanceledAt = domain.BookingBooked, time.Time{}
 			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Update(ctx, first) })
-			wantErr(e.t, err, domain.ErrConflict)
+			wantErr(e.t, err, domain.ErrDuplicate)
 
 			// Guests are not limited.
 			for range 2 {
 				g := domain.Booking{
 					ID: newID[domain.BookingID](e), LessonID: l.ID, GuestName: "Gina Guest",
-					GuestEmail: "gina@example.org", Status: domain.BookingBooked, BookedAt: t0,
+					GuestEmail: "gina@example.org", Status: domain.BookingBooked, Source: domain.BookingSourceSelf,
+					BookedAt: t0,
 				}
 				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Create(ctx, g) })
 			}
@@ -333,6 +347,154 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			wantEqual(e.t, n, 0)
 		},
+		"CountActiveByLessons": func(e *env) {
+			s := e.setting()
+			l1, l2, l3 := e.lesson(s, t0, 5), e.lesson(s, t0.Add(time.Hour), 5), e.lesson(s, t0.Add(2*time.Hour), 5)
+			p1, p2, p3, p4 := e.person("Ann", "One"), e.person("Ben", "Two"), e.person("Cy", "Three"), e.person("Di", "Four")
+
+			e.booking(l1, p1, t0.Add(-3*time.Hour))
+			attended := e.booking(l1, p2, t0.Add(-3*time.Hour))
+			noShow := e.booking(l1, p3, t0.Add(-3*time.Hour))
+			canceled := e.booking(l1, p4, t0.Add(-3*time.Hour))
+			gone := e.booking(l3, p1, t0.Add(-3*time.Hour))
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				attended.Status, noShow.Status = domain.BookingAttended, domain.BookingNoShow
+				canceled.Status, canceled.CanceledAt = domain.BookingCanceled, t0.Add(-2*time.Hour)
+				gone.Status, gone.CanceledAt, gone.Late = domain.BookingCanceled, t0.Add(-time.Minute), true
+
+				for _, b := range []domain.Booking{attended, noShow, canceled, gone} {
+					if err := tx.Bookings().Update(ctx, b); err != nil {
+						return err
+					}
+				}
+
+				return nil
+			})
+
+			guest := domain.Booking{
+				ID: newID[domain.BookingID](e), LessonID: l2.ID, GuestName: "Gina Guest",
+				GuestEmail: "gina@example.org", Status: domain.BookingBooked, Source: domain.BookingSourceSelf,
+				BookedAt: t0,
+			}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Create(ctx, guest) })
+
+			// Attended and no-show bookings hold their place; canceled ones
+			// do not. Lessons without an active booking, and unknown ones,
+			// are left out.
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) (map[domain.LessonID]int, error) {
+				return tx.Bookings().CountActiveByLessons(ctx, []domain.LessonID{l1.ID, l2.ID, l3.ID, newID[domain.LessonID](e), l1.ID})
+			})
+			if len(got) != 2 || got[l1.ID] != 3 || got[l2.ID] != 1 {
+				e.t.Fatalf("CountActiveByLessons = %v, want %s: 3, %s: 1", got, l1.ID, l2.ID)
+			}
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) (map[domain.LessonID]int, error) {
+				return tx.Bookings().CountActiveByLessons(ctx, []domain.LessonID{l2.ID})
+			})
+			if len(got) != 1 || got[l2.ID] != 1 {
+				e.t.Fatalf("CountActiveByLessons(l2) = %v", got)
+			}
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) (map[domain.LessonID]int, error) {
+				return tx.Bookings().CountActiveByLessons(ctx, nil)
+			})
+			if len(got) != 0 {
+				e.t.Fatalf("CountActiveByLessons(nil) = %v", got)
+			}
+		},
+		"ListActiveByLessonsAndPersons": func(e *env) {
+			s := e.setting()
+			l1, l2, l3 := e.lesson(s, t0, 5), e.lesson(s, t0.Add(time.Hour), 5), e.lesson(s, t0.Add(2*time.Hour), 5)
+			me, child, stranger := e.person("Mia", "Member"), e.person("Kim", "Member"), e.person("Sam", "Stranger")
+
+			late := e.booking(l1, me, t0.Add(-time.Hour))
+			early2 := e.booking(l2, child, t0.Add(-2*time.Hour))
+			early1 := e.booking(l1, child, t0.Add(-2*time.Hour))
+			e.booking(l1, stranger, t0.Add(-3*time.Hour)) // not asked for
+			e.booking(l3, me, t0.Add(-3*time.Hour))       // lesson not asked for
+
+			canceled := e.booking(l2, me, t0.Add(-4*time.Hour))
+			canceled.Status, canceled.CanceledAt = domain.BookingCanceled, t0.Add(-90*time.Minute)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Update(ctx, canceled) })
+
+			guest := domain.Booking{
+				ID: newID[domain.BookingID](e), LessonID: l1.ID, GuestName: "Gina Guest",
+				GuestEmail: "gina@example.org", Status: domain.BookingBooked, Source: domain.BookingSourceSelf,
+				BookedAt: t0.Add(-5 * time.Hour),
+			}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Create(ctx, guest) })
+
+			list := func(lessons []domain.LessonID, persons []domain.PersonID) []domain.Booking {
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Booking, error) {
+					return tx.Bookings().ListActiveByLessonsAndPersons(ctx, lessons, persons)
+				})
+			}
+
+			wantSlice(e.t, list([]domain.LessonID{l1.ID, l2.ID}, []domain.PersonID{me.ID, child.ID}),
+				[]domain.Booking{early2, early1, late})
+			wantSlice(e.t, list([]domain.LessonID{l2.ID}, []domain.PersonID{me.ID}), nil)
+			wantSlice(e.t, list(nil, []domain.PersonID{me.ID}), nil)
+			wantSlice(e.t, list([]domain.LessonID{l1.ID}, nil), nil)
+		},
+		"LockSerialisesTheLastPlace": func(e *env) {
+			// Every capacity check runs under the lesson lock, so of many
+			// concurrent bookings of the last place exactly one succeeds.
+			const n = 8
+
+			l := e.lesson(e.setting(), t0, 2)
+			e.booking(l, e.person("First", "Booker"), t0.Add(-2*time.Hour))
+
+			bookings := make([]domain.Booking, n)
+			for i := range bookings {
+				bookings[i] = e.newBooking(l, e.person("Racer", string(rune('A'+i))), t0.Add(-time.Hour))
+			}
+
+			errFull := errors.New("full")
+			results := make(chan error, n)
+
+			var wg sync.WaitGroup
+
+			for _, b := range bookings {
+				wg.Go(func() {
+					results <- e.write(func(ctx context.Context, tx store.Tx) error {
+						locked, err := tx.Lessons().Lock(ctx, b.LessonID)
+						if err != nil {
+							return err
+						}
+
+						active, err := tx.Bookings().CountActive(ctx, locked.ID)
+						if err != nil {
+							return err
+						}
+
+						if active >= locked.Capacity {
+							return errFull
+						}
+
+						return tx.Bookings().Create(ctx, b)
+					})
+				})
+			}
+
+			wg.Wait()
+			close(results)
+
+			ok := 0
+
+			for err := range results {
+				switch {
+				case err == nil:
+					ok++
+				case !errors.Is(err, errFull):
+					e.t.Fatalf("unexpected error: %v", err)
+				}
+			}
+
+			wantEqual(e.t, ok, 1)
+
+			active := mustQuery(e, func(ctx context.Context, tx store.Tx) (int, error) { return tx.Bookings().CountActive(ctx, l.ID) })
+			wantEqual(e.t, active, 2)
+		},
 		"MissingReferenceIsConflict": func(e *env) {
 			l := e.lesson(e.setting(), t0, 5)
 			p := e.person("Bo", "Booker")
@@ -353,9 +515,12 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			later := domain.BookingEvent{
 				ID: newID[domain.BookingEventID](e), BookingID: b.ID, At: t0.Add(-30 * time.Minute),
-				Status: domain.BookingCanceled, ActorAccountID: actor.ID, Note: "Called in sick.",
+				Status: domain.BookingCanceled, ActorAccountID: actor.ID, Note: "Called in sick.", Late: true,
 			}
-			first2 := domain.BookingEvent{ID: newID[domain.BookingEventID](e), BookingID: b.ID, At: t0.Add(-time.Hour), Status: domain.BookingBooked}
+			first2 := domain.BookingEvent{
+				ID: newID[domain.BookingEventID](e), BookingID: b.ID, At: t0.Add(-time.Hour), Status: domain.BookingBooked,
+				Override: true,
+			}
 			first1 := domain.BookingEvent{ID: newID[domain.BookingEventID](e), BookingID: b.ID, At: t0.Add(-time.Hour), Status: domain.BookingBooked}
 
 			for _, ev := range []domain.BookingEvent{later, first2, first1} {

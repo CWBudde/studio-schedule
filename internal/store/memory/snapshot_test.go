@@ -114,7 +114,7 @@ func fullStore(t *testing.T) *Store {
 
 		booking := domain.Booking{
 			ID: ids.New[domain.BookingID](src), LessonID: lesson, PersonID: person,
-			Status: domain.BookingBooked, BookedAt: at,
+			Status: domain.BookingBooked, Source: domain.BookingSourceSelf, BookedAt: at,
 		}
 
 		return errors.Join(

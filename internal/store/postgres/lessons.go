@@ -150,10 +150,12 @@ func toBooking(row sqlc.Booking) domain.Booking {
 		GuestName:  row.GuestName.String,
 		GuestEmail: row.GuestEmail.String,
 		Status:     domain.BookingStatus(row.Status),
+		Source:     domain.BookingSource(row.Source),
 		Trial:      row.Trial,
 		Prepaid:    row.Prepaid,
 		BookedAt:   fromPgInstant(row.BookedAt),
 		CanceledAt: fromPgInstant(row.CanceledAt),
+		Late:       row.Late,
 	}
 }
 
@@ -165,10 +167,12 @@ func bookingParams(b domain.Booking) sqlc.CreateBookingParams {
 		GuestName:  pgText(b.GuestName),
 		GuestEmail: pgText(b.GuestEmail),
 		Status:     string(b.Status),
+		Source:     string(b.Source),
 		Trial:      b.Trial,
 		Prepaid:    b.Prepaid,
 		BookedAt:   pgInstant(b.BookedAt),
 		CanceledAt: pgInstant(b.CanceledAt),
+		Late:       b.Late,
 	}
 }
 
@@ -206,6 +210,32 @@ func (r bookingRepo) CountActive(ctx context.Context, lesson domain.LessonID) (i
 	return int(n), nil
 }
 
+func (r bookingRepo) CountActiveByLessons(
+	ctx context.Context, lessons []domain.LessonID,
+) (map[domain.LessonID]int, error) {
+	rows, err := r.q.CountActiveBookingsByLessons(ctx, pgIDs(lessons))
+	if err != nil {
+		return nil, mapErr(err)
+	}
+
+	out := make(map[domain.LessonID]int, len(rows))
+	for _, row := range rows {
+		out[fromPgID[domain.LessonID](row.LessonID)] = int(row.Active)
+	}
+
+	return out, nil
+}
+
+func (r bookingRepo) ListActiveByLessonsAndPersons(
+	ctx context.Context, lessons []domain.LessonID, persons []domain.PersonID,
+) ([]domain.Booking, error) {
+	rows, err := r.q.ListActiveBookingsByLessonsAndPersons(ctx, sqlc.ListActiveBookingsByLessonsAndPersonsParams{
+		Lessons: pgIDs(lessons), Persons: pgIDs(persons),
+	})
+
+	return convertRows(rows, err, toBooking)
+}
+
 func (r bookingRepo) AddEvent(ctx context.Context, e domain.BookingEvent) error {
 	return mapErr(r.q.AddBookingEvent(ctx, sqlc.AddBookingEventParams{
 		ID:             pgID(e.ID),
@@ -214,6 +244,8 @@ func (r bookingRepo) AddEvent(ctx context.Context, e domain.BookingEvent) error 
 		Status:         string(e.Status),
 		ActorAccountID: pgID(e.ActorAccountID),
 		Note:           pgText(e.Note),
+		Late:           e.Late,
+		Override:       e.Override,
 	}))
 }
 
@@ -228,6 +260,8 @@ func (r bookingRepo) ListEvents(ctx context.Context, booking domain.BookingID) (
 			Status:         domain.BookingStatus(row.Status),
 			ActorAccountID: fromPgID[domain.AccountID](row.ActorAccountID),
 			Note:           row.Note.String,
+			Late:           row.Late,
+			Override:       row.Override,
 		}
 	})
 }

@@ -319,7 +319,7 @@ func (e *env) newBooking(l domain.Lesson, p domain.Person, at time.Time) domain.
 
 	b := domain.Booking{
 		ID: newID[domain.BookingID](e), LessonID: l.ID, PersonID: p.ID,
-		Status: domain.BookingBooked, BookedAt: at,
+		Status: domain.BookingBooked, Source: domain.BookingSourceSelf, BookedAt: at,
 	}
 	valid(e.t, b)
 

@@ -31,7 +31,7 @@ const (
 // conflicts describes the unique constraints above: the message, and the
 // error it wraps (domain.ErrDuplicate for the unique names of ADR 0007 and
 // for what exists only once per person: an account, a guardian link, a
-// class membership).
+// class membership, an active booking of a lesson).
 // Other unique and foreign key violations get a generic message naming the
 // constraint.
 var conflicts = map[string]struct {
@@ -43,7 +43,7 @@ var conflicts = map[string]struct {
 	constraintGuardianLink:    {"guardian link exists", domain.ErrDuplicate},
 	constraintClassMember:     {"person is already a member of the class", domain.ErrDuplicate},
 	constraintLessonClassSlot: {"class already has a lesson in this slot", domain.ErrConflict},
-	constraintActiveBooking:   {"person already has an active booking for the lesson", domain.ErrConflict},
+	constraintActiveBooking:   {"person already has an active booking for the lesson", domain.ErrDuplicate},
 	constraintLocationName:    {"location name is taken", domain.ErrDuplicate},
 	constraintRoomName:        {"room name is taken at the location", domain.ErrDuplicate},
 	constraintCourseTypeName:  {"course type name is taken", domain.ErrDuplicate},

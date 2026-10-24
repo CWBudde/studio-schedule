@@ -53,6 +53,8 @@ type Booking struct {
 	Prepaid    bool
 	BookedAt   pgtype.Timestamptz
 	CanceledAt pgtype.Timestamptz
+	Source     string
+	Late       bool
 }
 
 type BookingEvent struct {
@@ -62,6 +64,8 @@ type BookingEvent struct {
 	Status         string
 	ActorAccountID pgtype.UUID
 	Note           pgtype.Text
+	Late           bool
+	Override       bool
 }
 
 type Class struct {

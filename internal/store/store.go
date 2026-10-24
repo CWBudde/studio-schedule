@@ -375,10 +375,11 @@ type LessonRepo interface {
 // active (not canceled) booking per lesson.
 type BookingRepo interface {
 	Get(ctx context.Context, id domain.BookingID) (domain.Booking, error)
-	// Create fails with domain.ErrConflict if the person already has an
-	// active booking for the lesson, or a referenced record does not exist.
+	// Create fails with domain.ErrDuplicate if the person already has an
+	// active booking for the lesson, and with domain.ErrConflict (but not
+	// ErrDuplicate) if a referenced record does not exist.
 	Create(ctx context.Context, b domain.Booking) error
-	// Update fails with domain.ErrConflict under the same rules as Create.
+	// Update fails under the same rules as Create.
 	Update(ctx context.Context, b domain.Booking) error
 	// ListByLesson returns the bookings of a lesson ordered by BookedAt and
 	// ID.
@@ -386,6 +387,16 @@ type BookingRepo interface {
 	// CountActive returns the number of bookings of a lesson that are not
 	// canceled.
 	CountActive(ctx context.Context, lesson domain.LessonID) (int, error)
+	// CountActiveByLessons returns, by lesson, the number of bookings that
+	// are not canceled, for each of the given lessons that has one; lessons
+	// without an active booking (or that do not exist) are left out.
+	CountActiveByLessons(ctx context.Context, lessons []domain.LessonID) (map[domain.LessonID]int, error)
+	// ListActiveByLessonsAndPersons returns the bookings that are not
+	// canceled of any of the given persons in any of the given lessons,
+	// ordered by BookedAt and ID.
+	ListActiveByLessonsAndPersons(
+		ctx context.Context, lessons []domain.LessonID, persons []domain.PersonID,
+	) ([]domain.Booking, error)
 
 	// AddEvent appends to the history of a booking. It fails with
 	// domain.ErrConflict if the booking or the actor account does not exist.
