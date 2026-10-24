@@ -652,6 +652,127 @@ export const deleteStaffMutation = (queryClient: QueryClient) =>
     onError: onCatalogueError(queryClient),
   });
 
+/** A weekly class as the office sees it: with the retired flag. */
+export type ClassEntry = components['schemas']['ClassEntry'];
+/** The editable fields of a class (create and update); no `accompanistId` means none. */
+export type ClassData = PostBody<'/api/v1/terms/{termId}/classes'>;
+
+/**
+ * Every weekly class of a term, retired ones included (office), in the
+ * order of classesQuery. Under the term's key, so whatever refreshes the
+ * terms refreshes it too.
+ */
+export const allClassesQuery = (termId: string) =>
+  queryOptions({
+    queryKey: [...classesQuery(termId).queryKey, 'all'],
+    queryFn: async ({ signal }) =>
+      (
+        await unwrap(
+          api.GET('/api/v1/admin/terms/{termId}/classes', {
+            params: { path: { termId } },
+            signal,
+          }),
+        )
+      ).items,
+  });
+
+/** The request body that keeps a class as it is, but for `retired`. */
+export const classDataOf = (c: ClassEntry, retired = c.retired): ClassData => ({
+  courseTypeId: c.courseTypeId,
+  roomId: c.roomId,
+  instructorId: c.instructor.id,
+  ...(c.accompanist ? { accompanistId: c.accompanist.id } : {}),
+  level: c.level,
+  weekday: c.weekday,
+  startTime: c.startTime,
+  durationMinutes: c.durationMinutes,
+  capacity: c.capacity,
+  retired,
+});
+
+/**
+ * After a write to a class: its lessons changed as well, so the classes
+ * (under the terms' key), the schedule and the lessons are asked again.
+ */
+function refreshTimetable(queryClient: QueryClient) {
+  return Promise.all(
+    [['terms'], scheduleQueryKey, ['lesson']].map((queryKey) =>
+      queryClient.invalidateQueries({ queryKey }),
+    ),
+  );
+}
+
+/** The errors of a class write; a 404 means the class is gone meanwhile. */
+function onClassError(queryClient: QueryClient) {
+  const signedOut = signedOutOn401(queryClient);
+  return (error: Error) => {
+    signedOut(error);
+    if (error instanceof ApiError && error.status === 404) void refreshTimetable(queryClient);
+  };
+}
+
+/**
+ * Adds a weekly class to a term (office); the API generates its lessons
+ * ahead. An unknown course type, room or staff member is a 422 on its field.
+ */
+export const createClassMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ termId, body }: { termId: string; body: ClassData }) =>
+      unwrap(api.POST('/api/v1/terms/{termId}/classes', { params: { path: { termId } }, body })),
+    onSuccess: () => refreshTimetable(queryClient),
+    onError: onClassError(queryClient),
+  });
+
+/**
+ * Replaces the fields of a class (office); its term stays. The coming
+ * lessons that were not edited one by one follow, with their bookings.
+ */
+export const updateClassMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ classId, body }: { classId: string; body: ClassData }) =>
+      unwrap(api.PUT('/api/v1/classes/{classId}', { params: { path: { classId } }, body })),
+    onSuccess: () => refreshTimetable(queryClient),
+    onError: onClassError(queryClient),
+  });
+
+/** Sets the retired flag of a class (office), keeping everything else. */
+const classRetiredMutation = (retired: boolean) => (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: async (c: ClassEntry) => {
+      await unwrap(
+        api.PUT('/api/v1/classes/{classId}', {
+          params: { path: { classId: c.id } },
+          body: classDataOf(c, retired),
+        }),
+      );
+    },
+    onSuccess: () => refreshTimetable(queryClient),
+    onError: onClassError(queryClient),
+  });
+
+/**
+ * Retires a class (office): it generates no more lessons, its coming
+ * lessons that still follow it and have no bookings go, and it leaves the
+ * public timetable. The way out when a class with history cannot be
+ * deleted.
+ */
+export const retireClassMutation = classRetiredMutation(true);
+
+/** Makes a retired class generate lessons again and shows it in the public timetable. */
+export const reactivateClassMutation = classRetiredMutation(false);
+
+/**
+ * Deletes a class with its lessons (office); one with members, booked or
+ * started lessons is a 409 `in-use`.
+ */
+export const deleteClassMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (classId: string) =>
+      expectOk(api.DELETE('/api/v1/classes/{classId}', { params: { path: { classId } } })),
+    onSuccess: () => refreshTimetable(queryClient),
+    onError: onClassError(queryClient),
+  });
+
 /**
  * The mails of the demo mailbox, newest first; null when the installation is
  * not a demo (404). In a demo it is refetched whenever a view of it mounts;

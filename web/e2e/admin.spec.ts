@@ -260,3 +260,108 @@ test('the office links a staff member to a person', async ({ page }) => {
   await expect(sheet).toBeHidden();
   await expect(page.getByText('Alina Starling has been saved.')).toBeVisible();
 });
+
+/** Opens the weekly classes of the demo's term from the administration. */
+async function openTermClasses(page: Page, office: string): Promise<void> {
+  await openAdministration(page, office);
+  await openSection(page, 'Timetable', 'Terms');
+  await page.getByRole('link', { name: /^Classes of School Year / }).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: /^Classes – School Year / }),
+  ).toBeVisible();
+}
+
+/** Opens a page of the main navigation, e.g. the public classes. */
+async function openMain(page: Page, link: string): Promise<void> {
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: link }).click();
+  await expect(page.getByRole('heading', { level: 1, name: link })).toBeVisible();
+}
+
+/** A class card, named "<course type>, <weekday>, <hh:mm–hh:mm>". */
+const classCard = (page: Page, name: string) =>
+  page.getByRole('main').getByRole('article', { name, exact: true });
+
+test('the office adds a class, moves it, and the public classes follow', async ({ page }) => {
+  const office = await signInAs(page, 'Office');
+  await openTermClasses(page, office);
+
+  await page.getByRole('button', { name: 'Add class' }).click();
+  const add = page.getByRole('dialog', { name: 'Add a class' });
+  await add.getByRole('combobox', { name: 'Course type' }).click();
+  await page.getByRole('option', { name: 'Tap', exact: true }).click();
+  await add.getByRole('combobox', { name: 'Room' }).click();
+  await page.getByRole('option', { name: 'Studio South · Hall 2' }).click();
+  // The capacity of the room.
+  await expect(add.getByLabel('Capacity')).toHaveValue('12');
+  await add.getByRole('combobox', { name: 'Instructor' }).click();
+  await page.getByRole('option', { name: 'Nina Tapworth' }).click();
+  await add.getByRole('combobox', { name: 'Level' }).click();
+  await page.getByRole('option', { name: 'Beginner' }).click();
+  await add.getByRole('combobox', { name: 'Weekday' }).click();
+  await page.getByRole('option', { name: 'Sunday' }).click();
+  await add.getByLabel('Start time').fill('09:15');
+  await add.getByLabel('Duration (minutes)').fill('60');
+  await add.getByRole('button', { name: 'Add class' }).click();
+  await expect(add).toBeHidden();
+  await expect(page.getByText('Tap, Sunday 09:15 has been added.')).toBeVisible();
+  await expect(classCard(page, 'Tap, Sunday, 09:15–10:15')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Edit Tap, Sunday 09:15' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit Tap, Sunday 09:15' });
+  await expect(edit.getByLabel('Start time')).toHaveValue('09:15');
+  await edit.getByLabel('Start time').fill('10:45');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(edit).toBeHidden();
+  await expect(page.getByText('Tap, Sunday 10:45 has been saved.')).toBeVisible();
+
+  await openMain(page, 'Classes');
+  await expect(classCard(page, 'Tap, Sunday, 10:45–11:45')).toBeVisible();
+  await expect(classCard(page, 'Tap, Sunday, 09:15–10:15')).toHaveCount(0);
+});
+
+test('office edits a class and the schedule shows the change', async ({ page }) => {
+  const office = await signInAs(page, 'Office');
+  await openTermClasses(page, office);
+
+  await page.getByRole('button', { name: 'Edit Barre Fitness, Tuesday 19:00' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit Barre Fitness, Tuesday 19:00' });
+  await edit.getByLabel('Start time').fill('07:15');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(edit).toBeHidden();
+  await expect(page.getByText('Barre Fitness, Tuesday 07:15 has been saved.')).toBeVisible();
+
+  // The next 14 days hold a Tuesday whose lesson moved along.
+  await openMain(page, 'Schedule');
+  await expect(
+    page
+      .getByRole('main')
+      .getByRole('button', { name: /^Barre Fitness, .+, 07:15–08:15/ })
+      .first(),
+  ).toBeVisible();
+});
+
+test('a class with history is retired instead of deleted and leaves the public classes', async ({
+  page,
+}) => {
+  const office = await signInAs(page, 'Office');
+  await openMain(page, 'Classes');
+  await expect(classCard(page, 'Pointe Work, Friday, 18:00–19:15')).toBeVisible();
+
+  await openTermClasses(page, office);
+  await page.getByRole('button', { name: 'Delete Pointe Work, Friday 18:00' }).click();
+  const dialog = page.getByRole('alertdialog', { name: 'Delete Pointe Work, Friday 18:00?' });
+  await dialog.getByRole('button', { name: 'Delete' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Retire it instead.');
+  await dialog.getByRole('button', { name: 'Retire instead' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText('Pointe Work, Friday 18:00 has been retired.')).toBeVisible();
+  const retired = classCard(page, 'Pointe Work, Friday, 18:00–19:15');
+  await expect(retired.getByText('Retired')).toBeVisible();
+  await expect(
+    retired.getByRole('button', { name: 'Reactivate Pointe Work, Friday 18:00' }),
+  ).toBeVisible();
+
+  await openMain(page, 'Classes');
+  await expect(classCard(page, 'Pointe Work, Wednesday, 18:00–18:45')).toBeVisible();
+  await expect(classCard(page, 'Pointe Work, Friday, 18:00–19:15')).toHaveCount(0);
+});

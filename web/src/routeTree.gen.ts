@@ -25,6 +25,8 @@ import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
 import { Route as AdminCourseTypesRouteImport } from './routes/admin.course-types'
 import { Route as AdminLocationsRouteImport } from './routes/admin.locations'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
+import { Route as AdminTermsIndexRouteImport } from './routes/admin.terms.index'
+import { Route as AdminTermsTermIdClassesRouteImport } from './routes/admin.terms.$termId.classes'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -106,6 +108,16 @@ const AdminStaffRoute = AdminStaffRouteImport.update({
   path: '/staff',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminTermsIndexRoute = AdminTermsIndexRouteImport.update({
+  id: '/terms/',
+  path: '/terms/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminTermsTermIdClassesRoute = AdminTermsTermIdClassesRouteImport.update({
+  id: '/terms/$termId/classes',
+  path: '/terms/$termId/classes',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -124,6 +136,8 @@ export interface FileRoutesByFullPath {
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/terms/': typeof AdminTermsIndexRoute
+  '/admin/terms/$termId/classes': typeof AdminTermsTermIdClassesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -141,6 +155,8 @@ export interface FileRoutesByTo {
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin': typeof AdminIndexRoute
+  '/admin/terms': typeof AdminTermsIndexRoute
+  '/admin/terms/$termId/classes': typeof AdminTermsTermIdClassesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -160,6 +176,8 @@ export interface FileRoutesById {
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/terms/': typeof AdminTermsIndexRoute
+  '/admin/terms/$termId/classes': typeof AdminTermsTermIdClassesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -180,6 +198,8 @@ export interface FileRouteTypes {
     | '/admin/locations'
     | '/admin/staff'
     | '/admin/'
+    | '/admin/terms/'
+    | '/admin/terms/$termId/classes'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -197,6 +217,8 @@ export interface FileRouteTypes {
     | '/admin/locations'
     | '/admin/staff'
     | '/admin'
+    | '/admin/terms'
+    | '/admin/terms/$termId/classes'
   id:
     | '__root__'
     | '/'
@@ -215,6 +237,8 @@ export interface FileRouteTypes {
     | '/admin/locations'
     | '/admin/staff'
     | '/admin/'
+    | '/admin/terms/'
+    | '/admin/terms/$termId/classes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -345,6 +369,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminStaffRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/terms/': {
+      id: '/admin/terms/'
+      path: '/terms'
+      fullPath: '/admin/terms/'
+      preLoaderRoute: typeof AdminTermsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/terms/$termId/classes': {
+      id: '/admin/terms/$termId/classes'
+      path: '/terms/$termId/classes'
+      fullPath: '/admin/terms/$termId/classes'
+      preLoaderRoute: typeof AdminTermsTermIdClassesRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
 
@@ -354,6 +392,8 @@ interface AdminRouteChildren {
   AdminLocationsRoute: typeof AdminLocationsRoute
   AdminStaffRoute: typeof AdminStaffRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  AdminTermsIndexRoute: typeof AdminTermsIndexRoute
+  AdminTermsTermIdClassesRoute: typeof AdminTermsTermIdClassesRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
@@ -362,6 +402,8 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminLocationsRoute: AdminLocationsRoute,
   AdminStaffRoute: AdminStaffRoute,
   AdminIndexRoute: AdminIndexRoute,
+  AdminTermsIndexRoute: AdminTermsIndexRoute,
+  AdminTermsTermIdClassesRoute: AdminTermsTermIdClassesRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)

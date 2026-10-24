@@ -1,5 +1,5 @@
 import { Clock, MapPin, UserRound } from 'lucide-react';
-import { useId, useMemo } from 'react';
+import { type ReactNode, useId, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -17,11 +17,24 @@ export type Catalogue = {
   locations: Map<string, string>;
 };
 
+/** Extras of a class card, e.g. the office's buttons; the public list has none. */
+export type CardExtras = {
+  /** Badges next to the level, such as "Retired". */
+  badges?: (weeklyClass: WeeklyClass) => ReactNode;
+  /** Buttons at the foot of the card. */
+  actions?: (weeklyClass: WeeklyClass) => ReactNode;
+};
+
 /**
  * The weekly classes of a term grouped by weekday, Monday first, each day
  * under a sticky heading. Days without classes are left out.
  */
-export function WeekList({ classes, catalogue }: { classes: WeeklyClass[]; catalogue: Catalogue }) {
+export function WeekList({
+  classes,
+  catalogue,
+  badges,
+  actions,
+}: { classes: WeeklyClass[]; catalogue: Catalogue } & CardExtras) {
   const { t, i18n } = useTranslation('timetable');
   const lang = i18n.resolvedLanguage ?? 'en';
   const days = useMemo(() => groupByWeekday(classes), [classes]);
@@ -29,7 +42,14 @@ export function WeekList({ classes, catalogue }: { classes: WeeklyClass[]; catal
   return (
     <div role="group" aria-label={t('week.label')} className="space-y-6">
       {days.map((day) => (
-        <DaySection key={day.weekday} day={day} lang={lang} catalogue={catalogue} />
+        <DaySection
+          key={day.weekday}
+          day={day}
+          lang={lang}
+          catalogue={catalogue}
+          badges={badges}
+          actions={actions}
+        />
       ))}
     </div>
   );
@@ -39,11 +59,13 @@ function DaySection({
   day,
   lang,
   catalogue,
+  badges,
+  actions,
 }: {
   day: WeekdayGroup;
   lang: string;
   catalogue: Catalogue;
-}) {
+} & CardExtras) {
   const headingId = useId();
   const name = weekdayName(day.weekday, lang);
   return (
@@ -57,7 +79,13 @@ function DaySection({
       <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {day.classes.map((c) => (
           <li key={c.id} className="flex">
-            <ClassCard weeklyClass={c} dayName={name} catalogue={catalogue} />
+            <ClassCard
+              weeklyClass={c}
+              dayName={name}
+              catalogue={catalogue}
+              badges={badges}
+              actions={actions}
+            />
           </li>
         ))}
       </ul>
@@ -69,11 +97,13 @@ function ClassCard({
   weeklyClass: c,
   dayName,
   catalogue,
+  badges,
+  actions,
 }: {
   weeklyClass: WeeklyClass;
   dayName: string;
   catalogue: Catalogue;
-}) {
+} & CardExtras) {
   const { t } = useTranslation('timetable');
   const { t: ts } = useTranslation('schedule');
   const unknown = t('class.unknown');
@@ -98,6 +128,7 @@ function ClassCard({
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="font-heading text-lg leading-snug font-medium">{courseType}</h3>
         <Badge variant="secondary">{ts(`level.${c.level}`)}</Badge>
+        {badges?.(c)}
       </div>
 
       <div className="flex flex-col gap-1 text-muted-foreground">
@@ -120,6 +151,7 @@ function ClassCard({
           </span>
         </p>
       </div>
+      {actions && <div className="mt-auto flex flex-wrap justify-end gap-2 pt-2">{actions(c)}</div>}
     </article>
   );
 }

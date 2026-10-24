@@ -29,7 +29,7 @@ export const locationData = ({ name, address }: LocationValues): LocationData =>
 });
 
 /** The capacity as typed: a whole number from 1 to 1000. */
-const capacity = z
+export const capacity = z
   .string()
   .trim()
   .regex(/^\d+$/, 'capacity')

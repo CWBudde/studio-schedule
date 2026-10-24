@@ -36,7 +36,9 @@ export type TestPath =
   | '/reset-password'
   | '/confirm-email-change'
   | '/account'
-  | '/admin/accounts';
+  | '/admin/accounts'
+  | '/admin/terms'
+  | '/admin/terms/$termId/classes';
 
 /**
  * Renders ui as the page at `at` (default '/') of a router with the app's
@@ -74,6 +76,8 @@ export function renderInRouter(
       route('/confirm-email-change'),
       route('/account'),
       route('/admin/accounts'),
+      route('/admin/terms'),
+      route('/admin/terms/$termId/classes'),
     ]),
     history: createMemoryHistory({ initialEntries: [`${at}${query ? `?${query}` : ''}`] }),
   });

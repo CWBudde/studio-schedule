@@ -108,6 +108,7 @@ export const ids = {
   classContemporary: id(202),
   classJazz: id(203),
   classSpring: id(204),
+  classRetired: id(205),
   termPast: id(501),
   termAutumn: id(502),
   termSpring: id(503),
@@ -301,6 +302,30 @@ export const autumnClasses: Class[] = [
     startTime: '17:00',
     durationMinutes: 60,
     capacity: 10,
+  },
+];
+
+type ClassEntry = components['schemas']['ClassEntry'];
+
+/**
+ * The classes of the autumn term as the office lists them
+ * (GET /admin/terms/{termId}/classes): the public ones and a retired
+ * Saturday jazz class, in the API's order (Sunday first).
+ */
+export const autumnClassEntries: ClassEntry[] = [
+  ...autumnClasses.map((c) => ({ ...c, retired: false })),
+  {
+    id: ids.classRetired,
+    termId: ids.termAutumn,
+    courseTypeId: ids.jazz,
+    roomId: ids.roomA,
+    instructor: { id: ids.staffQuinn, displayName: 'Quinn Former' },
+    level: 'beginner',
+    weekday: 6,
+    startTime: '10:00',
+    durationMinutes: 60,
+    capacity: 16,
+    retired: true,
   },
 ];
 
