@@ -411,27 +411,43 @@ Goal: people can sign up and log in; staff can maintain the timetable.
         edits fill lessons, ADR 0007 has the term and member rules
 - [ ] Lesson administration: edit, cancel (notifies booked participants), hide, add one-off/special
       lessons, clone day, clone week. Builds on the class-to-lesson sync of Admin CRUD
-  - [ ] ADR 0007 (extended): an individually edited lesson is detached from its class, so neither
+  - [x] ADR 0007 (extended): an individually edited lesson is detached from its class, so neither
         class edits nor generation touch it again; generated lessons are canceled, never deleted
         (generation would re-create them), and only one-offs without bookings can be deleted;
         copies made by cloning are one-off lessons; who may cancel (office; instructors their own
-        lessons or not)
-  - [ ] Store: lesson fields for a detached flag and a cancellation note (migration, both stores,
+        lessons or not) (2026-10-24) — ADR 0007 "Lessons": office only; `detached` complements the
+        implicit follow rule; started lessons are a 422, past dates need `confirmPast`; a room
+        overlap is a 409 `room-taken` with `confirmRoomOverlap`; recipients are the person's
+        confirmed account, else their email, else their guardians' accounts (none for a disabled
+        account), no mails for past lessons; a term edit deletes the unbooked future lessons it
+        leaves out; ADR 0003: only workshops and private lessons publish early
+  - [x] Store: lesson fields for a detached flag and a cancellation note (migration, both stores,
         contract cases); a room-overlap query so an edit or clone can warn about a double-booked
-        room
-  - [ ] Edit a lesson: time, room, staff, capacity, visibility (hide/unhide as a quick action),
+        room (2026-10-24) — migration 00009 (`detached`, `cancel_note`, `canceled_at`,
+        `canceled_by`), `Lessons().ListRoomOverlaps`; contract cases in both stores
+  - [x] Edit a lesson: time, room, staff, capacity, visibility (hide/unhide as a quick action),
         kind; capacity below the active bookings is refused; office actions in the existing lesson
-        sheet of the schedule
-  - [ ] Cancel and restore with an optional note: one transaction marks the lesson and queues an
+        sheet of the schedule (2026-10-24) — `updateLesson` (`service/lesson_admin.go`); a start or
+        room change of a booked lesson mails "lesson changed"; "Manage this lesson" in the lesson
+        sheet with edit, hide/unhide (asks when booked) and the room and past confirmations
+  - [x] Cancel and restore with an optional note: one transaction marks the lesson and queues an
         EN/DE mail (outbox) to everyone with an active booking; bookings stay as they are until
-        Phase 4/6 decide about passes; the schedule already shows canceled lessons
-  - [ ] One-off and special lessons (workshop, private): create form with course type, room,
+        Phase 4/6 decide about passes; the schedule already shows canceled lessons (2026-10-24) —
+        `cancelLesson`, `restoreLesson` (checks the room), `lesson-canceled`/`lesson-restored`
+        mails with golden files; the sheet shows who canceled (the real admin when impersonating)
+        and the note
+  - [x] One-off and special lessons (workshop, private): create form with course type, room,
         staff, time, capacity, visibility; published early per ADR 0003; delete while unbooked
+        (2026-10-24) — `createLesson`, `deleteLesson` (409 `generated` for a class lesson, `in-use`
+        while booked); "New lesson" in the schedule toolbar; e2e in `lesson-admin.spec.ts`
   - [ ] Clone day and clone week: pick source and target, preview what would be created and what
         is skipped (same room and time taken), then apply in one transaction; only adds, never
         deletes; lessons keep their wall-clock time across DST
   - [ ] Tests: cancellation mail golden files, clone across a DST change, generation leaves
         detached and moved lessons alone, e2e "office cancels a lesson and it shows as canceled"
+        (2026-10-24) — partial: golden files, `TestUpdateLesson` (generation and class sync leave
+        detached lessons alone) and the cancel e2e exist; the clone DST test remains; the demo has
+        no bookings yet, so the e2e cannot show the cancellation mail (Phase 4)
 - [ ] UI: login, registration, confirm, reset; profile (person data, dependents, password, language);
       admin area with shadcn data tables and forms (react-hook-form + zod, schemas derived from the
       OpenAPI types) (2026-10-23) — partial: login, registration and confirm pages, the signed-in

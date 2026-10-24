@@ -35,6 +35,9 @@ where it differs.
 | Duplicate          | Already taken       | Bereits vergeben      | Name taken or person already a member (409 `duplicate`; ADR 0007)       |
 | Slot date          | (not shown)         | (nicht sichtbar)      | School date a generated lesson belongs to (`lessons.slot_date`)         |
 | Follow             | (not shown)         | (nicht sichtbar)      | An unedited future lesson follows class and term edits (ADR 0007)       |
+| Detached           | Edited individually | Einzeln bearbeitet    | Lesson of a class the office edited; follows the class no more (0007)   |
+| One-off lesson     | One-off lesson      | Einzeltermin          | Lesson without a class, e.g. a workshop; created by the office (0007)   |
+| Room taken         | Room taken          | Raum belegt           | Another lesson uses the room then (409 `room-taken`; ADR 0007)          |
 
 Roles: `guest` (not logged in) · `member` (Mitglied) · `instructor` (Lehrkraft) · `office` (Büro) ·
 `admin` (Administration).

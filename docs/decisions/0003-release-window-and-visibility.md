@@ -28,9 +28,12 @@ the schedule is released through the same weekday `ReleaseWeeksAhead` weeks late
   the rule.
 
 **Visible means released.** A guest sees a lesson if its visibility is `public` and it is released.
-One-off lessons (no class) and kinds other than `regular` (workshops, private lessons) ignore the
-window: they are "published early" by rule, without a per-lesson release field. Canceled lessons
-stay visible with their status. Signed-in accounts see more:
+Workshops and private lessons (kinds other than `regular`) ignore the window, whether they belong
+to a class or not: they are "published early" by rule, without a per-lesson release field. A
+regular lesson follows the window, a one-off one included (amended 2026-10-24: until then every
+one-off lesson was published early; lesson administration lets the office add regular one-offs
+and clone lessons as one-offs, which must not bypass the release; ADR 0007). Canceled lessons stay
+visible with their status. Signed-in accounts see more:
 
 - **Members** also see `members` lessons, and they get _early access_: every lesson they may see
   that starts before school-local midnight after today + N days, where N is the account's

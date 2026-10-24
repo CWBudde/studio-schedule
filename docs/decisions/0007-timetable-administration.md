@@ -62,10 +62,9 @@ Lessons in the past and lessons that were edited one by one stay as they are. Te
 e.g. a summer workshop term within the regular term. The class-to-lesson link this needs is the
 slot link of ADR 0003: every generated lesson keeps the school date of its slot (2026-10-24).
 
-- A future lesson _follows_ its class while it still is what the class generated: scheduled,
-  public and regular, at its slot's start and end, with the class's course type, room, staff and
-  capacity. Anything else counts as edited one by one; no separate flag is needed until lesson
-  administration adds one.
+- A future lesson _follows_ its class while it is not detached (below) and still is what the class
+  generated: scheduled, public and regular, at its slot's start and end, with the class's course
+  type, room, staff and capacity. Anything else counts as edited one by one.
 - A follower takes the new time, room, staff and capacity, keeping its wall-clock time across DST.
   Its bookings move with it. A capacity below the active bookings of a follower is a 422 on
   `capacity`.
@@ -83,11 +82,12 @@ slot link of ADR 0003: every generated lesson keeps the school date of its slot 
 **Terms and their lessons.** A term's new date range takes the lessons of its classes along in the
 same transaction (2026-10-24). Term names need not be unique.
 
-- A lesson whose slot date the new range leaves out is deleted while it lies ahead, follows its
-  class and has no bookings.
-- A lesson left out that has started, has bookings or was edited one by one refuses the new range
-  with a 422 on `startsOn` or `endsOn`, whichever leaves it out. The office moves or cancels it
-  first; history never ends up outside its term.
+- A lesson whose slot date the new range leaves out is deleted while it lies ahead and has no
+  bookings, whether it follows its class, was edited one by one (detached) or is canceled: nobody
+  is booked into it, so nobody misses it (2026-10-24, replacing "follows its class").
+- A lesson left out that has started or has bookings refuses the new range with a 422 on
+  `startsOn` or `endsOn`, whichever leaves it out. History never ends up outside its term, and the
+  office handles the bookings first.
 - A longer range gets the class's missing lessons of the horizon that have not started, as after a
   class edit (ADR 0003: generation does not create the past).
 
@@ -96,11 +96,83 @@ membership by removing it. A person is a member once (409 `duplicate`); an unkno
 on `personId`. A class with members cannot be deleted. Memberships do not book anyone until Phase
 4 (2026-10-24).
 
+**Lessons (2026-10-24).** The office edits, cancels and adds single lessons. Every lesson write is
+an `office` operation; instructors get no write access (they are notified from Phase 4).
+
+- _Detached._ An individually edited lesson is detached from its class (`lessons.detached`): every
+  lesson write of the office sets the flag on a lesson of a class (a one-off lesson has no class
+  to detach from), and it is never cleared, a restore included. A detached lesson does not follow
+  class or term edits, whatever its fields. The implicit rule above stays for lessons edited before
+  the flag existed (the migration starts every lesson undetached). Generation never touches an
+  existing lesson: it skips the week of every lesson of the class, detached and moved ones
+  included.
+- _Edit._ The office replaces a lesson's school date, start time, duration, room, staff, capacity,
+  visibility and kind with `PUT /lessons/{id}`; course type and class stay, and so does the slot
+  date of a lesson of a class (ADR 0003). A lesson that has started is not edited any more: a 422
+  whose error has the location `path.lessonId`, since the lesson the path names, not a field of
+  the body, is the problem. A lesson created or moved to a start that is not in the future is a 409
+  `past`; the office can save it anyway by repeating the request with `confirmPast: true`, e.g. to
+  record a lesson after the fact. Like a class, a lesson ends on its school day (422 on
+  `durationMinutes`). A capacity below the active bookings is a 422 on `capacity`. Hiding a lesson
+  with bookings is allowed; the UI confirms it with the booking count, and nobody is mailed.
+  Changing the kind is allowed on every lesson: a regular lesson that becomes a workshop or private
+  lesson is published early from then on, and a workshop that becomes regular follows the release
+  window (ADR 0003).
+- _Cancel and restore._ Canceling a canceled lesson or restoring a scheduled one changes nothing
+  and mails nobody, whether the lesson has started or not; a repeated cancel keeps the first note.
+  Otherwise only a lesson that has not started can be canceled or restored (422 on
+  `path.lessonId`, as for an edit). Cancelling takes an optional note and records when and by whom
+  (`lessons.canceled_at`, `canceled_by`); an admin signed in as another account (ADR 0005) is
+  recorded as themselves, not as the impersonated account. Restoring clears the three and keeps the
+  lesson detached; it checks the room like an edit (409 `room-taken` unless the otherwise optional
+  body sends `confirmRoomOverlap: true`), since another lesson may have taken the room while the
+  lesson was canceled. The same transaction queues a mail (outbox) to everyone with an active
+  booking: "lesson canceled" with the note, or "takes place after all" with the lesson's current
+  time and room. Bookings stay as they are until Phase 4/6 decide about passes. The office sees the
+  note, the time and the account in the lesson sheet; the public schedule shows only the status.
+- _Changed lessons._ An edit of the start or the room of a scheduled lesson with active bookings
+  queues a "lesson changed" mail to the same recipients, naming the old and the new start and room.
+  Staff, capacity, duration and visibility edits send nothing. Moving a canceled lesson sends
+  nothing either; its restore mail always states the time and room it then has, with a hint that
+  they may have changed since the cancellation. The lesson does not remember what its cancel mail
+  said, so the mail cannot tell whether they did.
+- _No mails for the past._ A lesson whose start is not in the future mails nobody, e.g. one moved
+  into the past with `confirmPast`. (Cancel and restore refuse started lessons anyway.)
+- _Recipients._ For each active booking of a person: nobody if the person's account is disabled
+  (no fallback); else the account's address if it is confirmed; else, for no account or an
+  unconfirmed one, the person's own address; else the addresses of the guardians' accounts that
+  are confirmed and not disabled (a guardian without such an account gets nothing, not even their
+  own address). For a guest booking, the guest's address. Each address (ignoring case) gets one
+  mail per change, in the language of its account (else the school's default), naming the booked
+  persons it is about; an address reached both as an account's and as a person's own (a child
+  with the parent's address) is mailed as the account's, with its language and name.
+- _Room overlaps._ A create, an edit that changes the time or the room, and a restore check the
+  room: another lesson that is not canceled and overlaps it there is a 409 `room-taken` that names
+  that lesson (its ID, start and course type). The office can save anyway: the request repeated
+  with `confirmRoomOverlap: true` skips the check. Canceled lessons do not count. When a create or
+  an edit is both in the past and in a taken room, `past` comes first; the retry with
+  `confirmPast` may then answer `room-taken`.
+- _One-off lessons._ The office creates one-off lessons (no class): course type, room, staff,
+  school date and start time, duration, capacity, visibility and kind (a workshop or a private
+  lesson is published early, a regular one follows the release window; ADR 0003).
+- _Deleting._ A lesson generated from a class is canceled, never deleted (409 `generated`):
+  generation would create it again. A one-off lesson can be deleted while it has not started (422
+  on `path.lessonId`, as for an edit) and no booking refers to it, canceled ones included (409
+  `in-use` otherwise).
+- _Cloning_ (decided now, built later). The office copies the scheduled lessons of a day or a
+  Monday-based week to another future date or week whose lessons have not started, in any term.
+  Copies are one-off lessons that keep kind and visibility and never take bookings along. A source
+  lesson is skipped when its class has a slot in the target week within its term (generation
+  covers it), and when its room is taken there (room overlap as above). A preview lists every
+  skipped lesson with the reason before anything is created. Cloned regular lessons follow the
+  release window like any regular lesson.
+
 **Concurrency.** The last write wins. There is no `If-Match` or version column: the office is a
 few people, and a stale form overwrites at most what the same person could have changed.
 
 **Audit.** Catalogue and timetable edits are not written to `audit_events`, which stays for
-security events (ADR 0005). Lesson administration decides separately about cancellations.
+security events (ADR 0005). A lesson's cancellation records its time and account on the lesson
+itself (above); other lesson edits are not recorded.
 
 ## Consequences
 
@@ -108,4 +180,6 @@ security events (ADR 0005). Lesson administration decides separately about cance
   and delete-confirmation components.
 - A refused delete tells the office why, so it can retire the record or remove what uses it.
 - Two people editing the same record at the same time can overwrite each other without notice.
-- Who changed the timetable is not recorded.
+- Who changed the timetable is not recorded, except who canceled a lesson.
+- A class edit no longer reaches a lesson the office has touched, even one it set back by hand to
+  what the class generates; the office edits such a lesson one by one.
