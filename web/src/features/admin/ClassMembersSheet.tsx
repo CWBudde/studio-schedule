@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserMinus, UserPlus } from 'lucide-react';
+import { CirclePlay, UserMinus, UserPlus } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -11,8 +11,11 @@ import {
   type ClassEntry,
   type ClassMember,
   classMembersQuery,
+  refusedAt,
   removeClassMemberMutation,
+  updateClassMemberMutation,
 } from '@/api/queries';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { invalidFields } from '@/features/auth/form';
@@ -157,8 +160,14 @@ function AddMember({ classId, members }: { classId: string; members: ClassMember
           duplicate: tried
             ? t('members.duplicate', { name: personName(tried.person) })
             : t('members.duplicateUnknown'),
+          full: t('members.full'),
         }}
-        messages={{ 404: t('classes.notFound'), 422: tAuth('form.checkEntries') }}
+        messages={{
+          404: t('classes.notFound'),
+          422: refusedAt(add.error, 'path.classId')
+            ? t('members.retired')
+            : tAuth('form.checkEntries'),
+        }}
       />
       <Controller
         control={form.control}
@@ -225,7 +234,19 @@ function MemberItem({
               })}
             </p>
           )}
+          {member.pausedUntil && (
+            <Badge variant="secondary" className="mt-1 tabular-nums">
+              {t('members.pausedUntil', {
+                date: formatDate(member.pausedUntil, lang, {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                }),
+              })}
+            </Badge>
+          )}
         </div>
+        {member.pausedUntil && <EndPause classId={classId} member={member} />}
         <Button
           variant="outline"
           size="sm"
@@ -248,6 +269,46 @@ function MemberItem({
         />
       )}
     </li>
+  );
+}
+
+/**
+ * Ends the pause of a member: the membership keeps its start date, and the
+ * member is booked into the coming lessons again.
+ */
+function EndPause({ classId, member }: { classId: string; member: ClassMember }) {
+  const { t } = useTranslation('admin');
+  const queryClient = useQueryClient();
+  const update = useMutation(updateClassMemberMutation(queryClient));
+  const name = personName(member.person);
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      aria-label={t('members.endPauseLabel', { name })}
+      disabled={update.isPending}
+      onClick={() =>
+        update.mutate(
+          {
+            classId,
+            personId: member.person.id,
+            body: member.since ? { since: member.since } : {},
+          },
+          {
+            onSuccess: () => toast.success(t('members.pauseEnded', { name })),
+            onError: (error) =>
+              toast.error(
+                error instanceof ApiError && error.status === 404
+                  ? t('members.notFound', { name })
+                  : t('members.pauseFailed', { name }),
+              ),
+          },
+        )
+      }
+    >
+      <CirclePlay aria-hidden="true" />
+      <span className="hidden sm:inline">{t('members.endPause')}</span>
+    </Button>
   );
 }
 
@@ -284,6 +345,7 @@ function ConfirmRemove({
       <p id={questionId} className="font-medium">
         {t('members.confirm', { name, classLabel })}
       </p>
+      <p className="text-muted-foreground">{t('members.confirmHint')}</p>
       <FormError error={remove.error} />
       <div className="flex flex-wrap gap-2">
         <Button

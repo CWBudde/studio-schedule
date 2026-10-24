@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, type LessonDetail } from '@/api/client';
@@ -40,6 +40,31 @@ const bookingId = '0190a000-0000-7000-8000-000000000601';
 
 const alone = { ...family, dependents: [] };
 
+/** Nora's bookings of the ballet class from the booked lesson on. */
+const followingBookings = [
+  {
+    bookingId,
+    lessonId: ids.lessonBallet,
+    startsAt: '2026-10-26T17:00:00Z',
+    endsAt: '2026-10-26T18:30:00Z',
+    late: true,
+  },
+  {
+    bookingId: '0190a000-0000-7000-8000-000000000602',
+    lessonId: '0190a000-0000-7000-8000-000000000112',
+    startsAt: '2026-11-02T17:00:00Z',
+    endsAt: '2026-11-02T18:30:00Z',
+    late: false,
+  },
+  {
+    bookingId: '0190a000-0000-7000-8000-000000000603',
+    lessonId: '0190a000-0000-7000-8000-000000000113',
+    startsAt: '2026-11-09T17:00:00Z',
+    endsAt: '2026-11-09T18:30:00Z',
+    late: false,
+  },
+];
+
 /** The answer of bookLesson or cancelBooking. */
 const bookingOf = (personId: string, extra: Partial<Booking> = {}): Booking => ({
   id: bookingId,
@@ -75,32 +100,17 @@ function mockMember({
         ? { body: l }
         : { status: 404, body: { title: 'Not Found' } };
     },
-    '/api/v1/bookings/{bookingId}/cancel-following': {
-      body: {
-        bookings: [
-          {
-            bookingId,
-            lessonId: ids.lessonBallet,
-            startsAt: '2026-10-26T17:00:00Z',
-            endsAt: '2026-10-26T18:30:00Z',
-            late: true,
-          },
-          {
-            bookingId: '0190a000-0000-7000-8000-000000000602',
-            lessonId: '0190a000-0000-7000-8000-000000000112',
-            startsAt: '2026-11-02T17:00:00Z',
-            endsAt: '2026-11-02T18:30:00Z',
-            late: false,
-          },
-          {
-            bookingId: '0190a000-0000-7000-8000-000000000603',
-            lessonId: '0190a000-0000-7000-8000-000000000113',
-            startsAt: '2026-11-09T17:00:00Z',
-            endsAt: '2026-11-09T18:30:00Z',
-            late: false,
-          },
-        ],
-      },
+    // Nora is a member of the class: the preview names her pause, up to
+    // the date asked for (by default the end of the term).
+    '/api/v1/bookings/{bookingId}/cancel-following': (init: MockRequest) => {
+      const until = (init.params?.query as { until?: string } | undefined)?.until ?? '2027-07-31';
+      return {
+        body: {
+          bookings: followingBookings.filter((b) => b.startsAt.slice(0, 10) <= until),
+          until,
+          pausedUntil: until,
+        },
+      };
     },
   });
 }
@@ -520,10 +530,65 @@ describe('BookingSection', () => {
     await waitFor(() => expect(dialog).not.toBeInTheDocument());
     expect(post).toHaveBeenCalledWith('/api/v1/bookings/{bookingId}/cancel-following', {
       params: { path: { bookingId } },
+      body: { until: '2027-07-31' },
     });
     // The toast counts what the API really canceled.
     expect(await screen.findAllByText('2 bookings have been canceled.')).not.toHaveLength(0);
     expect(await screen.findAllByText('1 of them was a late cancellation.')).not.toHaveLength(0);
+  });
+
+  it('cancels the following weeks up to a date and says when a member is booked again', async () => {
+    const get = mockMember({ lesson: () => bookedBallet() });
+    const post = mockApiPost({
+      '/api/v1/bookings/{bookingId}/cancel-following': {
+        body: {
+          bookings: followingBookings.slice(0, 2),
+          until: '2026-11-02',
+          pausedUntil: '2026-11-02',
+        },
+      },
+    });
+    const user = userEvent.setup();
+
+    const { section } = await openBooking();
+    await user.click(
+      await section.findByRole('button', {
+        name: 'Also cancel the following weeks of Nora Example',
+      }),
+    );
+
+    const dialog = within(
+      screen.getByRole('alertdialog', { name: 'Cancel the following weeks too?' }),
+    );
+    // The field starts with the default the API names: the end of the term.
+    const until = dialog.getByLabelText('Cancel up to and including');
+    await waitFor(() => expect(until).toHaveValue('2027-07-31'));
+    expect(
+      dialog.getByText(
+        'Nora Example stays a member of the class and is booked again automatically from Sunday, August 1, 2027.',
+      ),
+    ).toBeInTheDocument();
+
+    // A date input takes the whole date at once.
+    fireEvent.change(until, { target: { value: '2026-11-02' } });
+    await waitFor(() => expect(dialog.getAllByRole('listitem')).toHaveLength(2));
+    expect(get).toHaveBeenCalledWith('/api/v1/bookings/{bookingId}/cancel-following', {
+      params: { path: { bookingId }, query: { until: '2026-11-02' } },
+      signal: expect.any(AbortSignal),
+    });
+    expect(
+      dialog.getByText(
+        'Nora Example stays a member of the class and is booked again automatically from Tuesday, November 3, 2026.',
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(dialog.getByRole('button', { name: 'Cancel 2 bookings' }));
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/api/v1/bookings/{bookingId}/cancel-following', {
+        params: { path: { bookingId } },
+        body: { until: '2026-11-02' },
+      }),
+    );
   });
 
   it('offers no following weeks for a one-off lesson', async () => {

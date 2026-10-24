@@ -157,7 +157,10 @@
       "done_one": "{{count}} Buchung wurde storniert.",
       "done_other": "{{count}} Buchungen wurden storniert.",
       "doneLate_one": "{{count}} davon war eine späte Stornierung.",
-      "doneLate_other": "{{count}} davon waren späte Stornierungen."
+      "doneLate_other": "{{count}} davon waren späte Stornierungen.",
+      "untilLabel": "Stornieren bis einschließlich",
+      "untilHint": "Beim Ende des Zeitraums werden alle folgenden Wochen storniert.",
+      "paused": "{{name}} bleibt Kursmitglied und wird ab {{date}} wieder automatisch gebucht."
     },
     "errors": {
       "alreadyBooked": "{{name}} ist für diese Stunde schon gebucht.",
@@ -171,7 +174,8 @@
       "alreadyCanceled": "Diese Buchung war schon storniert.",
       "notFound": "Diese Stunde oder Buchung ist nicht mehr verfügbar.",
       "started": "Die Stunde hat begonnen; die Buchung kann nicht mehr storniert werden.",
-      "failed": "Das hat nicht geklappt. Bitte versuche es noch einmal."
+      "failed": "Das hat nicht geklappt. Bitte versuche es noch einmal.",
+      "untilBeforeLesson": "Das Datum darf nicht vor dieser Stunde liegen."
     },
     "badge": {
       "free_one": "{{count}} frei",

@@ -6,8 +6,9 @@ import type { components } from './schema';
  * is taken, a guardian may not edit a managed dependent, the person has an
  * account already, another lesson uses the room then, a lesson would be in
  * the past, a lesson of a class is to be deleted rather than canceled, the
- * person is booked already, the lesson is full or closed for booking (see
- * closedWhy), or the booking is canceled already.
+ * person is booked already, the lesson (or a class, for its members) is
+ * full, the lesson is closed for booking (see closedWhy), or the booking is
+ * canceled already.
  */
 export type ConflictReason = components['schemas']['Conflict']['reason'];
 

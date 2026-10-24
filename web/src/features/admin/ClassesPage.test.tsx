@@ -246,7 +246,7 @@ describe('ClassesPage', () => {
 
     expect(await sheet.findByRole('alert')).toHaveTextContent('Please check your entries.');
     expect(sheet.getByLabelText('Capacity')).toHaveAccessibleDescription(
-      /Coming lessons have more bookings than that\.$/,
+      /The class has more members, or a coming lesson more bookings, than that\.$/,
     );
     expect(put).toHaveBeenCalledWith('/api/v1/classes/{classId}', {
       params: { path: { classId: ids.classBallet } },

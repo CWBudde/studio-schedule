@@ -13,6 +13,7 @@ import {
   mockApiDelete,
   mockApiGet,
   mockApiPost,
+  mockApiPut,
   type MockRequest,
   persons,
   problem,
@@ -194,6 +195,48 @@ describe('ClassMembersSheet', () => {
     expect(screen.queryByText('already a member')).not.toBeInTheDocument();
   });
 
+  it('says when the class is full', async () => {
+    mockApiGet(asOffice);
+    mockApiPost({
+      '/api/v1/classes/{classId}/members': conflict('full', 'the class is full'),
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const sheet = await openBalletMembers(user);
+    await sheet.findByRole('list', { name: 'Members' });
+    await pickPerson(user, sheet, /Alex Example/);
+    await user.click(sheet.getByRole('button', { name: 'Add member' }));
+
+    expect(await sheet.findByRole('alert')).toHaveTextContent(
+      'The class is full: it has as many members as places. Raise its capacity first.',
+    );
+    expect(sheet.getByRole('combobox', { name: 'Person' })).not.toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    expect(screen.queryByText('the class is full')).not.toBeInTheDocument();
+  });
+
+  it('says when the class is retired', async () => {
+    mockApiGet(asOffice);
+    mockApiPost({
+      '/api/v1/classes/{classId}/members': problem(422, 'the class is retired', [
+        { location: 'path.classId' },
+      ]),
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const sheet = await openBalletMembers(user);
+    await pickPerson(user, sheet, /Alex Example/);
+    await user.click(sheet.getByRole('button', { name: 'Add member' }));
+
+    expect(await sheet.findByRole('alert')).toHaveTextContent(
+      'The class is retired and takes no members. Reactivate it first.',
+    );
+  });
+
   it('marks a person the API does not know', async () => {
     mockApiGet(asOffice);
     mockApiPost({
@@ -288,6 +331,37 @@ describe('ClassMembersSheet', () => {
     });
     expect(await sheet.findByRole('heading', { name: '1 member' })).toBeInTheDocument();
     expect(sheet.queryByText('Noah Sample')).not.toBeInTheDocument();
+  });
+
+  it('shows a paused member and ends the pause', async () => {
+    let members: typeof balletMembers = [{ ...balletMembers[0]!, pausedUntil: '2026-12-01' }];
+    mockApiGet({
+      ...asOffice,
+      '/api/v1/admin/classes/{classId}/members': () => ({ body: { items: members } }),
+    });
+    const put = mockApiPut({
+      '/api/v1/classes/{classId}/members/{personId}': () => {
+        members = [balletMembers[0]!];
+        return { body: balletMembers[0] };
+      },
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const sheet = await openBalletMembers(user);
+    expect(await sheet.findByText('Paused until Dec 1, 2026')).toBeInTheDocument();
+    await user.click(sheet.getByRole('button', { name: 'End the pause of Mia Sample' }));
+
+    expect(
+      await screen.findByText(
+        'The pause of Mia Sample has ended: they are booked into the coming lessons again.',
+      ),
+    ).toBeInTheDocument();
+    expect(put).toHaveBeenCalledWith('/api/v1/classes/{classId}/members/{personId}', {
+      params: { path: { classId: ids.classBallet, personId: ids.personMia } },
+      body: { since: '2026-08-31' },
+    });
+    await waitFor(() => expect(sheet.queryByText(/^Paused until/)).not.toBeInTheDocument());
   });
 
   it('says when the members could not be loaded, and loads them again', async () => {

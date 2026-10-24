@@ -157,7 +157,10 @@
       "done_one": "{{count}} booking has been canceled.",
       "done_other": "{{count}} bookings have been canceled.",
       "doneLate_one": "{{count}} of them was a late cancellation.",
-      "doneLate_other": "{{count}} of them were late cancellations."
+      "doneLate_other": "{{count}} of them were late cancellations.",
+      "untilLabel": "Cancel up to and including",
+      "untilHint": "Leave it at the end of the term to cancel all following weeks.",
+      "paused": "{{name}} stays a member of the class and is booked again automatically from {{date}}."
     },
     "errors": {
       "alreadyBooked": "{{name}} is booked for this lesson already.",
@@ -171,7 +174,8 @@
       "alreadyCanceled": "This booking was canceled already.",
       "notFound": "This lesson or booking is not available any more.",
       "started": "The lesson has started; the booking can no longer be canceled.",
-      "failed": "That did not work. Please try again."
+      "failed": "That did not work. Please try again.",
+      "untilBeforeLesson": "The date cannot be before this lesson."
     },
     "badge": {
       "free_one": "{{count}} free",

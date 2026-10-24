@@ -1001,13 +1001,20 @@ export const classMembersQuery = (classId: string) =>
 function onMembersSettled(queryClient: QueryClient) {
   return (_data: unknown, error: Error | null, { classId }: { classId: string }) => {
     if (error) onTimetableError(queryClient)(error);
+    // Members are booked into the coming lessons of the class, and their
+    // bookings canceled when they leave (ADR 0009). Not awaited: the
+    // members list must settle first, or the sheet's own callbacks (toasts)
+    // would wait for every schedule query.
+    if (!error) void refreshLessons(queryClient);
     return queryClient.invalidateQueries({ queryKey: classMembersQuery(classId).queryKey });
   };
 }
 
 /**
- * Adds a person to a class (office); a member already there is a 409
- * `duplicate`, an unknown person a 422 on `body.personId`.
+ * Adds a person to a class (office) and books them into its coming
+ * lessons; a member already there is a 409 `duplicate`, a class whose
+ * members fill its capacity a 409 `full`, an unknown person a 422 on
+ * `body.personId`, a retired class a 422 on `path.classId`.
  */
 export const addClassMemberMutation = (queryClient: QueryClient) =>
   mutationOptions({
@@ -1018,7 +1025,39 @@ export const addClassMemberMutation = (queryClient: QueryClient) =>
     onSettled: onMembersSettled(queryClient),
   });
 
-/** Ends a person's membership in a class (office); one who is not a member is a 404. */
+/** New dates of a membership (updateClassMember); no `pausedUntil` ends a pause. */
+export type ClassMemberUpdateData = PutBody<'/api/v1/classes/{classId}/members/{personId}'>;
+
+/**
+ * Replaces the dates of a membership (office): `since`, and `pausedUntil`
+ * (left out: ends a pause). The member is booked into the coming lessons
+ * they are active on and have no booking for; one who is not a member is a
+ * 404.
+ */
+export const updateClassMemberMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({
+      classId,
+      personId,
+      body,
+    }: {
+      classId: string;
+      personId: string;
+      body: ClassMemberUpdateData;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/classes/{classId}/members/{personId}', {
+          params: { path: { classId, personId } },
+          body,
+        }),
+      ),
+    onSettled: onMembersSettled(queryClient),
+  });
+
+/**
+ * Ends a person's membership in a class (office) and cancels their bookings
+ * of its coming lessons; one who is not a member is a 404.
+ */
 export const removeClassMemberMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: ({ classId, personId }: { classId: string; personId: string }) =>
@@ -1061,6 +1100,18 @@ function refreshLessons(queryClient: QueryClient, { except }: { except?: string 
 export function refusedAsStarted(
   error: unknown,
   location: 'path.lessonId' | 'path.bookingId',
+): boolean {
+  return refusedAt(error, location);
+}
+
+/**
+ * Whether a request was refused with a 422 at a location: a path parameter,
+ * i.e. the record the path names, such as a retired class (`path.classId`),
+ * or a query parameter or a body field.
+ */
+export function refusedAt(
+  error: unknown,
+  location: `path.${string}` | `query.${string}` | `body.${string}`,
 ): boolean {
   if (!(error instanceof ApiError) || error.status !== 422) return false;
   const body = error.body as { errors?: { location?: string }[] | null } | undefined;
@@ -1179,7 +1230,10 @@ export const cloneLessonsMutation = (queryClient: QueryClient) =>
 export type Booking = components['schemas']['Booking'];
 /** A person of the signed-in family with an active booking for a lesson. */
 export type BookedFor = components['schemas']['BookedFor'];
-/** The bookings cancelFollowing cancels (or would cancel), the requested one first. */
+/**
+ * The bookings cancelFollowing cancels (or would cancel), the requested one
+ * first, up to `until`, and the member's pause (`pausedUntil`), if any.
+ */
 export type FollowingCancellation = components['schemas']['FollowingCancellation'];
 
 /** What the schedule and the lesson queries know of the bookings of a lesson. */
@@ -1373,16 +1427,19 @@ export const cancelBookingMutation = (queryClient: QueryClient) =>
 
 /**
  * What cancelFollowingMutation would cancel now: the booking of a class
- * lesson and the same person's later bookings of that class that have not
- * started, each with its own `late` flag. Always asked anew.
+ * lesson and the same person's later bookings of that class up to the
+ * school date `until` that have not started, each with its own `late` flag.
+ * Without `until` the answer names the default (the end of the term) as
+ * `until`; for a member of the class it names the pause (`pausedUntil`).
+ * Always asked anew.
  */
-export const cancelFollowingPreviewQuery = (bookingId: string) =>
+export const cancelFollowingPreviewQuery = (bookingId: string, until?: string) =>
   queryOptions({
-    queryKey: ['bookings', bookingId, 'cancel-following'],
+    queryKey: ['bookings', bookingId, 'cancel-following', until ?? 'default'],
     queryFn: ({ signal }) =>
       unwrap(
         api.GET('/api/v1/bookings/{bookingId}/cancel-following', {
-          params: { path: { bookingId } },
+          params: { path: { bookingId }, query: until ? { until } : {} },
           signal,
         }),
       ),
@@ -1392,15 +1449,18 @@ export const cancelFollowingPreviewQuery = (bookingId: string) =>
 
 /**
  * Cancels a booking of a class lesson and the same person's later bookings
- * of that class in one go; the answer lists what it canceled. The account
- * gets one mail. Afterwards the lessons and the demo mailbox are asked again.
+ * of that class up to `until` (default: the end of the term) in one go, and
+ * pauses a member of the class until then; the answer lists what it
+ * canceled. The account gets one mail. Afterwards the lessons and the demo
+ * mailbox are asked again.
  */
 export const cancelFollowingMutation = (queryClient: QueryClient) =>
   mutationOptions({
-    mutationFn: (bookingId: string) =>
+    mutationFn: ({ bookingId, until }: { bookingId: string; until?: string }) =>
       unwrap(
         api.POST('/api/v1/bookings/{bookingId}/cancel-following', {
           params: { path: { bookingId } },
+          body: until ? { until } : {},
         }),
       ),
     mutationKey: bookingMutationKey,
