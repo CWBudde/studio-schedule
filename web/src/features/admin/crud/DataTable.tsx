@@ -75,7 +75,7 @@ export function DataTable<T extends RowData>({
   });
 
   if (data === undefined) {
-    return isError ? <LoadError onRetry={onRetry} /> : <Loading />;
+    return isError ? <LoadError onRetry={onRetry} /> : <DataTableLoading />;
   }
   if (data.length === 0) {
     return (
@@ -218,7 +218,8 @@ function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
   );
 }
 
-function Loading() {
+/** The loading state of a DataTable, for a page that waits for something before its table. */
+export function DataTableLoading() {
   const { t } = useTranslation('admin');
   return (
     <div role="status" className="space-y-3">

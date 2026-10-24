@@ -1,15 +1,24 @@
 import { expect, gotoDemo, type Page, test } from './fixtures';
 
+/** The demo account button of a role on the login page. */
+const demoAccount = (page: Page, role: string) =>
+  page
+    .getByRole('region', { name: 'Demo accounts' })
+    .getByRole('button', { name: new RegExp(`^Sign in as .+ \\(${role}\\)$`) });
+
+/** The name of the demo account of a role, read on the login page. */
+async function demoName(page: Page, role: string): Promise<string> {
+  const label = (await demoAccount(page, role).getAttribute('aria-label')) ?? '';
+  const name = new RegExp(`^Sign in as (.+) \\(${role}\\)$`).exec(label)?.[1] ?? '';
+  expect(name).not.toBe('');
+  return name;
+}
+
 /** Signs in with the demo account of a role from the login page; returns its name. */
 async function signInAs(page: Page, role: string): Promise<string> {
   await gotoDemo(page, '/login');
-  const button = page
-    .getByRole('region', { name: 'Demo accounts' })
-    .getByRole('button', { name: new RegExp(`^Sign in as .+ \\(${role}\\)$`) });
-  const label = (await button.getAttribute('aria-label')) ?? '';
-  const name = new RegExp(`^Sign in as (.+) \\(${role}\\)$`).exec(label)?.[1] ?? '';
-  expect(name).not.toBe('');
-  await button.click();
+  const name = await demoName(page, role);
+  await demoAccount(page, role).click();
   await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
   return name;
 }
@@ -585,4 +594,54 @@ test('the office deletes a person added by mistake, but not one with family link
   await expect(refused.getByRole('alert')).toHaveText(
     'Ella Amberly still has an account, a staff link, bookings, class memberships, guardians or children, so they cannot be deleted. Remove those first.',
   );
+});
+
+/** The audit log: a table on wider screens, a list of cards on phones. */
+const auditLog = (page: Page) =>
+  page.getByRole('table', { name: 'Audit log' }).or(page.getByRole('list', { name: 'Audit log' }));
+
+test('an admin signs in as a member, returns and finds both in the audit log', async ({ page }) => {
+  await gotoDemo(page, '/login');
+  const member = await demoName(page, 'Member');
+  const admin = await signInAs(page, 'Administrator');
+
+  await page.getByRole('banner').getByRole('button', { name: admin }).click();
+  await page.getByRole('menuitem', { name: 'Accounts' }).click();
+  await page
+    .getByRole('table', { name: 'Accounts' })
+    .getByRole('button', { name: `Sign in as ${member}` })
+    .click();
+  const banner = page.getByRole('region', { name: 'Signed in as someone else' });
+  await banner.getByRole('button', { name: 'Return to my account' }).click();
+  await expect(banner).toBeHidden();
+
+  await openAdministration(page, admin);
+  await openSection(page, 'Audit log');
+
+  // Newest first: the return, then the start.
+  const log = auditLog(page);
+  const entries = log.getByRole('row').or(log.getByRole('listitem')).filter({ hasText: member });
+  await expect(entries).toHaveCount(2);
+  await expect(entries.nth(0)).toContainText('Sign-in as ended');
+  await expect(entries.nth(1)).toContainText('Sign-in as started');
+  await expect(entries.nth(0)).toContainText(admin);
+
+  await page.getByRole('searchbox', { name: 'Search the audit log' }).fill('started');
+  await expect(entries).toHaveCount(1);
+  await expect(entries).toContainText('Sign-in as started');
+});
+
+test('the office has no audit log', async ({ page }) => {
+  const office = await signInAs(page, 'Office');
+  await openAdministration(page, office);
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Administration' })
+      .getByRole('link', { name: 'Audit log' }),
+  ).toHaveCount(0);
+
+  await gotoDemo(page, '/admin/audit');
+  await expect(page.getByRole('heading', { level: 1, name: 'Audit log' })).toBeVisible();
+  await expect(page.getByText('Only administrators can see this page.')).toBeVisible();
+  await expect(auditLog(page)).toHaveCount(0);
 });

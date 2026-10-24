@@ -114,15 +114,25 @@ export function formatTimeRange(
   return `${formatTime(start, timeZone, locale)}–${formatTime(end, timeZone, locale)}`;
 }
 
+/** Day, month and wall-clock time, which formatDateTime and formatTimestamp add to. */
+const dateTimeOptions = {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+} as const satisfies Intl.DateTimeFormatOptions;
+
 /** Date and time of the instant in the school time zone, e.g. 'Mon, Oct 26, 00:30'. */
 export function formatDateTime(instant: Instant, timeZone: string, locale: string): string {
-  return formatter(locale, {
-    timeZone,
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(new Date(instant));
+  return formatter(locale, { ...dateTimeOptions, timeZone, weekday: 'short' }).format(
+    new Date(instant),
+  );
+}
+
+/** Date with year and time of the instant in the school time zone, e.g. 'Oct 26, 2026, 00:30'. */
+export function formatTimestamp(instant: Instant, timeZone: string, locale: string): string {
+  return formatter(locale, { ...dateTimeOptions, timeZone, year: 'numeric' }).format(
+    new Date(instant),
+  );
 }

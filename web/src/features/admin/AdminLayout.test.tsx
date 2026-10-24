@@ -58,6 +58,7 @@ function renderAdmin(at: string, { accounts }: { accounts?: () => ReactElement }
         section('/terms', 'Terms section'),
         section('/persons', 'Persons section'),
         section('/accounts', 'Accounts section', accounts),
+        section('/audit', 'Audit log section'),
       ]),
     ]),
     history: createMemoryHistory({ initialEntries: [at] }),
@@ -91,7 +92,7 @@ describe('AdminLayout', () => {
     expect(screen.queryByText('Locations section')).not.toBeInTheDocument();
   });
 
-  it('shows the office the catalogue sections but not the accounts', async () => {
+  it('shows the office the catalogue sections but not the accounts or the audit log', async () => {
     mockApiGet({ '/api/v1/auth/me': { body: meOffice } });
 
     renderAdmin('/admin/locations');
@@ -110,6 +111,7 @@ describe('AdminLayout', () => {
     expect(nav.getByRole('link', { name: 'Timetable' })).toHaveAttribute('href', '/admin/terms');
     expect(nav.getByRole('link', { name: 'Persons' })).toHaveAttribute('href', '/admin/persons');
     expect(nav.queryByRole('link', { name: 'Accounts' })).not.toBeInTheDocument();
+    expect(nav.queryByRole('link', { name: 'Audit log' })).not.toBeInTheDocument();
     expect(screen.getByText('Locations section')).toBeInTheDocument();
   });
 
@@ -142,11 +144,17 @@ describe('AdminLayout', () => {
       'Timetable',
       'Persons',
       'Accounts',
+      'Audit log',
     ]);
     await user.click(nav.getByRole('link', { name: 'Accounts' }));
 
     expect(await screen.findByText('Accounts section')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/admin/accounts');
+
+    await user.click((await sections()).getByRole('link', { name: 'Audit log' }));
+
+    expect(await screen.findByText('Audit log section')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/admin/audit');
   });
 
   it('says when it cannot check the access, and checks again', async () => {
@@ -199,5 +207,6 @@ describe('AdminLayout', () => {
     expect(nav.getByRole('link', { name: 'Stundenplan' })).toBeInTheDocument();
     expect(nav.getByRole('link', { name: 'Personen' })).toBeInTheDocument();
     expect(nav.getByRole('link', { name: 'Konten' })).toBeInTheDocument();
+    expect(nav.getByRole('link', { name: 'Protokoll' })).toBeInTheDocument();
   });
 });

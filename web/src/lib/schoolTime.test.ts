@@ -3,6 +3,7 @@ import {
   addDays,
   formatDate,
   formatDateTime,
+  formatTimestamp,
   formatDayHeading,
   formatTime,
   formatTimeRange,
@@ -86,5 +87,10 @@ describe('formatting', () => {
 
   it('formats an instant with date and time in the school time zone', () => {
     expect(formatDateTime('2026-10-25T23:30:00Z', berlin, 'de')).toBe('Mo., 26. Okt., 00:30');
+  });
+
+  it('formats a timestamp with the year in the school time zone', () => {
+    expect(formatTimestamp('2026-10-25T23:30:00Z', berlin, 'en')).toBe('Oct 26, 2026, 00:30');
+    expect(formatTimestamp('2026-10-23T14:30:00Z', berlin, 'de')).toBe('23. Okt. 2026, 16:30');
   });
 });

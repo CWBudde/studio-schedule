@@ -57,9 +57,14 @@ export function AdminLayout() {
           {t('nav.persons')}
         </Link>
         {role === 'admin' && (
-          <Link to="/admin/accounts" className={sectionLink}>
-            {t('nav.accounts')}
-          </Link>
+          <>
+            <Link to="/admin/accounts" className={sectionLink}>
+              {t('nav.accounts')}
+            </Link>
+            <Link to="/admin/audit" className={sectionLink}>
+              {t('nav.audit')}
+            </Link>
+          </>
         )}
       </nav>
       <Outlet />

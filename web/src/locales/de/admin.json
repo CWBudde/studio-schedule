@@ -6,7 +6,8 @@
     "staff": "Personal",
     "timetable": "Stundenplan",
     "persons": "Personen",
-    "accounts": "Konten"
+    "accounts": "Konten",
+    "audit": "Protokoll"
   },
   "noAccess": {
     "title": "Kein Zugriff",
@@ -416,5 +417,22 @@
       "since": "Mitglied seit {{date}}",
       "retired": "Stillgelegt"
     }
+  },
+  "audit": {
+    "title": "Protokoll",
+    "description": "Die letzten {{count}} protokollierten Aktionen, die neuesten zuerst: wann sich jemand aus der Administration als eine andere Person angemeldet hat und wann das endete. Die Zeiten gelten in der Zeitzone der Schule.",
+    "table": "Protokoll",
+    "search": "Protokoll durchsuchen",
+    "empty": "Bisher wurde nichts protokolliert.",
+    "at": "Zeitpunkt",
+    "action": "Aktion",
+    "actor": "Von",
+    "target": "Konto",
+    "actions": {
+      "impersonation-started": "Anmelden als begonnen",
+      "impersonation-ended": "Anmelden als beendet"
+    },
+    "unknownAccount": "Unbekanntes Konto",
+    "noAccess": "Nur die Administration kann diese Seite sehen."
   }
 }

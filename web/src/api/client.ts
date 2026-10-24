@@ -20,6 +20,7 @@ export type Me = Schemas['Me'];
 export type Role = Me['role'];
 export type Impersonator = Schemas['Impersonator'];
 export type AccountEntry = Schemas['AccountEntry'];
+export type AuditEventEntry = Schemas['AuditEventEntry'];
 export type LoginBody = Schemas['LoginInputBody'];
 export type RegisterBody = Schemas['RegisterInputBody'];
 export type ConfirmEmailBody = Schemas['ConfirmEmailInputBody'];

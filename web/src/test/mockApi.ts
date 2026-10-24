@@ -3,6 +3,7 @@ import { api } from '@/api/client';
 import type { components } from '@/api/schema';
 import type {
   AccountEntry,
+  AuditEventEntry,
   DemoLogin,
   LessonDetail,
   LessonSummary,
@@ -576,6 +577,45 @@ export const accounts: AccountEntry[] = [
     familyName: 'Old',
     confirmed: true,
     disabled: true,
+  },
+];
+
+/**
+ * Fictional audit events as GET /admin/audit lists them (newest first): the
+ * admin signed in as Nora Example and returned; an action this frontend does
+ * not know yet.
+ */
+export const auditEvents: AuditEventEntry[] = [
+  {
+    id: id(343),
+    at: '2026-10-25T23:30:00Z',
+    action: 'account-merged',
+    actor: { id: meAdmin.accountId, email: meAdmin.email, givenName: 'Ada', familyName: 'Admin' },
+    target: { id: id(323), email: 'olaf.old@example.org', givenName: 'Olaf', familyName: 'Old' },
+  },
+  {
+    id: id(342),
+    at: '2026-10-23T14:45:00Z',
+    action: 'impersonation-ended',
+    actor: { id: meAdmin.accountId, email: meAdmin.email, givenName: 'Ada', familyName: 'Admin' },
+    target: {
+      id: meMember.accountId,
+      email: meMember.email,
+      givenName: 'Nora',
+      familyName: 'Example',
+    },
+  },
+  {
+    id: id(341),
+    at: '2026-10-23T14:30:00Z',
+    action: 'impersonation-started',
+    actor: { id: meAdmin.accountId, email: meAdmin.email, givenName: 'Ada', familyName: 'Admin' },
+    target: {
+      id: meMember.accountId,
+      email: meMember.email,
+      givenName: 'Nora',
+      familyName: 'Example',
+    },
   },
 ];
 

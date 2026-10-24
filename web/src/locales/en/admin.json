@@ -6,7 +6,8 @@
     "staff": "Staff",
     "timetable": "Timetable",
     "persons": "Persons",
-    "accounts": "Accounts"
+    "accounts": "Accounts",
+    "audit": "Audit log"
   },
   "noAccess": {
     "title": "No access",
@@ -416,5 +417,22 @@
       "since": "Member since {{date}}",
       "retired": "Retired"
     }
+  },
+  "audit": {
+    "title": "Audit log",
+    "description": "The latest {{count}} recorded actions, newest first: when an administrator signed in as someone else and when that ended. Times are in the school’s time zone.",
+    "table": "Audit log",
+    "search": "Search the audit log",
+    "empty": "Nothing has been recorded yet.",
+    "at": "Time",
+    "action": "Action",
+    "actor": "By",
+    "target": "Account",
+    "actions": {
+      "impersonation-started": "Sign-in as started",
+      "impersonation-ended": "Sign-in as ended"
+    },
+    "unknownAccount": "Unknown account",
+    "noAccess": "Only administrators can see this page."
   }
 }

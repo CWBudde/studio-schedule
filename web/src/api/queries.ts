@@ -424,6 +424,17 @@ export const listAccountsQuery = queryOptions({
 });
 
 /**
+ * The latest 200 audit events, newest first, with the accounts they name
+ * (admins only). Always stale, so that the page shows new events whenever
+ * it is opened or the window regains focus.
+ */
+export const listAuditEventsQuery = queryOptions({
+  queryKey: [...adminQueryKey, 'audit'],
+  staleTime: 0,
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/admin/audit', { signal }))).items,
+});
+
+/**
  * Signs the admin in as another account ("login as"); that account, with
  * the admin as its impersonator, becomes the `me` query's data.
  */
