@@ -173,6 +173,191 @@
         ],
         "type": "object"
       },
+      "ClassData": {
+        "additionalProperties": false,
+        "properties": {
+          "accompanistId": {
+            "description": "Accompanist, if any.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "capacity": {
+            "description": "Maximum number of participants per lesson.",
+            "format": "int64",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "courseTypeId": {
+            "description": "Course type taught.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "durationMinutes": {
+            "description": "Length of each lesson in minutes.",
+            "format": "int64",
+            "maximum": 1440,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "instructorId": {
+            "description": "Instructor.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "level": {
+            "description": "Skill level the class is aimed at.",
+            "enum": [
+              "beginner",
+              "intermediate",
+              "advanced",
+              "professional",
+              "open"
+            ],
+            "type": "string"
+          },
+          "retired": {
+            "description": "Whether the class is retired: it generates no more lessons and leaves the public timetable.",
+            "type": "boolean"
+          },
+          "roomId": {
+            "description": "Room the class takes place in.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "startTime": {
+            "description": "Start time (HH:MM) in the school time zone.",
+            "examples": [
+              "18:00"
+            ],
+            "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+            "type": "string"
+          },
+          "weekday": {
+            "description": "Day of the week, 0 = Sunday to 6 = Saturday.",
+            "format": "int64",
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "courseTypeId",
+          "roomId",
+          "instructorId",
+          "level",
+          "weekday",
+          "startTime",
+          "durationMinutes",
+          "capacity"
+        ],
+        "type": "object"
+      },
+      "ClassEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "accompanist": {
+            "$ref": "#/components/schemas/StaffRef",
+            "description": "Accompanist, if any."
+          },
+          "capacity": {
+            "description": "Maximum number of participants per lesson.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "courseTypeId": {
+            "description": "Course type taught.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "durationMinutes": {
+            "description": "Length of each lesson in minutes.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "id": {
+            "description": "Class ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "instructor": {
+            "$ref": "#/components/schemas/StaffRef",
+            "description": "Instructor, also when no longer active."
+          },
+          "level": {
+            "description": "Skill level the class is aimed at.",
+            "enum": [
+              "beginner",
+              "intermediate",
+              "advanced",
+              "professional",
+              "open"
+            ],
+            "type": "string"
+          },
+          "retired": {
+            "description": "Whether the class is retired.",
+            "type": "boolean"
+          },
+          "roomId": {
+            "description": "Room the class takes place in.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "startTime": {
+            "description": "Start time (HH:MM) in the school time zone.",
+            "examples": [
+              "18:00"
+            ],
+            "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+            "type": "string"
+          },
+          "termId": {
+            "description": "Term the class belongs to.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "weekday": {
+            "description": "Day of the week, 0 = Sunday to 6 = Saturday.",
+            "format": "int64",
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "retired",
+          "id",
+          "termId",
+          "courseTypeId",
+          "roomId",
+          "instructor",
+          "level",
+          "weekday",
+          "startTime",
+          "durationMinutes",
+          "capacity"
+        ],
+        "type": "object"
+      },
+      "ClassEntryList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "Classes ordered by weekday (Sunday first) and start time.",
+            "items": {
+              "$ref": "#/components/schemas/ClassEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "ClassList": {
         "additionalProperties": false,
         "properties": {
@@ -1844,6 +2029,52 @@
         "x-access": "office"
       }
     },
+    "/api/v1/admin/terms/{termId}/classes": {
+      "get": {
+        "description": "Returns the weekly classes of a term like `listClasses`, including retired classes, which the public list leaves out.",
+        "operationId": "listAllClasses",
+        "parameters": [
+          {
+            "description": "Term ID.",
+            "in": "path",
+            "name": "termId",
+            "required": true,
+            "schema": {
+              "description": "Term ID.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassEntryList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List all classes of a term",
+        "tags": [
+          "timetable"
+        ],
+        "x-access": "office"
+      }
+    },
     "/api/v1/auth/confirm": {
       "post": {
         "description": "Confirms the email address with the token from the confirmation link and the account's password, and signs in. An unknown, used or expired link is a 410.",
@@ -2333,6 +2564,119 @@
           "auth"
         ],
         "x-access": "public"
+      }
+    },
+    "/api/v1/classes/{classId}": {
+      "delete": {
+        "description": "Deletes a class with its lessons while none of them has started or been booked and it has no members; otherwise it is a 409 `in-use` and can be retired instead.",
+        "operationId": "deleteClass",
+        "parameters": [
+          {
+            "description": "The class.",
+            "in": "path",
+            "name": "classId",
+            "required": true,
+            "schema": {
+              "description": "The class.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete a class",
+        "tags": [
+          "timetable"
+        ],
+        "x-access": "office"
+      },
+      "put": {
+        "description": "Replaces the fields of a class; its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons without bookings are deleted.",
+        "operationId": "updateClass",
+        "parameters": [
+          {
+            "description": "The class.",
+            "in": "path",
+            "name": "classId",
+            "required": true,
+            "schema": {
+              "description": "The class.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassEntry"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update a class",
+        "tags": [
+          "timetable"
+        ],
+        "x-access": "office"
       }
     },
     "/api/v1/course-types": {
@@ -3670,7 +4014,7 @@
     },
     "/api/v1/terms/{termId}/classes": {
       "get": {
-        "description": "Returns the weekly classes of a term ordered by weekday (Sunday first) and start time.",
+        "description": "Returns the weekly classes of a term ordered by weekday (Sunday first) and start time, without retired classes.",
         "operationId": "listClasses",
         "parameters": [
           {
@@ -3712,6 +4056,70 @@
           "timetable"
         ],
         "x-access": "public"
+      },
+      "post": {
+        "description": "Adds a weekly class to a term and generates its lessons that lie ahead. An unknown course type, room or staff member is a 422 on the field that names it.",
+        "operationId": "createClass",
+        "parameters": [
+          {
+            "description": "Term ID.",
+            "in": "path",
+            "name": "termId",
+            "required": true,
+            "schema": {
+              "description": "Term ID.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassEntry"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create a class",
+        "tags": [
+          "timetable"
+        ],
+        "x-access": "office"
       }
     }
   }

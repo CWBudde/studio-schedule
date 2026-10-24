@@ -84,6 +84,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/terms/{termId}/classes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all classes of a term
+         * @description Returns the weekly classes of a term like `listClasses`, including retired classes, which the public list leaves out.
+         */
+        get: operations["listAllClasses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/confirm": {
         parameters: {
             query?: never;
@@ -319,6 +339,30 @@ export interface paths {
          */
         post: operations["register"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/classes/{classId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update a class
+         * @description Replaces the fields of a class; its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons without bookings are deleted.
+         */
+        put: operations["updateClass"];
+        post?: never;
+        /**
+         * Delete a class
+         * @description Deletes a class with its lessons while none of them has started or been booked and it has no members; otherwise it is a 409 `in-use` and can be retired instead.
+         */
+        delete: operations["deleteClass"];
         options?: never;
         head?: never;
         patch?: never;
@@ -749,11 +793,15 @@ export interface paths {
         };
         /**
          * List the classes of a term
-         * @description Returns the weekly classes of a term ordered by weekday (Sunday first) and start time.
+         * @description Returns the weekly classes of a term ordered by weekday (Sunday first) and start time, without retired classes.
          */
         get: operations["listClasses"];
         put?: never;
-        post?: never;
+        /**
+         * Create a class
+         * @description Adds a weekly class to a term and generates its lessons that lie ahead. An unknown course type, room or staff member is a 422 on the field that names it.
+         */
+        post: operations["createClass"];
         delete?: never;
         options?: never;
         head?: never;
@@ -846,6 +894,112 @@ export interface components {
              * @description Day of the week, 0 = Sunday to 6 = Saturday.
              */
             weekday: number;
+        };
+        ClassData: {
+            /**
+             * Format: uuid
+             * @description Accompanist, if any.
+             */
+            accompanistId?: string;
+            /**
+             * Format: int64
+             * @description Maximum number of participants per lesson.
+             */
+            capacity: number;
+            /**
+             * Format: uuid
+             * @description Course type taught.
+             */
+            courseTypeId: string;
+            /**
+             * Format: int64
+             * @description Length of each lesson in minutes.
+             */
+            durationMinutes: number;
+            /**
+             * Format: uuid
+             * @description Instructor.
+             */
+            instructorId: string;
+            /**
+             * @description Skill level the class is aimed at.
+             * @enum {string}
+             */
+            level: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            /** @description Whether the class is retired: it generates no more lessons and leaves the public timetable. */
+            retired?: boolean;
+            /**
+             * Format: uuid
+             * @description Room the class takes place in.
+             */
+            roomId: string;
+            /**
+             * @description Start time (HH:MM) in the school time zone.
+             * @example 18:00
+             */
+            startTime: string;
+            /**
+             * Format: int64
+             * @description Day of the week, 0 = Sunday to 6 = Saturday.
+             */
+            weekday: number;
+        };
+        ClassEntry: {
+            /** @description Accompanist, if any. */
+            accompanist?: components["schemas"]["StaffRef"];
+            /**
+             * Format: int64
+             * @description Maximum number of participants per lesson.
+             */
+            capacity: number;
+            /**
+             * Format: uuid
+             * @description Course type taught.
+             */
+            courseTypeId: string;
+            /**
+             * Format: int64
+             * @description Length of each lesson in minutes.
+             */
+            durationMinutes: number;
+            /**
+             * Format: uuid
+             * @description Class ID.
+             */
+            id: string;
+            /** @description Instructor, also when no longer active. */
+            instructor: components["schemas"]["StaffRef"];
+            /**
+             * @description Skill level the class is aimed at.
+             * @enum {string}
+             */
+            level: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            /** @description Whether the class is retired. */
+            retired: boolean;
+            /**
+             * Format: uuid
+             * @description Room the class takes place in.
+             */
+            roomId: string;
+            /**
+             * @description Start time (HH:MM) in the school time zone.
+             * @example 18:00
+             */
+            startTime: string;
+            /**
+             * Format: uuid
+             * @description Term the class belongs to.
+             */
+            termId: string;
+            /**
+             * Format: int64
+             * @description Day of the week, 0 = Sunday to 6 = Saturday.
+             */
+            weekday: number;
+        };
+        ClassEntryList: {
+            /** @description Classes ordered by weekday (Sunday first) and start time. */
+            items: components["schemas"]["ClassEntry"][];
         };
         ClassList: {
             /** @description Classes ordered by weekday (Sunday first) and start time. */
@@ -1639,6 +1793,38 @@ export interface operations {
             };
         };
     };
+    listAllClasses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Term ID. */
+                termId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassEntryList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     confirmEmail: {
         parameters: {
             query?: never;
@@ -2008,6 +2194,90 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateClass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The class. */
+                classId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassEntry"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteClass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The class. */
+                classId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
             };
             /** @description Error */
             default: {
@@ -3042,6 +3312,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClassList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createClass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Term ID. */
+                termId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassEntry"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
                 };
             };
             /** @description Error */

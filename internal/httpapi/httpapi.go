@@ -85,6 +85,7 @@ func Register(api huma.API, deps Deps) {
 	registerCatalog(api, h)
 	registerCatalogAdmin(api, h)
 	registerTimetable(api, h)
+	registerTimetableAdmin(api, h)
 	registerSchedule(api, h)
 	registerAuth(api, h)
 	registerCredentials(api, h)

@@ -4,19 +4,24 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/store"
 )
 
-// TimetableService provides read access to the terms and their weekly
-// classes.
+// TimetableService provides the terms and their weekly classes, and the
+// office's writes to the classes (class_admin.go).
 type TimetableService struct {
 	store store.Store
+	clock clock.Clock
+	ids   ids.Source
+	gen   *LessonGenerator
 }
 
 // NewTimetableService returns a TimetableService backed by st.
-func NewTimetableService(st store.Store) *TimetableService {
-	return &TimetableService{store: st}
+func NewTimetableService(st store.Store, clk clock.Clock, src ids.Source) *TimetableService {
+	return &TimetableService{store: st, clock: clk, ids: src, gen: NewLessonGenerator(st, clk, src)}
 }
 
 // Terms returns all terms ordered by start date.
@@ -46,9 +51,14 @@ type TimetableClass struct {
 }
 
 // Classes returns the weekly classes of a term with their staff, ordered by
-// weekday (Sunday first) and start time. An unknown term is
-// domain.ErrNotFound.
+// weekday (Sunday first) and start time, without retired ones. An unknown
+// term is domain.ErrNotFound.
 func (s *TimetableService) Classes(ctx context.Context, term domain.TermID) ([]TimetableClass, error) {
+	return s.classes(ctx, term, false)
+}
+
+// classes is Classes, with the retired classes if withRetired is set.
+func (s *TimetableService) classes(ctx context.Context, term domain.TermID, withRetired bool) ([]TimetableClass, error) {
 	var classes []TimetableClass
 
 	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
@@ -77,6 +87,10 @@ func (s *TimetableService) Classes(ctx context.Context, term domain.TermID) ([]T
 
 		classes = make([]TimetableClass, 0, len(list))
 		for _, c := range list {
+			if c.Retired && !withRetired {
+				continue
+			}
+
 			classes = append(classes, TimetableClass{
 				Class: c, Instructor: staff[c.InstructorID], Accompanist: staff[c.AccompanistID],
 			})

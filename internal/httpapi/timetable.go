@@ -7,6 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/service"
 )
 
 func registerTimetable(api huma.API, h *handlers) {
@@ -24,8 +25,9 @@ func registerTimetable(api huma.API, h *handlers) {
 		Method:      "GET",
 		Path:        BasePath + "/terms/{termId}/classes",
 		Summary:     "List the classes of a term",
-		Description: "Returns the weekly classes of a term ordered by weekday (Sunday first) and start time.",
-		Tags:        []string{"timetable"},
+		Description: "Returns the weekly classes of a term ordered by weekday (Sunday first) and start time, " +
+			"without retired classes.",
+		Tags: []string{"timetable"},
 	}, h.listClasses)
 }
 
@@ -99,22 +101,26 @@ func (h *handlers) listClasses(ctx context.Context, in *ClassListInput) (*ClassL
 
 	items := make([]Class, 0, len(classes))
 	for _, c := range classes {
-		items = append(items, Class{
-			ID:              c.ID,
-			TermID:          c.TermID,
-			CourseTypeID:    c.CourseTypeID,
-			RoomID:          c.RoomID,
-			Instructor:      StaffRef{ID: c.Instructor.ID, DisplayName: c.Instructor.DisplayName},
-			Accompanist:     accompanistRef(c.Accompanist),
-			Level:           c.Level,
-			Weekday:         int(c.Weekday),
-			StartTime:       c.StartTime,
-			DurationMinutes: int(c.Duration / time.Minute),
-			Capacity:        c.Capacity,
-		})
+		items = append(items, class(c))
 	}
 
 	return &ClassListOutput{Body: ClassList{Items: items}}, nil
+}
+
+func class(c service.TimetableClass) Class {
+	return Class{
+		ID:              c.ID,
+		TermID:          c.TermID,
+		CourseTypeID:    c.CourseTypeID,
+		RoomID:          c.RoomID,
+		Instructor:      StaffRef{ID: c.Instructor.ID, DisplayName: c.Instructor.DisplayName},
+		Accompanist:     accompanistRef(c.Accompanist),
+		Level:           c.Level,
+		Weekday:         int(c.Weekday),
+		StartTime:       c.StartTime,
+		DurationMinutes: int(c.Duration / time.Minute),
+		Capacity:        c.Capacity,
+	}
 }
 
 // accompanistRef is the reference to an accompanist, nil for none.
