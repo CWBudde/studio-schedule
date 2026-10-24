@@ -25,6 +25,7 @@ where it differs.
 | Late cancellation  | Late cancellation   | Späte Absage          | Canceled after the cancellation cutoff; allowed, flagged (ADR 0009)     |
 | Auto-enrolment     | Auto-enrolment      | Automatische Buchung  | Class members are booked into their class's lessons (ADR 0009)          |
 | Release a date     | Release this date   | Termin freigeben      | A class member cancels one lesson; the place goes to others (0009)      |
+| Pause (membership) | Paused until        | Pausiert bis          | Class member canceled the following weeks up to a date (0009)           |
 | Guest booking      | Guest               | Gast / extern         | Booking without an account (name + email)                               |
 | Trial              | Trial lesson        | Probestunde           |                                                                         |
 | `WaitlistEntry`    | Waiting list        | Warteliste            | Timed invites instead of "notify all"                                   |

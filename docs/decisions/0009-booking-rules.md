@@ -75,6 +75,23 @@ canceled too; only the requested booking's own lesson having started fails. The 
 canceled lessons by start. A booking of a one-off lesson, or of a lesson that has started, is a 422 on `path.bookingId`; a
 canceled one a 409 `already-canceled`.
 
+_Up to a date, and pausing a membership (2026-10-24)._ Both operations take an end date `until`
+(the preview as query parameter, the apply in its body `{until?}`); only lessons whose slot date is
+on or before it are canceled. Without it, it is the last day of the class's term, and the answer
+names the effective `until`, so the UI can prefill it. An `until` before the requested lesson's slot
+date is a 422 on `query.until` or `body.until`. For a person who is a member of the class, canceling
+the following weeks is a **pause**: the membership stays, `class_members.paused_until` is set to
+the later of `until` and a pause the member has already (under the class lock the apply holds),
+and the answer carries that `pausedUntil` (the preview says it would). The pause's cancellations
+do not release their dates (below), so ending a pause books them again. The checks run in the
+same order in the preview and the apply: the booking first (one-off lesson, canceled, started),
+then `until`. `domain.ClassMember.ActiveOn` is false for slot dates up to the pause, so
+generation and enrollment skip them; lessons after it that exist keep their member bookings, and
+those generated later book the member again. For anyone else (bookings of their own in a class
+lesson), the same `until` applies without a pause, and the cancellations are ordinary ones that
+release their dates. The office sees a pause in the class's member list while it lasts (a pause
+that ended before today is left out of the list) and can end it (`updateClassMember`, below).
+
 **Canceled lessons.** When the school cancels a lesson (ADR 0007), its bookings stay booked: they
 record who was affected, and Phase 6 decides about passes and refunds. A member may still cancel
 such a booking (never late). Booking a canceled lesson is a 409 `closed` with why `canceled`.
@@ -83,16 +100,40 @@ such a booking (never late). Booking a canceled lesson is a 409 `closed` with wh
 `member` (a class member's automatic booking, written by the auto-enrolment of chunk B of Phase 4).
 Bookings the office or an instructor make get a source of their own with the staff actions later in
 Phase 4; until then no such source exists. Term shortening, a class's weekday move and retiring a class ignore
-and cancel the automatic `member` bookings; only other bookings still block those edits (ADR 0007).
+the automatic `member` bookings and delete them with the lessons they remove; only other bookings
+still block those edits (ADR 0007, amendment).
 
-**Class members.** Generation books the class members into each lesson it creates, from their
-`since` date, as `member` bookings, and ignores the booking cutoff. Adding a member books the
-future lessons that have not started, even beyond capacity; the booking event then records an
-override. A member releases a single date by a normal cancellation, which frees the place; taking
-it back is a normal booking under the booking cutoff while a place is free. Generation only books
-persons without any booking for that lesson, canceled ones included, so a released date stays
-released. Removing a class member cancels their future bookings of that class without a mail. A
-class refuses members beyond its capacity (409 `full`) and a capacity below its member count (422).
+**Class members.** Generation books the class members into each lesson it creates that has not
+started, from their `since` date (on or before the lesson's slot date), as `member` bookings
+without an actor, and ignores the booking cutoff; a lesson generated for a past date gets none.
+Adding a member (`addClassMember`) books them into the class's lessons that have not started (by
+their start, so a lesson the office moved from an earlier slot into the future too) and whose slot
+date they are active on, whatever their detached state, those the school canceled included;
+even beyond capacity, and the booking event then records an override (`override`).
+Members win: generation records an override too if older data has more members than places. The
+office account is the actor of these bookings. A member releases a single date by a normal
+cancellation, which frees the place; taking it back is a normal booking (`self`, a new row) under
+the booking cutoff while a place is free. **Released dates.** A cancellation by the person or their
+family (`cancelBooking`, and `cancelFollowing` of a person who is not a member of the class) sets
+`bookings.released`; the office's cancellations (ending or changing a membership) and a member's
+pause do not. Neither generation nor enrollment books a person into a lesson they have an active
+or a released booking for, so a released date stays released, while a date the office or a pause
+canceled is booked again when the person is active on it again. Removing a class member (`removeClassMember`) cancels their active bookings of the
+class's lessons that have not started, whatever their source (a taken-back date included), with
+the office as the actor, never late and without a mail; bookings of lessons that have started stay.
+A class refuses members beyond its capacity (409 `full`; a person who is a member already is still
+a 409 `duplicate`), new members of a retired class (422 on `path.classId`), and a capacity below its
+member count it lowers to (422 on `capacity`); a class with more members than places from older
+data stays editable otherwise. Canceled lessons (not started) get the new member's booking like
+the others, as their bookings stay (above). `updateClassMember` (office, `PUT
+/api/v1/classes/{classId}/members/{personId}`, body `{since?, pausedUntil?}`; 422 on
+`path.classId` for a retired class) replaces the dates of a membership, which ends a pause when
+`pausedUntil` is left out. It cancels the member's active automatic bookings of lessons that have
+not started and that they are no longer active on (a new pause, a later `since`), not released,
+never late, without a mail, and then books them like a new member into the lessons they are now
+active on. Both run under the
+class lock (term → class → lesson), so membership and member count cannot change meanwhile. The
+office's timetable edits delete lessons together with their member bookings (ADR 0007, amendment).
 
 **History.** Every booking change adds a booking event with the new status, the time, the actor and
 the `late` and `override` flags. The actor is the real account: the admin when impersonating (as

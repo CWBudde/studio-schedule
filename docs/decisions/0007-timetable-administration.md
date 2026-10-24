@@ -93,8 +93,9 @@ same transaction (2026-10-24). Term names need not be unique.
 
 **Class members.** The office enrolls persons in a class with an optional "since" date and ends a
 membership by removing it. A person is a member once (409 `duplicate`); an unknown person is a 422
-on `personId`. A class with members cannot be deleted. Memberships do not book anyone until Phase
-4 (2026-10-24).
+on `personId`. A class with members cannot be deleted. Since Phase 4, members are booked into the
+class's lessons automatically, and a class holds at most as many members as its capacity (see the
+amendment below and ADR 0009).
 
 **Lessons (2026-10-24).** The office edits, cancels and adds single lessons. Every lesson write is
 an `office` operation; instructors get no write access (they are notified from Phase 4).
@@ -203,7 +204,19 @@ itself (above); other lesson edits are not recorded.
 ## Amendment (2026-10-24): member bookings
 
 Class members are booked automatically into their class's lessons (source `member`, ADR 0009).
-Term shortening, a class's weekday move and retiring a class ignore those bookings and cancel
-them; only other bookings (source `self`, later also the staff's) still keep a lesson or refuse the
-change as described above. A canceled lesson keeps its bookings (ADR 0009). Phase 4 chunk B
-implements this.
+Term shortening, a class's weekday move and retiring a class ignore those bookings, active or
+canceled; only other bookings (source `self`, later also the staff's) still keep a lesson or refuse
+the change as described above. A canceled lesson keeps its bookings (ADR 0009).
+
+- A lesson these edits remove is deleted, so its member bookings are deleted with it, together with
+  their booking events: a booking cannot outlive its lesson, and a lesson that never takes place
+  needs no record of who would have come. Canceling them first would leave the same rows pointing
+  at nothing (`Bookings().DeleteByLessonAndSource`).
+- A follower that moves keeps its member bookings, like any other booking.
+- Deleting a class follows the same rule: once its last member is removed, the member bookings
+  that removal canceled no longer keep it from being deleted.
+- A class edit refuses a capacity it lowers below the class's member count or below the active
+  bookings of a follower (422 on `capacity`). A follower booked beyond its capacity
+  by a member's override moves along when the capacity stays.
+- Taking back a released date creates a `self` booking (ADR 0009), which keeps its lesson like any
+  other booking of a member.

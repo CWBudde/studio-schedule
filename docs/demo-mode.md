@@ -41,7 +41,10 @@ store for the day of the visit (today in the school time zone, from the app's cl
 the visit that seeded it: the term and workshops do not move along, and after a few weeks the
 workshops lie in the past. "Reset demo" seeds again for today; the banner says so. The demo
 term runs from three weeks before that day to about ten months after it, class members join on the
-term's first day, and three one-off public workshops follow 3, 17 and 24 days after it. The demo
+term's first day, and three one-off public workshops follow 3, 17 and 24 days after it. The seeded
+class lessons of the week up to the visit carry the members' automatic bookings, and the lesson
+generation at startup books the members into every later lesson it creates (ADR 0009), so class
+lessons show fewer free places than workshops, which nobody is booked into. The demo
 releases one week ahead, so the later workshops always lie beyond the release window; they are visible
 because workshops are published early. `scripts/wasm-smoke.mjs` checks this.
 
@@ -119,7 +122,9 @@ The demo is a _demo installation_ (`app.Deps.Demo`, also set for `serve` without
 
 - **Demo accounts:** every seeded account has the published password `demo-password`, and
   `GET /api/v1/demo/logins` lists one account per role (member, instructor, office, admin) for the
-  login page.
+  login page. One more is a managed dependent (ADR 0008): Sophie Hollowmere, a teenager with an
+  account of her own (`sophie.hollowmere@example.com`), who books her classes herself; the admin
+  can also "sign in as" her from Accounts.
 - **Mailbox:** nothing is ever delivered. `GET /api/v1/demo/mailbox` lists the outbox, and the
   mailbox panel in the header shows it, so a visitor can register, open the confirmation link and
   sign in.

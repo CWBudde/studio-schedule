@@ -527,13 +527,20 @@ no repository yet.
   - [x] "Also cancel following weeks": cancels the person's future bookings of the same class in
         one transaction, after a preview of the dates (2026-10-24) — `previewCancelFollowing`
         (GET) and `cancelFollowing`; one summary mail
-- [ ] Class members are auto-enrolled into generated lessons and can release single dates (this
+- [x] Class members are auto-enrolled into generated lessons and can release single dates (this
       replaces the old paper "swap list")
-  - [ ] Generation books the class members into each lesson it creates; adding a member books
+  - [x] Generation books the class members into each lesson it creates; adding a member books
         the future lessons, removing one cancels them; a class cannot have more members than
-        capacity
-  - [ ] Releasing a date is a normal cancellation (the place goes to the waitlist); taking it back
-        is a normal booking while a place is free
+        capacity (2026-10-24) — `service/enrollment.go`: source `member`, `Since` and pauses
+        honoured, an override when a lesson is full; only dates the family released
+        (`bookings.released`) stay out, so re-joining or ending a pause books again; retired
+        classes take no members; term, weekday and retire edits remove member bookings with their
+        lessons
+  - [x] Releasing a date is a normal cancellation (the place goes to the waitlist); taking it back
+        is a normal booking while a place is free (2026-10-24) — a released date stays released
+        for generation and enrolment; "cancel following weeks" pauses a member until a date
+        (`class_members.paused_until`, migration 00011), the office ends a pause with
+        `updateClassMember`
 - [ ] Staff actions: guest bookings (name + email, no account), trial flag, add or remove
       participants beyond capacity (explicit override)
   - [ ] Office and instructor operations on a lesson's participants: add a person or a guest,
@@ -575,7 +582,9 @@ no repository yet.
 - [ ] Tests: concurrent booking (contract suite, both stores), cutoffs, waitlist invite
       expiry/acceptance, e2e booking flow in the demo
   - [ ] Service tests: cutoffs at the exact edge, booking for a stranger's child, override,
-        auto-enrolment and release, invite chain on expiry
+        auto-enrolment and release, invite chain on expiry (2026-10-24) — partial: cutoff edges,
+        strangers, override, auto-enrolment, release and pause are tested; the invite chain comes
+        with the waitlist
   - [ ] e2e in the demo: book, cancel, join the waitlist and accept the invite from the demo
         mailbox, instructor marks attendance; desktop and phone
 
