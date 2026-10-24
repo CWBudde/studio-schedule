@@ -1028,6 +1028,118 @@ export const removeClassMemberMutation = (queryClient: QueryClient) =>
     onSettled: onMembersSettled(queryClient),
   });
 
+/** The editable fields of a lesson (updateLesson); no `accompanistId` means none. */
+export type LessonData = PutBody<'/api/v1/lessons/{lessonId}'>;
+/** A new one-off lesson: the fields of a lesson and its course type. */
+export type LessonCreateData = PostBody<'/api/v1/lessons'>;
+/** The optional note of a cancellation, for those booked. */
+export type LessonCancelData = PostBody<'/api/v1/lessons/{lessonId}/cancel'>;
+/** A restore; `confirmRoomOverlap` restores even if another lesson took the room meanwhile. */
+export type LessonRestoreData = components['schemas']['LessonRestoreData'];
+
+/**
+ * After a write to a lesson: the schedule and the lessons are asked again,
+ * but for `except` (a deleted lesson, which would only be found gone), and
+ * so is the demo mailbox, as a write may mail those booked.
+ */
+function refreshLessons(queryClient: QueryClient, { except }: { except?: string } = {}) {
+  const gone = except === undefined ? undefined : hashKey(lessonQuery(except).queryKey);
+  return Promise.all(
+    [scheduleQueryKey, ['lesson'], demoMailboxQuery.queryKey].map((queryKey) =>
+      queryClient.invalidateQueries({ queryKey, predicate: (query) => query.queryHash !== gone }),
+    ),
+  );
+}
+
+/**
+ * Whether a lesson write was refused because the lesson has started: a 422
+ * at `path.lessonId`.
+ */
+export function lessonStarted(error: unknown): boolean {
+  if (!(error instanceof ApiError) || error.status !== 422) return false;
+  const body = error.body as { errors?: { location?: string }[] | null } | undefined;
+  return (body?.errors ?? []).some((e) => e.location === 'path.lessonId');
+}
+
+/**
+ * The errors of a lesson write. A 404 means the lesson is gone, and a 422
+ * at `path.lessonId` that it has started meanwhile: either way, the lessons
+ * are asked again.
+ */
+function onLessonError(queryClient: QueryClient) {
+  const signedOut = signedOutOn401(queryClient);
+  return (error: Error) => {
+    signedOut(error);
+    const gone = error instanceof ApiError && error.status === 404;
+    if (gone || lessonStarted(error)) void refreshLessons(queryClient);
+  };
+}
+
+/**
+ * Adds a one-off lesson (office). A start in the past is a 409 `past`
+ * unless `confirmPast` is set; another lesson in the room at an overlapping
+ * time a 409 `room-taken` naming it, unless `confirmRoomOverlap` is set.
+ */
+export const createLessonMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: LessonCreateData) => unwrap(api.POST('/api/v1/lessons', { body })),
+    onSuccess: () => refreshLessons(queryClient),
+    onError: onLessonError(queryClient),
+  });
+
+/**
+ * Replaces the time, room, staff, capacity, visibility and kind of a lesson
+ * that has not started (office; a 422 otherwise); a lesson of a class is
+ * detached from it. Hiding and unhiding a lesson are this write with another
+ * visibility. A new start or room mails those booked; a move into the past
+ * and a taken room are refused like in createLessonMutation.
+ */
+export const updateLessonMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ lessonId, body }: { lessonId: string; body: LessonData }) =>
+      unwrap(api.PUT('/api/v1/lessons/{lessonId}', { params: { path: { lessonId } }, body })),
+    onSuccess: () => refreshLessons(queryClient),
+    onError: onLessonError(queryClient),
+  });
+
+/** Cancels a lesson that has not started (office) and mails those booked, with the note. */
+export const cancelLessonMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ lessonId, body }: { lessonId: string; body: LessonCancelData }) =>
+      unwrap(
+        api.POST('/api/v1/lessons/{lessonId}/cancel', { params: { path: { lessonId } }, body }),
+      ),
+    onSuccess: () => refreshLessons(queryClient),
+    onError: onLessonError(queryClient),
+  });
+
+/**
+ * Lets a canceled lesson take place after all (office) and mails those
+ * booked. Another lesson in its room meanwhile is a 409 `room-taken`, unless
+ * `confirmRoomOverlap` is set.
+ */
+export const restoreLessonMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ lessonId, body }: { lessonId: string; body: LessonRestoreData }) =>
+      unwrap(
+        api.POST('/api/v1/lessons/{lessonId}/restore', { params: { path: { lessonId } }, body }),
+      ),
+    onSuccess: () => refreshLessons(queryClient),
+    onError: onLessonError(queryClient),
+  });
+
+/**
+ * Deletes a one-off lesson nobody has booked (office); a booked one is a 409
+ * `in-use`, a lesson of a class a 409 `generated` (it is canceled instead).
+ */
+export const deleteLessonMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (lessonId: string) =>
+      expectOk(api.DELETE('/api/v1/lessons/{lessonId}', { params: { path: { lessonId } } })),
+    onSuccess: (_: void, lessonId: string) => refreshLessons(queryClient, { except: lessonId }),
+    onError: onLessonError(queryClient),
+  });
+
 /**
  * The mails of the demo mailbox, newest first; null when the installation is
  * not a demo (404). In a demo it is refetched whenever a view of it mounts;

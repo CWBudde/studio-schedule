@@ -14,7 +14,6 @@ import {
   type StaffEntry,
   updateClassMutation,
 } from '@/api/queries';
-import type { components } from '@/api/schema';
 import { invalidFields } from '@/features/auth/form';
 import { TextField } from '@/features/auth/TextField';
 import { levels } from '@/features/schedule/search';
@@ -29,6 +28,7 @@ import {
   weekdaysMondayFirst,
 } from './classForms';
 import { SelectField } from './crud/fields';
+import { roomOptions, staffOptions } from './crud/options';
 import { showServerErrors, useAdminErrorText } from './crud/form';
 import { FormSheet, FormSheetActions, FormSheetHeader } from './crud/FormSheet';
 import { ProblemAlert } from '@/components/ProblemAlert';
@@ -78,25 +78,6 @@ export function ClassSheet({
   );
 }
 
-/**
- * The options of a staff select: the active staff of `kind` and, so an
- * existing class keeps them, its `current` member even when inactive.
- */
-function staffOptions(
-  staff: StaffEntry[],
-  kind: StaffEntry['kind'],
-  current: components['schemas']['StaffRef'] | undefined,
-  inactive: (name: string) => string,
-) {
-  const options = staff
-    .filter((s) => s.id === current?.id || (s.kind === kind && s.active))
-    .map((s) => ({ value: s.id, label: s.active ? s.displayName : inactive(s.displayName) }));
-  if (current && !options.some((o) => o.value === current.id)) {
-    options.push({ value: current.id, label: current.displayName });
-  }
-  return options;
-}
-
 /** Which server-refused fields get a message of their own rather than the general one. */
 const serverMessages: Partial<Record<keyof ClassInput, string>> = {
   capacity: 'bookedCapacity',
@@ -133,16 +114,10 @@ function ClassForm({
   const { errors } = form.formState;
 
   const options = useMemo(() => {
-    const locationName = new Map(choices.locations.map((l) => [l.id, l.name]));
     const inactive = (name: string) => t('classes.inactiveStaff', { name });
     return {
       courseTypes: choices.courseTypes.map((c) => ({ value: c.id, label: c.name })),
-      rooms: choices.rooms
-        .map((r) => ({
-          value: r.id,
-          label: `${locationName.get(r.locationId) ?? t('classes.unknown')} · ${r.name}`,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label, lang)),
+      rooms: roomOptions(choices.rooms, choices.locations, lang, t('classes.unknown')),
       instructors: staffOptions(choices.staff, 'instructor', editing?.instructor, inactive),
       accompanists: [
         { value: none, label: t('classes.noAccompanist') },

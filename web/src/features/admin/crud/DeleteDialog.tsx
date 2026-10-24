@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ConfirmDelete } from './ConfirmDelete';
-import { conflictReason } from '@/api/conflict';
+import { type ConflictReason, conflictReason } from '@/api/conflict';
 
 /** A delete mutation of the catalogue, such as deleteRoomMutation: its variable is the id. */
 export type DeleteMutation = (queryClient: QueryClient) => UseMutationOptions<void, Error, string>;
@@ -23,6 +23,8 @@ export type DeleteTexts = {
   notFound: string;
   /** The toast after the delete. */
   deleted: string;
+  /** Why the API refuses for other 409 reasons, if the record has any. */
+  conflicts?: Partial<Record<ConflictReason, string>>;
 };
 
 /**
@@ -123,7 +125,7 @@ function DeleteConfirm<T>({
       error={alternative.error ?? remove.error}
       title={texts.title}
       description={texts.description}
-      conflicts={{ 'in-use': texts.inUse }}
+      conflicts={{ ...texts.conflicts, 'in-use': texts.inUse }}
       messages={{ 404: texts.notFound }}
       alternative={
         offer && (

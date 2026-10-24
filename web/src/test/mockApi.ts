@@ -241,6 +241,37 @@ export const lessonBalletDetail: LessonDetail = {
   locationAddress: '1 Example Street, Sampletown',
 };
 
+/**
+ * The ballet lesson as the office sees it: with the admin details, two
+ * active bookings and still following its class.
+ */
+export const lessonBalletOffice: LessonDetail = {
+  ...lessonBalletDetail,
+  admin: { detached: false, activeBookings: 2 },
+};
+
+/** The one-off jazz workshop as the office sees it: nobody has booked it. */
+export const lessonWorkshopOffice: LessonDetail = {
+  ...lessonWorkshop,
+  admin: { detached: false, activeBookings: 0 },
+};
+
+/**
+ * The canceled contemporary lesson as the office sees it: canceled by the
+ * office worker on Friday 2026-10-23 12:30 in Berlin, with a note, and
+ * detached from its class.
+ */
+export const lessonContemporaryOffice: LessonDetail = {
+  ...lessonContemporary,
+  admin: {
+    detached: true,
+    activeBookings: 1,
+    cancelNote: 'The instructor is ill.',
+    canceledAt: '2026-10-23T10:30:00Z',
+    canceledBy: { id: '0190a000-0000-7000-8000-000000000321', name: 'Otto Office' },
+  },
+};
+
 /** Catalogue fixtures for the filter selects. */
 export const catalogFixtures = {
   '/api/v1/locations': { body: { items: locations } },
@@ -629,13 +660,17 @@ export const problem = (
   body: { status, title: 'Error', detail, type: 'about:blank', errors },
 });
 
-/** A 409 answer of a write: problem+json with a stable `reason`. */
+/**
+ * A 409 answer of a write: problem+json with a stable `reason`, and `extra`
+ * fields such as the `lesson` of a `room-taken`.
+ */
 export const conflict = (
-  reason: 'in-use' | 'duplicate' | 'managed' | 'has-account',
+  reason: components['schemas']['Conflict']['reason'],
   detail = 'conflict',
+  extra: Partial<components['schemas']['Conflict']> = {},
 ) => ({
   status: 409,
-  body: { status: 409, title: 'Conflict', detail, type: 'about:blank', reason },
+  body: { status: 409, title: 'Conflict', detail, type: 'about:blank', reason, ...extra },
 });
 
 /**

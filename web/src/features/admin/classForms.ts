@@ -7,13 +7,24 @@ import { capacity } from './locationForms';
 // or `admin:form.errors` (see useAdminErrorText).
 
 /** A choice of a select: an empty value means none was made. */
-const chosen = z.string().min(1, 'choose');
+export const chosen = z.string().min(1, 'choose');
 
 /** The minutes after midnight of a time of day 'HH:MM'. */
-const minutesOf = (time: string) => {
+export const minutesOf = (time: string) => {
   const [h = 0, m = 0] = time.split(':').map(Number);
   return h * 60 + m;
 };
+
+/** A time of day 'HH:MM' as typed. */
+export const startTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'startTime');
+
+/** A duration in whole minutes as typed, 1 to 1440. */
+export const durationMinutes = z
+  .string()
+  .trim()
+  .regex(/^\d+$/, 'duration')
+  .transform(Number)
+  .pipe(z.number().int().min(1, 'duration').max(1440, 'duration'));
 
 /**
  * A class's form, every field as the inputs hold it: an empty `accompanistId`
@@ -32,13 +43,8 @@ export const classSchema = z
       .string()
       .regex(/^[0-6]$/, 'choose')
       .transform(Number),
-    startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'startTime'),
-    durationMinutes: z
-      .string()
-      .trim()
-      .regex(/^\d+$/, 'duration')
-      .transform(Number)
-      .pipe(z.number().int().min(1, 'duration').max(1440, 'duration')),
+    startTime,
+    durationMinutes,
     capacity,
   })
   .superRefine((v, ctx) => {

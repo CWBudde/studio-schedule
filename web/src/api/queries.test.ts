@@ -7,6 +7,8 @@ import {
   conflict,
   family,
   ids,
+  lessonBalletOffice,
+  lessonWorkshopOffice,
   meAdmin,
   meImpersonated,
   meMember,
@@ -27,9 +29,14 @@ import {
   changePasswordMutation,
   confirmEmailChangeMutation,
   confirmEmailMutation,
+  cancelLessonMutation,
   courseTypesQuery,
   createCourseTypeMutation,
+  createLessonMutation,
+  deleteLessonMutation,
   deleteStaffMutation,
+  demoMailboxQuery,
+  lessonQuery,
   familyQuery,
   impersonateMutation,
   listAccountsQuery,
@@ -41,10 +48,12 @@ import {
   requestEmailChangeMutation,
   requestPasswordResetMutation,
   resetPasswordMutation,
+  restoreLessonMutation,
   scheduleQuery,
   staffQuery,
   stopImpersonationMutation,
   updateDependentMutation,
+  updateLessonMutation,
   updateLocaleMutation,
   updateMyPersonMutation,
   updateStaffMutation,
@@ -285,6 +294,153 @@ describe('catalogue administration', () => {
       new MutationObserver(queryClient, deleteStaffMutation(queryClient)).mutate(ids.staffAlex),
     ).rejects.toMatchObject({ status: 409 });
     expect(queryClient.getQueryState(allStaffQuery.queryKey)?.isInvalidated).toBe(false);
+  });
+});
+
+describe('lesson administration', () => {
+  /** A client with the schedule, two lessons and the demo mailbox cached. */
+  function lessonClient() {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(scheduleQuery(range).queryKey, schedule);
+    queryClient.setQueryData(lessonQuery(ids.lessonBallet).queryKey, lessonBalletOffice);
+    queryClient.setQueryData(lessonQuery(ids.lessonWorkshop).queryKey, lessonWorkshopOffice);
+    queryClient.setQueryData(demoMailboxQuery.queryKey, []);
+    return queryClient;
+  }
+  const invalidated = (queryClient: QueryClient, key: readonly unknown[]) =>
+    queryClient.getQueryState(key)?.isInvalidated;
+
+  const body = {
+    date: '2026-10-26',
+    startTime: '18:00',
+    durationMinutes: 90,
+    roomId: ids.roomA,
+    instructorId: ids.staffAlex,
+    capacity: 12,
+    visibility: 'hidden' as const,
+    kind: 'regular' as const,
+  };
+
+  it('updates a lesson and refreshes the schedule, the lessons and the mailbox', async () => {
+    const put = mockApiPut({ '/api/v1/lessons/{lessonId}': { body: lessonBalletOffice } });
+    const queryClient = lessonClient();
+
+    await new MutationObserver(queryClient, updateLessonMutation(queryClient)).mutate({
+      lessonId: ids.lessonBallet,
+      body,
+    });
+
+    expect(put).toHaveBeenCalledWith('/api/v1/lessons/{lessonId}', {
+      params: { path: { lessonId: ids.lessonBallet } },
+      body,
+    });
+    expect(invalidated(queryClient, scheduleQuery(range).queryKey)).toBe(true);
+    expect(invalidated(queryClient, lessonQuery(ids.lessonBallet).queryKey)).toBe(true);
+    expect(invalidated(queryClient, demoMailboxQuery.queryKey)).toBe(true);
+  });
+
+  it('creates a one-off lesson', async () => {
+    const post = mockApiPost({
+      '/api/v1/lessons': { status: 201, body: lessonWorkshopOffice },
+    });
+    const queryClient = lessonClient();
+    const created = { ...body, courseTypeId: ids.jazz };
+
+    const lesson = await new MutationObserver(
+      queryClient,
+      createLessonMutation(queryClient),
+    ).mutate(created);
+
+    expect(lesson.id).toBe(ids.lessonWorkshop);
+    expect(post).toHaveBeenCalledWith('/api/v1/lessons', { body: created });
+    expect(invalidated(queryClient, scheduleQuery(range).queryKey)).toBe(true);
+  });
+
+  it('cancels with a note and restores', async () => {
+    const post = mockApiPost({
+      '/api/v1/lessons/{lessonId}/cancel': { body: lessonBalletOffice },
+      '/api/v1/lessons/{lessonId}/restore': { body: lessonBalletOffice },
+    });
+    const queryClient = lessonClient();
+
+    await new MutationObserver(queryClient, cancelLessonMutation(queryClient)).mutate({
+      lessonId: ids.lessonBallet,
+      body: { note: 'Room flooded.' },
+    });
+    await new MutationObserver(queryClient, restoreLessonMutation(queryClient)).mutate({
+      lessonId: ids.lessonBallet,
+      body: { confirmRoomOverlap: true },
+    });
+
+    expect(post).toHaveBeenCalledWith('/api/v1/lessons/{lessonId}/cancel', {
+      params: { path: { lessonId: ids.lessonBallet } },
+      body: { note: 'Room flooded.' },
+    });
+    expect(post).toHaveBeenCalledWith('/api/v1/lessons/{lessonId}/restore', {
+      params: { path: { lessonId: ids.lessonBallet } },
+      body: { confirmRoomOverlap: true },
+    });
+    expect(invalidated(queryClient, demoMailboxQuery.queryKey)).toBe(true);
+  });
+
+  it('deletes a one-off lesson without asking for it again', async () => {
+    mockApiDelete({ '/api/v1/lessons/{lessonId}': { status: 204 } });
+    const queryClient = lessonClient();
+
+    await new MutationObserver(queryClient, deleteLessonMutation(queryClient)).mutate(
+      ids.lessonWorkshop,
+    );
+
+    expect(invalidated(queryClient, scheduleQuery(range).queryKey)).toBe(true);
+    expect(invalidated(queryClient, lessonQuery(ids.lessonBallet).queryKey)).toBe(true);
+    expect(invalidated(queryClient, lessonQuery(ids.lessonWorkshop).queryKey)).toBe(false);
+  });
+
+  it('asks for the lesson again when it has started meanwhile (422)', async () => {
+    mockApiPost({
+      '/api/v1/lessons/{lessonId}/cancel': problem(422, 'the lesson has started', [
+        { location: 'path.lessonId', message: 'the lesson has started' },
+      ]),
+    });
+    const queryClient = lessonClient();
+
+    await expect(
+      new MutationObserver(queryClient, cancelLessonMutation(queryClient)).mutate({
+        lessonId: ids.lessonBallet,
+        body: {},
+      }),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(invalidated(queryClient, lessonQuery(ids.lessonBallet).queryKey)).toBe(true);
+  });
+
+  it('does not ask again for a 422 at a field', async () => {
+    mockApiPut({
+      '/api/v1/lessons/{lessonId}': problem(422, 'validation failed', [
+        { location: 'body.capacity', message: 'below bookings' },
+      ]),
+    });
+    const queryClient = lessonClient();
+
+    await expect(
+      new MutationObserver(queryClient, updateLessonMutation(queryClient)).mutate({
+        lessonId: ids.lessonBallet,
+        body,
+      }),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(invalidated(queryClient, lessonQuery(ids.lessonBallet).queryKey)).toBe(false);
+  });
+
+  it('keeps everything when the room is taken (409 room-taken)', async () => {
+    mockApiPut({ '/api/v1/lessons/{lessonId}': conflict('room-taken') });
+    const queryClient = lessonClient();
+
+    await expect(
+      new MutationObserver(queryClient, updateLessonMutation(queryClient)).mutate({
+        lessonId: ids.lessonBallet,
+        body,
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(invalidated(queryClient, scheduleQuery(range).queryKey)).toBe(false);
   });
 });
 

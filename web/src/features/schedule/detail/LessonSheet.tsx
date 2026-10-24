@@ -3,7 +3,7 @@ import { CircleAlert, RotateCcw, XIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LessonDetail } from '@/api/client';
-import { ApiError, lessonQuery, publicSettingsQuery } from '@/api/queries';
+import { ApiError, lessonQuery, meQuery, publicSettingsQuery } from '@/api/queries';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,9 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatDayHeading, formatTimeRange, schoolDateOf } from '@/lib/schoolTime';
+import { canAdminister } from '@/features/admin/access';
+import { formatDayHeading, formatTimeRange, formatTimestamp, schoolDateOf } from '@/lib/schoolTime';
+import { LessonActions } from '../admin/LessonActions';
 import { useScheduleSearch } from '../useScheduleSearch';
 import { VisibilityBadge } from '../visibility/VisibilityBadge';
 
@@ -128,8 +130,13 @@ function LessonSheetBody({ lessonId }: { lessonId: string }) {
 
 function LessonDetails({ lesson, timeZone }: { lesson: LessonDetail; timeZone: string }) {
   const { t, i18n } = useTranslation('schedule');
+  const { t: tAdmin } = useTranslation('admin');
   const lang = i18n.resolvedLanguage ?? 'en';
+  const me = useQuery(meQuery);
   const canceled = lesson.status === 'canceled';
+  // What the office sees of the cancellation (ADR 0007).
+  const admin = lesson.admin;
+  const canceledAt = admin?.canceledAt && formatTimestamp(admin.canceledAt, timeZone, lang);
 
   return (
     <>
@@ -164,6 +171,25 @@ function LessonDetails({ lesson, timeZone }: { lesson: LessonDetail; timeZone: s
           <Alert variant="destructive">
             <CircleAlert aria-hidden="true" />
             <AlertTitle>{t('detail.canceled')}</AlertTitle>
+            {(canceledAt || admin?.cancelNote) && (
+              <AlertDescription>
+                {canceledAt && (
+                  <p>
+                    {admin?.canceledBy
+                      ? tAdmin('lessons.canceledBy', {
+                          name: admin.canceledBy.name,
+                          at: canceledAt,
+                        })
+                      : tAdmin('lessons.canceledAt', { at: canceledAt })}
+                  </p>
+                )}
+                {admin?.cancelNote && (
+                  <p className="break-words">
+                    {tAdmin('lessons.note', { note: admin.cancelNote })}
+                  </p>
+                )}
+              </AlertDescription>
+            )}
           </Alert>
         )}
 
@@ -181,6 +207,8 @@ function LessonDetails({ lesson, timeZone }: { lesson: LessonDetail; timeZone: s
           )}
           <Row label={t('detail.capacity')}>{t('detail.places', { count: lesson.capacity })}</Row>
         </dl>
+
+        {canAdminister(me.data?.role) && <LessonActions lesson={lesson} timeZone={timeZone} />}
 
         {lesson.courseTypeDescription && (
           <section aria-labelledby="lesson-about" className="space-y-1">

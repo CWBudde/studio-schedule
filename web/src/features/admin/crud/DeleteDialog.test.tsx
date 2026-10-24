@@ -45,6 +45,7 @@ function Harness({
           title: `Delete ${name}?`,
           description: 'It is deleted for good.',
           inUse: `${name} is in use.`,
+          conflicts: { generated: `${name} comes back by itself.` },
           notFound: `${name} is gone.`,
           deleted: `${name} has been deleted.`,
         })}
@@ -90,6 +91,20 @@ describe('DeleteDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Delete Cellar' }));
     const second = within(await screen.findByRole('alertdialog', { name: 'Delete Cellar?' }));
     expect(second.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('says why for the other 409 reasons of the record', async () => {
+    const remove = vi.fn(() =>
+      Promise.reject(new ApiError(409, { status: 409, reason: 'generated' })),
+    );
+    const user = userEvent.setup();
+    renderWithQuery(<Harness remove={remove} />);
+
+    await user.click(screen.getByRole('button', { name: 'Delete Attic' }));
+    const dialog = within(await screen.findByRole('alertdialog', { name: 'Delete Attic?' }));
+    await user.click(dialog.getByRole('button', { name: 'Delete' }));
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent('Attic comes back by itself.');
   });
 
   it('offers the way out of an in-use delete', async () => {

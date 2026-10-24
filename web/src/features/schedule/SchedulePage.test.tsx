@@ -1,16 +1,21 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Schedule } from '@/api/client';
+import type { Me, Schedule } from '@/api/client';
 import type { ScheduleParams } from '@/api/queries';
 import {
   catalogFixtures,
   ids,
   lessonBalletDetail,
+  lessonWorkshopOffice,
+  meMember,
+  meOffice,
   mockApiGet,
+  mockApiPost,
   type MockRequest,
   publicSettings,
   schedule,
+  staffEntries,
 } from '@/test/mockApi';
 import { renderAtSchedule } from '@/test/utils';
 import { SchedulePage } from './SchedulePage';
@@ -27,11 +32,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** Mocks the API and records the query of every schedule request. */
-function mockSchedule(answer: Schedule = schedule) {
+/** Mocks the API and records the query of every schedule request; `me` is signed in. */
+function mockSchedule(answer: Schedule = schedule, me?: Me) {
   const requests: ScheduleParams[] = [];
   mockApiGet({
     ...catalogFixtures,
+    ...(me ? { '/api/v1/auth/me': { body: me } } : {}),
+    '/api/v1/admin/staff': { body: { items: staffEntries } },
     '/api/v1/settings/public': { body: publicSettings },
     '/api/v1/schedule': (init: MockRequest) => {
       requests.push(init.params?.query as ScheduleParams);
@@ -163,5 +170,38 @@ describe('SchedulePage', () => {
     renderAtSchedule(<SchedulePage />);
 
     expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('lets the office add a one-off lesson and opens it', async () => {
+    mockSchedule(schedule, meOffice);
+    const post = mockApiPost({ '/api/v1/lessons': { status: 201, body: lessonWorkshopOffice } });
+    const user = userEvent.setup();
+    const { router } = renderAtSchedule(<SchedulePage />, { from: '2026-10-26' });
+
+    await user.click(await screen.findByRole('button', { name: 'New lesson' }));
+
+    const sheet = within(await screen.findByRole('dialog', { name: 'New one-off lesson' }));
+    await user.click(await sheet.findByRole('combobox', { name: 'Course type' }));
+    await user.click(await screen.findByRole('option', { name: 'Jazz' }));
+    await user.type(sheet.getByLabelText('Date'), '2026-11-07');
+    await user.type(sheet.getByLabelText('Start time'), '14:00');
+    await user.type(sheet.getByLabelText('Duration (minutes)'), '180');
+    await user.click(sheet.getByRole('combobox', { name: 'Room' }));
+    await user.click(await screen.findByRole('option', { name: 'North Studio · Room A' }));
+    await user.click(sheet.getByRole('combobox', { name: 'Instructor' }));
+    await user.click(await screen.findByRole('option', { name: 'Riley Sample' }));
+    await user.click(sheet.getByRole('button', { name: 'Add lesson' }));
+
+    await waitFor(() => expect(router.state.location.search.lesson).toBe(ids.lessonWorkshop));
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no new lesson to a member', async () => {
+    mockSchedule(schedule, meMember);
+
+    renderAtSchedule(<SchedulePage />, { from: '2026-10-26' });
+
+    expect(await screen.findByRole('heading', { name: 'Monday, October 26' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New lesson' })).not.toBeInTheDocument();
   });
 });
