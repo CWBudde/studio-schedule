@@ -85,6 +85,8 @@ var accessLevels = map[string]string{
 	"searchPersonsForStaff":       "staff",
 	"listTeachLessons":            "staff",
 	"notifyParticipants":          "staff",
+	"listMyLessons":               "signedIn",
+	"listMyLessonHistory":         "signedIn",
 	"register":                    "public",
 	"confirmEmail":                "public",
 	"login":                       "public",

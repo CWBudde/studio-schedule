@@ -2631,6 +2631,138 @@
         ],
         "type": "object"
       },
+      "MyLessonBooking": {
+        "additionalProperties": false,
+        "properties": {
+          "booking": {
+            "$ref": "#/components/schemas/Booking"
+          },
+          "canCancel": {
+            "description": "Whether the booking may be canceled now (cancelBooking): it is active and its lesson has not started.",
+            "type": "boolean"
+          },
+          "lateCancelFrom": {
+            "description": "From this instant on a cancellation is late: the cancellation cutoff before the start (UTC); absent for a lesson the school canceled, which is never canceled late.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "lesson": {
+            "$ref": "#/components/schemas/LessonSummary"
+          },
+          "personName": {
+            "description": "Given and family name of the booked person.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "booking",
+          "personName",
+          "lesson",
+          "canCancel"
+        ],
+        "type": "object"
+      },
+      "MyLessonHistory": {
+        "additionalProperties": false,
+        "properties": {
+          "before": {
+            "description": "End of the page (exclusive): the before asked for, at most now.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "hasMore": {
+            "description": "Whether there are bookings of lessons that started before nextBefore.",
+            "type": "boolean"
+          },
+          "items": {
+            "description": "Bookings of lessons that are over and started in [nextBefore, before), every status, the newest lessons first.",
+            "items": {
+              "$ref": "#/components/schemas/MyLessonBooking"
+            },
+            "type": "array"
+          },
+          "nextBefore": {
+            "description": "Start of the page (inclusive; the operation says how many months a page covers); the before of the next page.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "now": {
+            "description": "Server time the response was computed at.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "timezone": {
+            "description": "IANA time zone of the school; school dates and times are local to it.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "timezone",
+          "now",
+          "before",
+          "items",
+          "nextBefore",
+          "hasMore"
+        ],
+        "type": "object"
+      },
+      "MyLessons": {
+        "additionalProperties": false,
+        "properties": {
+          "now": {
+            "description": "Server time the response was computed at.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "timezone": {
+            "description": "IANA time zone of the school; school dates and times are local to it.",
+            "type": "string"
+          },
+          "upcoming": {
+            "description": "Active bookings of lessons that are not over, by the lessons' start, then by booking time.",
+            "items": {
+              "$ref": "#/components/schemas/MyLessonBooking"
+            },
+            "type": "array"
+          },
+          "waitlist": {
+            "description": "Open waiting-list entries of lessons that have not started, by the lessons' start, the signed-in person first.",
+            "items": {
+              "$ref": "#/components/schemas/MyWaitlistEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "timezone",
+          "now",
+          "upcoming",
+          "waitlist"
+        ],
+        "type": "object"
+      },
+      "MyWaitlistEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "bookingClosesAt": {
+            "description": "Booking closes at this instant (UTC); no invites go out from then on.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "entry": {
+            "$ref": "#/components/schemas/WaitlistFor"
+          },
+          "lesson": {
+            "$ref": "#/components/schemas/LessonSummary"
+          }
+        },
+        "required": [
+          "entry",
+          "lesson",
+          "bookingClosesAt"
+        ],
+        "type": "object"
+      },
       "NotifyData": {
         "additionalProperties": false,
         "properties": {
@@ -7596,6 +7728,85 @@
           "catalog"
         ],
         "x-access": "office"
+      }
+    },
+    "/api/v1/my/lessons": {
+      "get": {
+        "description": "Returns the active bookings of the signed-in person and their dependents (managed ones included) in lessons that are not over, by start, and their open waiting-list entries of lessons that have not started, with their place in the list or their invite. A booking is listed whatever its lesson's visibility: a hidden or unreleased lesson the family is booked for is still theirs. Canceled bookings are not listed here; the history has them once their lessons are over.",
+        "operationId": "listMyLessons",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyLessons"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List my upcoming lessons",
+        "tags": [
+          "bookings"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/my/lessons/history": {
+      "get": {
+        "description": "Returns one page of the bookings of the signed-in person and their dependents, canceled ones included, in lessons that are over: those that started in the 3 calendar months (in the school time zone) before `before` (default and at most: now), the newest first. The next page is `before` = `nextBefore`, as long as `hasMore` says there are older bookings; a page in between may be empty.",
+        "operationId": "listMyLessonHistory",
+        "parameters": [
+          {
+            "description": "End of the page (exclusive): it holds the lessons that started in the months before this instant; default and at most: now.",
+            "explode": false,
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "description": "End of the page (exclusive): it holds the lessons that started in the months before this instant; default and at most: now.",
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyLessonHistory"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List my past lessons",
+        "tags": [
+          "bookings"
+        ],
+        "x-access": "signedIn"
       }
     },
     "/api/v1/rooms": {

@@ -465,12 +465,11 @@ func (w waitlister) void(ctx context.Context, tx store.Tx, l domain.LessonID) er
 // first (in the order of their IDs), and offers the places their invites
 // held. Removing a person from the school does this before deleting it.
 func (w waitlister) withdrawPerson(ctx context.Context, tx store.Tx, now time.Time, person domain.PersonID) error {
-	entries, err := tx.Waitlist().ListByPersons(ctx, []domain.PersonID{person})
+	entries, err := tx.Waitlist().ListOpenByPersons(ctx, []domain.PersonID{person})
 	if err != nil {
 		return err
 	}
 
-	entries = slices.DeleteFunc(entries, func(e domain.WaitlistEntry) bool { return !e.Open() })
 	slices.SortFunc(entries, func(a, b domain.WaitlistEntry) int { return bytes.Compare(a.LessonID[:], b.LessonID[:]) })
 
 	for _, e := range entries {

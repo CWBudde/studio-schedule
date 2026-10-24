@@ -257,22 +257,26 @@ func waitlistEntryBody(place service.WaitlistPlace) WaitlistEntry {
 // shows them.
 func waitlistFor(waiting []service.WaitingPerson) []WaitlistFor {
 	var out []WaitlistFor
-
 	for _, w := range waiting {
-		e := w.Entry
-		f := WaitlistFor{
-			PersonID: w.Person.ID, Name: w.Name, EntryID: e.ID, Status: string(w.Status), StayOnList: e.StayOnList,
-			Position: w.Position,
-		}
-
-		if e.Status == domain.WaitlistInvited {
-			f.ExpiresAt = e.ExpiresAt.UTC()
-		}
-
-		out = append(out, f)
+		out = append(out, waitlistForOne(w))
 	}
 
 	return out
+}
+
+// waitlistForOne returns the entry of w as the family sees it.
+func waitlistForOne(w service.WaitingPerson) WaitlistFor {
+	e := w.Entry
+	f := WaitlistFor{
+		PersonID: w.Person.ID, Name: w.Name, EntryID: e.ID, Status: string(w.Status), StayOnList: e.StayOnList,
+		Position: w.Position,
+	}
+
+	if e.Status == domain.WaitlistInvited {
+		f.ExpiresAt = e.ExpiresAt.UTC()
+	}
+
+	return f
 }
 
 // waitlistError maps the conflicts of the waiting list to their reasons,

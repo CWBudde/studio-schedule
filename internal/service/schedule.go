@@ -333,34 +333,23 @@ func addFamily(
 
 	lessonIDs := lessonIDsOf(lessons)
 
-	me, err := tx.Persons().Get(ctx, p.PersonID)
+	fam, err := familyOf(ctx, tx, p)
 	if err != nil {
-		return fmt.Errorf("person %v: %w", p.PersonID, err)
+		return err
 	}
 
-	dependents, err := tx.Persons().ListDependents(ctx, p.PersonID)
-	if err != nil {
-		return fmt.Errorf("dependents: %w", err)
-	}
-
-	family := append([]domain.Person{me}, dependents...)
-	persons := make([]domain.PersonID, len(family))
-	rank := make(map[domain.PersonID]int, len(family))
-
-	for i, f := range family {
-		persons[i], rank[f.ID] = f.ID, i
-	}
-
-	booked, err := tx.Bookings().ListActiveByLessonsAndPersons(ctx, lessonIDs, persons)
+	booked, err := tx.Bookings().ListActiveByLessonsAndPersons(ctx, lessonIDs, fam.ids())
 	if err != nil {
 		return fmt.Errorf("family bookings: %w", err)
 	}
 
-	slices.SortStableFunc(booked, func(a, b domain.Booking) int { return cmp.Compare(rank[a.PersonID], rank[b.PersonID]) })
+	slices.SortStableFunc(booked, func(a, b domain.Booking) int {
+		return cmp.Compare(fam.rank[a.PersonID], fam.rank[b.PersonID])
+	})
 
 	byLesson := map[domain.LessonID][]BookedPerson{}
 	for _, b := range booked {
-		person := family[rank[b.PersonID]]
+		person := fam.person(b.PersonID)
 		byLesson[b.LessonID] = append(byLesson[b.LessonID], BookedPerson{
 			Person: person, Name: fullName(person), BookingID: b.ID,
 		})
@@ -374,22 +363,10 @@ func addFamily(
 	waiting := map[domain.LessonID][]WaitingPerson{}
 
 	for _, e := range open {
-		r, ok := rank[e.PersonID]
-		if !ok {
-			continue
+		if _, ok := fam.rank[e.PersonID]; ok {
+			waiting[e.LessonID] = append(waiting[e.LessonID],
+				waitingPerson(fam.person(e.PersonID), e, byLessonOpen[e.LessonID], now))
 		}
-
-		person := family[r]
-		status := e.Status
-
-		if status == domain.WaitlistInvited && !holdsPlace(e, now) {
-			status = domain.WaitlistExpired
-		}
-
-		waiting[e.LessonID] = append(waiting[e.LessonID], WaitingPerson{
-			Person: person, Name: fullName(person),
-			WaitlistPlace: WaitlistPlace{Entry: e, Position: position(byLessonOpen[e.LessonID], e.ID)}, Status: status,
-		})
 	}
 
 	for i := range lessons {
@@ -397,11 +374,71 @@ func addFamily(
 		lessons[i].BookedFor = byLesson[id]
 		lessons[i].Waiting = waiting[id]
 		slices.SortStableFunc(lessons[i].Waiting, func(a, b WaitingPerson) int {
-			return cmp.Compare(rank[a.Person.ID], rank[b.Person.ID])
+			return cmp.Compare(fam.rank[a.Person.ID], fam.rank[b.Person.ID])
 		})
 	}
 
 	return nil
+}
+
+// family is a signed-in person and their dependents (managed ones
+// included): the person first, then the dependents by name, with each
+// one's place in that order.
+type family struct {
+	persons []domain.Person
+	rank    map[domain.PersonID]int
+}
+
+// familyOf returns p's family; an empty one for a zero p.
+func familyOf(ctx context.Context, tx store.Tx, p Principal) (family, error) {
+	if p.PersonID.IsZero() {
+		return family{}, nil
+	}
+
+	me, err := tx.Persons().Get(ctx, p.PersonID)
+	if err != nil {
+		return family{}, fmt.Errorf("person %v: %w", p.PersonID, err)
+	}
+
+	dependents, err := tx.Persons().ListDependents(ctx, p.PersonID)
+	if err != nil {
+		return family{}, fmt.Errorf("dependents: %w", err)
+	}
+
+	f := family{persons: append([]domain.Person{me}, dependents...), rank: map[domain.PersonID]int{}}
+	for i, person := range f.persons {
+		f.rank[person.ID] = i
+	}
+
+	return f, nil
+}
+
+// ids returns the IDs of the family, in its order.
+func (f family) ids() []domain.PersonID {
+	out := make([]domain.PersonID, len(f.persons))
+	for i, p := range f.persons {
+		out[i] = p.ID
+	}
+
+	return out
+}
+
+// person returns the family member id, who must be one.
+func (f family) person(id domain.PersonID) domain.Person { return f.persons[f.rank[id]] }
+
+// waitingPerson is the open entry e of person as the family sees it at now,
+// with its place among open, the open entries of its lesson: an invite that
+// has run out is expired, even before the waitlist-expiry job ends it.
+func waitingPerson(person domain.Person, e domain.WaitlistEntry, open []domain.WaitlistEntry, now time.Time) WaitingPerson {
+	status := e.Status
+	if status == domain.WaitlistInvited && !holdsPlace(e, now) {
+		status = domain.WaitlistExpired
+	}
+
+	return WaitingPerson{
+		Person: person, Name: fullName(person), Status: status,
+		WaitlistPlace: WaitlistPlace{Entry: e, Position: position(open, e.ID)},
+	}
 }
 
 // setAvailability sets the free places of sl, which has active bookings
@@ -446,6 +483,37 @@ func newLessonRefs() lessonRefs {
 // loadRangeRefs loads the catalog and the classes of the terms that overlap
 // the school dates [from, to), so the cost does not grow with past terms.
 func loadRangeRefs(ctx context.Context, tx store.Tx, from, to domain.Date) (lessonRefs, error) {
+	refs, err := loadCatalogRefs(ctx, tx)
+	if err != nil {
+		return refs, err
+	}
+
+	terms, err := tx.Terms().List(ctx)
+	if err != nil {
+		return refs, fmt.Errorf("terms: %w", err)
+	}
+
+	for _, t := range terms {
+		if t.EndsOn.Compare(from) < 0 || t.StartsOn.Compare(to) >= 0 {
+			continue
+		}
+
+		classes, err := tx.Classes().ListByTerm(ctx, t.ID)
+		if err != nil {
+			return refs, fmt.Errorf("classes of term %v: %w", t.ID, err)
+		}
+
+		for _, c := range classes {
+			refs.classes[c.ID] = c
+		}
+	}
+
+	return refs, nil
+}
+
+// loadCatalogRefs loads the locations, rooms, staff and course types, the
+// records that lessons reference besides their classes.
+func loadCatalogRefs(ctx context.Context, tx store.Tx) (lessonRefs, error) {
 	refs := newLessonRefs()
 
 	locations, err := tx.Locations().List(ctx)
@@ -482,26 +550,6 @@ func loadRangeRefs(ctx context.Context, tx store.Tx, from, to domain.Date) (less
 
 	for _, c := range courseTypes {
 		refs.courseTypes[c.ID] = c
-	}
-
-	terms, err := tx.Terms().List(ctx)
-	if err != nil {
-		return refs, fmt.Errorf("terms: %w", err)
-	}
-
-	for _, t := range terms {
-		if t.EndsOn.Compare(from) < 0 || t.StartsOn.Compare(to) >= 0 {
-			continue
-		}
-
-		classes, err := tx.Classes().ListByTerm(ctx, t.ID)
-		if err != nil {
-			return refs, fmt.Errorf("classes of term %v: %w", t.ID, err)
-		}
-
-		for _, c := range classes {
-			refs.classes[c.ID] = c
-		}
 	}
 
 	return refs, nil

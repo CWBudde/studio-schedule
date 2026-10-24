@@ -1140,6 +1140,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/my/lessons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List my upcoming lessons
+         * @description Returns the active bookings of the signed-in person and their dependents (managed ones included) in lessons that are not over, by start, and their open waiting-list entries of lessons that have not started, with their place in the list or their invite. A booking is listed whatever its lesson's visibility: a hidden or unreleased lesson the family is booked for is still theirs. Canceled bookings are not listed here; the history has them once their lessons are over.
+         */
+        get: operations["listMyLessons"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/lessons/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List my past lessons
+         * @description Returns one page of the bookings of the signed-in person and their dependents, canceled ones included, in lessons that are over: those that started in the 3 calendar months (in the school time zone) before `before` (default and at most: now), the newest first. The next page is `before` = `nextBefore`, as long as `hasMore` says there are older bookings; a page in between may be empty.
+         */
+        get: operations["listMyLessonHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms": {
         parameters: {
             query?: never;
@@ -2808,6 +2848,64 @@ export interface components {
              * @enum {string}
              */
             role: "member" | "instructor" | "office" | "admin";
+        };
+        MyLessonBooking: {
+            booking: components["schemas"]["Booking"];
+            /** @description Whether the booking may be canceled now (cancelBooking): it is active and its lesson has not started. */
+            canCancel: boolean;
+            /**
+             * Format: date-time
+             * @description From this instant on a cancellation is late: the cancellation cutoff before the start (UTC); absent for a lesson the school canceled, which is never canceled late.
+             */
+            lateCancelFrom?: string;
+            lesson: components["schemas"]["LessonSummary"];
+            /** @description Given and family name of the booked person. */
+            personName: string;
+        };
+        MyLessonHistory: {
+            /**
+             * Format: date-time
+             * @description End of the page (exclusive): the before asked for, at most now.
+             */
+            before: string;
+            /** @description Whether there are bookings of lessons that started before nextBefore. */
+            hasMore: boolean;
+            /** @description Bookings of lessons that are over and started in [nextBefore, before), every status, the newest lessons first. */
+            items: components["schemas"]["MyLessonBooking"][];
+            /**
+             * Format: date-time
+             * @description Start of the page (inclusive; the operation says how many months a page covers); the before of the next page.
+             */
+            nextBefore: string;
+            /**
+             * Format: date-time
+             * @description Server time the response was computed at.
+             */
+            now: string;
+            /** @description IANA time zone of the school; school dates and times are local to it. */
+            timezone: string;
+        };
+        MyLessons: {
+            /**
+             * Format: date-time
+             * @description Server time the response was computed at.
+             */
+            now: string;
+            /** @description IANA time zone of the school; school dates and times are local to it. */
+            timezone: string;
+            /** @description Active bookings of lessons that are not over, by the lessons' start, then by booking time. */
+            upcoming: components["schemas"]["MyLessonBooking"][];
+            /** @description Open waiting-list entries of lessons that have not started, by the lessons' start, the signed-in person first. */
+            waitlist: components["schemas"]["MyWaitlistEntry"][];
+        };
+        MyWaitlistEntry: {
+            /**
+             * Format: date-time
+             * @description Booking closes at this instant (UTC); no invites go out from then on.
+             */
+            bookingClosesAt: string;
+            entry: components["schemas"]["WaitlistFor"];
+            lesson: components["schemas"]["LessonSummary"];
         };
         NotifyData: {
             /** @description The message, plain text; line breaks are kept. At most 1000 characters once its line breaks are normalized and the space around it is trimmed. */
@@ -6096,6 +6194,67 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMyLessons: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyLessons"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMyLessonHistory: {
+        parameters: {
+            query?: {
+                /** @description End of the page (exclusive): it holds the lessons that started in the months before this instant; default and at most: now. */
+                before?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyLessonHistory"];
                 };
             };
             /** @description Error */
