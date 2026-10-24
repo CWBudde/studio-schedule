@@ -38,7 +38,11 @@
       "duration": "Gib eine ganze Zahl von Minuten von 1 bis 1440 ein.",
       "midnight": "Der Kurs muss bis Mitternacht enden.",
       "accompanist": "Die Korrepetition kann nicht die Lehrkraft sein; wähle eine andere oder keine.",
-      "bookedCapacity": "Kommende Stunden haben mehr Buchungen als das."
+      "bookedCapacity": "Kommende Stunden haben mehr Buchungen als das.",
+      "endBeforeStart": "Der letzte Tag darf nicht vor dem ersten liegen.",
+      "termLessons": "Eine Stunde außerhalb dieser Daten hat begonnen, hat Buchungen oder wurde einzeln geändert und darf daher nicht herausfallen.",
+      "choosePerson": "Bitte wähle eine Person.",
+      "alreadyMember": "Diese Person ist bereits Kursmitglied."
     }
   },
   "delete": {
@@ -192,7 +196,25 @@
     "period": "Zeitraum",
     "range": "{{from}} – {{to}}",
     "classes": "Kurse",
-    "classesLabel": "Kurse von {{name}}"
+    "classesLabel": "Kurse von {{name}}",
+    "add": "Kurszeitraum hinzufügen",
+    "addTitle": "Kurszeitraum hinzufügen",
+    "addDescription": "Kurszeiträume dürfen sich überschneiden. Sobald der Zeitraum angelegt ist, kannst du seine wöchentlichen Kurse hinzufügen.",
+    "editTitle": "{{name}} bearbeiten",
+    "editDescription": "Kürzere Daten entfernen die kommenden Stunden außerhalb davon. Eine Stunde, die begonnen hat, Buchungen hat oder einzeln geändert wurde, darf nicht herausfallen. Längere Daten ergänzen die Stunden der kommenden Wochen.",
+    "nameHint": "So zeigt ihn der Stundenplan; Namen dürfen mehrfach vorkommen.",
+    "startsOn": "Erster Tag",
+    "endsOn": "Letzter Tag",
+    "endsOnHint": "Der Zeitraum schließt diesen Tag ein.",
+    "editLabel": "{{name}} bearbeiten",
+    "deleteLabel": "{{name}} löschen",
+    "added": "{{name}} wurde hinzugefügt.",
+    "saved": "{{name}} wurde gespeichert.",
+    "deleted": "{{name}} wurde gelöscht.",
+    "notFound": "Diesen Kurszeitraum gibt es nicht mehr.",
+    "deleteTitle": "{{name}} löschen?",
+    "deleteDescription": "Der Kurszeitraum wird endgültig gelöscht. Ein Zeitraum, der noch Kurse hat, kann nicht gelöscht werden.",
+    "inUse": "{{name}} hat noch Kurse und kann daher nicht gelöscht werden. Lösche zuerst seine Kurse oder lass den Zeitraum an seinem letzten Tag enden."
   },
   "classes": {
     "title": "Kurse – {{term}}",
@@ -247,5 +269,32 @@
     "reactivateLabel": "{{name}} reaktivieren",
     "reactivated": "{{name}} wurde reaktiviert.",
     "reactivateFailed": "{{name}} konnte nicht reaktiviert werden. Bitte versuche es erneut."
+  },
+  "members": {
+    "open": "Mitglieder",
+    "label": "Mitglieder von {{name}}",
+    "title": "Mitglieder von {{name}}",
+    "description": "Die festen Teilnehmenden des Kurses. Hinzufügen oder Entfernen ändert keine Buchungen.",
+    "heading": "Kursmitglieder",
+    "count_one": "{{count}} Kursmitglied",
+    "count_other": "{{count}} Kursmitglieder",
+    "list": "Kursmitglieder",
+    "empty": "Dieser Kurs hat noch keine Mitglieder.",
+    "addLabel": "Kursmitglied hinzufügen",
+    "person": "Person",
+    "since": "Mitglied seit",
+    "sinceHint": "Leer lassen, wenn unbekannt.",
+    "add": "Kursmitglied hinzufügen",
+    "added": "{{name}} wurde zum Kurs hinzugefügt.",
+    "duplicate": "{{name}} ist bereits Mitglied dieses Kurses.",
+    "duplicateUnknown": "Diese Person ist bereits Mitglied dieses Kurses.",
+    "sinceDate": "Mitglied seit {{date}}",
+    "removeLabel": "{{name}} entfernen",
+    "remove": "Entfernen",
+    "removing": "Wird entfernt…",
+    "keep": "Behalten",
+    "confirm": "{{name}} aus {{classLabel}} entfernen?",
+    "removed": "{{name}} wurde aus dem Kurs entfernt.",
+    "notFound": "{{name}} ist kein Mitglied dieses Kurses mehr."
   }
 }

@@ -38,7 +38,11 @@
       "duration": "Enter a whole number of minutes from 1 to 1440.",
       "midnight": "The class must end by midnight.",
       "accompanist": "The accompanist cannot be the instructor; choose another one or none.",
-      "bookedCapacity": "Coming lessons have more bookings than that."
+      "bookedCapacity": "Coming lessons have more bookings than that.",
+      "endBeforeStart": "The last day cannot be before the first day.",
+      "termLessons": "A lesson outside these dates has started, has bookings or was changed one by one, so the term cannot leave it out.",
+      "choosePerson": "Please choose a person.",
+      "alreadyMember": "This person is a member of the class already."
     }
   },
   "delete": {
@@ -192,7 +196,25 @@
     "period": "Period",
     "range": "{{from}} – {{to}}",
     "classes": "Classes",
-    "classesLabel": "Classes of {{name}}"
+    "classesLabel": "Classes of {{name}}",
+    "add": "Add term",
+    "addTitle": "Add a term",
+    "addDescription": "Terms may overlap. Once the term exists, add its weekly classes.",
+    "editTitle": "Edit {{name}}",
+    "editDescription": "Shorter dates drop the coming lessons outside them. A lesson that has started, has bookings or was changed one by one cannot be left out. Longer dates get the lessons of the weeks ahead.",
+    "nameHint": "As the timetable shows it; names need not be unique.",
+    "startsOn": "First day",
+    "endsOn": "Last day",
+    "endsOnHint": "The term includes this day.",
+    "editLabel": "Edit {{name}}",
+    "deleteLabel": "Delete {{name}}",
+    "added": "{{name}} has been added.",
+    "saved": "{{name}} has been saved.",
+    "deleted": "{{name}} has been deleted.",
+    "notFound": "This term no longer exists.",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteDescription": "The term is deleted for good. A term that still has classes cannot be deleted.",
+    "inUse": "{{name}} still has classes, so it cannot be deleted. Delete its classes first, or let the term end on its last day."
   },
   "classes": {
     "title": "Classes – {{term}}",
@@ -247,5 +269,32 @@
     "reactivateLabel": "Reactivate {{name}}",
     "reactivated": "{{name}} has been reactivated.",
     "reactivateFailed": "{{name}} could not be reactivated. Please try again."
+  },
+  "members": {
+    "open": "Members",
+    "label": "Members of {{name}}",
+    "title": "Members of {{name}}",
+    "description": "The regular participants of the class. Adding or removing a member does not change any bookings.",
+    "heading": "Members",
+    "count_one": "{{count}} member",
+    "count_other": "{{count}} members",
+    "list": "Members",
+    "empty": "This class has no members yet.",
+    "addLabel": "Add a member",
+    "person": "Person",
+    "since": "Member since",
+    "sinceHint": "Leave empty if unknown.",
+    "add": "Add member",
+    "added": "{{name}} has been added to the class.",
+    "duplicate": "{{name}} is a member of this class already.",
+    "duplicateUnknown": "This person is a member of this class already.",
+    "sinceDate": "Member since {{date}}",
+    "removeLabel": "Remove {{name}}",
+    "remove": "Remove",
+    "removing": "Removing…",
+    "keep": "Keep",
+    "confirm": "Remove {{name}} from {{classLabel}}?",
+    "removed": "{{name}} has been removed from the class.",
+    "notFound": "{{name}} is no longer a member of this class."
   }
 }

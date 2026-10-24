@@ -365,3 +365,129 @@ test('a class with history is retired instead of deleted and leaves the public c
   await expect(classCard(page, 'Pointe Work, Wednesday, 18:00–18:45')).toBeVisible();
   await expect(classCard(page, 'Pointe Work, Friday, 18:00–19:15')).toHaveCount(0);
 });
+
+/** Opens the terms from the administration. */
+async function openTerms(page: Page, office: string): Promise<void> {
+  await openAdministration(page, office);
+  await openSection(page, 'Timetable', 'Terms');
+}
+
+test('the office adds a term, renames and shortens it, and deletes it', async ({ page }) => {
+  const office = await signInAs(page, 'Office');
+  await openTerms(page, office);
+
+  await page.getByRole('button', { name: 'Add term' }).click();
+  const add = page.getByRole('dialog', { name: 'Add a term' });
+  await add.getByLabel('Name').fill('Summer Intensive');
+  await add.getByLabel('First day').fill('2031-07-01');
+  await add.getByLabel('Last day').fill('2031-08-29');
+  await add.getByRole('button', { name: 'Add term' }).click();
+  await expect(add).toBeHidden();
+  await expect(page.getByText('Summer Intensive has been added.')).toBeVisible();
+  await expect(page.getByText('Jul 1 – Aug 29, 2031')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Edit Summer Intensive' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit Summer Intensive' });
+  await expect(edit.getByLabel('First day')).toHaveValue('2031-07-01');
+  await expect(edit.getByLabel('Last day')).toHaveValue('2031-08-29');
+  // The last day cannot come before the first.
+  await edit.getByLabel('Last day').fill('2031-06-30');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(edit.getByText('The last day cannot be before the first day.')).toBeVisible();
+  await edit.getByLabel('Name').fill('Summer Workshop Weeks');
+  await edit.getByLabel('Last day').fill('2031-08-15');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(edit).toBeHidden();
+  await expect(page.getByText('Summer Workshop Weeks has been saved.')).toBeVisible();
+  await expect(page.getByText('Jul 1 – Aug 15, 2031')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Delete Summer Workshop Weeks' }).click();
+  const dialog = page.getByRole('alertdialog', { name: 'Delete Summer Workshop Weeks?' });
+  await dialog.getByRole('button', { name: 'Delete' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText('Summer Workshop Weeks has been deleted.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit Summer Workshop Weeks' })).toHaveCount(0);
+});
+
+test('deleting a term with classes says why it stays', async ({ page }) => {
+  const office = await signInAs(page, 'Office');
+  await openTerms(page, office);
+
+  const deleteButton = page.getByRole('button', { name: /^Delete School Year / });
+  const label = (await deleteButton.getAttribute('aria-label')) ?? '';
+  const term = /^Delete (.+)$/.exec(label)?.[1] ?? '';
+  expect(term).not.toBe('');
+
+  await deleteButton.click();
+  const dialog = page.getByRole('alertdialog', { name: `Delete ${term}?` });
+  await dialog.getByRole('button', { name: 'Delete' }).click();
+  await expect(dialog.getByRole('alert')).toHaveText(
+    `${term} still has classes, so it cannot be deleted. Delete its classes first, or let the term end on its last day.`,
+  );
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('button', { name: `Edit ${term}` })).toBeVisible();
+});
+
+test('a term cannot leave out lessons that took place', async ({ page }) => {
+  const office = await signInAs(page, 'Office');
+  await openTerms(page, office);
+
+  await page.getByRole('button', { name: /^Edit School Year / }).click();
+  const edit = page.getByRole('dialog', { name: /^Edit School Year / });
+  // Starting on its last day would leave out the lessons of the past weeks.
+  const lastDay = await edit.getByLabel('Last day').inputValue();
+  await edit.getByLabel('First day').fill(lastDay);
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+
+  await expect(edit.getByRole('alert')).toHaveText('Please check your entries.');
+  await expect(edit.getByLabel('First day')).toHaveAttribute('aria-invalid', 'true');
+  await expect(edit.getByLabel('Last day')).not.toHaveAttribute('aria-invalid', 'true');
+  await expect(
+    edit.getByText(
+      'A lesson outside these dates has started, has bookings or was changed one by one, so the term cannot leave it out.',
+    ),
+  ).toBeVisible();
+});
+
+test('the office adds and removes a class member', async ({ page }) => {
+  const office = await signInAs(page, 'Office');
+  await openTermClasses(page, office);
+
+  await page.getByRole('button', { name: 'Members of Creative Dance, Saturday 10:00' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Members of Creative Dance, Saturday 10:00' });
+  await expect(sheet.getByText('This class has no members yet.')).toBeVisible();
+
+  /** Picks a person by a search in the sheet's person field. */
+  const pick = async (search: string, name: RegExp) => {
+    await sheet.getByRole('combobox', { name: 'Person' }).click();
+    await page.getByRole('combobox', { name: 'Search by name or email' }).fill(search);
+    await page.getByRole('option', { name }).click();
+    await expect(sheet.getByRole('combobox', { name: 'Person' })).not.toHaveText('No person');
+  };
+
+  await pick('inkwell', /Irene Inkwell/);
+  await sheet.getByLabel('Member since (optional)').fill('2026-09-01');
+  await sheet.getByRole('button', { name: 'Add member' }).click();
+  await expect(page.getByText('Irene Inkwell has been added to the class.')).toBeVisible();
+  const members = sheet.getByRole('list', { name: 'Members' });
+  await expect(members.getByRole('listitem')).toHaveCount(1);
+  await expect(members.getByText('Member since Sep 1, 2026')).toBeVisible();
+  await expect(sheet.getByRole('combobox', { name: 'Person' })).toHaveText('No person');
+
+  // Adding the same person twice says why.
+  await pick('inkwell', /Irene Inkwell/);
+  await sheet.getByRole('button', { name: 'Add member' }).click();
+  await expect(sheet.getByRole('alert')).toHaveText(
+    'Irene Inkwell is a member of this class already.',
+  );
+  await expect(members.getByRole('listitem')).toHaveCount(1);
+
+  await sheet.getByRole('button', { name: 'Remove Irene Inkwell' }).click();
+  const question = sheet.getByRole('group', {
+    name: 'Remove Irene Inkwell from Creative Dance, Saturday 10:00?',
+  });
+  await question.getByRole('button', { name: 'Remove' }).click();
+  await expect(page.getByText('Irene Inkwell has been removed from the class.')).toBeVisible();
+  await expect(sheet.getByText('This class has no members yet.')).toBeVisible();
+});

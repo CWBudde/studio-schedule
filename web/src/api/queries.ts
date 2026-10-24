@@ -702,8 +702,11 @@ function refreshTimetable(queryClient: QueryClient) {
   );
 }
 
-/** The errors of a class write; a 404 means the class is gone meanwhile. */
-function onClassError(queryClient: QueryClient) {
+/**
+ * The errors of a write to a term or class; a 404 means the record is gone
+ * meanwhile, so the timetable is asked again.
+ */
+function onTimetableError(queryClient: QueryClient) {
   const signedOut = signedOutOn401(queryClient);
   return (error: Error) => {
     signedOut(error);
@@ -720,7 +723,7 @@ export const createClassMutation = (queryClient: QueryClient) =>
     mutationFn: ({ termId, body }: { termId: string; body: ClassData }) =>
       unwrap(api.POST('/api/v1/terms/{termId}/classes', { params: { path: { termId } }, body })),
     onSuccess: () => refreshTimetable(queryClient),
-    onError: onClassError(queryClient),
+    onError: onTimetableError(queryClient),
   });
 
 /**
@@ -732,7 +735,7 @@ export const updateClassMutation = (queryClient: QueryClient) =>
     mutationFn: ({ classId, body }: { classId: string; body: ClassData }) =>
       unwrap(api.PUT('/api/v1/classes/{classId}', { params: { path: { classId } }, body })),
     onSuccess: () => refreshTimetable(queryClient),
-    onError: onClassError(queryClient),
+    onError: onTimetableError(queryClient),
   });
 
 /** Sets the retired flag of a class (office), keeping everything else. */
@@ -747,7 +750,7 @@ const classRetiredMutation = (retired: boolean) => (queryClient: QueryClient) =>
       );
     },
     onSuccess: () => refreshTimetable(queryClient),
-    onError: onClassError(queryClient),
+    onError: onTimetableError(queryClient),
   });
 
 /**
@@ -770,7 +773,97 @@ export const deleteClassMutation = (queryClient: QueryClient) =>
     mutationFn: (classId: string) =>
       expectOk(api.DELETE('/api/v1/classes/{classId}', { params: { path: { classId } } })),
     onSuccess: () => refreshTimetable(queryClient),
-    onError: onClassError(queryClient),
+    onError: onTimetableError(queryClient),
+  });
+
+/** The editable fields of a term (create and update). */
+export type TermData = PostBody<'/api/v1/terms'>;
+
+/** Adds a term (office); terms may overlap, and their names need not be unique. */
+export const createTermMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: TermData) => unwrap(api.POST('/api/v1/terms', { body })),
+    onSuccess: () => refreshTimetable(queryClient),
+    onError: onTimetableError(queryClient),
+  });
+
+/**
+ * Replaces the name and dates of a term (office). The coming lessons that
+ * the new dates leave out go; a lesson left out that has started, has
+ * bookings or was edited is a 422 on `startsOn` or `endsOn`.
+ */
+export const updateTermMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ termId, body }: { termId: string; body: TermData }) =>
+      unwrap(api.PUT('/api/v1/terms/{termId}', { params: { path: { termId } }, body })),
+    onSuccess: () => refreshTimetable(queryClient),
+    onError: onTimetableError(queryClient),
+  });
+
+/** Deletes a term (office); one with classes is a 409 `in-use`. */
+export const deleteTermMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (termId: string) =>
+      expectOk(api.DELETE('/api/v1/terms/{termId}', { params: { path: { termId } } })),
+    onSuccess: () => refreshTimetable(queryClient),
+    onError: onTimetableError(queryClient),
+  });
+
+/** A member of a class, with the date they joined if known. */
+export type ClassMember = components['schemas']['ClassMember'];
+/** A person to enroll in a class; no `since` means unknown. */
+export type ClassMemberData = PostBody<'/api/v1/classes/{classId}/members'>;
+
+/** The members of a class (office), ordered by family and given name. */
+export const classMembersQuery = (classId: string) =>
+  queryOptions({
+    queryKey: [...adminQueryKey, 'classes', classId, 'members'],
+    queryFn: async ({ signal }) =>
+      (
+        await unwrap(
+          api.GET('/api/v1/admin/classes/{classId}/members', {
+            params: { path: { classId } },
+            signal,
+          }),
+        )
+      ).items,
+  });
+
+/**
+ * After a write to the members of a class, whatever the answer: a refused
+ * write (a 409 for a member already there, a 404 for one gone) means the
+ * list is out of date, and a 404 may mean the class itself is gone.
+ */
+function onMembersSettled(queryClient: QueryClient) {
+  return (_data: unknown, error: Error | null, { classId }: { classId: string }) => {
+    if (error) onTimetableError(queryClient)(error);
+    return queryClient.invalidateQueries({ queryKey: classMembersQuery(classId).queryKey });
+  };
+}
+
+/**
+ * Adds a person to a class (office); a member already there is a 409
+ * `duplicate`, an unknown person a 422 on `body.personId`.
+ */
+export const addClassMemberMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ classId, body }: { classId: string; body: ClassMemberData }) =>
+      unwrap(
+        api.POST('/api/v1/classes/{classId}/members', { params: { path: { classId } }, body }),
+      ),
+    onSettled: onMembersSettled(queryClient),
+  });
+
+/** Ends a person's membership in a class (office); one who is not a member is a 404. */
+export const removeClassMemberMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ classId, personId }: { classId: string; personId: string }) =>
+      expectOk(
+        api.DELETE('/api/v1/classes/{classId}/members/{personId}', {
+          params: { path: { classId, personId } },
+        }),
+      ),
+    onSettled: onMembersSettled(queryClient),
   });
 
 /**

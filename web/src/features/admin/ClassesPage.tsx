@@ -1,6 +1,6 @@
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { ArrowLeft, CalendarPlus, RotateCcw } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, RotateCcw, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -25,6 +25,7 @@ import {
   TimetableError,
   TimetableLoading,
 } from '@/features/timetable/TimetableStates';
+import { ClassMembersSheet } from './ClassMembersSheet';
 import { type ClassChoices, ClassSheet, type ClassTarget } from './ClassSheet';
 import { DeleteDialog } from './crud/DeleteDialog';
 import { RowActions } from './crud/RowActions';
@@ -45,7 +46,7 @@ export function ClassesRoute() {
  * The weekly classes of one term for the office
  * (/admin/terms/$termId/classes), laid out like the public /classes: add
  * classes, edit them, delete those without history and retire (or
- * reactivate) the others.
+ * reactivate) the others, and maintain their members.
  */
 export function ClassesPage({ termId }: { termId: string }) {
   const { t, i18n } = useTranslation('admin');
@@ -58,6 +59,7 @@ export function ClassesPage({ termId }: { termId: string }) {
   const staff = useQuery(allStaffQuery);
   const [sheet, setSheet] = useState<ClassTarget | null>(null);
   const [deleting, setDeleting] = useState<ClassEntry | null>(null);
+  const [members, setMembers] = useState<ClassEntry | null>(null);
   const queries = [terms, classes, courseTypes, rooms, locations, staff];
 
   const term = terms.data?.find((x) => x.id === termId);
@@ -124,8 +126,10 @@ export function ClassesPage({ termId }: { termId: string }) {
           }}
           sheet={sheet}
           deleting={deleting}
+          members={members}
           onSheet={setSheet}
           onDelete={setDeleting}
+          onMembers={setMembers}
         />
       )}
     </div>
@@ -138,16 +142,21 @@ function TermClasses({
   choices,
   sheet,
   deleting,
+  members,
   onSheet,
   onDelete,
+  onMembers,
 }: {
   termId: string;
   classes: ClassEntry[];
   choices: ClassChoices;
   sheet: ClassTarget | null;
   deleting: ClassEntry | null;
+  /** The class whose members are shown. */
+  members: ClassEntry | null;
   onSheet: (target: ClassTarget | null) => void;
   onDelete: (entry: ClassEntry | null) => void;
+  onMembers: (entry: ClassEntry | null) => void;
 }) {
   const { t } = useTranslation('admin');
   const classLabel = useClassLabel(choices.courseTypes);
@@ -182,6 +191,15 @@ function TermClasses({
             return (
               <>
                 {entry.retired && <ReactivateButton entry={entry} name={name} />}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label={t('members.label', { name })}
+                  onClick={() => onMembers(entry)}
+                >
+                  <Users aria-hidden="true" />
+                  <span className="hidden md:inline">{t('members.open')}</span>
+                </Button>
                 <RowActions
                   editLabel={t('classes.editLabel', { name })}
                   deleteLabel={t('classes.deleteLabel', { name })}
@@ -195,6 +213,7 @@ function TermClasses({
       )}
 
       <ClassSheet termId={termId} target={sheet} choices={choices} onClose={() => onSheet(null)} />
+      <ClassMembersSheet target={members} name={classLabel} onClose={() => onMembers(null)} />
       <DeleteDialog
         target={deleting}
         id={(c) => c.id}

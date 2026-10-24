@@ -345,6 +345,26 @@ export const springClasses: Class[] = [
   },
 ];
 
+type ClassMember = components['schemas']['ClassMember'];
+
+/**
+ * The members of the Monday ballet class as the office lists them
+ * (GET /admin/classes/{classId}/members, by family and given name): Mia
+ * since the start of the autumn term, Noah since an unknown date.
+ */
+export const balletMembers: ClassMember[] = [
+  {
+    person: {
+      id: ids.personMia,
+      givenName: 'Mia',
+      familyName: 'Sample',
+      email: 'mia.sample@example.org',
+    },
+    since: '2026-08-31',
+  },
+  { person: { id: ids.personNoah, givenName: 'Noah', familyName: 'Sample' } },
+];
+
 /** The fictional member signed in in auth tests. */
 export const meMember: Me = {
   accountId: id(301),
