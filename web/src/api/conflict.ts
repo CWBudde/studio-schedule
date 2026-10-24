@@ -61,3 +61,18 @@ export function closedWhy(error: unknown): ClosedWhy | undefined {
   const why = (error as ApiError & { body: { why?: unknown } }).body.why;
   return closedWhys.find((w) => w === why);
 }
+
+/**
+ * Why the API refused a write with 422 although the request was fine: the
+ * lesson has not started yet, or an instructor's school day of it is over.
+ */
+export type InvalidReason = NonNullable<components['schemas']['Invalid']['reason']>;
+
+const invalidReasons: readonly InvalidReason[] = ['not-started', 'day-over'];
+
+/** The reason of a 422 answer of a write, if it gives one (a 422 about the body does not). */
+export function invalidReason(error: unknown): InvalidReason | undefined {
+  if (!(error instanceof ApiError) || error.status !== 422) return undefined;
+  const reason = (error.body as { reason?: unknown } | undefined)?.reason;
+  return invalidReasons.find((r) => r === reason);
+}

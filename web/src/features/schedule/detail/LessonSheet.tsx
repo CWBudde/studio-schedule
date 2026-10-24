@@ -20,6 +20,8 @@ import { canAdminister } from '@/features/admin/access';
 import { formatDayHeading, formatTimeRange, formatTimestamp, schoolDateOf } from '@/lib/schoolTime';
 import { LessonActions } from '../admin/LessonActions';
 import { BookingSection } from '../booking/BookingSection';
+import { ParticipantsSection } from '../participants/ParticipantsSection';
+import { useLessonLabel } from '../lessonLabel';
 import { useScheduleSearch } from '../useScheduleSearch';
 import { VisibilityBadge } from '../visibility/VisibilityBadge';
 
@@ -134,6 +136,7 @@ function LessonDetails({ lesson, timeZone }: { lesson: LessonDetail; timeZone: s
   const { t: tAdmin } = useTranslation('admin');
   const lang = i18n.resolvedLanguage ?? 'en';
   const me = useQuery(meQuery);
+  const label = useLessonLabel()(lesson, timeZone);
   const canceled = lesson.status === 'canceled';
   // What the office sees of the cancellation (ADR 0007).
   const admin = lesson.admin;
@@ -209,7 +212,9 @@ function LessonDetails({ lesson, timeZone }: { lesson: LessonDetail; timeZone: s
           <Row label={t('detail.capacity')}>{t('detail.places', { count: lesson.capacity })}</Row>
         </dl>
 
-        <BookingSection lesson={lesson} timeZone={timeZone} />
+        <BookingSection lesson={lesson} timeZone={timeZone} label={label} />
+
+        <ParticipantsSection lesson={lesson} timeZone={timeZone} label={label} />
 
         {canAdminister(me.data?.role) && <LessonActions lesson={lesson} timeZone={timeZone} />}
 

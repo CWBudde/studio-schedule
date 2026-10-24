@@ -40,7 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { formatDateTime, formatDayHeading, formatTimeRange, schoolDateOf } from '@/lib/schoolTime';
+import { formatDateTime } from '@/lib/schoolTime';
 import { useServerClock } from '../useServerClock';
 import { useBookingErrorText } from './bookingErrors';
 import { CancelFollowingDialog } from './CancelFollowingDialog';
@@ -56,7 +56,16 @@ type Bookable = { id: string; name: string; self: boolean };
  * way to book itself or a dependent, or to join the waiting list of a full
  * lesson. Visitors get a link to sign in.
  */
-export function BookingSection({ lesson, timeZone }: { lesson: LessonDetail; timeZone: string }) {
+export function BookingSection({
+  lesson,
+  timeZone,
+  label,
+}: {
+  lesson: LessonDetail;
+  timeZone: string;
+  /** The lesson in words (useLessonLabel), for the dialogs. */
+  label: string;
+}) {
   const { t } = useTranslation('schedule');
   const me = useQuery(meQuery);
   const headingId = useId();
@@ -68,7 +77,7 @@ export function BookingSection({ lesson, timeZone }: { lesson: LessonDetail; tim
         {t('booking.title')}
       </h3>
       {me.data ? (
-        <MemberBooking lesson={lesson} timeZone={timeZone} me={me.data} now={now} />
+        <MemberBooking lesson={lesson} timeZone={timeZone} label={label} me={me.data} now={now} />
       ) : (
         <>
           <Availability lesson={lesson} timeZone={timeZone} closed={closedState(lesson, now)} />
@@ -137,16 +146,17 @@ function Availability({
 function MemberBooking({
   lesson,
   timeZone,
+  label,
   me,
   now,
 }: {
   lesson: LessonDetail;
   timeZone: string;
+  label: string;
   me: Me;
   now: number;
 }) {
-  const { t, i18n } = useTranslation('schedule');
-  const lang = i18n.resolvedLanguage ?? 'en';
+  const { t } = useTranslation('schedule');
   const queryClient = useQueryClient();
   const errorText = useBookingErrorText();
   const family = useQuery(familyQuery);
@@ -166,11 +176,6 @@ function MemberBooking({
     (book.variables?.lessonId === lesson.id ? closedWhy(book.error) : undefined) ??
     (join.variables?.lessonId === lesson.id ? closedWhy(join.error) : undefined);
   const closed = closedState(lesson, now) ?? refused;
-  const label = t('list.cardLabel', {
-    courseType: lesson.courseType.name,
-    day: formatDayHeading(schoolDateOf(lesson.startsAt, timeZone), lang),
-    time: formatTimeRange(lesson.startsAt, lesson.endsAt, timeZone, lang),
-  });
 
   const self: Bookable = { id: me.personId, name: fullName(me), self: true };
   const persons: Bookable[] = [

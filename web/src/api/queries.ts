@@ -1594,6 +1594,193 @@ export const acceptWaitlistInviteByTokenMutation = (queryClient: QueryClient) =>
     onSettled: () => refreshLessons(queryClient),
   });
 
+/** A lesson's participants as staff see them (listLessonParticipants). */
+export type LessonParticipants = components['schemas']['LessonParticipants'];
+/** A booking of a lesson in its participant list, canceled ones included. */
+export type LessonParticipant = components['schemas']['LessonParticipant'];
+/** An entry of a lesson's waiting list in its participant list, ended ones included. */
+export type LessonWaitlistEntry = components['schemas']['LessonWaitlistEntry'];
+/** A booking as the staff writes answer it. */
+export type StaffBooking = components['schemas']['StaffBooking'];
+/** Whom staff add to a lesson: `personId` or `guest`, optionally as a trial. */
+export type AddParticipantData = PostBody<'/api/v1/lessons/{lessonId}/participants'>;
+/** The trial flag and note of a booking. */
+export type UpdateParticipantData = PutBody<'/api/v1/bookings/{bookingId}/participant'>;
+/** The attendance of a booking; `booked` sets it back to unknown. */
+export type AttendanceStatus = PostBody<'/api/v1/bookings/{bookingId}/attendance'>['status'];
+/** An event of a booking's history (listBookingEvents). */
+export type BookingEvent = components['schemas']['BookingEvent'];
+/** A person found by the staff's person search: name and birth year only. */
+export type StaffPersonMatch = components['schemas']['StaffPersonMatch'];
+
+/**
+ * The participants of a lesson for staff: its bookings (canceled ones
+ * included), its waiting list and the counts. The office sees every lesson;
+ * instructors and accompanists only those they teach, any other is a 404
+ * (not asked again). Under the lesson's key, so every write to lessons or
+ * bookings asks it again.
+ */
+export const lessonParticipantsQuery = (lessonId: string) =>
+  queryOptions({
+    queryKey: ['lesson', lessonId, 'participants'],
+    queryFn: ({ signal }) =>
+      unwrap(
+        api.GET('/api/v1/lessons/{lessonId}/participants', {
+          params: { path: { lessonId } },
+          signal,
+        }),
+      ),
+  });
+
+/**
+ * The history of a booking, oldest first (office): status, flags and who
+ * made each change. Always asked anew when shown.
+ */
+export const bookingEventsQuery = (bookingId: string) =>
+  queryOptions({
+    queryKey: [...adminQueryKey, 'bookings', bookingId, 'events'],
+    queryFn: async ({ signal }) =>
+      (
+        await unwrap(
+          api.GET('/api/v1/admin/bookings/{bookingId}/events', {
+            params: { path: { bookingId } },
+            signal,
+          }),
+        )
+      ).items,
+    staleTime: 0,
+  });
+
+/** The fewest characters the staff's person search needs. */
+export const minStaffPersonQuery = 2;
+/** The longest search the staff's person search takes, in characters (the API's maxLength). */
+export const maxStaffPersonQuery = 100;
+/** The most persons the staff's person search returns (`service` caps it the same). */
+export const maxStaffPersonMatches = 20;
+
+/** `q` as the staff's person search takes it: trimmed, at most 100 characters (code points). */
+const staffPersonSearch = (q: string) => [...q.trim()].slice(0, maxStaffPersonQuery).join('');
+
+/**
+ * The persons whose given or family name contains every word of `q` (staff;
+ * at least two characters, longer ones cut at 100), at most 20, ordered by
+ * family and given name, with their birth year, no contact data.
+ */
+export const staffPersonsQuery = (q: string) =>
+  queryOptions({
+    queryKey: ['staff-persons', staffPersonSearch(q)],
+    queryFn: async ({ signal }) =>
+      (
+        await unwrap(
+          api.GET('/api/v1/staff/persons', {
+            params: { query: { q: staffPersonSearch(q) } },
+            signal,
+          }),
+        )
+      ).items,
+    staleTime: 30_000,
+  });
+
+/**
+ * After a staff write to a lesson's participants: the lessons (their
+ * participants included) and the demo mailbox, once no other booking write
+ * runs, and the booking histories the office may have open.
+ */
+function refreshAfterParticipants(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({ queryKey: [...adminQueryKey, 'bookings'] });
+  return refreshAfterBooking(queryClient);
+}
+
+/** Whom to add to which lesson. */
+export type AddParticipantVariables = { lessonId: string; body: AddParticipantData };
+
+/**
+ * Adds a person or a guest to a lesson (staff), as a trial if asked: 409
+ * `already-booked`, `full` (unless `confirmOverCapacity`), `closed` with why
+ * `canceled`; a 422 on `path.lessonId` once an instructor's day is over, or
+ * on the body's fields. Afterwards the lessons and the demo mailbox (the
+ * confirmation) are asked again.
+ */
+export const addLessonParticipantMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationKey: bookingMutationKey,
+    mutationFn: ({ lessonId, body }: AddParticipantVariables) =>
+      unwrap(
+        api.POST('/api/v1/lessons/{lessonId}/participants', {
+          params: { path: { lessonId } },
+          body,
+        }),
+      ),
+    onError: signedOutOn401(queryClient),
+    onSettled: () => refreshAfterParticipants(queryClient),
+  });
+
+/**
+ * Sets whether an active booking is a trial and its note (staff); a
+ * canceled one is a 409 `already-canceled`.
+ */
+export const updateLessonParticipantMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationKey: bookingMutationKey,
+    mutationFn: ({ bookingId, body }: { bookingId: string; body: UpdateParticipantData }) =>
+      unwrap(
+        api.PUT('/api/v1/bookings/{bookingId}/participant', {
+          params: { path: { bookingId } },
+          body,
+        }),
+      ),
+    onError: signedOutOn401(queryClient),
+    onSettled: () => refreshAfterParticipants(queryClient),
+  });
+
+/**
+ * Takes a participant off a lesson (staff): cancels the booking, never
+ * late; the place goes to the waiting list. A canceled booking is a 409
+ * `already-canceled`.
+ */
+export const removeLessonParticipantMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationKey: bookingMutationKey,
+    mutationFn: ({ bookingId }: { bookingId: string }) =>
+      unwrap(api.POST('/api/v1/bookings/{bookingId}/remove', { params: { path: { bookingId } } })),
+    onError: signedOutOn401(queryClient),
+    onSettled: () => refreshAfterParticipants(queryClient),
+  });
+
+/**
+ * Records whether a participant came (staff), from the lesson's start: a
+ * 422 on `path.bookingId` before it or once an instructor's day is over.
+ */
+export const setAttendanceMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationKey: bookingMutationKey,
+    mutationFn: ({ bookingId, status }: { bookingId: string; status: AttendanceStatus }) =>
+      unwrap(
+        api.POST('/api/v1/bookings/{bookingId}/attendance', {
+          params: { path: { bookingId } },
+          body: { status },
+        }),
+      ),
+    onError: signedOutOn401(queryClient),
+    onSettled: () => refreshAfterParticipants(queryClient),
+  });
+
+/** Marks every participant whose attendance is unknown as attended; returns those it changed. */
+export const markAllAttendedMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationKey: bookingMutationKey,
+    mutationFn: async ({ lessonId }: { lessonId: string }) =>
+      (
+        await unwrap(
+          api.POST('/api/v1/lessons/{lessonId}/attendance/all', {
+            params: { path: { lessonId } },
+          }),
+        )
+      ).items,
+    onError: signedOutOn401(queryClient),
+    onSettled: () => refreshAfterParticipants(queryClient),
+  });
+
 /**
  * The mails of the demo mailbox, newest first; null when the installation is
  * not a demo (404). In a demo it is refetched whenever a view of it mounts;
