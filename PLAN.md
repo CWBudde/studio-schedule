@@ -163,10 +163,10 @@ Goal: a production-grade persistence layer with two interchangeable implementati
       builds it around the visit date (`seed.DemoAt`), so its schedule is never empty
 - [x] `serve` chooses the store: `postgres` when `DATABASE_URL` is set, otherwise `memory` with demo
       seed (with a warning log) (2026-10-23) — refuses to start while migrations are pending
-- [ ] Demo: the WASM build loads the full demo dataset; optional IndexedDB snapshot; "Reset demo"
+- [x] Demo: the WASM build loads the full demo dataset; optional IndexedDB snapshot; "Reset demo"
       button (2026-10-23) — `cmd/wasm` loads the full dataset for the visit date via
-      `seed.LoadDemoAt`. partial: IndexedDB
-      snapshot and "Reset demo" once the demo can change data (Phase 3)
+      `seed.LoadDemoAt`; since 2026-10-24 the whole memory store and the session survive a reload
+      (IndexedDB snapshot until "Reset demo", see Admin CRUD → Demo)
 - [x] CI: Postgres contract tests job; sqlc generate drift check (2026-10-23) — `test-unit` runs
       the PostgreSQL contract tests via testcontainers on the runner's Docker; `test-format` runs
       `just check-sqlc`
@@ -301,14 +301,13 @@ Goal: people can sign up and log in; staff can maintain the timetable.
       the causing transaction; the `deliver-mail` job claims one at a time and retries 5 times
       (`SMTP_*` config, `internal/mail/smtp` server only); the demo's header opens the mailbox, whose
       confirmation links open in the app
-- [ ] Admin CRUD: locations, rooms, staff, course types, terms, classes, class members. The repos
+- [x] Admin CRUD: locations, rooms, staff, course types, terms, classes, class members. The repos
       already have Get/Create/Update/Delete/List; the work is services, write operations and the
       admin UI. Order: decisions and the two foundations first, then the entity slices (each slice
       is backend + UI + tests and can run in parallel; regenerate `api/openapi.json`,
       `schema.d.ts` and `routeTree.gen.ts` after merging), then demo and e2e (2026-10-24) —
-      partial: ADR 0007, both foundations, every entity slice (locations and rooms, staff, course
-      types, terms, classes, class members) and their tests are done; the demo's "Reset demo"
-      remains
+      ADR 0007, both foundations, every entity slice (locations and rooms, staff, course types,
+      terms, classes, class members), the demo's snapshot and "Reset demo", and their tests
   - [x] ADR 0007 "Timetable administration": `office` writes catalogue and timetable (admins
         inherit it), what an edit of a class or term does to its generated lessons (proposed:
         future, untouched lessons follow the class; past and individually edited lessons stay),
@@ -395,9 +394,14 @@ Goal: people can sign up and log in; staff can maintain the timetable.
         `addClassMember` (409 `duplicate`, a 422 on an unknown `personId`), `removeClassMember`
         (`service/class_members.go`); a "Members" sheet per class on `/admin/terms/{id}/classes`
         with the person combobox and a "since" date; e2e in `admin.spec.ts`
-  - [ ] Demo: the demo office account can do every action above; edits live in the worker's memory
+  - [x] Demo: the demo office account can do every action above; edits live in the worker's memory
         store until a reload, and the open Phase 1 item ("Reset demo" button, optional IndexedDB
-        snapshot) lands with this slice
+        snapshot) lands with this slice (2026-10-24) — the worker saves a JSON snapshot of the
+        whole memory store and its cookie jar to IndexedDB after every committed write (job writes
+        included) and restores it on start, until "Reset demo" (header and crash card) clears it;
+        a snapshot from another build or store shape is dropped; one tab runs the demo (Web Lock,
+        "Use here" takes over, owner epoch fences stale saves); `memory/snapshot_test.go` fails
+        for a table without a codec; e2e in `demo-reset.spec.ts`
   - [x] Tests and docs: every new operation pinned in `internal/app/access_test.go`; service tests
         per entity (validation, 409 reasons, lesson sync); component tests per admin page; e2e
         "office edits a class and the schedule shows the change" on desktop and phone; glossary
