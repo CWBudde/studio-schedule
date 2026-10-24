@@ -184,7 +184,9 @@ to the CHECK). The booking event names who: the real account, the admin when imp
 **Guests.** A booking has a person or a guest. A guest has a name and an optional email
 (`bookings.guest_email` is nullable since 00013); only staff add guests. A guest with an email gets
 the confirmation, the cancellation and the lesson mails (ADR 0007) in the school's default
-language, greeted by name; one without an email gets nothing. Guests are not unique per lesson.
+language, greeted by name; one without an email gets nothing. A guest has no account to cancel
+with, so their `booking-confirmed` asks them to contact the school to cancel (the settings hold no
+contact data of the school yet, so the mail names the school only). Guests are not unique per lesson.
 
 **Trial.** `bookings.trial` (since Phase 1) marks a trial lesson; `bookings.trial_note` (00013) is an
 optional note for the instructor (at most 500 characters), and only a trial booking has one (a note
@@ -195,7 +197,7 @@ booking of the lesson, canceled ones included, ordered by booking time, with the
 a guest marker, status, source, trial and note, the late flag and the times; and the lesson's
 waiting list, ended entries included, in its order, with position and status (an invite whose expiry
 has passed shows as `expired`), plus the capacity, the active bookings, the held places, the free
-places and the waiting entries. _Contact data_ is kept simple: `contactEmail` is the head of the
+places and the waiting entries (`waiting`, counted by the service). _Contact data_ is kept simple: `contactEmail` is the head of the
 person's mail chain (their confirmed account, else their own address, else their first guardian's
 confirmed account; ADR 0007) or a guest's address, and `contactPhone` is the person's phone, else
 the phone of their first guardian who has one (guardians ordered by name). A disabled account has
@@ -213,8 +215,12 @@ guest {name, email?}, trial?, trialNote?, confirmOverCapacity?}`, 201). Under th
 settling the waiting list like `bookLesson` (ADR 0010): a person with an active booking is a 409
 `already-booked`; a lesson whose active bookings and the places held by others' invites fill its
 capacity is a 409 `full`, unless `confirmOverCapacity` is set, which the booking event records as
-`override`. A person whose own invite holds a place takes it (the invite is `accepted`, the event
-notes `waitlist`); any other open entry of the person is withdrawn. Before the start, the person's
+`override`. A person whose own invite holds a place takes it without confirming (the invite is
+`accepted`, the event notes `waitlist`); any other open entry of the person is withdrawn. **One
+capacity rule** (`fitOf`) serves `bookLesson`, this add and accepting an invite: the places others'
+invites hold count as taken, the place the person's own invite holds is theirs. So an invited person
+gets their reserved place even when the office has booked over capacity next to the invite since;
+the booking event then records `override`, as the lesson goes beyond its capacity. Before the start, the person's
 recipient chain (ADR 0010) or a guest with an email gets `booking-confirmed`; a walk-in after the
 start gets no mail. Both or neither of `personId` and `guest` is a 422 on `body`, an unknown person a
 422 on `body.personId`, a bad guest a 422 on `body.guest.name` or `body.guest.email`.
@@ -224,11 +230,14 @@ start gets no mail. Both or neither of `personId` and `guest` is a 422 on `body`
 `already-canceled`); it records no event, as the status does not change.
 
 **Remove** (`removeLessonParticipant`, `POST /api/v1/bookings/{bookingId}/remove`) cancels through
-the shared `cancelBooking`: never late, not released (a class member is booked again when the office
-changes their membership), with the staff account as actor, and the freed place goes to the waiting
-list. Also after the start (a walk-in added by mistake), within the window. Before the start, the
-participant's recipients get `booking-canceled`; after it, nobody. A canceled booking is a 409
-`already-canceled`.
+the shared `cancelBooking`: never late, with the staff account as actor, and the freed place goes to
+the waiting list. A person's booking is **released** (`bookings.released`, like the family's own
+cancellation): staff took them off that date, so neither enrollment nor generation books a class
+member into it again when the office later changes their membership; taking it back is an add. Also
+after the start (a walk-in added by mistake), within the window, and on a lesson the school canceled
+(to tidy it up; trials may be marked there too). Before the start of a lesson that takes place, the
+participant's recipients get `booking-canceled`; after the start, or for a canceled lesson, nobody,
+and a canceled lesson invites nobody from its list. A canceled booking is a 409 `already-canceled`.
 
 **Attendance** (`setAttendance`, `POST /api/v1/bookings/{bookingId}/attendance`, body `{status:
 attended | no_show | booked}`; `markAllAttended`, `POST /api/v1/lessons/{lessonId}/attendance/all`,
@@ -238,9 +247,16 @@ start (before it a 422 on the path), within the window; a lesson the school canc
 booking event with the new status and the actor; setting the status a booking has changes nothing.
 `booked` sets the attendance back to unknown. A no-show is only a status until Phase 6 (passes).
 
-**History** (`listBookingEvents`, `GET /api/v1/bookings/{bookingId}/events`, office only): every event
+**History** (`listBookingEvents`, `GET /api/v1/admin/bookings/{bookingId}/events`, office only, so
+under `/admin` like the office's other reads): every event
 of a booking, oldest first, with status, `late`, `override`, `note` and the actor's account, name and
 email (none for the system).
+
+**Finding persons** (`searchPersonsForStaff`, `GET /api/v1/staff/persons?q=…`, access `staff`).
+Instructors need to find the person they add, but not the office's person records: the search
+matches the given and family name only (not email addresses), needs at least two characters, returns
+at most 20, ordered by family and given name, and gives only the ID, the name and the birth year (to
+tell namesakes apart), no contact data. The office keeps `listPersons`.
 
 **Demo.** Felix Keysworth, the demo accompanist, has an instructor account (signing in by email, as
 the login page lists Alina for instructors), and Alina's ballet workshop, which Felix accompanies,

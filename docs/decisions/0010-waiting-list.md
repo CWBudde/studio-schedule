@@ -149,3 +149,11 @@ lessons whose entries their removal withdraws.
 - Persons without any reachable address are never invited; the office sees them on the list later
   (staff actions) and can book them directly.
 - The schedule needs one more query per request; the job one query a minute while nothing is due.
+
+## Amendment (2026-10-24): overbooked lessons
+
+Staff may book beyond the capacity next to an open invite (ADR 0009, amendment: `confirmOverCapacity`).
+The invite still reserves its place: booking the invited person (`bookLesson`, or staff adding them)
+and accepting the invite take it without a `full`, by the one capacity rule of ADR 0009 (`fitOf`), and
+because the lesson then goes beyond its capacity, the booking event records `override`. Accepting
+still never refuses for capacity.
