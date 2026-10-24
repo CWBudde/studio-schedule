@@ -26,6 +26,12 @@ func viewerOf(p Principal, s domain.Settings, loc *time.Location, now time.Time)
 		return viewer{role: p.Role}
 	}
 
+	return memberViewer(p, s, loc, now)
+}
+
+// memberViewer returns the viewer p is as a member, whatever their role:
+// staff book under member rules (ADR 0009).
+func memberViewer(p Principal, s domain.Settings, loc *time.Location, now time.Time) viewer {
 	days := s.DefaultVisibleDays
 	if p.VisibleDays > 0 {
 		days = p.VisibleDays

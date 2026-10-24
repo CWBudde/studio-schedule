@@ -1,0 +1,1 @@
+{{.SchoolName}}: {{if eq (len .Lessons) 1}}{{with index .Lessons 0}}booking of {{.CourseType}} on {{date .StartsAt}}{{end}} canceled{{else}}{{len .Lessons}} bookings of {{(index .Lessons 0).CourseType}} canceled{{end}}

@@ -116,7 +116,7 @@ func (s *LessonService) CreateLesson(ctx context.Context, d NewLesson) (Schedule
 	var out ScheduledLesson
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		_, loc, err := loadSchool(ctx, tx)
+		settings, loc, err := loadSchool(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -148,7 +148,7 @@ func (s *LessonService) CreateLesson(ctx context.Context, d NewLesson) (Schedule
 		}
 
 		// A new lesson has no bookings.
-		out, err = adminLesson(ctx, tx, l, 0)
+		out, err = adminLesson(ctx, tx, settings, l, 0)
 
 		return err
 	})
@@ -228,7 +228,7 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 			}
 		}
 
-		out, err = adminLesson(ctx, tx, l, active)
+		out, err = adminLesson(ctx, tx, settings, l, active)
 
 		return err
 	})
@@ -326,7 +326,7 @@ func (s *LessonService) setStatus(
 			return err
 		}
 
-		out, err = adminLesson(ctx, tx, l, active)
+		out, err = adminLesson(ctx, tx, settings, l, active)
 
 		return err
 	})
@@ -450,9 +450,11 @@ func roomTaker(ctx context.Context, tx store.Tx, l domain.Lesson) (domain.Lesson
 	return others[0], true, nil
 }
 
-// adminLesson returns l with its references and what the office sees of it,
-// given its number of active bookings.
-func adminLesson(ctx context.Context, tx store.Tx, l domain.Lesson, active int) (ScheduledLesson, error) {
+// adminLesson returns l with its references, cutoffs and what the office
+// sees of it, given its number of active bookings.
+func adminLesson(
+	ctx context.Context, tx store.Tx, settings domain.Settings, l domain.Lesson, active int,
+) (ScheduledLesson, error) {
 	refs, err := loadRefsOf(ctx, tx, l)
 	if err != nil {
 		return ScheduledLesson{}, err
@@ -469,6 +471,7 @@ func adminLesson(ctx context.Context, tx store.Tx, l domain.Lesson, active int) 
 	}
 
 	sl.Admin = &a
+	sl.setAvailability(settings, active)
 
 	return sl, nil
 }

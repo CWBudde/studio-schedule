@@ -437,7 +437,7 @@ func TestDeletePerson(t *testing.T) {
 
 		return tx.Bookings().Create(ctx, domain.Booking{
 			ID: ids.New[domain.BookingID](ids.V7{}), LessonID: lessons[0].ID, PersonID: booked.ID,
-			Status: domain.BookingBooked, BookedAt: lessons[0].StartsAt.Add(-time.Hour),
+			Status: domain.BookingBooked, Source: domain.BookingSourceSelf, BookedAt: lessons[0].StartsAt.Add(-time.Hour),
 		})
 	})
 

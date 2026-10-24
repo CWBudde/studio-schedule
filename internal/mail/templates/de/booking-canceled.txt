@@ -1,0 +1,17 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+{{if eq (len .Lessons) 1}}diese Buchung bei {{.SchoolName}} ist storniert:{{else}}diese Buchungen bei {{.SchoolName}} sind storniert:{{end}}
+
+Gebucht für: {{.Participant}}
+{{- range .Lessons}}
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr
+{{.Room}}, {{.Location}}
+{{- if .Late}}
+Späte Absage: nach der Abmeldefrist
+{{- end}}
+{{- end}}
+
+Viele Grüße
+{{.SchoolName}}

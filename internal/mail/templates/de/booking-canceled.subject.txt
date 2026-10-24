@@ -1,0 +1,1 @@
+{{.SchoolName}}: {{if eq (len .Lessons) 1}}{{with index .Lessons 0}}Buchung für {{.CourseType}} am {{date .StartsAt}}{{end}} storniert{{else}}{{len .Lessons}} Buchungen für {{(index .Lessons 0).CourseType}} storniert{{end}}

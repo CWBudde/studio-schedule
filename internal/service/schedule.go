@@ -1,9 +1,11 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/clock"
@@ -74,6 +76,26 @@ type ScheduledLesson struct {
 	// Admin is what the office sees beyond the schedule; nil for
 	// everyone else.
 	Admin *LessonAdmin
+	// FreePlaces is the capacity minus the active bookings, at least 0.
+	FreePlaces int
+	// BookingClosesAt is when booking closes: the booking cutoff before
+	// the start (ADR 0009).
+	BookingClosesAt time.Time
+	// LateCancelFrom is when a cancellation becomes late: the cancellation
+	// cutoff before the start; zero for a lesson the school canceled, which
+	// is never canceled late.
+	LateCancelFrom time.Time
+	// BookedFor are the viewer and their dependents with an active booking
+	// for the lesson, the viewer first; only in Schedule and Lesson.
+	BookedFor []BookedPerson
+}
+
+// BookedPerson is someone of the viewer's family with an active booking.
+type BookedPerson struct {
+	Person domain.Person
+	// Name is the person's given and family name, for display.
+	Name      string
+	BookingID domain.BookingID
 }
 
 // Schedule is the published timetable of a date range as one viewer sees
@@ -159,7 +181,7 @@ func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQ
 			}
 		}
 
-		return nil
+		return addAvailability(ctx, tx, p, settings, out.Lessons)
 	})
 	if err != nil {
 		return Schedule{}, fmt.Errorf("schedule: %w", err)
@@ -192,31 +214,145 @@ func (s *ScheduleService) Lesson(ctx context.Context, p Principal, id domain.Les
 			return domain.ErrNotFound
 		}
 
-		if p.Role.AtLeast(domain.RoleOffice) {
-			active, err := tx.Bookings().CountActive(ctx, l.ID)
-			if err != nil {
-				return err
-			}
-
-			out, err = adminLesson(ctx, tx, l, active)
-
-			return err
-		}
-
-		refs, err := loadRefsOf(ctx, tx, l)
+		// One count serves the free places and the office's details.
+		active, err := tx.Bookings().CountActiveByLessons(ctx, []domain.LessonID{l.ID})
 		if err != nil {
+			return fmt.Errorf("active bookings: %w", err)
+		}
+
+		if out, err = s.resolveLesson(ctx, tx, p, settings, l, active[l.ID]); err != nil {
 			return err
 		}
 
-		out, err = refs.resolve(l)
+		lessons := []ScheduledLesson{out}
+		if err := addBookedFor(ctx, tx, p, lessons); err != nil {
+			return err
+		}
 
-		return err
+		out = lessons[0]
+
+		return nil
 	})
 	if err != nil {
 		return ScheduledLesson{}, fmt.Errorf("lesson %v: %w", id, err)
 	}
 
 	return out, nil
+}
+
+// resolveLesson combines l, which has active bookings that are not
+// canceled, with the records it references, its free places and cutoffs
+// and, for office and admin accounts, the office's details.
+func (s *ScheduleService) resolveLesson(
+	ctx context.Context, tx store.Tx, p Principal, settings domain.Settings, l domain.Lesson, active int,
+) (ScheduledLesson, error) {
+	if p.Role.AtLeast(domain.RoleOffice) {
+		return adminLesson(ctx, tx, settings, l, active)
+	}
+
+	refs, err := loadRefsOf(ctx, tx, l)
+	if err != nil {
+		return ScheduledLesson{}, err
+	}
+
+	sl, err := refs.resolve(l)
+	if err != nil {
+		return ScheduledLesson{}, err
+	}
+
+	sl.setAvailability(settings, active)
+
+	return sl, nil
+}
+
+// addAvailability sets the free places and cutoffs of the lessons and, for
+// a signed-in p, whom of p's family each has booked (ADR 0009). It counts
+// the active bookings of all lessons with one query.
+func addAvailability(
+	ctx context.Context, tx store.Tx, p Principal, settings domain.Settings, lessons []ScheduledLesson,
+) error {
+	if len(lessons) == 0 {
+		return nil
+	}
+
+	active, err := tx.Bookings().CountActiveByLessons(ctx, lessonIDsOf(lessons))
+	if err != nil {
+		return fmt.Errorf("active bookings: %w", err)
+	}
+
+	for i := range lessons {
+		lessons[i].setAvailability(settings, active[lessons[i].Lesson.ID])
+	}
+
+	return addBookedFor(ctx, tx, p, lessons)
+}
+
+// addBookedFor sets, for a signed-in p, whom of p's family each lesson has
+// booked: three queries for all lessons together.
+func addBookedFor(ctx context.Context, tx store.Tx, p Principal, lessons []ScheduledLesson) error {
+	if p.PersonID.IsZero() || len(lessons) == 0 {
+		return nil
+	}
+
+	lessonIDs := lessonIDsOf(lessons)
+
+	me, err := tx.Persons().Get(ctx, p.PersonID)
+	if err != nil {
+		return fmt.Errorf("person %v: %w", p.PersonID, err)
+	}
+
+	dependents, err := tx.Persons().ListDependents(ctx, p.PersonID)
+	if err != nil {
+		return fmt.Errorf("dependents: %w", err)
+	}
+
+	family := append([]domain.Person{me}, dependents...)
+	persons := make([]domain.PersonID, len(family))
+	rank := make(map[domain.PersonID]int, len(family))
+
+	for i, f := range family {
+		persons[i], rank[f.ID] = f.ID, i
+	}
+
+	booked, err := tx.Bookings().ListActiveByLessonsAndPersons(ctx, lessonIDs, persons)
+	if err != nil {
+		return fmt.Errorf("family bookings: %w", err)
+	}
+
+	slices.SortStableFunc(booked, func(a, b domain.Booking) int { return cmp.Compare(rank[a.PersonID], rank[b.PersonID]) })
+
+	byLesson := map[domain.LessonID][]BookedPerson{}
+	for _, b := range booked {
+		person := family[rank[b.PersonID]]
+		byLesson[b.LessonID] = append(byLesson[b.LessonID], BookedPerson{
+			Person: person, Name: fullName(person), BookingID: b.ID,
+		})
+	}
+
+	for i := range lessons {
+		lessons[i].BookedFor = byLesson[lessons[i].Lesson.ID]
+	}
+
+	return nil
+}
+
+// setAvailability sets the free places of sl, which has active bookings
+// that are not canceled, when booking it closes and when canceling it
+// becomes late (ADR 0009). It is the only place that sets them.
+func (sl *ScheduledLesson) setAvailability(settings domain.Settings, active int) {
+	sl.FreePlaces = max(0, sl.Lesson.Capacity-active)
+	sl.BookingClosesAt = bookingClosesAt(settings, sl.Lesson)
+	sl.LateCancelFrom = lateCancelFrom(settings, sl.Lesson)
+}
+
+// lessonIDsOf returns the IDs of the lessons.
+func lessonIDsOf(lessons []ScheduledLesson) []domain.LessonID {
+	out := make([]domain.LessonID, len(lessons))
+	for i, sl := range lessons {
+		out[i] = sl.Lesson.ID
+	}
+
+	return out
 }
 
 // lessonRefs holds the records lessons reference, by ID.

@@ -127,7 +127,7 @@ func (f *genFixture) bookFor(t *testing.T, l domain.Lesson, persons ...domain.Pe
 		for _, p := range persons {
 			b := domain.Booking{
 				ID: ids.New[domain.BookingID](f.seq), LessonID: l.ID, PersonID: p.ID,
-				Status: domain.BookingBooked, BookedAt: mustInstant(t, "2026-10-20T10:00:00Z"),
+				Status: domain.BookingBooked, Source: domain.BookingSourceSelf, BookedAt: mustInstant(t, "2026-10-20T10:00:00Z"),
 			}
 			if p.ID.IsZero() {
 				b.GuestName, b.GuestEmail = "Gina Guest", "gina@example.org"

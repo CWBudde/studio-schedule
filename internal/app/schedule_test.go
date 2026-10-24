@@ -344,8 +344,8 @@ func TestGetSchedule(t *testing.T) {
 
 	ballet, _ := lessons[0].(map[string]any)
 	wantBallet := []string{
-		"accompanist", "capacity", "classId", "courseType", "endsAt", "id", "instructor", "kind",
-		"level", "location", "room", "startsAt", "status", "visibility",
+		"accompanist", "bookingClosesAt", "capacity", "classId", "courseType", "endsAt", "freePlaces", "id",
+		"instructor", "kind", "lateCancelFrom", "level", "location", "room", "startsAt", "status", "visibility",
 	}
 	if !slices.Equal(sortedJSONKeys(ballet), wantBallet) {
 		t.Fatalf("lesson keys = %v, want %v", sortedJSONKeys(ballet), wantBallet)
@@ -507,9 +507,9 @@ func TestGetLesson(t *testing.T) {
 
 	got := decode(t, body)
 	wantKeys := []string{
-		"accompanist", "capacity", "classId", "courseType", "courseTypeDescription", "endsAt", "id",
-		"instructor", "kind", "level", "location", "locationAddress", "room", "startsAt", "status",
-		"visibility",
+		"accompanist", "bookingClosesAt", "capacity", "classId", "courseType", "courseTypeDescription", "endsAt",
+		"freePlaces", "id", "instructor", "kind", "lateCancelFrom", "level", "location", "locationAddress", "room",
+		"startsAt", "status", "visibility",
 	}
 
 	if !slices.Equal(sortedJSONKeys(got), wantKeys) {
@@ -608,6 +608,7 @@ func TestScheduleEnums(t *testing.T) {
 
 	levels := enumStrings(domain.Levels())
 	summary := spec.Components.Schemas["LessonSummary"].Properties
+	booking := spec.Components.Schemas["Booking"].Properties
 
 	for name, c := range map[string]struct{ got, want []string }{
 		"level parameter":   {levelParam, levels},
@@ -615,6 +616,8 @@ func TestScheduleEnums(t *testing.T) {
 		"lesson status":     {summary["status"].Enum, enumStrings(domain.LessonStatuses())},
 		"lesson kind":       {summary["kind"].Enum, enumStrings(domain.LessonKinds())},
 		"lesson visibility": {summary["visibility"].Enum, enumStrings(domain.LessonVisibilities())},
+		"booking status":    {booking["status"].Enum, enumStrings(domain.BookingStatuses())},
+		"booking source":    {booking["source"].Enum, enumStrings(domain.BookingSources())},
 	} {
 		if !slices.Equal(c.got, c.want) {
 			t.Errorf("%s enum = %v, want %v", name, c.got, c.want)

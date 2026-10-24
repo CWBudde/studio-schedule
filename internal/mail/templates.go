@@ -36,13 +36,21 @@ const (
 	// TemplateLessonChanged tells those booked for a lesson that its start
 	// or room changed. Data: LessonChangedData.
 	TemplateLessonChanged = "lesson-changed"
+	// TemplateBookingConfirmed confirms a booking to the account that made
+	// it (ADR 0009). Data: BookingData with one lesson.
+	TemplateBookingConfirmed = "booking-confirmed"
+	// TemplateBookingCanceled confirms the cancellation of one or more
+	// bookings of a person to the account that canceled them, marking the
+	// late ones (ADR 0009). Data: BookingData.
+	TemplateBookingCanceled = "booking-canceled"
 )
 
 // TemplateNames returns all template names.
 func TemplateNames() []string {
 	return []string{
 		TemplateConfirmEmail, TemplateResetPassword, TemplateChangeEmail, TemplateEmailChanged, TemplateInvite,
-		TemplateLessonCanceled, TemplateLessonRestored, TemplateLessonChanged,
+		TemplateLessonCanceled, TemplateLessonRestored, TemplateLessonChanged, TemplateBookingConfirmed,
+		TemplateBookingCanceled,
 	}
 }
 
@@ -157,6 +165,59 @@ func (d LessonChangedData) Validate() error {
 	if d.PreviousStartsAt.IsZero() || !d.PreviousEndsAt.After(d.PreviousStartsAt) ||
 		strings.TrimSpace(d.PreviousRoom) == "" || strings.TrimSpace(d.PreviousLocation) == "" {
 		return fmt.Errorf("%w: the previous start, end, room and location must be set", domain.ErrValidation)
+	}
+
+	return nil
+}
+
+// BookingData is the data of TemplateBookingConfirmed and
+// TemplateBookingCanceled: the bookings of one person, each in a lesson. The
+// templates format the times in their own location, which must be the
+// school's time zone.
+type BookingData struct {
+	// SchoolName is the school that sends the mail.
+	SchoolName string
+	// GivenName greets the recipient; empty means a greeting without name.
+	GivenName string
+	// Participant names the booked person: the recipient or a dependent.
+	Participant string
+	// Lessons are the booked lessons, ordered by start.
+	Lessons []BookedLesson
+}
+
+// BookedLesson is one lesson of a BookingData.
+type BookedLesson struct {
+	// CourseType names what is taught.
+	CourseType string
+	// StartsAt and EndsAt are the lesson's times in the school's time zone.
+	StartsAt, EndsAt time.Time
+	// Room and Location say where the lesson takes place.
+	Room, Location string
+	// Late marks a cancellation after the cancellation cutoff; only in
+	// TemplateBookingCanceled.
+	Late bool
+}
+
+// Validate checks the data before rendering. All errors wrap
+// domain.ErrValidation.
+func (d BookingData) Validate() error {
+	switch {
+	case strings.TrimSpace(d.SchoolName) == "":
+		return fmt.Errorf("%w: school name must not be empty", domain.ErrValidation)
+	case strings.TrimSpace(d.Participant) == "":
+		return fmt.Errorf("%w: a booking mail needs a participant", domain.ErrValidation)
+	case len(d.Lessons) == 0:
+		return fmt.Errorf("%w: a booking mail needs a lesson", domain.ErrValidation)
+	}
+
+	for _, l := range d.Lessons {
+		switch {
+		case strings.TrimSpace(l.CourseType) == "" || strings.TrimSpace(l.Room) == "" ||
+			strings.TrimSpace(l.Location) == "":
+			return fmt.Errorf("%w: course type, room and location must not be empty", domain.ErrValidation)
+		case l.StartsAt.IsZero() || !l.EndsAt.After(l.StartsAt):
+			return fmt.Errorf("%w: a lesson must end after it starts", domain.ErrValidation)
+		}
 	}
 
 	return nil

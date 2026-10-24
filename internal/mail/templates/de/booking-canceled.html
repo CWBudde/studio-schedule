@@ -1,0 +1,9 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>{{if eq (len .Lessons) 1}}diese Buchung bei {{.SchoolName}} ist storniert:{{else}}diese Buchungen bei {{.SchoolName}} sind storniert:{{end}}</p>
+<p>Gebucht für: {{.Participant}}</p>
+{{- range .Lessons}}
+<p><strong>{{.CourseType}}</strong><br>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr<br>{{.Room}}, {{.Location}}{{if .Late}}<br><strong>Späte Absage:</strong> nach der Abmeldefrist{{end}}</p>
+{{- end}}
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

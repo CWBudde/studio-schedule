@@ -46,7 +46,7 @@ func (f *genFixture) book(t *testing.T, l domain.Lesson, n int) {
 
 			err := tx.Bookings().Create(ctx, domain.Booking{
 				ID: ids.New[domain.BookingID](f.seq), LessonID: l.ID, PersonID: p.ID,
-				Status: domain.BookingBooked, BookedAt: l.StartsAt.Add(-48 * time.Hour),
+				Status: domain.BookingBooked, Source: domain.BookingSourceSelf, BookedAt: l.StartsAt.Add(-48 * time.Hour),
 			})
 			if err != nil {
 				return err

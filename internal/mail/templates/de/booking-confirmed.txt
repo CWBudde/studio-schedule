@@ -1,0 +1,17 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+deine Buchung bei {{.SchoolName}} ist bestätigt:
+
+Gebucht für: {{.Participant}}
+{{- range .Lessons}}
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr
+{{.Room}}, {{.Location}}
+{{- end}}
+
+Falls der Termin doch nicht passt, storniere die Buchung bitte rechtzeitig, damit jemand
+anderes den Platz bekommt.
+
+Viele Grüße
+{{.SchoolName}}

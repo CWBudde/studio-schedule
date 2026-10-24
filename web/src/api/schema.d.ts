@@ -516,6 +516,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bookings/{bookingId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a booking
+         * @description Cancels a booking of the signed-in person or one of their dependents (404 for any other booking) and frees its place. A booking canceled already is a 409 `already-canceled`; one whose lesson has started a 422 on `path.bookingId`. From the cancellation cutoff before the start on, the cancellation is allowed but `late`, unless the school canceled the lesson. The signed-in account gets a mail.
+         */
+        post: operations["cancelBooking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookings/{bookingId}/cancel-following": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview canceling the following weeks
+         * @description Returns what `cancelFollowing` would cancel now, without changing anything, and fails like it.
+         */
+        get: operations["previewCancelFollowing"];
+        put?: never;
+        /**
+         * Cancel the following weeks
+         * @description Cancels a booking of a class lesson together with the same person's other active bookings of that class from this lesson on whose lessons have not started, in one transaction, each `late` like in `cancelBooking`. A booking of a one-off lesson, or one whose lesson has started, is a 422 on `path.bookingId`; a canceled one a 409 `already-canceled`; any other person's a 404. The signed-in account gets one mail listing every canceled booking.
+         */
+        post: operations["cancelFollowing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/classes/{classId}": {
         parameters: {
             query?: never;
@@ -801,7 +845,7 @@ export interface paths {
         };
         /**
          * Published lesson
-         * @description Returns one lesson the caller may see (see getSchedule). Lessons that do not exist or are not visible are reported alike as not found. Office and admin accounts also get `admin`: the detached flag, the active bookings and the cancellation details.
+         * @description Returns one lesson the caller may see (see getSchedule), with its free places and, for a signed-in caller, whom of their family it has booked. Lessons that do not exist or are not visible are reported alike as not found. Office and admin accounts also get `admin`: the detached flag, the active bookings and the cancellation details.
          */
         get: operations["getLesson"];
         /**
@@ -815,6 +859,26 @@ export interface paths {
          * @description Deletes a one-off lesson that has not started (422 on `path.lessonId` otherwise) and that no booking refers to (409 `in-use` otherwise). A lesson of a class is canceled instead (409 `generated`): generation would create it again.
          */
         delete: operations["deleteLesson"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lessons/{lessonId}/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Book a lesson
+         * @description Books the lesson for the signed-in person or one of their dependents (managed ones included). A person outside the family, or a lesson the caller may not see, is a 404. Everyone books under member rules: staff get a 409 `closed` with why `release` for a lesson members may not book yet (not released, beyond their early access) or at all (hidden). A canceled lesson is a 409 `closed` with why `canceled`, one that has started a 409 `closed` with why `started`, and one whose booking cutoff has passed a 409 `closed` with why `cutoff`, checked in this order. A person booked already is a 409 `already-booked`, a lesson whose active bookings fill its capacity a 409 `full`. The signed-in account gets a confirmation mail.
+         */
+        post: operations["bookLesson"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -965,7 +1029,7 @@ export interface paths {
         };
         /**
          * Published schedule
-         * @description Returns the lessons that start in a range of school dates, as the caller may see them. Visitors who are not signed in see public lessons that are released, plus workshops and private lessons, which are published early. Members also see lessons for members, and regular lessons up to visibleUntil (early access). Staff see every lesson, hidden and unreleased ones included. Canceled lessons are included with their status.
+         * @description Returns the lessons that start in a range of school dates, as the caller may see them. Visitors who are not signed in see public lessons that are released, plus workshops and private lessons, which are published early. Members also see lessons for members, and regular lessons up to visibleUntil (early access). Staff see every lesson, hidden and unreleased ones included. Canceled lessons are included with their status. Each lesson comes with its free places and, for a signed-in caller, whom of their family it has booked.
          */
         get: operations["getSchedule"];
         put?: never;
@@ -1208,6 +1272,90 @@ export interface components {
         AuditEventList: {
             /** @description The latest audit events, newest first. */
             items: components["schemas"]["AuditEventEntry"][];
+        };
+        BookLessonData: {
+            /**
+             * Format: uuid
+             * @description Whom to book: the signed-in person or one of their dependents.
+             */
+            personId: string;
+        };
+        BookedFor: {
+            /**
+             * Format: uuid
+             * @description The active booking, e.g. to cancel it.
+             */
+            bookingId: string;
+            /** @description Given and family name of the person. */
+            name: string;
+            /**
+             * Format: uuid
+             * @description The booked person.
+             */
+            personId: string;
+        };
+        Booking: {
+            /**
+             * Format: date-time
+             * @description When the booking was made.
+             */
+            bookedAt: string;
+            /**
+             * Format: date-time
+             * @description When it was canceled, if so.
+             */
+            canceledAt?: string;
+            /**
+             * Format: uuid
+             * @description Booking ID.
+             */
+            id: string;
+            /** @description Whether the cancellation came after the cancellation cutoff. */
+            late: boolean;
+            /**
+             * Format: uuid
+             * @description The lesson.
+             */
+            lessonId: string;
+            /**
+             * Format: uuid
+             * @description The booked person.
+             */
+            personId: string;
+            /**
+             * @description How the booking came about: by a member, or as a class member's automatic booking.
+             * @enum {string}
+             */
+            source: "self" | "member";
+            /**
+             * @description State of the booking.
+             * @enum {string}
+             */
+            status: "booked" | "canceled" | "attended" | "no_show";
+        };
+        CanceledBooking: {
+            /**
+             * Format: uuid
+             * @description The booking.
+             */
+            bookingId: string;
+            /**
+             * Format: date-time
+             * @description End of the lesson (UTC).
+             */
+            endsAt: string;
+            /** @description Whether the cancellation is late. */
+            late: boolean;
+            /**
+             * Format: uuid
+             * @description Its lesson.
+             */
+            lessonId: string;
+            /**
+             * Format: date-time
+             * @description Start of the lesson (UTC).
+             */
+            startsAt: string;
         };
         ChangePasswordInputBody: {
             /** @description The current password. */
@@ -1458,10 +1606,10 @@ export interface components {
             /** @description The lesson that uses the room; only with reason room-taken. */
             lesson?: components["schemas"]["ConflictLesson"];
             /**
-             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted.
+             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings fill the lesson's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking is canceled already.
              * @enum {string}
              */
-            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated";
+            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled";
             /**
              * Format: int64
              * @description HTTP status code
@@ -1480,6 +1628,11 @@ export interface components {
              * @example https://example.com/errors/example
              */
             type: string;
+            /**
+             * @description Why the lesson cannot be booked; only with reason closed. cutoff: the booking cutoff before the start has passed; release: members may not book the lesson yet, or at all (staff book under member rules); canceled: the school canceled the lesson; started: the lesson has started or is over.
+             * @enum {string}
+             */
+            why?: "cutoff" | "release" | "canceled" | "started";
         };
         ConflictLesson: {
             courseType: components["schemas"]["CourseTypeRef"];
@@ -1634,6 +1787,10 @@ export interface components {
             id: string;
             /** @description Phone number, if any. */
             phone?: string;
+        };
+        FollowingCancellation: {
+            /** @description The bookings, ordered by the start of their lessons; the requested one first. */
+            bookings: components["schemas"]["CanceledBooking"][];
         };
         GuardianInputBody: {
             /**
@@ -1867,6 +2024,13 @@ export interface components {
             accompanist?: components["schemas"]["StaffRef"];
             /** @description What the office sees beyond the schedule; only for office and admin accounts. */
             admin?: components["schemas"]["LessonAdmin"];
+            /** @description The signed-in person and their dependents with an active booking for the lesson, the signed-in person first; absent if there is none or the caller is not signed in (and in the responses of the lesson writes). */
+            bookedFor?: components["schemas"]["BookedFor"][];
+            /**
+             * Format: date-time
+             * @description Booking closes at this instant: the booking cutoff before the start (UTC).
+             */
+            bookingClosesAt: string;
             /**
              * Format: int64
              * @description Maximum number of participants.
@@ -1886,6 +2050,11 @@ export interface components {
              */
             endsAt: string;
             /**
+             * Format: int64
+             * @description Places left: the capacity minus the active bookings, at least 0.
+             */
+            freePlaces: number;
+            /**
              * Format: uuid
              * @description Lesson ID.
              */
@@ -1896,6 +2065,11 @@ export interface components {
              * @enum {string}
              */
             kind: "regular" | "workshop" | "private";
+            /**
+             * Format: date-time
+             * @description From this instant on a cancellation is late: the cancellation cutoff before the start (UTC); absent for a lesson the school canceled, which is never canceled late.
+             */
+            lateCancelFrom?: string;
             /**
              * @description Level of the class; absent for one-off lessons.
              * @enum {string}
@@ -2305,7 +2479,7 @@ export interface components {
              */
             from: string;
             /** @description Visible lessons, ordered by start. */
-            lessons: components["schemas"]["LessonSummary"][];
+            lessons: components["schemas"]["ScheduleLesson"][];
             /**
              * Format: date-time
              * @description Instant of the next weekly release.
@@ -2333,6 +2507,76 @@ export interface components {
              * @description Regular lessons that start before this instant are visible to the caller: releasedUntil for guests, later for members with early access; absent for staff, who see every lesson.
              */
             visibleUntil?: string;
+        };
+        ScheduleLesson: {
+            /** @description Accompanist; absent if the lesson has none. */
+            accompanist?: components["schemas"]["StaffRef"];
+            /** @description The signed-in person and their dependents with an active booking for the lesson, the signed-in person first; absent if there is none or the caller is not signed in (and in the responses of the lesson writes). */
+            bookedFor?: components["schemas"]["BookedFor"][];
+            /**
+             * Format: date-time
+             * @description Booking closes at this instant: the booking cutoff before the start (UTC).
+             */
+            bookingClosesAt: string;
+            /**
+             * Format: int64
+             * @description Maximum number of participants.
+             */
+            capacity: number;
+            /**
+             * Format: uuid
+             * @description Weekly class the lesson belongs to; absent for one-off lessons.
+             */
+            classId?: string;
+            courseType: components["schemas"]["CourseTypeRef"];
+            /**
+             * Format: date-time
+             * @description End instant (UTC).
+             */
+            endsAt: string;
+            /**
+             * Format: int64
+             * @description Places left: the capacity minus the active bookings, at least 0.
+             */
+            freePlaces: number;
+            /**
+             * Format: uuid
+             * @description Lesson ID.
+             */
+            id: string;
+            instructor: components["schemas"]["StaffRef"];
+            /**
+             * @description Regular lesson or special format.
+             * @enum {string}
+             */
+            kind: "regular" | "workshop" | "private";
+            /**
+             * Format: date-time
+             * @description From this instant on a cancellation is late: the cancellation cutoff before the start (UTC); absent for a lesson the school canceled, which is never canceled late.
+             */
+            lateCancelFrom?: string;
+            /**
+             * @description Level of the class; absent for one-off lessons.
+             * @enum {string}
+             */
+            level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            location: components["schemas"]["LocationRef"];
+            room: components["schemas"]["RoomRef"];
+            /**
+             * Format: date-time
+             * @description Start instant (UTC).
+             */
+            startsAt: string;
+            /**
+             * @description Whether the lesson takes place.
+             * @enum {string}
+             */
+            status: "scheduled" | "canceled";
+            /**
+             * @description Who may see the lesson: everyone, signed-in members, or staff only.
+             * @enum {string}
+             */
+            visibility: "public" | "members" | "hidden";
         };
         StaffData: {
             /** @description Whether the staff member is listed publicly; former staff are inactive. */
@@ -3391,6 +3635,129 @@ export interface operations {
             };
         };
     };
+    cancelBooking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The booking. */
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    previewCancelFollowing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The booking. */
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowingCancellation"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    cancelFollowing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The booking. */
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowingCancellation"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     updateClass: {
         parameters: {
             query?: never;
@@ -4110,6 +4477,51 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    bookLesson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The lesson. */
+                lessonId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookLessonData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
             };
             /** @description Conflict */
             409: {

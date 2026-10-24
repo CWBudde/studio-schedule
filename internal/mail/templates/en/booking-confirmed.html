@@ -1,0 +1,10 @@
+{{define "content" -}}
+<p>Hello{{with .GivenName}} {{.}}{{end}},</p>
+<p>Your booking at {{.SchoolName}} is confirmed:</p>
+<p>Booked for: {{.Participant}}</p>
+{{- range .Lessons}}
+<p><strong>{{.CourseType}}</strong><br>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}<br>{{.Room}}, {{.Location}}</p>
+{{- end}}
+<p>If the date does not suit after all, please cancel the booking in good time, so that someone else can take the place.</p>
+<p>Kind regards,<br>{{.SchoolName}}</p>
+{{- end}}

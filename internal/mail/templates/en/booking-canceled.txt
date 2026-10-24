@@ -1,0 +1,17 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+{{if eq (len .Lessons) 1}}This booking at {{.SchoolName}} is canceled:{{else}}These bookings at {{.SchoolName}} are canceled:{{end}}
+
+Booked for: {{.Participant}}
+{{- range .Lessons}}
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}
+{{.Room}}, {{.Location}}
+{{- if .Late}}
+Late cancellation: after the cancellation deadline
+{{- end}}
+{{- end}}
+
+Kind regards,
+{{.SchoolName}}

@@ -1,0 +1,17 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+Your booking at {{.SchoolName}} is confirmed:
+
+Booked for: {{.Participant}}
+{{- range .Lessons}}
+
+{{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}
+{{.Room}}, {{.Location}}
+{{- end}}
+
+If the date does not suit after all, please cancel the booking in good time, so that someone
+else can take the place.
+
+Kind regards,
+{{.SchoolName}}

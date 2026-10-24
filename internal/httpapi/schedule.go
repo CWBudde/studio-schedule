@@ -20,7 +20,8 @@ func registerSchedule(api huma.API, h *handlers) {
 			"them. Visitors who are not signed in see public lessons that are released, plus workshops " +
 			"and private lessons, which are published early. Members also see lessons for " +
 			"members, and regular lessons up to visibleUntil (early access). Staff see every lesson, " +
-			"hidden and unreleased ones included. Canceled lessons are included with their status.",
+			"hidden and unreleased ones included. Canceled lessons are included with their status. Each lesson " +
+			"comes with its free places and, for a signed-in caller, whom of their family it has booked.",
 		Tags: []string{"schedule"},
 	}, h.getSchedule)
 
@@ -29,7 +30,7 @@ func registerSchedule(api huma.API, h *handlers) {
 		Method:      "GET",
 		Path:        BasePath + "/lessons/{lessonId}",
 		Summary:     "Published lesson",
-		Description: "Returns one lesson the caller may see (see getSchedule). Lessons that do not exist or are not visible are reported alike as not found. Office and admin accounts also get `admin`: the detached flag, the active bookings and the cancellation details.",
+		Description: "Returns one lesson the caller may see (see getSchedule), with its free places and, for a signed-in caller, whom of their family it has booked. Lessons that do not exist or are not visible are reported alike as not found. Office and admin accounts also get `admin`: the detached flag, the active bookings and the cancellation details.",
 		Tags:        []string{"schedule"},
 	}, h.getLesson)
 }
@@ -47,14 +48,38 @@ type ScheduleInput struct {
 
 // Schedule is the response body of getSchedule.
 type Schedule struct {
-	Timezone      string          `doc:"IANA time zone of the school; school dates and times are local to it." json:"timezone"`
-	Now           time.Time       `doc:"Server time the response was computed at."                             json:"now"`
-	From          domain.Date     `doc:"First school date of the range."                format:"date"          json:"from"`
-	To            domain.Date     `doc:"School date after the last day of the range." format:"date"            json:"to"`
-	ReleasedUntil time.Time       `doc:"Regular lessons that start before this instant are released."          json:"releasedUntil"`
-	NextReleaseAt time.Time       `doc:"Instant of the next weekly release."                                  json:"nextReleaseAt"`
-	VisibleUntil  time.Time       `doc:"Regular lessons that start before this instant are visible to the caller: releasedUntil for guests, later for members with early access; absent for staff, who see every lesson." json:"visibleUntil,omitzero"`
-	Lessons       []LessonSummary `doc:"Visible lessons, ordered by start."                                    json:"lessons"       nullable:"false"`
+	Timezone      string           `doc:"IANA time zone of the school; school dates and times are local to it." json:"timezone"`
+	Now           time.Time        `doc:"Server time the response was computed at."                             json:"now"`
+	From          domain.Date      `doc:"First school date of the range."                format:"date"          json:"from"`
+	To            domain.Date      `doc:"School date after the last day of the range." format:"date"            json:"to"`
+	ReleasedUntil time.Time        `doc:"Regular lessons that start before this instant are released."          json:"releasedUntil"`
+	NextReleaseAt time.Time        `doc:"Instant of the next weekly release."                                  json:"nextReleaseAt"`
+	VisibleUntil  time.Time        `doc:"Regular lessons that start before this instant are visible to the caller: releasedUntil for guests, later for members with early access; absent for staff, who see every lesson." json:"visibleUntil,omitzero"`
+	Lessons       []ScheduleLesson `doc:"Visible lessons, ordered by start."                                   json:"lessons"       nullable:"false"`
+}
+
+// ScheduleLesson is a lesson in the schedule with its availability.
+type ScheduleLesson struct {
+	LessonSummary
+	Availability
+}
+
+// Availability is how many places a lesson has left and whom of the
+// caller's family it has booked (ADR 0009).
+type Availability struct {
+	FreePlaces int         `doc:"Places left: the capacity minus the active bookings, at least 0." json:"freePlaces" minimum:"0"`
+	BookedFor  []BookedFor `doc:"The signed-in person and their dependents with an active booking for the lesson, the signed-in person first; absent if there is none or the caller is not signed in (and in the responses of the lesson writes)." json:"bookedFor,omitempty" nullable:"false"`
+	// The cutoffs are not secret: everyone gets them, so the UI can show a
+	// closed booking and warn of a late cancellation without a request.
+	BookingClosesAt time.Time `doc:"Booking closes at this instant: the booking cutoff before the start (UTC)." json:"bookingClosesAt"`
+	LateCancelFrom  time.Time `doc:"From this instant on a cancellation is late: the cancellation cutoff before the start (UTC); absent for a lesson the school canceled, which is never canceled late." json:"lateCancelFrom,omitzero"`
+}
+
+// BookedFor is someone of the caller's family with an active booking.
+type BookedFor struct {
+	PersonID  domain.PersonID  `doc:"The booked person."                     json:"personId"`
+	Name      string           `doc:"Given and family name of the person."  json:"name"`
+	BookingID domain.BookingID `doc:"The active booking, e.g. to cancel it." json:"bookingId"`
 }
 
 // LessonSummary is a lesson in the schedule.
@@ -78,6 +103,7 @@ type LessonSummary struct {
 // LessonDetail is the response body of getLesson and of the lesson writes.
 type LessonDetail struct {
 	LessonSummary
+	Availability
 
 	CourseTypeDescription string       `doc:"Description of the course type." json:"courseTypeDescription,omitempty"`
 	LocationAddress       string       `doc:"Postal address of the location." json:"locationAddress,omitempty"`
@@ -155,11 +181,11 @@ func (h *handlers) getSchedule(ctx context.Context, in *ScheduleInput) (*Schedul
 		ReleasedUntil: s.Release.ReleasedUntil.UTC(),
 		NextReleaseAt: s.Release.NextRelease.UTC(),
 		VisibleUntil:  s.VisibleUntil.UTC(),
-		Lessons:       make([]LessonSummary, 0, len(s.Lessons)),
+		Lessons:       make([]ScheduleLesson, 0, len(s.Lessons)),
 	}
 
 	for _, sl := range s.Lessons {
-		body.Lessons = append(body.Lessons, lessonSummary(sl))
+		body.Lessons = append(body.Lessons, ScheduleLesson{LessonSummary: lessonSummary(sl), Availability: availability(sl)})
 	}
 
 	return &ScheduleOutput{Body: body}, nil
@@ -179,6 +205,7 @@ func (h *handlers) getLesson(ctx context.Context, in *LessonInput) (*LessonOutpu
 func lessonDetail(sl service.ScheduledLesson) LessonDetail {
 	out := LessonDetail{
 		LessonSummary:         lessonSummary(sl),
+		Availability:          availability(sl),
 		CourseTypeDescription: sl.CourseType.Description,
 		LocationAddress:       sl.Location.Address,
 	}
@@ -195,6 +222,21 @@ func lessonDetail(sl service.ScheduledLesson) LessonDetail {
 	}
 
 	return out
+}
+
+// availability returns the free places and the family's bookings of sl.
+func availability(sl service.ScheduledLesson) Availability {
+	a := Availability{
+		FreePlaces: sl.FreePlaces, BookingClosesAt: sl.BookingClosesAt.UTC(), LateCancelFrom: sl.LateCancelFrom.UTC(),
+	}
+
+	for _, b := range sl.BookedFor {
+		a.BookedFor = append(a.BookedFor, BookedFor{
+			PersonID: b.Person.ID, Name: b.Name, BookingID: b.BookingID,
+		})
+	}
+
+	return a
 }
 
 // query converts the parameters into a service query.

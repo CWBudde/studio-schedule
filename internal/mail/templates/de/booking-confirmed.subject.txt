@@ -1,0 +1,1 @@
+{{.SchoolName}}: {{with index .Lessons 0}}{{.CourseType}} am {{date .StartsAt}}{{end}} ist gebucht
