@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 	"sync"
@@ -415,7 +416,9 @@ func TestUniqueNamesMigration(t *testing.T) {
 
 	t.Cleanup(func() { _ = m.Close() })
 
-	for _, want := range []string{"00007_course_type_unique_names.sql", "00006_catalog_unique_names.sql"} {
+	for _, want := range []string{
+		"00008_lesson_slots.sql", "00007_course_type_unique_names.sql", "00006_catalog_unique_names.sql",
+	} {
 		if res, err := m.Down(ctx); err != nil || res.Name != want {
 			t.Fatalf("down = %+v, %v; want %s rolled back", res, err, want)
 		}
@@ -460,6 +463,71 @@ func TestUniqueNamesMigration(t *testing.T) {
 			UNION ALL SELECT name FROM course_types WHERE id = $1`, id).Scan(&name)
 		if err != nil || name != want {
 			t.Errorf("name of %s = %q, %v; want %q", id, name, err, want)
+		}
+	}
+}
+
+// TestLessonSlotsMigration upgrades a database with generated and one-off
+// lessons (00008): a class lesson gets the school date of its start as its
+// slot, a one-off none.
+func TestLessonSlotsMigration(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	m, err := NewMigrator(newTestDatabase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = m.Close() })
+
+	if res, err := m.Down(ctx); err != nil || res.Name != "00008_lesson_slots.sql" {
+		t.Fatalf("down = %+v, %v; want 00008 rolled back", res, err)
+	}
+
+	const (
+		loc, room, ct, staff = "00000000-0000-7000-8000-000000000001", "00000000-0000-7000-8000-000000000002",
+			"00000000-0000-7000-8000-000000000003", "00000000-0000-7000-8000-000000000004"
+		term, class  = "00000000-0000-7000-8000-000000000005", "00000000-0000-7000-8000-000000000006"
+		late, oneOff = "00000000-0000-7000-8000-000000000007", "00000000-0000-7000-8000-000000000008"
+	)
+
+	for _, stmt := range []string{
+		`INSERT INTO settings (school_name, timezone, default_locale, currency, receipt_prefix, release_weekday,
+			release_time, release_weeks_ahead, booking_cutoff, cancellation_cutoff, default_visible_days)
+			VALUES ('Example School', 'America/New_York', 'en', 'EUR', 'R', 0, '18:00', 2, '0', '0', 14)`,
+		`INSERT INTO locations (id, name) VALUES ('` + loc + `', 'Hall')`,
+		`INSERT INTO rooms (id, location_id, name, capacity) VALUES ('` + room + `', '` + loc + `', 'Studio', 5)`,
+		`INSERT INTO course_types (id, name) VALUES ('` + ct + `', 'Tap')`,
+		`INSERT INTO staff (id, display_name, kind, active) VALUES ('` + staff + `', 'Ada', 'instructor', true)`,
+		`INSERT INTO terms (id, name, starts_on, ends_on) VALUES ('` + term + `', 'Spring', '2026-03-01', '2026-06-30')`,
+		`INSERT INTO classes (id, term_id, course_type_id, room_id, instructor_id, level, weekday, start_time,
+			duration, capacity) VALUES ('` + class + `', '` + term + `', '` + ct + `', '` + room + `', '` + staff +
+			`', 'open', 1, '21:30', '1 hour', 5)`,
+		// 21:30 in New York on Monday 2 March is already Tuesday in UTC.
+		`INSERT INTO lessons (id, class_id, course_type_id, room_id, instructor_id, starts_at, ends_at, status,
+			visibility, kind, capacity) VALUES ('` + late + `', '` + class + `', '` + ct + `', '` + room + `', '` +
+			staff + `', '2026-03-03 02:30Z', '2026-03-03 03:30Z', 'scheduled', 'public', 'regular', 5)`,
+		`INSERT INTO lessons (id, course_type_id, room_id, instructor_id, starts_at, ends_at, status,
+			visibility, kind, capacity) VALUES ('` + oneOff + `', '` + ct + `', '` + room + `', '` + staff +
+			`', '2026-03-03 02:30Z', '2026-03-03 03:30Z', 'scheduled', 'public', 'workshop', 5)`,
+	} {
+		if _, err := m.db.ExecContext(ctx, stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+
+	if _, err := m.Up(ctx); err != nil {
+		t.Fatalf("up: %v", err)
+	}
+
+	for id, want := range map[string]string{late: "2026-03-02", oneOff: ""} {
+		var slot sql.NullString
+
+		err := m.db.QueryRowContext(ctx, `SELECT slot_date::text FROM lessons WHERE id = $1`, id).Scan(&slot)
+		if err != nil || slot.String != want {
+			t.Errorf("slot of %s = %q, %v; want %q", id, slot.String, err, want)
 		}
 	}
 }

@@ -14,9 +14,9 @@ import (
 const createLesson = `-- name: CreateLesson :exec
 INSERT INTO lessons (
     id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status,
-    visibility, kind, capacity
+    visibility, kind, capacity, slot_date
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 )
 `
 
@@ -33,6 +33,7 @@ type CreateLessonParams struct {
 	Visibility    string
 	Kind          string
 	Capacity      int32
+	SlotDate      pgtype.Date
 }
 
 func (q *Queries) CreateLesson(ctx context.Context, arg CreateLessonParams) error {
@@ -49,12 +50,25 @@ func (q *Queries) CreateLesson(ctx context.Context, arg CreateLessonParams) erro
 		arg.Visibility,
 		arg.Kind,
 		arg.Capacity,
+		arg.SlotDate,
 	)
 	return err
 }
 
+const deleteLesson = `-- name: DeleteLesson :execrows
+DELETE FROM lessons WHERE id = $1
+`
+
+func (q *Queries) DeleteLesson(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteLesson, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getLesson = `-- name: GetLesson :one
-SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity FROM lessons WHERE id = $1
+SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date FROM lessons WHERE id = $1
 `
 
 func (q *Queries) GetLesson(ctx context.Context, id pgtype.UUID) (Lesson, error) {
@@ -73,12 +87,58 @@ func (q *Queries) GetLesson(ctx context.Context, id pgtype.UUID) (Lesson, error)
 		&i.Visibility,
 		&i.Kind,
 		&i.Capacity,
+		&i.SlotDate,
 	)
 	return i, err
 }
 
+const listLessonsByClass = `-- name: ListLessonsByClass :many
+SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date FROM lessons
+WHERE class_id = $1 AND slot_date >= $2
+ORDER BY starts_at, id
+`
+
+type ListLessonsByClassParams struct {
+	ClassID  pgtype.UUID
+	FromSlot pgtype.Date
+}
+
+func (q *Queries) ListLessonsByClass(ctx context.Context, arg ListLessonsByClassParams) ([]Lesson, error) {
+	rows, err := q.db.Query(ctx, listLessonsByClass, arg.ClassID, arg.FromSlot)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Lesson
+	for rows.Next() {
+		var i Lesson
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClassID,
+			&i.CourseTypeID,
+			&i.RoomID,
+			&i.InstructorID,
+			&i.AccompanistID,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.Status,
+			&i.Visibility,
+			&i.Kind,
+			&i.Capacity,
+			&i.SlotDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLessonsInRange = `-- name: ListLessonsInRange :many
-SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity FROM lessons
+SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date FROM lessons
 WHERE starts_at >= $1 AND starts_at < $2
 ORDER BY starts_at, id
 `
@@ -110,6 +170,7 @@ func (q *Queries) ListLessonsInRange(ctx context.Context, arg ListLessonsInRange
 			&i.Visibility,
 			&i.Kind,
 			&i.Capacity,
+			&i.SlotDate,
 		); err != nil {
 			return nil, err
 		}
@@ -122,7 +183,7 @@ func (q *Queries) ListLessonsInRange(ctx context.Context, arg ListLessonsInRange
 }
 
 const lockLesson = `-- name: LockLesson :one
-SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity FROM lessons WHERE id = $1 FOR UPDATE
+SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date FROM lessons WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockLesson(ctx context.Context, id pgtype.UUID) (Lesson, error) {
@@ -141,6 +202,7 @@ func (q *Queries) LockLesson(ctx context.Context, id pgtype.UUID) (Lesson, error
 		&i.Visibility,
 		&i.Kind,
 		&i.Capacity,
+		&i.SlotDate,
 	)
 	return i, err
 }
@@ -148,7 +210,8 @@ func (q *Queries) LockLesson(ctx context.Context, id pgtype.UUID) (Lesson, error
 const updateLesson = `-- name: UpdateLesson :execrows
 UPDATE lessons
 SET class_id = $2, course_type_id = $3, room_id = $4, instructor_id = $5, accompanist_id = $6,
-    starts_at = $7, ends_at = $8, status = $9, visibility = $10, kind = $11, capacity = $12
+    starts_at = $7, ends_at = $8, status = $9, visibility = $10, kind = $11, capacity = $12,
+    slot_date = $13
 WHERE id = $1
 `
 
@@ -165,6 +228,7 @@ type UpdateLessonParams struct {
 	Visibility    string
 	Kind          string
 	Capacity      int32
+	SlotDate      pgtype.Date
 }
 
 func (q *Queries) UpdateLesson(ctx context.Context, arg UpdateLessonParams) (int64, error) {
@@ -181,6 +245,7 @@ func (q *Queries) UpdateLesson(ctx context.Context, arg UpdateLessonParams) (int
 		arg.Visibility,
 		arg.Kind,
 		arg.Capacity,
+		arg.SlotDate,
 	)
 	if err != nil {
 		return 0, err

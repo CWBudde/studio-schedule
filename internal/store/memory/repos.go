@@ -644,6 +644,16 @@ func (r classRepo) Get(_ context.Context, id domain.ClassID) (domain.Class, erro
 	return c, nil
 }
 
+// Lock needs no lock of its own: the store mutex already serialises every
+// transaction.
+func (r classRepo) Lock(ctx context.Context, id domain.ClassID) (domain.Class, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return domain.Class{}, err
+	}
+
+	return r.Get(ctx, id)
+}
+
 func (r classRepo) Create(_ context.Context, c domain.Class) error {
 	if err := r.tx.checkWritable(); err != nil {
 		return err
@@ -796,14 +806,42 @@ func (r lessonRepo) put(l domain.Lesson) error {
 		(!l.AccompanistID.IsZero() && !s.staff.has(l.AccompanistID)):
 		return conflict("lesson references a missing record")
 	case !l.ClassID.IsZero() && s.lessons.exists(func(o domain.Lesson) bool {
-		return o.ID != l.ID && o.ClassID == l.ClassID && o.StartsAt.Equal(l.StartsAt)
+		return o.ID != l.ID && o.ClassID == l.ClassID && o.SlotDate == l.SlotDate
 	}):
-		return conflict("class already has a lesson at %s", l.StartsAt)
+		return conflict("class already has a lesson in the slot of %s", l.SlotDate)
 	}
 
 	s.lessons.put(r.tx.gen, l.ID, l)
 
 	return nil
+}
+
+func (r lessonRepo) Delete(_ context.Context, id domain.LessonID) error {
+	s := &r.tx.state
+	if err := r.tx.checkWritable(); err != nil {
+		return err
+	}
+
+	switch {
+	case !s.lessons.has(id):
+		return notFound("lesson")
+	case s.bookings.exists(func(b domain.Booking) bool { return b.LessonID == id }):
+		return conflict("lesson %s is booked", id)
+	}
+
+	s.lessons.delete(r.tx.gen, id)
+
+	return nil
+}
+
+func (r lessonRepo) ListByClass(_ context.Context, class domain.ClassID, from domain.Date) ([]domain.Lesson, error) {
+	lessons := r.tx.state.lessons.filter(func(l domain.Lesson) bool {
+		return l.ClassID == class && l.SlotDate.Compare(from) >= 0
+	})
+
+	return sorted(lessons, func(a, b domain.Lesson) int {
+		return cmp.Or(a.StartsAt.Compare(b.StartsAt), compareID(a.ID, b.ID))
+	}), nil
 }
 
 func (r lessonRepo) ListRange(_ context.Context, from, to time.Time) ([]domain.Lesson, error) {

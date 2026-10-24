@@ -23,6 +23,9 @@ var errBoom = errors.New("storetest: boom")
 // from it survive a round trip unchanged.
 var t0 = time.Date(2026, time.March, 2, 9, 0, 0, 0, time.UTC)
 
+// slot0 is the date of t0, the slot of a class lesson starting at t0.
+var slot0 = domain.Date{Year: 2026, Month: time.March, Day: 2}
+
 // Run executes the store contract tests. newStore must return a fresh, empty
 // store for every call.
 func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
@@ -277,6 +280,18 @@ func (e *env) newLesson(s setting, start time.Time, capacity int) domain.Lesson 
 		Capacity: capacity,
 	}
 	valid(e.t, l)
+
+	return l
+}
+
+// classLesson creates a lesson of c for the slot date, starting at start.
+func (e *env) classLesson(s setting, c domain.Class, slot domain.Date, start time.Time) domain.Lesson {
+	e.t.Helper()
+
+	l := e.newLesson(s, start, c.Capacity)
+	l.ClassID, l.SlotDate = c.ID, slot
+	valid(e.t, l)
+	e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Create(ctx, l) })
 
 	return l
 }

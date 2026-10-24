@@ -53,6 +53,7 @@ func testTimetable(t *testing.T, newStore func(*testing.T) store.Store) {
 				full.StartTime = domain.TimeOfDay{Hour: 10}
 				full.Duration = 90 * time.Minute
 				full.Capacity = 14
+				full.Retired = true
 				valid(e.t, full)
 
 				return minimal, full
@@ -146,12 +147,37 @@ func testTimetable(t *testing.T, newStore func(*testing.T) store.Store) {
 			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Classes().RemoveMember(ctx, c.ID, p1.ID) })
 			wantErr(e.t, err, domain.ErrNotFound)
 		},
+		"Lock": func(e *env) {
+			c := e.class(e.setting(), time.Monday, domain.TimeOfDay{Hour: 9})
+
+			var got domain.Class
+
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				var err error
+				got, err = tx.Classes().Lock(ctx, c.ID)
+
+				return err
+			})
+			wantEqual(e.t, got, c)
+
+			err := e.read(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Classes().Lock(ctx, c.ID)
+
+				return err
+			})
+			wantErr(e.t, err, store.ErrReadOnly)
+
+			err = e.write(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Classes().Lock(ctx, newID[domain.ClassID](e))
+
+				return err
+			})
+			wantErr(e.t, err, domain.ErrNotFound)
+		},
 		"DeleteClassWithLessonIsConflict": func(e *env) {
 			s := e.setting()
 			c := e.class(s, time.Monday, domain.TimeOfDay{Hour: 9})
-			l := e.newLesson(s, t0, 5)
-			l.ClassID = c.ID
-			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Create(ctx, l) })
+			e.classLesson(s, c, slot0, t0)
 
 			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Classes().Delete(ctx, c.ID) })
 			wantErr(e.t, err, domain.ErrConflict)

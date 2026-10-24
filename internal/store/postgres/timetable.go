@@ -73,6 +73,7 @@ func toClass(row sqlc.Class) domain.Class {
 		StartTime:     fromPgTimeOfDay(row.StartTime),
 		Duration:      fromPgInterval(row.Duration),
 		Capacity:      int(row.Capacity),
+		Retired:       row.Retired,
 	}
 }
 
@@ -100,11 +101,23 @@ func classParams(c domain.Class) (sqlc.CreateClassParams, error) {
 		StartTime:     pgTimeOfDay(c.StartTime),
 		Duration:      pgInterval(c.Duration),
 		Capacity:      capacity,
+		Retired:       c.Retired,
 	}, nil
 }
 
 func (r classRepo) Get(ctx context.Context, id domain.ClassID) (domain.Class, error) {
 	row, err := r.q.GetClass(ctx, pgID(id))
+	if err != nil {
+		return domain.Class{}, notFound("class", err)
+	}
+
+	return toClass(row), nil
+}
+
+// Lock reads the class with SELECT … FOR UPDATE. In a read-only transaction
+// PostgreSQL rejects the statement (SQLSTATE 25006, store.ErrReadOnly).
+func (r classRepo) Lock(ctx context.Context, id domain.ClassID) (domain.Class, error) {
+	row, err := r.q.LockClass(ctx, pgID(id))
 	if err != nil {
 		return domain.Class{}, notFound("class", err)
 	}

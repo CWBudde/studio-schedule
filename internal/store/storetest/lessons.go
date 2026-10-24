@@ -25,6 +25,7 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 				minimal := e.newLesson(s, t0, 8)
 				full := minimal
 				full.ClassID = e.class(s, time.Monday, domain.TimeOfDay{Hour: 10}).ID
+				full.SlotDate = slot0
 				full.AccompanistID = e.staffMember("Accompanist").ID
 				full.StartsAt = t0.Add(24 * time.Hour)
 				full.EndsAt = full.StartsAt.Add(90 * time.Minute)
@@ -70,16 +71,13 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			wantSlice(e.t, got, []domain.Lesson{atStart2, atStart1})
 		},
-		"ClassStartIsUnique": func(e *env) {
+		"ClassSlotIsUnique": func(e *env) {
 			s := e.setting()
 			c := e.class(s, time.Monday, domain.TimeOfDay{Hour: 9})
+			e.classLesson(s, c, slot0, t0)
 
-			first := e.newLesson(s, t0, 5)
-			first.ClassID = c.ID
-			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Create(ctx, first) })
-
-			dup := e.newLesson(s, t0, 5)
-			dup.ClassID = c.ID
+			dup := e.newLesson(s, t0.Add(time.Hour), 5)
+			dup.ClassID, dup.SlotDate = c.ID, slot0
 			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Create(ctx, dup) })
 			wantErr(e.t, err, domain.ErrConflict)
 
@@ -87,19 +85,68 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 			e.lesson(s, t0, 5)
 			e.lesson(s, t0, 5)
 
-			// Moving another lesson of the class onto the taken start fails.
-			other := e.newLesson(s, t0.Add(time.Hour), 5)
-			other.ClassID = c.ID
-			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Create(ctx, other) })
+			// A lesson moved onto the start of another slot is fine too: the
+			// slot, not the start, identifies it.
+			moved := e.classLesson(s, c, slot0.AddDays(7), t0)
 
-			other.StartsAt, other.EndsAt = t0, t0.Add(time.Hour)
-			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Update(ctx, other) })
+			// Moving it into the taken slot fails.
+			moved.SlotDate = slot0
+			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Update(ctx, moved) })
 			wantErr(e.t, err, domain.ErrConflict)
+		},
+		"Delete": func(e *env) {
+			s := e.setting()
+			free, booked := e.lesson(s, t0, 5), e.lesson(s, t0.Add(time.Hour), 5)
+			b := e.booking(booked, e.person("Bo", "Booker"), t0.Add(-time.Hour))
+
+			err := e.read(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Delete(ctx, free.ID) })
+			wantErr(e.t, err, store.ErrReadOnly)
+
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Delete(ctx, free.ID) })
+			err = e.read(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Lessons().Get(ctx, free.ID)
+
+				return err
+			})
+			wantErr(e.t, err, domain.ErrNotFound)
+
+			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Delete(ctx, free.ID) })
+			wantErr(e.t, err, domain.ErrNotFound)
+
+			// A booking blocks the delete, a canceled one too.
+			b.Status, b.CanceledAt = domain.BookingCanceled, t0.Add(-30*time.Minute)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Update(ctx, b) })
+
+			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Delete(ctx, booked.ID) })
+			wantErr(e.t, err, domain.ErrConflict)
+		},
+		"ListByClass": func(e *env) {
+			s := e.setting()
+			c := e.class(s, time.Monday, domain.TimeOfDay{Hour: 9})
+			other := e.class(s, time.Tuesday, domain.TimeOfDay{Hour: 9})
+
+			e.classLesson(s, c, slot0.AddDays(-7), t0.Add(-7*24*time.Hour))
+			first := e.classLesson(s, c, slot0, t0)
+			third := e.classLesson(s, c, slot0.AddDays(14), t0.Add(14*24*time.Hour))
+			// Moved before the lesson of the slot before it.
+			second := e.classLesson(s, c, slot0.AddDays(21), t0.Add(time.Hour))
+			e.classLesson(s, other, slot0.AddDays(1), t0.Add(24*time.Hour))
+			e.lesson(s, t0, 5)
+
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+				return tx.Lessons().ListByClass(ctx, c.ID, slot0)
+			})
+			wantSlice(e.t, got, []domain.Lesson{first, second, third})
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+				return tx.Lessons().ListByClass(ctx, c.ID, slot0.AddDays(22))
+			})
+			wantSlice(e.t, got, nil)
 		},
 		"MissingReferenceIsConflict": func(e *env) {
 			s := e.setting()
 			for name, mutate := range map[string]func(*domain.Lesson){
-				"class":       func(l *domain.Lesson) { l.ClassID = newID[domain.ClassID](e) },
+				"class":       func(l *domain.Lesson) { l.ClassID, l.SlotDate = newID[domain.ClassID](e), slot0 },
 				"course type": func(l *domain.Lesson) { l.CourseTypeID = newID[domain.CourseTypeID](e) },
 				"room":        func(l *domain.Lesson) { l.RoomID = newID[domain.RoomID](e) },
 				"instructor":  func(l *domain.Lesson) { l.InstructorID = newID[domain.StaffID](e) },

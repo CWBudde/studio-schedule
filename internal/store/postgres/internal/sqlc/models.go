@@ -76,6 +76,7 @@ type Class struct {
 	StartTime     pgtype.Time
 	Duration      pgtype.Interval
 	Capacity      int32
+	Retired       bool
 }
 
 type ClassMember struct {
@@ -103,6 +104,7 @@ type Lesson struct {
 	Visibility    string
 	Kind          string
 	Capacity      int32
+	SlotDate      pgtype.Date
 }
 
 type Location struct {

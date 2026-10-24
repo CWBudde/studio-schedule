@@ -61,7 +61,7 @@ func newScheduleApp(t *testing.T) scheduleApp {
 		start := d.At(c.StartTime, berlin)
 
 		return domain.Lesson{
-			ClassID: c.ID, CourseTypeID: c.CourseTypeID, RoomID: c.RoomID,
+			ClassID: c.ID, SlotDate: d, CourseTypeID: c.CourseTypeID, RoomID: c.RoomID,
 			InstructorID: c.InstructorID, AccompanistID: c.AccompanistID,
 			StartsAt: start, EndsAt: start.Add(c.Duration),
 			Status: domain.LessonScheduled, Visibility: domain.VisibilityPublic, Kind: domain.LessonRegular,
@@ -94,7 +94,7 @@ func newScheduleApp(t *testing.T) scheduleApp {
 	add("members", members)
 
 	workshop := fromClass(monHipHop, domain.Date{Year: 2026, Month: time.November, Day: 7})
-	workshop.ClassID = domain.ClassID{}
+	workshop.ClassID, workshop.SlotDate = domain.ClassID{}, domain.Date{}
 	workshop.Kind = domain.LessonWorkshop
 	add("workshop", workshop)
 

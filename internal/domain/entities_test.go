@@ -205,6 +205,11 @@ func TestLessonValidate(t *testing.T) {
 		"bad visibility":      func(l *domain.Lesson) { l.Visibility = "secret" },
 		"bad kind":            func(l *domain.Lesson) { l.Kind = "party" },
 		"zero capacity":       func(l *domain.Lesson) { l.Capacity = 0 },
+		"slot without class":  func(l *domain.Lesson) { l.SlotDate = domain.Date{Year: 2026, Month: time.September, Day: 7} },
+		"class without slot":  func(l *domain.Lesson) { l.ClassID = newID[domain.ClassID]() },
+		"bad slot": func(l *domain.Lesson) {
+			l.ClassID, l.SlotDate = newID[domain.ClassID](), domain.Date{Year: 2026, Month: time.February, Day: 30}
+		},
 	})
 }
 
@@ -606,18 +611,34 @@ func TestFieldErrors(t *testing.T) {
 	t.Parallel()
 
 	room := domain.Room{ID: newID[domain.RoomID](), LocationID: newID[domain.LocationID](), Name: "Studio A", Capacity: 20}
+	class := domain.Class{
+		ID: newID[domain.ClassID](), TermID: newID[domain.TermID](), CourseTypeID: newID[domain.CourseTypeID](),
+		RoomID: newID[domain.RoomID](), InstructorID: newID[domain.StaffID](), Level: domain.LevelOpen,
+		Weekday: time.Monday, StartTime: domain.TimeOfDay{Hour: 18}, Duration: time.Hour, Capacity: 12,
+	}
+	classWith := func(f func(*domain.Class)) domain.Class { c := class; f(&c); return c }
 
 	for name, tc := range map[string]struct {
 		entity interface{ Validate() error }
 		field  string
 	}{
-		"location name": {domain.Location{ID: newID[domain.LocationID]()}, "name"},
-		"room location": {func() domain.Room { r := room; r.LocationID = domain.LocationID{}; return r }(), "locationId"},
-		"room name":     {func() domain.Room { r := room; r.Name = " "; return r }(), "name"},
-		"room capacity": {func() domain.Room { r := room; r.Capacity = 0; return r }(), "capacity"},
-		"course type":   {domain.CourseType{ID: newID[domain.CourseTypeID]()}, "name"},
-		"staff name":    {domain.Staff{ID: newID[domain.StaffID](), Kind: domain.StaffInstructor}, "displayName"},
-		"staff kind":    {domain.Staff{ID: newID[domain.StaffID](), DisplayName: "A", Kind: "dancer"}, "kind"},
+		"location name":     {domain.Location{ID: newID[domain.LocationID]()}, "name"},
+		"room location":     {func() domain.Room { r := room; r.LocationID = domain.LocationID{}; return r }(), "locationId"},
+		"room name":         {func() domain.Room { r := room; r.Name = " "; return r }(), "name"},
+		"room capacity":     {func() domain.Room { r := room; r.Capacity = 0; return r }(), "capacity"},
+		"course type":       {domain.CourseType{ID: newID[domain.CourseTypeID]()}, "name"},
+		"staff name":        {domain.Staff{ID: newID[domain.StaffID](), Kind: domain.StaffInstructor}, "displayName"},
+		"staff kind":        {domain.Staff{ID: newID[domain.StaffID](), DisplayName: "A", Kind: "dancer"}, "kind"},
+		"class course type": {classWith(func(c *domain.Class) { c.CourseTypeID = domain.CourseTypeID{} }), "courseTypeId"},
+		"class room":        {classWith(func(c *domain.Class) { c.RoomID = domain.RoomID{} }), "roomId"},
+		"class instructor":  {classWith(func(c *domain.Class) { c.InstructorID = domain.StaffID{} }), "instructorId"},
+		"class accompanist": {classWith(func(c *domain.Class) { c.AccompanistID = c.InstructorID }), "accompanistId"},
+		"class level":       {classWith(func(c *domain.Class) { c.Level = "expert" }), "level"},
+		"class weekday":     {classWith(func(c *domain.Class) { c.Weekday = 7 }), "weekday"},
+		"class start":       {classWith(func(c *domain.Class) { c.StartTime = domain.TimeOfDay{Hour: 24} }), "startTime"},
+		"class duration":    {classWith(func(c *domain.Class) { c.Duration = 0 }), "durationMinutes"},
+		"class midnight":    {classWith(func(c *domain.Class) { c.Duration = 7 * time.Hour }), "durationMinutes"},
+		"class capacity":    {classWith(func(c *domain.Class) { c.Capacity = 0 }), "capacity"},
 	} {
 		err := tc.entity.Validate()
 

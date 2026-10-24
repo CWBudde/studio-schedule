@@ -18,6 +18,7 @@ func toLesson(row sqlc.Lesson) domain.Lesson {
 	return domain.Lesson{
 		ID:            fromPgID[domain.LessonID](row.ID),
 		ClassID:       fromPgID[domain.ClassID](row.ClassID),
+		SlotDate:      fromPgDate(row.SlotDate),
 		CourseTypeID:  fromPgID[domain.CourseTypeID](row.CourseTypeID),
 		RoomID:        fromPgID[domain.RoomID](row.RoomID),
 		InstructorID:  fromPgID[domain.StaffID](row.InstructorID),
@@ -51,6 +52,7 @@ func lessonParams(l domain.Lesson) (sqlc.CreateLessonParams, error) {
 		Visibility:    string(l.Visibility),
 		Kind:          string(l.Kind),
 		Capacity:      capacity,
+		SlotDate:      pgDate(l.SlotDate),
 	}, nil
 }
 
@@ -81,6 +83,18 @@ func (r lessonRepo) Update(ctx context.Context, l domain.Lesson) error {
 	n, err := r.q.UpdateLesson(ctx, sqlc.UpdateLessonParams(p))
 
 	return affected("lesson", n, err)
+}
+
+func (r lessonRepo) Delete(ctx context.Context, id domain.LessonID) error {
+	n, err := r.q.DeleteLesson(ctx, pgID(id))
+
+	return affected("lesson", n, err)
+}
+
+func (r lessonRepo) ListByClass(ctx context.Context, class domain.ClassID, from domain.Date) ([]domain.Lesson, error) {
+	rows, err := r.q.ListLessonsByClass(ctx, sqlc.ListLessonsByClassParams{ClassID: pgID(class), FromSlot: pgDate(from)})
+
+	return convertRows(rows, err, toLesson)
 }
 
 func (r lessonRepo) ListRange(ctx context.Context, from, to time.Time) ([]domain.Lesson, error) {

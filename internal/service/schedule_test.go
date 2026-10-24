@@ -124,6 +124,7 @@ func (f *scheduleFixture) fromClass(c domain.Class, d domain.Date) domain.Lesson
 
 	return domain.Lesson{
 		ClassID:       c.ID,
+		SlotDate:      d,
 		CourseTypeID:  c.CourseTypeID,
 		RoomID:        c.RoomID,
 		InstructorID:  c.InstructorID,
@@ -518,7 +519,8 @@ func TestScheduleLessonOutsideItsTerm(t *testing.T) {
 	}
 	start := schoolDate(2026, time.October, 19).At(class.StartTime, loc)
 	lesson := domain.Lesson{
-		ID: ids.New[domain.LessonID](seq), ClassID: class.ID, CourseTypeID: courseType.ID, RoomID: room.ID,
+		ID: ids.New[domain.LessonID](seq), ClassID: class.ID, SlotDate: schoolDate(2026, time.October, 19),
+		CourseTypeID: courseType.ID, RoomID: room.ID,
 		InstructorID: staff.ID, StartsAt: start, EndsAt: start.Add(time.Hour), Status: domain.LessonScheduled,
 		Visibility: domain.VisibilityPublic, Kind: domain.LessonRegular, Capacity: 10,
 	}

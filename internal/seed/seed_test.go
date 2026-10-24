@@ -164,9 +164,10 @@ func TestDemoWorkshops(t *testing.T) {
 
 	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
 		d := seed.DemoAt(anchor)
+		d.Lessons = slices.DeleteFunc(d.Lessons, func(l domain.Lesson) bool { return !l.ClassID.IsZero() })
 
 		if n := len(d.Lessons); n < 4 || n > 5 {
-			t.Fatalf("%v: %d lessons, want 4..5 workshops", anchor, n)
+			t.Fatalf("%v: %d one-off lessons, want 4..5 workshops", anchor, n)
 		}
 
 		validAll(t, d.Lessons)
@@ -251,6 +252,64 @@ func TestDemoWorkshops(t *testing.T) {
 
 		if beyond == 0 {
 			t.Errorf("%v: no workshop beyond the release window (until %v)", anchor, window.ReleasedUntil)
+		}
+	}
+}
+
+// TestDemoHistory checks the lessons of the weekly classes: exactly one per
+// class slot from a week before the anchor up to and including it, as the
+// generator creates them.
+func TestDemoHistory(t *testing.T) {
+	t.Parallel()
+
+	loc, err := time.LoadLocation(seed.DemoSettings().Timezone)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
+		d := seed.DemoAt(anchor)
+		classes := index(d.Classes, func(c domain.Class) domain.ClassID { return c.ID })
+
+		type slot struct {
+			class domain.ClassID
+			date  domain.Date
+		}
+
+		got := map[slot]bool{}
+
+		for _, l := range d.Lessons {
+			if l.ClassID.IsZero() {
+				continue
+			}
+
+			c := classes[l.ClassID]
+			start := l.SlotDate.At(c.StartTime, loc)
+
+			switch {
+			case got[slot{c.ID, l.SlotDate}]:
+				t.Errorf("%v: two lessons of class %v on %v", anchor, c.ID, l.SlotDate)
+			case l.SlotDate.Compare(anchor.AddDays(-7)) < 0 || l.SlotDate.Compare(anchor) > 0:
+				t.Errorf("%v: lesson on %v outside the week before the anchor", anchor, l.SlotDate)
+			case l.SlotDate.Weekday() != c.Weekday || !l.StartsAt.Equal(start) || !l.EndsAt.Equal(start.Add(c.Duration)) ||
+				l.RoomID != c.RoomID || l.InstructorID != c.InstructorID || l.Capacity != c.Capacity:
+				t.Errorf("%v: lesson %+v does not follow class %+v", anchor, l, c)
+			}
+
+			got[slot{c.ID, l.SlotDate}] = true
+		}
+
+		// Eight days hold every weekday once, the anchor's weekday twice.
+		want := 0
+		for _, c := range d.Classes {
+			want++
+			if c.Weekday == anchor.Weekday() {
+				want++
+			}
+		}
+
+		if len(got) != want {
+			t.Errorf("%v: %d class lessons, want %d", anchor, len(got), want)
 		}
 	}
 }

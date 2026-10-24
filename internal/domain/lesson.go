@@ -57,8 +57,12 @@ func (k LessonKind) Valid() bool { return slices.Contains(LessonKinds(), k) }
 // Lesson is a concrete, dated occurrence, generated from a class or created
 // as a one-off.
 type Lesson struct {
-	ID            LessonID
-	ClassID       ClassID // optional: zero for one-off lessons
+	ID      LessonID
+	ClassID ClassID // optional: zero for one-off lessons
+	// SlotDate is the school date of the class slot the lesson was
+	// generated for, set exactly when ClassID is. It stays when the lesson
+	// moves, so generation does not create the slot again (ADR 0003).
+	SlotDate      Date
 	CourseTypeID  CourseTypeID
 	RoomID        RoomID
 	InstructorID  StaffID
@@ -75,6 +79,8 @@ type Lesson struct {
 func (l Lesson) Validate() error {
 	return validate(
 		rule{!l.ID.IsZero(), "lesson id must be set"},
+		rule{l.ClassID.IsZero() == l.SlotDate.IsZero(), "a lesson has a slot date exactly when it has a class"},
+		rule{optionalDate(l.SlotDate), "invalid lesson slot date"},
 		rule{!l.CourseTypeID.IsZero(), "lesson course type must be set"},
 		rule{!l.RoomID.IsZero(), "lesson room must be set"},
 		rule{!l.InstructorID.IsZero(), "lesson instructor must be set"},

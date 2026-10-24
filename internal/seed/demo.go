@@ -34,9 +34,10 @@ func Demo() Dataset { return DemoAt(FixedDemoAnchor) }
 // DemoAt returns the fictional demo school as seen on the visit date
 // anchor: two locations, their rooms, staff, course types, one term around
 // anchor with its weekly classes, members with their families and accounts,
-// and a few one-off workshops in the weeks after anchor. It has no lessons
-// of the weekly classes (the lesson generator creates them) and no
-// bookings. IDs come from a fresh ids.Sequence, so every call with the same
+// and a few one-off workshops in the weeks after anchor. Of the weekly
+// classes it has the lessons of the week up to and including anchor
+// (history); the lesson generator creates the later ones, but never the
+// past. It has no bookings. IDs come from a fresh ids.Sequence, so every call with the same
 // anchor returns identical data.
 //
 // DemoAt panics if the demo time zone cannot be loaded (no zoneinfo
@@ -104,6 +105,8 @@ func demoAt(anchor domain.Date) (Dataset, error) {
 	for _, w := range demoWorkshops {
 		b.workshop(anchor, w)
 	}
+
+	b.history(anchor)
 
 	return b.d, nil
 }
@@ -541,6 +544,37 @@ func (b *builder) class(term domain.TermID, spec classSpec) {
 			PersonID: lookup(b.persons, name),
 			Since:    b.termStart,
 		})
+	}
+}
+
+// history adds the lessons of the weekly classes from a week before anchor
+// up to and including anchor, as the lesson generator would have created
+// them, so the demo has a recent past. The term starts three weeks before
+// anchor, so the whole week lies in it.
+func (b *builder) history(anchor domain.Date) {
+	for d := anchor.AddDays(-7); d.Compare(anchor) <= 0; d = d.AddDays(1) {
+		for _, c := range b.d.Classes {
+			if c.Weekday != d.Weekday() {
+				continue
+			}
+
+			start := d.At(c.StartTime, b.loc)
+			b.d.Lessons = append(b.d.Lessons, domain.Lesson{
+				ID:            ids.New[domain.LessonID](b.seq),
+				ClassID:       c.ID,
+				SlotDate:      d,
+				CourseTypeID:  c.CourseTypeID,
+				RoomID:        c.RoomID,
+				InstructorID:  c.InstructorID,
+				AccompanistID: c.AccompanistID,
+				StartsAt:      start,
+				EndsAt:        start.Add(c.Duration),
+				Status:        domain.LessonScheduled,
+				Visibility:    domain.VisibilityPublic,
+				Kind:          domain.LessonRegular,
+				Capacity:      c.Capacity,
+			})
+		}
 	}
 }
 

@@ -282,6 +282,7 @@ func TestGenerate(t *testing.T) {
 		want := domain.Lesson{
 			ID:            l.ID,
 			ClassID:       c.ID,
+			SlotDate:      domain.DateOf(l.StartsAt, berlin(t)),
 			CourseTypeID:  c.CourseTypeID,
 			RoomID:        c.RoomID,
 			InstructorID:  c.InstructorID,
@@ -324,6 +325,7 @@ func TestGenerateKeepsExistingLessons(t *testing.T) {
 	existing := domain.Lesson{
 		ID:           ids.New[domain.LessonID](f.seq),
 		ClassID:      c.ID,
+		SlotDate:     mustDate(t, "2026-10-25"),
 		CourseTypeID: c.CourseTypeID,
 		RoomID:       c.RoomID,
 		InstructorID: c.InstructorID,
@@ -389,6 +391,55 @@ func TestGenerateKeepsExistingLessons(t *testing.T) {
 
 	if generated != 1 {
 		t.Fatalf("%d generated lessons, want 1", generated)
+	}
+}
+
+// A lesson moved away from its slot keeps the slot: generation does not
+// create the slot again, also when the lesson moved out of the range.
+func TestGenerateSkipsMovedLessons(t *testing.T) {
+	t.Parallel()
+
+	f := newGenFixture(t, seed.DemoSettings())
+	c := f.addClass(t, time.Sunday, domain.TimeOfDay{Hour: 18})
+
+	// The Sunday lesson of 2026-10-25 moved to the Saturday before.
+	moved := domain.Lesson{
+		ID: ids.New[domain.LessonID](f.seq), ClassID: c.ID, SlotDate: mustDate(t, "2026-10-25"),
+		CourseTypeID: c.CourseTypeID, RoomID: c.RoomID, InstructorID: c.InstructorID,
+		StartsAt: mustInstant(t, "2026-10-24T16:00:00Z"), EndsAt: mustInstant(t, "2026-10-24T17:15:00Z"),
+		Status: domain.LessonScheduled, Visibility: domain.VisibilityPublic, Kind: domain.LessonRegular, Capacity: c.Capacity,
+	}
+	f.write(t, func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Create(ctx, moved) })
+
+	created, err := generatorAt(f.st, mustInstant(t, "2026-10-23T10:00:00Z")).
+		Generate(t.Context(), mustDate(t, "2026-10-25"), mustDate(t, "2026-11-02"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"2026-10-24T16:00:00Z", "2026-11-01T17:00:00Z"}
+	if got := lessonStarts(f.lessons(t)); created != 1 || !slices.Equal(got, want) {
+		t.Fatalf("created %d, lessons start at %v; want 1 and %v", created, got, want)
+	}
+}
+
+// GenerateAhead does not create lessons that have started: a class created
+// today has no history.
+func TestGenerateAheadSkipsThePast(t *testing.T) {
+	t.Parallel()
+
+	f := newGenFixture(t, seed.DemoSettings())
+	f.addClass(t, time.Friday, domain.TimeOfDay{Hour: 19})
+	f.addClass(t, time.Friday, domain.TimeOfDay{Hour: 21})
+
+	// 20:00 on Friday 2026-10-23 in Berlin.
+	if _, err := generatorAt(f.st, mustInstant(t, "2026-10-23T18:00:00Z")).GenerateAhead(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	got := lessonStarts(f.lessons(t))
+	if len(got) < 2 || got[0] != "2026-10-23T19:00:00Z" || got[1] != "2026-10-30T18:00:00Z" {
+		t.Fatalf("lessons start at %v, want the 21:00 lesson of today first, then next Friday's (after DST)", got)
 	}
 }
 
@@ -471,16 +522,16 @@ func TestGenerateAhead(t *testing.T) {
 		accountDays int    // an account's visible-days override; 0 = none
 		first, last string // first and last Friday lesson, school dates
 	}{
-		// max(7·(1+2), 14) + 7 = 28 days: [10-16, 11-21).
-		{"release window dominates", 1, 14, 0, "2026-10-16", "2026-11-20"},
-		// max(7·(1+2), 30) + 7 = 37 days: [10-16, 11-30).
-		{"visible days dominate", 1, 30, 0, "2026-10-16", "2026-11-27"},
-		// max(7·(3+2), 14) + 7 = 42 days: [10-16, 12-05).
-		{"more weeks ahead", 3, 14, 0, "2026-10-16", "2026-12-04"},
-		// max(7·(1+2), 45) + 7 = 52 days: [10-16, 12-15).
-		{"an account's early access dominates", 1, 14, 45, "2026-10-16", "2026-12-11"},
+		// max(7·(1+2), 14) + 7 = 28 days: [10-23, 11-21).
+		{"release window dominates", 1, 14, 0, "2026-10-23", "2026-11-20"},
+		// max(7·(1+2), 30) + 7 = 37 days: [10-23, 11-30).
+		{"visible days dominate", 1, 30, 0, "2026-10-23", "2026-11-27"},
+		// max(7·(3+2), 14) + 7 = 42 days: [10-23, 12-05).
+		{"more weeks ahead", 3, 14, 0, "2026-10-23", "2026-12-04"},
+		// max(7·(1+2), 45) + 7 = 52 days: [10-23, 12-15).
+		{"an account's early access dominates", 1, 14, 45, "2026-10-23", "2026-12-11"},
 		// A shorter override does not shorten the horizon.
-		{"a shorter override", 1, 30, 5, "2026-10-16", "2026-11-27"},
+		{"a shorter override", 1, 30, 5, "2026-10-23", "2026-11-27"},
 	}
 
 	for _, tt := range tests {

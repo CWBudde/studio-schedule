@@ -29,9 +29,9 @@ func (q *Queries) AddClassMember(ctx context.Context, arg AddClassMemberParams) 
 const createClass = `-- name: CreateClass :exec
 INSERT INTO classes (
     id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time,
-    duration, capacity
+    duration, capacity, retired
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
 )
 `
 
@@ -47,6 +47,7 @@ type CreateClassParams struct {
 	StartTime     pgtype.Time
 	Duration      pgtype.Interval
 	Capacity      int32
+	Retired       bool
 }
 
 func (q *Queries) CreateClass(ctx context.Context, arg CreateClassParams) error {
@@ -62,6 +63,7 @@ func (q *Queries) CreateClass(ctx context.Context, arg CreateClassParams) error 
 		arg.StartTime,
 		arg.Duration,
 		arg.Capacity,
+		arg.Retired,
 	)
 	return err
 }
@@ -112,7 +114,7 @@ func (q *Queries) DeleteTerm(ctx context.Context, id pgtype.UUID) (int64, error)
 }
 
 const getClass = `-- name: GetClass :one
-SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time, duration, capacity FROM classes WHERE id = $1
+SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time, duration, capacity, retired FROM classes WHERE id = $1
 `
 
 func (q *Queries) GetClass(ctx context.Context, id pgtype.UUID) (Class, error) {
@@ -130,6 +132,7 @@ func (q *Queries) GetClass(ctx context.Context, id pgtype.UUID) (Class, error) {
 		&i.StartTime,
 		&i.Duration,
 		&i.Capacity,
+		&i.Retired,
 	)
 	return i, err
 }
@@ -175,7 +178,7 @@ func (q *Queries) ListClassMembers(ctx context.Context, classID pgtype.UUID) ([]
 }
 
 const listClassesByTerm = `-- name: ListClassesByTerm :many
-SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time, duration, capacity FROM classes WHERE term_id = $1 ORDER BY weekday, start_time, id
+SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time, duration, capacity, retired FROM classes WHERE term_id = $1 ORDER BY weekday, start_time, id
 `
 
 func (q *Queries) ListClassesByTerm(ctx context.Context, termID pgtype.UUID) ([]Class, error) {
@@ -199,6 +202,7 @@ func (q *Queries) ListClassesByTerm(ctx context.Context, termID pgtype.UUID) ([]
 			&i.StartTime,
 			&i.Duration,
 			&i.Capacity,
+			&i.Retired,
 		); err != nil {
 			return nil, err
 		}
@@ -239,6 +243,30 @@ func (q *Queries) ListTerms(ctx context.Context) ([]Term, error) {
 	return items, nil
 }
 
+const lockClass = `-- name: LockClass :one
+SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time, duration, capacity, retired FROM classes WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockClass(ctx context.Context, id pgtype.UUID) (Class, error) {
+	row := q.db.QueryRow(ctx, lockClass, id)
+	var i Class
+	err := row.Scan(
+		&i.ID,
+		&i.TermID,
+		&i.CourseTypeID,
+		&i.RoomID,
+		&i.InstructorID,
+		&i.AccompanistID,
+		&i.Level,
+		&i.Weekday,
+		&i.StartTime,
+		&i.Duration,
+		&i.Capacity,
+		&i.Retired,
+	)
+	return i, err
+}
+
 const removeClassMember = `-- name: RemoveClassMember :execrows
 DELETE FROM class_members WHERE class_id = $1 AND person_id = $2
 `
@@ -259,7 +287,7 @@ func (q *Queries) RemoveClassMember(ctx context.Context, arg RemoveClassMemberPa
 const updateClass = `-- name: UpdateClass :execrows
 UPDATE classes
 SET term_id = $2, course_type_id = $3, room_id = $4, instructor_id = $5, accompanist_id = $6, level = $7,
-    weekday = $8, start_time = $9, duration = $10, capacity = $11
+    weekday = $8, start_time = $9, duration = $10, capacity = $11, retired = $12
 WHERE id = $1
 `
 
@@ -275,6 +303,7 @@ type UpdateClassParams struct {
 	StartTime     pgtype.Time
 	Duration      pgtype.Interval
 	Capacity      int32
+	Retired       bool
 }
 
 func (q *Queries) UpdateClass(ctx context.Context, arg UpdateClassParams) (int64, error) {
@@ -290,6 +319,7 @@ func (q *Queries) UpdateClass(ctx context.Context, arg UpdateClassParams) (int64
 		arg.StartTime,
 		arg.Duration,
 		arg.Capacity,
+		arg.Retired,
 	)
 	if err != nil {
 		return 0, err

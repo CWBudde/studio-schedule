@@ -15,17 +15,17 @@ import (
 )
 
 // Constraints and unique indexes whose violation has a domain meaning beyond
-// "duplicate key" (see migrations/00001_core.sql, 00006 and 00007).
+// "duplicate key" (see migrations/00001_core.sql, 00006, 00007 and 00008).
 const (
-	constraintAccountEmail     = "accounts_email_key"
-	constraintAccountPerson    = "accounts_person_id_key"
-	constraintGuardianLink     = "person_guardians_pkey"
-	constraintClassMember      = "class_members_pkey"
-	constraintLessonClassStart = "lessons_class_start_key"
-	constraintActiveBooking    = "bookings_one_active_key"
-	constraintLocationName     = "locations_name_key"
-	constraintRoomName         = "rooms_location_name_key"
-	constraintCourseTypeName   = "course_types_name_key"
+	constraintAccountEmail    = "accounts_email_key"
+	constraintAccountPerson   = "accounts_person_id_key"
+	constraintGuardianLink    = "person_guardians_pkey"
+	constraintClassMember     = "class_members_pkey"
+	constraintLessonClassSlot = "lessons_class_slot_key"
+	constraintActiveBooking   = "bookings_one_active_key"
+	constraintLocationName    = "locations_name_key"
+	constraintRoomName        = "rooms_location_name_key"
+	constraintCourseTypeName  = "course_types_name_key"
 )
 
 // conflicts describes the unique constraints above: the message, and the
@@ -36,15 +36,15 @@ var conflicts = map[string]struct {
 	msg string
 	err error
 }{
-	constraintAccountEmail:     {"account email is taken", domain.ErrConflict},
-	constraintAccountPerson:    {"person already has an account", domain.ErrConflict},
-	constraintGuardianLink:     {"guardian link exists", domain.ErrConflict},
-	constraintClassMember:      {"person is already a member of the class", domain.ErrConflict},
-	constraintLessonClassStart: {"class already has a lesson at this start", domain.ErrConflict},
-	constraintActiveBooking:    {"person already has an active booking for the lesson", domain.ErrConflict},
-	constraintLocationName:     {"location name is taken", domain.ErrDuplicate},
-	constraintRoomName:         {"room name is taken at the location", domain.ErrDuplicate},
-	constraintCourseTypeName:   {"course type name is taken", domain.ErrDuplicate},
+	constraintAccountEmail:    {"account email is taken", domain.ErrConflict},
+	constraintAccountPerson:   {"person already has an account", domain.ErrConflict},
+	constraintGuardianLink:    {"guardian link exists", domain.ErrConflict},
+	constraintClassMember:     {"person is already a member of the class", domain.ErrConflict},
+	constraintLessonClassSlot: {"class already has a lesson in this slot", domain.ErrConflict},
+	constraintActiveBooking:   {"person already has an active booking for the lesson", domain.ErrConflict},
+	constraintLocationName:    {"location name is taken", domain.ErrDuplicate},
+	constraintRoomName:        {"room name is taken at the location", domain.ErrDuplicate},
+	constraintCourseTypeName:  {"course type name is taken", domain.ErrDuplicate},
 }
 
 // retryableError reports a serialization failure or deadlock. InTx retries

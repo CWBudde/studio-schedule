@@ -35,6 +35,9 @@ type Class struct {
 	StartTime     TimeOfDay // school time
 	Duration      time.Duration
 	Capacity      int
+	// Retired classes generate no more lessons and leave the public
+	// timetable; their lessons stay (ADR 0007).
+	Retired bool
 }
 
 // Validate checks the class for consistency. All errors wrap ErrValidation.
@@ -42,16 +45,19 @@ func (c Class) Validate() error {
 	return validate(
 		rule{!c.ID.IsZero(), "class id must be set"},
 		rule{!c.TermID.IsZero(), "class term must be set"},
-		rule{!c.CourseTypeID.IsZero(), "class course type must be set"},
-		rule{!c.RoomID.IsZero(), "class room must be set"},
-		rule{!c.InstructorID.IsZero(), "class instructor must be set"},
-		rule{c.AccompanistID.IsZero() || c.AccompanistID != c.InstructorID, "accompanist must differ from the instructor"},
-		rule{c.Level.Valid(), "invalid class level"},
-		rule{validWeekday(c.Weekday), "invalid class weekday"},
-		rule{c.StartTime.Valid(), "invalid class start time"},
-		rule{c.Duration > 0 && c.Duration%time.Minute == 0, "class duration must be a positive number of minutes"},
-		rule{c.Duration <= 24*time.Hour-c.StartTime.SinceMidnight(), "class must not run past midnight"},
-		rule{c.Capacity > 0, "class capacity must be positive"},
+		on("courseTypeId", !c.CourseTypeID.IsZero(), "class course type must be set"),
+		on("roomId", !c.RoomID.IsZero(), "class room must be set"),
+		on("instructorId", !c.InstructorID.IsZero(), "class instructor must be set"),
+		on("accompanistId", c.AccompanistID.IsZero() || c.AccompanistID != c.InstructorID,
+			"accompanist must differ from the instructor"),
+		on("level", c.Level.Valid(), "invalid class level"),
+		on("weekday", validWeekday(c.Weekday), "invalid class weekday"),
+		on("startTime", c.StartTime.Valid(), "invalid class start time"),
+		on("durationMinutes", c.Duration > 0 && c.Duration%time.Minute == 0,
+			"class duration must be a positive number of minutes"),
+		on("durationMinutes", c.Duration <= 24*time.Hour-c.StartTime.SinceMidnight(),
+			"class must not run past midnight"),
+		on("capacity", c.Capacity > 0, "class capacity must be positive"),
 	)
 }
 

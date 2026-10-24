@@ -286,6 +286,12 @@ type ClassRepo interface {
 	// ListByTerm returns the classes of a term ordered by weekday (Sunday
 	// first), start time and ID.
 	ListByTerm(ctx context.Context, term domain.TermID) ([]domain.Class, error)
+	// Lock returns the class and locks it until the transaction ends (in
+	// PostgreSQL: SELECT … FOR UPDATE). Class edits and lesson generation
+	// lock a class before they read or change its lessons, so they never
+	// work on each other's half. It needs a ReadWrite transaction and fails
+	// with ErrReadOnly otherwise.
+	Lock(ctx context.Context, id domain.ClassID) (domain.Class, error)
 
 	// AddMember fails with domain.ErrConflict if the person is already a
 	// member or the class or person does not exist.
@@ -299,10 +305,16 @@ type ClassRepo interface {
 type LessonRepo interface {
 	Get(ctx context.Context, id domain.LessonID) (domain.Lesson, error)
 	// Create fails with domain.ErrConflict if the class already has a lesson
-	// with the same start, or a referenced record does not exist.
+	// for the same slot date, or a referenced record does not exist.
 	Create(ctx context.Context, l domain.Lesson) error
 	// Update fails with domain.ErrConflict under the same rules as Create.
 	Update(ctx context.Context, l domain.Lesson) error
+	// Delete fails with domain.ErrConflict while bookings refer to the
+	// lesson, canceled ones included.
+	Delete(ctx context.Context, id domain.LessonID) error
+	// ListByClass returns the lessons of a class whose slot date is from or
+	// later, ordered by StartsAt and ID.
+	ListByClass(ctx context.Context, class domain.ClassID, from domain.Date) ([]domain.Lesson, error)
 	// ListRange returns the lessons with from <= StartsAt < to, ordered by
 	// StartsAt and ID.
 	ListRange(ctx context.Context, from, to time.Time) ([]domain.Lesson, error)
