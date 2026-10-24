@@ -23,7 +23,9 @@ type recipient struct {
 	givenName string
 	// account tells that email is an account's address. Its language and
 	// name win over a person's own address that is the same.
-	account      bool
+	account bool
+	// guest tells that the address is a guest's (guestRecipient).
+	guest        bool
 	participants []string
 }
 
@@ -103,7 +105,7 @@ func guestRecipient(b domain.Booking) (recipient, bool) {
 		return recipient{}, false
 	}
 
-	return recipient{email: b.GuestEmail, givenName: b.GuestName, participants: []string{b.GuestName}}, true
+	return recipient{email: b.GuestEmail, givenName: b.GuestName, guest: true, participants: []string{b.GuestName}}, true
 }
 
 // mailsGuardians reports whether mail about booked person p goes to p's

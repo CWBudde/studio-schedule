@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -445,15 +446,15 @@ func TestRemoveParticipant(t *testing.T) {
 	stella := f.bookingIn(t, l, f.stella(t))
 	svc := f.participants(t, bookingNow)
 
-	// Removing after the cancellation cutoff is never late, and does not
-	// release the date.
+	// Removing after the cancellation cutoff is never late, and releases
+	// the date.
 	removed, err := svc.Remove(ctx, ivy, stella.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	stored, events := f.booking(t, stella.ID)
-	if stored != removed || removed.Status != domain.BookingCanceled || removed.Late || removed.Released ||
+	if stored != removed || removed.Status != domain.BookingCanceled || removed.Late || !removed.Released ||
 		removed.CanceledAt != mustInstant(t, bookingNow) {
 		t.Errorf("removed %+v, stored %+v", removed, stored)
 	}
@@ -677,7 +678,7 @@ func TestLessonParticipants(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got.Active != 2 || got.Held != 1 || got.FreePlaces() != 0 || len(got.Waitlist) != 2 ||
+	if got.Active != 2 || got.Held != 1 || got.FreePlaces() != 0 || got.Waiting != 1 || len(got.Waitlist) != 2 ||
 		got.Waitlist[0].Status != domain.WaitlistInvited || got.Waitlist[0].Position != 0 ||
 		got.Waitlist[1].Position != 1 {
 		t.Errorf("with an invite: counts %d/%d, waitlist %+v", got.Active, got.Held, got.Waitlist)
@@ -722,7 +723,7 @@ func TestLessonParticipants(t *testing.T) {
 	}
 
 	// Mia accepted her invite by being added; Tom waits first in line.
-	if got.Active != 3 || got.Held != 0 || got.FreePlaces() != 0 || len(got.Waitlist) != 2 ||
+	if got.Active != 3 || got.Held != 0 || got.FreePlaces() != 0 || got.Waiting != 1 || len(got.Waitlist) != 2 ||
 		got.Waitlist[0].Name != "Mia Example" || got.Waitlist[0].Status != domain.WaitlistAccepted ||
 		got.Waitlist[0].Position != 0 || got.Waitlist[1].Status != domain.WaitlistWaiting || got.Waitlist[1].Position != 1 ||
 		!got.Waitlist[1].Entry.StayOnList {
@@ -836,5 +837,319 @@ func TestLessonRecipientsGuests(t *testing.T) {
 
 	if want := []string{"gina@example.org::Gina Guest", "anna@example.org:de:Mia Example"}; !slices.Equal(got, want) {
 		t.Errorf("recipients %v, want %v", got, want)
+	}
+}
+
+// TestRemovedMemberStaysOut: staff removing a class member from a date
+// releases it, so a later change of the membership does not book them into
+// it again (ADR 0009, amendment).
+func TestRemovedMemberStaysOut(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newStaffFixture(t)
+	c := f.memberClass(t)
+	olga := f.principal(t, f.olga)
+	removed := f.lessonAt(t, c.ID, "2026-10-27")
+
+	got, err := f.participants(t, bookingNow).Remove(ctx, f.principal(t, f.ivy), f.bookingOf(t, removed, f.mia)[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !got.Released || got.Late {
+		t.Errorf("removed %+v, want released, not late", got)
+	}
+
+	// The office pauses Mia for the next date and ends the pause again.
+	svc := f.timetable(t, bookingNow)
+	m := f.memberOf(t, c.ID, f.mia)
+
+	for _, until := range []domain.Date{mustDate(t, "2026-11-03"), {}} {
+		m.PausedUntil = until
+		if _, err := svc.UpdateClassMember(ctx, olga, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if b := f.bookingOf(t, removed, f.mia); len(b) != 1 || b[0].Status != domain.BookingCanceled {
+		t.Errorf("removed date: %+v, want it to stay canceled", b)
+	}
+
+	if b := f.bookingOf(t, f.lessonAt(t, c.ID, "2026-11-03"), f.mia); len(b) != 2 || b[1].Status != domain.BookingBooked {
+		t.Errorf("paused date: %+v, want booked again", b)
+	}
+}
+
+// TestRemoveGuestIsNotReleased: a guest has no dates to release.
+func TestRemoveGuestIsNotReleased(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newStaffFixture(t)
+	svc := f.participants(t, bookingNow)
+	ivy := f.principal(t, f.ivy)
+	l := f.lessonWithPianist(t, 5)
+
+	guest, err := svc.Add(ctx, ivy, l.ID, NewParticipant{GuestName: "Gina Guest"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := svc.Remove(ctx, ivy, guest.ID); err != nil || got.Released {
+		t.Errorf("removed guest %+v, %v; want not released", got, err)
+	}
+}
+
+// overbookedInvite sets up the full lesson of capacity 1 with Mia invited
+// to the place Stella's removal freed, and the office's guest booked over
+// capacity next to her invite.
+func (f *staffFixture) overbookedInvite(t *testing.T) (domain.Lesson, domain.WaitlistEntry) {
+	t.Helper()
+
+	ctx := t.Context()
+	l := f.fullLesson(t, 1)
+	olga := f.principal(t, f.olga)
+
+	joined, err := f.waitlistService(t, bookingNow).Join(ctx, f.principal(t, f.anna), l.ID, f.mia.ID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc := f.participants(t, bookingNow)
+	if _, err := svc.Remove(ctx, olga, f.bookingIn(t, l, f.stella(t)).ID); err != nil {
+		t.Fatal(err)
+	}
+
+	wantStatus(t, f.entry(t, joined.Entry.ID), domain.WaitlistInvited)
+
+	if _, err := svc.Add(ctx, olga, l.ID, NewParticipant{GuestName: "Gina Guest", ConfirmOverCapacity: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	return l, joined.Entry
+}
+
+// wantWaitlistBooking checks that b took the place of entry e from the
+// waiting list with the override flag.
+func (f *staffFixture) wantWaitlistBooking(t *testing.T, b domain.Booking, e domain.WaitlistEntry, override bool) {
+	t.Helper()
+
+	wantStatus(t, f.entry(t, e.ID), domain.WaitlistAccepted)
+
+	if _, events := f.booking(t, b.ID); len(events) != 1 || events[0].Note != waitlistNote || events[0].Override != override {
+		t.Errorf("events %+v, want one from the waiting list with override %v", events, override)
+	}
+}
+
+// TestInvitedPlaceAfterOverbooking: when the office booked over capacity
+// next to an open invite, the invited person still gets the place their
+// invite reserves, whether they book it, accept it or staff add them; the
+// booking event records the override.
+func TestInvitedPlaceAfterOverbooking(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	t.Run("book", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffFixture(t)
+		l, e := f.overbookedInvite(t)
+
+		b, err := f.bookingService(t, bookingNow).Book(ctx, f.principal(t, f.anna), l.ID, f.mia.ID)
+		if err != nil {
+			t.Fatalf("book the invited place: %v", err)
+		}
+
+		f.wantWaitlistBooking(t, b, e, true)
+	})
+
+	t.Run("accept", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffFixture(t)
+		l, e := f.overbookedInvite(t)
+
+		b, err := f.waitlistService(t, bookingNow).Accept(ctx, f.principal(t, f.anna), e.ID)
+		if err != nil {
+			t.Fatalf("accept: %v", err)
+		}
+
+		if b.LessonID != l.ID {
+			t.Errorf("booking %+v", b)
+		}
+
+		f.wantWaitlistBooking(t, b, e, true)
+	})
+
+	t.Run("add", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffFixture(t)
+		l, e := f.overbookedInvite(t)
+
+		b, err := f.participants(t, bookingNow).Add(ctx, f.principal(t, f.ivy), l.ID, NewParticipant{PersonID: f.mia.ID})
+		if err != nil {
+			t.Fatalf("add the invited person: %v", err)
+		}
+
+		f.wantWaitlistBooking(t, b, e, true)
+	})
+
+	t.Run("others", func(t *testing.T) {
+		t.Parallel()
+
+		// Anyone else needs the confirmation.
+		f := newStaffFixture(t)
+		l, _ := f.overbookedInvite(t)
+
+		if _, err := f.participants(t, bookingNow).Add(ctx, f.principal(t, f.ivy), l.ID,
+			NewParticipant{PersonID: f.tom.ID}); !errors.Is(err, ErrLessonFull) {
+			t.Errorf("add another person: want ErrLessonFull, got %v", err)
+		}
+
+		if _, err := f.bookingService(t, bookingNow).Book(ctx, f.principal(t, f.tom), l.ID, f.tom.ID); !errors.Is(err, ErrLessonFull) {
+			t.Errorf("book another person: want ErrLessonFull, got %v", err)
+		}
+	})
+}
+
+// TestInvitedPlaceWithinCapacity: taking the place an invite holds in a
+// lesson that is not overbooked records no override.
+func TestInvitedPlaceWithinCapacity(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newStaffFixture(t)
+	l := f.fullLesson(t, 1)
+
+	joined, err := f.waitlistService(t, bookingNow).Join(ctx, f.principal(t, f.anna), l.ID, f.mia.ID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc := f.participants(t, bookingNow)
+	if _, err := svc.Remove(ctx, f.principal(t, f.olga), f.bookingIn(t, l, f.stella(t)).ID); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := svc.Add(ctx, f.principal(t, f.ivy), l.ID, NewParticipant{PersonID: f.mia.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f.wantWaitlistBooking(t, b, joined.Entry, false)
+}
+
+// TestParticipantsOfCanceledLesson: staff may tidy up the participants of
+// a lesson the school canceled: removing one sends no mail and invites
+// nobody, and trials may still be marked.
+func TestParticipantsOfCanceledLesson(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newStaffFixture(t)
+	ivy := f.principal(t, f.ivy)
+	l := f.fullLesson(t, 1)
+
+	if _, err := f.waitlistService(t, bookingNow).Join(ctx, f.principal(t, f.anna), l.ID, f.mia.ID, false); err != nil {
+		t.Fatal(err)
+	}
+
+	l.Status, l.CanceledAt = domain.LessonCanceled, mustInstant(t, bookingNow)
+	f.write(t, func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Update(ctx, l) })
+
+	svc := f.participants(t, bookingNow)
+	stella := f.bookingIn(t, l, f.stella(t))
+
+	if got, err := svc.UpdateTrial(ctx, ivy, stella.ID, ParticipantUpdate{Trial: true}); err != nil || !got.Trial {
+		t.Errorf("trial on a canceled lesson: %+v, %v", got, err)
+	}
+
+	removed, err := svc.Remove(ctx, ivy, stella.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if removed.Status != domain.BookingCanceled || removed.Late || !removed.Released {
+		t.Errorf("removed %+v", removed)
+	}
+
+	if mails := f.mailsOf(t, mail.TemplateBookingCanceled); len(mails) != 0 {
+		t.Errorf("cancellation mails %+v, want none", mails)
+	}
+
+	if mails := f.mailsOf(t, mail.TemplateWaitlistInvite); len(mails) != 0 {
+		t.Errorf("invites %+v, want none", mails)
+	}
+
+	if es := f.entries(t, l); len(es) != 1 || es[0].Status != domain.WaitlistWaiting {
+		t.Errorf("entries %+v, want Mia still waiting", es)
+	}
+}
+
+// TestGuestConfirmation: a guest cannot cancel online, so their
+// confirmation asks them to contact the school instead.
+func TestGuestConfirmation(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newStaffFixture(t)
+	l := f.lessonWithPianist(t, 5)
+
+	if _, err := f.participants(t, bookingNow).Add(ctx, f.principal(t, f.ivy), l.ID,
+		NewParticipant{GuestName: "Gina Guest", GuestEmail: "gina@example.org"}); err != nil {
+		t.Fatal(err)
+	}
+
+	confirmed := f.mailsOf(t, mail.TemplateBookingConfirmed)
+	if len(confirmed) != 1 {
+		t.Fatalf("confirmations %+v", confirmed)
+	}
+
+	if text := confirmed[0].Text; strings.Contains(text, "cancel the booking") || !strings.Contains(text, "please contact Studio Example") {
+		t.Errorf("guest confirmation:\n%s", text)
+	}
+}
+
+func TestFindPersonsForStaff(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newStaffFixture(t)
+	svc := f.participants(t, bookingNow)
+
+	f.write(t, func(ctx context.Context, tx store.Tx) error {
+		f.mia.BirthDate = mustDate(t, "2016-05-04")
+
+		return tx.Persons().Update(ctx, f.mia)
+	})
+
+	got, err := svc.FindPersons(ctx, " mia exa ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got) != 1 || got[0].ID != f.mia.ID || got[0].Name != "Mia Example" || got[0].BirthYear != 2016 {
+		t.Errorf("found %+v, want Mia with her birth year", got)
+	}
+
+	// Only names match, not email addresses.
+	if got, err := svc.FindPersons(ctx, "anna@example.org"); err != nil || len(got) != 0 {
+		t.Errorf("by email: %+v, %v; want nothing", got, err)
+	}
+
+	// Short queries find nothing; many matches are cut off.
+	if got, err := svc.FindPersons(ctx, " m "); err != nil || len(got) != 0 {
+		t.Errorf("one letter: %+v, %v; want nothing", got, err)
+	}
+
+	for i := range MaxStaffPersonMatches + 3 {
+		f.person(t, fmt.Sprintf("Many%02d", i), "", "", "")
+	}
+
+	if got, err := svc.FindPersons(ctx, "many"); err != nil || len(got) != MaxStaffPersonMatches {
+		t.Errorf("found %d, %v; want %d", len(got), err, MaxStaffPersonMatches)
 	}
 }

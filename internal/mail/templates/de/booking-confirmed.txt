@@ -10,8 +10,13 @@ Gebucht für: {{.Participant}}
 {{.Room}}, {{.Location}}
 {{- end}}
 
+{{if .Guest -}}
+Falls der Termin doch nicht passt, sag bitte rechtzeitig bei {{.SchoolName}} ab, damit jemand
+anderes den Platz bekommt.
+{{- else -}}
 Falls der Termin doch nicht passt, storniere die Buchung bitte rechtzeitig, damit jemand
 anderes den Platz bekommt.
+{{- end}}
 
 Viele Grüße
 {{.SchoolName}}

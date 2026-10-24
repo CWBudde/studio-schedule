@@ -15,8 +15,8 @@ import (
 // registerParticipants registers the staff actions on the participants of
 // a lesson (ADR 0007 and ADR 0009, amendments): the office on every lesson,
 // an instructor or accompanist on their own (a 404 on any other), list,
-// add, mark trials, remove and take attendance; and the history of a
-// booking for the office.
+// add, mark trials, remove and take attendance, and find persons to add;
+// and the history of a booking for the office.
 func registerParticipants(api huma.API, h *handlers) {
 	write := func(op huma.Operation) huma.Operation {
 		op.Tags = []string{"participants"}
@@ -49,11 +49,13 @@ func registerParticipants(api huma.API, h *handlers) {
 			"started: instructors and accompanists add until the end of the lesson's school day (afterwards " +
 			"a 422 on `path.lessonId`), the office at any time. A lesson the school canceled is a 409 " +
 			"`closed` with why `canceled`. A person booked already is a 409 `already-booked`; a lesson whose " +
-			"active bookings and the places held by waiting-list invites fill its capacity a 409 `full`, " +
-			"unless `confirmOverCapacity` is set (the booking event records the override). The person's " +
-			"entry on the lesson's waiting list ends. Before the lesson starts, the person's mail recipients, " +
-			"or a guest with an email (in the school's language), get the confirmation. Lessons of others " +
-			"are a 404, an unknown person a 422 on `body.personId`.",
+			"active bookings and the places held by others' waiting-list invites fill its capacity a 409 " +
+			"`full`, unless `confirmOverCapacity` is set (the booking event records the override). A person " +
+			"whose own invite holds a place takes it without the confirmation (an override if the lesson has " +
+			"been overbooked since); any other entry of the person on the lesson's waiting list ends. Before " +
+			"the lesson starts, the person's mail recipients, or a guest with an email (in the school's " +
+			"language, asked to contact the school to cancel), get the confirmation. Lessons of others are " +
+			"a 404, an unknown person a 422 on `body.personId`.",
 		DefaultStatus: http.StatusCreated,
 	}), h.addLessonParticipant)
 
@@ -72,12 +74,14 @@ func registerParticipants(api huma.API, h *handlers) {
 		OperationID: "removeLessonParticipant",
 		Path:        BasePath + "/bookings/{bookingId}/remove",
 		Summary:     "Remove a participant",
-		Description: "Cancels a booking of the lesson as staff: never late, and the date is not released. Its " +
-			"place goes to the waiting list. After the start too (a walk-in added by mistake), until the end " +
-			"of the lesson's school day for instructors and accompanists (afterwards a 422 on " +
-			"`path.bookingId`), at any time for the office. Before the start, the participant's mail " +
-			"recipients get the cancellation. A canceled booking is a 409 `already-canceled`; a booking of a " +
-			"lesson of others a 404.",
+		Description: "Cancels a booking of the lesson as staff: never late, and a person's date is released, so " +
+			"a later change of their class membership does not book them into it again. Its place goes to the " +
+			"waiting list. After the start too (a walk-in added by mistake), until the end of the lesson's " +
+			"school day for instructors and accompanists (afterwards a 422 on `path.bookingId`), at any time " +
+			"for the office, and on a lesson the school canceled. Before the start of a lesson that takes " +
+			"place, the participant's mail recipients get the cancellation; for a canceled lesson nobody is " +
+			"mailed or invited. A canceled booking is a 409 `already-canceled`; a booking of a lesson of " +
+			"others a 404.",
 	}), h.removeLessonParticipant)
 
 	register(api, AccessStaff, write(huma.Operation{
@@ -100,10 +104,22 @@ func registerParticipants(api huma.API, h *handlers) {
 			"changed.",
 	}), h.markAllAttended)
 
+	register(api, AccessStaff, huma.Operation{
+		OperationID: "searchPersonsForStaff",
+		Method:      http.MethodGet,
+		Path:        BasePath + "/staff/persons",
+		Summary:     "Find persons to add",
+		Description: "Returns the persons whose given or family name contains every word of `q` (at least two " +
+			"characters), ignoring case, ordered by family and given name; at most 20. Only the name and the " +
+			"birth year, no contact data: for instructors and accompanists adding a person to their lesson " +
+			"(`addLessonParticipant`). The office's picker is `listPersons`.",
+		Tags: []string{"participants"},
+	}, h.searchPersonsForStaff)
+
 	register(api, AccessOffice, huma.Operation{
 		OperationID: "listBookingEvents",
 		Method:      http.MethodGet,
-		Path:        BasePath + "/bookings/{bookingId}/events",
+		Path:        BasePath + "/admin/bookings/{bookingId}/events",
 		Summary:     "List a booking's history",
 		Description: "Returns every change of the booking, oldest first, with the account that made it (the " +
 			"admin when an admin was signed in as someone else; none for the system).",
@@ -233,6 +249,26 @@ type StaffBookingsOutput struct {
 	}
 }
 
+// StaffPersonSearchInput is the request of searchPersonsForStaff.
+type StaffPersonSearchInput struct {
+	Query string `doc:"Words to look for in the names; at least two characters." maxLength:"100" minLength:"2" query:"q" required:"true"`
+}
+
+// StaffPersonMatch is a person found by searchPersonsForStaff: no contact
+// data.
+type StaffPersonMatch struct {
+	ID        domain.PersonID `doc:"Person ID."                       json:"id"`
+	Name      string          `doc:"Given and family name."           json:"name"`
+	BirthYear int             `doc:"Year of birth; absent if unknown." json:"birthYear,omitzero"`
+}
+
+// StaffPersonMatchesOutput is the response of searchPersonsForStaff.
+type StaffPersonMatchesOutput struct {
+	Body struct {
+		Items []StaffPersonMatch `doc:"Matching persons ordered by family and given name." json:"items" nullable:"false"`
+	}
+}
+
 // BookingEvent is an entry in the history of a booking.
 type BookingEvent struct {
 	ID       domain.BookingEventID `doc:"Event ID."                                   json:"id"`
@@ -270,7 +306,7 @@ func (h *handlers) listLessonParticipants(
 
 	body := LessonParticipants{
 		LessonID: lp.Lesson.ID, Capacity: lp.Lesson.Capacity, Active: lp.Active, Held: lp.Held,
-		FreePlaces: lp.FreePlaces(), DayOverAt: lp.DayOverAt.UTC(),
+		FreePlaces: lp.FreePlaces(), Waiting: lp.Waiting, DayOverAt: lp.DayOverAt.UTC(),
 		Bookings: make([]LessonParticipant, 0, len(lp.Bookings)), Waitlist: make([]LessonWaitlistEntry, 0, len(lp.Waitlist)),
 	}
 
@@ -293,10 +329,6 @@ func (h *handlers) listLessonParticipants(
 
 		if w.Status == domain.WaitlistInvited {
 			entry.ExpiresAt = e.ExpiresAt.UTC()
-		}
-
-		if w.Status == domain.WaitlistWaiting {
-			body.Waiting++
 		}
 
 		body.Waitlist = append(body.Waitlist, entry)
@@ -360,6 +392,24 @@ func (h *handlers) markAllAttended(ctx context.Context, in *LessonRefInput) (*St
 
 	for _, b := range changed {
 		out.Body.Items = append(out.Body.Items, staffBookingBody(b))
+	}
+
+	return out, nil
+}
+
+func (h *handlers) searchPersonsForStaff(
+	ctx context.Context, in *StaffPersonSearchInput,
+) (*StaffPersonMatchesOutput, error) {
+	hits, err := h.deps.Participants.FindPersons(ctx, in.Query)
+	if err != nil {
+		return nil, h.toHTTPError(ctx, err)
+	}
+
+	out := &StaffPersonMatchesOutput{}
+	out.Body.Items = make([]StaffPersonMatch, 0, len(hits))
+
+	for _, p := range hits {
+		out.Body.Items = append(out.Body.Items, StaffPersonMatch{ID: p.ID, Name: p.Name, BirthYear: p.BirthYear})
 	}
 
 	return out, nil

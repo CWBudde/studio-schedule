@@ -18,7 +18,7 @@ import (
 // started, and removing one cancels their bookings of those lessons. These
 // bookings have the source domain.BookingSourceMember, ignore the booking
 // cutoff and send no mail. A member releases a single date by a normal
-// cancellation; neither generation nor enrollment books a person into a
+// cancellation, staff by removing them from it; neither generation nor enrollment books a person into a
 // lesson they have any booking for, canceled ones included, so a released
 // date stays released.
 
@@ -134,8 +134,9 @@ func lessonIDs(lessons []domain.Lesson) []domain.LessonID {
 // class's lessons that have not started and that m is active on
 // (domain.ClassMember.ActiveOn), those the school canceled included (their
 // bookings stay; ADR 0009). A lesson the person has an active booking for,
-// or a date they released (domain.Booking.Released), is skipped; a booking
-// the office canceled or a pause canceled does not keep them out. A full
+// or a released date (domain.Booking.Released: they gave it up, or staff
+// removed them), is skipped; a booking the office canceled by changing the
+// membership, or a pause canceled, does not keep them out. A full
 // lesson gets the booking anyway, recorded as an override. The member's
 // open entry on a lesson's waiting list ends with the booking (ADR 0010).
 // The actor is the office account.

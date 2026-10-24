@@ -85,6 +85,34 @@
         ],
         "type": "object"
       },
+      "AddParticipantData": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmOverCapacity": {
+            "description": "Book even if the lesson is full (skips the 409 full); the booking event records the override.",
+            "type": "boolean"
+          },
+          "guest": {
+            "$ref": "#/components/schemas/GuestData",
+            "description": "A guest to book instead of a person."
+          },
+          "personId": {
+            "description": "The person to book.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "trial": {
+            "description": "Book as a trial lesson.",
+            "type": "boolean"
+          },
+          "trialNote": {
+            "description": "Note on the trial for the instructor; only with trial.",
+            "maxLength": 500,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "AdminPerson": {
         "additionalProperties": false,
         "properties": {
@@ -130,6 +158,24 @@
           "id",
           "givenName",
           "familyName"
+        ],
+        "type": "object"
+      },
+      "AttendanceData": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "description": "attended, no_show, or booked to set it back to unknown.",
+            "enum": [
+              "attended",
+              "no_show",
+              "booked"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
         ],
         "type": "object"
       },
@@ -282,10 +328,11 @@
             "type": "string"
           },
           "source": {
-            "description": "How the booking came about: by a member, or as a class member's automatic booking.",
+            "description": "How the booking came about: self, by a member; member, a class member's automatic booking; staff, by the office or the lesson's instructor or accompanist.",
             "enum": [
               "self",
-              "member"
+              "member",
+              "staff"
             ],
             "type": "string"
           },
@@ -308,6 +355,95 @@
           "source",
           "bookedAt",
           "late"
+        ],
+        "type": "object"
+      },
+      "BookingEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/BookingEventActor",
+            "description": "Who did it; absent for the system (e.g. automatic class member bookings, or an invite accepted by its link)."
+          },
+          "at": {
+            "description": "When it happened.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "Event ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "late": {
+            "description": "A cancellation after the cancellation cutoff.",
+            "type": "boolean"
+          },
+          "note": {
+            "description": "waitlist: the place came from the waiting list.",
+            "type": "string"
+          },
+          "override": {
+            "description": "A booking beyond the lesson's capacity.",
+            "type": "boolean"
+          },
+          "status": {
+            "description": "The booking's status from then on.",
+            "enum": [
+              "booked",
+              "canceled",
+              "attended",
+              "no_show"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "status",
+          "late",
+          "override"
+        ],
+        "type": "object"
+      },
+      "BookingEventActor": {
+        "additionalProperties": false,
+        "properties": {
+          "accountId": {
+            "description": "The account.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "email": {
+            "description": "Its email.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Given and family name of its person.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accountId",
+          "name",
+          "email"
+        ],
+        "type": "object"
+      },
+      "BookingEventsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "The history, oldest first.",
+            "items": {
+              "$ref": "#/components/schemas/BookingEvent"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
         ],
         "type": "object"
       },
@@ -1334,6 +1470,26 @@
         ],
         "type": "object"
       },
+      "GuestData": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "The guest's email, for the confirmation and the lesson mails.",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "name": {
+            "description": "The guest's name.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "Health": {
         "additionalProperties": false,
         "properties": {
@@ -1883,6 +2039,155 @@
         ],
         "type": "object"
       },
+      "LessonParticipant": {
+        "additionalProperties": false,
+        "properties": {
+          "bookedAt": {
+            "description": "When the booking was made.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "bookingId": {
+            "description": "The booking.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "canceledAt": {
+            "description": "When it was canceled, if so.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "contactEmail": {
+            "description": "Where mails about the participant go first: the person's account, their own address or a guardian's account; a guest's address. Absent if none.",
+            "type": "string"
+          },
+          "contactPhone": {
+            "description": "The person's phone, else the first of their guardians' with one; absent if none.",
+            "type": "string"
+          },
+          "guest": {
+            "description": "Whether this is a guest without a person record.",
+            "type": "boolean"
+          },
+          "late": {
+            "description": "Whether the cancellation came after the cancellation cutoff.",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "Given and family name of the person, or the guest's name.",
+            "type": "string"
+          },
+          "personId": {
+            "description": "The booked person; absent for a guest.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "source": {
+            "description": "How the booking came about (see Booking).",
+            "enum": [
+              "self",
+              "member",
+              "staff"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "description": "booked: attendance unknown; attended; no_show; canceled.",
+            "enum": [
+              "booked",
+              "canceled",
+              "attended",
+              "no_show"
+            ],
+            "type": "string"
+          },
+          "trial": {
+            "description": "Whether this is a trial lesson.",
+            "type": "boolean"
+          },
+          "trialNote": {
+            "description": "Note on the trial for the instructor.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bookingId",
+          "name",
+          "guest",
+          "status",
+          "source",
+          "trial",
+          "late",
+          "bookedAt"
+        ],
+        "type": "object"
+      },
+      "LessonParticipants": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "description": "Active (not canceled) bookings; more than the capacity after an override.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "bookings": {
+            "description": "All bookings, canceled ones included, ordered by when they were made.",
+            "items": {
+              "$ref": "#/components/schemas/LessonParticipant"
+            },
+            "type": "array"
+          },
+          "capacity": {
+            "description": "Places of the lesson.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "dayOverAt": {
+            "description": "When the attendance window of instructors and accompanists ends: the end of the lesson's school day, or its end if later. Attendance opens at the start.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "freePlaces": {
+            "description": "Capacity minus active bookings and held places, at least 0.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "held": {
+            "description": "Places held by open waiting-list invites.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lessonId": {
+            "description": "The lesson.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "waiting": {
+            "description": "Entries waiting for an invite.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "waitlist": {
+            "description": "The waiting list, ended entries included, in its order.",
+            "items": {
+              "$ref": "#/components/schemas/LessonWaitlistEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "lessonId",
+          "capacity",
+          "active",
+          "held",
+          "freePlaces",
+          "waiting",
+          "dayOverAt",
+          "bookings",
+          "waitlist"
+        ],
+        "type": "object"
+      },
       "LessonRestoreData": {
         "additionalProperties": false,
         "properties": {
@@ -1988,6 +2293,65 @@
           "room",
           "location",
           "instructor"
+        ],
+        "type": "object"
+      },
+      "LessonWaitlistEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "entryId": {
+            "description": "The entry.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "expiresAt": {
+            "description": "Until when the invite reserves the place; only while invited.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "joinedAt": {
+            "description": "When the entry joined the list, or went back to its end.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "description": "Given and family name of the person.",
+            "type": "string"
+          },
+          "personId": {
+            "description": "The person on the list.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "position": {
+            "description": "Place among the waiting entries, 1 for the next to be invited; absent unless waiting.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "status": {
+            "description": "As in WaitlistEntry, except that an invite whose expiry has passed is expired.",
+            "enum": [
+              "waiting",
+              "invited",
+              "accepted",
+              "expired",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "stayOnList": {
+            "description": "Whether an invite that expires or is declined puts the entry back at the end of the list.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "entryId",
+          "personId",
+          "name",
+          "status",
+          "stayOnList",
+          "joinedAt"
         ],
         "type": "object"
       },
@@ -2938,6 +3302,101 @@
         ],
         "type": "object"
       },
+      "StaffBooking": {
+        "additionalProperties": false,
+        "properties": {
+          "bookedAt": {
+            "description": "When the booking was made.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "canceledAt": {
+            "description": "When it was canceled, if so.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "guestEmail": {
+            "description": "The guest's email, if they gave one.",
+            "type": "string"
+          },
+          "guestName": {
+            "description": "The guest's name; only for a guest.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Booking ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "late": {
+            "description": "Whether the cancellation came after the cancellation cutoff.",
+            "type": "boolean"
+          },
+          "lessonId": {
+            "description": "The lesson.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "personId": {
+            "description": "The booked person; absent for a guest.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "source": {
+            "description": "How the booking came about (see Booking).",
+            "enum": [
+              "self",
+              "member",
+              "staff"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "description": "State of the booking.",
+            "enum": [
+              "booked",
+              "canceled",
+              "attended",
+              "no_show"
+            ],
+            "type": "string"
+          },
+          "trial": {
+            "description": "Whether this is a trial lesson.",
+            "type": "boolean"
+          },
+          "trialNote": {
+            "description": "Note on the trial for the instructor.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "lessonId",
+          "status",
+          "source",
+          "trial",
+          "bookedAt",
+          "late"
+        ],
+        "type": "object"
+      },
+      "StaffBookingsOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "The bookings marked attended.",
+            "items": {
+              "$ref": "#/components/schemas/StaffBooking"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "StaffData": {
         "additionalProperties": false,
         "properties": {
@@ -3069,6 +3528,46 @@
         ],
         "type": "object"
       },
+      "StaffPersonMatch": {
+        "additionalProperties": false,
+        "properties": {
+          "birthYear": {
+            "description": "Year of birth; absent if unknown.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "description": "Person ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "description": "Given and family name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "StaffPersonMatchesOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "Matching persons ordered by family and given name.",
+            "items": {
+              "$ref": "#/components/schemas/StaffPersonMatch"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "StaffRef": {
         "additionalProperties": false,
         "properties": {
@@ -3172,6 +3671,24 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "UpdateParticipantData": {
+        "additionalProperties": false,
+        "properties": {
+          "trial": {
+            "description": "Whether the booking is a trial lesson.",
+            "type": "boolean"
+          },
+          "trialNote": {
+            "description": "Note on the trial for the instructor; only with trial.",
+            "maxLength": 500,
+            "type": "string"
+          }
+        },
+        "required": [
+          "trial"
+        ],
         "type": "object"
       },
       "WaitlistEntry": {
@@ -3461,6 +3978,52 @@
           "admin"
         ],
         "x-access": "admin"
+      }
+    },
+    "/api/v1/admin/bookings/{bookingId}/events": {
+      "get": {
+        "description": "Returns every change of the booking, oldest first, with the account that made it (the admin when an admin was signed in as someone else; none for the system).",
+        "operationId": "listBookingEvents",
+        "parameters": [
+          {
+            "description": "The booking.",
+            "in": "path",
+            "name": "bookingId",
+            "required": true,
+            "schema": {
+              "description": "The booking.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingEventsOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List a booking's history",
+        "tags": [
+          "participants"
+        ],
+        "x-access": "office"
       }
     },
     "/api/v1/admin/classes/{classId}/members": {
@@ -4601,6 +5164,72 @@
         "x-access": "public"
       }
     },
+    "/api/v1/bookings/{bookingId}/attendance": {
+      "post": {
+        "description": "Sets an active booking to `attended`, `no_show` or back to `booked` (unknown). From the lesson's start on (before it a 422 on `path.bookingId`), until the end of its school day for instructors and accompanists (afterwards a 422 on `path.bookingId`), at any time after the start for the office. Each change adds a booking event. A canceled booking is a 409 `already-canceled`, a lesson the school canceled a 409 `closed` with why `canceled`.",
+        "operationId": "setAttendance",
+        "parameters": [
+          {
+            "description": "The booking.",
+            "in": "path",
+            "name": "bookingId",
+            "required": true,
+            "schema": {
+              "description": "The booking.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttendanceData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffBooking"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Take attendance",
+        "tags": [
+          "participants"
+        ],
+        "x-access": "staff"
+      }
+    },
     "/api/v1/bookings/{bookingId}/cancel": {
       "post": {
         "description": "Cancels a booking of the signed-in person or one of their dependents (404 for any other booking) and frees its place. A booking canceled already is a 409 `already-canceled`; one whose lesson has started a 422 on `path.bookingId`. From the cancellation cutoff before the start on, the cancellation is allowed but `late`, unless the school canceled the lesson. The signed-in account gets a mail.",
@@ -4785,6 +5414,128 @@
           "bookings"
         ],
         "x-access": "signedIn"
+      }
+    },
+    "/api/v1/bookings/{bookingId}/participant": {
+      "put": {
+        "description": "Sets whether an active booking is a trial, and its note for the instructor (a note without `trial` is a 422 on `body.trialNote`). Same access and time window as `addLessonParticipant` (a 422 on `path.bookingId` once the day is over for instructors); a canceled booking is a 409 `already-canceled`.",
+        "operationId": "updateLessonParticipant",
+        "parameters": [
+          {
+            "description": "The booking.",
+            "in": "path",
+            "name": "bookingId",
+            "required": true,
+            "schema": {
+              "description": "The booking.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateParticipantData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffBooking"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Mark a participant's trial",
+        "tags": [
+          "participants"
+        ],
+        "x-access": "staff"
+      }
+    },
+    "/api/v1/bookings/{bookingId}/remove": {
+      "post": {
+        "description": "Cancels a booking of the lesson as staff: never late, and a person's date is released, so a later change of their class membership does not book them into it again. Its place goes to the waiting list. After the start too (a walk-in added by mistake), until the end of the lesson's school day for instructors and accompanists (afterwards a 422 on `path.bookingId`), at any time for the office, and on a lesson the school canceled. Before the start of a lesson that takes place, the participant's mail recipients get the cancellation; for a canceled lesson nobody is mailed or invited. A canceled booking is a 409 `already-canceled`; a booking of a lesson of others a 404.",
+        "operationId": "removeLessonParticipant",
+        "parameters": [
+          {
+            "description": "The booking.",
+            "in": "path",
+            "name": "bookingId",
+            "required": true,
+            "schema": {
+              "description": "The booking.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffBooking"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove a participant",
+        "tags": [
+          "participants"
+        ],
+        "x-access": "staff"
       }
     },
     "/api/v1/classes/{classId}": {
@@ -5819,6 +6570,62 @@
         "x-access": "office"
       }
     },
+    "/api/v1/lessons/{lessonId}/attendance/all": {
+      "post": {
+        "description": "Sets every booking of the lesson whose attendance is unknown (`booked`) to `attended`, under the rules of `setAttendance` (the 422s on `path.lessonId`), and returns the bookings it changed.",
+        "operationId": "markAllAttended",
+        "parameters": [
+          {
+            "description": "The lesson.",
+            "in": "path",
+            "name": "lessonId",
+            "required": true,
+            "schema": {
+              "description": "The lesson.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffBookingsOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Mark everyone attended",
+        "tags": [
+          "participants"
+        ],
+        "x-access": "staff"
+      }
+    },
     "/api/v1/lessons/{lessonId}/bookings": {
       "post": {
         "description": "Books the lesson for the signed-in person or one of their dependents (managed ones included). A person outside the family, or a lesson the caller may not see, is a 404. Everyone books under member rules: staff get a 409 `closed` with why `release` for a lesson members may not book yet (not released, beyond their early access) or at all (hidden). A canceled lesson is a 409 `closed` with why `canceled`, one that has started a 409 `closed` with why `started`, and one whose booking cutoff has passed a 409 `closed` with why `cutoff`, checked in this order. A person booked already is a 409 `already-booked`, a lesson whose active bookings fill its capacity a 409 `full`. The signed-in account gets a confirmation mail.",
@@ -5949,6 +6756,116 @@
           "lessons"
         ],
         "x-access": "office"
+      }
+    },
+    "/api/v1/lessons/{lessonId}/participants": {
+      "get": {
+        "description": "Returns every booking of the lesson, canceled ones included, with the participant's name and contact data, and its waiting list, ended entries included, with the counts. The office sees every lesson, an instructor or accompanist the lessons they teach or accompany (their staff record linked to their person); any other lesson is a 404.",
+        "operationId": "listLessonParticipants",
+        "parameters": [
+          {
+            "description": "The lesson.",
+            "in": "path",
+            "name": "lessonId",
+            "required": true,
+            "schema": {
+              "description": "The lesson.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonParticipants"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List a lesson's participants",
+        "tags": [
+          "participants"
+        ],
+        "x-access": "staff"
+      },
+      "post": {
+        "description": "Books a person (`personId`) or a guest (`guest`, a name and an optional email) into the lesson as staff (source `staff`), optionally as a `trial` with a `trialNote`. Unlike `bookLesson`, the release window and the booking cutoff do not apply, and the lesson may have started: instructors and accompanists add until the end of the lesson's school day (afterwards a 422 on `path.lessonId`), the office at any time. A lesson the school canceled is a 409 `closed` with why `canceled`. A person booked already is a 409 `already-booked`; a lesson whose active bookings and the places held by others' waiting-list invites fill its capacity a 409 `full`, unless `confirmOverCapacity` is set (the booking event records the override). A person whose own invite holds a place takes it without the confirmation (an override if the lesson has been overbooked since); any other entry of the person on the lesson's waiting list ends. Before the lesson starts, the person's mail recipients, or a guest with an email (in the school's language, asked to contact the school to cancel), get the confirmation. Lessons of others are a 404, an unknown person a 422 on `body.personId`.",
+        "operationId": "addLessonParticipant",
+        "parameters": [
+          {
+            "description": "The lesson.",
+            "in": "path",
+            "name": "lessonId",
+            "required": true,
+            "schema": {
+              "description": "The lesson.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddParticipantData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffBooking"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add a participant",
+        "tags": [
+          "participants"
+        ],
+        "x-access": "staff"
       }
     },
     "/api/v1/lessons/{lessonId}/restore": {
@@ -6713,6 +7630,54 @@
           "catalog"
         ],
         "x-access": "office"
+      }
+    },
+    "/api/v1/staff/persons": {
+      "get": {
+        "description": "Returns the persons whose given or family name contains every word of `q` (at least two characters), ignoring case, ordered by family and given name; at most 20. Only the name and the birth year, no contact data: for instructors and accompanists adding a person to their lesson (`addLessonParticipant`). The office's picker is `listPersons`.",
+        "operationId": "searchPersonsForStaff",
+        "parameters": [
+          {
+            "description": "Words to look for in the names; at least two characters.",
+            "explode": false,
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "Words to look for in the names; at least two characters.",
+              "maxLength": 100,
+              "minLength": 2,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffPersonMatchesOutputBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Find persons to add",
+        "tags": [
+          "participants"
+        ],
+        "x-access": "staff"
       }
     },
     "/api/v1/staff/{staffId}": {

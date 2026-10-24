@@ -5,6 +5,6 @@
 {{- range .Lessons}}
 <p><strong>{{.CourseType}}</strong><br>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}<br>{{.Room}}, {{.Location}}</p>
 {{- end}}
-<p>If the date does not suit after all, please cancel the booking in good time, so that someone else can take the place.</p>
+<p>{{if .Guest}}If the date does not suit after all, please contact {{.SchoolName}} in good time to cancel, so that someone else can take the place.{{else}}If the date does not suit after all, please cancel the booking in good time, so that someone else can take the place.{{end}}</p>
 <p>Kind regards,<br>{{.SchoolName}}</p>
 {{- end}}

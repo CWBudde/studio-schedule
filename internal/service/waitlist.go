@@ -358,6 +358,16 @@ func (s *WaitlistService) accept(
 		return domain.Booking{}, err
 	}
 
+	open, err := tx.Waitlist().ListOpenByLessons(ctx, []domain.LessonID{l.ID})
+	if err != nil {
+		return domain.Booking{}, err
+	}
+
+	fit, err := fitOf(ctx, tx, now, l, open, e.PersonID)
+	if err != nil {
+		return domain.Booking{}, err
+	}
+
 	b := domain.Booking{
 		ID: ids.New[domain.BookingID](s.w.ids), LessonID: l.ID, PersonID: e.PersonID, Status: domain.BookingBooked,
 		Source: domain.BookingSourceSelf, BookedAt: now,
@@ -373,7 +383,7 @@ func (s *WaitlistService) accept(
 		return domain.Booking{}, err
 	}
 
-	if err := recordWaitlistEvent(ctx, tx, s.w.ids, actor, now, b); err != nil {
+	if err := recordWaitlistEvent(ctx, tx, s.w.ids, actor, now, b, fit.Over); err != nil {
 		return domain.Booking{}, err
 	}
 
@@ -381,13 +391,15 @@ func (s *WaitlistService) accept(
 }
 
 // recordWaitlistEvent records the booking b of a place from the waiting
-// list.
+// list, with the override flag of a place beyond the lesson's capacity (the
+// office overbooked the lesson while the invite held the place; fitOf).
 func recordWaitlistEvent(
 	ctx context.Context, tx store.Tx, src ids.Source, actor domain.AccountID, now time.Time, b domain.Booking,
+	override bool,
 ) error {
 	e := domain.BookingEvent{
 		ID: ids.New[domain.BookingEventID](src), BookingID: b.ID, At: now, Status: b.Status, ActorAccountID: actor,
-		Note: waitlistNote,
+		Note: waitlistNote, Override: override,
 	}
 	if err := e.Validate(); err != nil {
 		return err

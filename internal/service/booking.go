@@ -99,14 +99,15 @@ func NewBookingService(st store.Store, clk clock.Clock, src ids.Source, mails Ma
 // started or past lesson, or one whose booking cutoff has passed, is a
 // *BookingClosedError too. A person with an active booking for the lesson
 // is ErrAlreadyBooked; a lesson whose active bookings and the places held
-// by waiting-list invites fill its capacity is ErrLessonFull, unless the
-// person's own invite holds one of them: booking then takes that place like
-// accepting the invite. Any other open entry of the person on the lesson's
-// list is withdrawn (ADR 0010). The booking event records p's real account
-// (the admin when impersonating), and the acting account p gets the
-// confirmation mail. Before it counts the places, it settles the lesson's
-// waiting list (an invite that ran out goes to the next entry), and that
-// stays even when the booking is refused.
+// by others' waiting-list invites fill its capacity is ErrLessonFull, unless
+// the person's own invite holds a place: booking then takes that place like
+// accepting the invite, even if the office has overbooked the lesson since,
+// which the booking event records as an override (fitOf). Any other open
+// entry of the person on the lesson's list is withdrawn (ADR 0010). The
+// booking event records p's real account (the admin when impersonating),
+// and the acting account p gets the confirmation mail. Before it counts
+// the places, it settles the lesson's waiting list (an invite that ran out
+// goes to the next entry), and that stays even when the booking is refused.
 func (s *BookingService) Book(
 	ctx context.Context, p Principal, lesson domain.LessonID, person domain.PersonID,
 ) (domain.Booking, error) {
@@ -143,25 +144,16 @@ func (s *BookingService) Book(
 			return err
 		}
 
-		booked, err := tx.Bookings().ListActiveByLessonsAndPersons(ctx, []domain.LessonID{l.ID}, []domain.PersonID{who.ID})
-		if err != nil {
-			return err
-		}
+		fit, err := fitOf(ctx, tx, now, l, open, who.ID)
 
-		if len(booked) > 0 {
+		switch {
+		case err != nil:
+			return err
+		case fit.Booked:
 			refused = ErrAlreadyBooked
 
 			return nil
-		}
-
-		active, err := tx.Bookings().CountActive(ctx, l.ID)
-		if err != nil {
-			return err
-		}
-
-		// The person's own invite holds its place for them.
-		others := slices.DeleteFunc(slices.Clone(open), func(e domain.WaitlistEntry) bool { return e.PersonID == who.ID })
-		if active+heldPlaces(others, now)[l.ID] >= l.Capacity {
+		case fit.Full():
 			refused = ErrLessonFull
 
 			return nil
@@ -194,7 +186,7 @@ func (s *BookingService) Book(
 		}
 
 		if accepted {
-			err = recordWaitlistEvent(ctx, tx, s.ids, actorOf(p), now, b)
+			err = recordWaitlistEvent(ctx, tx, s.ids, actorOf(p), now, b, fit.Over)
 		} else {
 			err = s.addEvent(ctx, tx, p, b, now)
 		}
@@ -572,8 +564,8 @@ func (s *BookingService) cancel(
 // and records the event with the actor (zero for the system). It frees the
 // place in the caller's transaction and offers it to the lesson's waiting
 // list (ADR 0010). Every cancellation goes through here: a member's
-// (BookingService.cancel) and the office's when a membership ends
-// (unenroll).
+// (BookingService.cancel), the office's when a membership ends (unenroll)
+// and staff removing a participant (ParticipantService.Remove).
 func cancelBooking(
 	ctx context.Context, tx store.Tx, w waitlister, actor domain.AccountID, now time.Time, l domain.Lesson,
 	b domain.Booking,
@@ -865,7 +857,8 @@ func mailBookings(
 
 	return sendMails(ctx, tx, src, mails, settings, now, recipients, template, func(r recipient) any {
 		return mail.BookingData{
-			SchoolName: settings.SchoolName, GivenName: r.givenName, Participant: participant, Lessons: lessons,
+			SchoolName: settings.SchoolName, GivenName: r.givenName, Participant: participant, Guest: r.guest,
+			Lessons: lessons,
 		}
 	})
 }

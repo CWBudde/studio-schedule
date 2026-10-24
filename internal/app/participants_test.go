@@ -1,8 +1,10 @@
 package app_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -207,7 +209,8 @@ func TestParticipants(t *testing.T) {
 	a.expect(http.StatusUnprocessableEntity, http.MethodPost, booking(claraBooking, "attendance"), `{"status":"maybe"}`, felix)
 
 	// The history is the office's.
-	events := decode(t, a.expect(http.StatusOK, http.MethodGet, booking(claraBooking, "events"), "", office))
+	history := func(id string) string { return "/api/v1/admin/bookings/" + id + "/events" }
+	events := decode(t, a.expect(http.StatusOK, http.MethodGet, history(claraBooking), "", office))
 	items, _ := events["items"].([]any)
 
 	if len(items) != 2 || items[0].(map[string]any)["status"] != "booked" ||
@@ -217,8 +220,9 @@ func TestParticipants(t *testing.T) {
 		t.Errorf("events %v", events)
 	}
 
-	a.expect(http.StatusForbidden, http.MethodGet, booking(claraBooking, "events"), "", alina)
-	a.expect(http.StatusNotFound, http.MethodGet, booking("00000000-0000-7000-8000-00000000f001", "events"), "", office)
+	a.expect(http.StatusForbidden, http.MethodGet, history(claraBooking), "", alina)
+	a.expect(http.StatusNotFound, http.MethodGet, history("00000000-0000-7000-8000-00000000f001"), "", office)
+	a.expect(http.StatusNotFound, http.MethodGet, booking(claraBooking, "events"), "", office)
 
 	// After the lesson's day, only the office changes it.
 	a.clock.advance(6 * time.Hour)
@@ -234,4 +238,49 @@ func TestParticipants(t *testing.T) {
 	}
 
 	a.expect(http.StatusOK, http.MethodPost, booking(claraBooking, "attendance"), `{"status":"attended"}`, office)
+}
+
+// TestSearchPersonsForStaff: instructors find persons to add by name, with
+// the birth year and nothing else; members may not search.
+func TestSearchPersonsForStaff(t *testing.T) {
+	t.Parallel()
+
+	a := newAuthApp(t, app.Deps{Demo: true})
+	alina := a.login("alina.starling@example.net")
+	clara := a.login("clara.amberly@example.org")
+	search := func(q string) string { return "/api/v1/staff/persons?q=" + url.QueryEscape(q) }
+
+	if res, _ := a.call(http.MethodGet, search("clara"), ""); res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("signed out: %d, want 401", res.StatusCode)
+	}
+
+	a.expect(http.StatusForbidden, http.MethodGet, search("clara"), "", clara)
+	a.expect(http.StatusUnprocessableEntity, http.MethodGet, search("c"), "", alina)
+
+	var found struct {
+		Items []map[string]any `json:"items"`
+	}
+
+	if err := json.Unmarshal(a.expect(http.StatusOK, http.MethodGet, search("clara amb"), "", alina), &found); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(found.Items) != 1 || found.Items[0]["name"] != "Clara Amberly" || found.Items[0]["id"] == nil {
+		t.Fatalf("found %v", found.Items)
+	}
+
+	for key := range found.Items[0] {
+		if key != "id" && key != "name" && key != "birthYear" {
+			t.Errorf("field %q in %v, want only id, name and birthYear", key, found.Items[0])
+		}
+	}
+
+	// Email addresses do not match.
+	if err := json.Unmarshal(a.expect(http.StatusOK, http.MethodGet, search("example.org"), "", alina), &found); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(found.Items) != 0 {
+		t.Errorf("by email: %v", found.Items)
+	}
 }

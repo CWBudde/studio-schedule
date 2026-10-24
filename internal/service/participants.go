@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
@@ -158,9 +159,10 @@ type NewParticipant struct {
 // without a trial on trialNote. A person with an active booking is
 // ErrAlreadyBooked. A lesson whose active bookings and the places held by
 // others' invites fill its capacity is ErrLessonFull unless the caller
-// confirms going over it, which the booking event records as an override.
-// The person's open entry on the lesson's list ends (ADR 0010), and like
-// Book it settles the list first. Before the lesson starts, the person's
+// confirms going over it, which the booking event records as an override;
+// a person whose own invite holds a place takes it without confirming, like
+// Book (fitOf). The person's open entry on the lesson's list ends (ADR
+// 0010), and like Book it settles the list first. Before the lesson starts, the person's
 // recipients (or a guest with an email) get the confirmation mail; a
 // walk-in after the start gets none. The event records p's real account.
 func (s *ParticipantService) Add(
@@ -208,17 +210,11 @@ func (s *ParticipantService) Add(
 			return err
 		}
 
-		participant := b.GuestName
-
-		if !b.PersonID.IsZero() {
-			who, err := tx.Persons().Get(ctx, b.PersonID)
-			if errors.Is(err, domain.ErrNotFound) {
-				return errUnknownPerson
-			} else if err != nil {
-				return err
-			}
-
-			participant = fullName(who)
+		participant, err := participantName(ctx, tx, b)
+		if errors.Is(err, domain.ErrNotFound) {
+			return errUnknownPerson
+		} else if err != nil {
+			return err
 		}
 
 		open, err := s.w.settled(ctx, tx, now, l)
@@ -226,16 +222,16 @@ func (s *ParticipantService) Add(
 			return err
 		}
 
-		booked, full, err := placeFor(ctx, tx, now, l, open, b.PersonID)
+		fit, err := fitOf(ctx, tx, now, l, open, b.PersonID)
 
 		switch {
 		case err != nil:
 			return err
-		case booked:
+		case fit.Booked:
 			refused = ErrAlreadyBooked
 
 			return nil
-		case full && !in.ConfirmOverCapacity:
+		case fit.Full() && !in.ConfirmOverCapacity:
 			refused = ErrLessonFull
 
 			return nil
@@ -259,9 +255,9 @@ func (s *ParticipantService) Add(
 		}
 
 		if accepted {
-			err = recordWaitlistEvent(ctx, tx, s.w.ids, actorOf(p), now, b)
+			err = recordWaitlistEvent(ctx, tx, s.w.ids, actorOf(p), now, b, fit.Over)
 		} else {
-			err = recordEvent(ctx, tx, s.w.ids, actorOf(p), now, b, full)
+			err = recordEvent(ctx, tx, s.w.ids, actorOf(p), now, b, fit.Over)
 		}
 
 		if err != nil {
@@ -285,35 +281,6 @@ func (s *ParticipantService) Add(
 	return b, nil
 }
 
-// placeFor tells whether person (zero for a guest) has an active booking
-// for lesson l, locked with its open entries, and whether l is full for
-// them at now: its active bookings and the places others' invites hold fill
-// its capacity. A person whose own invite holds a place takes that place,
-// like accepting the invite, which does not count the places again (ADR
-// 0010).
-func placeFor(
-	ctx context.Context, tx store.Tx, now time.Time, l domain.Lesson, open []domain.WaitlistEntry,
-	person domain.PersonID,
-) (booked, full bool, err error) {
-	if !person.IsZero() {
-		active, err := tx.Bookings().ListActiveByLessonsAndPersons(ctx, []domain.LessonID{l.ID}, []domain.PersonID{person})
-		if err != nil || len(active) > 0 {
-			return len(active) > 0, false, err
-		}
-
-		if slices.ContainsFunc(open, func(e domain.WaitlistEntry) bool { return e.PersonID == person && holdsPlace(e, now) }) {
-			return false, false, nil
-		}
-	}
-
-	active, err := tx.Bookings().CountActive(ctx, l.ID)
-	if err != nil {
-		return false, false, err
-	}
-
-	return false, active+heldPlaces(open, now)[l.ID] >= l.Capacity, nil
-}
-
 // ParticipantUpdate is what UpdateTrial sets on a booking.
 type ParticipantUpdate struct {
 	Trial     bool
@@ -322,7 +289,7 @@ type ParticipantUpdate struct {
 
 // UpdateTrial sets whether an active booking of a lesson p manages
 // (domain.ErrNotFound otherwise) is a trial, and its note, under the same
-// window as Add (ErrDayOver). A canceled booking is ErrBookingCanceled; a
+// window as Add (ErrDayOver), on a lesson the school canceled too. A canceled booking is ErrBookingCanceled; a
 // note without a trial is a validation error on trialNote. It records no
 // booking event: its status does not change.
 func (s *ParticipantService) UpdateTrial(
@@ -364,12 +331,17 @@ func (s *ParticipantService) UpdateTrial(
 }
 
 // Remove takes a participant off a lesson p manages (domain.ErrNotFound
-// otherwise): it cancels the booking, never late and not released, with
-// p's real account as the actor, and frees its place for the waiting list
-// (cancelBooking). It works after the start too (a walk-in booked by
-// mistake), until the lesson's day is over (ErrDayOver; the office always).
-// A canceled booking is ErrBookingCanceled. Before the start, the person's
-// recipients (or a guest with an email) get the cancellation mail.
+// otherwise): it cancels the booking, never late, with p's real account as
+// the actor, and frees its place for the waiting list (cancelBooking). A
+// person's booking is released (domain.Booking.Released): staff took them
+// off that date, so a later change of a class membership does not book
+// them into it again (ADR 0009, amendment). It works after the start too (a
+// walk-in booked by mistake), until the lesson's day is over (ErrDayOver;
+// the office always), and on a lesson the school canceled, to tidy it up.
+// A canceled booking is ErrBookingCanceled. Before the start of a lesson
+// that takes place, the person's recipients (or a guest with an email) get
+// the cancellation mail; for a canceled lesson nobody does, and nobody is
+// invited (the lesson takes no invites).
 func (s *ParticipantService) Remove(ctx context.Context, p Principal, id domain.BookingID) (domain.Booking, error) {
 	var b domain.Booking
 
@@ -394,18 +366,18 @@ func (s *ParticipantService) Remove(ctx context.Context, p Principal, id domain.
 			return err
 		}
 
-		b.Late, b.Released = false, false
+		b.Late, b.Released = false, !b.PersonID.IsZero()
 		if b, err = cancelBooking(ctx, tx, s.w, actorOf(p), now, l, b); err != nil {
 			return err
 		}
 
-		if !now.Before(l.StartsAt) {
+		if !now.Before(l.StartsAt) || l.Status == domain.LessonCanceled {
 			return nil
 		}
 
 		participant, err := participantName(ctx, tx, b)
 		if err != nil {
-			return err
+			return refErr(err)
 		}
 
 		return s.mailParticipant(ctx, tx, settings, loc, now, mail.TemplateBookingCanceled, b, participant, l)
@@ -555,7 +527,8 @@ func (s *ParticipantService) attend(
 }
 
 // participantName is the name of the participant of booking b: the
-// person's full name, or the guest's name.
+// person's full name, or the guest's name. A missing person is
+// domain.ErrNotFound.
 func participantName(ctx context.Context, tx store.Tx, b domain.Booking) (string, error) {
 	if b.PersonID.IsZero() {
 		return b.GuestName, nil
@@ -563,7 +536,7 @@ func participantName(ctx context.Context, tx store.Tx, b domain.Booking) (string
 
 	who, err := tx.Persons().Get(ctx, b.PersonID)
 	if err != nil {
-		return "", fmt.Errorf("person %v: %w", b.PersonID, refErr(err))
+		return "", fmt.Errorf("person %v: %w", b.PersonID, err)
 	}
 
 	return fullName(who), nil
@@ -629,8 +602,9 @@ type LessonParticipants struct {
 	// Waitlist is the lesson's list, ended entries included, ordered by
 	// JoinedAt and ID.
 	Waitlist []WaitingParticipant
-	// Active counts the active bookings, Held the places held by invites.
-	Active, Held int
+	// Active counts the active bookings, Held the places held by invites,
+	// Waiting the entries waiting for an invite.
+	Active, Held, Waiting int
 	// DayOverAt is when the instructor's attendance window closes
 	// (attendance opens at the lesson's start).
 	DayOverAt time.Time
@@ -738,6 +712,10 @@ func participantsOf(
 		status := e.Status
 		if status == domain.WaitlistInvited && !holdsPlace(e, now) {
 			status = domain.WaitlistExpired
+		}
+
+		if status == domain.WaitlistWaiting {
+			out.Waiting++
 		}
 
 		out.Waitlist = append(out.Waitlist, WaitingParticipant{
@@ -881,6 +859,61 @@ func (s *ParticipantService) Events(
 	})
 	if err != nil {
 		return nil, fmt.Errorf("events of booking %v: %w", id, err)
+	}
+
+	return out, nil
+}
+
+// MaxStaffPersonMatches is the most persons FindPersons returns.
+const MaxStaffPersonMatches = 20
+
+// minPersonQuery is the shortest query, in characters, FindPersons answers.
+const minPersonQuery = 2
+
+// PersonHit is a person as staff find them to add to a lesson: the name and
+// the birth year to tell persons of the same name apart, no contact data.
+type PersonHit struct {
+	ID   domain.PersonID
+	Name string
+	// BirthYear is the year of the birth date, 0 if unknown.
+	BirthYear int
+}
+
+// FindPersons returns the persons whose given or family name contains
+// every word of query, ignoring case, ordered by family name and given
+// name; at most MaxStaffPersonMatches. Unlike the office's
+// PersonService.SearchPersons it matches names only and returns no contact
+// data, as every staff member may search (ADR 0009, amendment). A query
+// shorter than two characters, spaces aside, finds nobody.
+func (s *ParticipantService) FindPersons(ctx context.Context, query string) ([]PersonHit, error) {
+	query = strings.TrimSpace(query)
+	if utf8.RuneCountInString(query) < minPersonQuery {
+		return []PersonHit{}, nil
+	}
+
+	var persons []domain.Person
+
+	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		persons, err = tx.Persons().List(ctx)
+
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("find persons: %w", err)
+	}
+
+	words := strings.Fields(strings.ToLower(query))
+	out := make([]PersonHit, 0, min(len(persons), MaxStaffPersonMatches))
+
+	for _, p := range persons {
+		if len(out) == MaxStaffPersonMatches {
+			break
+		}
+
+		if containsAll(strings.ToLower(p.GivenName+" "+p.FamilyName), words) {
+			out = append(out, PersonHit{ID: p.ID, Name: fullName(p), BirthYear: p.BirthDate.Year})
+		}
 	}
 
 	return out, nil

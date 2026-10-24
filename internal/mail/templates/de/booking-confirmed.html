@@ -5,6 +5,6 @@
 {{- range .Lessons}}
 <p><strong>{{.CourseType}}</strong><br>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr<br>{{.Room}}, {{.Location}}</p>
 {{- end}}
-<p>Falls der Termin doch nicht passt, storniere die Buchung bitte rechtzeitig, damit jemand anderes den Platz bekommt.</p>
+<p>{{if .Guest}}Falls der Termin doch nicht passt, sag bitte rechtzeitig bei {{.SchoolName}} ab, damit jemand anderes den Platz bekommt.{{else}}Falls der Termin doch nicht passt, storniere die Buchung bitte rechtzeitig, damit jemand anderes den Platz bekommt.{{end}}</p>
 <p>Viele Grüße<br>{{.SchoolName}}</p>
 {{- end}}

@@ -25,6 +25,17 @@ func bookingData(t *testing.T) mail.BookingData {
 	}
 }
 
+// guestData confirms the booking of a guest, who contacts the school to
+// cancel.
+func guestData(t *testing.T) mail.BookingData {
+	t.Helper()
+
+	d := bookingData(t)
+	d.Guest = true
+
+	return d
+}
+
 // canceledData cancels the booking of bookingData late.
 func canceledData(t *testing.T) mail.BookingData {
 	t.Helper()
@@ -67,6 +78,7 @@ func TestRenderBookingGolden(t *testing.T) {
 		{mail.TemplateBookingConfirmed, mail.TemplateBookingConfirmed, bookingData(t)},
 		{mail.TemplateBookingCanceled, mail.TemplateBookingCanceled, canceledData(t)},
 		{"booking-canceled-several", mail.TemplateBookingCanceled, canceledSeveralData(t)},
+		{"booking-confirmed-guest", mail.TemplateBookingConfirmed, guestData(t)},
 	}
 
 	for _, tt := range tests {
@@ -109,6 +121,8 @@ func TestRenderBookingContent(t *testing.T) {
 			"Dienstag, 27. Oktober 2026, 18:00–19:15 Uhr", "Room One, Studio Nowhere", "Gebucht für: Mia Example",
 			"bestätigt",
 		}, "Späte"},
+		{mail.TemplateBookingConfirmed, "en", guestData(t), []string{"please contact Studio Example in good time to cancel"}, "cancel the booking"},
+		{mail.TemplateBookingConfirmed, "de", guestData(t), []string{"sag bitte rechtzeitig bei Studio Example ab"}, "storniere"},
 		{mail.TemplateBookingCanceled, "en", canceledData(t), []string{
 			"Tuesday, 27 October 2026, 18:00–19:15", "is canceled", "Late cancellation",
 		}, "are canceled"},

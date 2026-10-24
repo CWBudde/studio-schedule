@@ -10,8 +10,13 @@ Booked for: {{.Participant}}
 {{.Room}}, {{.Location}}
 {{- end}}
 
+{{if .Guest -}}
+If the date does not suit after all, please contact {{.SchoolName}} in good time to cancel, so
+that someone else can take the place.
+{{- else -}}
 If the date does not suit after all, please cancel the booking in good time, so that someone
 else can take the place.
+{{- end}}
 
 Kind regards,
 {{.SchoolName}}

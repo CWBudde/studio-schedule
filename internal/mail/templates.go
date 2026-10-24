@@ -189,6 +189,10 @@ type BookingData struct {
 	GivenName string
 	// Participant names the booked person: the recipient or a dependent.
 	Participant string
+	// Guest tells that the recipient is a guest whom staff booked, who has
+	// no account to cancel with: TemplateBookingConfirmed asks them to
+	// contact the school instead.
+	Guest bool
 	// Lessons are the booked lessons, ordered by start.
 	Lessons []BookedLesson
 }

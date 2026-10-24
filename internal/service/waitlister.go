@@ -44,6 +44,62 @@ func heldPlaces(entries []domain.WaitlistEntry, now time.Time) map[domain.Lesson
 	return out
 }
 
+// placeFit is how a booking of a person, or a guest, fits into a lesson
+// (fitOf).
+type placeFit struct {
+	// Booked: the person has an active booking for the lesson already.
+	Booked bool
+	// Invited: the person's own invite holds a place in the lesson, which
+	// is theirs (ADR 0010).
+	Invited bool
+	// Over: the active bookings and the places others' invites hold fill
+	// the lesson's capacity, so a booking goes beyond it, and its event
+	// records an override.
+	Over bool
+}
+
+// Full reports whether a booking needs a confirmed override to go beyond
+// the capacity: it is Over, and no invite of the person reserves the place.
+func (p placeFit) Full() bool { return p.Over && !p.Invited }
+
+// fitOf tells how a booking of person (zero for a guest) fits into lesson
+// l, which the caller has locked, at now, given its open entries: the one
+// capacity rule of Book, Add and accepting an invite. The places that
+// others' invites hold count as taken; the place the person's own invite
+// holds is theirs, even when the office has overbooked the lesson since
+// (the booking then records an override).
+func fitOf(
+	ctx context.Context, tx store.Tx, now time.Time, l domain.Lesson, open []domain.WaitlistEntry,
+	person domain.PersonID,
+) (placeFit, error) {
+	var out placeFit
+
+	if !person.IsZero() {
+		active, err := tx.Bookings().ListActiveByLessonsAndPersons(ctx, []domain.LessonID{l.ID}, []domain.PersonID{person})
+		if err != nil || len(active) > 0 {
+			return placeFit{Booked: len(active) > 0}, err
+		}
+
+		out.Invited = slices.ContainsFunc(open, func(e domain.WaitlistEntry) bool {
+			return e.PersonID == person && holdsPlace(e, now)
+		})
+	}
+
+	active, err := tx.Bookings().CountActive(ctx, l.ID)
+	if err != nil {
+		return placeFit{}, err
+	}
+
+	others := open
+	if !person.IsZero() {
+		others = slices.DeleteFunc(slices.Clone(open), func(e domain.WaitlistEntry) bool { return e.PersonID == person })
+	}
+
+	out.Over = active+heldPlaces(others, now)[l.ID] >= l.Capacity
+
+	return out, nil
+}
+
 // places returns the active bookings of lesson id and the places its
 // invites hold at now.
 func places(ctx context.Context, tx store.Tx, now time.Time, id domain.LessonID) (active, held int, err error) {
