@@ -58,6 +58,9 @@ const (
 	// TemplateReceipt sends the PDF of a receipt, or of its cancellation, to
 	// whoever paid (ADR 0012); the PDF is attached. Data: ReceiptData.
 	TemplateReceipt = "receipt"
+	// TemplateAnnouncement brings an announcement of the school to its
+	// audience (ADR 0014). Data: AnnouncementData.
+	TemplateAnnouncement = "announcement"
 )
 
 // TemplateNames returns all template names.
@@ -66,7 +69,20 @@ func TemplateNames() []string {
 		TemplateConfirmEmail, TemplateResetPassword, TemplateChangeEmail, TemplateEmailChanged, TemplateInvite,
 		TemplateLessonCanceled, TemplateLessonRestored, TemplateLessonChanged, TemplateBookingConfirmed,
 		TemplateBookingCanceled, TemplateWaitlistInvite, TemplateWaitlistExpired, TemplateLessonNotice,
-		TemplateReceipt,
+		TemplateReceipt, TemplateAnnouncement,
+	}
+}
+
+// SecretLink reports whether mails of the template carry a secret,
+// single-use link: whoever reads such a mail can take over what the link
+// grants (an account, a password, a reserved place). The mail log never
+// shows their bodies and never queues them again (ADR 0014).
+func SecretLink(template string) bool {
+	switch template {
+	case TemplateConfirmEmail, TemplateChangeEmail, TemplateResetPassword, TemplateInvite, TemplateWaitlistInvite:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -372,4 +388,36 @@ type ReceiptData struct {
 	// Item describes what was paid, e.g. "10-visit pass for Lea Example,
 	// valid …".
 	Item string
+}
+
+// AnnouncementData is the data of TemplateAnnouncement.
+type AnnouncementData struct {
+	// SchoolName is the school that sends the mail.
+	SchoolName string
+	// GivenName greets the recipient; empty means a greeting without name.
+	GivenName string
+	// Participants are the persons the recipient gets the mail for, when
+	// the audience is the members or participants of classes or a lesson:
+	// the recipient, their dependents; empty for everyone or a role.
+	Participants []string
+	// Title is the announcement's title.
+	Title string
+	// Message is its plain text. The templates keep its line breaks and
+	// escape it in the HTML part.
+	Message string
+}
+
+// Validate checks the data before rendering. All errors wrap
+// domain.ErrValidation.
+func (d AnnouncementData) Validate() error {
+	switch {
+	case strings.TrimSpace(d.SchoolName) == "":
+		return fmt.Errorf("%w: school name must not be empty", domain.ErrValidation)
+	case strings.TrimSpace(d.Title) == "":
+		return fmt.Errorf("%w: an announcement needs a title", domain.ErrValidation)
+	case strings.TrimSpace(d.Message) == "":
+		return fmt.Errorf("%w: an announcement needs a message", domain.ErrValidation)
+	}
+
+	return nil
 }

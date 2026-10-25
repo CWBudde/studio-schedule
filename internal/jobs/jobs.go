@@ -4,7 +4,8 @@
 // demo. It uses one Go time.Ticker per job, and Go timers work in js/wasm
 // (the runtime yields to the browser's event loop while goroutines wait), so
 // the demo needs no JavaScript timer bridge. Both targets call RunOnce at
-// startup, before they serve requests, and then Run in a goroutine.
+// startup, before they serve requests, and then Run in a goroutine. A
+// Waker lets a request run a job before its next tick (Job.Wake).
 //
 // Jobs run in-process and share the WASM build's single thread, so a job
 // must stay cheap and must not assume it is the only instance running.
@@ -31,6 +32,59 @@ type Job struct {
 	// SkipAtStartup leaves the job out of RunOnce, for jobs that may block
 	// on the network (such as sending mail) and must not delay startup.
 	SkipAtStartup bool
+	// Wake, if set, runs the job before its next tick when it receives (see
+	// Waker.Chan): the application has work for it now.
+	Wake <-chan struct{}
+}
+
+// Waker lets the application ask for a run of a job before its next tick,
+// such as emailing an announcement right after it is published. The
+// handler that asks returns at once; the job runs in the background. A nil
+// *Waker wakes nothing.
+type Waker struct {
+	mu    sync.Mutex
+	chans map[string]chan struct{}
+}
+
+// NewWaker returns a Waker without pending wakes.
+func NewWaker() *Waker { return &Waker{chans: map[string]chan struct{}{}} }
+
+// Chan returns the channel that wakes the job name, for Job.Wake (nil for
+// a nil Waker, which never receives).
+func (w *Waker) Chan(name string) <-chan struct{} {
+	if w == nil {
+		return nil
+	}
+
+	return w.channel(name)
+}
+
+func (w *Waker) channel(name string) chan struct{} {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	c, ok := w.chans[name]
+	if !ok {
+		// One pending wake is enough: the run it causes does all the work
+		// there is.
+		c = make(chan struct{}, 1)
+		w.chans[name] = c
+	}
+
+	return c
+}
+
+// Wake asks for a run of the job name soon. It never blocks; wakes while
+// one is pending coalesce.
+func (w *Waker) Wake(name string) {
+	if w == nil {
+		return
+	}
+
+	select {
+	case w.channel(name) <- struct{}{}:
+	default:
+	}
 }
 
 // Runner runs a fixed set of jobs.
@@ -93,8 +147,8 @@ func (r *Runner) Run(ctx context.Context) {
 	wg.Wait()
 }
 
-// loop runs j on every tick until ctx is canceled. Ticks that arrive while
-// j runs are dropped, so runs never overlap.
+// loop runs j on every tick and wake until ctx is canceled. Ticks that
+// arrive while j runs are dropped, so runs never overlap.
 func (r *Runner) loop(ctx context.Context, j Job) {
 	ticks, stop := r.newTicker(j.Every)
 	defer stop()
@@ -104,6 +158,7 @@ func (r *Runner) loop(ctx context.Context, j Job) {
 		case <-ctx.Done():
 			return
 		case <-ticks:
+		case <-j.Wake:
 		}
 
 		if ctx.Err() != nil {

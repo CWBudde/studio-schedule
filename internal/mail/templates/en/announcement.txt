@@ -1,0 +1,12 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+{{.SchoolName}} has an announcement{{with .Participants}} for {{join .}}{{end}}:
+
+{{.Title}}
+
+{{.Message}}
+
+You also find it in the app under Announcements on the home page.
+
+Kind regards,
+{{.SchoolName}}

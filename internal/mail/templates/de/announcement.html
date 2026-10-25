@@ -1,0 +1,8 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>{{.SchoolName}} hat eine Mitteilung{{with .Participants}} für {{join .}}{{end}}:</p>
+<p><strong>{{.Title}}</strong></p>
+<p style="margin:16px 0;padding:8px 16px;border-left:4px solid #d4d4d8;">{{range $i, $line := lines .Message}}{{if $i}}<br>{{end}}{{$line}}{{end}}</p>
+<p>Du findest sie auch in der App unter Mitteilungen auf der Startseite.</p>
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

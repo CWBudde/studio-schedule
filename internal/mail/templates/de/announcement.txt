@@ -1,0 +1,12 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+{{.SchoolName}} hat eine Mitteilung{{with .Participants}} für {{join .}}{{end}}:
+
+{{.Title}}
+
+{{.Message}}
+
+Du findest sie auch in der App unter Mitteilungen auf der Startseite.
+
+Viele Grüße
+{{.SchoolName}}

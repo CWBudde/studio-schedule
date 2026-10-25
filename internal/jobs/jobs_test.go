@@ -258,3 +258,54 @@ func TestNewRunnerRejectsInvalidJobs(t *testing.T) {
 		})
 	}
 }
+
+// TestWake runs a job before its tick when it is woken, once for wakes that
+// pile up while it waits, and not for another job's wake.
+func TestWake(t *testing.T) {
+	t.Parallel()
+
+	ran := make(chan string, 10)
+	w := NewWaker()
+	job := func(name string) Job {
+		return Job{Name: name, Every: time.Hour, Wake: w.Chan(name), Run: func(context.Context) error {
+			ran <- name
+
+			return nil
+		}}
+	}
+	r := NewRunner(nil, job("announcements"), job("other"))
+	r.newTicker = newFakeTickers().new
+
+	// Wakes before Run starts coalesce into one run.
+	w.Wake("announcements")
+	w.Wake("announcements")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	go r.Run(ctx)
+
+	if got := receive(t, ran); got != "announcements" {
+		t.Fatalf("ran %s, want announcements", got)
+	}
+
+	select {
+	case got := <-ran:
+		t.Fatalf("ran %s again, want one run for the coalesced wakes", got)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	w.Wake("other")
+
+	if got := receive(t, ran); got != "other" {
+		t.Fatalf("ran %s, want other", got)
+	}
+
+	// A nil Waker wakes nothing and does not block.
+	var none *Waker
+	none.Wake("announcements")
+
+	if none.Chan("announcements") != nil {
+		t.Error("a nil Waker has a channel")
+	}
+}

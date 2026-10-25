@@ -1,0 +1,8 @@
+{{define "content" -}}
+<p>Hello{{with .GivenName}} {{.}}{{end}},</p>
+<p>{{.SchoolName}} has an announcement{{with .Participants}} for {{join .}}{{end}}:</p>
+<p><strong>{{.Title}}</strong></p>
+<p style="margin:16px 0;padding:8px 16px;border-left:4px solid #d4d4d8;">{{range $i, $line := lines .Message}}{{if $i}}<br>{{end}}{{$line}}{{end}}</p>
+<p>You also find it in the app under Announcements on the home page.</p>
+<p>Kind regards,<br>{{.SchoolName}}</p>
+{{- end}}
