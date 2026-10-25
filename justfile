@@ -125,7 +125,7 @@ restore-drill:
     ./scripts/restore-drill.sh
 
 # Everything CI runs but `just vuln` (needs Docker; the e2e tests need `just e2e-install` once)
-ci: check-tidy check-formatted check-sqlc lint test check-wasm-deps typst-wasm-check web-check e2e e2e-server restore-drill
+ci: check-tidy check-formatted check-sqlc lint test check-wasm-deps typst-wasm-check web-check wasm-smoke e2e e2e-server restore-drill
 
 # ---------------------------------------------------------------- build & run
 
@@ -156,6 +156,11 @@ web-build:
 # Build the Go app to WASM into web/public
 wasm:
     ./scripts/build-wasm.sh
+
+# Smoke test the WASM build in Node: the bridge's endpoints and the receipt renderer
+wasm-smoke: wasm
+    node scripts/wasm-smoke.mjs web/public/app.wasm web/public/wasm_exec.js
+    node scripts/receipt-pdf-smoke.mjs
 
 # Build the GitHub Pages demo (WASM transport) to web/dist
 demo-build base="/studio-schedule/": wasm

@@ -36,6 +36,7 @@ just fmt         # treefmt + prettier
 just gen-api     # after changing any HTTP operation: regenerates api/openapi.json + TS types
 just web-check   # pnpm -C web check (eslint, tsc, prettier) && pnpm -C web test (vitest)
 just demo-serve  # WASM demo locally
+just wasm-smoke  # builds app.wasm, smoke-tests the bridge and the receipt renderer in Node
 just e2e         # builds the demo, runs the Playwright tests in web/e2e (once: just e2e-install)
 just e2e-server  # builds the server, smoke-tests `serve` on PostgreSQL + Mailpit (web/e2e-server; Docker)
 just restore-drill  # pg_dump a seeded database, pg_restore it, check the copy serves (Docker)
