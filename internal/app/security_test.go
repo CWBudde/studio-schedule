@@ -87,9 +87,51 @@ func TestSecurityHeaders(t *testing.T) {
 			}
 
 			got := res.Header.Get("Strict-Transport-Security")
-			if want := map[bool]string{true: "max-age=31536000"}[hsts]; got != want {
+			if want := map[bool]string{true: "max-age=31536000; includeSubDomains"}[hsts]; got != want {
 				t.Errorf("%s (hsts=%v): Strict-Transport-Security = %q, want %q", c.name, hsts, got, want)
 			}
+		}
+	}
+}
+
+// TestAPIAnswersAreNotCached: the API's answers, problems included, are
+// never cached and download rather than render when opened as a page; the
+// web app's pages and the API's documentation are not affected.
+func TestAPIAnswersAreNotCached(t *testing.T) {
+	t.Parallel()
+
+	h := newSecurityApp(t, true)
+
+	cases := []struct {
+		target      string
+		api         bool
+		status      int
+		contentType string
+	}{
+		{"/api/v1/health", true, http.StatusOK, "application/json"},
+		{"/api/v1/does-not-exist", true, http.StatusNotFound, "application/problem+json"},
+		{"/api/v1/test-panic", true, http.StatusInternalServerError, "application/problem+json"},
+		{"/api/v1/openapi.json", false, http.StatusOK, "application/"},
+		{"/api/v1/docs", false, http.StatusOK, "text/html"},
+		{"/schedule/week", false, http.StatusOK, ""},
+	}
+
+	for _, c := range cases {
+		res, body := do(t, h, httptest.NewRequest(http.MethodGet, c.target, nil))
+		if res.StatusCode != c.status || !strings.HasPrefix(res.Header.Get("Content-Type"), c.contentType) {
+			t.Fatalf("%s: %d %s, want %d %s; body %s", c.target, res.StatusCode, res.Header.Get("Content-Type"),
+				c.status, c.contentType, body)
+		}
+
+		cache, disposition := res.Header.Get("Cache-Control"), res.Header.Get("Content-Disposition")
+		if c.api && (cache != "no-store" || disposition != `attachment; filename="api.json"`) {
+			t.Errorf("%s: Cache-Control %q, Content-Disposition %q; want no-store and an attachment",
+				c.target, cache, disposition)
+		}
+
+		if !c.api && (cache == "no-store" || disposition != "") {
+			t.Errorf("%s: Cache-Control %q, Content-Disposition %q; want neither of the API's",
+				c.target, cache, disposition)
 		}
 	}
 }
