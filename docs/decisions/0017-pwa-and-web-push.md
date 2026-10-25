@@ -17,7 +17,8 @@ transport and the store, mailer and PDF renderer implementations.
 **Installable.** `vite-plugin-pwa` with `injectManifest` builds our own service worker
 (`web/src/sw.ts`) with Workbox's precaching. It precaches the app shell (the hashed assets,
 `index.html`, `theme.js`, the icons) but never the demo's `*.wasm` and `wasm_exec.js` (large, and
-loaded once), answers navigations with `index.html` except `/api`, `/ical` and the manifest, and
+loaded once), answers navigations with `index.html` except `/api`, `/ical`, the manifest, `/healthz`, `/readyz` and
+`/metrics`, and
 caches no API answer. A new version waits; a toast ("New version", "Reload") activates it, so a page
 never runs half old, half new code. The server answers `GET /manifest.webmanifest` from the public
 settings (the school's name and language, its accent as the theme color; `application/manifest+json`,
@@ -29,7 +30,9 @@ five minutes' cache), and the web build links it; the Pages demo ships a static 
 **Offline: the last schedule and My lessons, read-only.** The page keeps an IndexedDB copy of the
 query cache (`@tanstack/react-query-persist-client`, `idb-keyval`) with an allow-list: the public
 settings, the schedule, the lessons opened from it, My lessons' coming lessons and `me`. The copy is
-used for seven days and dropped when the API's schema changes (its hash is the buster). It is
+used for seven days and dropped when the API's schema changes (its hash is the buster); it is saved
+at most once a second (`@tanstack/query-async-storage-persister`), and a missing or failing
+IndexedDB only means nothing is saved. It is
 deleted on every change of identity, so on sign-out and on any 401 (the global handler of ADR 0004).
 The service worker caches no API answer, so `no-store` stays true. Offline, queries pause and show
 the copy, a banner says so, submit buttons and the booking actions are disabled with a tooltip, and
@@ -42,9 +45,16 @@ page ("Notifications on this device"): the browser's permission, `PushManager.su
 server's VAPID key, and `POST /api/v1/my/push/subscriptions` (signed in; `DELETE` with the endpoint
 in the body turns it off). An endpoint belongs to one subscription (`push_subscriptions`, migration
 00024): saved again by the same account it is refreshed, saved by another account (a shared device)
-it moves to that account and its queued messages go. Sign-out deletes the device's subscription and
-unsubscribes the browser; an admin signed in as an account cannot subscribe (403). A deleted
-account's subscriptions go with it.
+it moves to that account and its queued messages go. A device's notifications belong to the
+account that turned them on: its sign-out deletes the subscription on the server and then
+unsubscribes the browser, and when that account leaves the device otherwise (a 401, another
+account signing in) the browser unsubscribes too; another account's sign-out leaves them alone,
+and an admin keeps theirs while signed in as someone. Ending all of an account's sessions (a new
+password, a reset, disabling or deleting it, an admin ending them) deletes all its subscriptions in
+the same transaction; a session that is kept saves its device again. An admin signed in as an
+account cannot subscribe (403). A device whose subscription was made with another VAPID key
+subscribes anew. In the demo, the page shows a notification only for the subscription it still
+holds.
 
 `waitlister.invite` queues, in the transaction of the invite, one message per subscription of every
 account its mail goes to (`enqueuePush` beside `enqueueMail`, `push_outbox`). The notification is
@@ -53,7 +63,8 @@ lesson and its time and the reservation, never a name, as it shows on lock scree
 the accept link and expires with the invite. The `deliver-push` job sends every minute and when a
 request queued something (`Wake`). A 404 or 410 deletes the subscription; a refusal (400, 401, 403,
 413), a retry after the invite's expiry or the fifth attempt gives the message up; other errors back
-off (1, 5, 15, 60 minutes).
+off (1, 5, 15, 60 minutes). The job is woken once the queueing transaction committed
+(`Tx.AfterCommit`), so it never runs before the messages are there.
 
 **Our own sender.** `internal/webpush` implements RFC 8291 (aes128gcm, one record) and RFC 8292
 (an ES256 JWT, valid 12 hours) with the standard library only, tested against the RFCs' examples.

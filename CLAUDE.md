@@ -215,7 +215,8 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
 - **Layering:** `httpapi` → `service` → `store` interfaces. Services never import a concrete store.
   No SQL outside `internal/store/postgres`. `httpapi` maps domain errors (`internal/domain`) to
   problem+json and holds no business logic.
-- **Transactions:** use `Store.InTx` and never nest it. Helpers take a `store.Tx`. Capacity checks
+- **Transactions:** use `Store.InTx` and never nest it. Helpers take a `store.Tx`; work that must
+  wait for the commit (waking a job) goes through `tx.AfterCommit`. Capacity checks
   go through `Lessons().Lock`.
 - **Time:** never use `time.Local` or `time.Now()` directly in services; use `clock.Clock` and the
   school timezone from settings. golangci-lint (forbidigo) enforces this and also bans `fmt.Print*`
