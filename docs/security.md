@@ -241,8 +241,9 @@ characters, recommending 15.
 ASVS 2.1.7, 2.1.8. **Done.** The 10,000 most common passwords (SecLists' `10k-most-common.txt`,
 MIT License; source, checksum and license next to it in `internal/auth/password`) are embedded and
 refused, ignoring case, wherever a password is set, as a 422 on that field (`IsCommon`,
-`checkPassword`). The set is built on first use, so sign-ins never pay for it, and the check works
-offline, in the web demo too. The web app shows a strength meter (length and kinds of characters,
+`checkPassword`). The set is built on first use, so sign-ins never pay for it, and keeps only the
+entries of at least 8 characters (about 2,100): a shorter one fails the length rule first. The
+check works offline, in the web demo too. The web app shows a strength meter (length and kinds of characters,
 no list in the client) under new passwords, and the "too common" message on a refused one.
 
 ### O3 Show password

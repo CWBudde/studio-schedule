@@ -125,7 +125,8 @@ setup links) must not be one of the **10,000 most common passwords**, compared i
 The list is SecLists' `10k-most-common.txt` (MIT License), embedded in `internal/auth/password`
 (`IsCommon`; source, checksum and license in `common-passwords-LICENSE.txt`), so the check needs
 no network and works in the web demo; the set is built on first use, so sign-ins never pay for
-it. The length is counted in characters, by the API (`maxLength`) and the service alike, at most 256. A broken rule is a 422 on the field that carried the password (`body.password`,
+it, and keeps only the entries of at least 8 characters (a shorter one fails the length rule
+first). The length is counted in characters, by the API (`maxLength`) and the service alike, at most 256. A broken rule is a 422 on the field that carried the password (`body.password`,
 `body.newPassword`). The web app shows a strength meter (length and kinds of characters) under
 new passwords and a show/hide button on every password field.
 

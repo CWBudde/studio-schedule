@@ -36,7 +36,7 @@ const (
 // Password limits, in characters as the API counts them. The upper limit
 // bounds the hashing work per request.
 const (
-	MinPasswordLength = 8
+	MinPasswordLength = authpassword.MinLength
 	MaxPasswordLength = 256
 )
 
