@@ -25,6 +25,7 @@ import { addDays, formatDayHeading, type SchoolDate, todayIn } from '@/lib/schoo
 import { cn } from '@/lib/utils';
 import { Loading } from './Loading';
 import { MyLessonRow, type RowBadge } from './MyLessonRow';
+import { usePaymentBadge } from './paymentBadge';
 import { useNamesPersons } from './useNamesPersons';
 
 /** How far ahead "Coming up" shows lessons before "Show later lessons". */
@@ -285,6 +286,7 @@ function UpcomingRow({
 }) {
   const { t } = useTranslation('myLessons');
   const { t: tSchedule } = useTranslation('schedule');
+  const paymentBadge = usePaymentBadge();
   const { lesson, personName } = item;
   const started = now >= Date.parse(lesson.startsAt);
   const canCancel = item.canCancel && !started;
@@ -296,6 +298,7 @@ function UpcomingRow({
       : [
           { label: t('status.booked'), variant: 'default' },
           ...(started ? [{ label: t('status.now'), variant: 'secondary' } as const] : []),
+          ...paymentBadge(item.payment),
         ];
 
   return (

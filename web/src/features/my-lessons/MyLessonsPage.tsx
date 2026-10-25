@@ -9,14 +9,17 @@ import { SubscribeButton } from '@/features/calendar-feeds/SubscribeDialog';
 import { LessonDetailSheet } from '@/features/schedule/detail/LessonSheet';
 import { HistorySection } from './HistorySection';
 import { Loading } from './Loading';
+import { MyPassesSection } from './MyPassesSection';
+import { MyReceiptsSection } from './MyReceiptsSection';
 import { UpcomingSections } from './UpcomingSections';
 import { useNamesPersons } from './useNamesPersons';
 
 /**
  * "My lessons" (/my-lessons): the coming lessons of the signed-in family,
- * its waiting-list entries and the lessons that are over, a page of three
- * months at a time. A lesson opens in the lesson sheet; "Subscribe" puts
- * the family's bookings in a calendar app. Visitors are asked to sign in.
+ * its waiting-list entries, its passes and receipts, and the lessons that
+ * are over, a page of three months at a time. A lesson opens in the lesson
+ * sheet; "Subscribe" puts the family's bookings in a calendar app. Visitors
+ * are asked to sign in.
  */
 export function MyLessonsPage() {
   const { t } = useTranslation('myLessons');
@@ -44,6 +47,8 @@ export function MyLessonsPage() {
       ) : (
         <>
           <UpcomingSections me={me.data} onOpen={open} />
+          <MyPassesSection />
+          <MyReceiptsSection />
           <HistorySection onOpen={open} />
           <LessonDetailSheet lessonId={search.lesson} onClose={() => open(undefined)} />
         </>

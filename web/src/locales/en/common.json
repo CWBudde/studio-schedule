@@ -42,6 +42,8 @@
       },
       "loading": "Loading mails…",
       "loadError": "Could not load the mails.",
+      "attachment": "Open the attachment {{filename}}",
+      "attachmentError": "Could not open the attachment.",
       "retry": "Retry",
       "close": "Close"
     },

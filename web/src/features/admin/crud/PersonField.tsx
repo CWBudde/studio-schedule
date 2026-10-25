@@ -20,6 +20,7 @@ export function PersonField({
   value,
   person,
   onChange,
+  onPick,
   onBlur,
   error,
   hint,
@@ -28,6 +29,8 @@ export function PersonField({
   value: string;
   person?: PersonMatch;
   onChange: (personId: string) => void;
+  /** The person picked (undefined when the choice is removed), e.g. to fill in their details. */
+  onPick?: (person: PersonMatch | undefined) => void;
   onBlur?: () => void;
   error?: string;
   hint?: string;
@@ -42,6 +45,7 @@ export function PersonField({
   const choose = (next: PersonMatch | undefined) => {
     setPicked(next);
     onChange(next?.id ?? '');
+    onPick?.(next);
   };
 
   return (

@@ -12,6 +12,7 @@ import {
   familyQuery,
   joinWaitlistMutation,
   meQuery,
+  myPassesQuery,
 } from '@/api/queries';
 import { Badge } from '@/components/ui/badge';
 import { fullName } from '@/features/account/personForm';
@@ -25,7 +26,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { formatDateTime } from '@/lib/schoolTime';
+import { PassHint } from '@/features/passes/PassHint';
+import { formatDateTime, schoolDateOf } from '@/lib/schoolTime';
 import { useServerClock } from '../useServerClock';
 import { useBookingErrorText } from './bookingErrors';
 import { CancelBookingDialog } from './CancelBookingDialog';
@@ -145,8 +147,10 @@ function MemberBooking({
   const family = useQuery(familyQuery);
   const book = useMutation(bookLessonMutation(queryClient));
   const join = useMutation(joinWaitlistMutation(queryClient));
+  const passes = useQuery(myPassesQuery);
   const selectId = useId();
   const stayId = useId();
+  const hintId = useId();
   const [chosen, setChosen] = useState<string>();
   // "Stay on the list" as chosen for one person; off for everyone else.
   const [stay, setStay] = useState<{ personId: string; checked: boolean }>();
@@ -184,6 +188,9 @@ function MemberBooking({
   // booking runs, its optimistic place does not turn Book into Join.
   const canJoin = !closed && lesson.freePlaces === 0 && !book.isPending;
   const stayOnList = stay !== undefined && stay.personId === target?.id && stay.checked;
+  // Whether to say which pass the booking would use: while the lesson can
+  // be booked and the family's passes are known.
+  const showHint = !closed && lesson.freePlaces > 0 && target !== undefined && !!passes.data;
   const nameOf = (p: Bookable) => (p.self ? t('booking.you', { name: p.name }) : p.name);
 
   const onBook = () => {
@@ -310,9 +317,22 @@ function MemberBooking({
               {join.isPending ? t('booking.waitlist.joining') : t('booking.waitlist.join')}
             </Button>
           ) : (
-            <Button disabled={!canBook} onClick={onBook}>
+            <Button
+              disabled={!canBook}
+              aria-describedby={showHint ? hintId : undefined}
+              onClick={onBook}
+            >
               {book.isPending ? t('booking.booking') : t('booking.book')}
             </Button>
+          )}
+          {showHint && passes.data && (
+            <PassHint
+              id={hintId}
+              passes={passes.data}
+              personId={target.id}
+              lessonId={lesson.id}
+              date={schoolDateOf(lesson.startsAt, timeZone)}
+            />
           )}
           {canJoin && (
             <div className="flex w-full items-center gap-2">

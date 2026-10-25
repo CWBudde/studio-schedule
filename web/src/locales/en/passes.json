@@ -1,0 +1,209 @@
+{
+  "kinds": {
+    "visits": "Visit pass",
+    "time": "Time pass"
+  },
+  "terms": {
+    "visits_one": "{{count}} visit, valid {{days}} days",
+    "visits_other": "{{count}} visits, valid {{days}} days",
+    "visitsNoExpiry_one": "{{count}} visit, no expiry",
+    "visitsNoExpiry_other": "{{count}} visits, no expiry",
+    "time_one": "Unlimited visits for {{count}} day",
+    "time_other": "Unlimited visits for {{count}} days"
+  },
+  "visits": {
+    "unlimited": "Unlimited visits",
+    "left_one": "{{count}} of {{total}} visits left",
+    "left_other": "{{count}} of {{total}} visits left"
+  },
+  "days": {
+    "range": "{{from}} – {{until}}",
+    "noExpiry": "From {{from}}, no expiry"
+  },
+  "states": {
+    "usable": "Usable",
+    "voided": "Voided",
+    "notYetValid": "Not valid yet",
+    "usedUp": "Used up",
+    "expired": "Expired"
+  },
+  "payment": {
+    "paid": "Paid",
+    "paidTime": "Paid · {{pass}}",
+    "paidVisits_one": "Paid · {{pass}}, {{count}} left",
+    "paidVisits_other": "Paid · {{pass}}, {{count}} left",
+    "unpaid": "Unpaid",
+    "free": "Free",
+    "pending": "Pending"
+  },
+  "hint": {
+    "none": "No valid pass for this day — pay at the desk.",
+    "time": {
+      "booking": "Uses {{pass}}.",
+      "attendance": "Will use {{pass}} when attended."
+    },
+    "visits": {
+      "booking_one": "Uses {{pass}}; {{count}} visit left after this booking.",
+      "booking_other": "Uses {{pass}}; {{count}} visits left after this booking.",
+      "attendance_one": "Will use {{pass}} when attended; {{count}} visit left after that.",
+      "attendance_other": "Will use {{pass}} when attended; {{count}} visits left after that.",
+      "planned_one": "Will use {{pass}} when attended, but its visits left ({{left}}) are already planned for {{count}} other booking — pay at the desk if it runs out.",
+      "planned_other": "Will use {{pass}} when attended, but its visits left ({{left}}) are already planned for {{count}} other bookings — pay at the desk if it runs out."
+    }
+  },
+  "types": {
+    "title": "Passes",
+    "description": "The passes the school sells: a number of visits, or unlimited visits for some days. Prices are gross; the VAT rate is printed on the receipts.",
+    "table": "Pass types",
+    "search": "Search pass types",
+    "empty": "There are no pass types yet.",
+    "name": "Name",
+    "terms": "Terms",
+    "price": "Price",
+    "vatRate": "VAT",
+    "status": "Status",
+    "onSale": "On sale",
+    "retired": "Retired",
+    "add": "Add pass type",
+    "addTitle": "Add a pass type",
+    "editTitle": "Edit {{name}}",
+    "sheetDescription": "Passes sold already keep their visits, days and price; changes apply to later sales.",
+    "editLabel": "Edit {{name}}",
+    "deleteLabel": "Delete {{name}}",
+    "added": "{{name}} has been added.",
+    "saved": "{{name}} has been saved.",
+    "deleted": "{{name}} has been deleted.",
+    "duplicate": "Another pass type is already called “{{name}}”.",
+    "notFound": "This pass type no longer exists.",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteDescription": "The pass type is deleted for good. A pass type that was sold cannot be deleted; retire it instead.",
+    "inUse": "{{name}} has been sold, so it cannot be deleted. Retire it instead: it is no longer sold, and the passes sold keep it.",
+    "inUseRetired": "{{name}} has been sold, so it cannot be deleted. It is retired already: it is no longer sold.",
+    "retire": "Retire instead",
+    "retiring": "Retiring…",
+    "retiredToast": "{{name}} has been retired.",
+    "kind": "Kind",
+    "kindHints": {
+      "visits": "A number of visits, one per lesson.",
+      "time": "Any number of lessons within its days, one booking per lesson."
+    },
+    "visits": "Visits",
+    "validityDays": "Valid for (days)",
+    "durationDays": "Duration (days)",
+    "validityHint": "Days from the first day of the pass; 0 for no expiry.",
+    "durationHint": "Days from the first day of the pass, at least 1.",
+    "priceIn": "Price ({{currency}})",
+    "priceHint": "The gross price, e.g. 150 or 150.00.",
+    "vatRatePercent": "VAT rate (%)",
+    "vatHint": "Included in the price, e.g. 19; 0 for none.",
+    "active": "On sale",
+    "activeHint": "A retired pass type is no longer sold; the passes sold keep it."
+  },
+  "settings": {
+    "pageTitle": "Settings",
+    "pageDescription": "How the school works. Changes apply from now on.",
+    "pageDescriptionOffice": "How the school works. Only administrators can change the settings.",
+    "title": "Passes",
+    "description": "When a booking uses a visit of a pass. Class members pay their fee outside the app; their bookings never use a pass.",
+    "mode": "Use a pass",
+    "modes": {
+      "attendance": "On attendance",
+      "booking": "On booking"
+    },
+    "modeHints": {
+      "attendance": "A visit is used once the lesson's attendance is taken (attended or no-show), or by a late cancellation.",
+      "booking": "A visit is used when the lesson is booked; a timely cancellation gives it back, a late one keeps it."
+    },
+    "notRetroactive": "Visits used already stay used.",
+    "adminOnly": "Only administrators can change this.",
+    "loading": "Loading the pass settings…",
+    "loadError": "The pass settings could not be loaded.",
+    "saved": "The pass settings have been saved."
+  },
+  "sale": {
+    "sellTitle": "Sell a pass to {{name}}",
+    "assignTitle": "Give {{name}} a pass",
+    "sellDescription": "The pass pays for bookings from its first day on; bookings made before stay unpaid and are settled at the desk.",
+    "assignDescription": "A pass without payment, e.g. as a goodwill gesture. It pays for bookings from its first day on.",
+    "loading": "Loading the pass types…",
+    "typesError": "The pass types or the currency could not be loaded.",
+    "noTypes": "No pass type is on sale. Add one under Passes first.",
+    "close": "Close",
+    "type": "Pass type",
+    "chooseType": "Choose a pass type",
+    "typeOption": "{{name}} · {{price}}",
+    "validFrom": "First day",
+    "validFromHint": "Empty: today.",
+    "note": "Note",
+    "payer": "Paid by",
+    "payerHint": "Empty: {{name}}.",
+    "priceIn": "Price paid ({{currency}}, optional)",
+    "priceHint": "Empty: the pass type's price, {{price}}.",
+    "priceHintNone": "Empty: the pass type's price.",
+    "personGone": "This person no longer exists.",
+    "cancel": "Cancel",
+    "sell": "Sell",
+    "selling": "Selling…",
+    "assign": "Give pass",
+    "assigning": "Giving…",
+    "sold": "{{name}} has bought {{pass}}.",
+    "assigned": "{{name}} has been given {{pass}}.",
+    "methodHint": "Printed on the receipt.",
+    "recipient": "Receipt",
+    "recipientName": "Name on the receipt",
+    "recipientEmail": "Email",
+    "recipientEmailHint": "The receipt is mailed to the payer's account, or to this address if they have none.",
+    "recipientAddress": "Address",
+    "recipientAddressHint": "Printed on the receipt, one line per line.",
+    "addressNeeded": "A receipt over {{amount}} should name the payer’s address."
+  },
+  "person": {
+    "title": "Passes",
+    "description": "The passes of {{name}}: they pay for lessons booked outside a class.",
+    "sell": "Sell a pass",
+    "assign": "Give a pass",
+    "empty": "{{name}} has no passes.",
+    "list": "Passes of {{name}}",
+    "loading": "Loading the passes…",
+    "loadError": "The passes could not be loaded.",
+    "void": "Void",
+    "voidLabel": "Void {{pass}} of {{date}}",
+    "sold": "Sold on {{date}} for {{price}}",
+    "given": "Given on {{date}}",
+    "paidBy": "paid by {{name}}",
+    "uses_one": "Paid for {{count}} booking",
+    "uses_other": "Paid for {{count}} bookings",
+    "note": "Note: {{note}}",
+    "receipt": "Receipt",
+    "receiptLabel": "Receipt of {{pass}} of {{date}}"
+  },
+  "void": {
+    "title": "Void {{pass}}?",
+    "description": "The pass pays for nothing more. What it paid for in lessons that have started stays paid; coming bookings it paid for use another pass of the person, or stay unpaid.",
+    "alreadyVoided": "{{pass}} has been voided already.",
+    "notFound": "This pass no longer exists.",
+    "keep": "Keep",
+    "confirm": "Void pass",
+    "voiding": "Voiding…",
+    "done": "{{pass}} has been voided."
+  },
+  "mine": {
+    "title": "My passes",
+    "cardLabel": "{{pass}}, {{name}}",
+    "loadError": "Your passes could not be loaded.",
+    "visits": "Visits",
+    "valid": "Valid",
+    "payment": "Payment",
+    "given": "Given by the school",
+    "paidBy": "Paid by {{name}}",
+    "noUses": "Not used yet.",
+    "latestUses": "Latest uses",
+    "usesLabel": "Uses of {{pass}}",
+    "useCount_one": "{{count}} use in total",
+    "useCount_other": "{{count}} uses in total",
+    "useStatus": {
+      "noShow": "No-show",
+      "late": "Canceled late"
+    }
+  }
+}

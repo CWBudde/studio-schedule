@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
-import { CircleAlert, Mail, RotateCcw, XIcon } from 'lucide-react';
-import { useEffect, useId } from 'react';
+import { CircleAlert, Mail, Paperclip, RotateCcw, XIcon } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBackendStatus } from '@/api/backendStatus';
+import { openDownload } from '@/api/download';
 import type { MailboxMail, MailStatus } from '@/api/client';
 import { demoMailboxQuery, publicSettingsQuery } from '@/api/queries';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -171,7 +172,40 @@ function MailItem({ mail, timeZone }: { mail: MailboxMail; timeZone: string }) {
         </dd>
       </dl>
       <MailText text={mail.text} />
+      {mail.attachment && <MailAttachment mailId={mail.id} filename={mail.attachment.filename} />}
     </article>
+  );
+}
+
+/** Opens the file a mail attaches (a receipt's PDF). */
+function MailAttachment({ mailId, filename }: { mailId: string; filename: string }) {
+  const { t } = useTranslation();
+  const [state, setState] = useState<'idle' | 'opening' | 'failed'>('idle');
+
+  return (
+    <div className="space-y-1">
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={state === 'opening'}
+        aria-label={t('demo.mailbox.attachment', { filename })}
+        onClick={() => {
+          setState('opening');
+          openDownload(`/api/v1/demo/mailbox/${encodeURIComponent(mailId)}/attachment`).then(
+            () => setState('idle'),
+            () => setState('failed'),
+          );
+        }}
+      >
+        <Paperclip aria-hidden="true" />
+        {filename}
+      </Button>
+      {state === 'failed' && (
+        <p role="alert" className="text-xs text-destructive">
+          {t('demo.mailbox.attachmentError')}
+        </p>
+      )}
+    </div>
   );
 }
 

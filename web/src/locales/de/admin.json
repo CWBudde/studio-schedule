@@ -7,7 +7,10 @@
     "timetable": "Stundenplan",
     "persons": "Personen",
     "accounts": "Konten",
-    "audit": "Protokoll"
+    "audit": "Protokoll",
+    "passes": "Karten",
+    "settings": "Einstellungen",
+    "receipts": "Belege"
   },
   "noAccess": {
     "title": "Kein Zugriff",
@@ -57,7 +60,14 @@
       "monday": "Wähle einen Montag.",
       "cloneSame": "Wähle ein anderes Datum als das, von dem kopiert wird.",
       "clonePast": "Das Datum darf nicht in der Vergangenheit liegen.",
-      "cloneWeekBegun": "Diese Woche hat schon begonnen; wähle eine spätere."
+      "cloneWeekBegun": "Diese Woche hat schon begonnen; wähle eine spätere.",
+      "money": "Gib einen Betrag wie 12,50 ein.",
+      "vatRate": "Gib einen Prozentsatz von 0 bis 100 ein, etwa 19 oder 7,5.",
+      "visits": "Gib eine ganze Zahl von Besuchen von 1 bis 1000 ein.",
+      "validityDays": "Gib eine ganze Zahl von Tagen von 0 (ohne Ablauf) bis 3660 ein.",
+      "timeDays": "Gib eine ganze Zahl von Tagen von 1 bis 3660 ein.",
+      "passTypeInactive": "Diese Kartenart wird nicht mehr verkauft; wähle eine andere.",
+      "receiptPrefix": "Verwende 1 bis 16 Buchstaben A–Z und Ziffern."
     }
   },
   "delete": {
@@ -344,8 +354,8 @@
       "button": "Löschen",
       "label": "{{name}} löschen",
       "title": "{{name}} löschen?",
-      "description": "Die Person wird endgültig gelöscht. Das geht nur, wenn nichts mehr auf sie verweist: kein Konto, kein Eintrag im Personal, keine Buchungen, Kursmitgliedschaften, Erziehungsberechtigten oder Kinder.",
-      "inUse": "{{name}} hat noch ein Konto, einen Eintrag im Personal, Buchungen, Kursmitgliedschaften, Erziehungsberechtigte oder Kinder und kann daher nicht gelöscht werden. Entferne diese zuerst.",
+      "description": "Die Person wird endgültig gelöscht. Das geht nur, wenn nichts mehr auf sie verweist: kein Konto, kein Eintrag im Personal, keine Buchungen, Kursmitgliedschaften, Karten, Erziehungsberechtigten oder Kinder.",
+      "inUse": "{{name}} hat noch ein Konto, einen Eintrag im Personal, Buchungen, Kursmitgliedschaften, eigene oder bezahlte Karten, Erziehungsberechtigte oder Kinder und kann daher nicht gelöscht werden. Entferne diese zuerst; Karten werden nie gelöscht, eine Person mit Karten bleibt also bestehen.",
       "deleted": "{{name}} wurde gelöscht."
     },
     "fields": {

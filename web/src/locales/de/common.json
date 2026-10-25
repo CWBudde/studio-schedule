@@ -42,6 +42,8 @@
       },
       "loading": "Mails werden geladen…",
       "loadError": "Die Mails konnten nicht geladen werden.",
+      "attachment": "Anhang {{filename}} öffnen",
+      "attachmentError": "Der Anhang konnte nicht geöffnet werden.",
       "retry": "Erneut versuchen",
       "close": "Schließen"
     },

@@ -348,7 +348,7 @@ describe('PersonPage', () => {
       await user.click(dialog.getByRole('button', { name: 'Delete' }));
 
       expect(await dialog.findByRole('alert')).toHaveTextContent(
-        'Noah Sample still has an account, a staff link, bookings, class memberships, guardians or children, so they cannot be deleted. Remove those first.',
+        'Noah Sample still has an account, a staff link, bookings, class memberships, passes they own or paid for, guardians or children, so they cannot be deleted. Remove those first; passes are never deleted, so a person with passes stays.',
       );
       expect(router.state.location.pathname).not.toBe('/admin/persons');
     });

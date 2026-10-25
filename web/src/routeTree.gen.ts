@@ -27,6 +27,9 @@ import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
 import { Route as AdminCourseTypesRouteImport } from './routes/admin.course-types'
 import { Route as AdminLocationsRouteImport } from './routes/admin.locations'
+import { Route as AdminPassTypesRouteImport } from './routes/admin.pass-types'
+import { Route as AdminReceiptsRouteImport } from './routes/admin.receipts'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
 import { Route as WaitlistAcceptRouteImport } from './routes/waitlist.accept'
 import { Route as AdminPersonsIndexRouteImport } from './routes/admin.persons.index'
@@ -124,6 +127,21 @@ const AdminLocationsRoute = AdminLocationsRouteImport.update({
   path: '/locations',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminPassTypesRoute = AdminPassTypesRouteImport.update({
+  id: '/pass-types',
+  path: '/pass-types',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminReceiptsRoute = AdminReceiptsRouteImport.update({
+  id: '/receipts',
+  path: '/receipts',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminStaffRoute = AdminStaffRouteImport.update({
   id: '/staff',
   path: '/staff',
@@ -173,6 +191,9 @@ export interface FileRoutesByFullPath {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/locations': typeof AdminLocationsRoute
+  '/admin/pass-types': typeof AdminPassTypesRoute
+  '/admin/receipts': typeof AdminReceiptsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/waitlist/accept': typeof WaitlistAcceptRoute
   '/admin/': typeof AdminIndexRoute
@@ -198,6 +219,9 @@ export interface FileRoutesByTo {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/locations': typeof AdminLocationsRoute
+  '/admin/pass-types': typeof AdminPassTypesRoute
+  '/admin/receipts': typeof AdminReceiptsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/waitlist/accept': typeof WaitlistAcceptRoute
   '/admin': typeof AdminIndexRoute
@@ -225,6 +249,9 @@ export interface FileRoutesById {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/locations': typeof AdminLocationsRoute
+  '/admin/pass-types': typeof AdminPassTypesRoute
+  '/admin/receipts': typeof AdminReceiptsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/waitlist/accept': typeof WaitlistAcceptRoute
   '/admin/': typeof AdminIndexRoute
@@ -253,6 +280,9 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/course-types'
     | '/admin/locations'
+    | '/admin/pass-types'
+    | '/admin/receipts'
+    | '/admin/settings'
     | '/admin/staff'
     | '/waitlist/accept'
     | '/admin/'
@@ -278,6 +308,9 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/course-types'
     | '/admin/locations'
+    | '/admin/pass-types'
+    | '/admin/receipts'
+    | '/admin/settings'
     | '/admin/staff'
     | '/waitlist/accept'
     | '/admin'
@@ -304,6 +337,9 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/course-types'
     | '/admin/locations'
+    | '/admin/pass-types'
+    | '/admin/receipts'
+    | '/admin/settings'
     | '/admin/staff'
     | '/waitlist/accept'
     | '/admin/'
@@ -458,6 +494,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLocationsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/pass-types': {
+      id: '/admin/pass-types'
+      path: '/pass-types'
+      fullPath: '/admin/pass-types'
+      preLoaderRoute: typeof AdminPassTypesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/receipts': {
+      id: '/admin/receipts'
+      path: '/receipts'
+      fullPath: '/admin/receipts'
+      preLoaderRoute: typeof AdminReceiptsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/staff': {
       id: '/admin/staff'
       path: '/staff'
@@ -508,6 +565,9 @@ interface AdminRouteChildren {
   AdminAuditRoute: typeof AdminAuditRoute
   AdminCourseTypesRoute: typeof AdminCourseTypesRoute
   AdminLocationsRoute: typeof AdminLocationsRoute
+  AdminPassTypesRoute: typeof AdminPassTypesRoute
+  AdminReceiptsRoute: typeof AdminReceiptsRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
   AdminStaffRoute: typeof AdminStaffRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminPersonsPersonIdRoute: typeof AdminPersonsPersonIdRoute
@@ -521,6 +581,9 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAuditRoute: AdminAuditRoute,
   AdminCourseTypesRoute: AdminCourseTypesRoute,
   AdminLocationsRoute: AdminLocationsRoute,
+  AdminPassTypesRoute: AdminPassTypesRoute,
+  AdminReceiptsRoute: AdminReceiptsRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
   AdminStaffRoute: AdminStaffRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminPersonsPersonIdRoute: AdminPersonsPersonIdRoute,

@@ -54,11 +54,14 @@ function renderAdmin(at: string, { accounts }: { accounts?: () => ReactElement }
       adminRoute.addChildren([
         section('/locations', 'Locations section'),
         section('/course-types', 'Course types section'),
+        section('/pass-types', 'Passes section'),
         section('/staff', 'Staff section'),
         section('/terms', 'Terms section'),
         section('/persons', 'Persons section'),
+        section('/receipts', 'Receipts section'),
         section('/accounts', 'Accounts section', accounts),
         section('/audit', 'Audit log section'),
+        section('/settings', 'Settings section'),
       ]),
     ]),
     history: createMemoryHistory({ initialEntries: [at] }),
@@ -110,6 +113,8 @@ describe('AdminLayout', () => {
     expect(nav.getByRole('link', { name: 'Staff' })).toHaveAttribute('href', '/admin/staff');
     expect(nav.getByRole('link', { name: 'Timetable' })).toHaveAttribute('href', '/admin/terms');
     expect(nav.getByRole('link', { name: 'Persons' })).toHaveAttribute('href', '/admin/persons');
+    expect(nav.getByRole('link', { name: 'Passes' })).toHaveAttribute('href', '/admin/pass-types');
+    expect(nav.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/admin/settings');
     expect(nav.queryByRole('link', { name: 'Accounts' })).not.toBeInTheDocument();
     expect(nav.queryByRole('link', { name: 'Audit log' })).not.toBeInTheDocument();
     expect(screen.getByText('Locations section')).toBeInTheDocument();
@@ -140,11 +145,14 @@ describe('AdminLayout', () => {
     expect(nav.getAllByRole('link').map((a) => a.textContent)).toEqual([
       'Locations',
       'Course types',
+      'Passes',
       'Staff',
       'Timetable',
       'Persons',
+      'Receipts',
       'Accounts',
       'Audit log',
+      'Settings',
     ]);
     await user.click(nav.getByRole('link', { name: 'Accounts' }));
 

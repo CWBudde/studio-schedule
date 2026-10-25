@@ -1,0 +1,141 @@
+{
+  "method": {
+    "label": "Payment method",
+    "cash": "Cash",
+    "transfer": "Bank transfer",
+    "card": "Card"
+  },
+  "kind": {
+    "sale": "Receipt",
+    "canceled": "Canceled",
+    "cancellation": "Cancellation"
+  },
+  "incomplete": {
+    "title": "Receipts can't be issued until the receipt settings are complete, so no pass can be sold.",
+    "missing": "Missing: {{field}}.",
+    "open": "Complete the receipt settings",
+    "askAdmin": "Ask an administrator to complete them."
+  },
+  "settings": {
+    "title": "Receipts",
+    "description": "What every receipt prints: the issuer, the tax details and the number. Changes apply to later receipts; issued ones stay as they are.",
+    "loading": "Loading the receipt settings…",
+    "loadError": "The receipt settings could not be loaded.",
+    "adminOnly": "Only administrators can change this.",
+    "saved": "The receipt settings have been saved.",
+    "savedIncomplete": "The receipt settings have been saved, but receipts still can't be issued.",
+    "chooseTaxMode": "Choose a tax mode",
+    "taxNoteHint": "Printed on every receipt; needed when the school is exempt from VAT, naming the legal basis.",
+    "footerHint": "Printed at the bottom, e.g. bank details.",
+    "prefixHint": "Starts every receipt number, e.g. SD for SD-2026-0001: 1 to 16 letters A–Z and digits.",
+    "notCashRegister": "Receipts confirm payments; this app is not a cash register. This is not tax advice.",
+    "fields": {
+      "issuerName": "Issuer",
+      "issuerAddress": "Address",
+      "taxNumber": "Tax number or VAT ID",
+      "email": "Email",
+      "phone": "Phone",
+      "taxMode": "Tax mode",
+      "taxNote": "Tax note",
+      "footer": "Footer",
+      "receiptPrefix": "Number prefix"
+    },
+    "taxModes": {
+      "small_business": "Small business (no VAT)",
+      "exempt": "Exempt from VAT",
+      "standard": "Standard VAT"
+    },
+    "taxModeHints": {
+      "small_business": "No VAT is charged; receipts print the small business note (or the tax note).",
+      "exempt": "No VAT is charged; receipts print the tax note, which names the legal basis.",
+      "standard": "The VAT rate of each pass type is included in its price; receipts print net and VAT."
+    }
+  },
+  "logo": {
+    "title": "Logo",
+    "alt": "The logo printed on receipts",
+    "none": "Receipts have no logo.",
+    "loading": "Loading the logo…",
+    "invalid": "Choose a PNG or JPEG image of at most {{size}} KB.",
+    "upload": "Upload a logo",
+    "replace": "Replace the logo",
+    "uploading": "Uploading…",
+    "remove": "Remove the logo",
+    "saved": "The logo has been saved.",
+    "removed": "The logo has been removed.",
+    "hint": "A PNG or JPEG of at most {{size}} KB, printed at the top of later receipts.",
+    "unreadable": "The file could not be read; choose it again."
+  },
+  "list": {
+    "title": "Receipts",
+    "description": "The receipts of the pass sales and their cancellations, newest first. Receipts are never changed: a mistake is canceled, which voids the pass if it was not used.",
+    "year": "Year",
+    "allYears": "All years",
+    "search": "Search receipts",
+    "searchPlaceholder": "Number or name…",
+    "table": "Receipts",
+    "empty": "No receipts yet.",
+    "noMatches": "No receipt matches.",
+    "number": "Number",
+    "date": "Date",
+    "recipient": "Recipient",
+    "kind": "Kind",
+    "gross": "Amount",
+    "open": "Open",
+    "openLabel": "Open receipt {{number}}",
+    "pages": "Pages of receipts",
+    "range": "{{from}}–{{to}} of {{total}}",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "detail": {
+    "close": "Close",
+    "title": "Receipt",
+    "loading": "Loading the receipt…",
+    "loadError": "The receipt could not be loaded.",
+    "notFound": "This receipt does not exist.",
+    "saleTitle": "Receipt {{number}}",
+    "cancellationTitle": "Cancellation {{number}}",
+    "description": "As it was issued; the PDF is the original.",
+    "refLabel": "{{number}} of {{date}}",
+    "taxNumber": "Tax number: {{number}}",
+    "issued": "Issued",
+    "issuer": "Issuer",
+    "recipient": "Recipient",
+    "payer": "Paid by",
+    "taxMode": "Tax mode",
+    "taxNote": "Tax note",
+    "reason": "Reason",
+    "cancels": "Cancels",
+    "canceledBy": "Canceled by",
+    "lines": "Lines",
+    "lineAmounts": "Net {{net}} · VAT {{rate}} {{vat}} · Gross {{gross}}",
+    "net": "Net",
+    "vat": "VAT",
+    "gross": "Total"
+  },
+  "download": {
+    "button": "PDF",
+    "pending": "Downloading…",
+    "label": "Download receipt {{number}} as PDF",
+    "failed": "The receipt could not be downloaded."
+  },
+  "cancel": {
+    "open": "Cancel receipt",
+    "title": "Cancel receipt {{number}}?",
+    "description": "A cancellation receipt with the next number is issued and mailed to the payer, and the pass is voided. This cannot be undone.",
+    "reason": "Reason (optional, printed)",
+    "passUsed": "The pass has paid for visits, so its receipt cannot be canceled. Void the pass on the person's page instead.",
+    "alreadyCanceled": "This receipt has been canceled already.",
+    "isCancellation": "A cancellation cannot be canceled.",
+    "keep": "Keep",
+    "confirm": "Cancel receipt",
+    "canceling": "Canceling…",
+    "done": "Cancellation {{number}} has been issued; the pass is voided."
+  },
+  "mine": {
+    "title": "My receipts",
+    "loadError": "Your receipts could not be loaded.",
+    "line": "{{date}} · {{what}} · {{amount}}"
+  }
+}

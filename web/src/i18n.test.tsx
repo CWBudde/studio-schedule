@@ -51,6 +51,8 @@ describe('i18n', () => {
     'teach',
     'myLessons',
     'feeds',
+    'passes',
+    'receipts',
   ])('has the same %s keys in all locales', async (ns) => {
     const [en, de] = await Promise.all([
       import(`./locales/en/${ns}.json`) as Promise<{ default: object }>,

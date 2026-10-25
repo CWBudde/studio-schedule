@@ -569,7 +569,7 @@ test('the office deletes a person added by mistake, but not one with family link
   const refused = page.getByRole('alertdialog', { name: 'Delete Ella Amberly?' });
   await refused.getByRole('button', { name: 'Delete' }).click();
   await expect(refused.getByRole('alert')).toHaveText(
-    'Ella Amberly still has an account, a staff link, bookings, class memberships, guardians or children, so they cannot be deleted. Remove those first.',
+    'Ella Amberly still has an account, a staff link, bookings, class memberships, passes they own or paid for, guardians or children, so they cannot be deleted. Remove those first; passes are never deleted, so a person with passes stays.',
   );
 });
 

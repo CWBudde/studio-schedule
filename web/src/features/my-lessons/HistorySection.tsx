@@ -9,6 +9,7 @@ import { LoadError } from '@/features/admin/crud/LoadError';
 import { useServerClock } from '@/features/schedule/useServerClock';
 import { formatDate, type SchoolDate, schoolDateOf, todayIn } from '@/lib/schoolTime';
 import { MyLessonRow, type RowBadge } from './MyLessonRow';
+import { usePaymentBadge } from './paymentBadge';
 import { Loading } from './Loading';
 import { useNamesPersons } from './useNamesPersons';
 
@@ -148,6 +149,7 @@ function HistoryRow({
   onOpen: () => void;
 }) {
   const { t } = useTranslation('myLessons');
+  const paymentBadge = usePaymentBadge();
   return (
     <MyLessonRow
       lesson={item.lesson}
@@ -156,7 +158,7 @@ function HistoryRow({
       withDate
       past
       person={named ? item.personName : undefined}
-      badges={historyBadges(item, t)}
+      badges={[...historyBadges(item, t), ...paymentBadge(item.payment)]}
       onOpen={onOpen}
     />
   );

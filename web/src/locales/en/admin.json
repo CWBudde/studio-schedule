@@ -7,7 +7,10 @@
     "timetable": "Timetable",
     "persons": "Persons",
     "accounts": "Accounts",
-    "audit": "Audit log"
+    "audit": "Audit log",
+    "passes": "Passes",
+    "settings": "Settings",
+    "receipts": "Receipts"
   },
   "noAccess": {
     "title": "No access",
@@ -57,7 +60,14 @@
       "monday": "Choose a Monday.",
       "cloneSame": "Choose another date than the one to copy from.",
       "clonePast": "The date cannot lie in the past.",
-      "cloneWeekBegun": "This week has begun already; choose a later one."
+      "cloneWeekBegun": "This week has begun already; choose a later one.",
+      "money": "Enter an amount such as 12.50.",
+      "vatRate": "Enter a percentage from 0 to 100, such as 19 or 7.5.",
+      "visits": "Enter a whole number of visits from 1 to 1000.",
+      "validityDays": "Enter a whole number of days from 0 (no expiry) to 3660.",
+      "timeDays": "Enter a whole number of days from 1 to 3660.",
+      "passTypeInactive": "This pass type is no longer sold; choose another one.",
+      "receiptPrefix": "Use 1 to 16 letters A–Z and digits."
     }
   },
   "delete": {
@@ -344,8 +354,8 @@
       "button": "Delete",
       "label": "Delete {{name}}",
       "title": "Delete {{name}}?",
-      "description": "The person is deleted for good. Only a person nothing refers to can be deleted: no account, staff link, bookings, class memberships, guardians or children.",
-      "inUse": "{{name}} still has an account, a staff link, bookings, class memberships, guardians or children, so they cannot be deleted. Remove those first.",
+      "description": "The person is deleted for good. Only a person nothing refers to can be deleted: no account, staff link, bookings, class memberships, passes, guardians or children.",
+      "inUse": "{{name}} still has an account, a staff link, bookings, class memberships, passes they own or paid for, guardians or children, so they cannot be deleted. Remove those first; passes are never deleted, so a person with passes stays.",
       "deleted": "{{name}} has been deleted."
     },
     "fields": {

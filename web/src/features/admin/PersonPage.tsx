@@ -15,6 +15,7 @@ import { LoadError } from './crud/LoadError';
 import { personName } from './crud/person';
 import { PersonAccountSheet } from './PersonAccountSheet';
 import { PersonGuardians } from './PersonGuardians';
+import { PersonPasses } from './PersonPasses';
 import { Section } from './PersonSection';
 import { PersonSheet, type PersonTarget } from './PersonSheet';
 
@@ -30,8 +31,9 @@ const linkClass =
 /**
  * One person for the office (/admin/persons/$personId): their data (edited
  * in a sheet), guardians (linked and unlinked here), children, account
- * (created here with an invitation), staff links and class memberships. A
- * person nothing refers to any more can be deleted; the list follows.
+ * (created here with an invitation), passes (sold, given and voided here),
+ * staff links and class memberships. A person nothing refers to any more
+ * can be deleted; the list follows.
  */
 export function PersonPage({ personId }: { personId: string }) {
   const { t } = useTranslation('admin');
@@ -103,6 +105,7 @@ export function PersonPage({ personId }: { personId: string }) {
         <AccountSection person={p} onCreate={() => setCreatingAccount(p)} />
         <PersonGuardians person={p} />
         <Dependents person={p} />
+        <PersonPasses person={p} />
         <ClassesSection person={p} />
         <StaffSection person={p} />
       </div>

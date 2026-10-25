@@ -12,6 +12,7 @@ import type { ReactElement } from 'react';
 import { type ScheduleSearch, validateScheduleSearch } from '@/features/schedule/search';
 import { type MyLessonsSearch, validateMyLessonsSearch } from '@/features/my-lessons/search';
 import { type TeachSearch, validateTeachSearch } from '@/features/teach/search';
+import { validateReceiptsSearch } from '@/features/admin/receiptsSearch';
 
 function testQueryClient() {
   return new QueryClient({
@@ -42,6 +43,8 @@ export type TestPath =
   | '/waitlist/accept'
   | '/account'
   | '/admin/accounts'
+  | '/admin/receipts'
+  | '/admin/settings'
   | '/admin/persons'
   | '/admin/persons/$personId'
   | '/admin/terms'
@@ -60,8 +63,9 @@ export function renderInRouter(
   const queryClient = testQueryClient();
   const rootRoute = createRootRoute({ component: Outlet });
   const page = (path: TestPath) => () => (at === path ? ui : null);
-  const route = (path: Exclude<TestPath, '/schedule' | '/teach' | '/my-lessons'>) =>
-    createRoute({ getParentRoute: () => rootRoute, path, component: page(path) });
+  const route = (
+    path: Exclude<TestPath, '/schedule' | '/teach' | '/my-lessons' | '/admin/receipts'>,
+  ) => createRoute({ getParentRoute: () => rootRoute, path, component: page(path) });
   const scheduleRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/schedule',
@@ -79,6 +83,12 @@ export function renderInRouter(
     path: '/my-lessons',
     validateSearch: validateMyLessonsSearch,
     component: page('/my-lessons'),
+  });
+  const receiptsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/admin/receipts',
+    validateSearch: validateReceiptsSearch,
+    component: page('/admin/receipts'),
   });
   const query = new URLSearchParams(
     Object.entries(search).filter((e): e is [string, string] => e[1] !== undefined),
@@ -98,6 +108,8 @@ export function renderInRouter(
       route('/waitlist/accept'),
       route('/account'),
       route('/admin/accounts'),
+      receiptsRoute,
+      route('/admin/settings'),
       route('/admin/persons'),
       route('/admin/persons/$personId'),
       route('/admin/terms'),

@@ -16,6 +16,8 @@ import {
   mockApiGet,
   mockApiPost,
   mockApiPut,
+  noahPasses,
+  passTypes,
   persons,
   problem,
   schedule,
@@ -48,6 +50,11 @@ import {
   meQuery,
   myLessonHistoryQuery,
   myLessonsQuery,
+  myPassesQuery,
+  lessonParticipantsQuery,
+  personPassesQuery,
+  retirePassTypeMutation,
+  updatePassSettingsMutation,
   personsQuery,
   removeDependentMutation,
   requestEmailChangeMutation,
@@ -1105,5 +1112,91 @@ describe('My lessons refresh', () => {
     await new MutationObserver(queryClient, removeDependentMutation(queryClient)).mutate(lina.id);
 
     expect(invalidated(queryClient)).toEqual(everything);
+  });
+});
+
+describe('passes', () => {
+  /** A client with the passes of the office and the family, and the lessons, cached. */
+  function passesClient() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(personPassesQuery(ids.personNoah).queryKey, noahPasses);
+    queryClient.setQueryData(myPassesQuery.queryKey, {
+      items: [],
+      today: '2026-10-23',
+      timezone: 'Europe/Berlin',
+      redemptionMode: 'attendance',
+    });
+    queryClient.setQueryData(scheduleQuery(range).queryKey, schedule);
+    queryClient.setQueryData(myLessonsQuery.queryKey, {
+      timezone: 'Europe/Berlin',
+      now: '2026-10-23T10:00:00Z',
+      upcoming: [],
+      waitlist: [],
+    });
+    queryClient.setQueryData(lessonParticipantsQuery(ids.lessonBallet).queryKey, {
+      lessonId: ids.lessonBallet,
+      capacity: 12,
+      active: 0,
+      held: 0,
+      freePlaces: 12,
+      waiting: 0,
+      dayOverAt: '2026-10-26T23:00:00Z',
+      bookings: [],
+      waitlist: [],
+    });
+    return queryClient;
+  }
+
+  it("asks for the office's and the family's passes again after attendance is taken", async () => {
+    mockApiPost({ '/api/v1/bookings/{bookingId}/attendance': { body: {} } });
+    const queryClient = passesClient();
+
+    await new MutationObserver(queryClient, setAttendanceMutation(queryClient)).mutate({
+      bookingId: 'b1',
+      status: 'attended',
+    });
+
+    expect(
+      queryClient.getQueryState(personPassesQuery(ids.personNoah).queryKey)?.isInvalidated,
+    ).toBe(true);
+    expect(queryClient.getQueryState(myPassesQuery.queryKey)?.isInvalidated).toBe(true);
+  });
+
+  it('asks for how bookings are paid again after the redemption mode changes', async () => {
+    mockApiPut({ '/api/v1/admin/settings/passes': ({ body }) => ({ body }) });
+    const queryClient = passesClient();
+
+    await new MutationObserver(queryClient, updatePassSettingsMutation(queryClient)).mutate(
+      'booking',
+    );
+
+    for (const key of [
+      scheduleQuery(range).queryKey,
+      myLessonsQuery.queryKey,
+      lessonParticipantsQuery(ids.lessonBallet).queryKey,
+      myPassesQuery.queryKey,
+      personPassesQuery(ids.personNoah).queryKey,
+    ]) {
+      expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+    }
+  });
+
+  it('retires a pass type with its own operation, changing nothing else', async () => {
+    const post = mockApiPost({
+      '/api/v1/admin/pass-types/{passTypeId}/retire': {
+        body: { ...passTypes[0]!, active: false },
+      },
+    });
+    const put = mockApiPut({});
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    await new MutationObserver(queryClient, retirePassTypeMutation(queryClient)).mutate(
+      passTypes[0]!,
+    );
+
+    expect(post).toHaveBeenCalledWith('/api/v1/admin/pass-types/{passTypeId}/retire', {
+      params: { path: { passTypeId: passTypes[0]!.id } },
+    });
+    expect(put).not.toHaveBeenCalled();
   });
 });

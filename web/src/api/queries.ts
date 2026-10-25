@@ -671,8 +671,9 @@ export const updatePersonMutation = (queryClient: QueryClient) =>
 
 /**
  * Deletes a person (office), e.g. one added by mistake. While an account, a
- * staff link, bookings, class memberships or a guardian link in either
- * direction refer to the person, it is a 409 `in-use` and nothing changes.
+ * staff link, bookings, class memberships, passes they own or paid for, or
+ * a guardian link in either direction refer to the person, it is a 409
+ * `in-use` and nothing changes.
  */
 export const deletePersonMutation = (queryClient: QueryClient) =>
   mutationOptions({
@@ -1171,8 +1172,9 @@ export type LessonRestoreData = components['schemas']['LessonRestoreData'];
 
 /**
  * After a write to a lesson, a booking or the names of a family: the
- * schedule, the instructor view, "My lessons" and the lessons are asked
- * again, but for `except` (a deleted lesson, which would only be found
+ * schedule, the instructor view, "My lessons", the family's and the
+ * office's passes (a booking may use or give back a visit) and the lessons
+ * are asked again, but for `except` (a deleted lesson, which would only be found
  * gone), and so is the demo mailbox, as a write may mail those booked. The
  * history of "My lessons" (every page loaded) only with `history`, for
  * writes that can change the past; a member's booking writes cannot.
@@ -1187,6 +1189,8 @@ function refreshLessons(
       scheduleQueryKey,
       teachQueryKey,
       history ? myLessonsQueryKey : myLessonsQuery.queryKey,
+      myPassesQueryKey,
+      personPassesKey,
       ['lesson'],
       demoMailboxQuery.queryKey,
     ].map((queryKey) =>
@@ -1982,4 +1986,345 @@ export const revokeCalendarFeedMutation = (queryClient: QueryClient) =>
       expectOk(api.DELETE('/api/v1/my/calendar-feeds/{feedId}', { params: { path: { feedId } } })),
     onError: signedOutOn401(queryClient),
     onSettled: () => refreshCalendarFeeds(queryClient),
+  });
+
+/** A pass type of the school's catalogue (office). */
+export type PassType = components['schemas']['PassType'];
+/** The editable fields of a pass type (create and update). */
+export type PassTypeData = PostBody<'/api/v1/admin/pass-types'>;
+/** A pass as the office sees it: with the office's note. */
+export type AdminPass = components['schemas']['AdminPass'];
+/** A pass of the signed-in family (listMyPasses), without the office's note. */
+export type Pass = components['schemas']['Pass'];
+/** A booking a pass paid for, as the pass lists it. */
+export type PassUse = components['schemas']['PassUse'];
+/** When bookings use a pass: on booking or on attendance. */
+export type RedemptionMode = components['schemas']['PassSettings']['redemptionMode'];
+/** The family's passes with the school's today, its time zone and when bookings use a pass. */
+export type MyPasses = components['schemas']['MyPasses'];
+/** What the office sends to sell a pass. */
+export type SellPassData = PostBody<'/api/v1/admin/persons/{personId}/passes/sell'>;
+/** What the office sends to give a pass away. */
+export type AssignPassData = PostBody<'/api/v1/admin/persons/{personId}/passes/assign'>;
+/** How a booking is paid: by a pass, unpaid, free or pending attendance. */
+export type BookingPayment = components['schemas']['BookingPayment'];
+
+/** Every pass type, retired ones included, ordered by name (office). */
+export const passTypesQuery = queryOptions({
+  queryKey: [...adminQueryKey, 'pass-types'],
+  queryFn: async ({ signal }) =>
+    (await unwrap(api.GET('/api/v1/admin/pass-types', { signal }))).items,
+});
+
+/** Prefix of the queries of a person's passes (office). */
+const personPassesKey = [...adminQueryKey, 'passes'] as const;
+
+/** The passes of a person (office): the usable ones first, then the others, newest sale first. */
+export const personPassesQuery = (personId: string) =>
+  queryOptions({
+    queryKey: [...personPassesKey, personId],
+    queryFn: async ({ signal }) =>
+      (
+        await unwrap(
+          api.GET('/api/v1/admin/persons/{personId}/passes', {
+            params: { path: { personId } },
+            signal,
+          }),
+        )
+      ).items,
+  });
+
+/** Prefix of the family's passes, asked again after every lesson or booking write. */
+export const myPassesQueryKey = ['my-passes'] as const;
+
+/**
+ * The passes of the signed-in person and their dependents with what they
+ * paid for (listMyPasses): usable first, then the others, newest sale first.
+ */
+export const myPassesQuery = queryOptions({
+  queryKey: myPassesQueryKey,
+  queryFn: ({ signal }) => unwrap(api.GET('/api/v1/my/passes', { signal })),
+});
+
+/** When bookings use a pass (office reads, an admin writes). */
+export const passSettingsQuery = queryOptions({
+  queryKey: [...adminQueryKey, 'settings', 'passes'],
+  queryFn: ({ signal }) => unwrap(api.GET('/api/v1/admin/settings/passes', { signal })),
+});
+
+/** After a write to the pass catalogue: the pass types and the passes that name them. */
+function refreshPassTypes(queryClient: QueryClient) {
+  return Promise.all(
+    [passTypesQuery.queryKey, personPassesKey, myPassesQueryKey].map((queryKey) =>
+      queryClient.invalidateQueries({ queryKey }),
+    ),
+  );
+}
+
+/** The errors of a write to the pass catalogue: a 404 means it changed meanwhile. */
+function onPassTypeError(queryClient: QueryClient) {
+  const signedOut = signedOutOn401(queryClient);
+  return (error: Error) => {
+    signedOut(error);
+    if (error instanceof ApiError && error.status === 404) void refreshPassTypes(queryClient);
+  };
+}
+
+/** Adds a pass type (office); a name another one has (ignoring case) is a 409 `duplicate`. */
+export const createPassTypeMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: PassTypeData) => unwrap(api.POST('/api/v1/admin/pass-types', { body })),
+    onSuccess: () => refreshPassTypes(queryClient),
+    onError: onPassTypeError(queryClient),
+  });
+
+/**
+ * Replaces the fields of a pass type (office); `active: false` retires it.
+ * Passes sold already keep their visits, days and price.
+ */
+export const updatePassTypeMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ passTypeId, body }: { passTypeId: string; body: PassTypeData }) =>
+      unwrap(
+        api.PUT('/api/v1/admin/pass-types/{passTypeId}', {
+          params: { path: { passTypeId } },
+          body,
+        }),
+      ),
+    onSuccess: () => refreshPassTypes(queryClient),
+    onError: onPassTypeError(queryClient),
+  });
+
+/**
+ * Retires a pass type (office): the way out when it cannot be deleted
+ * because it was sold. Only its sale stops; nothing else changes. A type
+ * gone meanwhile is a 404.
+ */
+export const retirePassTypeMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: async ({ id }: PassType) => {
+      await unwrap(
+        api.POST('/api/v1/admin/pass-types/{passTypeId}/retire', {
+          params: { path: { passTypeId: id } },
+        }),
+      );
+    },
+    onSuccess: () => refreshPassTypes(queryClient),
+    onError: onPassTypeError(queryClient),
+  });
+
+/** Deletes a pass type that was never sold (office); a sold one is a 409 `in-use`. */
+export const deletePassTypeMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (passTypeId: string) =>
+      expectOk(
+        api.DELETE('/api/v1/admin/pass-types/{passTypeId}', { params: { path: { passTypeId } } }),
+      ),
+    onSuccess: () => refreshPassTypes(queryClient),
+    onError: onPassTypeError(queryClient),
+  });
+
+/**
+ * After a pass is sold, given or voided: the person's passes, the family's
+ * passes, and whatever shows how bookings are paid (a void moves the coming
+ * bookings to another pass, or leaves them unpaid); a sale also issues and
+ * mails a receipt, so the receipts and the demo mailbox too.
+ */
+function refreshPasses(queryClient: QueryClient) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: personPassesKey }),
+    queryClient.invalidateQueries({ queryKey: receiptsKey }),
+    queryClient.invalidateQueries({ queryKey: myReceiptsQuery.queryKey }),
+    refreshLessons(queryClient),
+  ]);
+}
+
+/** Whose pass to sell or give: the person and the request body. */
+export type PassSaleVariables<B> = { personId: string; body: B };
+
+/**
+ * Sells a pass to a person (office). An unknown person is a 404; an
+ * unknown or retired type a 422 on `body.passTypeId`, an unknown payer on
+ * `body.payerId`.
+ */
+export const sellPassMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ personId, body }: PassSaleVariables<SellPassData>) =>
+      unwrap(
+        api.POST('/api/v1/admin/persons/{personId}/passes/sell', {
+          params: { path: { personId } },
+          body,
+        }),
+      ),
+    onSuccess: () => refreshPasses(queryClient),
+    onError: signedOutOn401(queryClient),
+  });
+
+/** Gives a person a pass without payment (office); it fails like sellPassMutation. */
+export const assignPassMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ personId, body }: PassSaleVariables<AssignPassData>) =>
+      unwrap(
+        api.POST('/api/v1/admin/persons/{personId}/passes/assign', {
+          params: { path: { personId } },
+          body,
+        }),
+      ),
+    onSuccess: () => refreshPasses(queryClient),
+    onError: signedOutOn401(queryClient),
+  });
+
+/**
+ * Voids a pass (office): it pays for nothing more; what it paid for stays
+ * paid. A voided pass is a 409 `already-voided`, after which the passes are
+ * asked again too.
+ */
+export const voidPassMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (passId: string) =>
+      unwrap(api.POST('/api/v1/admin/passes/{passId}/void', { params: { path: { passId } } })),
+    onError: signedOutOn401(queryClient),
+    onSettled: () => refreshPasses(queryClient),
+  });
+
+/**
+ * Sets when bookings use a pass from now on (admin; the office gets a
+ * 403). Bookings redeemed before stay as they are; what shows how bookings
+ * are paid is asked again.
+ */
+export const updatePassSettingsMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (redemptionMode: RedemptionMode) =>
+      unwrap(api.PUT('/api/v1/admin/settings/passes', { body: { redemptionMode } })),
+    onSuccess: (settings) => {
+      queryClient.setQueryData(passSettingsQuery.queryKey, settings);
+      // How bookings are paid follows the mode: pending or paid.
+      return refreshLessons(queryClient);
+    },
+    onError: signedOutOn401(queryClient),
+  });
+
+/** A receipt (a payment confirmation of a pass sale, or its cancellation), as issued. */
+export type Receipt = components['schemas']['Receipt'];
+/** How a pass was paid, printed on its receipt. */
+export type PaymentMethod = Receipt['paymentMethod'];
+/** The school's tax mode, as receipts print it. */
+export type TaxMode = Receipt['taxMode'];
+/** The receipt settings with whether receipts can be issued, the first gap, and the logo's type. */
+export type ReceiptSettings = components['schemas']['ReceiptSettingsBody'];
+/** The receipt settings an admin writes. */
+export type ReceiptSettingsData = components['schemas']['ReceiptSettingsData'];
+/** The receipt list filter: a year (0: all), a search, and a page. */
+export type ReceiptsParams = NonNullable<
+  paths['/api/v1/admin/receipts']['get']['parameters']['query']
+>;
+
+/** Prefix of the office's receipt queries. */
+const receiptsKey = [...adminQueryKey, 'receipts'] as const;
+
+/** The receipts that match `params`, newest first, and how many match in all (office). */
+export const receiptsQuery = (params: ReceiptsParams) =>
+  queryOptions({
+    queryKey: [...receiptsKey, 'list', params],
+    queryFn: ({ signal }) =>
+      unwrap(api.GET('/api/v1/admin/receipts', { params: { query: params }, signal })),
+  });
+
+/** One receipt (office); an unknown one is a 404. */
+export const receiptQuery = (receiptId: string) =>
+  queryOptions({
+    queryKey: [...receiptsKey, 'one', receiptId],
+    queryFn: ({ signal }) =>
+      unwrap(
+        api.GET('/api/v1/admin/receipts/{receiptId}', { params: { path: { receiptId } }, signal }),
+      ),
+  });
+
+/** The receipts of what the signed-in person paid for, newest first. */
+export const myReceiptsQuery = queryOptions({
+  queryKey: ['my-receipts'],
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/my/receipts', { signal }))).items,
+});
+
+/** The path of a receipt's PDF for the office, or for its payer (`mine`). */
+export const receiptPdfPath = (receiptId: string, { mine = false } = {}) =>
+  mine ? `/api/v1/my/receipts/${receiptId}/pdf` : `/api/v1/admin/receipts/${receiptId}/pdf`;
+
+/** The receipt settings (office reads, an admin writes). */
+export const receiptSettingsQuery = queryOptions({
+  queryKey: [...adminQueryKey, 'settings', 'receipts'],
+  queryFn: ({ signal }) => unwrap(api.GET('/api/v1/admin/settings/receipts', { signal })),
+});
+
+/** The logo printed on receipts, or null without one (office). */
+export const receiptLogoQuery = queryOptions({
+  queryKey: [...adminQueryKey, 'settings', 'receipts', 'logo'],
+  queryFn: ({ signal }) =>
+    unwrapOrNull(
+      404,
+      api.GET('/api/v1/admin/settings/receipts/logo', { parseAs: 'blob', signal }),
+    ) as Promise<Blob | null>,
+});
+
+/**
+ * Replaces the receipt settings (admin); the answer says whether receipts
+ * can be issued now.
+ */
+export const updateReceiptSettingsMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: ReceiptSettingsData) =>
+      unwrap(api.PUT('/api/v1/admin/settings/receipts', { body })),
+    onSuccess: (settings) => queryClient.setQueryData(receiptSettingsQuery.queryKey, settings),
+    onError: signedOutOn401(queryClient),
+  });
+
+/** After the logo changes: the settings (their logo type) and the logo. */
+const refreshLogo = (queryClient: QueryClient) =>
+  queryClient.invalidateQueries({ queryKey: receiptSettingsQuery.queryKey });
+
+/**
+ * Sets the logo of later receipts (admin): a PNG or JPEG of at most 512
+ * KiB, base64 encoded; a larger image or data not of the type is a 422 on
+ * `body.data`.
+ */
+export const updateReceiptLogoMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: components['schemas']['ReceiptLogoInputBody']) =>
+      expectOk(api.PUT('/api/v1/admin/settings/receipts/logo', { body })),
+    onSuccess: () => refreshLogo(queryClient),
+    onError: signedOutOn401(queryClient),
+  });
+
+/** Removes the logo of later receipts (admin). */
+export const deleteReceiptLogoMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: () => expectOk(api.DELETE('/api/v1/admin/settings/receipts/logo')),
+    onSuccess: () => refreshLogo(queryClient),
+    onError: signedOutOn401(queryClient),
+  });
+
+/**
+ * Issues the cancellation (Storno) of a sale receipt (office), which voids
+ * its pass. A pass that paid for visits is a 409 `pass-used`, a receipt
+ * canceled already a 409 `already-canceled`, a cancellation a 409
+ * `cancellation`, incomplete settings a 409 `receipt-settings-incomplete`.
+ * Afterwards the receipts, the passes, how bookings are paid and the demo
+ * mailbox (the cancellation is mailed) are asked again.
+ */
+export const cancelReceiptMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ receiptId, reason }: { receiptId: string; reason?: string }) =>
+      unwrap(
+        api.POST('/api/v1/admin/receipts/{receiptId}/cancel', {
+          params: { path: { receiptId } },
+          body: reason ? { reason } : {},
+        }),
+      ),
+    onError: signedOutOn401(queryClient),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: receiptsKey }),
+        queryClient.invalidateQueries({ queryKey: myReceiptsQuery.queryKey }),
+        refreshPasses(queryClient),
+      ]),
   });

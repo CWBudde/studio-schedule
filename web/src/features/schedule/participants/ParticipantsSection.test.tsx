@@ -257,6 +257,48 @@ describe('ParticipantsSection', () => {
     expect(section.queryByRole('button', { name: 'All attended' })).toBeNull();
   });
 
+  it('shows how each booking is paid', async () => {
+    mockStaff({
+      me: meOffice,
+      list: {
+        body: {
+          ...participants,
+          bookings: [
+            {
+              ...mia,
+              payment: {
+                status: 'paid',
+                pass: { id: id(711), name: '10-visit pass', kind: 'visits', visitsRemaining: 6 },
+              },
+            },
+            { ...gina, payment: { status: 'unpaid' } },
+            { ...noah, payment: { status: 'free' } },
+            {
+              ...booking(5, 'Kai Example', { personId: id(348) }),
+              payment: {
+                status: 'paid',
+                pass: { id: id(712), name: '30-day pass', kind: 'time', visitsRemaining: 0 },
+              },
+            },
+            carla,
+          ],
+        },
+      },
+    });
+
+    const section = await openParticipants();
+
+    const rows = within(section.getByRole('list', { name: 'Booked participants' })).getAllByRole(
+      'listitem',
+    );
+    expect(within(rows[0]!).getByText('Paid · 10-visit pass, 6 left')).toBeInTheDocument();
+    expect(within(rows[1]!).getByText('Unpaid')).toBeInTheDocument();
+    expect(within(rows[2]!).getByText('Free')).toBeInTheDocument();
+    expect(within(rows[3]!).getByText('Paid · 30-day pass')).toBeInTheDocument();
+    const canceled = within(section.getByRole('list', { name: 'Canceled bookings' }));
+    expect(canceled.getByText('Pending')).toBeInTheDocument();
+  });
+
   it('stays away from a lesson the instructor does not teach', async () => {
     const get = mockStaff({ list: problem(404, 'not found') });
 

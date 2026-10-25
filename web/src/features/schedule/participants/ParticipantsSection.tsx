@@ -41,6 +41,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { canAdminister } from '@/features/admin/access';
+import { PaymentBadge } from '@/features/passes/PassBits';
 import { formatDateTime } from '@/lib/schoolTime';
 import { useServerClock } from '../useServerClock';
 import { AddParticipantDialog } from './AddParticipantDialog';
@@ -401,6 +402,7 @@ function ParticipantRow({
         {p.trial && <Badge variant="secondary">{t('participants.trial.badge')}</Badge>}
         <StatusBadge status={p.status} />
         {p.late && <Badge variant="destructive">{t('participants.late')}</Badge>}
+        <PaymentBadge payment={p.payment} />
       </div>
       {p.trial && p.trialNote && (
         <p className="text-sm break-words text-muted-foreground">

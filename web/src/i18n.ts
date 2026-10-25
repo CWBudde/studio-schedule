@@ -6,6 +6,8 @@ import deAdmin from './locales/de/admin.json';
 import deAuth from './locales/de/auth.json';
 import deFeeds from './locales/de/feeds.json';
 import deMyLessons from './locales/de/myLessons.json';
+import dePasses from './locales/de/passes.json';
+import deReceipts from './locales/de/receipts.json';
 import de from './locales/de/common.json';
 import deSchedule from './locales/de/schedule.json';
 import deTeach from './locales/de/teach.json';
@@ -15,6 +17,8 @@ import enAdmin from './locales/en/admin.json';
 import enAuth from './locales/en/auth.json';
 import enFeeds from './locales/en/feeds.json';
 import enMyLessons from './locales/en/myLessons.json';
+import enPasses from './locales/en/passes.json';
+import enReceipts from './locales/en/receipts.json';
 import en from './locales/en/common.json';
 import enSchedule from './locales/en/schedule.json';
 import enTeach from './locales/en/teach.json';
@@ -35,6 +39,8 @@ export const resources = {
     teach: enTeach,
     myLessons: enMyLessons,
     feeds: enFeeds,
+    passes: enPasses,
+    receipts: enReceipts,
   },
   de: {
     common: de,
@@ -46,6 +52,8 @@ export const resources = {
     teach: deTeach,
     myLessons: deMyLessons,
     feeds: deFeeds,
+    passes: dePasses,
+    receipts: deReceipts,
   },
 } as const;
 
@@ -65,6 +73,8 @@ void i18n
       'teach',
       'myLessons',
       'feeds',
+      'passes',
+      'receipts',
     ],
     fallbackLng: 'en',
     supportedLngs: supportedLanguages,

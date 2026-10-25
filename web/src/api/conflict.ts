@@ -10,7 +10,10 @@ import type { components } from './schema';
  * full, the lesson is closed for booking (see closedWhy), the booking is
  * canceled already, or a waiting-list write does not fit the entry: the
  * lesson has a free place, the person waits already, the entry has no
- * invite, its invite ran out or was used, or it left the list.
+ * invite, its invite ran out or was used, or it left the list; or the
+ * pass is voided already; or a receipt cannot be issued (the receipt
+ * settings are incomplete) or canceled (its pass paid for visits, it is
+ * canceled already, or it is a cancellation itself).
  */
 export type ConflictReason = components['schemas']['Conflict']['reason'];
 
@@ -32,6 +35,10 @@ const conflictReasons: readonly ConflictReason[] = [
   'invite-expired',
   'invite-used',
   'not-waiting',
+  'already-voided',
+  'receipt-settings-incomplete',
+  'pass-used',
+  'cancellation',
 ];
 
 /** The lesson that uses the room, named by a 409 `room-taken`. */

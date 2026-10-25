@@ -50,6 +50,13 @@ const adminErrors = [
   'cloneSame',
   'clonePast',
   'cloneWeekBegun',
+  'money',
+  'vatRate',
+  'visits',
+  'validityDays',
+  'timeDays',
+  'passTypeInactive',
+  'receiptPrefix',
 ] as const;
 type AdminErrorKey = (typeof adminErrors)[number];
 const isAdminErrorKey = (key: unknown): key is AdminErrorKey =>

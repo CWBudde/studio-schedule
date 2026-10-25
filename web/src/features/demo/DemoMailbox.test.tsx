@@ -1,9 +1,12 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { openDownload } from '@/api/download';
 import { confirmationMail, mockApiGet, publicSettings } from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { DemoMailbox } from './DemoMailbox';
+
+vi.mock('@/api/download', () => ({ openDownload: vi.fn(() => Promise.resolve()) }));
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -63,6 +66,34 @@ describe('DemoMailbox', () => {
     expect(external).toHaveAttribute('rel', 'noopener noreferrer');
     // No address to reply to but the sender's.
     expect(mail.queryByText('Reply to')).not.toBeInTheDocument();
+  });
+
+  it('opens the attachment of a receipt mail, and says when that fails', async () => {
+    mockMailbox([
+      {
+        ...confirmationMail(appUrl),
+        id: 'mail-7',
+        subject: 'Studio Demo: your receipt SD-2026-0006',
+        template: 'receipt',
+        attachment: { filename: 'SD-2026-0006.pdf', contentType: 'application/pdf' },
+      },
+    ]);
+    const user = userEvent.setup();
+
+    renderInRouter(<DemoMailbox />);
+    await user.click(await screen.findByRole('button', { name: 'Demo mailbox (1 mail)' }));
+
+    const mail = within(
+      await screen.findByRole('article', { name: 'Studio Demo: your receipt SD-2026-0006' }),
+    );
+    const open = mail.getByRole('button', { name: 'Open the attachment SD-2026-0006.pdf' });
+    await user.click(open);
+    expect(openDownload).toHaveBeenCalledWith('/api/v1/demo/mailbox/mail-7/attachment');
+    expect(mail.queryByRole('alert')).not.toBeInTheDocument();
+
+    vi.mocked(openDownload).mockRejectedValueOnce(new Error('offline'));
+    await user.click(open);
+    expect(await mail.findByRole('alert')).toHaveTextContent('Could not open the attachment.');
   });
 
   it('shows the address replies go to, if the mail has one', async () => {

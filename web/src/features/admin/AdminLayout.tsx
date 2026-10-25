@@ -35,6 +35,9 @@ function Administration({ role }: { role: Role }) {
         <Link to="/admin/course-types" className={sectionLink}>
           {t('nav.courseTypes')}
         </Link>
+        <Link to="/admin/pass-types" className={sectionLink}>
+          {t('nav.passes')}
+        </Link>
         <Link to="/admin/staff" className={sectionLink}>
           {t('nav.staff')}
         </Link>
@@ -43,6 +46,9 @@ function Administration({ role }: { role: Role }) {
         </Link>
         <Link to="/admin/persons" className={sectionLink}>
           {t('nav.persons')}
+        </Link>
+        <Link to="/admin/receipts" className={sectionLink}>
+          {t('nav.receipts')}
         </Link>
         {role === 'admin' && (
           <>
@@ -54,6 +60,9 @@ function Administration({ role }: { role: Role }) {
             </Link>
           </>
         )}
+        <Link to="/admin/settings" className={sectionLink}>
+          {t('nav.settings')}
+        </Link>
       </nav>
       <Outlet />
     </div>

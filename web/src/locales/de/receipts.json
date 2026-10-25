@@ -1,0 +1,141 @@
+{
+  "method": {
+    "label": "Zahlungsart",
+    "cash": "Bar",
+    "transfer": "Überweisung",
+    "card": "Karte"
+  },
+  "kind": {
+    "sale": "Beleg",
+    "canceled": "Storniert",
+    "cancellation": "Storno"
+  },
+  "incomplete": {
+    "title": "Belege können erst ausgestellt werden, wenn die Belegeinstellungen vollständig sind; bis dahin lassen sich keine Karten verkaufen.",
+    "missing": "Es fehlt: {{field}}.",
+    "open": "Belegeinstellungen vervollständigen",
+    "askAdmin": "Bitte eine Administratorin oder einen Administrator, sie zu vervollständigen."
+  },
+  "settings": {
+    "title": "Belege",
+    "description": "Was jeder Beleg druckt: Aussteller, Steuerangaben und Nummer. Änderungen gelten für spätere Belege; ausgestellte bleiben, wie sie sind.",
+    "loading": "Die Belegeinstellungen werden geladen…",
+    "loadError": "Die Belegeinstellungen konnten nicht geladen werden.",
+    "adminOnly": "Nur Administratoren können das ändern.",
+    "saved": "Die Belegeinstellungen wurden gespeichert.",
+    "savedIncomplete": "Die Belegeinstellungen wurden gespeichert, aber Belege können noch nicht ausgestellt werden.",
+    "chooseTaxMode": "Steuerart wählen",
+    "taxNoteHint": "Steht auf jedem Beleg; nötig bei Steuerbefreiung, mit der Rechtsgrundlage.",
+    "footerHint": "Steht unten, z. B. die Bankverbindung.",
+    "prefixHint": "Beginnt jede Belegnummer, z. B. SD für SD-2026-0001: 1 bis 16 Buchstaben A–Z und Ziffern.",
+    "notCashRegister": "Belege bestätigen Zahlungen; diese App ist keine Kasse. Keine Steuerberatung.",
+    "fields": {
+      "issuerName": "Aussteller",
+      "issuerAddress": "Anschrift",
+      "taxNumber": "Steuernummer oder USt-IdNr.",
+      "email": "E-Mail",
+      "phone": "Telefon",
+      "taxMode": "Steuerart",
+      "taxNote": "Steuerhinweis",
+      "footer": "Fußzeile",
+      "receiptPrefix": "Nummernpräfix"
+    },
+    "taxModes": {
+      "small_business": "Kleinunternehmer (ohne USt.)",
+      "exempt": "Umsatzsteuerbefreit",
+      "standard": "Regelbesteuerung"
+    },
+    "taxModeHints": {
+      "small_business": "Es wird keine Umsatzsteuer berechnet; Belege drucken den Kleinunternehmerhinweis (oder den Steuerhinweis).",
+      "exempt": "Es wird keine Umsatzsteuer berechnet; Belege drucken den Steuerhinweis mit der Rechtsgrundlage.",
+      "standard": "Der Steuersatz jeder Kartenart ist im Preis enthalten; Belege drucken netto und Umsatzsteuer."
+    }
+  },
+  "logo": {
+    "title": "Logo",
+    "alt": "Das Logo auf den Belegen",
+    "none": "Belege haben kein Logo.",
+    "loading": "Das Logo wird geladen…",
+    "invalid": "Wähle ein PNG- oder JPEG-Bild mit höchstens {{size}} KB.",
+    "upload": "Logo hochladen",
+    "replace": "Logo ersetzen",
+    "uploading": "Wird hochgeladen…",
+    "remove": "Logo entfernen",
+    "saved": "Das Logo wurde gespeichert.",
+    "removed": "Das Logo wurde entfernt.",
+    "hint": "Ein PNG oder JPEG mit höchstens {{size}} KB, oben auf späteren Belegen.",
+    "unreadable": "Die Datei konnte nicht gelesen werden; wähle sie noch einmal."
+  },
+  "list": {
+    "title": "Belege",
+    "description": "Die Belege der Kartenverkäufe und ihre Stornos, die neuesten zuerst. Belege werden nie geändert: Ein Fehler wird storniert, was die Karte storniert, wenn sie nicht genutzt wurde.",
+    "year": "Jahr",
+    "allYears": "Alle Jahre",
+    "search": "Belege durchsuchen",
+    "searchPlaceholder": "Nummer oder Name…",
+    "table": "Belege",
+    "empty": "Noch keine Belege.",
+    "noMatches": "Kein Beleg passt.",
+    "number": "Nummer",
+    "date": "Datum",
+    "recipient": "Empfänger",
+    "kind": "Art",
+    "gross": "Betrag",
+    "open": "Öffnen",
+    "openLabel": "Beleg {{number}} öffnen",
+    "pages": "Seiten der Belege",
+    "range": "{{from}}–{{to}} von {{total}}",
+    "previous": "Zurück",
+    "next": "Weiter"
+  },
+  "detail": {
+    "close": "Schließen",
+    "title": "Beleg",
+    "loading": "Der Beleg wird geladen…",
+    "loadError": "Der Beleg konnte nicht geladen werden.",
+    "notFound": "Diesen Beleg gibt es nicht.",
+    "saleTitle": "Beleg {{number}}",
+    "cancellationTitle": "Storno {{number}}",
+    "description": "So, wie er ausgestellt wurde; das PDF ist das Original.",
+    "refLabel": "{{number}} vom {{date}}",
+    "taxNumber": "Steuernummer: {{number}}",
+    "issued": "Ausgestellt",
+    "issuer": "Aussteller",
+    "recipient": "Empfänger",
+    "payer": "Bezahlt von",
+    "taxMode": "Steuerart",
+    "taxNote": "Steuerhinweis",
+    "reason": "Grund",
+    "cancels": "Storniert",
+    "canceledBy": "Storniert durch",
+    "lines": "Positionen",
+    "lineAmounts": "Netto {{net}} · USt. {{rate}} {{vat}} · Brutto {{gross}}",
+    "net": "Netto",
+    "vat": "USt.",
+    "gross": "Gesamt"
+  },
+  "download": {
+    "button": "PDF",
+    "pending": "Wird geladen…",
+    "label": "Beleg {{number}} als PDF herunterladen",
+    "failed": "Der Beleg konnte nicht heruntergeladen werden."
+  },
+  "cancel": {
+    "open": "Beleg stornieren",
+    "title": "Beleg {{number}} stornieren?",
+    "description": "Ein Stornobeleg mit der nächsten Nummer wird ausgestellt und an die zahlende Person geschickt, und die Karte wird storniert. Das lässt sich nicht rückgängig machen.",
+    "reason": "Grund (optional, wird gedruckt)",
+    "passUsed": "Die Karte hat schon Besuche bezahlt, daher kann ihr Beleg nicht storniert werden. Storniere stattdessen die Karte auf der Seite der Person.",
+    "alreadyCanceled": "Dieser Beleg ist bereits storniert.",
+    "isCancellation": "Ein Storno kann nicht storniert werden.",
+    "keep": "Behalten",
+    "confirm": "Beleg stornieren",
+    "canceling": "Wird storniert…",
+    "done": "Storno {{number}} wurde ausgestellt; die Karte ist storniert."
+  },
+  "mine": {
+    "title": "Meine Belege",
+    "loadError": "Deine Belege konnten nicht geladen werden.",
+    "line": "{{date}} · {{what}} · {{amount}}"
+  }
+}

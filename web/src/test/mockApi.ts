@@ -750,3 +750,327 @@ export const confirmationMail = (appUrl: string): MailboxMail => ({
   createdAt: '2026-10-23T10:00:00Z',
   status: 'pending',
 });
+
+type PassType = components['schemas']['PassType'];
+type Pass = components['schemas']['Pass'];
+type AdminPass = components['schemas']['AdminPass'];
+type PassUse = components['schemas']['PassUse'];
+
+/**
+ * The fictional pass catalogue as GET /admin/pass-types lists it (by name):
+ * a 10-visit pass, a 30-day pass and a retired single visit.
+ */
+export const passTypes: PassType[] = [
+  {
+    id: id(701),
+    name: '10-visit pass',
+    kind: 'visits',
+    visits: 10,
+    validityDays: 180,
+    price: 15000,
+    vatRate: 1900,
+    active: true,
+    createdAt: '2026-09-01T07:00:00Z',
+  },
+  {
+    id: id(702),
+    name: '30-day pass',
+    kind: 'time',
+    validityDays: 30,
+    price: 8900,
+    vatRate: 1900,
+    active: true,
+    createdAt: '2026-09-01T07:00:00Z',
+  },
+  {
+    id: id(703),
+    name: 'Single visit',
+    kind: 'visits',
+    visits: 1,
+    validityDays: 0,
+    price: 1800,
+    vatRate: 700,
+    active: false,
+    createdAt: '2026-09-01T07:00:00Z',
+  },
+];
+
+const typeRef = (n: number) => ({ id: passTypes[n]!.id, name: passTypes[n]!.name });
+
+/** A use of a pass: the ballet lesson on `startsAt` booked for `personName`. */
+const passUse = (
+  n: number,
+  startsAt: string,
+  personName: string,
+  extra: Partial<PassUse> = {},
+) => ({
+  bookingId: id(760 + n),
+  bookingStatus: 'attended' as const,
+  late: false,
+  lesson: { ...lessonBallet, startsAt, endsAt: startsAt.replace('T17:', 'T18:') },
+  personName,
+  redeemedAt: startsAt,
+  ...extra,
+});
+
+const nora = { id: meMember.personId, name: 'Nora Example' };
+const lina = { id: id(331), name: 'Lina Example' };
+const max = { id: id(332), name: 'Max Example' };
+
+/**
+ * The passes of the member's family as GET /my/passes lists them on Friday
+ * 2026-10-23: Nora's usable 10-visit pass, Lina's 30-day pass Nora paid,
+ * Nora's used-up single visit and voided pass, and Max's expired pass the
+ * school gave him.
+ */
+export const myPasses: Pass[] = [
+  {
+    id: id(711),
+    passType: typeRef(0),
+    kind: 'visits',
+    owner: nora,
+    origin: 'sale',
+    pricePaid: 15000,
+    soldAt: '2026-10-01T08:00:00Z',
+    status: 'active',
+    usable: true,
+    validFrom: '2026-10-01',
+    validUntil: '2027-03-29',
+    visitsTotal: 10,
+    visitsRemaining: 7,
+    useCount: 3,
+    uses: [
+      passUse(1, '2026-10-19T17:00:00Z', 'Nora Example'),
+      passUse(2, '2026-10-12T17:00:00Z', 'Nora Example', { bookingStatus: 'no_show' }),
+      passUse(3, '2026-10-05T17:00:00Z', 'Nora Example'),
+    ],
+  },
+  {
+    id: id(712),
+    passType: typeRef(1),
+    kind: 'time',
+    owner: lina,
+    payer: nora,
+    origin: 'sale',
+    pricePaid: 8900,
+    soldAt: '2026-10-10T08:00:00Z',
+    status: 'active',
+    usable: true,
+    validFrom: '2026-10-10',
+    validUntil: '2026-11-08',
+    visitsTotal: 0,
+    visitsRemaining: 0,
+    useCount: 14,
+    uses: [passUse(4, '2026-10-22T17:00:00Z', 'Lina Example')],
+  },
+  {
+    id: id(713),
+    passType: typeRef(2),
+    kind: 'visits',
+    owner: nora,
+    origin: 'sale',
+    pricePaid: 1800,
+    soldAt: '2026-09-20T08:00:00Z',
+    status: 'active',
+    usable: false,
+    validFrom: '2026-09-20',
+    visitsTotal: 1,
+    visitsRemaining: 0,
+    useCount: 1,
+    uses: [
+      passUse(5, '2026-09-28T17:00:00Z', 'Nora Example', { bookingStatus: 'canceled', late: true }),
+    ],
+  },
+  {
+    id: id(714),
+    passType: typeRef(0),
+    kind: 'visits',
+    owner: max,
+    origin: 'assignment',
+    pricePaid: 0,
+    soldAt: '2026-03-01T08:00:00Z',
+    status: 'active',
+    usable: false,
+    validFrom: '2026-03-01',
+    validUntil: '2026-08-27',
+    visitsTotal: 10,
+    visitsRemaining: 4,
+    useCount: 6,
+    uses: [],
+  },
+  {
+    id: id(715),
+    passType: typeRef(2),
+    kind: 'visits',
+    owner: nora,
+    origin: 'sale',
+    pricePaid: 1800,
+    soldAt: '2026-10-02T08:00:00Z',
+    status: 'voided',
+    voidedAt: '2026-10-03T08:00:00Z',
+    usable: false,
+    validFrom: '2026-10-02',
+    visitsTotal: 1,
+    visitsRemaining: 1,
+    useCount: 0,
+    uses: [],
+  },
+];
+
+/** GET /my/passes of the member's family; the school uses passes on attendance by default. */
+export const myPassesAnswer = (
+  redemptionMode: 'booking' | 'attendance' = 'attendance',
+  items = myPasses,
+) => ({
+  body: { items, today: '2026-10-23', timezone: 'Europe/Berlin', redemptionMode },
+});
+
+/**
+ * Noah Sample's passes as the office lists them: a usable 10-visit pass his
+ * guardian Mia paid, and a single visit voided with a note.
+ */
+export const noahPasses: AdminPass[] = [
+  {
+    id: id(721),
+    passType: typeRef(0),
+    kind: 'visits',
+    owner: { id: ids.personNoah, name: 'Noah Sample' },
+    payer: { id: ids.personMia, name: 'Mia Sample' },
+    origin: 'sale',
+    pricePaid: 14000,
+    receiptId: id(731),
+    soldAt: '2026-10-05T08:00:00Z',
+    status: 'active',
+    usable: true,
+    validFrom: '2026-10-05',
+    validUntil: '2027-04-02',
+    visitsTotal: 10,
+    visitsRemaining: 9,
+    useCount: 1,
+    uses: [passUse(6, '2026-10-19T17:00:00Z', 'Noah Sample')],
+  },
+  {
+    id: id(722),
+    passType: typeRef(2),
+    kind: 'visits',
+    owner: { id: ids.personNoah, name: 'Noah Sample' },
+    origin: 'sale',
+    pricePaid: 1800,
+    soldAt: '2026-09-02T08:00:00Z',
+    status: 'voided',
+    voidedAt: '2026-09-03T08:00:00Z',
+    usable: false,
+    validFrom: '2026-09-02',
+    visitsTotal: 1,
+    visitsRemaining: 1,
+    useCount: 0,
+    uses: [],
+    note: 'Sold to the wrong person.',
+  },
+];
+
+type Receipt = components['schemas']['Receipt'];
+
+const issuer = {
+  name: 'Example Dance Studio',
+  address: '1 Example Street\nSampletown',
+  taxNumber: '00/000/00000',
+  email: 'office@example.org',
+};
+
+/** A sale receipt of 140.00 € with 19 % VAT, paid by Mia Sample in cash. */
+export const receiptSale: Receipt = {
+  id: id(731),
+  number: 'SD-2026-0002',
+  kind: 'sale',
+  issuedAt: '2026-10-05T08:00:00Z',
+  issueDate: '2026-10-05',
+  issuer,
+  taxMode: 'standard',
+  payer: { id: ids.personMia, name: 'Mia Sample' },
+  recipientName: 'Mia Sample',
+  recipientAddress: '2 Sample Road\nSampletown',
+  paymentMethod: 'cash',
+  currency: 'EUR',
+  net: 11765,
+  vat: 2235,
+  gross: 14000,
+  lines: [
+    {
+      position: 1,
+      description: '10-visit pass for Noah Sample',
+      quantity: 1,
+      unitPrice: 14000,
+      vatRate: 1900,
+      net: 11765,
+      vat: 2235,
+      gross: 14000,
+    },
+  ],
+  passId: id(721),
+  cancelable: true,
+};
+
+/** A sale receipt canceled the next day, and its cancellation. */
+export const receiptCanceled: Receipt = {
+  ...receiptSale,
+  id: id(732),
+  number: 'SD-2026-0001',
+  issuedAt: '2026-09-02T08:00:00Z',
+  issueDate: '2026-09-02',
+  recipientAddress: undefined,
+  net: 1513,
+  vat: 287,
+  gross: 1800,
+  lines: [
+    {
+      position: 1,
+      description: 'Single visit for Noah Sample',
+      quantity: 1,
+      unitPrice: 1800,
+      vatRate: 1900,
+      net: 1513,
+      vat: 287,
+      gross: 1800,
+    },
+  ],
+  passId: id(722),
+  cancelable: false,
+  canceledBy: { id: id(733), number: 'SD-2026-0003', issueDate: '2026-09-03' },
+};
+
+export const receiptCancellation: Receipt = {
+  ...receiptCanceled,
+  id: id(733),
+  number: 'SD-2026-0003',
+  kind: 'cancellation',
+  issuedAt: '2026-09-03T08:00:00Z',
+  issueDate: '2026-09-03',
+  net: -1513,
+  vat: -287,
+  gross: -1800,
+  lines: [{ ...receiptCanceled.lines[0]!, unitPrice: -1800, net: -1513, vat: -287, gross: -1800 }],
+  reason: 'Sold to the wrong person',
+  canceledBy: undefined,
+  cancels: { id: id(732), number: 'SD-2026-0001', issueDate: '2026-09-02' },
+};
+
+/** The receipts as GET /admin/receipts lists them, newest first. */
+export const receipts: Receipt[] = [receiptCancellation, receiptSale, receiptCanceled];
+
+/**
+ * Complete receipt settings in the standard tax mode in euros (so receipts
+ * over 250 € should name the address), with a PNG logo.
+ */
+export const receiptSettings = {
+  complete: true,
+  issuerName: issuer.name,
+  issuerAddress: issuer.address,
+  taxNumber: issuer.taxNumber,
+  email: issuer.email,
+  taxMode: 'standard' as const,
+  receiptPrefix: 'SD',
+  logoType: 'image/png' as const,
+  logoMaxBytes: 524288,
+  addressRequiredAbove: 25000,
+};

@@ -1,0 +1,209 @@
+{
+  "kinds": {
+    "visits": "Besuchskarte",
+    "time": "Zeitkarte"
+  },
+  "terms": {
+    "visits_one": "{{count}} Besuch, {{days}} Tage gültig",
+    "visits_other": "{{count}} Besuche, {{days}} Tage gültig",
+    "visitsNoExpiry_one": "{{count}} Besuch, ohne Ablauf",
+    "visitsNoExpiry_other": "{{count}} Besuche, ohne Ablauf",
+    "time_one": "Beliebig viele Besuche für {{count}} Tag",
+    "time_other": "Beliebig viele Besuche für {{count}} Tage"
+  },
+  "visits": {
+    "unlimited": "Beliebig viele Besuche",
+    "left_one": "{{count}} von {{total}} Besuchen übrig",
+    "left_other": "{{count}} von {{total}} Besuchen übrig"
+  },
+  "days": {
+    "range": "{{from}} – {{until}}",
+    "noExpiry": "Ab {{from}}, ohne Ablauf"
+  },
+  "states": {
+    "usable": "Gültig",
+    "voided": "Storniert",
+    "notYetValid": "Noch nicht gültig",
+    "usedUp": "Aufgebraucht",
+    "expired": "Abgelaufen"
+  },
+  "payment": {
+    "paid": "Bezahlt",
+    "paidTime": "Bezahlt · {{pass}}",
+    "paidVisits_one": "Bezahlt · {{pass}}, {{count}} übrig",
+    "paidVisits_other": "Bezahlt · {{pass}}, {{count}} übrig",
+    "unpaid": "Unbezahlt",
+    "free": "Kostenlos",
+    "pending": "Offen"
+  },
+  "hint": {
+    "none": "Keine gültige Karte für diesen Tag – bitte am Empfang bezahlen.",
+    "time": {
+      "booking": "Nutzt {{pass}}.",
+      "attendance": "Nutzt {{pass}}, sobald du anwesend warst."
+    },
+    "visits": {
+      "booking_one": "Nutzt {{pass}}; danach bleibt {{count}} Besuch übrig.",
+      "booking_other": "Nutzt {{pass}}; danach bleiben {{count}} Besuche übrig.",
+      "attendance_one": "Nutzt {{pass}}, sobald du anwesend warst; danach bleibt {{count}} Besuch übrig.",
+      "attendance_other": "Nutzt {{pass}}, sobald du anwesend warst; danach bleiben {{count}} Besuche übrig.",
+      "planned_one": "Nutzt {{pass}}, sobald du anwesend warst, aber die übrigen Besuche ({{left}}) sind schon für {{count}} andere Buchung verplant – bitte am Empfang bezahlen, falls sie nicht reichen.",
+      "planned_other": "Nutzt {{pass}}, sobald du anwesend warst, aber die übrigen Besuche ({{left}}) sind schon für {{count}} andere Buchungen verplant – bitte am Empfang bezahlen, falls sie nicht reichen."
+    }
+  },
+  "types": {
+    "title": "Karten",
+    "description": "Die Karten, die die Schule verkauft: eine Zahl von Besuchen oder beliebig viele Besuche für einige Tage. Preise sind brutto; der Steuersatz steht auf den Belegen.",
+    "table": "Kartenarten",
+    "search": "Kartenarten durchsuchen",
+    "empty": "Es gibt noch keine Kartenarten.",
+    "name": "Name",
+    "terms": "Leistung",
+    "price": "Preis",
+    "vatRate": "USt.",
+    "status": "Status",
+    "onSale": "Im Verkauf",
+    "retired": "Eingestellt",
+    "add": "Kartenart hinzufügen",
+    "addTitle": "Kartenart hinzufügen",
+    "editTitle": "{{name}} bearbeiten",
+    "sheetDescription": "Verkaufte Karten behalten ihre Besuche, Tage und ihren Preis; Änderungen gelten für spätere Verkäufe.",
+    "editLabel": "{{name}} bearbeiten",
+    "deleteLabel": "{{name}} löschen",
+    "added": "{{name}} wurde hinzugefügt.",
+    "saved": "{{name}} wurde gespeichert.",
+    "deleted": "{{name}} wurde gelöscht.",
+    "duplicate": "Eine andere Kartenart heißt bereits „{{name}}“.",
+    "notFound": "Diese Kartenart gibt es nicht mehr.",
+    "deleteTitle": "{{name}} löschen?",
+    "deleteDescription": "Die Kartenart wird endgültig gelöscht. Eine verkaufte Kartenart kann nicht gelöscht werden; stelle sie stattdessen ein.",
+    "inUse": "{{name}} wurde verkauft und kann daher nicht gelöscht werden. Stelle sie stattdessen ein: Sie wird nicht mehr verkauft, die verkauften Karten behalten sie.",
+    "inUseRetired": "{{name}} wurde verkauft und kann daher nicht gelöscht werden. Sie ist bereits eingestellt und wird nicht mehr verkauft.",
+    "retire": "Stattdessen einstellen",
+    "retiring": "Wird eingestellt…",
+    "retiredToast": "{{name}} wurde eingestellt.",
+    "kind": "Art",
+    "kindHints": {
+      "visits": "Eine Zahl von Besuchen, einer je Stunde.",
+      "time": "Beliebig viele Stunden innerhalb ihrer Tage, eine Buchung je Stunde."
+    },
+    "visits": "Besuche",
+    "validityDays": "Gültig für (Tage)",
+    "durationDays": "Laufzeit (Tage)",
+    "validityHint": "Tage ab dem ersten Tag der Karte; 0 für ohne Ablauf.",
+    "durationHint": "Tage ab dem ersten Tag der Karte, mindestens 1.",
+    "priceIn": "Preis ({{currency}})",
+    "priceHint": "Der Bruttopreis, z. B. 150 oder 150,00.",
+    "vatRatePercent": "Umsatzsteuersatz (%)",
+    "vatHint": "Im Preis enthalten, z. B. 19; 0 für keine.",
+    "active": "Im Verkauf",
+    "activeHint": "Eine eingestellte Kartenart wird nicht mehr verkauft; die verkauften Karten behalten sie."
+  },
+  "settings": {
+    "pageTitle": "Einstellungen",
+    "pageDescription": "Wie die Schule arbeitet. Änderungen gelten ab jetzt.",
+    "pageDescriptionOffice": "Wie die Schule arbeitet. Nur Administratoren können die Einstellungen ändern.",
+    "title": "Karten",
+    "description": "Wann eine Buchung einen Besuch einer Karte nutzt. Kursmitglieder zahlen ihren Beitrag außerhalb der App; ihre Buchungen nutzen nie eine Karte.",
+    "mode": "Karte nutzen",
+    "modes": {
+      "attendance": "Bei Anwesenheit",
+      "booking": "Bei Buchung"
+    },
+    "modeHints": {
+      "attendance": "Ein Besuch wird genutzt, sobald die Anwesenheit der Stunde erfasst ist (anwesend oder nicht erschienen), oder durch eine späte Stornierung.",
+      "booking": "Ein Besuch wird bei der Buchung genutzt; eine rechtzeitige Stornierung gibt ihn zurück, eine späte nicht."
+    },
+    "notRetroactive": "Bereits genutzte Besuche bleiben genutzt.",
+    "adminOnly": "Nur Administratoren können das ändern.",
+    "loading": "Die Karteneinstellungen werden geladen…",
+    "loadError": "Die Karteneinstellungen konnten nicht geladen werden.",
+    "saved": "Die Karteneinstellungen wurden gespeichert."
+  },
+  "sale": {
+    "sellTitle": "Karte an {{name}} verkaufen",
+    "assignTitle": "{{name}} eine Karte schenken",
+    "sellDescription": "Die Karte bezahlt Buchungen ab ihrem ersten Tag; frühere Buchungen bleiben unbezahlt und werden am Empfang beglichen.",
+    "assignDescription": "Eine Karte ohne Bezahlung, etwa aus Kulanz. Sie bezahlt Buchungen ab ihrem ersten Tag.",
+    "loading": "Die Kartenarten werden geladen…",
+    "typesError": "Die Kartenarten oder die Währung konnten nicht geladen werden.",
+    "noTypes": "Keine Kartenart ist im Verkauf. Lege zuerst eine unter Karten an.",
+    "close": "Schließen",
+    "type": "Kartenart",
+    "chooseType": "Kartenart wählen",
+    "typeOption": "{{name}} · {{price}}",
+    "validFrom": "Erster Tag",
+    "validFromHint": "Leer: heute.",
+    "note": "Notiz",
+    "payer": "Bezahlt von",
+    "payerHint": "Leer: {{name}}.",
+    "priceIn": "Bezahlter Preis ({{currency}}, optional)",
+    "priceHint": "Leer: der Preis der Kartenart, {{price}}.",
+    "priceHintNone": "Leer: der Preis der Kartenart.",
+    "personGone": "Diese Person gibt es nicht mehr.",
+    "cancel": "Abbrechen",
+    "sell": "Verkaufen",
+    "selling": "Wird verkauft…",
+    "assign": "Karte schenken",
+    "assigning": "Wird geschenkt…",
+    "sold": "{{name}} hat {{pass}} gekauft.",
+    "assigned": "{{name}} hat {{pass}} geschenkt bekommen.",
+    "methodHint": "Steht auf dem Beleg.",
+    "recipient": "Beleg",
+    "recipientName": "Name auf dem Beleg",
+    "recipientEmail": "E-Mail",
+    "recipientEmailHint": "Der Beleg geht an das Konto der zahlenden Person, oder an diese Adresse, wenn sie keins hat.",
+    "recipientAddress": "Anschrift",
+    "recipientAddressHint": "Steht auf dem Beleg, Zeile für Zeile.",
+    "addressNeeded": "Ein Beleg über {{amount}} sollte die Anschrift der zahlenden Person nennen."
+  },
+  "person": {
+    "title": "Karten",
+    "description": "Die Karten von {{name}}: Sie bezahlen Stunden, die außerhalb eines Kurses gebucht werden.",
+    "sell": "Karte verkaufen",
+    "assign": "Karte schenken",
+    "empty": "{{name}} hat keine Karten.",
+    "list": "Karten von {{name}}",
+    "loading": "Die Karten werden geladen…",
+    "loadError": "Die Karten konnten nicht geladen werden.",
+    "void": "Stornieren",
+    "voidLabel": "{{pass}} vom {{date}} stornieren",
+    "sold": "Verkauft am {{date}} für {{price}}",
+    "given": "Geschenkt am {{date}}",
+    "paidBy": "bezahlt von {{name}}",
+    "uses_one": "Hat {{count}} Buchung bezahlt",
+    "uses_other": "Hat {{count}} Buchungen bezahlt",
+    "note": "Notiz: {{note}}",
+    "receipt": "Beleg",
+    "receiptLabel": "Beleg zu {{pass}} vom {{date}}"
+  },
+  "void": {
+    "title": "{{pass}} stornieren?",
+    "description": "Die Karte bezahlt nichts mehr. Was sie in begonnenen Stunden bezahlt hat, bleibt bezahlt; kommende Buchungen, die sie bezahlt hat, nutzen eine andere Karte der Person oder bleiben unbezahlt.",
+    "alreadyVoided": "{{pass}} ist bereits storniert.",
+    "notFound": "Diese Karte gibt es nicht mehr.",
+    "keep": "Behalten",
+    "confirm": "Karte stornieren",
+    "voiding": "Wird storniert…",
+    "done": "{{pass}} wurde storniert."
+  },
+  "mine": {
+    "title": "Meine Karten",
+    "cardLabel": "{{pass}}, {{name}}",
+    "loadError": "Deine Karten konnten nicht geladen werden.",
+    "visits": "Besuche",
+    "valid": "Gültig",
+    "payment": "Bezahlung",
+    "given": "Von der Schule geschenkt",
+    "paidBy": "Bezahlt von {{name}}",
+    "noUses": "Noch nicht genutzt.",
+    "latestUses": "Zuletzt genutzt",
+    "usesLabel": "Nutzungen von {{pass}}",
+    "useCount_one": "{{count}} Nutzung insgesamt",
+    "useCount_other": "{{count}} Nutzungen insgesamt",
+    "useStatus": {
+      "noShow": "Nicht erschienen",
+      "late": "Spät storniert"
+    }
+  }
+}
