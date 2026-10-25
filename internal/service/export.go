@@ -33,10 +33,13 @@ type PersonExport struct {
 	Merged     []domain.Person
 	// Account is the person's login; nil without one, or when the export
 	// leaves what belongs to the account out (a dependent's own account,
-	// exported by a guardian). Then CalendarFeeds and Dismissed are empty
-	// too.
+	// exported by a guardian). Then CalendarFeeds, PushSubscriptions and
+	// Dismissed are empty too.
 	Account       *domain.Account
 	CalendarFeeds []domain.CalendarFeed
+	// PushSubscriptions are the account's devices with notifications on
+	// (ADR 0017).
+	PushSubscriptions []domain.PushSubscription
 	// Dismissed are the announcements the account dismissed, newest first.
 	Dismissed []domain.Announcement
 	// Classes are the class memberships.
@@ -176,8 +179,8 @@ func exportPerson(
 	return out, exportReceipts(ctx, tx, &out)
 }
 
-// exportAccount adds the person's account, its calendar feeds and the
-// announcements it dismissed.
+// exportAccount adds the person's account, its calendar feeds, its push
+// subscriptions and the announcements it dismissed.
 func exportAccount(ctx context.Context, tx store.Tx, out *PersonExport) error {
 	acc, err := tx.Accounts().GetByPerson(ctx, out.Person.ID)
 
@@ -191,6 +194,10 @@ func exportAccount(ctx context.Context, tx store.Tx, out *PersonExport) error {
 	out.Account = &acc
 
 	if out.CalendarFeeds, err = tx.CalendarFeeds().ListByAccount(ctx, acc.ID); err != nil {
+		return err
+	}
+
+	if out.PushSubscriptions, err = tx.PushSubscriptions().ListByAccount(ctx, acc.ID); err != nil {
 		return err
 	}
 

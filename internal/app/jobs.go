@@ -18,8 +18,7 @@ func Jobs(deps Deps) *jobs.Runner {
 	lessons := service.NewLessonGenerator(deps.Store, deps.Clock, deps.IDs)
 	renderer := newRenderer()
 	auth := newAuthService(deps, renderer)
-	waitlist := service.NewWaitlistService(deps.Store, deps.Clock, deps.IDs,
-		service.Mails{Renderer: renderer, AppURL: deps.AppURL})
+	waitlist := service.NewWaitlistService(deps.Store, deps.Clock, deps.IDs, mailsOf(deps, renderer))
 
 	all := []jobs.Job{{
 		Name:  "generate-lessons",
@@ -106,11 +105,40 @@ func Jobs(deps Deps) *jobs.Runner {
 		})
 	}
 
+	if deps.Pusher != nil {
+		all = append(all, deliverPush(deps))
+	}
+
 	for i := range all {
 		all[i].Run = measured(all[i], deps)
 	}
 
 	return jobs.NewRunner(deps.Logger, all...)
+}
+
+// deliverPushJob is the name of the job that sends web push messages.
+const deliverPushJob = "deliver-push"
+
+// deliverPush sends the queued web push messages (ADR 0017), every minute
+// and when a request queues one (Wake).
+func deliverPush(deps Deps) jobs.Job {
+	push := service.NewPushService(deps.Store, deps.Clock, deps.IDs, deps.Pusher)
+
+	return jobs.Job{
+		Name:  deliverPushJob,
+		Every: time.Minute,
+		Wake:  deps.Wake.Chan(deliverPushJob),
+		// A slow push service must not delay startup.
+		SkipAtStartup: true,
+		Run: func(ctx context.Context) error {
+			n, err := push.Deliver(ctx)
+			if n > 0 {
+				deps.Logger.InfoContext(ctx, "push messages sent", slog.Int("sent", n))
+			}
+
+			return err
+		},
+	}
 }
 
 // measured returns the Run of j reporting each run to deps.Metrics: its

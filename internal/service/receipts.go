@@ -250,7 +250,7 @@ func (s *ReceiptService) mail(
 
 		switch {
 		case err == nil:
-			to = recipient{email: acc.Email, locale: acc.Locale, givenName: person.GivenName, account: true}
+			to = recipient{email: acc.Email, locale: acc.Locale, givenName: person.GivenName, account: true, accountID: acc.ID}
 		case !errors.Is(err, domain.ErrNotFound):
 			return err
 		}

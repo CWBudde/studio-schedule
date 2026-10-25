@@ -30,3 +30,8 @@ func TestCredentialScenarios(t *testing.T) {
 	t.Parallel()
 	servicetest.Credentials(t, func(*testing.T) store.Store { return memory.New() })
 }
+
+func TestPushScenarios(t *testing.T) {
+	t.Parallel()
+	servicetest.Push(t, func(*testing.T) store.Store { return memory.New() })
+}

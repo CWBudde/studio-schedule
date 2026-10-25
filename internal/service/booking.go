@@ -806,7 +806,7 @@ func actingRecipient(ctx context.Context, tx store.Tx, p Principal) (recipient, 
 		return recipient{}, fmt.Errorf("person %v: %w", acc.PersonID, refErr(err))
 	}
 
-	return recipient{email: acc.Email, locale: acc.Locale, givenName: me.GivenName, account: true}, nil
+	return recipient{email: acc.Email, locale: acc.Locale, givenName: me.GivenName, account: true, accountID: acc.ID}, nil
 }
 
 // mailBookings renders template about the bookings of the participant (a

@@ -54,6 +54,11 @@ type Deps struct {
 	// Mailer delivers the mails of the outbox. Without one, mails stay in
 	// the outbox and the outbox job does not run.
 	Mailer mail.Mailer
+	// Pusher delivers web push notifications (ADR 0017): internal/webpush
+	// with the VAPID keys on the server, the worker in the web demo
+	// (internal/wasmbridge). Without one push is off: nothing is queued,
+	// the API reports it off and the deliver-push job does not run.
+	Pusher service.PushSender
 	// PDF renders receipt PDFs (ADR 0012): the typst module run by wazero
 	// on the server (internal/pdf/typstwasm), by the browser in the web demo
 	// (internal/wasmbridge). Without one, receipts and so pass sales fail.
@@ -169,7 +174,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 	api := humachi.New(router, cfg)
 
 	renderer := newRenderer()
-	mails := service.Mails{Renderer: renderer, AppURL: deps.AppURL}
+	mails := mailsOf(deps, renderer)
 	receipts := service.NewReceiptService(deps.Store, deps.Clock, deps.IDs, mails, deps.PDF)
 
 	httpapi.Register(api, httpapi.Deps{
@@ -364,6 +369,18 @@ func demoLogins(logins []seed.Login) []httpapi.DemoLogin {
 	}
 
 	return out
+}
+
+// mailsOf is how the services of deps mail: rendered by renderer, with
+// links into the app, and with web push notifications if deps has a
+// Pusher, which a queued notification wakes.
+func mailsOf(deps Deps, renderer *mail.Renderer) service.Mails {
+	m := service.Mails{Renderer: renderer, AppURL: deps.AppURL}
+	if deps.Pusher != nil {
+		m.Push = service.PushQueue{On: true, Wake: func() { deps.Wake.Wake(deliverPushJob) }}
+	}
+
+	return m
 }
 
 // newAuthService builds the AuthService of deps. The mail templates are

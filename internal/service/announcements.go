@@ -909,7 +909,7 @@ func accountRecipients(ctx context.Context, tx store.Tx, role domain.Role) ([]re
 	out := make([]recipient, len(accounts))
 
 	for i, acc := range accounts {
-		out[i] = recipient{email: acc.Email, locale: acc.Locale, givenName: names[acc.PersonID].GivenName, account: true}
+		out[i] = recipient{email: acc.Email, locale: acc.Locale, givenName: names[acc.PersonID].GivenName, account: true, accountID: acc.ID}
 	}
 
 	return out, nil

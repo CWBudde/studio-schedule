@@ -40,11 +40,16 @@ func NewRetentionService(st store.Store, clk clock.Clock) *RetentionService {
 // Purged counts what a purge changed.
 type Purged struct {
 	Guests, AuditEvents, ImportRuns int
+	// PushSubscriptions and PushMessages count the web push subscriptions
+	// and messages deleted (ADR 0017).
+	PushSubscriptions, PushMessages int
 }
 
 // Purge anonymizes the guests of the bookings of lessons that ended more
 // than GuestRetentionMonths ago, and deletes the audit events and import
-// runs older than their retention periods, in one transaction.
+// runs older than their retention periods, the push subscriptions unused
+// for PushSubscriptionRetentionMonths and the push messages older than
+// PushRetention, in one transaction.
 func (s *RetentionService) Purge(ctx context.Context) (Purged, error) {
 	var out Purged
 
@@ -60,7 +65,16 @@ func (s *RetentionService) Purge(ctx context.Context) (Purged, error) {
 			return err
 		}
 
-		out.ImportRuns, err = tx.Imports().DeleteStartedBefore(ctx, now.AddDate(-ImportRetentionYears, 0, 0))
+		if out.ImportRuns, err = tx.Imports().DeleteStartedBefore(ctx, now.AddDate(-ImportRetentionYears, 0, 0)); err != nil {
+			return err
+		}
+
+		if out.PushMessages, err = tx.PushOutbox().DeleteCreatedBefore(ctx, now.Add(-PushRetention)); err != nil {
+			return err
+		}
+
+		out.PushSubscriptions, err = tx.PushSubscriptions().DeleteUnusedBefore(ctx,
+			now.AddDate(0, -PushSubscriptionRetentionMonths, 0))
 
 		return err
 	})

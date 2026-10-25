@@ -54,6 +54,9 @@ const acceptRoute = "waitlist/accept"
 type Mails struct {
 	Renderer MailRenderer
 	AppURL   string
+	// Push queues the web push notifications of some mails (ADR 0017);
+	// the zero value queues none.
+	Push PushQueue
 }
 
 // WaitlistPlace is an entry with its place in the list: Position counts

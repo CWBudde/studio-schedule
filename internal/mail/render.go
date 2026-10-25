@@ -59,6 +59,8 @@ type templateSet struct {
 type Renderer struct {
 	locales []string
 	sets    map[string]map[string]templateSet // locale → name → parts
+	// push holds the notifications of PushTemplateNames: locale → name.
+	push map[string]map[string]*texttemplate.Template
 }
 
 // NewRenderer parses all embedded templates. It fails if a locale lacks a
@@ -72,7 +74,7 @@ func NewRenderer() (*Renderer, error) {
 		return nil, fmt.Errorf("mail templates: %w", err)
 	}
 
-	r := &Renderer{sets: map[string]map[string]templateSet{}}
+	r := &Renderer{sets: map[string]map[string]templateSet{}, push: map[string]map[string]*texttemplate.Template{}}
 
 	for _, e := range entries {
 		if !e.IsDir() {
@@ -90,6 +92,17 @@ func NewRenderer() (*Renderer, error) {
 			}
 
 			r.sets[loc][name] = set
+		}
+
+		r.push[loc] = map[string]*texttemplate.Template{}
+
+		for _, name := range PushTemplateNames() {
+			t, err := parsePush(fsys, loc, name)
+			if err != nil {
+				return nil, fmt.Errorf("push template %s/%s: %w", loc, name, err)
+			}
+
+			r.push[loc][name] = t
 		}
 	}
 

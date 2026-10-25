@@ -598,7 +598,8 @@ func TestRenderWrongData(t *testing.T) {
 }
 
 // TestTemplateParity checks that every template exists in every locale, with
-// all three parts, and that the templates directory holds nothing else.
+// all three parts (and the notification of PushTemplateNames), and that the
+// templates directory holds nothing else.
 func TestTemplateParity(t *testing.T) {
 	t.Parallel()
 
@@ -616,6 +617,10 @@ func TestTemplateParity(t *testing.T) {
 			for _, part := range []string{"subject.txt", "txt", "html"} {
 				want[loc+"/"+name+"."+part] = true
 			}
+		}
+
+		for _, name := range mail.PushTemplateNames() {
+			want[loc+"/"+name+".push.txt"] = true
 		}
 	}
 

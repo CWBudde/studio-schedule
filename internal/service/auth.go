@@ -69,6 +69,9 @@ type PasswordHasher interface {
 // MailRenderer renders a mail template; *mail.Renderer implements it.
 type MailRenderer interface {
 	Render(locale, name string, data any) (mail.Rendered, error)
+	// RenderPush renders the web push notification of a template (one of
+	// mail.PushTemplateNames) with the data of its mail (ADR 0017).
+	RenderPush(locale, name string, data any) (mail.PushText, error)
 	// MatchLocale returns the template locale for a requested one, or false
 	// if there is none.
 	MatchLocale(locale string) (string, bool)

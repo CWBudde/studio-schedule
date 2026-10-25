@@ -1,0 +1,2 @@
+A place is free: {{.CourseType}}
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}. Reserved until {{date .ExpiresAt}}, {{clock .ExpiresAt}}: open to take it.

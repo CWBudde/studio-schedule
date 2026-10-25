@@ -24,6 +24,9 @@ type recipient struct {
 	// account tells that email is an account's address. Its language and
 	// name win over a person's own address that is the same.
 	account bool
+	// accountID is that account (zero unless account), whose devices get
+	// the notifications of the mail (ADR 0017).
+	accountID domain.AccountID
 	// guest tells that the address is a guest's (guestRecipient).
 	guest        bool
 	participants []string
@@ -107,7 +110,7 @@ func (s *recipientSet) add(r recipient, participants ...string) {
 		s.index[key] = i
 	case r.account && !s.list[i].account:
 		o := &s.list[i]
-		o.email, o.locale, o.givenName, o.account = r.email, r.locale, r.givenName, true
+		o.email, o.locale, o.givenName, o.account, o.accountID = r.email, r.locale, r.givenName, true, r.accountID
 	}
 
 	for _, p := range participants {
@@ -154,7 +157,9 @@ func chainOf(
 	case found && !acc.DisabledAt.IsZero():
 		return nil
 	case found && !acc.ConfirmedAt.IsZero():
-		return []recipient{{email: acc.Email, locale: acc.Locale, givenName: p.GivenName, account: true}}
+		return []recipient{{
+			email: acc.Email, locale: acc.Locale, givenName: p.GivenName, account: true, accountID: acc.ID,
+		}}
 	case p.Email != "":
 		return []recipient{{email: p.Email, givenName: p.GivenName}}
 	}
@@ -164,7 +169,9 @@ func chainOf(
 	for _, g := range guardianIDs {
 		acc, found := guardianAccounts[g]
 		if found && acc.DisabledAt.IsZero() && !acc.ConfirmedAt.IsZero() {
-			out = append(out, recipient{email: acc.Email, locale: acc.Locale, givenName: guardians[g].GivenName, account: true})
+			out = append(out, recipient{
+				email: acc.Email, locale: acc.Locale, givenName: guardians[g].GivenName, account: true, accountID: acc.ID,
+			})
 		}
 	}
 

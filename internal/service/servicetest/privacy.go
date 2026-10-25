@@ -845,10 +845,38 @@ func retention(t *testing.T, w *world) {
 	runAt(now.AddDate(-service.ImportRetentionYears, 0, 0).Add(-time.Microsecond))
 	runAt(now.AddDate(-service.ImportRetentionYears, 0, 0))
 
+	// Push subscriptions unused for six months, and push messages of a
+	// week ago (ADR 0017).
+	subAt := func(endpoint string, used time.Time) domain.PushSubscription {
+		sub := domain.PushSubscription{
+			ID: newID[domain.PushSubscriptionID](w), AccountID: w.office.AccountID,
+			Endpoint: "https://push.example.net/" + endpoint, P256DH: [65]byte{4}, Auth: [16]byte{1},
+			CreatedAt: used, LastUsedAt: used,
+		}
+		w.write(func(ctx context.Context, tx store.Tx) error { return tx.PushSubscriptions().Save(ctx, sub) })
+
+		return sub
+	}
+	subAt("old", now.AddDate(0, -service.PushSubscriptionRetentionMonths, 0).Add(-time.Microsecond))
+	recentSub := subAt("recent", now.AddDate(0, -service.PushSubscriptionRetentionMonths, 0))
+
+	messageAt := func(at time.Time) {
+		w.write(func(ctx context.Context, tx store.Tx) error {
+			return tx.PushOutbox().Create(ctx, domain.PushMessage{
+				ID: newID[domain.PushMessageID](w), SubscriptionID: recentSub.ID, Payload: `{"title":"x"}`,
+				CreatedAt: at, ExpiresAt: at.Add(time.Hour), SentAt: at.Add(time.Minute),
+			})
+		})
+	}
+	messageAt(now.Add(-service.PushRetention).Add(-time.Microsecond))
+	messageAt(now.Add(-service.PushRetention))
+
 	svc := service.NewRetentionService(w.st, clock.NewFixed(now))
 
 	n, err := svc.Purge(ctx)
-	if err != nil || n != (service.Purged{Guests: 1, AuditEvents: 1, ImportRuns: 1}) {
+	if err != nil || n != (service.Purged{
+		Guests: 1, AuditEvents: 1, ImportRuns: 1, PushSubscriptions: 1, PushMessages: 1,
+	}) {
 		t.Fatalf("purge: %+v, %v", n, err)
 	}
 

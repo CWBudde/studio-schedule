@@ -242,7 +242,7 @@ func (w waitlister) offerTo(
 // invite invites the waiting entry e of lesson l at now: a new random token
 // whose hash it stores, valid for the school's invite expiry but never
 // beyond the booking cutoff, mailed to the recipients with the link that
-// accepts it.
+// accepts it, and notified on their devices if push is on.
 func (w waitlister) invite(
 	ctx context.Context, tx store.Tx, settings domain.Settings, loc *time.Location, now time.Time, l domain.Lesson,
 	at lessonPlace, e domain.WaitlistEntry, recipients []recipient,
@@ -260,12 +260,18 @@ func (w waitlister) invite(
 	}
 
 	link := w.mails.AppURL + acceptRoute + "?token=" + url.QueryEscape(token)
-
-	return w.send(ctx, tx, settings, now, recipients, mail.TemplateWaitlistInvite, func(r recipient) any {
+	data := func(r recipient) any {
 		return mail.WaitlistInviteData{
 			WaitlistData: at.waitlistData(settings, loc, l, r), Link: link, ExpiresAt: e.ExpiresAt.In(loc),
 		}
-	})
+	}
+
+	if err := w.send(ctx, tx, settings, now, recipients, mail.TemplateWaitlistInvite, data); err != nil {
+		return err
+	}
+
+	// Also on the devices of the recipients' accounts (ADR 0017).
+	return w.pushInvite(ctx, tx, settings, now, e, link, recipients, data)
 }
 
 // settle brings the list of lesson l, which the caller has locked, up to
