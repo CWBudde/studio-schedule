@@ -98,9 +98,9 @@ The software gives the school the tools; the school and its operator remain resp
 - **Log and backup retention**: the app's log and the reverse proxy's access log (which records
   client addresses and the requested URLs) and the backups follow the operator's own retention
   periods; keep them short. The office's searches (persons, receipts, the mail log) send their
-  terms in POST bodies, so names and email addresses searched for are not part of the URLs; only
-  the address of the persons page keeps its search (`?q=`) for the browser's Back button, which
-  reaches the server when that page is opened or reloaded directly.
+  terms in POST bodies, and the web app keeps no search term in an address (the persons page keeps
+  its search in the browser's history state), so names and email addresses searched for are not
+  part of the URLs.
 - **Answering requests** within the legal deadlines: export or anonymize through the app, and
   anonymize again after restoring a backup that predates an erasure.
 - **Never loading the demo data** (`seed`) into an installation with real people: its accounts share

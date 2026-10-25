@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Link, useNavigate, useSearch } from '@tanstack/react-router';
+import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { Search, UserPlus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,29 +11,30 @@ import { personName } from '@/lib/personName';
 import { maxPersonMatches } from './crud/person';
 import { columnHelper } from './crud/table';
 import { PersonSheet, type PersonTarget } from './PersonSheet';
-import { validatePersonsSearch } from './personsSearch';
+import { personsSearchFrom, personsSearchState } from './personsSearch';
 
 const columns = columnHelper<PersonMatch>();
 
-/** How long the typing pauses before the search goes into the URL and to the API. */
+/** How long the typing pauses before the search goes into the history state and to the API. */
 const searchDelay = 250;
 
 /**
  * The persons of the school (/admin/persons), for the office: a search over
- * names and emails (the API's, at most 50 matches; kept in the URL as `q`,
- * so going back from a person keeps it), each person a link to their page,
- * and a sheet that adds a person.
+ * names and emails (the API's, at most 50 matches; kept in the history
+ * state, never in the URL, so going back from a person keeps it and a reload
+ * starts empty: personsSearch.ts), each person a link to their page, and a
+ * sheet that adds a person.
  */
 export function PersonsPage() {
   const { t } = useTranslation('admin');
   const navigate = useNavigate();
-  const { q: search = '' } = validatePersonsSearch(useSearch({ strict: false }));
+  const search = useLocation({ select: (location) => personsSearchFrom(location.state) });
   const [query, setQuery] = useState(search);
-  /** The search this page last put into the URL. */
+  /** The search this page last put into the history state. */
   const [written, setWritten] = useState(search);
-  // The URL may change elsewhere (back and forward, the navigation's link):
-  // then the box follows. Our own writes land while the typing may go on,
-  // so they leave the box alone.
+  // The state may change elsewhere (back and forward, the navigation's
+  // link): then the box follows. Our own writes land while the typing may go
+  // on, so they leave the box alone.
   const [shown, setShown] = useState(search);
   if (search !== shown) {
     setShown(search);
@@ -50,7 +51,11 @@ export function PersonsPage() {
     timer.current = setTimeout(() => {
       const q = value.trim();
       setWritten(q);
-      void navigate({ to: '/admin/persons', search: { q: q || undefined }, replace: true });
+      void navigate({
+        to: '/admin/persons',
+        state: (prev) => ({ ...prev, personsSearch: q ? personsSearchState(q) : undefined }),
+        replace: true,
+      });
     }, searchDelay);
   };
   const persons = useQuery({ ...personsQuery(search), placeholderData: keepPreviousData });

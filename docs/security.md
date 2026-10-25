@@ -288,9 +288,9 @@ ASVS 8.3.1. **Done.** The searches by name or email are POSTs with a JSON body a
 (was `GET /staff/persons?q=`), `searchReceipts` (was `GET /admin/receipts?q=`) and `searchMails`
 (the mail log's recipient filter, was `GET /admin/mails?recipient=`); the GETs are gone. Their
 answers carry `Cache-Control: no-store` like every API answer. The persons page keeps its search
-in the page's address (`/admin/persons?q=…`) so that Back restores it; that address reaches the
-server only when the page is opened or reloaded directly, and the app never logs query strings
-([privacy.md](privacy.md#what-the-operator-still-has-to-do)).
+in the browser's history state, not in its address (`web/src/features/admin/personsSearch.ts`):
+Back and Forward restore it, a reload starts empty, and the term never appears in a URL. No search
+term of the web app is part of an address.
 
 ### O9 Minor items
 

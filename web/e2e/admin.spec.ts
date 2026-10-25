@@ -490,9 +490,10 @@ test('the office edits a person, links a guardian and creates an account with an
   await expect(page.getByRole('link', { name: /Amberly/ })).toHaveCount(1);
   await page.getByRole('link', { name: 'Ella Amberly' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Ella Amberly' })).toBeVisible();
-  // Going back keeps the search.
+  // Going back keeps the search, which never shows in the address.
   await page.goBack();
   await expect(search).toHaveValue('amberly ella');
+  expect(page.url()).not.toContain('amberly');
   await page.getByRole('link', { name: 'Ella Amberly' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Ella Amberly' })).toBeVisible();
 

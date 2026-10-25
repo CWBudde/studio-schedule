@@ -13,6 +13,7 @@ import {
 } from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { PersonsPage } from './PersonsPage';
+import { personsSearchFrom, personsSearchState } from './personsSearch';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -50,6 +51,10 @@ function renderPage(search: Record<string, string> = {}) {
   render(<Toaster />);
   return renderInRouter(<PersonsPage />, { at: '/admin/persons', search });
 }
+
+/** The search the router's current history entry keeps. */
+const searchOf = (router: { state: { location: { state: object } } }) =>
+  personsSearchFrom(router.state.location.state);
 
 /** The names in the persons table, in display order. */
 const names = () =>
@@ -91,7 +96,7 @@ describe('PersonsPage', () => {
     });
   });
 
-  it('keeps the search in the URL', async () => {
+  it('keeps the search in the history state, never in the URL', async () => {
     mockOffice();
     const user = userEvent.setup();
 
@@ -99,19 +104,49 @@ describe('PersonsPage', () => {
     await screen.findByRole('table', { name: 'Persons' });
     await user.type(screen.getByRole('searchbox', { name: 'Search persons' }), 'mia');
 
-    await waitFor(() => expect(router.state.location.search).toEqual({ q: 'mia' }));
+    await waitFor(() => expect(searchOf(router)).toBe('mia'));
     await waitFor(() => expect(names()).toEqual(['Mia Sample']));
+    expect(router.state.location.search).toEqual({});
+    expect(router.state.location.href).toBe('/admin/persons');
     await user.clear(screen.getByRole('searchbox', { name: 'Search persons' }));
-    await waitFor(() => expect(router.state.location.search).toEqual({}));
+    await waitFor(() => expect(searchOf(router)).toBe(''));
+    expect(router.state.location.href).toBe('/admin/persons');
   });
 
-  it('starts with the search of the URL', async () => {
+  it('restores the search when going back from a person', async () => {
     mockOffice();
+    const user = userEvent.setup();
 
-    renderPage({ q: 'noah' });
+    const { router } = renderPage();
+    await screen.findByRole('table', { name: 'Persons' });
+    await user.type(screen.getByRole('searchbox', { name: 'Search persons' }), 'noah');
+    await waitFor(() => expect(searchOf(router)).toBe('noah'));
+    await router.navigate({
+      to: '/admin/persons/$personId',
+      params: { personId: persons[2]!.id },
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole('searchbox', { name: 'Search persons' })).not.toBeInTheDocument(),
+    );
+
+    router.history.back();
 
     expect(await screen.findByRole('searchbox', { name: 'Search persons' })).toHaveValue('noah');
     await waitFor(() => expect(names()).toEqual(['Noah Sample']));
+  });
+
+  it('ignores a search in the URL', async () => {
+    const { post } = mockOffice();
+
+    renderPage({ q: 'noah' });
+
+    await screen.findByRole('table', { name: 'Persons' });
+    expect(screen.getByRole('searchbox', { name: 'Search persons' })).toHaveValue('');
+    expect(names()).toEqual(['Alex Example', 'Mia Sample', 'Noah Sample']);
+    expect(post).not.toHaveBeenCalledWith(
+      '/api/v1/admin/persons/search',
+      expect.objectContaining({ body: { query: 'noah' } }),
+    );
   });
 
   it('keeps typing while its own search lands in the URL', async () => {
@@ -120,7 +155,7 @@ describe('PersonsPage', () => {
     const { router } = renderPage();
     const box = await screen.findByRole('searchbox', { name: 'Search persons' });
     const navigate = router.navigate.bind(router);
-    // The next letter comes while the search "mi" is on its way into the URL.
+    // The next letter comes while the search "mi" is on its way into the state.
     vi.spyOn(router, 'navigate').mockImplementationOnce((options) => {
       fireEvent.change(box, { target: { value: 'mia' } });
       return navigate(options);
@@ -128,26 +163,36 @@ describe('PersonsPage', () => {
     fireEvent.change(box, { target: { value: 'mi' } });
 
     // Once "mi" has landed, the box still says "mia" …
-    await waitFor(() => expect(router.state.location.search).toEqual({ q: 'mi' }));
+    await waitFor(() => expect(searchOf(router)).toBe('mi'));
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
     expect(box).toHaveValue('mia');
     // … and its search follows.
-    await waitFor(() => expect(router.state.location.search).toEqual({ q: 'mia' }));
+    await waitFor(() => expect(searchOf(router)).toBe('mia'));
     expect(box).toHaveValue('mia');
   });
 
-  it('follows the URL when it changes elsewhere', async () => {
+  it('follows the history state when it changes elsewhere', async () => {
     mockOffice();
 
-    const { router } = renderPage({ q: 'noah' });
+    const { router } = renderPage();
     const box = await screen.findByRole('searchbox', { name: 'Search persons' });
-    expect(box).toHaveValue('noah');
-    await router.navigate({ to: '/admin/persons', search: { q: 'mia' } });
+    await router.navigate({
+      to: '/admin/persons',
+      state: { personsSearch: personsSearchState('noah') },
+    });
+    await waitFor(() => expect(box).toHaveValue('noah'));
+    await router.navigate({
+      to: '/admin/persons',
+      state: { personsSearch: personsSearchState('mia') },
+    });
 
     await waitFor(() => expect(box).toHaveValue('mia'));
     await waitFor(() => expect(names()).toEqual(['Mia Sample']));
+    // The navigation's link carries no state: the search is gone.
+    await router.navigate({ to: '/admin/persons' });
+    await waitFor(() => expect(box).toHaveValue(''));
   });
 
   it('shows a failed search as failed, not the rows of the last one', async () => {
