@@ -34,6 +34,9 @@ func (r pushSubscriptionRepo) Save(_ context.Context, sub domain.PushSubscriptio
 	sub.CreatedAt, sub.LastUsedAt = instant(sub.CreatedAt), instant(sub.LastUsedAt)
 
 	if old, ok := r.byEndpoint(sub.Endpoint); ok {
+		// The same account's endpoint is updated; another account's goes
+		// with its messages, and s takes its place (the device changed
+		// hands).
 		if old.AccountID == sub.AccountID {
 			old.P256DH, old.Auth, old.DeviceLabel, old.LastUsedAt = sub.P256DH, sub.Auth, sub.DeviceLabel, sub.LastUsedAt
 			st.pushSubs.put(r.tx.gen, old.ID, old)
@@ -84,6 +87,19 @@ func (r pushSubscriptionRepo) Delete(_ context.Context, id domain.PushSubscripti
 	r.delete(id)
 
 	return nil
+}
+
+func (r pushSubscriptionRepo) DeleteByAccount(_ context.Context, account domain.AccountID) (int, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return 0, err
+	}
+
+	subs := r.tx.state.pushSubs.filter(func(s domain.PushSubscription) bool { return s.AccountID == account })
+	for _, s := range subs {
+		r.delete(s.ID)
+	}
+
+	return len(subs), nil
 }
 
 func (r pushSubscriptionRepo) DeleteByEndpoint(

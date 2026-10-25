@@ -33,6 +33,7 @@ func Push(t *testing.T, newStore func(t *testing.T) store.Store) {
 		"NothingQueuedWhilePushIsOff": pushOff,
 		"DeliverRecordsTheAnswers":    pushDeliver,
 		"DeliverGivesUp":              pushGiveUp,
+		"SessionsEndSubscriptionsGo":  pushSessionsEnd,
 	}
 
 	for name, run := range scenarios {
@@ -217,15 +218,25 @@ func pushSubscribe(t *testing.T, w *world) {
 		t.Errorf("push off: status %+v", s)
 	}
 
-	for field, in := range map[string]service.PushSubscriptionInput{
-		"endpoint":    {Endpoint: "http://push.example.net/x", P256DH: pushP256DH, Auth: pushAuth},
-		"keys.p256dh": {Endpoint: input.Endpoint, P256DH: "BA" + strings.Repeat("A", 85), Auth: pushAuth},
-		"keys.auth":   {Endpoint: input.Endpoint, P256DH: pushP256DH, Auth: "AAAA"},
-		"deviceLabel": {Endpoint: input.Endpoint, P256DH: pushP256DH, Auth: pushAuth, DeviceLabel: strings.Repeat("x", 101)},
+	for _, tc := range []struct {
+		field string
+		in    service.PushSubscriptionInput
+	}{
+		{"endpoint", service.PushSubscriptionInput{Endpoint: "http://push.example.net/x", P256DH: pushP256DH, Auth: pushAuth}},
+		// The schema's CHECK wants a literal, lowercase https://: refused
+		// alike on both stores, before any write.
+		{"endpoint", service.PushSubscriptionInput{Endpoint: "HTTPS://push.example.net/x", P256DH: pushP256DH, Auth: pushAuth}},
+		{"keys.p256dh", service.PushSubscriptionInput{
+			Endpoint: input.Endpoint, P256DH: "BA" + strings.Repeat("A", 85), Auth: pushAuth,
+		}},
+		{"keys.auth", service.PushSubscriptionInput{Endpoint: input.Endpoint, P256DH: pushP256DH, Auth: "AAAA"}},
+		{"deviceLabel", service.PushSubscriptionInput{
+			Endpoint: input.Endpoint, P256DH: pushP256DH, Auth: pushAuth, DeviceLabel: strings.Repeat("x", 101),
+		}},
 	} {
 		var fe *domain.FieldError
-		if err := svc.Subscribe(ctx, w.principal(anna), in); !errors.As(err, &fe) || fe.Field != field {
-			t.Errorf("%s: want a field error on it, got %v", field, err)
+		if err := svc.Subscribe(ctx, w.principal(anna), tc.in); !errors.As(err, &fe) || fe.Field != tc.field {
+			t.Errorf("%s (%q): want a field error on it, got %v", tc.field, tc.in.Endpoint, err)
 		}
 	}
 
@@ -244,6 +255,9 @@ type invitedFixture struct {
 	anna     domain.Account
 	mia      domain.Person
 	wakes    int
+	// queuedAtWake is how many messages a new transaction saw when the
+	// deliver-push job was woken: all of them, as it wakes after the commit.
+	queuedAtWake int
 }
 
 func newInvitedFixture(t *testing.T, w *world, push bool) (*invitedFixture, service.Mails) {
@@ -269,7 +283,12 @@ func newInvitedFixture(t *testing.T, w *world, push bool) (*invitedFixture, serv
 
 	mails := service.Mails{Renderer: renderer, AppURL: pushAppURL}
 	if push {
-		mails.Push = service.PushQueue{On: true, Wake: func() { f.wakes++ }}
+		mails.Push = service.PushQueue{On: true, Wake: func() {
+			f.wakes++
+			// Inside the transaction the memory store would block here, and
+			// PostgreSQL would show nothing yet.
+			f.queuedAtWake = len(w.pushMessages(now))
+		}}
 	}
 
 	subs := service.NewPushService(w.st, clock.NewFixed(now), w.seq, &fakeSender{})
@@ -303,8 +322,9 @@ func pushInvite(t *testing.T, w *world) {
 	f.cancel(t, w, mails)
 
 	msgs := w.pushMessages(now)
-	if len(msgs) != 2 || f.wakes == 0 {
-		t.Fatalf("%d messages, %d wakes; want 2 and a wake", len(msgs), f.wakes)
+	if len(msgs) != 2 || f.wakes != 1 || f.queuedAtWake != 2 {
+		t.Fatalf("%d messages, %d wakes seeing %d; want 2 and one wake after the commit", len(msgs), f.wakes,
+			f.queuedAtWake)
 	}
 
 	annaSubs := map[domain.PushSubscriptionID]bool{}
@@ -498,5 +518,28 @@ func pushGiveUp(t *testing.T, w *world) {
 	// Every subscription stays: only a gone one is deleted.
 	if n := len(w.pushSubs(anna.ID)); n != 4 {
 		t.Errorf("%d subscriptions left, want 4", n)
+	}
+}
+
+// pushSessionsEnd: when every session of an account ends (disabled here;
+// a new password, a reset and a deletion end them alike, endSessions), its
+// devices get no more notifications. Other accounts keep theirs.
+func pushSessionsEnd(t *testing.T, w *world) {
+	f := newAdminFixture(w)
+	svc := service.NewPushService(w.st, clock.NewFixed(now), w.seq, &fakeSender{})
+	w.subscribe(svc, w.principal(f.member), "https://push.example.net/push/member")
+	bob := w.account(w.person("Bob", "Example", ""), "bob@example.net")
+	w.subscribe(svc, w.principal(bob), "https://push.example.net/push/bob")
+
+	if _, err := w.auth().SetAccountDisabled(t.Context(), f.admin, f.member.ID, true); err != nil {
+		t.Fatal(err)
+	}
+
+	if subs := w.pushSubs(f.member.ID); len(subs) != 0 {
+		t.Errorf("the disabled account keeps %d subscriptions", len(subs))
+	}
+
+	if subs := w.pushSubs(bob.ID); len(subs) != 1 {
+		t.Errorf("Bob has %d subscriptions, want 1", len(subs))
 	}
 }

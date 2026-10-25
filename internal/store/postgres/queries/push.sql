@@ -7,18 +7,34 @@ SELECT * FROM push_subscriptions WHERE id = $1;
 DELETE FROM push_subscriptions WHERE endpoint = sqlc.arg(endpoint) AND account_id <> sqlc.arg(account_id);
 
 -- name: SavePushSubscription :exec
--- The same account's endpoint keeps its ID and creation time.
+-- The same account's endpoint keeps its ID and creation time. The
+-- conflict is another account's endpoint too if one committed it after
+-- DeleteMovedPushSubscription ran: it becomes this account's, and its
+-- queued messages, which were the other account's, go (moved).
+WITH moved AS (
+    DELETE FROM push_outbox
+    WHERE subscription_id IN (
+        SELECT s.id FROM push_subscriptions s
+        WHERE s.endpoint = sqlc.arg(endpoint) AND s.account_id <> sqlc.arg(account_id)
+    )
+)
 INSERT INTO push_subscriptions (id, account_id, endpoint, p256dh, auth, device_label, created_at, last_used_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES (
+    sqlc.arg(id), sqlc.arg(account_id), sqlc.arg(endpoint), sqlc.arg(p256dh), sqlc.arg(auth),
+    sqlc.narg(device_label), sqlc.arg(created_at), sqlc.arg(last_used_at)
+)
 ON CONFLICT (endpoint) DO UPDATE
-SET p256dh = excluded.p256dh, auth = excluded.auth, device_label = excluded.device_label,
-    last_used_at = excluded.last_used_at;
+SET account_id = excluded.account_id, p256dh = excluded.p256dh, auth = excluded.auth,
+    device_label = excluded.device_label, last_used_at = excluded.last_used_at;
 
 -- name: ListPushSubscriptionsByAccount :many
 SELECT * FROM push_subscriptions WHERE account_id = $1 ORDER BY created_at, id;
 
 -- name: DeletePushSubscription :execrows
 DELETE FROM push_subscriptions WHERE id = $1;
+
+-- name: DeletePushSubscriptionsByAccount :execrows
+DELETE FROM push_subscriptions WHERE account_id = $1;
 
 -- name: DeletePushSubscriptionByEndpoint :execrows
 DELETE FROM push_subscriptions WHERE account_id = sqlc.arg(account_id) AND endpoint = sqlc.arg(endpoint);

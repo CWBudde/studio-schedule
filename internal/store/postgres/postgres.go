@@ -171,7 +171,8 @@ func (s *Store) runTx(ctx context.Context, mode store.TxMode, fn func(ctx contex
 		_ = ptx.Rollback(rctx)
 	}()
 
-	if err := fn(context.WithValue(ctx, txKey{}, s), &tx{q: sqlc.New(ptx)}); err != nil {
+	t := &tx{q: sqlc.New(ptx)}
+	if err := fn(context.WithValue(ctx, txKey{}, s), t); err != nil {
 		return err
 	}
 
@@ -182,6 +183,10 @@ func (s *Store) runTx(ctx context.Context, mode store.TxMode, fn func(ctx contex
 
 	if err := ptx.Commit(ctx); err != nil {
 		return fmt.Errorf("postgres: commit: %w", mapErr(err))
+	}
+
+	for _, f := range t.afterCommit {
+		f()
 	}
 
 	return nil
@@ -203,7 +208,13 @@ func sleep(ctx context.Context, d time.Duration) error {
 // tx implements store.Tx; its repositories share one pgx transaction.
 type tx struct {
 	q *sqlc.Queries
+	// afterCommit runs once the transaction committed (Tx.AfterCommit); a
+	// retried run starts with a new tx, so a failed run's functions never
+	// run.
+	afterCommit []func()
 }
+
+func (t *tx) AfterCommit(fn func()) { t.afterCommit = append(t.afterCommit, fn) }
 
 func (t *tx) Settings() store.SettingsRepo      { return settingsRepo{t.q} }
 func (t *tx) Persons() store.PersonRepo         { return personRepo{t.q} }

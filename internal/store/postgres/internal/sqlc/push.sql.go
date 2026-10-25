@@ -106,6 +106,18 @@ func (q *Queries) DeletePushSubscriptionByEndpoint(ctx context.Context, arg Dele
 	return result.RowsAffected(), nil
 }
 
+const deletePushSubscriptionsByAccount = `-- name: DeletePushSubscriptionsByAccount :execrows
+DELETE FROM push_subscriptions WHERE account_id = $1
+`
+
+func (q *Queries) DeletePushSubscriptionsByAccount(ctx context.Context, accountID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deletePushSubscriptionsByAccount, accountID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteUnusedPushSubscriptions = `-- name: DeleteUnusedPushSubscriptions :execrows
 DELETE FROM push_subscriptions WHERE last_used_at < $1
 `
@@ -239,11 +251,21 @@ func (q *Queries) ListPushSubscriptionsByAccount(ctx context.Context, accountID 
 }
 
 const savePushSubscription = `-- name: SavePushSubscription :exec
+WITH moved AS (
+    DELETE FROM push_outbox
+    WHERE subscription_id IN (
+        SELECT s.id FROM push_subscriptions s
+        WHERE s.endpoint = $3 AND s.account_id <> $2
+    )
+)
 INSERT INTO push_subscriptions (id, account_id, endpoint, p256dh, auth, device_label, created_at, last_used_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+VALUES (
+    $1, $2, $3, $4, $5,
+    $6, $7, $8
+)
 ON CONFLICT (endpoint) DO UPDATE
-SET p256dh = excluded.p256dh, auth = excluded.auth, device_label = excluded.device_label,
-    last_used_at = excluded.last_used_at
+SET account_id = excluded.account_id, p256dh = excluded.p256dh, auth = excluded.auth,
+    device_label = excluded.device_label, last_used_at = excluded.last_used_at
 `
 
 type SavePushSubscriptionParams struct {
@@ -257,7 +279,10 @@ type SavePushSubscriptionParams struct {
 	LastUsedAt  pgtype.Timestamptz
 }
 
-// The same account's endpoint keeps its ID and creation time.
+// The same account's endpoint keeps its ID and creation time. The
+// conflict is another account's endpoint too if one committed it after
+// DeleteMovedPushSubscription ran: it becomes this account's, and its
+// queued messages, which were the other account's, go (moved).
 func (q *Queries) SavePushSubscription(ctx context.Context, arg SavePushSubscriptionParams) error {
 	_, err := q.db.Exec(ctx, savePushSubscription,
 		arg.ID,

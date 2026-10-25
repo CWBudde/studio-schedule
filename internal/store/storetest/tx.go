@@ -145,6 +145,58 @@ func testTx(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantErr(e.t, err, domain.ErrNotFound)
 		},
 		"LockSerialisesCapacityChecks": func(e *env) { testLockCapacity(e) },
+		"AfterCommitRunsOnceCommitted": func(e *env) {
+			p := domain.Person{ID: newID[domain.PersonID](e), GivenName: "Ada", FamilyName: "After"}
+
+			var (
+				order   []string
+				visible bool
+			)
+
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				tx.AfterCommit(func() {
+					order = append(order, "first")
+					// It runs outside the transaction, after the commit: the
+					// store answers, and shows what was written.
+					_, err := query(e, func(ctx context.Context, tx store.Tx) (domain.Person, error) {
+						return tx.Persons().Get(ctx, p.ID)
+					})
+					visible = err == nil
+				})
+				tx.AfterCommit(func() { order = append(order, "second") })
+
+				if err := tx.Persons().Create(ctx, p); err != nil {
+					return err
+				}
+
+				if len(order) != 0 {
+					e.t.Error("an after-commit function ran inside the transaction")
+				}
+
+				return nil
+			})
+			wantSlice(e.t, order, []string{"first", "second"})
+			wantEqual(e.t, visible, true)
+
+			// A rollback runs nothing.
+			ran := false
+			err := e.write(func(_ context.Context, tx store.Tx) error {
+				tx.AfterCommit(func() { ran = true })
+
+				return errBoom
+			})
+			wantErr(e.t, err, errBoom)
+			wantEqual(e.t, ran, false)
+
+			// A read-only transaction runs them too.
+			err = e.read(func(_ context.Context, tx store.Tx) error {
+				tx.AfterCommit(func() { ran = true })
+
+				return nil
+			})
+			wantErr(e.t, err, nil)
+			wantEqual(e.t, ran, true)
+		},
 	})
 }
 

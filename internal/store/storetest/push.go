@@ -163,6 +163,57 @@ func testPushSubscriptions(t *testing.T, newStore func(*testing.T) store.Store) 
 			wantSlice(e.t, e.pushSubsOf(bob), []domain.PushSubscription{moved})
 			wantEqual(e.t, e.pushMessageGone(msg.ID), true)
 		},
+		"SaveMovesAnEndpointWithinATransaction": func(e *env) {
+			ada := e.account(e.person("Ada", "Lovelace"), "ada@example.org")
+			bob := e.account(e.person("Bob", "Builder"), "bob@example.org")
+			sub := e.pushSub(ada, "https://push.example.net/push/shared", t0)
+			msg := e.pushMessage(sub, t0)
+			moved := e.pushSub(bob, sub.Endpoint, t0.Add(time.Hour))
+
+			// Ada's subscription and message, then Bob's save of the same
+			// endpoint, in one transaction: the endpoint is Bob's, and Ada's
+			// message does not reach him.
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				if err := tx.PushSubscriptions().Save(ctx, sub); err != nil {
+					return err
+				}
+
+				if err := tx.PushOutbox().Create(ctx, msg); err != nil {
+					return err
+				}
+
+				return tx.PushSubscriptions().Save(ctx, moved)
+			})
+
+			wantSlice(e.t, e.pushSubsOf(ada), nil)
+			wantSlice(e.t, e.pushSubsOf(bob), []domain.PushSubscription{moved})
+			wantEqual(e.t, e.pushMessageGone(msg.ID), true)
+		},
+		"DeleteByAccount": func(e *env) {
+			ada := e.account(e.person("Ada", "Lovelace"), "ada@example.org")
+			bob := e.account(e.person("Bob", "Builder"), "bob@example.org")
+			phone := e.pushSub(ada, "https://push.example.net/push/phone", t0)
+			laptop := e.pushSub(ada, "https://push.example.net/push/laptop", t0)
+			other := e.pushSub(bob, "https://push.example.net/push/bob", t0)
+			e.savePushSubs(phone, laptop, other)
+			msg := e.pushMessage(phone, t0)
+			e.createPushMessages(msg)
+
+			err := e.read(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.PushSubscriptions().DeleteByAccount(ctx, ada.ID)
+
+				return err
+			})
+			wantErr(e.t, err, store.ErrReadOnly)
+
+			n := mustWriteQuery(e, func(ctx context.Context, tx store.Tx) (int, error) {
+				return tx.PushSubscriptions().DeleteByAccount(ctx, ada.ID)
+			})
+			wantEqual(e.t, n, 2)
+			wantSlice(e.t, e.pushSubsOf(ada), nil)
+			wantSlice(e.t, e.pushSubsOf(bob), []domain.PushSubscription{other})
+			wantEqual(e.t, e.pushMessageGone(msg.ID), true)
+		},
 		"SaveConflicts": func(e *env) {
 			ada := e.account(e.person("Ada", "Lovelace"), "ada@example.org")
 			sub := e.pushSub(ada, "https://push.example.net/push/phone", t0)

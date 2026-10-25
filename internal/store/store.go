@@ -16,6 +16,9 @@
 //   - The callback may run more than once: the PostgreSQL store retries it
 //     after serialization failures and deadlocks. It must not have side
 //     effects outside the transaction.
+//   - Work that must wait for the commit, such as waking a job that reads
+//     what the transaction wrote, is registered with Tx.AfterCommit: it
+//     runs once the transaction committed, and never for one rolled back.
 //   - After a write fails, the callback must return an error: PostgreSQL
 //     aborts the transaction, so later statements would fail too. A read
 //     that reports domain.ErrNotFound does not abort the transaction.
@@ -90,6 +93,12 @@ type Store interface {
 
 // Tx gives access to the repositories bound to one transaction.
 type Tx interface {
+	// AfterCommit registers fn to run after the transaction committed, in
+	// the order of registration, outside any transaction (fn may use the
+	// store). A transaction that rolls back, or a run of the callback that
+	// is retried, never runs its functions.
+	AfterCommit(fn func())
+
 	Settings() SettingsRepo
 	Persons() PersonRepo
 	Accounts() AccountRepo
@@ -855,6 +864,9 @@ type PushSubscriptionRepo interface {
 	// Delete deletes subscription id with its messages; one that does not
 	// exist is domain.ErrNotFound.
 	Delete(ctx context.Context, id domain.PushSubscriptionID) error
+	// DeleteByAccount deletes every subscription of the account with their
+	// messages and returns how many it deleted (all its sessions ended).
+	DeleteByAccount(ctx context.Context, account domain.AccountID) (int, error)
 	// DeleteByEndpoint deletes the account's subscription of the endpoint
 	// with its messages, if it has one, and returns how many it deleted (0
 	// or 1).

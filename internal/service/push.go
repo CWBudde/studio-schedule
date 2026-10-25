@@ -3,8 +3,6 @@ package service
 import (
 	"cmp"
 	"context"
-	"crypto/ecdh"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,9 +50,8 @@ type PushQueue struct {
 	// On: a PushSender delivers messages; without one nothing is queued.
 	On bool
 	// Wake asks the deliver-push job to send soon instead of on its next
-	// tick; nil: on its tick. It may run inside the transaction that
-	// queued the messages: a run before the commit finds nothing yet and
-	// leaves them to the tick (the memory store makes the run wait).
+	// tick; nil: on its tick. It runs once the transaction that queued the
+	// messages committed (Tx.AfterCommit).
 	Wake func()
 }
 
@@ -157,7 +154,8 @@ func pushTo(
 	}
 
 	if queued > 0 && mails.Push.Wake != nil {
-		mails.Push.Wake()
+		// After the commit: a run before it would find nothing yet.
+		tx.AfterCommit(mails.Push.Wake)
 	}
 
 	return nil
@@ -235,24 +233,15 @@ func (s *PushService) Subscribe(ctx context.Context, p Principal, in PushSubscri
 		return ErrImpersonating
 	}
 
-	p256dh, err := decodeKey(in.P256DH, 65)
+	p256dh, auth, err := domain.ParsePushKeys(in.P256DH, in.Auth)
 	if err != nil {
-		return &domain.FieldError{Field: "keys.p256dh", Msg: "p256dh must be the base64url of a P-256 public key"}
-	}
-
-	if _, err := ecdh.P256().NewPublicKey(p256dh); err != nil {
-		return &domain.FieldError{Field: "keys.p256dh", Msg: "p256dh must be the base64url of a P-256 public key"}
-	}
-
-	auth, err := decodeKey(in.Auth, 16)
-	if err != nil {
-		return &domain.FieldError{Field: "keys.auth", Msg: "auth must be the base64url of 16 bytes"}
+		return err
 	}
 
 	now := s.clock.Now()
 	sub := domain.PushSubscription{
 		ID: ids.New[domain.PushSubscriptionID](s.ids), AccountID: p.AccountID, Endpoint: in.Endpoint,
-		P256DH: [65]byte(p256dh), Auth: [16]byte(auth), DeviceLabel: strings.TrimSpace(in.DeviceLabel),
+		P256DH: p256dh, Auth: auth, DeviceLabel: strings.TrimSpace(in.DeviceLabel),
 		CreatedAt: now, LastUsedAt: now,
 	}
 	if err := sub.Validate(); err != nil {
@@ -267,16 +256,6 @@ func (s *PushService) Subscribe(ctx context.Context, p Principal, in PushSubscri
 	}
 
 	return nil
-}
-
-// decodeKey decodes base64url (padding optional) of n bytes.
-func decodeKey(s string, n int) ([]byte, error) {
-	b, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(strings.TrimSpace(s), "="))
-	if err == nil && len(b) != n {
-		err = fmt.Errorf("%d bytes, want %d", len(b), n)
-	}
-
-	return b, err
 }
 
 // Unsubscribe deletes the subscription of the endpoint if it is p's

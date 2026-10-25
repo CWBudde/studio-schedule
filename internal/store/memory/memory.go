@@ -208,6 +208,15 @@ func (s *Store) InTx(ctx context.Context, mode store.TxMode, fn func(ctx context
 		}
 	}
 
+	// After the commit and outside the lock: the functions may use the
+	// store.
+	s.mu.Unlock()
+	defer s.mu.Lock() // for the deferred Unlock above
+
+	for _, f := range t.afterCommit {
+		f()
+	}
+
 	return nil
 }
 
@@ -215,7 +224,11 @@ type tx struct {
 	state state
 	mode  store.TxMode
 	gen   uint64
+	// afterCommit runs once the transaction committed (Tx.AfterCommit).
+	afterCommit []func()
 }
+
+func (t *tx) AfterCommit(fn func()) { t.afterCommit = append(t.afterCommit, fn) }
 
 func (t *tx) Settings() store.SettingsRepo      { return settingsRepo{t} }
 func (t *tx) Persons() store.PersonRepo         { return personRepo{t} }

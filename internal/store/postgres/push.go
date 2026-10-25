@@ -67,6 +67,12 @@ func (r pushSubscriptionRepo) Delete(ctx context.Context, id domain.PushSubscrip
 	return affected("push subscription", n, err)
 }
 
+func (r pushSubscriptionRepo) DeleteByAccount(ctx context.Context, account domain.AccountID) (int, error) {
+	n, err := r.q.DeletePushSubscriptionsByAccount(ctx, pgID(account))
+
+	return int(n), mapErr(err)
+}
+
 func (r pushSubscriptionRepo) DeleteByEndpoint(
 	ctx context.Context, account domain.AccountID, endpoint string,
 ) (int, error) {

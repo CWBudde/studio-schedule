@@ -304,12 +304,19 @@ func lastAdmin(acc domain.Account, admins []domain.Account) bool {
 // (zero: all of them), its own and the impersonation sessions it started
 // (SessionRepo.DeleteByAccount), and records each impersonation among them
 // that was still running as impersonation-ended by the admin who started
-// it, as Logout does. An impersonation past its end had ended already.
+// it, as Logout does. An impersonation past its end had ended already. The
+// account's web push subscriptions go too (ADR 0017): a device someone
+// else signed out of, by a new password or by the office, gets no more
+// notifications; a session that is kept saves its device again.
 func endSessions(
 	ctx context.Context, tx store.Tx, src ids.Source, now time.Time, id domain.AccountID, keep domain.SessionID,
 ) error {
 	ended, err := tx.Sessions().DeleteByAccount(ctx, id, keep)
 	if err != nil {
+		return err
+	}
+
+	if _, err := tx.PushSubscriptions().DeleteByAccount(ctx, id); err != nil {
 		return err
 	}
 
