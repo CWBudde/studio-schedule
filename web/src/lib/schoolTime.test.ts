@@ -85,6 +85,12 @@ describe('formatting', () => {
     expect(formatDate('2026-10-26', 'en', { weekday: 'short' })).toBe('Mon');
   });
 
+  it('adds the year to a day heading outside the year of today', () => {
+    expect(formatDayHeading('2026-12-28', 'en', '2026-10-25')).toBe('Monday, December 28');
+    expect(formatDayHeading('2027-01-04', 'en', '2026-10-25')).toBe('Monday, January 4, 2027');
+    expect(formatDayHeading('2027-01-04', 'de', '2026-10-25')).toBe('Montag, 4. Januar 2027');
+  });
+
   it('formats an instant with date and time in the school time zone', () => {
     expect(formatDateTime('2026-10-25T23:30:00Z', berlin, 'de')).toBe('Mo., 26. Okt., 00:30');
   });

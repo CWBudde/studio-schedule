@@ -1,33 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { CalendarX2, Check, CircleAlert, ListPlus, LogIn, TriangleAlert, X } from 'lucide-react';
+import { CalendarX2, ListPlus, LogIn, X } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import type { LessonDetail, Me } from '@/api/client';
 import { type ClosedWhy, closedWhy } from '@/api/conflict';
 import {
-  acceptWaitlistInviteMutation,
   type BookedFor,
   bookLessonMutation,
-  cancelBookingMutation,
-  declineWaitlistInviteMutation,
   familyQuery,
   joinWaitlistMutation,
-  leaveWaitlistMutation,
   meQuery,
-  type WaitlistFor,
 } from '@/api/queries';
-import { Alert, AlertTitle } from '@/components/ui/alert';
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { fullName } from '@/features/account/personForm';
 import { Button } from '@/components/ui/button';
@@ -43,8 +28,11 @@ import {
 import { formatDateTime } from '@/lib/schoolTime';
 import { useServerClock } from '../useServerClock';
 import { useBookingErrorText } from './bookingErrors';
+import { CancelBookingDialog } from './CancelBookingDialog';
 import { CancelFollowingDialog } from './CancelFollowingDialog';
-import { inviteRanOut, isInvited, staysOnList } from './waitlist';
+import { cancelIsLate } from './lateCancel';
+import { staysOnList } from './waitlist';
+import { WaitlistRow } from './WaitlistRow';
 
 /** A person the signed-in account books for: itself or one of its dependents. */
 type Bookable = { id: string; name: string; self: boolean };
@@ -105,11 +93,6 @@ function closedState(lesson: LessonDetail, now: number): ClosedWhy | undefined {
   if (now >= Date.parse(lesson.startsAt)) return 'started';
   if (now >= Date.parse(lesson.bookingClosesAt)) return 'cutoff';
   return undefined;
-}
-
-/** Whether canceling now is late: from the cancellation cutoff on (never for a canceled lesson). */
-function cancelIsLate(lesson: LessonDetail, now: number): boolean {
-  return lesson.lateCancelFrom !== undefined && now >= Date.parse(lesson.lateCancelFrom);
 }
 
 /** "3 places left" and until when, "This lesson is full." or why it is closed. */
@@ -292,6 +275,7 @@ function MemberBooking({
               entry={w}
               self={w.personId === me.personId}
               active={!started && lesson.status !== 'canceled'}
+              closed={now >= Date.parse(lesson.bookingClosesAt)}
               timeZone={timeZone}
               now={now}
             />
@@ -362,215 +346,5 @@ function MemberBooking({
         onClose={() => setFollowing(null)}
       />
     </>
-  );
-}
-
-/**
- * A person of the family on the waiting list: their place in it and a way
- * to leave it, or the place their invite holds, until when, with Accept
- * (books them) and Decline. An invite whose expiry has passed by the
- * server's clock shows as expired, even before the API says so. `active`
- * is false once the lesson has started or is canceled: then there is
- * nothing to do.
- */
-function WaitlistRow({
-  entry,
-  self,
-  active,
-  timeZone,
-  now,
-}: {
-  entry: WaitlistFor;
-  self: boolean;
-  active: boolean;
-  timeZone: string;
-  now: number;
-}) {
-  const { t, i18n } = useTranslation('schedule');
-  const lang = i18n.resolvedLanguage ?? 'en';
-  const queryClient = useQueryClient();
-  const errorText = useBookingErrorText();
-  const leave = useMutation(leaveWaitlistMutation(queryClient));
-  const accept = useMutation(acceptWaitlistInviteMutation(queryClient));
-  const decline = useMutation(declineWaitlistInviteMutation(queryClient));
-  const pending = leave.isPending || accept.isPending || decline.isPending;
-  const { entryId, name } = entry;
-  const variables = { entryId, name };
-  const onError = (error: Error) => toast.error(errorText(error, name));
-
-  const expired = inviteRanOut(entry, now);
-  const invited = isInvited(entry, now);
-
-  const onLeave = () =>
-    leave.mutate(variables, {
-      onSuccess: () => toast.success(t('booking.waitlist.leftToast', { name })),
-      onError,
-    });
-  const onAccept = () =>
-    accept.mutate(variables, {
-      onSuccess: () =>
-        toast.success(t('booking.bookedToast', { name }), {
-          description: t('booking.mailHint'),
-        }),
-      onError,
-    });
-  const onDecline = () =>
-    decline.mutate(variables, {
-      onSuccess: (after) =>
-        toast.success(
-          after.status === 'waiting' && after.position !== undefined
-            ? t('booking.waitlist.declinedRequeued', { name, position: after.position })
-            : t('booking.waitlist.declinedToast', { name }),
-        ),
-      onError,
-    });
-
-  let badge: string;
-  let note: string | undefined;
-  if (invited) {
-    badge = t('booking.waitlist.invited');
-    if (entry.expiresAt === undefined) {
-      note = self
-        ? t('booking.waitlist.reservedYouPlain')
-        : t('booking.waitlist.reservedForPlain', { name });
-    } else {
-      const at = formatDateTime(entry.expiresAt, timeZone, lang);
-      note = self
-        ? t('booking.waitlist.reservedYou', { at })
-        : t('booking.waitlist.reservedFor', { name, at });
-    }
-  } else if (expired) {
-    badge = t('booking.waitlist.expired');
-    note = entry.stayOnList
-      ? t('booking.waitlist.expiredRequeue', { name })
-      : t('booking.waitlist.expiredEnds');
-  } else {
-    badge =
-      entry.position === undefined
-        ? t('booking.waitlist.waiting')
-        : t('booking.waitlist.position', { position: entry.position });
-  }
-  // Leaving makes sense while waiting, or after a missed invite that would requeue.
-  const canLeave = active && !invited && (!expired || entry.stayOnList);
-
-  return (
-    <li className="flex flex-wrap items-center gap-2">
-      <span className="min-w-0 font-medium break-words">{name}</span>
-      <Badge variant={invited ? 'default' : 'outline'}>{badge}</Badge>
-      {note && <p className="w-full text-sm text-muted-foreground">{note}</p>}
-      {active && invited && (
-        <span className="flex w-full flex-wrap gap-2">
-          <Button
-            size="sm"
-            disabled={pending}
-            aria-label={t('booking.waitlist.acceptFor', { name })}
-            onClick={onAccept}
-          >
-            <Check aria-hidden="true" />
-            {t('booking.waitlist.accept')}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={pending}
-            aria-label={t('booking.waitlist.declineFor', { name })}
-            onClick={onDecline}
-          >
-            <X aria-hidden="true" />
-            {t('booking.waitlist.decline')}
-          </Button>
-        </span>
-      )}
-      {canLeave && (
-        <span className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={pending}
-            aria-label={t('booking.waitlist.leaveFor', { name })}
-            onClick={onLeave}
-          >
-            <X aria-hidden="true" />
-            {t('booking.waitlist.leave')}
-          </Button>
-        </span>
-      )}
-    </li>
-  );
-}
-
-/** Asks before canceling a booking; a refusal keeps the dialog open and says why. */
-function CancelBookingDialog({
-  booking,
-  lessonId,
-  label,
-  late,
-  onClose,
-}: {
-  booking: BookedFor | null;
-  lessonId: string;
-  label: string;
-  /** Whether canceling now counts as late, as far as the client can tell. */
-  late: boolean;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation('schedule');
-  const queryClient = useQueryClient();
-  const errorText = useBookingErrorText();
-  const cancel = useMutation(cancelBookingMutation(queryClient));
-  const name = booking?.name ?? '';
-
-  const onConfirm = () => {
-    if (!booking) return;
-    cancel.mutate(
-      { bookingId: booking.bookingId, lessonId },
-      {
-        onSuccess: ({ late }) => {
-          const title = t('booking.canceled', { name });
-          if (late) toast.warning(title, { description: t('booking.late') });
-          else toast.success(title);
-          onClose();
-        },
-      },
-    );
-  };
-
-  return (
-    <AlertDialog
-      open={booking !== null}
-      onOpenChange={(open) => {
-        if (!open && !cancel.isPending) onClose();
-      }}
-    >
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{t('booking.confirm.title')}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {t('booking.confirm.description', { name, lesson: label })}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        {late && (
-          <Alert>
-            <TriangleAlert aria-hidden="true" />
-            <AlertTitle>{t('booking.confirm.late')}</AlertTitle>
-          </Alert>
-        )}
-        {cancel.error && (
-          <Alert variant="destructive">
-            <CircleAlert aria-hidden="true" />
-            <AlertTitle>{errorText(cancel.error, name)}</AlertTitle>
-          </Alert>
-        )}
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={cancel.isPending}>
-            {t('booking.confirm.keep')}
-          </AlertDialogCancel>
-          {/* No AlertDialogAction: it would close the dialog before the answer. */}
-          <Button variant="destructive" disabled={cancel.isPending} onClick={onConfirm}>
-            {cancel.isPending ? t('booking.confirm.canceling') : t('booking.confirm.confirm')}
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   );
 }

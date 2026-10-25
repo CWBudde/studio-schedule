@@ -33,6 +33,7 @@
     "instructor": "Instructor",
     "accompaniedBy": "accompanied by {{name}}",
     "place": "Place",
+    "for": "For",
     "loading": "Loading schedule…",
     "empty": {
       "title": "No lessons in this period",
@@ -221,7 +222,9 @@
       "decline": "Decline",
       "declineFor": "Decline the place for {{name}}",
       "declinedToast": "{{name}} has given up the place.",
-      "declinedRequeued": "{{name}} is back on the waiting list, position {{position}}."
+      "declinedRequeued": "{{name}} is back on the waiting list, position {{position}}.",
+      "closed": "Booking has closed",
+      "closedHint": "No more invites will come for this lesson."
     }
   },
   "invite": {

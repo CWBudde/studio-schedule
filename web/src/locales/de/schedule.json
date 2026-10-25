@@ -33,6 +33,7 @@
     "instructor": "Lehrkraft",
     "accompaniedBy": "Korrepetition: {{name}}",
     "place": "Ort",
+    "for": "Für",
     "loading": "Stundenplan wird geladen…",
     "empty": {
       "title": "Keine Stunden in diesem Zeitraum",
@@ -221,7 +222,9 @@
       "decline": "Ablehnen",
       "declineFor": "Den Platz für {{name}} ablehnen",
       "declinedToast": "{{name}} hat den Platz abgegeben.",
-      "declinedRequeued": "{{name}} steht wieder auf der Warteliste, Platz {{position}}."
+      "declinedRequeued": "{{name}} steht wieder auf der Warteliste, Platz {{position}}.",
+      "closed": "Buchung geschlossen",
+      "closedHint": "Für diese Stunde kommen keine Einladungen mehr."
     }
   },
   "invite": {

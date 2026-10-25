@@ -51,6 +51,27 @@ describe('AppHeader', () => {
     }
   });
 
+  it('links signed-in accounts to their lessons', async () => {
+    mockApiGet({ ...notDemo, '/api/v1/auth/me': { body: meMember } });
+
+    renderInRouter(<AppHeader />);
+
+    const nav = within(await screen.findByRole('navigation', { name: 'Main' }));
+    expect(await nav.findByRole('link', { name: 'My lessons' })).toHaveAttribute(
+      'href',
+      '/my-lessons',
+    );
+  });
+
+  it('has no link to my lessons for visitors', async () => {
+    mockApiGet({ ...signedOut, ...notDemo });
+
+    renderInRouter(<AppHeader />);
+
+    expect(await screen.findByRole('link', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'My lessons' })).not.toBeInTheDocument();
+  });
+
   it.each([
     ['members', { '/api/v1/auth/me': { body: meMember } }, 'button', 'Nora Example'],
     ['visitors', signedOut, 'link', 'Sign in'],

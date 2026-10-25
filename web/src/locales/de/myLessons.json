@@ -1,0 +1,43 @@
+{
+  "title": "Meine Stunden",
+  "intro": "Deine Buchungen und Wartelisten und die Stunden, die du besucht hast.",
+  "introFamily": "Die Buchungen und Wartelisten deiner Familie und die besuchten Stunden.",
+  "loading": "Deine Stunden werden geladen…",
+  "loadError": "Deine Stunden konnten nicht geladen werden.",
+  "retry": "Erneut versuchen",
+  "signedOutTitle": "Melde dich an, um deine Stunden zu sehen",
+  "signedOut": "Sobald du angemeldet bist, siehst du hier deine Buchungen, Wartelisten und vergangenen Stunden.",
+  "signIn": "Anmelden",
+  "status": {
+    "booked": "Gebucht",
+    "now": "Läuft",
+    "schoolCanceled": "Von der Schule abgesagt",
+    "attended": "Anwesend",
+    "noShow": "Nicht erschienen",
+    "canceled": "Storniert",
+    "late": "Spät",
+    "notMarked": "Nicht erfasst"
+  },
+  "row": {
+    "label": "{{lesson}}, {{name}}"
+  },
+  "upcoming": {
+    "title": "Demnächst",
+    "empty": "Keine anstehenden Stunden.",
+    "toSchedule": "Eine Stunde im Stundenplan finden",
+    "noneSoon": "In den nächsten vier Wochen keine Stunden.",
+    "showLater_one": "{{count}} spätere Stunde zeigen",
+    "showLater_other": "{{count}} spätere Stunden zeigen"
+  },
+  "waitlist": {
+    "title": "Wartelisten"
+  },
+  "history": {
+    "title": "Verlauf",
+    "empty": "Noch keine vergangenen Stunden.",
+    "emptyPage": "Keine Stunden zwischen {{from}} und {{to}}.",
+    "loadEarlier": "Frühere laden",
+    "loadingEarlier": "Wird geladen…",
+    "loadError": "Die früheren Stunden konnten nicht geladen werden."
+  }
+}

@@ -10,6 +10,7 @@ import {
 import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { type ScheduleSearch, validateScheduleSearch } from '@/features/schedule/search';
+import { type MyLessonsSearch, validateMyLessonsSearch } from '@/features/my-lessons/search';
 import { type TeachSearch, validateTeachSearch } from '@/features/teach/search';
 
 function testQueryClient() {
@@ -31,6 +32,7 @@ export type TestPath =
   | '/'
   | '/schedule'
   | '/teach'
+  | '/my-lessons'
   | '/login'
   | '/register'
   | '/confirm'
@@ -58,7 +60,7 @@ export function renderInRouter(
   const queryClient = testQueryClient();
   const rootRoute = createRootRoute({ component: Outlet });
   const page = (path: TestPath) => () => (at === path ? ui : null);
-  const route = (path: Exclude<TestPath, '/schedule' | '/teach'>) =>
+  const route = (path: Exclude<TestPath, '/schedule' | '/teach' | '/my-lessons'>) =>
     createRoute({ getParentRoute: () => rootRoute, path, component: page(path) });
   const scheduleRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -72,6 +74,12 @@ export function renderInRouter(
     validateSearch: validateTeachSearch,
     component: page('/teach'),
   });
+  const myLessonsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/my-lessons',
+    validateSearch: validateMyLessonsSearch,
+    component: page('/my-lessons'),
+  });
   const query = new URLSearchParams(
     Object.entries(search).filter((e): e is [string, string] => e[1] !== undefined),
   ).toString();
@@ -80,6 +88,7 @@ export function renderInRouter(
       route('/'),
       scheduleRoute,
       teachRoute,
+      myLessonsRoute,
       route('/login'),
       route('/register'),
       route('/confirm'),
@@ -115,4 +124,9 @@ export function renderAtSchedule(ui: ReactElement, search: ScheduleSearch = {}) 
 /** Renders ui as the /teach page with the given search params (see renderInRouter). */
 export function renderAtTeach(ui: ReactElement, search: TeachSearch = {}) {
   return renderInRouter(ui, { at: '/teach', search });
+}
+
+/** Renders ui as the /my-lessons page with the given search params (see renderInRouter). */
+export function renderAtMyLessons(ui: ReactElement, search: MyLessonsSearch = {}) {
+  return renderInRouter(ui, { at: '/my-lessons', search });
 }

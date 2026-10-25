@@ -1,4 +1,10 @@
-import { hashKey, mutationOptions, type QueryClient, queryOptions } from '@tanstack/react-query';
+import {
+  hashKey,
+  infiniteQueryOptions,
+  mutationOptions,
+  type QueryClient,
+  queryOptions,
+} from '@tanstack/react-query';
 import i18n from '@/i18n';
 import {
   api,
@@ -121,6 +127,46 @@ export const teachLessonsQuery = (params: TeachParams) =>
     queryFn: ({ signal }) =>
       unwrap(api.GET('/api/v1/teach', { params: { query: params }, signal })),
   });
+
+/** A booking of the signed-in family in "My lessons", with its lesson and whether it may be canceled. */
+export type MyLessonBooking = components['schemas']['MyLessonBooking'];
+/** An open waiting-list entry of the signed-in family in "My lessons", with its lesson. */
+export type MyWaitlistEntry = components['schemas']['MyWaitlistEntry'];
+/** The family's coming lessons and open waiting-list entries (listMyLessons). */
+export type MyLessons = components['schemas']['MyLessons'];
+/** A page of the family's past bookings (three calendar months). */
+export type MyLessonHistory = components['schemas']['MyLessonHistory'];
+
+/** Prefix of every "My lessons" query key (refreshed after every lesson or booking write). */
+export const myLessonsQueryKey = ['my-lessons'] as const;
+
+/**
+ * The family's coming lessons (`upcoming`: active bookings of lessons that
+ * are not over) and its open waiting-list entries, with the server's `now`.
+ */
+export const myLessonsQuery = queryOptions({
+  queryKey: [...myLessonsQueryKey, 'upcoming'],
+  queryFn: ({ signal }) => unwrap(api.GET('/api/v1/my/lessons', { signal })),
+});
+
+/**
+ * The family's past bookings, newest first, a page of three calendar months
+ * at a time: the first page ends now, each next one at the previous page's
+ * `nextBefore`, as long as `hasMore` says older bookings exist. A page may
+ * be empty while there are older ones.
+ */
+export const myLessonHistoryQuery = infiniteQueryOptions({
+  queryKey: [...myLessonsQueryKey, 'history'],
+  queryFn: ({ signal, pageParam }) =>
+    unwrap(
+      api.GET('/api/v1/my/lessons/history', {
+        params: { query: pageParam ? { before: pageParam } : {} },
+        signal,
+      }),
+    ),
+  initialPageParam: '',
+  getNextPageParam: (last: MyLessonHistory) => (last.hasMore ? last.nextBefore : undefined),
+});
 
 /** One published lesson. Unknown and invisible lessons fail alike with status 404. */
 export const lessonQuery = (lessonId: string) =>
@@ -381,15 +427,21 @@ function onDependentError(queryClient: QueryClient) {
   };
 }
 
-/** Changes the signed-in person's data; the header's name comes from `me`, so it is asked again. */
+/**
+ * Changes the signed-in person's data; the header's name comes from `me`,
+ * so it is asked again, and so is everything that shows the family's names
+ * (the lessons' bookings and waiting lists, "My lessons").
+ */
 export const updateMyPersonMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (body: PersonData) => unwrap(api.PUT('/api/v1/family/me', { body })),
-    onSuccess: () =>
-      Promise.all([
+    onSuccess: () => {
+      void refreshLessons(queryClient);
+      return Promise.all([
         refreshFamily(queryClient),
         queryClient.invalidateQueries({ queryKey: meQuery.queryKey }),
-      ]),
+      ]);
+    },
     onError: signedOutOn401(queryClient),
   });
 
@@ -404,7 +456,8 @@ export const addDependentMutation = (queryClient: QueryClient) =>
 /**
  * Changes the data of one of the signed-in person's dependents (404 for
  * anyone else); a managed dependent (own account, staff link, or a guardian
- * of someone itself) is a 409 `managed`.
+ * of someone itself) is a 409 `managed`. What shows the family's names (the
+ * lessons, "My lessons") is asked again.
  */
 export const updateDependentMutation = (queryClient: QueryClient) =>
   mutationOptions({
@@ -412,7 +465,12 @@ export const updateDependentMutation = (queryClient: QueryClient) =>
       unwrap(
         api.PUT('/api/v1/family/dependents/{personId}', { params: { path: { personId } }, body }),
       ),
-    onSuccess: () => refreshFamily(queryClient),
+    onSuccess: () => {
+      // Not awaited: the caller's own onSuccess runs once the family is
+      // fresh, before the dependent's row (and its callback) may unmount.
+      void refreshLessons(queryClient);
+      return refreshFamily(queryClient);
+    },
     onError: onDependentError(queryClient),
   });
 
@@ -429,7 +487,14 @@ export const removeDependentMutation = (queryClient: QueryClient) =>
       expectOk(
         api.DELETE('/api/v1/family/dependents/{personId}', { params: { path: { personId } } }),
       ),
-    onSuccess: () => refreshFamily(queryClient),
+    // Removing a dependent ends their waiting-list entries, and their
+    // bookings leave the lessons' family view and "My lessons".
+    onSuccess: () => {
+      // Not awaited: the caller's own onSuccess runs once the family is
+      // fresh, before the dependent's row (and its callback) may unmount.
+      void refreshLessons(queryClient);
+      return refreshFamily(queryClient);
+    },
     onError: onDependentError(queryClient),
   });
 
@@ -674,7 +739,7 @@ export const createPersonAccountMutation = (queryClient: QueryClient) =>
 /**
  * After a write to the catalogue: the lists are asked again (the public ones
  * feed the schedule's filters), and so is what shows catalogue names (the
- * schedule, the instructor view, lessons, classes); a staff member's person
+ * schedule, the instructor view, "My lessons", lessons, classes); a staff member's person
  * link also decides whose lessons the instructor view lists.
  */
 function refreshCatalogue(queryClient: QueryClient) {
@@ -687,6 +752,7 @@ function refreshCatalogue(queryClient: QueryClient) {
       allStaffQuery.queryKey,
       scheduleQueryKey,
       teachQueryKey,
+      myLessonsQueryKey,
       ['lesson'],
       ['terms'],
     ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
@@ -880,12 +946,12 @@ export const classDataOf = (c: ClassEntry, retired = c.retired): ClassData => ({
 
 /**
  * After a write to a class: its lessons changed as well, so the classes
- * (under the terms' key), the schedule, the instructor view and the lessons
- * are asked again.
+ * (under the terms' key), the schedule, the instructor view, "My lessons"
+ * and the lessons are asked again.
  */
 function refreshTimetable(queryClient: QueryClient) {
   return Promise.all(
-    [['terms'], scheduleQueryKey, teachQueryKey, ['lesson']].map((queryKey) =>
+    [['terms'], scheduleQueryKey, teachQueryKey, myLessonsQueryKey, ['lesson']].map((queryKey) =>
       queryClient.invalidateQueries({ queryKey }),
     ),
   );
@@ -1104,14 +1170,26 @@ export type LessonCancelData = PostBody<'/api/v1/lessons/{lessonId}/cancel'>;
 export type LessonRestoreData = components['schemas']['LessonRestoreData'];
 
 /**
- * After a write to a lesson: the schedule, the instructor view and the
- * lessons are asked again, but for `except` (a deleted lesson, which would only be found gone), and
- * so is the demo mailbox, as a write may mail those booked.
+ * After a write to a lesson, a booking or the names of a family: the
+ * schedule, the instructor view, "My lessons" and the lessons are asked
+ * again, but for `except` (a deleted lesson, which would only be found
+ * gone), and so is the demo mailbox, as a write may mail those booked. The
+ * history of "My lessons" (every page loaded) only with `history`, for
+ * writes that can change the past; a member's booking writes cannot.
  */
-function refreshLessons(queryClient: QueryClient, { except }: { except?: string } = {}) {
+function refreshLessons(
+  queryClient: QueryClient,
+  { except, history = true }: { except?: string; history?: boolean } = {},
+) {
   const gone = except === undefined ? undefined : hashKey(lessonQuery(except).queryKey);
   return Promise.all(
-    [scheduleQueryKey, teachQueryKey, ['lesson'], demoMailboxQuery.queryKey].map((queryKey) =>
+    [
+      scheduleQueryKey,
+      teachQueryKey,
+      history ? myLessonsQueryKey : myLessonsQuery.queryKey,
+      ['lesson'],
+      demoMailboxQuery.queryKey,
+    ].map((queryKey) =>
       queryClient.invalidateQueries({ queryKey, predicate: (query) => query.queryHash !== gone }),
     ),
   );
@@ -1367,11 +1445,15 @@ const restoreBooked =
           bookedFor: [...(lesson.bookedFor ?? []), entry],
         };
 
-/** The lessons are asked again once no other booking write is running. */
-function refreshAfterBooking(queryClient: QueryClient) {
+/**
+ * The lessons are asked again once no other booking write is running; the
+ * history of "My lessons" only with `history` (staff writes such as
+ * attendance can change it, a member's cannot).
+ */
+function refreshAfterBooking(queryClient: QueryClient, { history = false } = {}) {
   // The settling mutation itself still counts.
   if (queryClient.isMutating({ mutationKey: bookingMutationKey }) > 1) return;
-  return refreshLessons(queryClient);
+  return refreshLessons(queryClient, { history });
 }
 
 /** Whom to book for which lesson; `name` shows the person as booked until the API answers. */
@@ -1616,7 +1698,7 @@ export const acceptWaitlistInviteByTokenMutation = (queryClient: QueryClient) =>
         void queryClient.invalidateQueries({ queryKey: waitlistInviteQuery(token).queryKey });
       }
     },
-    onSettled: () => refreshLessons(queryClient),
+    onSettled: () => refreshLessons(queryClient, { history: false }),
   });
 
 /** A lesson's participants as staff see them (listLessonParticipants). */
@@ -1713,7 +1795,7 @@ export const staffPersonsQuery = (q: string) =>
  */
 function refreshAfterParticipants(queryClient: QueryClient) {
   void queryClient.invalidateQueries({ queryKey: [...adminQueryKey, 'bookings'] });
-  return refreshAfterBooking(queryClient);
+  return refreshAfterBooking(queryClient, { history: true });
 }
 
 /** Whom to add to which lesson. */

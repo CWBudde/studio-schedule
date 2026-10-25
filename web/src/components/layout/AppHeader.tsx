@@ -31,7 +31,7 @@ export function AppHeader() {
         </Link>
         <nav
           aria-label={t('nav.label')}
-          className="order-last -mx-2 flex w-full items-center pb-2 sm:order-none sm:mx-0 sm:w-auto sm:pb-0"
+          className="order-last -mx-2 flex w-full flex-wrap items-center pb-2 sm:order-none sm:mx-0 sm:w-auto sm:pb-0"
         >
           <Link to="/schedule" className={navLink}>
             {t('nav.schedule')}
@@ -39,6 +39,11 @@ export function AppHeader() {
           <Link to="/classes" className={navLink}>
             {t('nav.classes')}
           </Link>
+          {me.data && (
+            <Link to="/my-lessons" className={navLink}>
+              {t('nav.myLessons')}
+            </Link>
+          )}
           {canTeach(me.data?.role) && (
             <Link to="/teach" className={navLink}>
               {t('nav.teach')}

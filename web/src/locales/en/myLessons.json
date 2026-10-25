@@ -1,0 +1,43 @@
+{
+  "title": "My lessons",
+  "intro": "Your bookings and waiting lists, and the lessons you went to.",
+  "introFamily": "The bookings and waiting lists of your family, and the lessons you went to.",
+  "loading": "Loading your lessons…",
+  "loadError": "Your lessons could not be loaded.",
+  "retry": "Try again",
+  "signedOutTitle": "Sign in to see your lessons",
+  "signedOut": "Once you are signed in, your bookings, waiting lists and past lessons show here.",
+  "signIn": "Sign in",
+  "status": {
+    "booked": "Booked",
+    "now": "Now",
+    "schoolCanceled": "Canceled by the school",
+    "attended": "Attended",
+    "noShow": "No-show",
+    "canceled": "Canceled",
+    "late": "Late",
+    "notMarked": "Not marked"
+  },
+  "row": {
+    "label": "{{lesson}}, {{name}}"
+  },
+  "upcoming": {
+    "title": "Coming up",
+    "empty": "No lessons coming up.",
+    "toSchedule": "Find a lesson in the schedule",
+    "noneSoon": "No lessons in the next four weeks.",
+    "showLater_one": "Show {{count}} later lesson",
+    "showLater_other": "Show {{count}} later lessons"
+  },
+  "waitlist": {
+    "title": "Waiting lists"
+  },
+  "history": {
+    "title": "History",
+    "empty": "No past lessons yet.",
+    "emptyPage": "No lessons between {{from}} and {{to}}.",
+    "loadEarlier": "Load earlier",
+    "loadingEarlier": "Loading…",
+    "loadError": "The earlier lessons could not be loaded."
+  }
+}

@@ -89,9 +89,25 @@ export function formatDate(
   return formatter(locale, { ...options, timeZone: 'UTC' }).format(utcDate(date));
 }
 
-/** A day heading such as 'Monday, October 26' or 'Montag, 26. Oktober'. */
-export function formatDayHeading(date: SchoolDate, locale: string): string {
-  return formatDate(date, locale, { weekday: 'long', day: 'numeric', month: 'long' });
+/**
+ * A day heading such as 'Monday, October 26' or 'Montag, 26. Oktober'.
+ * Given `today`, a date in another year has its year: 'Monday, January 4, 2027'.
+ */
+export function formatDayHeading(date: SchoolDate, locale: string, today?: SchoolDate): string {
+  return formatDate(date, locale, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    ...yearUnlessIn(date, today),
+  });
+}
+
+/** The year option for a date outside the year of `today` (none without `today`). */
+export function yearUnlessIn(
+  date: SchoolDate,
+  today: SchoolDate | undefined,
+): Pick<Intl.DateTimeFormatOptions, 'year'> {
+  return today !== undefined && date.slice(0, 4) !== today.slice(0, 4) ? { year: 'numeric' } : {};
 }
 
 /** The wall-clock time of the instant in the school time zone, e.g. '18:00'. */

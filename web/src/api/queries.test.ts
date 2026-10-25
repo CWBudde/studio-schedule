@@ -46,6 +46,8 @@ import {
   loginMutation,
   logoutMutation,
   meQuery,
+  myLessonHistoryQuery,
+  myLessonsQuery,
   personsQuery,
   removeDependentMutation,
   requestEmailChangeMutation,
@@ -53,6 +55,7 @@ import {
   resetPasswordMutation,
   restoreLessonMutation,
   scheduleQuery,
+  setAttendanceMutation,
   staffQuery,
   stopImpersonationMutation,
   teachLessonsQuery,
@@ -983,5 +986,124 @@ describe('bookings', () => {
     }
     expect(ballet(queryClient).inSchedule).toEqual(booked);
     expect(ballet(queryClient).detail).toEqual(booked);
+  });
+});
+
+describe('My lessons refresh', () => {
+  const lina = family.dependents[0]!;
+  const bookingId = '0190a000-0000-7000-8000-000000000601';
+
+  /** A client with the schedule, a lesson, "My lessons" and a page of its history cached. */
+  function myLessonsClient() {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(meQuery.queryKey, meMember);
+    queryClient.setQueryData(familyQuery.queryKey, family);
+    queryClient.setQueryData(scheduleQuery(range).queryKey, schedule);
+    queryClient.setQueryData(lessonQuery(ids.lessonBallet).queryKey, lessonBalletOffice);
+    queryClient.setQueryData(myLessonsQuery.queryKey, {
+      timezone: 'Europe/Berlin',
+      now: '2026-10-23T10:00:00Z',
+      upcoming: [],
+      waitlist: [],
+    });
+    queryClient.setQueryData(myLessonHistoryQuery.queryKey, {
+      pages: [
+        {
+          timezone: 'Europe/Berlin',
+          now: '2026-10-23T10:00:00Z',
+          before: '2026-10-23T10:00:00Z',
+          nextBefore: '2026-07-23T10:00:00Z',
+          hasMore: false,
+          items: [],
+        },
+      ],
+      pageParams: [''],
+    });
+    return queryClient;
+  }
+  const invalidated = (queryClient: QueryClient) => ({
+    schedule: queryClient.getQueryState(scheduleQuery(range).queryKey)?.isInvalidated,
+    lesson: queryClient.getQueryState(lessonQuery(ids.lessonBallet).queryKey)?.isInvalidated,
+    upcoming: queryClient.getQueryState(myLessonsQuery.queryKey)?.isInvalidated,
+    history: queryClient.getQueryState(myLessonHistoryQuery.queryKey)?.isInvalidated,
+  });
+
+  it('asks for the coming lessons again after a member cancels, but not for the past', async () => {
+    mockApiPost({
+      '/api/v1/bookings/{bookingId}/cancel': {
+        body: {
+          id: bookingId,
+          lessonId: ids.lessonBallet,
+          personId: meMember.personId,
+          status: 'canceled',
+          source: 'self',
+          bookedAt: '2026-10-20T10:00:00Z',
+          late: false,
+        },
+      },
+    });
+    const queryClient = myLessonsClient();
+
+    await new MutationObserver(queryClient, cancelBookingMutation(queryClient)).mutate({
+      bookingId,
+      lessonId: ids.lessonBallet,
+    });
+
+    await vi.waitFor(() =>
+      expect(invalidated(queryClient)).toEqual({
+        schedule: true,
+        lesson: true,
+        upcoming: true,
+        history: false,
+      }),
+    );
+  });
+
+  it('asks for the history too after attendance is taken', async () => {
+    mockApiPost({ '/api/v1/bookings/{bookingId}/attendance': { body: {} } });
+    const queryClient = myLessonsClient();
+
+    await new MutationObserver(queryClient, setAttendanceMutation(queryClient)).mutate({
+      bookingId,
+      status: 'attended',
+    });
+
+    await vi.waitFor(() => expect(invalidated(queryClient).history).toBe(true));
+    expect(invalidated(queryClient).upcoming).toBe(true);
+  });
+
+  const everything = { schedule: true, lesson: true, upcoming: true, history: true };
+
+  it('asks for everything that shows names after my person changes', async () => {
+    mockApiPut({ '/api/v1/family/me': { body: { id: meMember.personId } } });
+    const queryClient = myLessonsClient();
+
+    await new MutationObserver(queryClient, updateMyPersonMutation(queryClient)).mutate({
+      givenName: 'Nora',
+      familyName: 'Example',
+    });
+
+    expect(invalidated(queryClient)).toEqual(everything);
+  });
+
+  it('asks for everything that shows names after a dependent changes', async () => {
+    mockApiPut({ '/api/v1/family/dependents/{personId}': { body: { id: lina.id } } });
+    const queryClient = myLessonsClient();
+
+    await new MutationObserver(queryClient, updateDependentMutation(queryClient)).mutate({
+      personId: lina.id,
+      body: { givenName: 'Lina', familyName: 'Sample' },
+    });
+
+    expect(invalidated(queryClient)).toEqual(everything);
+  });
+
+  it('asks for the lessons and My lessons again after a dependent is removed', async () => {
+    mockApiDelete({ '/api/v1/family/dependents/{personId}': { status: 204 } });
+    const queryClient = myLessonsClient();
+
+    await new MutationObserver(queryClient, removeDependentMutation(queryClient)).mutate(lina.id);
+
+    expect(invalidated(queryClient)).toEqual(everything);
   });
 });

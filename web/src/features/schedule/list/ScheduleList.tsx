@@ -1,24 +1,18 @@
-import { CalendarClock, Clock, MapPin, UserRound, X } from 'lucide-react';
+import { CalendarClock, X } from 'lucide-react';
 import { useId, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Schedule, ScheduleLesson } from '@/api/client';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  addDays,
-  formatDateTime,
-  formatDayHeading,
-  formatTimeRange,
-  todayIn,
-} from '@/lib/schoolTime';
+import { addDays, formatDateTime, todayIn } from '@/lib/schoolTime';
 import { useServerNow } from '@/lib/useNow';
 import { cn } from '@/lib/utils';
 import { AvailabilityBadges, hasAvailabilityBadges } from '../booking/AvailabilityBadges';
 import { DayHeading } from './DayHeading';
+import { LessonCardBody } from './LessonCard';
+import { lessonCardButton, lessonCardSurface, useLessonCardLabel } from './cardParts';
 import { type Day as DayOf, type DayTone, dayTone, groupByDay } from './days';
 import { clearedFilters, hasActiveFilter } from '../filters/filterParams';
 import { useScheduleSearch } from '../useScheduleSearch';
-import { VisibilityBadge } from '../visibility/VisibilityBadge';
 
 type Day = DayOf<ScheduleLesson>;
 
@@ -52,7 +46,6 @@ export function ScheduleList({ schedule, receivedAt }: { schedule: Schedule; rec
           tone={dayTone(day.date, today, tomorrow)}
           now={now}
           timeZone={schedule.timezone}
-          lang={lang}
           onOpen={(lesson) => void update({ lesson })}
         />
       ))}
@@ -65,18 +58,15 @@ function DaySection({
   tone,
   now,
   timeZone,
-  lang,
   onOpen,
 }: {
   day: Day;
   tone: DayTone;
   now: number;
   timeZone: string;
-  lang: string;
   onOpen: (lessonId: string) => void;
 }) {
   const headingId = useId();
-  const heading = formatDayHeading(day.date, lang);
   return (
     <section aria-labelledby={headingId} className="space-y-3">
       <DayHeading id={headingId} date={day.date} tone={tone} />
@@ -87,9 +77,7 @@ function DaySection({
               lesson={lesson}
               past={Date.parse(lesson.endsAt) <= now}
               now={now}
-              dayLabel={heading}
               timeZone={timeZone}
-              lang={lang}
               onOpen={() => onOpen(lesson.id)}
             />
           </li>
@@ -103,38 +91,23 @@ function LessonCard({
   lesson,
   past,
   now,
-  dayLabel,
   timeZone,
-  lang,
   onOpen,
 }: {
   lesson: ScheduleLesson;
   past: boolean;
   /** The server's clock, in ms. */
   now: number;
-  dayLabel: string;
   timeZone: string;
-  lang: string;
   onOpen: () => void;
 }) {
-  const { t } = useTranslation('schedule');
   const detailsId = useId();
   const availabilityId = useId();
+  const label = useLessonCardLabel()(lesson, timeZone);
   const canceled = lesson.status === 'canceled';
   // Canceled and ended lessons lose their accent colors.
   const quiet = canceled || past;
-  const special = lesson.kind !== 'regular';
-  const time = formatTimeRange(lesson.startsAt, lesson.endsAt, timeZone, lang);
-  const label = [
-    t('list.cardLabel', { courseType: lesson.courseType.name, day: dayLabel, time }),
-    canceled && t('status.canceled'),
-    special && t(`kind.${lesson.kind}`),
-    lesson.visibility !== 'public' && t(`visibility.${lesson.visibility}`),
-  ]
-    .filter(Boolean)
-    .join(', ');
 
-  // The thin primary line on the left is a barre; ended and canceled lessons lose it.
   return (
     <button
       type="button"
@@ -145,63 +118,15 @@ function LessonCard({
       onClick={onOpen}
       data-canceled={canceled || undefined}
       data-past={past || undefined}
-      className="flex w-full flex-col gap-2 rounded-lg bg-card p-4 pl-5 text-left text-sm text-card-foreground shadow-[inset_2px_0_0_0_var(--color-primary)] ring-1 ring-foreground/10 transition-[background-color,box-shadow] outline-none hover:bg-accent/50 hover:ring-primary/30 focus-visible:ring-3 focus-visible:ring-ring/50 data-canceled:bg-muted/40 data-canceled:text-muted-foreground data-canceled:shadow-none data-past:bg-muted/40 data-past:text-muted-foreground data-past:shadow-none"
+      className={cn(
+        lessonCardSurface,
+        lessonCardButton,
+        'w-full transition-[background-color,box-shadow] hover:ring-primary/30',
+      )}
     >
-      <span className="flex items-baseline justify-between gap-3">
-        <span
-          className={cn(
-            'font-heading text-lg leading-snug font-medium',
-            canceled && 'line-through decoration-1',
-          )}
-        >
-          {lesson.courseType.name}
-        </span>
-        {lesson.level && (
-          <span className="shrink-0 text-right eyebrow text-muted-foreground">
-            {t(`level.${lesson.level}`)}
-          </span>
-        )}
-      </span>
-
-      <span className="flex flex-wrap items-center gap-2">
-        <span
-          className={cn(
-            'inline-flex items-center gap-1.5 font-medium tabular-nums',
-            canceled && 'line-through',
-            !quiet && 'text-primary',
-          )}
-        >
-          <Clock className="size-4" aria-hidden="true" />
-          {time}
-        </span>
-        {canceled && <Badge variant="destructive">{t('status.canceled')}</Badge>}
-        {special && <Badge variant="outline">{t(`kind.${lesson.kind}`)}</Badge>}
-        <VisibilityBadge visibility={lesson.visibility} />
-      </span>
-
-      <span id={detailsId} className="flex flex-col gap-1 text-muted-foreground">
-        <span className="inline-flex items-start gap-1.5">
-          <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span>
-            <span className="sr-only">{t('list.place')}: </span>
-            {lesson.room.name} · {lesson.location.name}
-          </span>
-        </span>
-        <span className="inline-flex items-start gap-1.5">
-          <UserRound className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span>
-            <span className="sr-only">{t('list.instructor')}: </span>
-            <span className={cn(!quiet && 'text-primary')}>{lesson.instructor.displayName}</span>
-            {lesson.accompanist && (
-              <>
-                {' · '}
-                <span>{t('list.accompaniedBy', { name: lesson.accompanist.displayName })}</span>
-              </>
-            )}
-          </span>
-        </span>
-      </span>
-      <AvailabilityBadges id={availabilityId} lesson={lesson} showFree={!quiet} now={now} />
+      <LessonCardBody lesson={lesson} timeZone={timeZone} detailsId={detailsId} quiet={quiet}>
+        <AvailabilityBadges id={availabilityId} lesson={lesson} showFree={!quiet} now={now} />
+      </LessonCardBody>
     </button>
   );
 }

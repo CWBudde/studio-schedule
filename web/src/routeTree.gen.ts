@@ -17,6 +17,7 @@ import { Route as ConfirmRouteImport } from './routes/confirm'
 import { Route as ConfirmEmailChangeRouteImport } from './routes/confirm-email-change'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MyLessonsRouteImport } from './routes/my-lessons'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ScheduleRouteImport } from './routes/schedule'
@@ -71,6 +72,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MyLessonsRoute = MyLessonsRouteImport.update({
+  id: '/my-lessons',
+  path: '/my-lessons',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RegisterRoute = RegisterRouteImport.update({
@@ -158,6 +164,7 @@ export interface FileRoutesByFullPath {
   '/confirm-email-change': typeof ConfirmEmailChangeRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/my-lessons': typeof MyLessonsRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/schedule': typeof ScheduleRoute
@@ -182,6 +189,7 @@ export interface FileRoutesByTo {
   '/confirm-email-change': typeof ConfirmEmailChangeRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/my-lessons': typeof MyLessonsRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/schedule': typeof ScheduleRoute
@@ -208,6 +216,7 @@ export interface FileRoutesById {
   '/confirm-email-change': typeof ConfirmEmailChangeRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/my-lessons': typeof MyLessonsRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/schedule': typeof ScheduleRoute
@@ -235,6 +244,7 @@ export interface FileRouteTypes {
     | '/confirm-email-change'
     | '/forgot-password'
     | '/login'
+    | '/my-lessons'
     | '/register'
     | '/reset-password'
     | '/schedule'
@@ -259,6 +269,7 @@ export interface FileRouteTypes {
     | '/confirm-email-change'
     | '/forgot-password'
     | '/login'
+    | '/my-lessons'
     | '/register'
     | '/reset-password'
     | '/schedule'
@@ -284,6 +295,7 @@ export interface FileRouteTypes {
     | '/confirm-email-change'
     | '/forgot-password'
     | '/login'
+    | '/my-lessons'
     | '/register'
     | '/reset-password'
     | '/schedule'
@@ -310,6 +322,7 @@ export interface RootRouteChildren {
   ConfirmEmailChangeRoute: typeof ConfirmEmailChangeRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
+  MyLessonsRoute: typeof MyLessonsRoute
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ScheduleRoute: typeof ScheduleRoute
@@ -373,6 +386,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/my-lessons': {
+      id: '/my-lessons'
+      path: '/my-lessons'
+      fullPath: '/my-lessons'
+      preLoaderRoute: typeof MyLessonsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/register': {
@@ -520,6 +540,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConfirmEmailChangeRoute: ConfirmEmailChangeRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
+  MyLessonsRoute: MyLessonsRoute,
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ScheduleRoute: ScheduleRoute,
