@@ -102,6 +102,12 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   My passes. Every booking or lesson write goes through `service/ledger.go`, which settles
   redemptions (`service/redemption.go`) on transitions only; lock order term → class → lesson →
   the persons' passes.
+- **Statistics:** `service.StatisticsService` (`service/statistics.go`, `httpapi/statistics.go`,
+  `office`): live aggregates of a range of school dates from a constant number of store reads
+  (`CountsByLessons`, `CountLateCanceledByLessons`, `CountActivePersons`,
+  `Waitlist().CountByLessons`, `Receipts().TotalsByDay`); see architecture.md "Statistics". The page
+  is `web/src/features/admin/StatisticsPage.tsx`; recharts and what only it uses stay in the lazily
+  loaded `charts` chunk (`web/vite.chunks.ts`, a build guard fails if the entry loads them).
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),

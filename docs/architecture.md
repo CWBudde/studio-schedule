@@ -111,6 +111,32 @@ Office edits of a class or a term run the same per-class fill inside their own t
 the class lock, after moving or deleting the future lessons the edit affects
 ([ADR 0007](decisions/0007-timetable-administration.md)).
 
+## Statistics
+
+The office's statistics (`GET /api/v1/admin/statistics`, `service.StatisticsService`) are computed
+live from the operational data; there is no snapshot table (ADR 0001). A request reads the lessons
+of the range (`Lessons().ListRange`), then one aggregate each: `Bookings().CountsByLessons`
+(active, trials, guests, attended, no-shows), `Bookings().CountLateCanceledByLessons`,
+`Waitlist().CountByLessons`, `Bookings().CountActivePersons` and `Receipts().TotalsByDay`, besides
+the catalog. So a year
+(about 1,500 lessons) costs the same handful of queries, which keeps the single-threaded WASM demo
+responsive.
+
+- Ranges are school dates in the school time zone: the last 4 or 12 weeks and the current term end
+  today; a custom range has at most 366 days (422 beyond). A lesson belongs to the school date it
+  starts on, a receipt to its issue date. Periods are weeks from Monday, or calendar months for
+  ranges beyond 26 weeks, the first and the last cut to the range.
+- Canceled lessons are only counted as such. Utilization is active bookings per place; the no-show
+  rate counts only bookings whose attendance was taken; an active member is a person with an
+  active booking in the range. Pass sales net cancellations (Storno) on the day they were issued.
+- Aggregates only: no person is named; per-instructor rows name the staff member.
+- Every lesson counts under its own room, course type and instructor, which the office may have
+  changed from its class's; a class row names the course type of its latest lesson in the range.
+- The page (`/admin/statistics`) renders recharts through shadcn `chart`; the build puts recharts
+  and every module only it uses (decided on the module graph, `web/vite.chunks.ts`) in its own
+  `charts` chunk, which only that route loads, and fails if the entry's chunks hold any of them.
+  Every chart has its figures in a table.
+
 ## API contract
 
 - Huma generates OpenAPI 3.1 from Go types. `just gen-api` writes `api/openapi.json` and generates

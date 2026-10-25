@@ -653,8 +653,11 @@ Goal: prepaid passes and legally sound receipts.
 - [ ] Announcements: audience (all / role / course type / lesson), publish window, in-app display
       (dismissible), optional email
 - [ ] Mail log (outbox history with status, resend)
-- [ ] Statistics dashboard: bookings per week, utilisation per class/room, no-show rate,
-      active members, pass sales (aggregated in Go; shadcn charts)
+- [x] Statistics dashboard: bookings per week, utilisation per class/room, no-show rate,
+      active members, pass sales (aggregated in Go; shadcn charts) (2026-10-25) —
+      `service/statistics.go` from a constant number of store reads; plus late cancellations,
+      trials and guests, waitlist demand and figures per instructor; recharts in a lazily loaded
+      chunk; e2e `statistics.spec.ts`
 - [ ] Member CSV import with column mapping, dry-run preview, idempotent re-import (`member_no`),
       import run history
 - [ ] Duplicate detection and merge for persons (email, name + birth date)

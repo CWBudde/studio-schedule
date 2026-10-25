@@ -193,7 +193,10 @@ from one test to the next. Any console error fails a test. The
 
 Lessons get random IDs when they are generated, so a link to a lesson works only as long as the
 saved data that holds it (until "Reset demo" or a new build). Generation creates only lessons that have not started (ADR 0003); the seed
-brings the lessons of the week before the visit, so the schedule has a recent past.
+brings the lessons from the term start (three weeks before the visit) up to the visit, with
+attendance, no-shows, late cancellations, guests and trials, so the schedule has a past and the
+statistics have weeks to count. Classical Ballet's past lessons have no attendance, so the
+instructor and office views show attendance to take.
 
 ## Constraints to keep in mind
 
@@ -205,7 +208,7 @@ brings the lessons of the week before the visit, so the schedule has a recent pa
 - A panic that escapes recovery terminates the Go program. The UI then shows "Demo crashed —
   reload". A reload restores the saved data; if that data is what crashed it, the card's "Reset
   demo" starts over.
-- Encoding a snapshot after a change runs in the Worker too: the demo data is about 100 KB of JSON
-  and takes a few milliseconds in WASM. Keep the store's tables plain (no derived indexes that
+- Encoding a snapshot after a change runs in the Worker too: the demo data (seed, generated lessons) is
+  about 450 KB of JSON and takes a few milliseconds in WASM. Keep the store's tables plain (no derived indexes that
   would bloat the snapshot).
 - The binary size is reported in every CI run (`test-web` job summary).
