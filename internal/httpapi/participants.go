@@ -106,13 +106,14 @@ func registerParticipants(api huma.API, h *handlers) {
 
 	register(api, AccessStaff, huma.Operation{
 		OperationID: "searchPersonsForStaff",
-		Method:      http.MethodGet,
-		Path:        BasePath + "/staff/persons",
+		Method:      http.MethodPost,
+		Path:        BasePath + "/staff/persons/search",
 		Summary:     "Find persons to add",
-		Description: "Returns the persons whose given or family name contains every word of `q` (at least two " +
-			"characters), ignoring case, ordered by family and given name; at most 20. Only the name and the " +
-			"birth year, no contact data: for instructors and accompanists adding a person to their lesson " +
-			"(`addLessonParticipant`). The office's picker is `listPersons`.",
+		Description: "Returns the persons whose given or family name contains every word of `query` (at least " +
+			"two characters), ignoring case, ordered by family and given name; at most 20. Only the name and " +
+			"the birth year, no contact data: for instructors and accompanists adding a person to their lesson " +
+			"(`addLessonParticipant`). The office's picker is `searchPersons`. A POST, so that the names stay " +
+			"out of URLs and the access logs of proxies (ASVS 8.3.1); it changes nothing.",
 		Tags: []string{"participants"},
 	}, h.searchPersonsForStaff)
 
@@ -254,7 +255,9 @@ type StaffBookingsOutput struct {
 
 // StaffPersonSearchInput is the request of searchPersonsForStaff.
 type StaffPersonSearchInput struct {
-	Query string `doc:"Words to look for in the names; at least two characters." maxLength:"100" minLength:"2" query:"q" required:"true"`
+	Body struct {
+		Query string `doc:"Words to look for in the names; at least two characters." json:"query" maxLength:"100" minLength:"2"`
+	}
 }
 
 // StaffPersonMatch is a person found by searchPersonsForStaff: no contact
@@ -404,7 +407,7 @@ func (h *handlers) markAllAttended(ctx context.Context, in *LessonRefInput) (*St
 func (h *handlers) searchPersonsForStaff(
 	ctx context.Context, in *StaffPersonSearchInput,
 ) (*StaffPersonMatchesOutput, error) {
-	hits, err := h.deps.Participants.FindPersons(ctx, in.Query)
+	hits, err := h.deps.Participants.FindPersons(ctx, in.Body.Query)
 	if err != nil {
 		return nil, h.toHTTPError(ctx, err)
 	}

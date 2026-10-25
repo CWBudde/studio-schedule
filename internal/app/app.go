@@ -67,6 +67,11 @@ type Deps struct {
 	// InsecureCookies leaves the Secure attribute off the session cookie,
 	// for local development over plain HTTP.
 	InsecureCookies bool
+	// HostCookie names the session cookie __Host-studio_session instead of
+	// studio_session (ADR 0004, amendment). Set it when the app is served
+	// over HTTPS (BASE_URL is https://); the prefix needs the Secure
+	// attribute, so InsecureCookies turns it off.
+	HostCookie bool
 	// HSTS sends Strict-Transport-Security on every response, telling
 	// browsers to use only HTTPS for a year. Set it only when the app is
 	// served over HTTPS (BASE_URL is https://).
@@ -191,6 +196,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 		Version:        deps.Version,
 		Logger:         deps.Logger,
 		SecureCookies:  !deps.InsecureCookies,
+		HostCookie:     deps.HostCookie,
 		Demo:           deps.Demo,
 		DemoLogins:     demoLogins(deps.DemoLogins),
 		TrustedProxies: deps.TrustedProxies,

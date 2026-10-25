@@ -1471,7 +1471,7 @@
             "type": "string"
           },
           "newPassword": {
-            "description": "New password, at least 8 characters.",
+            "description": "New password: 8 to 256 characters and none of the 10,000 most common passwords (ignoring case).",
             "maxLength": 256,
             "minLength": 8,
             "type": "string"
@@ -3355,15 +3355,10 @@
               "ok"
             ],
             "type": "string"
-          },
-          "version": {
-            "description": "Build version of the running service.",
-            "type": "string"
           }
         },
         "required": [
-          "status",
-          "version"
+          "status"
         ],
         "type": "object"
       },
@@ -5133,7 +5128,8 @@
               "lesson-notice",
               "receipt",
               "announcement",
-              "account-deleted"
+              "account-deleted",
+              "password-changed"
             ],
             "type": "string"
           },
@@ -5155,6 +5151,54 @@
           "attempts",
           "body"
         ],
+        "type": "object"
+      },
+      "MailLogInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "description": "Where the page starts: the nextCursor of the previous page.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "recipient": {
+            "description": "Only mails whose recipient contains this, ignoring ASCII case.",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "status": {
+            "description": "Only mails in this state; absent: all.",
+            "enum": [
+              "pending",
+              "sent",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "template": {
+            "description": "Only mails of this template; absent: all.",
+            "enum": [
+              "confirm-email",
+              "reset-password",
+              "change-email",
+              "email-changed",
+              "invite",
+              "lesson-canceled",
+              "lesson-restored",
+              "lesson-changed",
+              "booking-confirmed",
+              "booking-canceled",
+              "waitlist-invite",
+              "waitlist-expired",
+              "lesson-notice",
+              "receipt",
+              "announcement",
+              "account-deleted",
+              "password-changed"
+            ],
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "MailLogItem": {
@@ -5237,7 +5281,8 @@
               "lesson-notice",
               "receipt",
               "announcement",
-              "account-deleted"
+              "account-deleted",
+              "password-changed"
             ],
             "type": "string"
           },
@@ -5354,7 +5399,8 @@
               "lesson-notice",
               "receipt",
               "announcement",
-              "account-deleted"
+              "account-deleted",
+              "password-changed"
             ],
             "type": "string"
           },
@@ -5427,6 +5473,10 @@
           "teaches": {
             "description": "Whether the account teaches: it is staff with an active staff record linked to its person, so it may create a teaching calendar feed (createCalendarFeed).",
             "type": "boolean"
+          },
+          "version": {
+            "description": "Build version of the running service, for support; only for the office and admins.",
+            "type": "string"
           }
         },
         "required": [
@@ -6810,6 +6860,17 @@
         ],
         "type": "object"
       },
+      "PersonSearchInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "description": "Words to look for; empty or absent matches everyone.",
+            "maxLength": 100,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "PublicSettings": {
         "additionalProperties": false,
         "properties": {
@@ -7428,7 +7489,7 @@
             "type": "string"
           },
           "password": {
-            "description": "Password, at least 8 characters.",
+            "description": "Password: 8 to 256 characters and none of the 10,000 most common passwords (ignoring case).",
             "maxLength": 256,
             "minLength": 8,
             "type": "string"
@@ -7525,7 +7586,7 @@
         "additionalProperties": false,
         "properties": {
           "password": {
-            "description": "New password, at least 8 characters.",
+            "description": "New password: 8 to 256 characters and none of the 10,000 most common passwords (ignoring case).",
             "maxLength": 256,
             "minLength": 8,
             "type": "string"
@@ -7932,6 +7993,38 @@
         ],
         "type": "object"
       },
+      "SearchReceiptsInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "Most receipts to return.",
+            "format": "int64",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Receipts to skip.",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "query": {
+            "description": "Matches the number or the recipient's name (ignoring ASCII case); empty or absent matches all.",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "year": {
+            "description": "Only the receipts of this year; 0 or absent: all.",
+            "format": "int64",
+            "maximum": 9999,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "SellPassData": {
         "additionalProperties": false,
         "properties": {
@@ -8256,6 +8349,21 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "StaffPersonSearchInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "description": "Words to look for in the names; at least two characters.",
+            "maxLength": 100,
+            "minLength": 2,
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
         ],
         "type": "object"
       },
@@ -10019,77 +10127,20 @@
         "x-access": "office"
       }
     },
-    "/api/v1/admin/mails": {
-      "get": {
-        "description": "Returns the mails of the outbox, newest first, 50 at most per page, without their bodies; `nextCursor` asks for the next page. Filters by status, template and a part of the recipient (ignoring ASCII case). The bodies of mails sent more than 30 days ago are removed, and mails older than 180 days deleted.",
-        "operationId": "listMails",
-        "parameters": [
-          {
-            "description": "Only mails in this state.",
-            "explode": false,
-            "in": "query",
-            "name": "status",
-            "schema": {
-              "description": "Only mails in this state.",
-              "enum": [
-                "pending",
-                "sent",
-                "failed"
-              ],
-              "type": "string"
+    "/api/v1/admin/mails/search": {
+      "post": {
+        "description": "Returns the mails of the outbox, newest first, 50 at most per page, without their bodies; `nextCursor` asks for the next page. Filters by status, template and a part of the recipient (ignoring ASCII case). The bodies of mails sent more than 30 days ago are removed, and mails older than 180 days deleted. A POST, so that the addresses searched for stay out of URLs and the access logs of proxies (ASVS 8.3.1); it changes nothing.",
+        "operationId": "searchMails",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailLogInputBody"
+              }
             }
           },
-          {
-            "description": "Only mails of this template.",
-            "explode": false,
-            "in": "query",
-            "name": "template",
-            "schema": {
-              "description": "Only mails of this template.",
-              "enum": [
-                "confirm-email",
-                "reset-password",
-                "change-email",
-                "email-changed",
-                "invite",
-                "lesson-canceled",
-                "lesson-restored",
-                "lesson-changed",
-                "booking-confirmed",
-                "booking-canceled",
-                "waitlist-invite",
-                "waitlist-expired",
-                "lesson-notice",
-                "receipt",
-                "announcement",
-                "account-deleted"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "description": "Only mails whose recipient contains this, ignoring ASCII case.",
-            "explode": false,
-            "in": "query",
-            "name": "recipient",
-            "schema": {
-              "description": "Only mails whose recipient contains this, ignoring ASCII case.",
-              "maxLength": 254,
-              "type": "string"
-            }
-          },
-          {
-            "description": "Where the page starts: the nextCursor of the previous page.",
-            "explode": false,
-            "in": "query",
-            "name": "cursor",
-            "schema": {
-              "description": "Where the page starts: the nextCursor of the previous page.",
-              "maxLength": 200,
-              "type": "string"
-            }
-          }
-        ],
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -10112,7 +10163,7 @@
             "description": "Error"
           }
         },
-        "summary": "List the mail log",
+        "summary": "Search the mail log",
         "tags": [
           "admin"
         ],
@@ -10521,50 +10572,6 @@
       }
     },
     "/api/v1/admin/persons": {
-      "get": {
-        "description": "Returns the persons whose given name, family name, email or member number contains every word of `q`, ignoring case, ordered by family and given name; at most 50; merged persons are left out. For the office's pickers, e.g. linking a staff member to a person.",
-        "operationId": "listPersons",
-        "parameters": [
-          {
-            "description": "Words to look for; empty matches everyone.",
-            "explode": false,
-            "in": "query",
-            "name": "q",
-            "schema": {
-              "description": "Words to look for; empty matches everyone.",
-              "maxLength": 100,
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PersonMatchList"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Search persons",
-        "tags": [
-          "admin"
-        ],
-        "x-access": "office"
-      },
       "post": {
         "description": "Adds a person without an account, e.g. a second parent or a staff member's record.",
         "operationId": "createPerson",
@@ -10664,6 +10671,49 @@
           }
         },
         "summary": "Merge two persons",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/persons/search": {
+      "post": {
+        "description": "Returns the persons whose given name, family name, email or member number contains every word of `query`, ignoring case, ordered by family and given name; at most 50; merged persons are left out. For the office's pickers, e.g. linking a staff member to a person. A POST, so that the search terms stay out of URLs and the access logs of proxies (ASVS 8.3.1); it changes nothing.",
+        "operationId": "searchPersons",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonSearchInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonMatchList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Search persons",
         "tags": [
           "admin"
         ],
@@ -11289,62 +11339,20 @@
         "x-access": "office"
       }
     },
-    "/api/v1/admin/receipts": {
-      "get": {
-        "description": "Returns the receipts that match the filter, newest first (by number), and how many match in all.",
-        "operationId": "listReceipts",
-        "parameters": [
-          {
-            "description": "Only the receipts of this year; 0 or absent: all.",
-            "explode": false,
-            "in": "query",
-            "name": "year",
-            "schema": {
-              "description": "Only the receipts of this year; 0 or absent: all.",
-              "format": "int64",
-              "maximum": 9999,
-              "minimum": 0,
-              "type": "integer"
+    "/api/v1/admin/receipts/search": {
+      "post": {
+        "description": "Returns the receipts that match the filter, newest first (by number), and how many match in all. A POST, so that the names searched for stay out of URLs and the access logs of proxies (ASVS 8.3.1); it changes nothing.",
+        "operationId": "searchReceipts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchReceiptsInputBody"
+              }
             }
           },
-          {
-            "description": "Matches the number or the recipient's name (ignoring ASCII case); empty matches all.",
-            "explode": false,
-            "in": "query",
-            "name": "q",
-            "schema": {
-              "description": "Matches the number or the recipient's name (ignoring ASCII case); empty matches all.",
-              "maxLength": 100,
-              "type": "string"
-            }
-          },
-          {
-            "description": "Receipts to skip.",
-            "explode": false,
-            "in": "query",
-            "name": "offset",
-            "schema": {
-              "description": "Receipts to skip.",
-              "format": "int64",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Most receipts to return.",
-            "explode": false,
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "default": 50,
-              "description": "Most receipts to return.",
-              "format": "int64",
-              "maximum": 100,
-              "minimum": 1,
-              "type": "integer"
-            }
-          }
-        ],
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -11367,7 +11375,7 @@
             "description": "Error"
           }
         },
-        "summary": "List receipts",
+        "summary": "Search receipts",
         "tags": [
           "receipts"
         ],
@@ -12429,17 +12437,6 @@
       "post": {
         "description": "Confirms the email address with the token from the confirmation link and the account's password, and signs in. An unknown, used or expired link is a 410.",
         "operationId": "confirmEmail",
-        "parameters": [
-          {
-            "description": "Session cookie, if any; it ends on success.",
-            "in": "cookie",
-            "name": "studio_session",
-            "schema": {
-              "description": "Session cookie, if any; it ends on success.",
-              "type": "string"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -12638,17 +12635,6 @@
       "post": {
         "description": "Signs in with email and password and sets the session cookie. A wrong email or password is a 401; a correct password for an unconfirmed email is a 403. Too many attempts per client or wrong passwords per email are a 429 with Retry-After.",
         "operationId": "login",
-        "parameters": [
-          {
-            "description": "Session cookie, if any; it ends on success.",
-            "in": "cookie",
-            "name": "studio_session",
-            "schema": {
-              "description": "Session cookie, if any; it ends on success.",
-              "type": "string"
-            }
-          }
-        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -12699,17 +12685,6 @@
       "post": {
         "description": "Ends the session and clears the session cookie.",
         "operationId": "logout",
-        "parameters": [
-          {
-            "description": "Session cookie.",
-            "in": "cookie",
-            "name": "studio_session",
-            "schema": {
-              "description": "Session cookie.",
-              "type": "string"
-            }
-          }
-        ],
         "responses": {
           "204": {
             "description": "No Content",
@@ -12774,7 +12749,7 @@
     },
     "/api/v1/auth/password": {
       "post": {
-        "description": "Replaces the password after checking the current one (a wrong one is a 422 on body.currentPassword) and ends every other session of the account. Refused (403) while an admin is signed in as the account.",
+        "description": "Replaces the password after checking the current one (a wrong one is a 422 on body.currentPassword), ends every other session of the account and mails the account that its password was changed. Refused (403) while an admin is signed in as the account.",
         "operationId": "changePassword",
         "requestBody": {
           "content": {
@@ -12846,7 +12821,7 @@
     },
     "/api/v1/auth/password-reset/confirm": {
       "post": {
-        "description": "Sets the password with the token from the reset link and ends every session of the account; it does not sign in. An unknown, used or expired link is a 410.",
+        "description": "Sets the password with the token from the reset link and ends every session of the account; it does not sign in. If the account had a password, it gets a mail that its password was changed. An unknown, used or expired link is a 410.",
         "operationId": "resetPassword",
         "requestBody": {
           "content": {
@@ -14176,7 +14151,7 @@
     },
     "/api/v1/health": {
       "get": {
-        "description": "Reports that the service is running and which version is deployed.",
+        "description": "Reports that the service is running. It names no version (ASVS 14.3.3): the office finds it in getMe.",
         "operationId": "getHealth",
         "responses": {
           "200": {
@@ -16076,25 +16051,20 @@
         "x-access": "office"
       }
     },
-    "/api/v1/staff/persons": {
-      "get": {
-        "description": "Returns the persons whose given or family name contains every word of `q` (at least two characters), ignoring case, ordered by family and given name; at most 20. Only the name and the birth year, no contact data: for instructors and accompanists adding a person to their lesson (`addLessonParticipant`). The office's picker is `listPersons`.",
+    "/api/v1/staff/persons/search": {
+      "post": {
+        "description": "Returns the persons whose given or family name contains every word of `query` (at least two characters), ignoring case, ordered by family and given name; at most 20. Only the name and the birth year, no contact data: for instructors and accompanists adding a person to their lesson (`addLessonParticipant`). The office's picker is `searchPersons`. A POST, so that the names stay out of URLs and the access logs of proxies (ASVS 8.3.1); it changes nothing.",
         "operationId": "searchPersonsForStaff",
-        "parameters": [
-          {
-            "description": "Words to look for in the names; at least two characters.",
-            "explode": false,
-            "in": "query",
-            "name": "q",
-            "required": true,
-            "schema": {
-              "description": "Words to look for in the names; at least two characters.",
-              "maxLength": 100,
-              "minLength": 2,
-              "type": "string"
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffPersonSearchInputBody"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {

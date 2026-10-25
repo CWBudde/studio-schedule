@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -272,20 +271,20 @@ func TestSearchPersonsForStaff(t *testing.T) {
 	a := newAuthApp(t, app.Deps{Demo: true})
 	alina := a.login("alina.starling@example.net")
 	clara := a.login("clara.amberly@example.org")
-	search := func(q string) string { return "/api/v1/staff/persons?q=" + url.QueryEscape(q) }
+	const search = "/api/v1/staff/persons/search"
 
-	if res, _ := a.call(http.MethodGet, search("clara"), ""); res.StatusCode != http.StatusUnauthorized {
+	if res, _ := a.call(http.MethodPost, search, searchBody("clara")); res.StatusCode != http.StatusUnauthorized {
 		t.Errorf("signed out: %d, want 401", res.StatusCode)
 	}
 
-	a.expect(http.StatusForbidden, http.MethodGet, search("clara"), "", clara)
-	a.expect(http.StatusUnprocessableEntity, http.MethodGet, search("c"), "", alina)
+	a.expect(http.StatusForbidden, http.MethodPost, search, searchBody("clara"), clara)
+	a.expect(http.StatusUnprocessableEntity, http.MethodPost, search, searchBody("c"), alina)
 
 	var found struct {
 		Items []map[string]any `json:"items"`
 	}
 
-	if err := json.Unmarshal(a.expect(http.StatusOK, http.MethodGet, search("clara amb"), "", alina), &found); err != nil {
+	if err := json.Unmarshal(a.expect(http.StatusOK, http.MethodPost, search, searchBody("clara amb"), alina), &found); err != nil {
 		t.Fatal(err)
 	}
 
@@ -300,7 +299,7 @@ func TestSearchPersonsForStaff(t *testing.T) {
 	}
 
 	// Email addresses do not match.
-	if err := json.Unmarshal(a.expect(http.StatusOK, http.MethodGet, search("example.org"), "", alina), &found); err != nil {
+	if err := json.Unmarshal(a.expect(http.StatusOK, http.MethodPost, search, searchBody("example.org"), alina), &found); err != nil {
 		t.Fatal(err)
 	}
 

@@ -184,7 +184,7 @@ func TestServeApp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if body["status"] != "ok" || body["version"] != "wasm-test" {
+	if body["status"] != "ok" {
 		t.Errorf("body = %v", body)
 	}
 

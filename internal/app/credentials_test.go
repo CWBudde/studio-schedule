@@ -118,6 +118,12 @@ func TestPasswordResetFlow(t *testing.T) {
 	token := a.linkToken("reset-password", "reset-password")
 	a.want(http.MethodPost, "/api/v1/auth/password-reset/confirm", `{"token":"`+token+`","password":"short"}`,
 		http.StatusUnprocessableEntity)
+	out := a.want(http.MethodPost, "/api/v1/auth/password-reset/confirm",
+		`{"token":"`+token+`","password":"Sunshine"}`, http.StatusUnprocessableEntity)
+	if !strings.Contains(string(out), `"location":"body.password"`) {
+		t.Errorf("common password: %s, want an error at body.password", out)
+	}
+
 	a.want(http.MethodPost, "/api/v1/auth/password-reset/confirm", `{"token":"`+token+`","password":"battery staple"}`,
 		http.StatusNoContent)
 	a.want(http.MethodPost, "/api/v1/auth/password-reset/confirm", `{"token":"`+token+`","password":"battery staple"}`,
@@ -126,6 +132,39 @@ func TestPasswordResetFlow(t *testing.T) {
 	a.want(http.MethodGet, "/api/v1/auth/me", "", http.StatusUnauthorized, old)
 	a.want(http.MethodPost, "/api/v1/auth/login", loginBody(m.Email, m.Password), http.StatusUnauthorized)
 	a.mustLogin(m.Email, "battery staple")
+
+	if to, text := a.mailTo("password-changed"); to != m.Email || strings.Contains(text, "http") {
+		t.Errorf("password-changed mail to %q: %q", to, text)
+	}
+}
+
+// TestPasswordLengthInCharacters: the API and the service both count a
+// password's length in characters, so a long password of multi-byte
+// characters is accepted, and one too long is a 422 on the field.
+func TestPasswordLengthInCharacters(t *testing.T) {
+	t.Parallel()
+
+	a := newAuthApp(t, app.Deps{Demo: true, DemoLogins: seed.DemoLogins()})
+	m := demoMember(t)
+	c := a.mustLogin(m.Email, m.Password)
+
+	long := strings.Repeat("€", 100) // 300 bytes
+	a.want(http.MethodPost, "/api/v1/auth/password",
+		`{"currentPassword":"`+m.Password+`","newPassword":"`+long+`"}`, http.StatusNoContent, c)
+	c = a.mustLogin(m.Email, long)
+
+	out := a.want(http.MethodPost, "/api/v1/auth/password",
+		`{"currentPassword":"`+long+`","newPassword":"`+strings.Repeat("€", 257)+`"}`,
+		http.StatusUnprocessableEntity, c)
+	if !strings.Contains(string(out), `"location":"body.newPassword"`) {
+		t.Errorf("too long: %s, want an error at body.newPassword", out)
+	}
+
+	out = a.want(http.MethodPost, "/api/v1/auth/password",
+		`{"currentPassword":"`+long+`","newPassword":"QWERTYUIOP"}`, http.StatusUnprocessableEntity, c)
+	if !strings.Contains(string(out), `"location":"body.newPassword"`) {
+		t.Errorf("common password: %s, want an error at body.newPassword", out)
+	}
 }
 
 func TestChangePasswordAndEmailFlow(t *testing.T) {

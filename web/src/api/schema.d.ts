@@ -376,20 +376,20 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/mails": {
+    "/api/v1/admin/mails/search": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * List the mail log
-         * @description Returns the mails of the outbox, newest first, 50 at most per page, without their bodies; `nextCursor` asks for the next page. Filters by status, template and a part of the recipient (ignoring ASCII case). The bodies of mails sent more than 30 days ago are removed, and mails older than 180 days deleted.
-         */
-        get: operations["listMails"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Search the mail log
+         * @description Returns the mails of the outbox, newest first, 50 at most per page, without their bodies; `nextCursor` asks for the next page. Filters by status, template and a part of the recipient (ignoring ASCII case). The bodies of mails sent more than 30 days ago are removed, and mails older than 180 days deleted. A POST, so that the addresses searched for stay out of URLs and the access logs of proxies (ASVS 8.3.1); it changes nothing.
+         */
+        post: operations["searchMails"];
         delete?: never;
         options?: never;
         head?: never;
@@ -531,11 +531,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Search persons
-         * @description Returns the persons whose given name, family name, email or member number contains every word of `q`, ignoring case, ordered by family and given name; at most 50; merged persons are left out. For the office's pickers, e.g. linking a staff member to a person.
-         */
-        get: operations["listPersons"];
+        get?: never;
         put?: never;
         /**
          * Create a person
@@ -562,6 +558,26 @@ export interface paths {
          * @description Merges a duplicate person into the survivor: its bookings, waiting-list entries, class memberships, passes (owned and paid for), guardian links, staff links and account move to the survivor. Where both have a booking of the same lesson that has not started, the duplicate's is canceled (a visit it cost comes back); of a lesson that has started, both stay as history. Where both are members of a class, the survivor's membership stays, and the duplicate's automatic bookings of the class follow it. The survivor takes the fields `take` names from the duplicate and keeps both notes, or the `notes` given (at most 2000 characters, else a 422); the duplicate stays as a hidden record for its receipts, which are listed under the survivor. Without `apply` it only tells what would happen. Both with an account is a 409 `two-accounts` (disable one first: a disabled account of the duplicate stays with it); a merge after which a guardian would also be a dependent of the survivor a 409 `guardian-cycle`. Recorded in the audit log.
          */
         post: operations["mergePersons"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/persons/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search persons
+         * @description Returns the persons whose given name, family name, email or member number contains every word of `query`, ignoring case, ordered by family and given name; at most 50; merged persons are left out. For the office's pickers, e.g. linking a staff member to a person. A POST, so that the search terms stay out of URLs and the access logs of proxies (ASVS 8.3.1); it changes nothing.
+         */
+        post: operations["searchPersons"];
         delete?: never;
         options?: never;
         head?: never;
@@ -756,20 +772,20 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/receipts": {
+    "/api/v1/admin/receipts/search": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * List receipts
-         * @description Returns the receipts that match the filter, newest first (by number), and how many match in all.
-         */
-        get: operations["listReceipts"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Search receipts
+         * @description Returns the receipts that match the filter, newest first (by number), and how many match in all. A POST, so that the names searched for stay out of URLs and the access logs of proxies (ASVS 8.3.1); it changes nothing.
+         */
+        post: operations["searchReceipts"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1299,7 +1315,7 @@ export interface paths {
         put?: never;
         /**
          * Change the password
-         * @description Replaces the password after checking the current one (a wrong one is a 422 on body.currentPassword) and ends every other session of the account. Refused (403) while an admin is signed in as the account.
+         * @description Replaces the password after checking the current one (a wrong one is a 422 on body.currentPassword), ends every other session of the account and mails the account that its password was changed. Refused (403) while an admin is signed in as the account.
          */
         post: operations["changePassword"];
         delete?: never;
@@ -1339,7 +1355,7 @@ export interface paths {
         put?: never;
         /**
          * Set a new password with a reset link
-         * @description Sets the password with the token from the reset link and ends every session of the account; it does not sign in. An unknown, used or expired link is a 410.
+         * @description Sets the password with the token from the reset link and ends every session of the account; it does not sign in. If the account had a password, it gets a mail that its password was changed. An unknown, used or expired link is a 410.
          */
         post: operations["resetPassword"];
         delete?: never;
@@ -1741,7 +1757,7 @@ export interface paths {
         };
         /**
          * Health check
-         * @description Reports that the service is running and which version is deployed.
+         * @description Reports that the service is running. It names no version (ASVS 14.3.3): the office finds it in getMe.
          */
         get: operations["getHealth"];
         put?: never;
@@ -2308,20 +2324,20 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/staff/persons": {
+    "/api/v1/staff/persons/search": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
          * Find persons to add
-         * @description Returns the persons whose given or family name contains every word of `q` (at least two characters), ignoring case, ordered by family and given name; at most 20. Only the name and the birth year, no contact data: for instructors and accompanists adding a person to their lesson (`addLessonParticipant`). The office's picker is `listPersons`.
+         * @description Returns the persons whose given or family name contains every word of `query` (at least two characters), ignoring case, ordered by family and given name; at most 20. Only the name and the birth year, no contact data: for instructors and accompanists adding a person to their lesson (`addLessonParticipant`). The office's picker is `searchPersons`. A POST, so that the names stay out of URLs and the access logs of proxies (ASVS 8.3.1); it changes nothing.
          */
-        get: operations["searchPersonsForStaff"];
-        put?: never;
-        post?: never;
+        post: operations["searchPersonsForStaff"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3335,7 +3351,7 @@ export interface components {
         ChangePasswordInputBody: {
             /** @description The current password. */
             currentPassword: string;
-            /** @description New password, at least 8 characters. */
+            /** @description New password: 8 to 256 characters and none of the 10,000 most common passwords (ignoring case). */
             newPassword: string;
         };
         Class: {
@@ -4337,8 +4353,6 @@ export interface components {
              * @enum {string}
              */
             status: "ok";
-            /** @description Build version of the running service. */
-            version: string;
         };
         Impersonator: {
             /**
@@ -5255,11 +5269,27 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed";
             /** @description Plain text body; only with body shown. */
             text?: string;
             /** @description Recipient address. */
             to: string;
+        };
+        MailLogInputBody: {
+            /** @description Where the page starts: the nextCursor of the previous page. */
+            cursor?: string;
+            /** @description Only mails whose recipient contains this, ignoring ASCII case. */
+            recipient?: string;
+            /**
+             * @description Only mails in this state; absent: all.
+             * @enum {string}
+             */
+            status?: "pending" | "sent" | "failed";
+            /**
+             * @description Only mails of this template; absent: all.
+             * @enum {string}
+             */
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed";
         };
         MailLogItem: {
             /** @description File name of the attached PDF; absent if none. */
@@ -5309,7 +5339,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed";
             /** @description Recipient address. */
             to: string;
         };
@@ -5356,7 +5386,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed";
             /** @description Plain text body. */
             text: string;
             /** @description Recipient address. */
@@ -5393,6 +5423,8 @@ export interface components {
             role: "member" | "instructor" | "office" | "admin";
             /** @description Whether the account teaches: it is staff with an active staff record linked to its person, so it may create a teaching calendar feed (createCalendarFeed). */
             teaches: boolean;
+            /** @description Build version of the running service, for support; only for the office and admins. */
+            version?: string;
         };
         MergeCanceled: {
             /** @description Its course type's name. */
@@ -6056,6 +6088,10 @@ export interface components {
             /** @description Phone number, if any. */
             phone?: string;
         };
+        PersonSearchInputBody: {
+            /** @description Words to look for; empty or absent matches everyone. */
+            query?: string;
+        };
         PublicSettings: {
             /** @description The school's accent color (#rrggbb) for the light theme; absent: the app's own. */
             accentColor?: string;
@@ -6352,7 +6388,7 @@ export interface components {
             givenName: string;
             /** @description Language of the confirmation mail (BCP 47), e.g. de; defaults to the school's. */
             locale?: string;
-            /** @description Password, at least 8 characters. */
+            /** @description Password: 8 to 256 characters and none of the 10,000 most common passwords (ignoring case). */
             password: string;
         };
         ReleaseWindowBody: {
@@ -6395,7 +6431,7 @@ export interface components {
             locale?: string;
         };
         ResetPasswordInputBody: {
-            /** @description New password, at least 8 characters. */
+            /** @description New password: 8 to 256 characters and none of the 10,000 most common passwords (ignoring case). */
             password: string;
             /** @description Token from the reset link. */
             token: string;
@@ -6622,6 +6658,26 @@ export interface components {
             /** @description Display name of the school. */
             schoolName: string;
         };
+        SearchReceiptsInputBody: {
+            /**
+             * Format: int64
+             * @description Most receipts to return.
+             * @default 50
+             */
+            limit: number;
+            /**
+             * Format: int64
+             * @description Receipts to skip.
+             */
+            offset?: number;
+            /** @description Matches the number or the recipient's name (ignoring ASCII case); empty or absent matches all. */
+            query?: string;
+            /**
+             * Format: int64
+             * @description Only the receipts of this year; 0 or absent: all.
+             */
+            year?: number;
+        };
         SellPassData: {
             /** @description A note for the office. */
             note?: string;
@@ -6782,6 +6838,10 @@ export interface components {
         StaffPersonMatchesOutputBody: {
             /** @description Matching persons ordered by family and given name. */
             items: components["schemas"]["StaffPersonMatch"][];
+        };
+        StaffPersonSearchInputBody: {
+            /** @description Words to look for in the names; at least two characters. */
+            query: string;
         };
         StaffRef: {
             displayName: string;
@@ -7998,23 +8058,18 @@ export interface operations {
             };
         };
     };
-    listMails: {
+    searchMails: {
         parameters: {
-            query?: {
-                /** @description Only mails in this state. */
-                status?: "pending" | "sent" | "failed";
-                /** @description Only mails of this template. */
-                template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted";
-                /** @description Only mails whose recipient contains this, ignoring ASCII case. */
-                recipient?: string;
-                /** @description Where the page starts: the nextCursor of the previous page. */
-                cursor?: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailLogInputBody"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -8337,38 +8392,6 @@ export interface operations {
             };
         };
     };
-    listPersons: {
-        parameters: {
-            query?: {
-                /** @description Words to look for; empty matches everyone. */
-                q?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PersonMatchList"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
     createPerson: {
         parameters: {
             query?: never;
@@ -8440,6 +8463,39 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    searchPersons: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonSearchInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonMatchList"];
                 };
             };
             /** @description Error */
@@ -8886,23 +8942,18 @@ export interface operations {
             };
         };
     };
-    listReceipts: {
+    searchReceipts: {
         parameters: {
-            query?: {
-                /** @description Only the receipts of this year; 0 or absent: all. */
-                year?: number;
-                /** @description Matches the number or the recipient's name (ignoring ASCII case); empty matches all. */
-                q?: string;
-                /** @description Receipts to skip. */
-                offset?: number;
-                /** @description Most receipts to return. */
-                limit?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchReceiptsInputBody"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -9705,10 +9756,7 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: {
-                /** @description Session cookie, if any; it ends on success. */
-                studio_session?: string;
-            };
+            cookie?: never;
         };
         requestBody: {
             content: {
@@ -9865,10 +9913,7 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: {
-                /** @description Session cookie, if any; it ends on success. */
-                studio_session?: string;
-            };
+            cookie?: never;
         };
         requestBody: {
             content: {
@@ -9902,10 +9947,7 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: {
-                /** @description Session cookie. */
-                studio_session?: string;
-            };
+            cookie?: never;
         };
         requestBody?: never;
         responses: {
@@ -12372,15 +12414,16 @@ export interface operations {
     };
     searchPersonsForStaff: {
         parameters: {
-            query: {
-                /** @description Words to look for in the names; at least two characters. */
-                q: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffPersonSearchInputBody"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

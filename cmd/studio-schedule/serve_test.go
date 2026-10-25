@@ -106,9 +106,10 @@ func TestSetTransportSecurity(t *testing.T) {
 
 			setTransportSecurity(&deps, baseURL, subdomains)
 
-			if deps.InsecureCookies == https || deps.HSTS != https || deps.HSTSIncludeSubdomains != subdomains {
-				t.Errorf("BASE_URL %q, subdomains %v: InsecureCookies = %v, HSTS = %v, HSTSIncludeSubdomains = %v",
-					baseURL, subdomains, deps.InsecureCookies, deps.HSTS, deps.HSTSIncludeSubdomains)
+			if deps.InsecureCookies == https || deps.HSTS != https || deps.HostCookie != https ||
+				deps.HSTSIncludeSubdomains != subdomains {
+				t.Errorf("BASE_URL %q, subdomains %v: InsecureCookies = %v, HSTS = %v, HostCookie = %v, HSTSIncludeSubdomains = %v",
+					baseURL, subdomains, deps.InsecureCookies, deps.HSTS, deps.HostCookie, deps.HSTSIncludeSubdomains)
 			}
 		}
 	}

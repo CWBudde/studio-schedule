@@ -286,14 +286,15 @@ func setUpMetrics(ctx context.Context, cfg config.Config, deps *app.Deps, logger
 	}
 }
 
-// setTransportSecurity sets Secure session cookies and HSTS (for the
-// subdomains too with subdomains, HSTS_INCLUDE_SUBDOMAINS) when BASE_URL is
-// https. Plain HTTP is only for local development, where BASE_URL is unset
-// or http://: browsers drop Secure cookies there, and HSTS must not pin the
-// host to HTTPS.
+// setTransportSecurity sets Secure session cookies with the __Host- prefix
+// and HSTS (for the subdomains too with subdomains, HSTS_INCLUDE_SUBDOMAINS)
+// when BASE_URL is https. Plain HTTP is only for local development, where
+// BASE_URL is unset or http://: browsers drop Secure cookies there, and HSTS
+// must not pin the host to HTTPS.
 func setTransportSecurity(deps *app.Deps, baseURL string, subdomains bool) {
 	https := isHTTPS(baseURL)
 	deps.InsecureCookies = !https
+	deps.HostCookie = https
 	deps.HSTS = https
 	deps.HSTSIncludeSubdomains = subdomains
 }

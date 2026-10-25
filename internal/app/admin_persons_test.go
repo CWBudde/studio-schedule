@@ -3,7 +3,6 @@ package app_test
 import (
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"regexp"
 	"slices"
 	"testing"
@@ -11,11 +10,21 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/app"
 )
 
+// searchBody is the JSON body of a person search for q.
+func searchBody(q string) string {
+	b, err := json.Marshal(map[string]string{"query": q})
+	if err != nil {
+		panic(err)
+	}
+
+	return string(b)
+}
+
 // personID finds the ID of the single person that q matches.
 func (a *authApp) personID(q string, cookie *http.Cookie) string {
 	a.t.Helper()
 
-	items, _ := decode(a.t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/persons?q="+url.QueryEscape(q), "", cookie))["items"].([]any)
+	items, _ := decode(a.t, a.expect(http.StatusOK, http.MethodPost, "/api/v1/admin/persons/search", searchBody(q), cookie))["items"].([]any)
 	if len(items) != 1 {
 		a.t.Fatalf("persons matching %q: %v", q, items)
 	}

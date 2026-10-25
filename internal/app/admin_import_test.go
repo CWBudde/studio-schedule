@@ -48,7 +48,7 @@ func TestAdminImport(t *testing.T) {
 	}
 
 	// Nothing was written: Paula is not found, and there is no run yet.
-	if found := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/persons?q=paula", "", office)); len(found["items"].([]any)) != 0 {
+	if found := decode(t, a.expect(http.StatusOK, http.MethodPost, "/api/v1/admin/persons/search", `{"query": "paula"}`, office)); len(found["items"].([]any)) != 0 {
 		t.Errorf("the dry run created %v", found)
 	}
 

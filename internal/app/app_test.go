@@ -64,11 +64,9 @@ func TestHealth(t *testing.T) {
 		t.Fatalf("status = %d, body %s", res.StatusCode, body)
 	}
 
-	got := decode(t, body)
-	want := map[string]any{"status": "ok", "version": "1.2.3-test"}
-
-	if len(got) != len(want) || got["status"] != want["status"] || got["version"] != want["version"] {
-		t.Fatalf("body = %v, want exactly %v", got, want)
+	// No version for the public (ASVS 14.3.3).
+	if got := decode(t, body); len(got) != 1 || got["status"] != "ok" {
+		t.Fatalf("body = %v, want exactly status ok", got)
 	}
 
 	if link := res.Header.Get("Link"); link != "" {

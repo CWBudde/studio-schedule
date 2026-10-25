@@ -25,15 +25,16 @@ func registerPersons(api huma.API, h *handlers) {
 	}
 
 	register(api, AccessOffice, huma.Operation{
-		OperationID: "listPersons",
-		Method:      http.MethodGet,
-		Path:        BasePath + "/admin/persons",
+		OperationID: "searchPersons",
+		Method:      http.MethodPost,
+		Path:        BasePath + "/admin/persons/search",
 		Summary:     "Search persons",
 		Description: "Returns the persons whose given name, family name, email or member number contains every " +
-			"word of `q`, ignoring case, ordered by family and given name; at most 50; merged persons are left " +
-			"out. For the office's pickers, e.g. linking a staff member to a person.",
+			"word of `query`, ignoring case, ordered by family and given name; at most 50; merged persons are " +
+			"left out. For the office's pickers, e.g. linking a staff member to a person. A POST, so that the " +
+			"search terms stay out of URLs and the access logs of proxies (ASVS 8.3.1); it changes nothing.",
 		Tags: []string{"admin"},
-	}, h.listPersons)
+	}, h.searchPersons)
 
 	register(api, AccessOffice, huma.Operation{
 		OperationID: "getPerson",
@@ -110,12 +111,14 @@ func registerPersons(api huma.API, h *handlers) {
 	}), h.createPersonAccount)
 }
 
-// PersonSearchInput is the request of listPersons.
+// PersonSearchInput is the request of searchPersons.
 type PersonSearchInput struct {
-	Query string `doc:"Words to look for; empty matches everyone." maxLength:"100" query:"q"`
+	Body struct {
+		Query string `doc:"Words to look for; empty or absent matches everyone." json:"query,omitempty" maxLength:"100"`
+	}
 }
 
-// PersonMatch is a person found by listPersons, or linked to a staff
+// PersonMatch is a person found by searchPersons, or linked to a staff
 // member.
 type PersonMatch struct {
 	ID         domain.PersonID `doc:"Person ID."                json:"id"`
@@ -126,18 +129,18 @@ type PersonMatch struct {
 	Anonymized bool            `doc:"Whether the office anonymized the person (ADR 0016); its name is then the fixed one (Deleted person), which clients show translated." json:"anonymized,omitempty"`
 }
 
-// PersonMatchList is the response body of listPersons.
+// PersonMatchList is the response body of searchPersons.
 type PersonMatchList struct {
 	Items []PersonMatch `doc:"Matching persons ordered by family and given name." json:"items" nullable:"false"`
 }
 
-// PersonMatchListOutput is the response of listPersons.
+// PersonMatchListOutput is the response of searchPersons.
 type PersonMatchListOutput struct {
 	Body PersonMatchList
 }
 
-func (h *handlers) listPersons(ctx context.Context, in *PersonSearchInput) (*PersonMatchListOutput, error) {
-	persons, err := h.deps.Persons.SearchPersons(ctx, in.Query)
+func (h *handlers) searchPersons(ctx context.Context, in *PersonSearchInput) (*PersonMatchListOutput, error) {
+	persons, err := h.deps.Persons.SearchPersons(ctx, in.Body.Query)
 	if err != nil {
 		return nil, h.toHTTPError(ctx, err)
 	}

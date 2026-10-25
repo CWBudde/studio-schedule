@@ -157,7 +157,7 @@ func TestAdminClassMembers(t *testing.T) {
 	list := "/api/v1/admin/classes/" + classID + "/members"
 	add := "/api/v1/classes/" + classID + "/members"
 
-	persons := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/persons?q=clara", "", office))
+	persons := decode(t, a.expect(http.StatusOK, http.MethodPost, "/api/v1/admin/persons/search", `{"query": "clara"}`, office))
 	personID, _ := persons["items"].([]any)[0].(map[string]any)["id"].(string)
 	body := `{"personId":"` + personID + `","since":"2026-09-07"}`
 
@@ -227,7 +227,7 @@ func TestAdminClassMembers(t *testing.T) {
 
 	a.expect(http.StatusCreated, http.MethodPost, smallAdd, body, office)
 
-	others := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/persons?q=hanna", "", office))
+	others := decode(t, a.expect(http.StatusOK, http.MethodPost, "/api/v1/admin/persons/search", `{"query": "hanna"}`, office))
 	otherID, _ := others["items"].([]any)[0].(map[string]any)["id"].(string)
 
 	full := decode(t, a.expect(http.StatusConflict, http.MethodPost, smallAdd, `{"personId":"`+otherID+`"}`, office))

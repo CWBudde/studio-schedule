@@ -31,13 +31,15 @@ func registerReceipts(api huma.API, h *handlers) {
 	}
 
 	register(api, AccessOffice, huma.Operation{
-		OperationID: "listReceipts",
-		Method:      http.MethodGet,
-		Path:        BasePath + "/admin/receipts",
-		Summary:     "List receipts",
-		Description: "Returns the receipts that match the filter, newest first (by number), and how many match in all.",
-		Tags:        tags,
-	}, h.listReceipts)
+		OperationID: "searchReceipts",
+		Method:      http.MethodPost,
+		Path:        BasePath + "/admin/receipts/search",
+		Summary:     "Search receipts",
+		Description: "Returns the receipts that match the filter, newest first (by number), and how many match in " +
+			"all. A POST, so that the names searched for stay out of URLs and the access logs of proxies " +
+			"(ASVS 8.3.1); it changes nothing.",
+		Tags: tags,
+	}, h.searchReceipts)
 
 	register(api, AccessOffice, huma.Operation{
 		OperationID: "getReceipt",
@@ -247,22 +249,24 @@ func receiptBody(v service.ReceiptView) Receipt {
 	return out
 }
 
-// ListReceiptsInput is the request of listReceipts.
-type ListReceiptsInput struct {
-	Year   int    `doc:"Only the receipts of this year; 0 or absent: all." maximum:"9999" minimum:"0" query:"year"`
-	Query  string `doc:"Matches the number or the recipient's name (ignoring ASCII case); empty matches all." maxLength:"100" query:"q"`
-	Offset int    `doc:"Receipts to skip." minimum:"0" query:"offset"`
-	Limit  int    `default:"50" doc:"Most receipts to return." maximum:"100" minimum:"1" query:"limit"`
+// SearchReceiptsInput is the request of searchReceipts.
+type SearchReceiptsInput struct {
+	Body struct {
+		Year   int    `doc:"Only the receipts of this year; 0 or absent: all." json:"year,omitempty" maximum:"9999" minimum:"0"`
+		Query  string `doc:"Matches the number or the recipient's name (ignoring ASCII case); empty or absent matches all." json:"query,omitempty" maxLength:"100"`
+		Offset int    `doc:"Receipts to skip." json:"offset,omitempty" minimum:"0"`
+		Limit  int    `default:"50" doc:"Most receipts to return." json:"limit,omitempty" maximum:"100" minimum:"1"`
+	}
 }
 
-// ReceiptList is the response body of listReceipts.
+// ReceiptList is the response body of searchReceipts.
 type ReceiptList struct {
 	Items []Receipt `doc:"The receipts, newest first." json:"items" nullable:"false"`
 	Total int       `doc:"How many receipts match in all." json:"total"`
 	Years []int     `doc:"The years with receipts, the latest first, whatever the filter: the choices of the year filter." json:"years" nullable:"false"`
 }
 
-// ReceiptListOutput is the response of listReceipts.
+// ReceiptListOutput is the response of searchReceipts.
 type ReceiptListOutput struct {
 	Body ReceiptList
 }
@@ -346,9 +350,10 @@ type ReceiptLogoInput struct {
 	}
 }
 
-func (h *handlers) listReceipts(ctx context.Context, in *ListReceiptsInput) (*ReceiptListOutput, error) {
+func (h *handlers) searchReceipts(ctx context.Context, in *SearchReceiptsInput) (*ReceiptListOutput, error) {
+	f := in.Body
 	page, err := h.deps.Receipts.List(ctx, store.ReceiptFilter{
-		Year: in.Year, Query: in.Query, Offset: in.Offset, Limit: in.Limit,
+		Year: f.Year, Query: f.Query, Offset: f.Offset, Limit: f.Limit,
 	})
 	if err != nil {
 		return nil, h.toHTTPError(ctx, err)

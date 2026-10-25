@@ -13,8 +13,15 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/service"
 )
 
-// SessionCookie is the name of the cookie that holds the session token.
-const SessionCookie = "studio_session"
+// Names of the cookie that holds the session token (ADR 0004, amendment):
+// HostSessionCookie when the app is served over HTTPS (Deps.HostCookie),
+// SessionCookie otherwise. The __Host- prefix makes browsers accept the
+// cookie only with Secure, Path=/ and no Domain, so neither a subdomain nor
+// a plain-HTTP page can set or shadow it.
+const (
+	SessionCookie     = "studio_session"
+	HostSessionCookie = "__Host-studio_session"
+)
 
 func registerAuth(api huma.API, h *handlers) {
 	register(api, AccessPublic, huma.Operation{
@@ -102,17 +109,40 @@ func principalFrom(ctx context.Context) (service.Principal, bool) {
 	return p, ok
 }
 
+// sessionTokenKey is the context key of the request's session token.
+type sessionTokenKey struct{}
+
+// sessionTokenFrom returns the token of the request's session cookie, valid
+// or not; empty without one. Signing in and out end that session.
+func sessionTokenFrom(ctx context.Context) string {
+	token, _ := ctx.Value(sessionTokenKey{}).(string)
+
+	return token
+}
+
+// cookieName is the name of the session cookie of this installation. A
+// cookie of the other name is ignored.
+func (h *handlers) cookieName() string {
+	if h.deps.HostCookie && h.deps.SecureCookies {
+		return HostSessionCookie
+	}
+
+	return SessionCookie
+}
+
 // sessionMiddleware resolves the session cookie to the request's principal
 // and renews the cookie when the session was extended. An invalid cookie is
 // cleared; the request continues without a principal.
 func (h *handlers) sessionMiddleware(api huma.API) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
-		c, err := huma.ReadCookie(ctx, SessionCookie)
+		c, err := huma.ReadCookie(ctx, h.cookieName())
 		if err != nil || c.Value == "" {
 			next(ctx)
 
 			return
 		}
+
+		ctx = huma.WithValue(ctx, sessionTokenKey{}, c.Value)
 
 		p, renewed, err := h.deps.Auth.Authenticate(ctx.Context(), c.Value)
 
@@ -145,7 +175,7 @@ func (h *handlers) sessionMiddleware(api huma.API) func(huma.Context, func(huma.
 func (h *handlers) sessionCookie(s service.SignedIn) http.Cookie {
 	//nolint:gosec // G124: Secure is off only with InsecureCookies, for local development over HTTP.
 	return http.Cookie{
-		Name:     SessionCookie,
+		Name:     h.cookieName(),
 		Value:    s.Token,
 		Path:     "/",
 		Expires:  s.ExpiresAt.UTC(),
@@ -158,7 +188,7 @@ func (h *handlers) sessionCookie(s service.SignedIn) http.Cookie {
 func (h *handlers) clearSessionCookie() http.Cookie {
 	//nolint:gosec // G124: Secure is off only with InsecureCookies, for local development over HTTP.
 	return http.Cookie{
-		Name:     SessionCookie,
+		Name:     h.cookieName(),
 		Path:     "/",
 		Expires:  time.Unix(0, 0).UTC(),
 		MaxAge:   -1,
@@ -174,7 +204,7 @@ type RegisterInput struct {
 		GivenName  string `doc:"Given name."  json:"givenName"  maxLength:"200" minLength:"1"`
 		FamilyName string `doc:"Family name." json:"familyName" maxLength:"200" minLength:"1"`
 		Email      string `doc:"Email address; it becomes the login name." format:"email" json:"email" maxLength:"254"`
-		Password   string `doc:"Password, at least 8 characters." json:"password" maxLength:"256" minLength:"8"`
+		Password   string `doc:"Password: 8 to 256 characters and none of the 10,000 most common passwords (ignoring case)." json:"password" maxLength:"256" minLength:"8"`
 		Locale     string `doc:"Language of the confirmation mail (BCP 47), e.g. de; defaults to the school's." json:"locale,omitempty" maxLength:"35"`
 	}
 }
@@ -195,27 +225,22 @@ func (h *handlers) register(ctx context.Context, in *RegisterInput) (*struct{}, 
 	return &struct{}{}, nil
 }
 
-// ConfirmEmailInput is the request of confirmEmail.
+// ConfirmEmailInput is the request of confirmEmail. A session the client
+// has ends on success.
 type ConfirmEmailInput struct {
-	Session string `cookie:"studio_session" doc:"Session cookie, if any; it ends on success."`
-	Body    struct {
+	Body struct {
 		Token    string `doc:"Token from the confirmation link." json:"token"    maxLength:"100" minLength:"1"`
 		Password string `doc:"The account's password."           json:"password" maxLength:"256" minLength:"1"`
 	}
 }
 
-// LoginInput is the request of login.
+// LoginInput is the request of login. A session the client has ends on
+// success.
 type LoginInput struct {
-	Session string `cookie:"studio_session" doc:"Session cookie, if any; it ends on success."`
-	Body    struct {
+	Body struct {
 		Email    string `doc:"Email address." json:"email"    maxLength:"254" minLength:"1"`
 		Password string `doc:"Password."      json:"password" maxLength:"256" minLength:"1"`
 	}
-}
-
-// LogoutInput is the request of logout.
-type LogoutInput struct {
-	Session string `cookie:"studio_session" doc:"Session cookie."`
 }
 
 // Me is the signed-in account.
@@ -228,6 +253,7 @@ type Me struct {
 	FamilyName string           `doc:"Family name."                json:"familyName"`
 	Locale     string           `doc:"Language of the mails the account receives; absent: the school's default." enum:"en,de" json:"locale,omitempty"`
 	Teaches    bool             `doc:"Whether the account teaches: it is staff with an active staff record linked to its person, so it may create a teaching calendar feed (createCalendarFeed)." json:"teaches"`
+	Version    string           `doc:"Build version of the running service, for support; only for the office and admins." json:"version,omitempty"`
 	// Impersonator is set while an admin is signed in as this account.
 	Impersonator *Impersonator `doc:"The admin signed in as this account (\"login as\"); absent otherwise." json:"impersonator,omitempty"`
 }
@@ -263,7 +289,7 @@ func (h *handlers) confirmEmail(ctx context.Context, in *ConfirmEmailInput) (*Si
 		return nil, h.authError(ctx, err)
 	}
 
-	h.endPrevious(ctx, in.Session)
+	h.endPrevious(ctx)
 
 	return h.signedIn(ctx, s)
 }
@@ -290,7 +316,7 @@ func (h *handlers) login(ctx context.Context, in *LoginInput) (*SignedInOutput, 
 
 	forget(limits.PasswordFailures, email)
 
-	h.endPrevious(ctx, in.Session)
+	h.endPrevious(ctx)
 
 	return h.signedIn(ctx, s)
 }
@@ -307,8 +333,8 @@ func (h *handlers) signedIn(ctx context.Context, s service.SignedIn) (*SignedInO
 // endPrevious ends the session the client signed in over, so that it does
 // not stay valid behind the new cookie; an impersonation ends audited. A
 // failure is logged: the new session is valid either way.
-func (h *handlers) endPrevious(ctx context.Context, token string) {
-	if err := h.deps.Auth.Logout(ctx, token); err != nil {
+func (h *handlers) endPrevious(ctx context.Context) {
+	if err := h.deps.Auth.Logout(ctx, sessionTokenFrom(ctx)); err != nil {
 		h.deps.Logger.WarnContext(ctx, "end previous session", slog.Any("err", err))
 	}
 }
@@ -343,8 +369,8 @@ func (h *handlers) authError(ctx context.Context, err error) error {
 	}
 }
 
-func (h *handlers) logout(ctx context.Context, in *LogoutInput) (*LogoutOutput, error) {
-	if err := h.deps.Auth.Logout(ctx, in.Session); err != nil {
+func (h *handlers) logout(ctx context.Context, _ *struct{}) (*LogoutOutput, error) {
+	if err := h.deps.Auth.Logout(ctx, sessionTokenFrom(ctx)); err != nil {
 		return nil, h.toHTTPError(ctx, err)
 	}
 
@@ -374,6 +400,11 @@ func (h *handlers) me(ctx context.Context, p service.Principal) (Me, error) {
 	out := Me{
 		AccountID: m.Account.ID, PersonID: m.Person.ID, Email: m.Account.Email, Role: string(m.Account.Role),
 		GivenName: m.Person.GivenName, FamilyName: m.Person.FamilyName, Locale: m.Account.Locale, Teaches: m.Teaches,
+	}
+
+	// The version helps support; nobody else needs to know it (ASVS 14.3.3).
+	if m.Account.Role.AtLeast(domain.RoleOffice) {
+		out.Version = h.deps.Version
 	}
 
 	if i := m.Impersonator; i != nil {

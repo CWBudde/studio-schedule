@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"net/http"
-	"net/url"
 	"strings"
 	"testing"
 
@@ -42,19 +41,19 @@ func TestReceipts(t *testing.T) {
 		Items []receiptBody
 		Total int
 		Years []int
-	}](t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/receipts?limit=2", "", olga))
+	}](t, a.expect(http.StatusOK, http.MethodPost, "/api/v1/admin/receipts/search", `{"limit":2}`, olga))
 	if list.Total != 5 || len(list.Items) != 2 || list.Items[0].Number != "SD-2026-0005" || len(list.Years) != 1 ||
 		list.Years[0] != 2026 {
 		t.Fatalf("receipts %+v", list)
 	}
 
-	a.expect(http.StatusForbidden, http.MethodGet, "/api/v1/admin/receipts", "", clara)
+	a.expect(http.StatusForbidden, http.MethodPost, "/api/v1/admin/receipts/search", "{}", clara)
 
 	find := func(q string) string {
 		t.Helper()
 
 		found := unmarshal[struct{ Items []struct{ ID string } }](t,
-			a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/persons?q="+url.QueryEscape(q), "", olga))
+			a.expect(http.StatusOK, http.MethodPost, "/api/v1/admin/persons/search", searchBody(q), olga))
 		if len(found.Items) != 1 {
 			t.Fatalf("persons %q: %+v", q, found)
 		}
@@ -97,7 +96,7 @@ func TestReceipts(t *testing.T) {
 	kais := unmarshal[struct {
 		Items []receiptBody
 		Total int
-	}](t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/receipts?q=lanternby", "", olga))
+	}](t, a.expect(http.StatusOK, http.MethodPost, "/api/v1/admin/receipts/search", `{"query":"lanternby"}`, olga))
 	if kais.Total != 1 {
 		t.Fatalf("Kai's receipts %+v", kais)
 	}

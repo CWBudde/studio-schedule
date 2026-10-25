@@ -88,7 +88,7 @@ func TestAnonymizeOverHTTP(t *testing.T) {
 		t.Errorf("twice: %v", c)
 	}
 
-	if items, _ := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/persons?q=deleted", "", office))["items"].([]any); len(items) != 0 {
+	if items, _ := decode(t, a.expect(http.StatusOK, http.MethodPost, "/api/v1/admin/persons/search", `{"query": "deleted"}`, office))["items"].([]any); len(items) != 0 {
 		t.Errorf("search %v", items)
 	}
 

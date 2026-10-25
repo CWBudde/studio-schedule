@@ -21,16 +21,17 @@ import (
 // see it, and queuing a failed mail again.
 func registerMailLog(api huma.API, h *handlers) {
 	register(api, AccessAdmin, huma.Operation{
-		OperationID: "listMails",
-		Method:      http.MethodGet,
-		Path:        BasePath + "/admin/mails",
-		Summary:     "List the mail log",
+		OperationID: "searchMails",
+		Method:      http.MethodPost,
+		Path:        BasePath + "/admin/mails/search",
+		Summary:     "Search the mail log",
 		Description: fmt.Sprintf("Returns the mails of the outbox, newest first, %d at most per page, without "+
 			"their bodies; `nextCursor` asks for the next page. Filters by status, template and a part of the "+
 			"recipient (ignoring ASCII case). The bodies of mails sent more than 30 days ago are removed, and "+
-			"mails older than 180 days deleted.", service.MailLogPageSize),
+			"mails older than 180 days deleted. A POST, so that the addresses searched for stay out of URLs "+
+			"and the access logs of proxies (ASVS 8.3.1); it changes nothing.", service.MailLogPageSize),
 		Tags: []string{"admin"},
-	}, h.listMails)
+	}, h.searchMails)
 
 	register(api, AccessAdmin, huma.Operation{
 		OperationID: "getMail",
@@ -98,21 +99,23 @@ type MailLogDetail struct {
 	HTML string `doc:"HTML body; only with body shown, and only if the mail has one." json:"html,omitempty"`
 }
 
-// MailLogInput are the parameters of listMails.
+// MailLogInput is the request of searchMails: its filter.
 type MailLogInput struct {
-	Status    string       `doc:"Only mails in this state." enum:"pending,sent,failed" query:"status" required:"false"`
-	Template  MailTemplate `doc:"Only mails of this template." query:"template" required:"false"`
-	Recipient string       `doc:"Only mails whose recipient contains this, ignoring ASCII case." maxLength:"254" query:"recipient" required:"false"`
-	Cursor    string       `doc:"Where the page starts: the nextCursor of the previous page." maxLength:"200" query:"cursor" required:"false"`
+	Body struct {
+		Status    string       `doc:"Only mails in this state; absent: all." enum:"pending,sent,failed" json:"status,omitempty"`
+		Template  MailTemplate `doc:"Only mails of this template; absent: all." json:"template,omitempty"`
+		Recipient string       `doc:"Only mails whose recipient contains this, ignoring ASCII case." json:"recipient,omitempty" maxLength:"254"`
+		Cursor    string       `doc:"Where the page starts: the nextCursor of the previous page." json:"cursor,omitempty" maxLength:"200"`
+	}
 }
 
-// MailLogPage is the response body of listMails.
+// MailLogPage is the response body of searchMails.
 type MailLogPage struct {
 	Items      []MailLogItem `doc:"The mails, newest first." json:"items" nullable:"false"`
 	NextCursor string        `doc:"The cursor of the next page; absent after the last." json:"nextCursor,omitempty"`
 }
 
-// MailLogOutput is the response of listMails.
+// MailLogOutput is the response of searchMails.
 type MailLogOutput struct {
 	Body MailLogPage
 }
@@ -132,16 +135,18 @@ type MailLogItemOutput struct {
 	Body MailLogItem
 }
 
-func (h *handlers) listMails(ctx context.Context, in *MailLogInput) (*MailLogOutput, error) {
-	after, err := parseMailCursor(in.Cursor)
+func (h *handlers) searchMails(ctx context.Context, in *MailLogInput) (*MailLogOutput, error) {
+	f := in.Body
+
+	after, err := parseMailCursor(f.Cursor)
 	if err != nil {
 		return nil, huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
-			Message: "invalid cursor", Location: "query.cursor",
+			Message: "invalid cursor", Location: "body.cursor",
 		})
 	}
 
 	page, err := h.deps.MailLog.List(ctx, service.MailLogQuery{
-		Status: domain.MailStatus(in.Status), Template: string(in.Template), Recipient: in.Recipient, After: after,
+		Status: domain.MailStatus(f.Status), Template: string(f.Template), Recipient: f.Recipient, After: after,
 	})
 	if err != nil {
 		return nil, h.toHTTPError(ctx, err)

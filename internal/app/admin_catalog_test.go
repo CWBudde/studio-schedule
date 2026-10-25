@@ -126,9 +126,9 @@ func TestAdminStaff(t *testing.T) {
 	member := a.login("clara.amberly@example.org")
 
 	a.expect(http.StatusForbidden, http.MethodGet, "/api/v1/admin/staff", "", member)
-	a.expect(http.StatusForbidden, http.MethodGet, "/api/v1/admin/persons?q=clara", "", member)
+	a.expect(http.StatusForbidden, http.MethodPost, "/api/v1/admin/persons/search", `{"query": "clara"}`, member)
 
-	persons := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/persons?q=clara+amberly", "", office))
+	persons := decode(t, a.expect(http.StatusOK, http.MethodPost, "/api/v1/admin/persons/search", `{"query": "clara amberly"}`, office))
 	items, _ := persons["items"].([]any)
 	if len(items) != 1 {
 		t.Fatalf("person search %v, want one match", persons)

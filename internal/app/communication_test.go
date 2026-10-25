@@ -43,13 +43,14 @@ type mailItem struct {
 	ID, To, Template, Status, Body, Text, HTML string
 }
 
-func (a *authApp) mails(query string, cookie *http.Cookie) []mailItem {
+// mails searches the mail log with filter, a JSON body of searchMails.
+func (a *authApp) mails(filter string, cookie *http.Cookie) []mailItem {
 	a.t.Helper()
 
 	var page struct {
 		Items []mailItem `json:"items"`
 	}
-	if err := json.Unmarshal(a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/mails"+query, "", cookie), &page); err != nil {
+	if err := json.Unmarshal(a.expect(http.StatusOK, http.MethodPost, "/api/v1/admin/mails/search", filter, cookie), &page); err != nil {
 		a.t.Fatal(err)
 	}
 
@@ -68,12 +69,12 @@ func TestMailLogNeverShowsSecretLinks(t *testing.T) {
 	}
 	admin := a.login(demoLogin(t, domain.RoleAdmin).Email)
 
-	res, list := a.call(http.MethodGet, "/api/v1/admin/mails?template=confirm-email", "", admin)
+	res, list := a.call(http.MethodPost, "/api/v1/admin/mails/search", `{"template":"confirm-email"}`, admin)
 	if res.StatusCode != http.StatusOK || strings.Contains(string(list), "token=") {
 		t.Fatalf("list: %d %s", res.StatusCode, list)
 	}
 
-	items := a.mails("?template=confirm-email&recipient=ADA@", admin)
+	items := a.mails(`{"template":"confirm-email","recipient":"ADA@"}`, admin)
 	if len(items) != 1 || items[0].Body != "withheld" || items[0].Status != "pending" {
 		t.Fatalf("items = %+v, want the confirmation, withheld", items)
 	}
@@ -91,7 +92,7 @@ func TestMailLogNeverShowsSecretLinks(t *testing.T) {
 
 	// The office does not see the log.
 	office := a.login(demoLogin(t, domain.RoleOffice).Email)
-	a.expect(http.StatusForbidden, http.MethodGet, "/api/v1/admin/mails", "", office)
+	a.expect(http.StatusForbidden, http.MethodPost, "/api/v1/admin/mails/search", "{}", office)
 	a.expect(http.StatusForbidden, http.MethodGet, "/api/v1/admin/mails/"+items[0].ID, "", office)
 }
 
@@ -180,7 +181,7 @@ func TestAnnouncementFlow(t *testing.T) {
 
 	// The mails are in the log, with their bodies.
 	admin := a.login(demoLogin(t, domain.RoleAdmin).Email)
-	items := a.mails("?template=announcement&status=pending", admin)
+	items := a.mails(`{"template":"announcement","status":"pending"}`, admin)
 
 	if len(items) != ann.EmailRecipients || items[0].Body != "shown" {
 		t.Fatalf("%d announcement mails, want %d: %+v", len(items), ann.EmailRecipients, items)
@@ -247,7 +248,7 @@ func TestMailLogPages(t *testing.T) {
 
 	for range 10 {
 		page.Items, page.NextCursor = nil, ""
-		if err := json.Unmarshal(a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/mails?cursor="+cursor, "", admin), &page); err != nil {
+		if err := json.Unmarshal(a.expect(http.StatusOK, http.MethodPost, "/api/v1/admin/mails/search", `{"cursor":"`+cursor+`"}`, admin), &page); err != nil {
 			t.Fatal(err)
 		}
 
@@ -270,7 +271,7 @@ func TestMailLogPages(t *testing.T) {
 		t.Errorf("%d mails seen, the second page at %q: want three mails each on two pages", len(seen), cursor)
 	}
 
-	a.expect(http.StatusUnprocessableEntity, http.MethodGet, "/api/v1/admin/mails?cursor=nonsense", "", admin)
+	a.expect(http.StatusUnprocessableEntity, http.MethodPost, "/api/v1/admin/mails/search", `{"cursor":"nonsense"}`, admin)
 }
 
 // TestAnnouncementWakesTheJob: an announcement emailed now does not wait
@@ -300,7 +301,7 @@ func TestAnnouncementWakesTheJob(t *testing.T) {
 		`{"audience":"role","role":"admin","title":"Note","body":"Hi.","email":true}`, office)
 
 	timeout := time.After(5 * time.Second)
-	for len(a.mails("?template=announcement", admin)) == 0 {
+	for len(a.mails(`{"template":"announcement"}`, admin)) == 0 {
 		select {
 		case <-timeout:
 			t.Fatal("the announcement was not mailed: the job was not woken")

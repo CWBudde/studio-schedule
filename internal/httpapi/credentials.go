@@ -29,7 +29,8 @@ func registerCredentials(api huma.API, h *handlers) {
 		Path:        BasePath + "/auth/password-reset/confirm",
 		Summary:     "Set a new password with a reset link",
 		Description: "Sets the password with the token from the reset link and ends every session of the " +
-			"account; it does not sign in. An unknown, used or expired link is a 410.",
+			"account; it does not sign in. If the account had a password, it gets a mail that its password " +
+			"was changed. An unknown, used or expired link is a 410.",
 		Tags:          []string{"auth"},
 		DefaultStatus: http.StatusNoContent,
 	}, h.resetPassword)
@@ -40,8 +41,8 @@ func registerCredentials(api huma.API, h *handlers) {
 		Path:        BasePath + "/auth/password",
 		Summary:     "Change the password",
 		Description: "Replaces the password after checking the current one (a wrong one is a 422 on " +
-			"body.currentPassword) and ends every other session of the account. Refused (403) while an " +
-			"admin is signed in as the account.",
+			"body.currentPassword), ends every other session of the account and mails the account that its " +
+			"password was changed. Refused (403) while an admin is signed in as the account.",
 		Tags:          []string{"auth"},
 		DefaultStatus: http.StatusNoContent,
 	}, h.changePassword)
@@ -84,7 +85,7 @@ type RequestPasswordResetInput struct {
 type ResetPasswordInput struct {
 	Body struct {
 		Token    string `doc:"Token from the reset link."           json:"token"    maxLength:"100" minLength:"1"`
-		Password string `doc:"New password, at least 8 characters." json:"password" maxLength:"256" minLength:"8"`
+		Password string `doc:"New password: 8 to 256 characters and none of the 10,000 most common passwords (ignoring case)." json:"password" maxLength:"256" minLength:"8"`
 	}
 }
 
@@ -92,7 +93,7 @@ type ResetPasswordInput struct {
 type ChangePasswordInput struct {
 	Body struct {
 		CurrentPassword string `doc:"The current password."                json:"currentPassword" maxLength:"256" minLength:"1"`
-		NewPassword     string `doc:"New password, at least 8 characters." json:"newPassword"     maxLength:"256" minLength:"8"`
+		NewPassword     string `doc:"New password: 8 to 256 characters and none of the 10,000 most common passwords (ignoring case)." json:"newPassword" maxLength:"256" minLength:"8"`
 	}
 }
 

@@ -12,6 +12,8 @@ import (
 
 	"github.com/cwbudde/studio-schedule/internal/app"
 	"github.com/cwbudde/studio-schedule/internal/auth/password"
+	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/httpapi"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/service"
 	"github.com/cwbudde/studio-schedule/internal/store/memory"
@@ -110,7 +112,7 @@ func sessionCookie(t *testing.T, res authResponse) *http.Cookie {
 	t.Helper()
 
 	for _, c := range res.Cookies() {
-		if c.Name == "studio_session" {
+		if c.Name == httpapi.SessionCookie || c.Name == httpapi.HostSessionCookie {
 			return c
 		}
 	}
@@ -300,5 +302,83 @@ func TestDemoLoginsSignIn(t *testing.T) {
 		if role := decode(t, body)["role"]; role != l.Role {
 			t.Errorf("%s: role %v, want %s", l.Email, role, l.Role)
 		}
+	}
+}
+
+// TestVersionOnlyForTheOffice: the build version is no public information
+// (ASVS 14.3.3); the office and admins see it in getMe, for support.
+func TestVersionOnlyForTheOffice(t *testing.T) {
+	t.Parallel()
+
+	a := newAuthApp(t, app.Deps{Demo: true, DemoLogins: seed.DemoLogins(), Version: "1.2.3-test"})
+
+	for _, l := range seed.DemoLogins() {
+		me := decode(t, a.want(http.MethodGet, "/api/v1/auth/me", "", http.StatusOK, a.mustLogin(l.Email, l.Password)))
+
+		want := ""
+		if l.Role.AtLeast(domain.RoleOffice) {
+			want = "1.2.3-test"
+		}
+
+		if got, _ := me["version"].(string); got != want {
+			t.Errorf("%s: version %q, want %q", l.Role, got, want)
+		}
+	}
+}
+
+// TestSessionCookieName: over HTTPS the session cookie is
+// __Host-studio_session (Secure, Path=/, no Domain), otherwise
+// studio_session; a cookie of the other name is ignored. Signing in and out
+// end the session the request carried under the configured name.
+func TestSessionCookieName(t *testing.T) {
+	t.Parallel()
+
+	m := demoMember(t)
+
+	for _, tt := range []struct {
+		name        string
+		deps        app.Deps
+		want, other string
+	}{
+		{"https", app.Deps{HostCookie: true}, httpapi.HostSessionCookie, httpapi.SessionCookie},
+		{"http", app.Deps{InsecureCookies: true}, httpapi.SessionCookie, httpapi.HostSessionCookie},
+		{"prefix needs Secure", app.Deps{HostCookie: true, InsecureCookies: true}, httpapi.SessionCookie, httpapi.HostSessionCookie},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tt.deps.Demo, tt.deps.DemoLogins = true, seed.DemoLogins()
+			a := newAuthApp(t, tt.deps)
+
+			c := a.mustLogin(m.Email, m.Password)
+			if c.Name != tt.want || c.Path != "/" || c.Domain != "" || !c.HttpOnly || c.Secure == tt.deps.InsecureCookies {
+				t.Fatalf("cookie %+v, want %s", c, tt.want)
+			}
+
+			a.want(http.MethodGet, "/api/v1/auth/me", "", http.StatusOK, c)
+
+			// The same token under the other name is no session.
+			a.want(http.MethodGet, "/api/v1/auth/me", "", http.StatusUnauthorized,
+				&http.Cookie{Name: tt.other, Value: c.Value})
+
+			// Signing in again over the session ends it.
+			res, body := a.call(http.MethodPost, "/api/v1/auth/login", loginBody(m.Email, m.Password), c)
+			if res.StatusCode != http.StatusOK {
+				t.Fatalf("login: %d %s", res.StatusCode, body)
+			}
+
+			a.want(http.MethodGet, "/api/v1/auth/me", "", http.StatusUnauthorized, c)
+
+			// Signing out ends the session and clears the cookie by its name.
+			next := sessionCookie(t, res)
+			res, body = a.call(http.MethodPost, "/api/v1/auth/logout", "", next)
+
+			cleared := sessionCookie(t, res)
+			if res.StatusCode != http.StatusNoContent || cleared.Name != tt.want || cleared.MaxAge >= 0 {
+				t.Fatalf("logout: %d %s, cookie %+v", res.StatusCode, body, cleared)
+			}
+
+			a.want(http.MethodGet, "/api/v1/auth/me", "", http.StatusUnauthorized, next)
+		})
 	}
 }

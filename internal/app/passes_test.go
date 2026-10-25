@@ -3,7 +3,6 @@ package app_test
 import (
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"testing"
 
 	"github.com/cwbudde/studio-schedule/internal/app"
@@ -97,7 +96,7 @@ func TestPasses(t *testing.T) {
 		t.Helper()
 
 		found := unmarshal[struct{ Items []struct{ ID string } }](t,
-			a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/persons?q="+url.QueryEscape(q), "", olga))
+			a.expect(http.StatusOK, http.MethodPost, "/api/v1/admin/persons/search", searchBody(q), olga))
 		if len(found.Items) != 1 {
 			t.Fatalf("persons %q: %+v", q, found)
 		}
