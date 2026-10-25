@@ -4,15 +4,15 @@ SELECT * FROM bookings WHERE id = $1;
 -- name: CreateBooking :exec
 INSERT INTO bookings (
     id, lesson_id, person_id, guest_name, guest_email, status, source, trial, booked_at, canceled_at,
-    late, released, trial_note
+    late, released, trial_note, merged_from
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 );
 
 -- name: UpdateBooking :execrows
 UPDATE bookings
 SET lesson_id = $2, person_id = $3, guest_name = $4, guest_email = $5, status = $6, source = $7, trial = $8,
-    booked_at = $9, canceled_at = $10, late = $11, released = $12, trial_note = $13
+    booked_at = $9, canceled_at = $10, late = $11, released = $12, trial_note = $13, merged_from = $14
 WHERE id = $1;
 
 -- name: ListBookingsByIDs :many

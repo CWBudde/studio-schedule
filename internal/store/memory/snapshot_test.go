@@ -207,6 +207,13 @@ func fullStore(t *testing.T) *Store {
 				ID: ids.New[domain.AnnouncementMailingID](src), AnnouncementID: announcement.ID, SenderID: account,
 				SentAt: at, Recipients: 2,
 			}),
+			tx.Imports().Create(ctx, domain.ImportRun{
+				ID: ids.New[domain.ImportRunID](src), FileName: "members.csv", ActorID: account, StartedAt: at,
+				FinishedAt: at.Add(time.Second), Counts: domain.ImportCounts{Rows: 2, Created: 1, Failed: 1},
+				Errors: []domain.ImportRowError{{Line: 3, Code: "required", Field: "familyName"}},
+			}),
+			tx.DuplicateDismissals().Create(ctx, domain.NewDuplicateDismissal(person, accounts[len(accounts)-1].PersonID,
+				account, at)),
 		)
 	})
 	if err != nil {

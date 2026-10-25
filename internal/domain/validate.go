@@ -76,6 +76,10 @@ func validEmail(s string) bool {
 	return err == nil && a.Name == "" && a.Address == s
 }
 
+// ValidEmail reports whether s is an email address the entities take: a
+// bare address such as "a@example.org", without spaces around it.
+func ValidEmail(s string) bool { return validEmail(s) }
+
 func validWeekday(d time.Weekday) bool { return d >= time.Sunday && d <= time.Saturday }
 
 // optionalEmail, optionalDate and notBefore treat the zero value as "absent".

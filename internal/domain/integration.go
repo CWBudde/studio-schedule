@@ -57,42 +57,67 @@ func (f CalendarFeed) Validate() error {
 	)
 }
 
-// ImportStatus is the state of an import run.
-type ImportStatus string
+// MaxImportErrors is the most row errors an import run records; its counts
+// still cover every row.
+const MaxImportErrors = 200
 
-// Known import statuses.
-const (
-	ImportRunning   ImportStatus = "running"
-	ImportSucceeded ImportStatus = "succeeded"
-	ImportFailed    ImportStatus = "failed"
-)
-
-// ImportStatuses returns all import statuses.
-func ImportStatuses() []ImportStatus {
-	return []ImportStatus{ImportRunning, ImportSucceeded, ImportFailed}
+// ImportRun records an applied run of the member import (ADR 0015): who ran
+// it, on which file, what it did, and the rows it could not take. A dry run
+// leaves no record.
+type ImportRun struct {
+	ID       ImportRunID
+	FileName string
+	// ActorID is the account that ran the import; zero for the command
+	// line.
+	ActorID    AccountID
+	StartedAt  time.Time
+	FinishedAt time.Time
+	Counts     ImportCounts
+	// Errors are rows that were not imported, at most MaxImportErrors, in
+	// file order.
+	Errors []ImportRowError
 }
 
-// Valid reports whether s is a known import status.
-func (s ImportStatus) Valid() bool { return slices.Contains(ImportStatuses(), s) }
+// ImportCounts count what an import did. Every row of the file is created,
+// updated, unchanged or failed.
+type ImportCounts struct {
+	Rows      int `json:"rows"`
+	Created   int `json:"created"`
+	Updated   int `json:"updated"`
+	Unchanged int `json:"unchanged"`
+	Failed    int `json:"failed"`
+	// GuardiansCreated and GuardiansUpdated count the guardians the rows
+	// created or changed, LinksAdded the guardian links they added.
+	GuardiansCreated int `json:"guardiansCreated"`
+	GuardiansUpdated int `json:"guardiansUpdated"`
+	LinksAdded       int `json:"linksAdded"`
+}
 
-// ImportRun records one run of a data import.
-type ImportRun struct {
-	ID         ImportRunID
-	Source     string // what was imported, e.g. a file or system name
-	Status     ImportStatus
-	StartedAt  time.Time
-	FinishedAt time.Time // set exactly when the run is no longer running
-	Summary    string    // optional
+// ImportRowError is a row an import could not take, with the first reason:
+// a code the import defines and the target field it is about, if any.
+type ImportRowError struct {
+	// Line is the row's line in the file, the header being line 1.
+	Line  int    `json:"line"`
+	Code  string `json:"code"`
+	Field string `json:"field,omitempty"`
 }
 
 // Validate checks the run for consistency. All errors wrap ErrValidation.
 func (r ImportRun) Validate() error {
+	c := r.Counts
+
 	return validate(
 		rule{!r.ID.IsZero(), "import run id must be set"},
-		rule{!blank(r.Source), "import source must not be empty"},
-		rule{r.Status.Valid(), "invalid import status"},
-		rule{!r.StartedAt.IsZero(), "import start must be set"},
-		rule{(r.Status == ImportRunning) == r.FinishedAt.IsZero(), "finish time must be set exactly for finished runs"},
+		rule{!blank(r.FileName), "import file name must not be empty"},
+		rule{!r.StartedAt.IsZero() && !r.FinishedAt.IsZero(), "import start and finish must be set"},
 		rule{notBefore(r.FinishedAt, r.StartedAt), "import cannot finish before it started"},
+		rule{min(c.Rows, c.Created, c.Updated, c.Unchanged, c.Failed, c.GuardiansCreated, c.GuardiansUpdated,
+			c.LinksAdded) >= 0, "import counts must not be negative"},
+		rule{c.Rows == c.Created+c.Updated+c.Unchanged+c.Failed, "every row is counted once"},
+		rule{len(r.Errors) <= min(c.Failed, MaxImportErrors), "an import records one error per failed row at most"},
+		rule{
+			!slices.ContainsFunc(r.Errors, func(e ImportRowError) bool { return e.Line < 1 || blank(e.Code) }),
+			"an import error has a line and a code",
+		},
 	)
 }

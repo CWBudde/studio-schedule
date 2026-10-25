@@ -46,6 +46,9 @@ SELECT * FROM passes WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY id;
 -- name: ListPassesByPersons :many
 SELECT * FROM passes WHERE person_id = ANY(sqlc.arg(persons)::uuid[]) ORDER BY sold_at, id;
 
+-- name: ListPassesByPayers :many
+SELECT * FROM passes WHERE payer_person_id = ANY(sqlc.arg(persons)::uuid[]) ORDER BY id;
+
 -- name: LockPassesByPersons :many
 -- In ID order, so that concurrent transactions lock the same passes in the
 -- same order.

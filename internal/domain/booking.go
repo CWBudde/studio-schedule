@@ -80,6 +80,11 @@ type Booking struct {
 	// automatically again. The office ending a membership or a member's
 	// pause does not release. Only a canceled booking can be released.
 	Released bool
+	// MergedFrom is the merged person (ADR 0015) whose booking of a lesson
+	// that had started this is, kept beside the survivor's own booking of
+	// the lesson as history; zero otherwise. Such a booking is left out of
+	// the rule that a person has one active booking per lesson.
+	MergedFrom PersonID
 }
 
 // Validate checks the booking for consistency. All errors wrap
@@ -99,6 +104,7 @@ func (b Booking) Validate() error {
 		rule{b.Source.Valid(), "invalid booking source"},
 		rule{!b.Late || b.Status == BookingCanceled, "only a canceled booking can be late"},
 		rule{!b.Released || b.Status == BookingCanceled, "only a canceled booking can be released"},
+		rule{b.MergedFrom.IsZero() || (hasPerson && b.MergedFrom != b.PersonID), "a merged booking is another person's"},
 		on("trialNote", b.TrialNote == "" || b.Trial, "only a trial booking has a note"),
 		on("trialNote", utf8.RuneCountInString(b.TrialNote) <= MaxTrialNoteLength, "trial note is too long"),
 		on("trialNote", b.TrialNote == strings.TrimSpace(b.TrialNote), "trial note must not start or end with spaces"),

@@ -37,7 +37,10 @@ type state struct {
 	settings *domain.Settings
 	logo     *storedLogo // nil: none
 
-	persons         table[domain.PersonID, domain.Person]
+	persons table[domain.PersonID, domain.Person]
+	// memberNos indexes the persons by member number (derived from
+	// persons: the snapshot leaves it out and Restore builds it again).
+	memberNos       table[string, domain.PersonID]
 	guardians       table[domain.Guardian, struct{}]
 	accounts        table[domain.AccountID, domain.Account]
 	credentials     table[domain.AccountID, domain.Credential]
@@ -68,6 +71,9 @@ type state struct {
 	announcements         table[domain.AnnouncementID, domain.Announcement]
 	announcementDismissed table[dismissalKey, domain.AnnouncementDismissal]
 	announcementMailings  table[domain.AnnouncementMailingID, domain.AnnouncementMailing]
+
+	importRuns table[domain.ImportRunID, domain.ImportRun]
+	dismissals table[pairKey, domain.DuplicateDismissal]
 }
 
 type dismissalKey struct {
@@ -242,6 +248,10 @@ func (t *tx) Outbox() store.OutboxRepo { return outboxRepo{t} }
 func (t *tx) Audit() store.AuditRepo   { return auditRepo{t} }
 func (t *tx) Announcements() store.AnnouncementRepo {
 	return announcementRepo{t}
+}
+func (t *tx) Imports() store.ImportRunRepo { return importRunRepo{t} }
+func (t *tx) DuplicateDismissals() store.DuplicateDismissalRepo {
+	return dismissalRepo{t}
 }
 
 func (t *tx) checkWritable() error {

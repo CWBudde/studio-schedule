@@ -29,7 +29,6 @@ func TestEnums(t *testing.T) {
 	t.Run("RedemptionMode", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.RedemptionModes()) })
 	t.Run("Audience", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.Audiences()) })
 	t.Run("FeedScope", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.FeedScopes()) })
-	t.Run("ImportStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.ImportStatuses()) })
 	t.Run("TokenPurpose", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.TokenPurposes()) })
 	t.Run("MailStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.MailStatuses()) })
 	t.Run("AuditAction", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.AuditActions()) })
@@ -42,17 +41,40 @@ func TestPersonValidate(t *testing.T) {
 	checkValidate(t, func() domain.Person {
 		return domain.Person{
 			ID: newID[domain.PersonID](), GivenName: "Ada", FamilyName: "Example",
-			Email: "ada@example.org", BirthDate: domain.Date{Year: 2015, Month: time.May, Day: 4},
+			Email: "ada@example.org", BirthDate: domain.Date{Year: 2015, Month: time.May, Day: 4}, MemberNo: "M-0001",
 		}
 	}, map[string]func(*domain.Person){
-		"zero id":         func(p *domain.Person) { p.ID = domain.PersonID{} },
-		"no given name":   func(p *domain.Person) { p.GivenName = " " },
-		"no family name":  func(p *domain.Person) { p.FamilyName = "" },
-		"bad email":       func(p *domain.Person) { p.Email = "not-an-email" },
-		"named email":     func(p *domain.Person) { p.Email = "Ada <ada@example.org>" },
-		"email surrounds": func(p *domain.Person) { p.Email = " ada@example.org" },
-		"bad birth date":  func(p *domain.Person) { p.BirthDate = domain.Date{Year: 2015, Month: 2, Day: 30} },
+		"member no surrounds":  func(p *domain.Person) { p.MemberNo = "M-0001 " },
+		"member no too long":   func(p *domain.Person) { p.MemberNo = strings.Repeat("9", domain.MaxMemberNoLength+1) },
+		"merged into itself":   func(p *domain.Person) { p.MergedInto = p.ID },
+		"merged with a number": func(p *domain.Person) { p.MergedInto = newID[domain.PersonID]() },
+		"zero id":              func(p *domain.Person) { p.ID = domain.PersonID{} },
+		"no given name":        func(p *domain.Person) { p.GivenName = " " },
+		"no family name":       func(p *domain.Person) { p.FamilyName = "" },
+		"bad email":            func(p *domain.Person) { p.Email = "not-an-email" },
+		"named email":          func(p *domain.Person) { p.Email = "Ada <ada@example.org>" },
+		"email surrounds":      func(p *domain.Person) { p.Email = " ada@example.org" },
+		"bad birth date":       func(p *domain.Person) { p.BirthDate = domain.Date{Year: 2015, Month: 2, Day: 30} },
 	})
+}
+
+func TestDuplicateDismissalValidate(t *testing.T) {
+	t.Parallel()
+
+	checkValidate(t, func() domain.DuplicateDismissal {
+		return domain.NewDuplicateDismissal(newID[domain.PersonID](), newID[domain.PersonID](), newID[domain.AccountID](), t0)
+	}, map[string]func(*domain.DuplicateDismissal){
+		"zero person": func(d *domain.DuplicateDismissal) { d.PersonA = domain.PersonID{} },
+		"same person": func(d *domain.DuplicateDismissal) { d.PersonB = d.PersonA },
+		"not ordered": func(d *domain.DuplicateDismissal) { d.PersonA, d.PersonB = d.PersonB, d.PersonA },
+		"no account":  func(d *domain.DuplicateDismissal) { d.DismissedBy = domain.AccountID{} },
+		"no time":     func(d *domain.DuplicateDismissal) { d.DismissedAt = time.Time{} },
+	})
+
+	a, b := newID[domain.PersonID](), newID[domain.PersonID]()
+	if domain.NewDuplicateDismissal(b, a, newID[domain.AccountID](), t0).PersonA != a {
+		t.Error("NewDuplicateDismissal does not order the pair")
+	}
 }
 
 func TestGuardianValidate(t *testing.T) {
@@ -921,17 +943,19 @@ func TestIntegrationValidate(t *testing.T) {
 		t.Parallel()
 		checkValidate(t, func() domain.ImportRun {
 			return domain.ImportRun{
-				ID: newID[domain.ImportRunID](), Source: "legacy-csv", Status: domain.ImportSucceeded,
-				StartedAt: t0, FinishedAt: t0.Add(time.Minute),
+				ID: newID[domain.ImportRunID](), FileName: "members.csv", StartedAt: t0, FinishedAt: t0.Add(time.Minute),
+				Counts: domain.ImportCounts{Rows: 4, Created: 1, Updated: 1, Unchanged: 1, Failed: 1, LinksAdded: 2},
+				Errors: []domain.ImportRowError{{Line: 3, Code: "required", Field: "givenName"}},
 			}
 		}, map[string]func(*domain.ImportRun){
-			"zero id":            func(r *domain.ImportRun) { r.ID = domain.ImportRunID{} },
-			"no source":          func(r *domain.ImportRun) { r.Source = "" },
-			"bad status":         func(r *domain.ImportRun) { r.Status = "paused" },
-			"no start":           func(r *domain.ImportRun) { r.StartedAt = time.Time{} },
-			"done, not finished": func(r *domain.ImportRun) { r.FinishedAt = time.Time{} },
-			"running, finished":  func(r *domain.ImportRun) { r.Status = domain.ImportRunning },
-			"finished early":     func(r *domain.ImportRun) { r.FinishedAt = t0.Add(-time.Minute) },
+			"zero id":         func(r *domain.ImportRun) { r.ID = domain.ImportRunID{} },
+			"no file name":    func(r *domain.ImportRun) { r.FileName = " " },
+			"no start":        func(r *domain.ImportRun) { r.StartedAt = time.Time{} },
+			"not finished":    func(r *domain.ImportRun) { r.FinishedAt = time.Time{} },
+			"finished early":  func(r *domain.ImportRun) { r.FinishedAt = t0.Add(-time.Minute) },
+			"negative count":  func(r *domain.ImportRun) { r.Counts.LinksAdded = -1 },
+			"rows not summed": func(r *domain.ImportRun) { r.Counts.Rows = 5 },
+			"too many errors": func(r *domain.ImportRun) { r.Errors = append(r.Errors, r.Errors[0]) },
 		})
 	})
 }
@@ -1002,6 +1026,26 @@ func TestAuthValidate(t *testing.T) {
 			"no mail": func(e *domain.AuditEvent) { e.Details.MailID = domain.OutboxMailID{} },
 			"target": func(e *domain.AuditEvent) {
 				e.TargetKind, e.TargetID = domain.AuditTargetAccount, newID[domain.AccountID]()
+			},
+		})
+	})
+
+	t.Run("AuditPersonMerged", func(t *testing.T) {
+		t.Parallel()
+		checkValidate(t, func() domain.AuditEvent {
+			return domain.AuditEvent{
+				ID: newID[domain.AuditEventID](), At: t0, ActorID: newID[domain.AccountID](),
+				Action: domain.AuditPersonMerged, TargetKind: domain.AuditTargetPerson,
+				TargetPersonID: newID[domain.PersonID](),
+				Details:        domain.AuditDetails{MergedPersonID: newID[domain.PersonID](), MergedName: "Ada Example"},
+			}
+		}, map[string]func(*domain.AuditEvent){
+			"no merged person": func(e *domain.AuditEvent) { e.Details.MergedPersonID = domain.PersonID{} },
+			"merged into itself": func(e *domain.AuditEvent) {
+				e.Details.MergedPersonID = e.TargetPersonID
+			},
+			"no target": func(e *domain.AuditEvent) {
+				e.TargetKind, e.TargetPersonID = "", domain.PersonID{}
 			},
 		})
 	})

@@ -347,6 +347,31 @@ func testPasses(t *testing.T, newStore func(*testing.T) store.Store) {
 				wantErr(e.t, err, domain.ErrConflict)
 			}
 		},
+		"ListByPayers": func(e *env) {
+			pt := e.passType("10-visit pass")
+			owner, paul, pia := e.person("Ada", "Owner"), e.person("Paul", "Payer"), e.person("Pia", "Payer")
+			paidBy := func(payer domain.Person) domain.Pass {
+				p := e.newPass(pt, owner, 3, t0)
+				p.Origin, p.PayerID, p.PricePaid = domain.PassSold, payer.ID, 12000
+				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Passes().Create(ctx, p) })
+
+				return p
+			}
+			first, second, third := paidBy(paul), paidBy(pia), paidBy(paul)
+			e.pass(pt, paul, 2, t0) // owned, not paid for
+
+			byPayers := func(persons ...domain.PersonID) []domain.Pass {
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Pass, error) {
+					return tx.Passes().ListByPayers(ctx, persons)
+				})
+			}
+
+			// By ID (the sequence's IDs ascend).
+			wantSlice(e.t, byPayers(paul.ID), []domain.Pass{first, third})
+			wantSlice(e.t, byPayers(pia.ID, paul.ID), []domain.Pass{first, second, third})
+			wantSlice(e.t, byPayers(owner.ID), nil)
+			wantSlice(e.t, byPayers(), nil)
+		},
 	})
 }
 

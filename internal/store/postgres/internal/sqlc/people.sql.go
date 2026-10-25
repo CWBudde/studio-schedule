@@ -56,8 +56,8 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) er
 }
 
 const createPerson = `-- name: CreatePerson :exec
-INSERT INTO persons (id, given_name, family_name, email, phone, birth_date, notes)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO persons (id, given_name, family_name, email, phone, birth_date, notes, member_no, merged_into)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type CreatePersonParams struct {
@@ -68,6 +68,8 @@ type CreatePersonParams struct {
 	Phone      pgtype.Text
 	BirthDate  pgtype.Date
 	Notes      pgtype.Text
+	MemberNo   pgtype.Text
+	MergedInto pgtype.UUID
 }
 
 func (q *Queries) CreatePerson(ctx context.Context, arg CreatePersonParams) error {
@@ -79,6 +81,8 @@ func (q *Queries) CreatePerson(ctx context.Context, arg CreatePersonParams) erro
 		arg.Phone,
 		arg.BirthDate,
 		arg.Notes,
+		arg.MemberNo,
+		arg.MergedInto,
 	)
 	return err
 }
@@ -158,7 +162,7 @@ func (q *Queries) GetAccountByPerson(ctx context.Context, personID pgtype.UUID) 
 }
 
 const getPerson = `-- name: GetPerson :one
-SELECT id, given_name, family_name, email, phone, birth_date, notes FROM persons WHERE id = $1
+SELECT id, given_name, family_name, email, phone, birth_date, notes, member_no, merged_into FROM persons WHERE id = $1
 `
 
 func (q *Queries) GetPerson(ctx context.Context, id pgtype.UUID) (Person, error) {
@@ -172,6 +176,29 @@ func (q *Queries) GetPerson(ctx context.Context, id pgtype.UUID) (Person, error)
 		&i.Phone,
 		&i.BirthDate,
 		&i.Notes,
+		&i.MemberNo,
+		&i.MergedInto,
+	)
+	return i, err
+}
+
+const getPersonByMemberNo = `-- name: GetPersonByMemberNo :one
+SELECT id, given_name, family_name, email, phone, birth_date, notes, member_no, merged_into FROM persons WHERE member_no = $1
+`
+
+func (q *Queries) GetPersonByMemberNo(ctx context.Context, memberNo pgtype.Text) (Person, error) {
+	row := q.db.QueryRow(ctx, getPersonByMemberNo, memberNo)
+	var i Person
+	err := row.Scan(
+		&i.ID,
+		&i.GivenName,
+		&i.FamilyName,
+		&i.Email,
+		&i.Phone,
+		&i.BirthDate,
+		&i.Notes,
+		&i.MemberNo,
+		&i.MergedInto,
 	)
 	return i, err
 }
@@ -276,7 +303,7 @@ func (q *Queries) ListAccountsByPersons(ctx context.Context, persons []pgtype.UU
 }
 
 const listDependents = `-- name: ListDependents :many
-SELECT p.id, p.given_name, p.family_name, p.email, p.phone, p.birth_date, p.notes
+SELECT p.id, p.given_name, p.family_name, p.email, p.phone, p.birth_date, p.notes, p.member_no, p.merged_into
 FROM person_guardians g
 JOIN persons p ON p.id = g.dependent_id
 WHERE g.guardian_id = $1
@@ -300,6 +327,8 @@ func (q *Queries) ListDependents(ctx context.Context, guardianID pgtype.UUID) ([
 			&i.Phone,
 			&i.BirthDate,
 			&i.Notes,
+			&i.MemberNo,
+			&i.MergedInto,
 		); err != nil {
 			return nil, err
 		}
@@ -339,7 +368,7 @@ func (q *Queries) ListGuardianLinks(ctx context.Context, dependents []pgtype.UUI
 }
 
 const listGuardians = `-- name: ListGuardians :many
-SELECT p.id, p.given_name, p.family_name, p.email, p.phone, p.birth_date, p.notes
+SELECT p.id, p.given_name, p.family_name, p.email, p.phone, p.birth_date, p.notes, p.member_no, p.merged_into
 FROM person_guardians g
 JOIN persons p ON p.id = g.guardian_id
 WHERE g.dependent_id = $1
@@ -363,6 +392,42 @@ func (q *Queries) ListGuardians(ctx context.Context, dependentID pgtype.UUID) ([
 			&i.Phone,
 			&i.BirthDate,
 			&i.Notes,
+			&i.MemberNo,
+			&i.MergedInto,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMergedPersons = `-- name: ListMergedPersons :many
+SELECT id, given_name, family_name, email, phone, birth_date, notes, member_no, merged_into FROM persons WHERE merged_into = $1 ORDER BY family_name, given_name, id
+`
+
+func (q *Queries) ListMergedPersons(ctx context.Context, mergedInto pgtype.UUID) ([]Person, error) {
+	rows, err := q.db.Query(ctx, listMergedPersons, mergedInto)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Person
+	for rows.Next() {
+		var i Person
+		if err := rows.Scan(
+			&i.ID,
+			&i.GivenName,
+			&i.FamilyName,
+			&i.Email,
+			&i.Phone,
+			&i.BirthDate,
+			&i.Notes,
+			&i.MemberNo,
+			&i.MergedInto,
 		); err != nil {
 			return nil, err
 		}
@@ -375,7 +440,7 @@ func (q *Queries) ListGuardians(ctx context.Context, dependentID pgtype.UUID) ([
 }
 
 const listPersons = `-- name: ListPersons :many
-SELECT id, given_name, family_name, email, phone, birth_date, notes FROM persons ORDER BY family_name, given_name, id
+SELECT id, given_name, family_name, email, phone, birth_date, notes, member_no, merged_into FROM persons WHERE merged_into IS NULL ORDER BY family_name, given_name, id
 `
 
 func (q *Queries) ListPersons(ctx context.Context) ([]Person, error) {
@@ -395,6 +460,8 @@ func (q *Queries) ListPersons(ctx context.Context) ([]Person, error) {
 			&i.Phone,
 			&i.BirthDate,
 			&i.Notes,
+			&i.MemberNo,
+			&i.MergedInto,
 		); err != nil {
 			return nil, err
 		}
@@ -407,7 +474,7 @@ func (q *Queries) ListPersons(ctx context.Context) ([]Person, error) {
 }
 
 const listPersonsByIDs = `-- name: ListPersonsByIDs :many
-SELECT id, given_name, family_name, email, phone, birth_date, notes FROM persons WHERE id = ANY($1::uuid[]) ORDER BY family_name, given_name, id
+SELECT id, given_name, family_name, email, phone, birth_date, notes, member_no, merged_into FROM persons WHERE id = ANY($1::uuid[]) ORDER BY family_name, given_name, id
 `
 
 func (q *Queries) ListPersonsByIDs(ctx context.Context, ids []pgtype.UUID) ([]Person, error) {
@@ -427,6 +494,8 @@ func (q *Queries) ListPersonsByIDs(ctx context.Context, ids []pgtype.UUID) ([]Pe
 			&i.Phone,
 			&i.BirthDate,
 			&i.Notes,
+			&i.MemberNo,
+			&i.MergedInto,
 		); err != nil {
 			return nil, err
 		}
@@ -529,7 +598,8 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (i
 
 const updatePerson = `-- name: UpdatePerson :execrows
 UPDATE persons
-SET given_name = $2, family_name = $3, email = $4, phone = $5, birth_date = $6, notes = $7
+SET given_name = $2, family_name = $3, email = $4, phone = $5, birth_date = $6, notes = $7, member_no = $8,
+    merged_into = $9
 WHERE id = $1
 `
 
@@ -541,6 +611,8 @@ type UpdatePersonParams struct {
 	Phone      pgtype.Text
 	BirthDate  pgtype.Date
 	Notes      pgtype.Text
+	MemberNo   pgtype.Text
+	MergedInto pgtype.UUID
 }
 
 func (q *Queries) UpdatePerson(ctx context.Context, arg UpdatePersonParams) (int64, error) {
@@ -552,6 +624,8 @@ func (q *Queries) UpdatePerson(ctx context.Context, arg UpdatePersonParams) (int
 		arg.Phone,
 		arg.BirthDate,
 		arg.Notes,
+		arg.MemberNo,
+		arg.MergedInto,
 	)
 	if err != nil {
 		return 0, err

@@ -196,6 +196,7 @@ func toBooking(row sqlc.Booking) domain.Booking {
 		Late:       row.Late,
 		Released:   row.Released,
 		TrialNote:  row.TrialNote.String,
+		MergedFrom: fromPgID[domain.PersonID](row.MergedFrom),
 	}
 }
 
@@ -214,6 +215,7 @@ func bookingParams(b domain.Booking) sqlc.CreateBookingParams {
 		Late:       b.Late,
 		Released:   b.Released,
 		TrialNote:  pgText(b.TrialNote),
+		MergedFrom: pgID(b.MergedFrom),
 	}
 }
 

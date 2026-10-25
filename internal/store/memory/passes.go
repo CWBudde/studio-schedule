@@ -151,6 +151,13 @@ func (r passRepo) ListByPersons(_ context.Context, persons []domain.PersonID) ([
 	}), nil
 }
 
+func (r passRepo) ListByPayers(_ context.Context, persons []domain.PersonID) ([]domain.Pass, error) {
+	set := setOf(persons)
+	passes := r.tx.state.passes.filter(func(p domain.Pass) bool { _, ok := set[p.PayerID]; return ok && !p.PayerID.IsZero() })
+
+	return sorted(passes, func(a, b domain.Pass) int { return compareID(a.ID, b.ID) }), nil
+}
+
 // LockByPersons needs no lock of its own: the store mutex already serialises
 // every transaction.
 func (r passRepo) LockByPersons(_ context.Context, persons ...domain.PersonID) ([]domain.Pass, error) {

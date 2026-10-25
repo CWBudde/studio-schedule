@@ -2,13 +2,20 @@
 SELECT * FROM persons WHERE id = $1;
 
 -- name: CreatePerson :exec
-INSERT INTO persons (id, given_name, family_name, email, phone, birth_date, notes)
-VALUES ($1, $2, $3, $4, $5, $6, $7);
+INSERT INTO persons (id, given_name, family_name, email, phone, birth_date, notes, member_no, merged_into)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
 
 -- name: UpdatePerson :execrows
 UPDATE persons
-SET given_name = $2, family_name = $3, email = $4, phone = $5, birth_date = $6, notes = $7
+SET given_name = $2, family_name = $3, email = $4, phone = $5, birth_date = $6, notes = $7, member_no = $8,
+    merged_into = $9
 WHERE id = $1;
+
+-- name: GetPersonByMemberNo :one
+SELECT * FROM persons WHERE member_no = $1;
+
+-- name: ListMergedPersons :many
+SELECT * FROM persons WHERE merged_into = $1 ORDER BY family_name, given_name, id;
 
 -- name: DeletePerson :execrows
 DELETE FROM persons WHERE id = $1;
@@ -19,7 +26,7 @@ DELETE FROM persons WHERE id = $1;
 SELECT id FROM persons WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY id FOR UPDATE;
 
 -- name: ListPersons :many
-SELECT * FROM persons ORDER BY family_name, given_name, id;
+SELECT * FROM persons WHERE merged_into IS NULL ORDER BY family_name, given_name, id;
 
 -- name: ListPersonsByIDs :many
 SELECT * FROM persons WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY family_name, given_name, id;

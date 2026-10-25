@@ -16,8 +16,9 @@ import (
 
 // Constraints and unique indexes whose violation has a domain meaning beyond
 // "duplicate key" (see migrations/00001_core.sql, 00006, 00007, 00008, 00012,
-// 00015, 00016 and 00017).
+// 00015, 00016, 00017 and 00021).
 const (
+	constraintMemberNo        = "persons_member_no_key"
 	constraintAccountEmail    = "accounts_email_key"
 	constraintAccountPerson   = "accounts_person_id_key"
 	constraintGuardianLink    = "person_guardians_pkey"
@@ -43,13 +44,14 @@ const (
 // for what exists only once per person: an account, a guardian link, a
 // class membership, an active booking of a lesson, an active calendar feed
 // of a subject, a pass type's name, a booking's redemption, a receipt's
-// number, cancellation and PDF).
+// number, cancellation and PDF, a person's member number).
 // Other unique and foreign key violations get a generic message naming the
 // constraint.
 var conflicts = map[string]struct {
 	msg string
 	err error
 }{
+	constraintMemberNo:        {"member number is taken", domain.ErrDuplicate},
 	constraintAccountEmail:    {"account email is taken", domain.ErrDuplicate},
 	constraintAccountPerson:   {"person already has an account", domain.ErrDuplicate},
 	constraintGuardianLink:    {"guardian link exists", domain.ErrDuplicate},

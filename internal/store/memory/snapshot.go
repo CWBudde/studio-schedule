@@ -159,6 +159,29 @@ func rows[K comparable, V any](field string, tbl func(*state) *table[K, V], key 
 	}
 }
 
+// derived is the codec of an index derived from other tables (reindex
+// builds it): the snapshot writes null for it, and Restore ignores what it
+// finds there.
+func derived[K comparable, V any](field string, tbl func(*state) *table[K, V]) codec {
+	return codec{
+		field:   field,
+		encode:  func(enc *jsontext.Encoder, _ *state) error { return enc.WriteToken(jsontext.Null) },
+		decode:  func(dec *jsontext.Decoder, _ *state) error { return dec.SkipValue() },
+		changed: tableChanged(tbl),
+	}
+}
+
+// reindex builds the indexes derived from the tables of a restored state.
+func reindex(st *state) {
+	st.memberNos = table[string, domain.PersonID]{rows: map[string]domain.PersonID{}}
+
+	for _, p := range st.persons.rows {
+		if p.MemberNo != "" {
+			st.memberNos.rows[p.MemberNo] = p.ID
+		}
+	}
+}
+
 // keys is the codec of a table that is a set of keys.
 func keys[K comparable](field string, tbl func(*state) *table[K, struct{}]) codec {
 	return codec{
@@ -246,6 +269,7 @@ var codecs = []codec{
 	},
 	rows("persons", func(s *state) *table[domain.PersonID, domain.Person] { return &s.persons },
 		func(v domain.Person) domain.PersonID { return v.ID }),
+	derived("memberNos", func(s *state) *table[string, domain.PersonID] { return &s.memberNos }),
 	keys("guardians", func(s *state) *table[domain.Guardian, struct{}] { return &s.guardians }),
 	rows("accounts", func(s *state) *table[domain.AccountID, domain.Account] { return &s.accounts },
 		func(v domain.Account) domain.AccountID { return v.ID }),
@@ -307,6 +331,10 @@ var codecs = []codec{
 			return &s.announcementMailings
 		},
 		func(v domain.AnnouncementMailing) domain.AnnouncementMailingID { return v.ID }),
+	rows("importRuns", func(s *state) *table[domain.ImportRunID, domain.ImportRun] { return &s.importRuns },
+		func(v domain.ImportRun) domain.ImportRunID { return v.ID }),
+	rows("dismissals", func(s *state) *table[pairKey, domain.DuplicateDismissal] { return &s.dismissals },
+		func(v domain.DuplicateDismissal) pairKey { return pairKey{v.PersonA, v.PersonB} }),
 }
 
 // OnCommit registers fn to run after every read-write transaction that
@@ -439,7 +467,9 @@ func decodeSnapshot(dec *jsontext.Decoder, build string) (state, error) {
 			}
 
 			tables = true
-			err = decodeTables(dec, &st)
+			if err = decodeTables(dec, &st); err == nil {
+				reindex(&st)
+			}
 		default:
 			return st, fmt.Errorf("%w: unknown member %q", ErrSnapshotMismatch, name)
 		}

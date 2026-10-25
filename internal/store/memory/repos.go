@@ -112,9 +112,7 @@ func (r personRepo) Create(_ context.Context, p domain.Person) error {
 		return conflict("person %s exists", p.ID)
 	}
 
-	s.persons.put(r.tx.gen, p.ID, p)
-
-	return nil
+	return r.put(p)
 }
 
 func (r personRepo) Update(_ context.Context, p domain.Person) error {
@@ -127,9 +125,42 @@ func (r personRepo) Update(_ context.Context, p domain.Person) error {
 		return notFound("person")
 	}
 
+	return r.put(p)
+}
+
+func (r personRepo) put(p domain.Person) error {
+	s := &r.tx.state
+
+	switch owner, taken := s.memberNos.get(p.MemberNo); {
+	case p.Merged() && !s.persons.has(p.MergedInto):
+		return conflict("person %s is merged into a missing person", p.ID)
+	case p.MemberNo != "" && taken && owner != p.ID:
+		return fmt.Errorf("member number is taken: %w", domain.ErrDuplicate)
+	}
+
+	if old, ok := s.persons.get(p.ID); ok && old.MemberNo != "" && old.MemberNo != p.MemberNo {
+		s.memberNos.delete(r.tx.gen, old.MemberNo)
+	}
+
+	if p.MemberNo != "" {
+		s.memberNos.put(r.tx.gen, p.MemberNo, p.ID)
+	}
+
 	s.persons.put(r.tx.gen, p.ID, p)
 
 	return nil
+}
+
+func (r personRepo) GetByMemberNo(ctx context.Context, memberNo string) (domain.Person, error) {
+	if id, ok := r.tx.state.memberNos.get(memberNo); ok && memberNo != "" {
+		return r.Get(ctx, id)
+	}
+
+	return domain.Person{}, notFound("person")
+}
+
+func (r personRepo) ListMerged(_ context.Context, into domain.PersonID) ([]domain.Person, error) {
+	return sorted(r.tx.state.persons.filter(func(p domain.Person) bool { return p.MergedInto == into }), comparePersons), nil
 }
 
 func (r personRepo) Delete(_ context.Context, id domain.PersonID) error {
@@ -145,10 +176,11 @@ func (r personRepo) Delete(_ context.Context, id domain.PersonID) error {
 	referenced := s.accounts.exists(func(a domain.Account) bool { return a.PersonID == id }) ||
 		s.staff.exists(func(st domain.Staff) bool { return st.PersonID == id }) ||
 		s.classMembers.exists(func(m domain.ClassMember) bool { return m.PersonID == id }) ||
-		s.bookings.exists(func(b domain.Booking) bool { return b.PersonID == id }) ||
+		s.bookings.exists(func(b domain.Booking) bool { return b.PersonID == id || b.MergedFrom == id }) ||
 		s.passes.exists(func(p domain.Pass) bool { return p.PersonID == id || p.PayerID == id }) ||
 		s.receipts.exists(func(rc domain.Receipt) bool { return rc.PayerID == id }) ||
-		s.audit.exists(func(e domain.AuditEvent) bool { return e.TargetPersonID == id })
+		s.audit.exists(func(e domain.AuditEvent) bool { return e.TargetPersonID == id }) ||
+		s.persons.exists(func(p domain.Person) bool { return p.MergedInto == id })
 	for g := range s.guardians.rows {
 		referenced = referenced || g.GuardianID == id || g.DependentID == id
 	}
@@ -159,6 +191,16 @@ func (r personRepo) Delete(_ context.Context, id domain.PersonID) error {
 
 	for _, e := range s.waitlist.filter(func(e domain.WaitlistEntry) bool { return e.PersonID == id }) {
 		s.waitlist.delete(r.tx.gen, e.ID)
+	}
+
+	for k := range s.dismissals.rows {
+		if k.a == id || k.b == id {
+			s.dismissals.delete(r.tx.gen, k)
+		}
+	}
+
+	if p, _ := s.persons.get(id); p.MemberNo != "" {
+		s.memberNos.delete(r.tx.gen, p.MemberNo)
 	}
 
 	s.persons.delete(r.tx.gen, id)
@@ -183,7 +225,7 @@ func (r personRepo) Lock(_ context.Context, ids ...domain.PersonID) error {
 }
 
 func (r personRepo) List(context.Context) ([]domain.Person, error) {
-	return sorted(r.tx.state.persons.filter(all), comparePersons), nil
+	return sorted(r.tx.state.persons.filter(func(p domain.Person) bool { return !p.Merged() }), comparePersons), nil
 }
 
 func (r personRepo) ListByIDs(_ context.Context, ids []domain.PersonID) ([]domain.Person, error) {
@@ -1127,10 +1169,12 @@ func (r bookingRepo) put(b domain.Booking) error {
 	b.BookedAt, b.CanceledAt = instant(b.BookedAt), instant(b.CanceledAt)
 
 	switch {
-	case !s.lessons.has(b.LessonID) || (!b.PersonID.IsZero() && !s.persons.has(b.PersonID)):
+	case !s.lessons.has(b.LessonID) || (!b.PersonID.IsZero() && !s.persons.has(b.PersonID)) ||
+		(!b.MergedFrom.IsZero() && !s.persons.has(b.MergedFrom)):
 		return conflict("booking references a missing record")
-	case !b.PersonID.IsZero() && active(b) && s.bookings.exists(func(o domain.Booking) bool {
-		return o.ID != b.ID && o.LessonID == b.LessonID && o.PersonID == b.PersonID && active(o)
+	// A booking kept from a merge (MergedFrom) is left out of the rule.
+	case !b.PersonID.IsZero() && active(b) && b.MergedFrom.IsZero() && s.bookings.exists(func(o domain.Booking) bool {
+		return o.ID != b.ID && o.LessonID == b.LessonID && o.PersonID == b.PersonID && active(o) && o.MergedFrom.IsZero()
 	}):
 		return fmt.Errorf("person already has an active booking for the lesson: %w", domain.ErrDuplicate)
 	}

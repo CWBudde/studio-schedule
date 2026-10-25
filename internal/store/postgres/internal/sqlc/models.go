@@ -97,6 +97,7 @@ type Booking struct {
 	Late       bool
 	Released   bool
 	TrialNote  pgtype.Text
+	MergedFrom pgtype.UUID
 }
 
 type BookingEvent struct {
@@ -147,6 +148,23 @@ type CourseType struct {
 	ID          pgtype.UUID
 	Name        string
 	Description pgtype.Text
+}
+
+type ImportRun struct {
+	ID               pgtype.UUID
+	FileName         string
+	ActorID          pgtype.UUID
+	StartedAt        pgtype.Timestamptz
+	FinishedAt       pgtype.Timestamptz
+	RowsTotal        int32
+	Created          int32
+	Updated          int32
+	Unchanged        int32
+	Failed           int32
+	GuardiansCreated int32
+	GuardiansUpdated int32
+	LinksAdded       int32
+	Errors           []byte
 }
 
 type Lesson struct {
@@ -245,6 +263,15 @@ type Person struct {
 	Phone      pgtype.Text
 	BirthDate  pgtype.Date
 	Notes      pgtype.Text
+	MemberNo   pgtype.Text
+	MergedInto pgtype.UUID
+}
+
+type PersonDuplicateDismissal struct {
+	PersonA     pgtype.UUID
+	PersonB     pgtype.UUID
+	DismissedBy pgtype.UUID
+	DismissedAt pgtype.Timestamptz
 }
 
 type PersonGuardian struct {

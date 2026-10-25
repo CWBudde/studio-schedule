@@ -223,6 +223,12 @@ func (r passRepo) ListByPersons(ctx context.Context, persons []domain.PersonID) 
 	return convertRows(rows, err, toPass)
 }
 
+func (r passRepo) ListByPayers(ctx context.Context, persons []domain.PersonID) ([]domain.Pass, error) {
+	rows, err := r.q.ListPassesByPayers(ctx, pgIDs(persons))
+
+	return convertRows(rows, err, toPass)
+}
+
 // LockByPersons reads the passes with SELECT … FOR UPDATE, ordered by ID. In
 // a read-only transaction PostgreSQL rejects the statement (SQLSTATE 25006,
 // store.ErrReadOnly).

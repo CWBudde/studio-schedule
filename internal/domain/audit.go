@@ -19,11 +19,15 @@ const (
 	// AuditMailRequeued: an admin queued a failed mail of the outbox again
 	// (ADR 0014). It has no target; the details name the mail.
 	AuditMailRequeued AuditAction = "mail-requeued"
+	// AuditPersonMerged: the office merged a duplicate person into the
+	// target person (ADR 0015); the details name the merged person, now a
+	// tombstone.
+	AuditPersonMerged AuditAction = "person-merged"
 )
 
 // AuditActions returns all audit actions.
 func AuditActions() []AuditAction {
-	return []AuditAction{AuditImpersonationStarted, AuditImpersonationEnded, AuditMailRequeued}
+	return []AuditAction{AuditImpersonationStarted, AuditImpersonationEnded, AuditMailRequeued, AuditPersonMerged}
 }
 
 // Valid reports whether a is a known audit action.
@@ -54,6 +58,10 @@ type AuditDetails struct {
 	MailID    OutboxMailID `json:"mailId,omitzero"`
 	Recipient string       `json:"recipient,omitempty"`
 	Template  string       `json:"template,omitempty"`
+	// MergedPersonID and MergedName name the person of AuditPersonMerged
+	// that was merged into the target, with its name at the time.
+	MergedPersonID PersonID `json:"mergedPersonId,omitzero"`
+	MergedName     string   `json:"mergedName,omitempty"`
 }
 
 // IsZero reports whether the details record nothing.
@@ -92,6 +100,11 @@ func (e AuditEvent) Validate() error {
 		rule{
 			e.Action != AuditMailRequeued || (e.TargetKind == "" && !e.Details.MailID.IsZero()),
 			"a requeued mail has no target and names the mail",
+		},
+		rule{
+			e.Action != AuditPersonMerged || (e.TargetKind == AuditTargetPerson && !e.Details.MergedPersonID.IsZero() &&
+				e.Details.MergedPersonID != e.TargetPersonID),
+			"a merge targets the surviving person and names the merged one",
 		},
 	)
 }

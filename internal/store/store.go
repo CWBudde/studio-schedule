@@ -115,6 +115,8 @@ type Tx interface {
 	Outbox() OutboxRepo
 	Audit() AuditRepo
 	Announcements() AnnouncementRepo
+	Imports() ImportRunRepo
+	DuplicateDismissals() DuplicateDismissalRepo
 }
 
 // SettingsRepo stores the single, school-wide settings record.
@@ -151,18 +153,31 @@ type SettingsUsage struct {
 	Receipts bool
 }
 
-// PersonRepo stores persons and the guardian links between them.
+// PersonRepo stores persons and the guardian links between them. Member
+// numbers are unique (exactly, not ignoring case). A merged person (a
+// tombstone, ADR 0015) is found by Get, ListByIDs and ListMerged only.
 type PersonRepo interface {
 	Get(ctx context.Context, id domain.PersonID) (domain.Person, error)
+	// Create fails with domain.ErrDuplicate if another person has the
+	// member number, and with domain.ErrConflict (but not ErrDuplicate) if
+	// the ID is taken or the person it is merged into does not exist.
 	Create(ctx context.Context, p domain.Person) error
+	// Update fails under the same rules as Create.
 	Update(ctx context.Context, p domain.Person) error
 	// Delete fails with domain.ErrConflict while the person is referenced
-	// (account, staff, guardian link, class member, booking, a pass they own
-	// or paid for, a receipt they paid, an audit event about them). The
-	// person's waiting-list entries are deleted with it.
+	// (account, staff, guardian link, class member, booking or a booking
+	// merged from them, a pass they own or paid for, a receipt they paid,
+	// an audit event about them, a person merged into them). The person's
+	// waiting-list entries and duplicate dismissals are deleted with it.
 	Delete(ctx context.Context, id domain.PersonID) error
-	// List returns all persons ordered by family name, given name and ID.
+	// GetByMemberNo finds the person with the member number.
+	GetByMemberNo(ctx context.Context, memberNo string) (domain.Person, error)
+	// List returns all persons that are not merged, ordered by family name,
+	// given name and ID.
 	List(ctx context.Context) ([]domain.Person, error)
+	// ListMerged returns the persons merged into the person, ordered like
+	// List.
+	ListMerged(ctx context.Context, into domain.PersonID) ([]domain.Person, error)
 	// ListByIDs returns the persons with the given IDs, each once and
 	// ordered like List. IDs that do not exist are left out.
 	ListByIDs(ctx context.Context, ids []domain.PersonID) ([]domain.Person, error)
@@ -438,7 +453,9 @@ type BookingRepo interface {
 	Get(ctx context.Context, id domain.BookingID) (domain.Booking, error)
 	// Create fails with domain.ErrDuplicate if the person already has an
 	// active booking for the lesson, and with domain.ErrConflict (but not
-	// ErrDuplicate) if a referenced record does not exist.
+	// ErrDuplicate) if a referenced record does not exist. A booking kept
+	// from a merge (domain.Booking.MergedFrom set) is left out of the
+	// duplicate check on either side.
 	Create(ctx context.Context, b domain.Booking) error
 	// Update fails under the same rules as Create.
 	Update(ctx context.Context, b domain.Booking) error
@@ -643,6 +660,9 @@ type PassRepo interface {
 	// ListByPersons returns the passes the given persons own, ordered by
 	// SoldAt and ID.
 	ListByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.Pass, error)
+	// ListByPayers returns the passes the given persons paid for, ordered by
+	// ID.
+	ListByPayers(ctx context.Context, persons []domain.PersonID) ([]domain.Pass, error)
 	// LockByPersons returns the passes the given persons own, ordered by ID,
 	// and locks them until the transaction ends (in PostgreSQL: SELECT …
 	// FOR UPDATE, in ID order, so that transactions locking the passes of
@@ -874,4 +894,33 @@ type AnnouncementRepo interface {
 	// ListMailings returns the mailings with from <= SentAt < to, ordered by
 	// SentAt and ID.
 	ListMailings(ctx context.Context, from, to time.Time) ([]domain.AnnouncementMailing, error)
+}
+
+// ImportRunRepo stores the history of applied member imports (ADR 0015).
+// Runs are only ever added.
+type ImportRunRepo interface {
+	// Create fails with domain.ErrConflict if the ID is taken or the actor
+	// does not exist.
+	Create(ctx context.Context, r domain.ImportRun) error
+	// List returns at most limit runs, newest first: ordered by StartedAt
+	// and ID, both descending.
+	List(ctx context.Context, limit int) ([]domain.ImportRun, error)
+}
+
+// DuplicateDismissalRepo stores the pairs of persons the office found not
+// to be duplicates (ADR 0015). A dismissal goes with either person
+// (PersonRepo.Delete).
+type DuplicateDismissalRepo interface {
+	// Create records a dismissal unless the pair has one (then it keeps the
+	// first). It fails with domain.ErrConflict if a person or the account
+	// does not exist.
+	Create(ctx context.Context, d domain.DuplicateDismissal) error
+	// List returns every dismissal, ordered by PersonA and PersonB.
+	List(ctx context.Context) ([]domain.DuplicateDismissal, error)
+	// ListByPerson returns the dismissals of the pairs the person is in,
+	// ordered like List.
+	ListByPerson(ctx context.Context, person domain.PersonID) ([]domain.DuplicateDismissal, error)
+	// Delete removes the dismissal of the pair a and b, in either order; a
+	// pair without one is domain.ErrNotFound.
+	Delete(ctx context.Context, a, b domain.PersonID) error
 }

@@ -221,3 +221,7 @@ func (t *tx) Audit() store.AuditRepo   { return auditRepo{t.q} }
 func (t *tx) Announcements() store.AnnouncementRepo {
 	return announcementRepo{t.q}
 }
+func (t *tx) Imports() store.ImportRunRepo { return importRunRepo{t.q} }
+func (t *tx) DuplicateDismissals() store.DuplicateDismissalRepo {
+	return dismissalRepo{t.q}
+}

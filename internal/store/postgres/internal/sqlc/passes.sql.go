@@ -416,6 +416,48 @@ func (q *Queries) ListPassesByIDs(ctx context.Context, ids []pgtype.UUID) ([]Pas
 	return items, nil
 }
 
+const listPassesByPayers = `-- name: ListPassesByPayers :many
+SELECT id, pass_type_id, person_id, kind, visits_total, visits_remaining, valid_from, valid_until, status, origin, sold_at, sold_by, payer_person_id, receipt_id, price_paid, note, voided_at FROM passes WHERE payer_person_id = ANY($1::uuid[]) ORDER BY id
+`
+
+func (q *Queries) ListPassesByPayers(ctx context.Context, persons []pgtype.UUID) ([]Pass, error) {
+	rows, err := q.db.Query(ctx, listPassesByPayers, persons)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Pass
+	for rows.Next() {
+		var i Pass
+		if err := rows.Scan(
+			&i.ID,
+			&i.PassTypeID,
+			&i.PersonID,
+			&i.Kind,
+			&i.VisitsTotal,
+			&i.VisitsRemaining,
+			&i.ValidFrom,
+			&i.ValidUntil,
+			&i.Status,
+			&i.Origin,
+			&i.SoldAt,
+			&i.SoldBy,
+			&i.PayerPersonID,
+			&i.ReceiptID,
+			&i.PricePaid,
+			&i.Note,
+			&i.VoidedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPassesByPersons = `-- name: ListPassesByPersons :many
 SELECT id, pass_type_id, person_id, kind, visits_total, visits_remaining, valid_from, valid_until, status, origin, sold_at, sold_by, payer_person_id, receipt_id, price_paid, note, voided_at FROM passes WHERE person_id = ANY($1::uuid[]) ORDER BY sold_at, id
 `

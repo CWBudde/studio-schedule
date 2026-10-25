@@ -2,6 +2,7 @@ package storetest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -30,6 +31,7 @@ func testPersons(t *testing.T, newStore func(*testing.T) store.Store) {
 				full.Phone = "+49 000 0000000"
 				full.BirthDate = domain.Date{Year: 2015, Month: time.June, Day: 30}
 				full.Notes = "Prefers the late class."
+				full.MemberNo = "M-0001"
 				valid(e.t, minimal)
 				valid(e.t, full)
 
@@ -221,8 +223,126 @@ func testPersons(t *testing.T, newStore func(*testing.T) store.Store) {
 			owner := e.person("Ow", "Owner")
 			e.pass(e.passType("10-visit pass"), owner, 3, t0)
 			deleteFails(owner.ID)
+
+			survivor := e.person("Sue", "Survivor")
+			e.merged(e.person("Sue", "Survivor"), survivor)
+			deleteFails(survivor.ID)
+		},
+		"MemberNo": func(e *env) {
+			a := e.person("Ada", "Member")
+			a.MemberNo = "M-0001"
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Update(ctx, a) })
+
+			byNo := func(no string) (domain.Person, error) {
+				return query(e, func(ctx context.Context, tx store.Tx) (domain.Person, error) {
+					return tx.Persons().GetByMemberNo(ctx, no)
+				})
+			}
+
+			got, err := byNo("M-0001")
+			if err != nil {
+				e.t.Fatalf("GetByMemberNo: %v", err)
+			}
+
+			wantEqual(e.t, got, a)
+
+			// Exactly: neither case nor an empty number matches.
+			for _, no := range []string{"m-0001", "", "M-0002"} {
+				_, err := byNo(no)
+				wantErr(e.t, err, domain.ErrNotFound)
+			}
+
+			// Unique, on create and update.
+			b := domain.Person{ID: newID[domain.PersonID](e), GivenName: "Bea", FamilyName: "Member", MemberNo: "M-0001"}
+			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Create(ctx, b) })
+			wantErr(e.t, err, domain.ErrDuplicate)
+
+			b.MemberNo = "M-0002"
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Create(ctx, b) })
+
+			b.MemberNo = "M-0001"
+			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Update(ctx, b) })
+			wantErr(e.t, err, domain.ErrDuplicate)
+
+			// The number moves once its holder gives it up, in one transaction.
+			a.MemberNo, b.MemberNo = "", "M-0001"
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				return errors.Join(tx.Persons().Update(ctx, a), tx.Persons().Update(ctx, b))
+			})
+
+			got, err = byNo("M-0001")
+			if err != nil {
+				e.t.Fatalf("GetByMemberNo: %v", err)
+			}
+
+			wantEqual(e.t, got, b)
+
+			// The number b gave up, and that of a deleted person, are free.
+			_, err = byNo("M-0002")
+			wantErr(e.t, err, domain.ErrNotFound)
+
+			c := domain.Person{ID: newID[domain.PersonID](e), GivenName: "Cy", FamilyName: "Member", MemberNo: "M-0002"}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Create(ctx, c) })
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Delete(ctx, c.ID) })
+
+			_, err = byNo("M-0002")
+			wantErr(e.t, err, domain.ErrNotFound)
+
+			c.ID = newID[domain.PersonID](e)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Create(ctx, c) })
+		},
+		"Merged": func(e *env) {
+			survivor := e.person("Sue", "Survivor")
+			other := e.person("Ole", "Other")
+			tomb2 := e.merged(e.person("Sue", "B-Survivor"), survivor)
+			tomb1 := e.merged(e.person("Sue", "A-Survivor"), survivor)
+
+			// Left out of List, but found by Get, ListByIDs and ListMerged.
+			wantSlice(e.t, list(e), []domain.Person{other, survivor})
+
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) (domain.Person, error) {
+				return tx.Persons().Get(ctx, tomb1.ID)
+			})
+			wantEqual(e.t, got, tomb1)
+
+			byIDs := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Person, error) {
+				return tx.Persons().ListByIDs(ctx, []domain.PersonID{tomb2.ID, survivor.ID})
+			})
+			wantSlice(e.t, byIDs, []domain.Person{tomb2, survivor})
+
+			merged := func(into domain.PersonID) []domain.Person {
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Person, error) {
+					return tx.Persons().ListMerged(ctx, into)
+				})
+			}
+			wantSlice(e.t, merged(survivor.ID), []domain.Person{tomb1, tomb2})
+			wantSlice(e.t, merged(other.ID), nil)
+
+			// Merged into a person that does not exist.
+			ghost := domain.Person{
+				ID: newID[domain.PersonID](e), GivenName: "Gus", FamilyName: "Ghost", MergedInto: newID[domain.PersonID](e),
+			}
+			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Create(ctx, ghost) })
+			wantErr(e.t, err, domain.ErrConflict)
+			wantNotErr(e.t, err, domain.ErrDuplicate)
+
+			// A tombstone moves on to another survivor.
+			tomb1.MergedInto = other.ID
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Update(ctx, tomb1) })
+			wantSlice(e.t, merged(other.ID), []domain.Person{tomb1})
 		},
 	})
+}
+
+// merged turns p into a tombstone merged into survivor and returns it.
+func (e *env) merged(p, survivor domain.Person) domain.Person {
+	e.t.Helper()
+
+	p.MergedInto = survivor.ID
+	valid(e.t, p)
+	e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Update(ctx, p) })
+
+	return p
 }
 
 func testAccounts(t *testing.T, newStore func(*testing.T) store.Store) {

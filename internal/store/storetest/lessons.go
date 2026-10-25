@@ -355,6 +355,7 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 				full.CanceledAt = t0.Add(-30 * time.Minute)
 				full.Late = true
 				full.Released = true
+				full.MergedFrom = e.person("Bo", "Merged").ID
 				valid(e.t, full)
 
 				return minimal, full
@@ -429,6 +430,39 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			n := mustQuery(e, func(ctx context.Context, tx store.Tx) (int, error) { return tx.Bookings().CountActive(ctx, l.ID) })
 			wantEqual(e.t, n, 3)
+		},
+		"MergedHistoryBesideAnActiveBooking": func(e *env) {
+			// A merge keeps the merged person's booking of a started lesson
+			// beside the survivor's (ADR 0015): it names the merged person
+			// and is left out of the one-active-booking rule.
+			l := e.lesson(e.setting(), t0, 5)
+			survivor, merged := e.person("Sara", "Example"), e.person("Sara", "Example")
+			e.booking(l, survivor, t0.Add(-3*time.Hour))
+
+			kept := e.newBooking(l, survivor, t0.Add(-2*time.Hour))
+			kept.Status, kept.MergedFrom = domain.BookingAttended, merged.ID
+			valid(e.t, kept)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Create(ctx, kept) })
+
+			// Any other active booking of the survivor is still a duplicate.
+			dup := e.newBooking(l, survivor, t0.Add(-time.Hour))
+			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Create(ctx, dup) })
+			wantErr(e.t, err, domain.ErrDuplicate)
+
+			active := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Booking, error) {
+				return tx.Bookings().ListActiveByLessonsAndPersons(ctx, []domain.LessonID{l.ID}, []domain.PersonID{survivor.ID})
+			})
+			wantEqual(e.t, len(active), 2)
+
+			// The merged person stays while the booking names it.
+			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Delete(ctx, merged.ID) })
+			wantErr(e.t, err, domain.ErrConflict)
+
+			// It must name a person that exists.
+			gone := e.newBooking(l, e.person("Gus", "Gone"), t0)
+			gone.MergedFrom = newID[domain.PersonID](e)
+			err = e.write(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Create(ctx, gone) })
+			wantErr(e.t, err, domain.ErrConflict)
 		},
 		"ListByIDs": func(e *env) {
 			s := e.setting()

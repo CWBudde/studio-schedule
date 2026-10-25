@@ -150,6 +150,8 @@ func toPerson(row sqlc.Person) domain.Person {
 		Phone:      row.Phone.String,
 		BirthDate:  fromPgDate(row.BirthDate),
 		Notes:      row.Notes.String,
+		MemberNo:   row.MemberNo.String,
+		MergedInto: fromPgID[domain.PersonID](row.MergedInto),
 	}
 }
 
@@ -175,6 +177,8 @@ func (r personRepo) Create(ctx context.Context, p domain.Person) error {
 		Phone:      pgText(p.Phone),
 		BirthDate:  pgDate(p.BirthDate),
 		Notes:      pgText(p.Notes),
+		MemberNo:   pgText(p.MemberNo),
+		MergedInto: pgID(p.MergedInto),
 	}))
 }
 
@@ -187,9 +191,24 @@ func (r personRepo) Update(ctx context.Context, p domain.Person) error {
 		Phone:      pgText(p.Phone),
 		BirthDate:  pgDate(p.BirthDate),
 		Notes:      pgText(p.Notes),
+		MemberNo:   pgText(p.MemberNo),
+		MergedInto: pgID(p.MergedInto),
 	})
 
 	return affected("person", n, err)
+}
+
+func (r personRepo) GetByMemberNo(ctx context.Context, memberNo string) (domain.Person, error) {
+	row, err := r.q.GetPersonByMemberNo(ctx, pgText(memberNo))
+	if err != nil {
+		return domain.Person{}, notFound("person", err)
+	}
+
+	return toPerson(row), nil
+}
+
+func (r personRepo) ListMerged(ctx context.Context, into domain.PersonID) ([]domain.Person, error) {
+	return toPersons(r.q.ListMergedPersons(ctx, pgID(into)))
 }
 
 func (r personRepo) Delete(ctx context.Context, id domain.PersonID) error {
