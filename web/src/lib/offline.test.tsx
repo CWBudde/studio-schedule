@@ -16,7 +16,13 @@ import { OfflineBanner } from '@/components/layout/OfflineBanner';
 import { Button } from '@/components/ui/button';
 import { pushDevice, pushOwner, setPushOwner } from '@/features/push/device';
 import { meMember, mockApiDelete, mockApiGet, mockApiPost, publicSettings } from '@/test/mockApi';
-import { isPersistedKey, offlineCacheOptions, setOfflinePersister } from './offlineCache';
+import {
+  indexedDbPersister,
+  indexedDbStorage,
+  isPersistedKey,
+  offlineCacheOptions,
+  setOfflinePersister,
+} from './offlineCache';
 import { OfflineError } from './online';
 
 afterEach(() => {
@@ -53,6 +59,8 @@ describe('the offline cache', () => {
       ['admin', 'accounts'],
       ['calendar-feeds'],
       ['push', 'status'],
+      // A lesson's participants are staff data, never kept offline.
+      ['lesson', 'l1', 'participants'],
     ]) {
       expect(isPersistedKey(key), JSON.stringify(key)).toBe(false);
     }
@@ -117,6 +125,24 @@ describe('the offline cache', () => {
     expect(pushOwner()).toBeNull();
     expect(persister.removeClient).toHaveBeenCalled();
     expect(client.getQueryData(meQuery.queryKey)).toBeNull();
+  });
+});
+
+describe('the offline cache without IndexedDB', () => {
+  it('saves and restores nothing, and never rejects', async () => {
+    // jsdom has no IndexedDB, like a browser that blocks it.
+    expect(globalThis.indexedDB).toBeUndefined();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const storage = indexedDbStorage();
+    await expect(storage.setItem('queries', '{}')).resolves.toBeUndefined();
+    await expect(storage.getItem('queries')).resolves.toBeNull();
+    await expect(storage.removeItem('queries')).resolves.toBeUndefined();
+
+    const persister = indexedDbPersister();
+    await expect(persister.restoreClient()).resolves.toBeUndefined();
+    await expect(persister.removeClient()).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalled();
   });
 });
 

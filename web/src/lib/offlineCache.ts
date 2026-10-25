@@ -1,10 +1,7 @@
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import type { Query } from '@tanstack/react-query';
-import type {
-  PersistedClient,
-  Persister,
-  PersistQueryClientOptions,
-} from '@tanstack/react-query-persist-client';
-import { createStore, del, get, set } from 'idb-keyval';
+import type { Persister, PersistQueryClientOptions } from '@tanstack/react-query-persist-client';
+import { createStore, del, get, set, type UseStore } from 'idb-keyval';
 
 /**
  * The offline cache (ADR 0017): the last public schedule and the family's
@@ -20,15 +17,16 @@ export const OFFLINE_CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Whether the query of this key is kept offline: the public settings, the
- * schedule (every range), the lessons opened from it, My lessons' coming
- * lessons and who is signed in.
+ * schedule (every range), the lessons opened from it (`['lesson', id]`,
+ * never their participants or anything else below a lesson), My lessons'
+ * coming lessons and who is signed in.
  */
 export function isPersistedKey(key: readonly unknown[]): boolean {
   const [area, sub] = key;
   return (
     (area === 'settings' && sub === 'public') ||
     area === 'schedule' ||
-    area === 'lesson' ||
+    (area === 'lesson' && key.length === 2) ||
     (area === 'my-lessons' && sub === 'upcoming') ||
     (area === 'auth' && sub === 'me')
   );
@@ -43,14 +41,41 @@ const STORE_DB = 'studio-schedule-offline';
 const STORE_NAME = 'query-cache';
 const CACHE_KEY = 'queries';
 
-/** A persister that keeps the cache in IndexedDB (idb-keyval). */
-export function indexedDbPersister(): Persister {
-  const store = createStore(STORE_DB, STORE_NAME);
+/** How long the persister waits between two saves of the cache. */
+export const OFFLINE_CACHE_THROTTLE_MS = 1_000;
+
+/**
+ * IndexedDB (idb-keyval) as the persister's storage. IndexedDB can be
+ * missing or fail (a private window, a full disk): then nothing is saved
+ * or restored, with a warning, and nothing rejects.
+ */
+export function indexedDbStorage() {
+  let store: UseStore | null = null;
+  const open = () => (store ??= createStore(STORE_DB, STORE_NAME));
+  async function safely<T>(what: string, op: () => Promise<T>, fallback: T): Promise<T> {
+    try {
+      return await op();
+    } catch (err) {
+      console.warn(`[studio-schedule] offline cache: ${what} failed`, err);
+      return fallback;
+    }
+  }
   return {
-    persistClient: (client: PersistedClient) => set(CACHE_KEY, client, store),
-    restoreClient: () => get<PersistedClient>(CACHE_KEY, store),
-    removeClient: () => del(CACHE_KEY, store),
+    getItem: (key: string) =>
+      safely('reading', async () => (await get<string>(key, open())) ?? null, null),
+    setItem: (key: string, value: string) =>
+      safely('saving', () => set(key, value, open()), undefined),
+    removeItem: (key: string) => safely('deleting', () => del(key, open()), undefined),
   };
+}
+
+/** The persister of the offline cache: IndexedDB, saved at most once a second. */
+export function indexedDbPersister(): Persister {
+  return createAsyncStoragePersister({
+    storage: indexedDbStorage(),
+    key: CACHE_KEY,
+    throttleTime: OFFLINE_CACHE_THROTTLE_MS,
+  });
 }
 
 let active: Persister | null = null;
