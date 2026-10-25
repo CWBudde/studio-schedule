@@ -214,6 +214,31 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			wantSlice(e.t, got, nil)
 		},
+		"ListByCourseTypeStartingAfter": func(e *env) {
+			s := e.setting()
+			c := e.class(s, time.Monday, domain.TimeOfDay{Hour: 9})
+
+			e.lesson(s, t0.Add(-time.Hour), 5)
+			e.lesson(s, t0, 5) // starts exactly at the bound: not after it
+			second := e.lesson(s, t0.Add(48*time.Hour), 5)
+			first := e.classLesson(s, c, slot0.AddDays(7), t0.Add(time.Hour)) // a class's lesson too
+
+			jazz := e.newLesson(s, t0.Add(2*time.Hour), 5)
+			jazz.CourseTypeID = e.courseType("Jazz").ID
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Create(ctx, jazz) })
+
+			list := func(ct domain.CourseTypeID, after time.Time) []domain.Lesson {
+				e.t.Helper()
+
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+					return tx.Lessons().ListByCourseTypeStartingAfter(ctx, ct, after)
+				})
+			}
+
+			wantSlice(e.t, list(s.courseType.ID, t0), []domain.Lesson{first, second})
+			wantSlice(e.t, list(jazz.CourseTypeID, t0), []domain.Lesson{jazz})
+			wantSlice(e.t, list(s.courseType.ID, t0.Add(72*time.Hour)), nil)
+		},
 		"ListByClass": func(e *env) {
 			s := e.setting()
 			c := e.class(s, time.Monday, domain.TimeOfDay{Hour: 9})
@@ -647,6 +672,37 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantEqual(e.t, count(l1.ID, l2.ID), 1)
 			wantEqual(e.t, count(l1.ID, l2.ID, l3.ID, newID[domain.LessonID](e)), 2)
 			wantEqual(e.t, count(), 0)
+		},
+		"ListActiveByLessons": func(e *env) {
+			s := e.setting()
+			l1, l2, l3 := e.lesson(s, t0, 5), e.lesson(s, t0.Add(time.Hour), 5), e.lesson(s, t0.Add(2*time.Hour), 5)
+			me, child := e.person("Mia", "Member"), e.person("Kim", "Member")
+
+			late := e.booking(l1, me, t0.Add(-time.Hour))
+			early := e.booking(l2, child, t0.Add(-2*time.Hour))
+			e.booking(l3, me, t0.Add(-3*time.Hour)) // lesson not asked for
+
+			canceled := e.booking(l2, me, t0.Add(-4*time.Hour))
+			canceled.Status, canceled.CanceledAt = domain.BookingCanceled, t0.Add(-90*time.Minute)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Update(ctx, canceled) })
+
+			guest := domain.Booking{
+				ID: newID[domain.BookingID](e), LessonID: l1.ID, GuestName: "Gina Guest",
+				Status: domain.BookingBooked, Source: domain.BookingSourceSelf, BookedAt: t0.Add(-5 * time.Hour),
+			}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Bookings().Create(ctx, guest) })
+
+			list := func(lessons ...domain.LessonID) []domain.Booking {
+				e.t.Helper()
+
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Booking, error) {
+					return tx.Bookings().ListActiveByLessons(ctx, lessons)
+				})
+			}
+
+			// Guests' bookings included, canceled ones not.
+			wantSlice(e.t, list(l1.ID, l2.ID), []domain.Booking{guest, early, late})
+			wantSlice(e.t, list(), nil)
 		},
 		"ListActiveByLessonsAndPersons": func(e *env) {
 			s := e.setting()

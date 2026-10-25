@@ -33,6 +33,7 @@ func TestEnums(t *testing.T) {
 	t.Run("TokenPurpose", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.TokenPurposes()) })
 	t.Run("MailStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.MailStatuses()) })
 	t.Run("AuditAction", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.AuditActions()) })
+	t.Run("AuditTargetKind", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.AuditTargetKinds()) })
 }
 
 func TestPersonValidate(t *testing.T) {
@@ -780,37 +781,110 @@ func TestLogoValidate(t *testing.T) {
 	}
 }
 
-func TestMessageValidate(t *testing.T) {
+func TestAnnouncementValidate(t *testing.T) {
 	t.Parallel()
 
-	t.Run("Message", func(t *testing.T) {
+	t.Run("Announcement", func(t *testing.T) {
 		t.Parallel()
-		checkValidate(t, func() domain.Message {
-			return domain.Message{
-				ID: newID[domain.MessageID](), AuthorAccountID: newID[domain.AccountID](), Title: "Holiday",
-				Body: "The studio is closed next week.", Audience: domain.AudienceMembers, InApp: true,
-				PublishedAt: t0, ExpiresAt: t0.Add(7 * 24 * time.Hour),
+		checkValidate(t, func() domain.Announcement {
+			return domain.Announcement{
+				ID: newID[domain.AnnouncementID](), AuthorID: newID[domain.AccountID](), Title: "Holiday",
+				Body: "The studio is closed next week.", Audience: domain.AudienceClass,
+				ClassID: newID[domain.ClassID](), PublishAt: t0, ExpiresAt: t0.Add(7 * 24 * time.Hour),
+				Email: true, EmailedAt: t0, EmailRecipients: 3, CreatedAt: t0, UpdatedAt: t0,
 			}
-		}, map[string]func(*domain.Message){
-			"zero id":        func(m *domain.Message) { m.ID = domain.MessageID{} },
-			"zero author":    func(m *domain.Message) { m.AuthorAccountID = domain.AccountID{} },
-			"no title":       func(m *domain.Message) { m.Title = "" },
-			"no body":        func(m *domain.Message) { m.Body = " " },
-			"bad audience":   func(m *domain.Message) { m.Audience = "world" },
-			"no channel":     func(m *domain.Message) { m.InApp = false },
-			"no published":   func(m *domain.Message) { m.PublishedAt = time.Time{} },
-			"expires at pub": func(m *domain.Message) { m.ExpiresAt = m.PublishedAt },
+		}, map[string]func(*domain.Announcement){
+			"zero id":         func(a *domain.Announcement) { a.ID = domain.AnnouncementID{} },
+			"zero author":     func(a *domain.Announcement) { a.AuthorID = domain.AccountID{} },
+			"no title":        func(a *domain.Announcement) { a.Title = " " },
+			"long title":      func(a *domain.Announcement) { a.Title = strings.Repeat("ä", 121) },
+			"two-line title":  func(a *domain.Announcement) { a.Title = "Holiday\nnext week" },
+			"padded title":    func(a *domain.Announcement) { a.Title = " Holiday" },
+			"no body":         func(a *domain.Announcement) { a.Body = "\n" },
+			"long body":       func(a *domain.Announcement) { a.Body = strings.Repeat("ä", 4001) },
+			"bad audience":    func(a *domain.Announcement) { a.Audience = "world" },
+			"no class":        func(a *domain.Announcement) { a.ClassID = domain.ClassID{} },
+			"role too":        func(a *domain.Announcement) { a.Role = domain.RoleMember },
+			"course type too": func(a *domain.Announcement) { a.CourseTypeID = newID[domain.CourseTypeID]() },
+			"lesson too":      func(a *domain.Announcement) { a.LessonID = newID[domain.LessonID]() },
+			"guest role": func(a *domain.Announcement) {
+				a.Audience, a.ClassID, a.Role = domain.AudienceRole, domain.ClassID{}, domain.RoleGuest
+			},
+			"no publish":       func(a *domain.Announcement) { a.PublishAt = time.Time{} },
+			"expires at pub":   func(a *domain.Announcement) { a.ExpiresAt = a.PublishAt },
+			"mailed, no email": func(a *domain.Announcement) { a.Email = false },
+			"counted unmailed": func(a *domain.Announcement) { a.EmailedAt = time.Time{} },
+			"negative count":   func(a *domain.Announcement) { a.EmailRecipients = -1 },
+			"no creation":      func(a *domain.Announcement) { a.CreatedAt = time.Time{} },
+			"updated before":   func(a *domain.Announcement) { a.UpdatedAt = t0.Add(-time.Second) },
 		})
 	})
 
-	t.Run("Read", func(t *testing.T) {
+	t.Run("Audiences", func(t *testing.T) {
 		t.Parallel()
-		checkValidate(t, func() domain.MessageRead {
-			return domain.MessageRead{MessageID: newID[domain.MessageID](), AccountID: newID[domain.AccountID](), ReadAt: t0}
-		}, map[string]func(*domain.MessageRead){
-			"zero message": func(r *domain.MessageRead) { r.MessageID = domain.MessageID{} },
-			"zero account": func(r *domain.MessageRead) { r.AccountID = domain.AccountID{} },
-			"no time":      func(r *domain.MessageRead) { r.ReadAt = time.Time{} },
+
+		base := domain.Announcement{
+			ID: newID[domain.AnnouncementID](), AuthorID: newID[domain.AccountID](), Title: "Hello", Body: "Hi",
+			PublishAt: t0, CreatedAt: t0, UpdatedAt: t0,
+		}
+		for _, a := range []domain.Announcement{
+			{Audience: domain.AudienceEveryone},
+			{Audience: domain.AudienceRole, Role: domain.RoleInstructor},
+			{Audience: domain.AudienceCourseType, CourseTypeID: newID[domain.CourseTypeID]()},
+			{Audience: domain.AudienceLesson, LessonID: newID[domain.LessonID]()},
+		} {
+			v := base
+			v.Audience, v.Role, v.CourseTypeID, v.LessonID = a.Audience, a.Role, a.CourseTypeID, a.LessonID
+			if err := v.Validate(); err != nil {
+				t.Errorf("%s: %v", a.Audience, err)
+			}
+		}
+	})
+
+	t.Run("Shown", func(t *testing.T) {
+		t.Parallel()
+
+		a := domain.Announcement{PublishAt: t0, ExpiresAt: t0.Add(time.Hour)}
+		for at, want := range map[time.Time]bool{
+			t0.Add(-time.Second): false, t0: true, t0.Add(time.Hour - 1): true, t0.Add(time.Hour): false,
+		} {
+			if got := a.ShownAt(at); got != want {
+				t.Errorf("ShownAt(%v) = %v, want %v", at, got, want)
+			}
+		}
+
+		a.ExpiresAt = time.Time{}
+		if !a.ShownAt(t0.Add(1000 * time.Hour)) {
+			t.Error("an announcement without expiry stops showing")
+		}
+	})
+
+	t.Run("Dismissal", func(t *testing.T) {
+		t.Parallel()
+		checkValidate(t, func() domain.AnnouncementDismissal {
+			return domain.AnnouncementDismissal{
+				AnnouncementID: newID[domain.AnnouncementID](), AccountID: newID[domain.AccountID](), DismissedAt: t0,
+			}
+		}, map[string]func(*domain.AnnouncementDismissal){
+			"zero announcement": func(d *domain.AnnouncementDismissal) { d.AnnouncementID = domain.AnnouncementID{} },
+			"zero account":      func(d *domain.AnnouncementDismissal) { d.AccountID = domain.AccountID{} },
+			"no time":           func(d *domain.AnnouncementDismissal) { d.DismissedAt = time.Time{} },
+		})
+	})
+
+	t.Run("Mailing", func(t *testing.T) {
+		t.Parallel()
+		checkValidate(t, func() domain.AnnouncementMailing {
+			return domain.AnnouncementMailing{
+				ID: newID[domain.AnnouncementMailingID](), AnnouncementID: newID[domain.AnnouncementID](),
+				SenderID: newID[domain.AccountID](), SentAt: t0, Recipients: 2,
+			}
+		}, map[string]func(*domain.AnnouncementMailing){
+			"zero id":           func(m *domain.AnnouncementMailing) { m.ID = domain.AnnouncementMailingID{} },
+			"zero announcement": func(m *domain.AnnouncementMailing) { m.AnnouncementID = domain.AnnouncementID{} },
+			"zero sender":       func(m *domain.AnnouncementMailing) { m.SenderID = domain.AccountID{} },
+			"no time":           func(m *domain.AnnouncementMailing) { m.SentAt = time.Time{} },
+			"no recipients":     func(m *domain.AnnouncementMailing) { m.Recipients = 0 },
 		})
 	})
 }
@@ -899,14 +973,36 @@ func TestAuthValidate(t *testing.T) {
 		checkValidate(t, func() domain.AuditEvent {
 			return domain.AuditEvent{
 				ID: newID[domain.AuditEventID](), At: t0, ActorID: newID[domain.AccountID](),
-				Action: domain.AuditImpersonationStarted, TargetID: newID[domain.AccountID](),
+				Action: domain.AuditImpersonationStarted, TargetKind: domain.AuditTargetAccount,
+				TargetID: newID[domain.AccountID](),
 			}
 		}, map[string]func(*domain.AuditEvent){
-			"zero id":    func(e *domain.AuditEvent) { e.ID = domain.AuditEventID{} },
-			"no time":    func(e *domain.AuditEvent) { e.At = time.Time{} },
-			"no actor":   func(e *domain.AuditEvent) { e.ActorID = domain.AccountID{} },
-			"bad action": func(e *domain.AuditEvent) { e.Action = "deleted" },
-			"no target":  func(e *domain.AuditEvent) { e.TargetID = domain.AccountID{} },
+			"zero id":          func(e *domain.AuditEvent) { e.ID = domain.AuditEventID{} },
+			"no time":          func(e *domain.AuditEvent) { e.At = time.Time{} },
+			"no actor":         func(e *domain.AuditEvent) { e.ActorID = domain.AccountID{} },
+			"bad action":       func(e *domain.AuditEvent) { e.Action = "deleted" },
+			"no target":        func(e *domain.AuditEvent) { e.TargetID = domain.AccountID{} },
+			"bad kind":         func(e *domain.AuditEvent) { e.TargetKind = "lesson" },
+			"no kind":          func(e *domain.AuditEvent) { e.TargetKind = "" },
+			"person too":       func(e *domain.AuditEvent) { e.TargetPersonID = newID[domain.PersonID]() },
+			"person kind":      func(e *domain.AuditEvent) { e.TargetKind = domain.AuditTargetPerson },
+			"impersonate none": func(e *domain.AuditEvent) { e.TargetKind, e.TargetID = "", domain.AccountID{} },
+		})
+	})
+
+	t.Run("AuditMailRequeued", func(t *testing.T) {
+		t.Parallel()
+		checkValidate(t, func() domain.AuditEvent {
+			return domain.AuditEvent{
+				ID: newID[domain.AuditEventID](), At: t0, ActorID: newID[domain.AccountID](),
+				Action:  domain.AuditMailRequeued,
+				Details: domain.AuditDetails{MailID: newID[domain.OutboxMailID](), Recipient: "a@example.org", Template: "receipt"},
+			}
+		}, map[string]func(*domain.AuditEvent){
+			"no mail": func(e *domain.AuditEvent) { e.Details.MailID = domain.OutboxMailID{} },
+			"target": func(e *domain.AuditEvent) {
+				e.TargetKind, e.TargetID = domain.AuditTargetAccount, newID[domain.AccountID]()
+			},
 		})
 	})
 
@@ -985,6 +1081,18 @@ func TestOutboxMailValidate(t *testing.T) {
 		if got := m.Status(); got != want {
 			t.Errorf("Status() = %s, want %s", got, want)
 		}
+	}
+
+	// The purge removes the bodies of sent mails only.
+	purged := sent
+	purged.Text = ""
+	if err := purged.Validate(); err != nil || !purged.Purged() {
+		t.Errorf("purged sent mail: Validate = %v, Purged = %v", err, purged.Purged())
+	}
+
+	purged.HTML = "<p>Hi</p>"
+	if err := purged.Validate(); err == nil {
+		t.Error("a mail with HTML but no text is valid")
 	}
 }
 

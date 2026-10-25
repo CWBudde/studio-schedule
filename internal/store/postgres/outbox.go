@@ -5,7 +5,10 @@ import (
 	"math"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/postgres/internal/sqlc"
 )
 
@@ -16,7 +19,7 @@ func toOutboxMail(row sqlc.OutboxMail) domain.OutboxMail {
 		ID:            fromPgID[domain.OutboxMailID](row.ID),
 		To:            row.Recipient,
 		Subject:       row.Subject,
-		Text:          row.BodyText,
+		Text:          row.BodyText.String,
 		HTML:          row.BodyHtml.String,
 		Template:      row.Template.String,
 		CreatedAt:     fromPgInstant(row.CreatedAt),
@@ -52,7 +55,7 @@ func (r outboxRepo) Create(ctx context.Context, m domain.OutboxMail) error {
 		ID:            pgID(m.ID),
 		Recipient:     m.To,
 		Subject:       m.Subject,
-		BodyText:      m.Text,
+		BodyText:      pgText(m.Text),
 		BodyHtml:      pgText(m.HTML),
 		Template:      pgText(m.Template),
 		CreatedAt:     pgInstant(m.CreatedAt),
@@ -75,7 +78,7 @@ func (r outboxRepo) Update(ctx context.Context, m domain.OutboxMail) error {
 		ID:            pgID(m.ID),
 		Recipient:     m.To,
 		Subject:       m.Subject,
-		BodyText:      m.Text,
+		BodyText:      pgText(m.Text),
 		BodyHtml:      pgText(m.HTML),
 		Template:      pgText(m.Template),
 		CreatedAt:     pgInstant(m.CreatedAt),
@@ -96,8 +99,27 @@ func (r outboxRepo) ListDue(ctx context.Context, now time.Time, limit int) ([]do
 	return convertRows(rows, err, toOutboxMail)
 }
 
-func (r outboxRepo) List(ctx context.Context, limit int) ([]domain.OutboxMail, error) {
-	rows, err := r.q.ListOutboxMails(ctx, rowLimit(limit))
+func (r outboxRepo) List(ctx context.Context, f store.OutboxFilter) ([]domain.OutboxMail, error) {
+	p := sqlc.ListOutboxMailsParams{
+		Status: string(f.Status), Template: f.Template, Recipient: f.Recipient, MaxRows: rowLimit(f.Limit),
+	}
+	if !f.AfterCreatedAt.IsZero() {
+		p.BeforeCreatedAt, p.BeforeID = pgInstant(f.AfterCreatedAt), pgtype.UUID{Bytes: f.AfterID, Valid: true}
+	}
+
+	rows, err := r.q.ListOutboxMails(ctx, p)
 
 	return convertRows(rows, err, toOutboxMail)
+}
+
+func (r outboxRepo) PurgeBodies(ctx context.Context, sentBefore time.Time) (int, error) {
+	n, err := r.q.PurgeOutboxBodies(ctx, pgAt(sentBefore))
+
+	return int(n), mapErr(err)
+}
+
+func (r outboxRepo) DeleteCreatedBefore(ctx context.Context, before time.Time) (int, error) {
+	n, err := r.q.DeleteOldOutboxMails(ctx, pgAt(before))
+
+	return int(n), mapErr(err)
 }

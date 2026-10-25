@@ -297,6 +297,16 @@ var codecs = []codec{
 		func(v domain.OutboxMail) domain.OutboxMailID { return v.ID }),
 	rows("audit", func(s *state) *table[domain.AuditEventID, domain.AuditEvent] { return &s.audit },
 		func(v domain.AuditEvent) domain.AuditEventID { return v.ID }),
+	rows("announcements", func(s *state) *table[domain.AnnouncementID, domain.Announcement] { return &s.announcements },
+		func(v domain.Announcement) domain.AnnouncementID { return v.ID }),
+	rows("announcementDismissed",
+		func(s *state) *table[dismissalKey, domain.AnnouncementDismissal] { return &s.announcementDismissed },
+		func(v domain.AnnouncementDismissal) dismissalKey { return dismissalKey{v.AnnouncementID, v.AccountID} }),
+	rows("announcementMailings",
+		func(s *state) *table[domain.AnnouncementMailingID, domain.AnnouncementMailing] {
+			return &s.announcementMailings
+		},
+		func(v domain.AnnouncementMailing) domain.AnnouncementMailingID { return v.ID }),
 }
 
 // OnCommit registers fn to run after every read-write transaction that

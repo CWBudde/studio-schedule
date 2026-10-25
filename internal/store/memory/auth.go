@@ -3,9 +3,11 @@ package memory
 import (
 	"cmp"
 	"context"
+	"strings"
 	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/store"
 )
 
 // ---------------------------------------------------------------- credentials
@@ -276,12 +278,54 @@ func (r outboxRepo) ListDue(_ context.Context, now time.Time, limit int) ([]doma
 	return due[:min(max(limit, 0), len(due))], nil
 }
 
-func (r outboxRepo) List(_ context.Context, limit int) ([]domain.OutboxMail, error) {
-	mails := sorted(r.tx.state.outbox.filter(all), func(a, b domain.OutboxMail) int {
+func (r outboxRepo) List(_ context.Context, f store.OutboxFilter) ([]domain.OutboxMail, error) {
+	newer := func(a, b domain.OutboxMail) int {
 		return cmp.Or(b.CreatedAt.Compare(a.CreatedAt), compareID(b.ID, a.ID))
+	}
+	cursor := domain.OutboxMail{CreatedAt: instant(f.AfterCreatedAt), ID: f.AfterID}
+	recipient := foldASCII(f.Recipient)
+
+	mails := sorted(r.tx.state.outbox.filter(func(m domain.OutboxMail) bool {
+		return (f.Status == "" || m.Status() == f.Status) &&
+			(f.Template == "" || m.Template == f.Template) &&
+			strings.Contains(foldASCII(m.To), recipient) &&
+			(f.AfterCreatedAt.IsZero() || newer(m, cursor) > 0)
+	}), newer)
+
+	return mails[:min(max(f.Limit, 0), len(mails))], nil
+}
+
+func (r outboxRepo) PurgeBodies(_ context.Context, sentBefore time.Time) (int, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return 0, err
+	}
+
+	sentBefore = instant(sentBefore)
+	mails := r.tx.state.outbox.filter(func(m domain.OutboxMail) bool {
+		return !m.SentAt.IsZero() && m.SentAt.Before(sentBefore) && !m.Purged()
 	})
 
-	return mails[:min(max(limit, 0), len(mails))], nil
+	for _, m := range mails {
+		m.Text, m.HTML = "", ""
+		r.tx.state.outbox.put(r.tx.gen, m.ID, m)
+	}
+
+	return len(mails), nil
+}
+
+func (r outboxRepo) DeleteCreatedBefore(_ context.Context, before time.Time) (int, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return 0, err
+	}
+
+	before = instant(before)
+	mails := r.tx.state.outbox.filter(func(m domain.OutboxMail) bool { return m.CreatedAt.Before(before) })
+
+	for _, m := range mails {
+		r.tx.state.outbox.delete(r.tx.gen, m.ID)
+	}
+
+	return len(mails), nil
 }
 
 // ---------------------------------------------------------------- audit
@@ -298,8 +342,10 @@ func (r auditRepo) Create(_ context.Context, e domain.AuditEvent) error {
 	switch {
 	case s.audit.has(e.ID):
 		return conflict("audit event %s exists", e.ID)
-	case !s.accounts.has(e.ActorID) || !s.accounts.has(e.TargetID):
-		return conflict("audit event references a missing account")
+	case !s.accounts.has(e.ActorID),
+		!e.TargetID.IsZero() && !s.accounts.has(e.TargetID),
+		!e.TargetPersonID.IsZero() && !s.persons.has(e.TargetPersonID):
+		return conflict("audit event references a missing account or person")
 	}
 
 	e.At = instant(e.At)

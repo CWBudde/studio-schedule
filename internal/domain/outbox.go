@@ -48,6 +48,9 @@ func MailStatuses() []MailStatus { return []MailStatus{MailPending, MailSent, Ma
 // Valid reports whether s is a known mail status.
 func (s MailStatus) Valid() bool { return slices.Contains(MailStatuses(), s) }
 
+// Purged reports whether the purge removed the mail's bodies (ADR 0014).
+func (m OutboxMail) Purged() bool { return m.Text == "" }
+
 // Status derives the delivery state of the mail.
 func (m OutboxMail) Status() MailStatus {
 	switch {
@@ -67,7 +70,9 @@ func (m OutboxMail) Validate() error {
 		rule{validEmail(m.To), "invalid mail recipient"},
 		rule{optionalEmail(m.ReplyTo), "invalid reply-to address"},
 		rule{!blank(m.Subject), "mail subject must not be empty"},
-		rule{!blank(m.Text), "mail text must not be empty"},
+		// The purge removes the bodies of mails sent long ago (ADR 0014).
+		rule{!blank(m.Text) || !m.SentAt.IsZero(), "mail text must not be empty"},
+		rule{m.Text != "" || m.HTML == "", "a mail without text has no HTML either"},
 		rule{!m.CreatedAt.IsZero(), "mail creation time must be set"},
 		rule{m.Attempts >= 0, "mail attempts must not be negative"},
 		rule{m.SentAt.IsZero() || m.NextAttemptAt.IsZero(), "a sent mail has no next attempt"},

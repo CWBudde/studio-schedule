@@ -110,6 +110,16 @@ func (r lessonRepo) ListByClassStartingAfter(
 	return convertRows(rows, err, toLesson)
 }
 
+func (r lessonRepo) ListByCourseTypeStartingAfter(
+	ctx context.Context, courseType domain.CourseTypeID, after time.Time,
+) ([]domain.Lesson, error) {
+	rows, err := r.q.ListLessonsByCourseTypeStartingAfter(ctx, sqlc.ListLessonsByCourseTypeStartingAfterParams{
+		CourseTypeID: pgID(courseType), StartsAt: pgtype.Timestamptz{Time: instant(after), Valid: true},
+	})
+
+	return convertRows(rows, err, toLesson)
+}
+
 func (r lessonRepo) ListByClass(ctx context.Context, class domain.ClassID, from domain.Date) ([]domain.Lesson, error) {
 	rows, err := r.q.ListLessonsByClass(ctx, sqlc.ListLessonsByClassParams{ClassID: pgID(class), FromSlot: pgDate(from)})
 
@@ -305,6 +315,12 @@ func (r bookingRepo) CountActivePersons(ctx context.Context, lessons []domain.Le
 	}
 
 	return int(n), nil
+}
+
+func (r bookingRepo) ListActiveByLessons(ctx context.Context, lessons []domain.LessonID) ([]domain.Booking, error) {
+	rows, err := r.q.ListActiveBookingsByLessons(ctx, pgIDs(lessons))
+
+	return convertRows(rows, err, toBooking)
 }
 
 func (r bookingRepo) ListActiveByLessonsAndPersons(

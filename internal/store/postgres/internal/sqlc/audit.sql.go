@@ -12,16 +12,19 @@ import (
 )
 
 const createAuditEvent = `-- name: CreateAuditEvent :exec
-INSERT INTO audit_events (id, occurred_at, actor_id, action, target_id)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO audit_events (id, occurred_at, actor_id, action, target_kind, target_id, target_person_id, details)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type CreateAuditEventParams struct {
-	ID         pgtype.UUID
-	OccurredAt pgtype.Timestamptz
-	ActorID    pgtype.UUID
-	Action     string
-	TargetID   pgtype.UUID
+	ID             pgtype.UUID
+	OccurredAt     pgtype.Timestamptz
+	ActorID        pgtype.UUID
+	Action         string
+	TargetKind     pgtype.Text
+	TargetID       pgtype.UUID
+	TargetPersonID pgtype.UUID
+	Details        []byte
 }
 
 func (q *Queries) CreateAuditEvent(ctx context.Context, arg CreateAuditEventParams) error {
@@ -30,13 +33,16 @@ func (q *Queries) CreateAuditEvent(ctx context.Context, arg CreateAuditEventPara
 		arg.OccurredAt,
 		arg.ActorID,
 		arg.Action,
+		arg.TargetKind,
 		arg.TargetID,
+		arg.TargetPersonID,
+		arg.Details,
 	)
 	return err
 }
 
 const listAuditEvents = `-- name: ListAuditEvents :many
-SELECT id, occurred_at, actor_id, action, target_id FROM audit_events ORDER BY occurred_at DESC, id DESC LIMIT $1
+SELECT id, occurred_at, actor_id, action, target_id, target_kind, target_person_id, details FROM audit_events ORDER BY occurred_at DESC, id DESC LIMIT $1
 `
 
 func (q *Queries) ListAuditEvents(ctx context.Context, maxRows int32) ([]AuditEvent, error) {
@@ -54,6 +60,9 @@ func (q *Queries) ListAuditEvents(ctx context.Context, maxRows int32) ([]AuditEv
 			&i.ActorID,
 			&i.Action,
 			&i.TargetID,
+			&i.TargetKind,
+			&i.TargetPersonID,
+			&i.Details,
 		); err != nil {
 			return nil, err
 		}

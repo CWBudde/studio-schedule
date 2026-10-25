@@ -147,7 +147,8 @@ func (r personRepo) Delete(_ context.Context, id domain.PersonID) error {
 		s.classMembers.exists(func(m domain.ClassMember) bool { return m.PersonID == id }) ||
 		s.bookings.exists(func(b domain.Booking) bool { return b.PersonID == id }) ||
 		s.passes.exists(func(p domain.Pass) bool { return p.PersonID == id || p.PayerID == id }) ||
-		s.receipts.exists(func(rc domain.Receipt) bool { return rc.PayerID == id })
+		s.receipts.exists(func(rc domain.Receipt) bool { return rc.PayerID == id }) ||
+		s.audit.exists(func(e domain.AuditEvent) bool { return e.TargetPersonID == id })
 	for g := range s.guardians.rows {
 		referenced = referenced || g.GuardianID == id || g.DependentID == id
 	}
@@ -655,7 +656,8 @@ func (r courseTypeRepo) Delete(_ context.Context, id domain.CourseTypeID) error 
 	case !s.courseTypes.has(id):
 		return notFound("course type")
 	case s.classes.exists(func(c domain.Class) bool { return c.CourseTypeID == id }),
-		s.lessons.exists(func(l domain.Lesson) bool { return l.CourseTypeID == id }):
+		s.lessons.exists(func(l domain.Lesson) bool { return l.CourseTypeID == id }),
+		s.announcements.exists(func(a domain.Announcement) bool { return a.CourseTypeID == id }):
 		return conflict("course type %s is referenced", id)
 	}
 
@@ -812,7 +814,8 @@ func (r classRepo) Delete(_ context.Context, id domain.ClassID) error {
 	case !s.classes.has(id):
 		return notFound("class")
 	case s.classMembers.exists(func(m domain.ClassMember) bool { return m.ClassID == id }),
-		s.lessons.exists(func(l domain.Lesson) bool { return l.ClassID == id }):
+		s.lessons.exists(func(l domain.Lesson) bool { return l.ClassID == id }),
+		s.announcements.exists(func(a domain.Announcement) bool { return a.ClassID == id }):
 		return conflict("class %s is referenced", id)
 	}
 
@@ -977,6 +980,10 @@ func (r lessonRepo) Delete(_ context.Context, id domain.LessonID) error {
 		s.notices.put(r.tx.gen, n.ID, n)
 	}
 
+	for _, a := range s.announcements.filter(func(a domain.Announcement) bool { return a.LessonID == id }) {
+		announcementRepo(r).remove(a.ID)
+	}
+
 	s.lessons.delete(r.tx.gen, id)
 
 	return nil
@@ -987,6 +994,19 @@ func (r lessonRepo) ListByClassStartingAfter(
 ) ([]domain.Lesson, error) {
 	after = instant(after)
 	lessons := r.tx.state.lessons.filter(func(l domain.Lesson) bool { return l.ClassID == class && l.StartsAt.After(after) })
+
+	return sorted(lessons, func(a, b domain.Lesson) int {
+		return cmp.Or(a.StartsAt.Compare(b.StartsAt), compareID(a.ID, b.ID))
+	}), nil
+}
+
+func (r lessonRepo) ListByCourseTypeStartingAfter(
+	_ context.Context, courseType domain.CourseTypeID, after time.Time,
+) ([]domain.Lesson, error) {
+	after = instant(after)
+	lessons := r.tx.state.lessons.filter(func(l domain.Lesson) bool {
+		return l.CourseTypeID == courseType && l.StartsAt.After(after)
+	})
 
 	return sorted(lessons, func(a, b domain.Lesson) int {
 		return cmp.Or(a.StartsAt.Compare(b.StartsAt), compareID(a.ID, b.ID))
@@ -1222,6 +1242,17 @@ func (r bookingRepo) CountActivePersons(_ context.Context, lessons []domain.Less
 	}
 
 	return len(persons), nil
+}
+
+func (r bookingRepo) ListActiveByLessons(_ context.Context, lessons []domain.LessonID) ([]domain.Booking, error) {
+	wanted := setOf(lessons)
+	bookings := r.tx.state.bookings.filter(func(b domain.Booking) bool {
+		_, ok := wanted[b.LessonID]
+
+		return ok && active(b)
+	})
+
+	return sorted(bookings, compareBookings), nil
 }
 
 func (r bookingRepo) ListActiveByLessonsAndPersons(

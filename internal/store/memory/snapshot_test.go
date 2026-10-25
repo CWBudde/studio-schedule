@@ -153,6 +153,12 @@ func fullStore(t *testing.T) *Store {
 			Lines: []domain.ReceiptLine{line},
 		}
 
+		announcement := domain.Announcement{
+			ID: ids.New[domain.AnnouncementID](src), AuthorID: account, Title: "Snapshot", Body: "Hello",
+			Audience: domain.AudienceLesson, LessonID: lesson, PublishAt: at, ExpiresAt: at.Add(time.Hour),
+			Email: true, EmailedAt: at, EmailRecipients: 2, CreatedAt: at, UpdatedAt: at,
+		}
+
 		return errors.Join(
 			tx.Receipts().Create(ctx, receipt),
 			tx.Receipts().PutPDF(ctx, receipt.ID, []byte("%PDF-1.7 snapshot")),
@@ -186,7 +192,20 @@ func fullStore(t *testing.T) *Store {
 			}),
 			tx.Audit().Create(ctx, domain.AuditEvent{
 				ID: ids.New[domain.AuditEventID](src), At: at, ActorID: account,
-				Action: domain.AuditImpersonationStarted, TargetID: account,
+				Action: domain.AuditImpersonationStarted, TargetKind: domain.AuditTargetAccount, TargetID: account,
+			}),
+			tx.Audit().Create(ctx, domain.AuditEvent{
+				ID: ids.New[domain.AuditEventID](src), At: at, ActorID: account, Action: domain.AuditMailRequeued,
+				TargetKind: domain.AuditTargetPerson, TargetPersonID: person,
+				Details: domain.AuditDetails{MailID: ids.New[domain.OutboxMailID](src), Recipient: "x@example.org"},
+			}),
+			tx.Announcements().Create(ctx, announcement),
+			tx.Announcements().Dismiss(ctx, domain.AnnouncementDismissal{
+				AnnouncementID: announcement.ID, AccountID: account, DismissedAt: at,
+			}),
+			tx.Announcements().CreateMailing(ctx, domain.AnnouncementMailing{
+				ID: ids.New[domain.AnnouncementMailingID](src), AnnouncementID: announcement.ID, SenderID: account,
+				SentAt: at, Recipients: 2,
 			}),
 		)
 	})

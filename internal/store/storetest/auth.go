@@ -470,7 +470,10 @@ func testAudit(t *testing.T, newStore func(*testing.T) store.Store) {
 	}
 
 	event := func(e *env, at time.Time, actor, target domain.Account, action domain.AuditAction) domain.AuditEvent {
-		ev := domain.AuditEvent{ID: newID[domain.AuditEventID](e), At: at, ActorID: actor.ID, Action: action, TargetID: target.ID}
+		ev := domain.AuditEvent{
+			ID: newID[domain.AuditEventID](e), At: at, ActorID: actor.ID, Action: action,
+			TargetKind: domain.AuditTargetAccount, TargetID: target.ID,
+		}
 		valid(e.t, ev)
 
 		return ev
@@ -520,6 +523,43 @@ func testAudit(t *testing.T, newStore func(*testing.T) store.Store) {
 			noTarget := ev
 			noTarget.ID, noTarget.TargetID = newID[domain.AuditEventID](e), newID[domain.AccountID](e)
 			wantErr(e.t, create(e, noTarget), domain.ErrConflict)
+		},
+		"TargetsAndDetails": func(e *env) {
+			admin := e.account(e.person("Ada", "Admin"), "ada@example.org")
+			ben := e.person("Ben", "Member")
+
+			// No target, with details.
+			requeued := domain.AuditEvent{
+				ID: newID[domain.AuditEventID](e), At: t0, ActorID: admin.ID, Action: domain.AuditMailRequeued,
+				Details: domain.AuditDetails{
+					MailID: newID[domain.OutboxMailID](e), Recipient: "ben@example.org", Template: "receipt",
+				},
+			}
+			valid(e.t, requeued)
+
+			// A person target. No action targets a person yet (ADR 0014), so
+			// the store, which does not validate, gets one anyway.
+			aboutBen := domain.AuditEvent{
+				ID: newID[domain.AuditEventID](e), At: t0.Add(time.Minute), ActorID: admin.ID,
+				Action: domain.AuditMailRequeued, TargetKind: domain.AuditTargetPerson, TargetPersonID: ben.ID,
+				Details: domain.AuditDetails{MailID: newID[domain.OutboxMailID](e)},
+			}
+
+			for _, ev := range []domain.AuditEvent{requeued, aboutBen} {
+				if err := create(e, ev); err != nil {
+					e.t.Fatalf("Create: %v", err)
+				}
+			}
+
+			wantSlice(e.t, list(e, 10), []domain.AuditEvent{aboutBen, requeued})
+
+			// The person is referenced now.
+			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Persons().Delete(ctx, ben.ID) })
+			wantErr(e.t, err, domain.ErrConflict)
+
+			noPerson := aboutBen
+			noPerson.ID, noPerson.TargetPersonID = newID[domain.AuditEventID](e), newID[domain.PersonID](e)
+			wantErr(e.t, create(e, noPerson), domain.ErrConflict)
 		},
 		"ReadOnlyRejectsWrites": func(e *env) {
 			admin := e.account(e.person("Ada", "Admin"), "ada@example.org")

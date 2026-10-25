@@ -280,6 +280,46 @@ func (q *Queries) GetBooking(ctx context.Context, id pgtype.UUID) (Booking, erro
 	return i, err
 }
 
+const listActiveBookingsByLessons = `-- name: ListActiveBookingsByLessons :many
+SELECT id, lesson_id, person_id, guest_name, guest_email, status, trial, booked_at, canceled_at, source, late, released, trial_note FROM bookings
+WHERE lesson_id = ANY($1::uuid[]) AND status <> 'canceled'
+ORDER BY booked_at, id
+`
+
+func (q *Queries) ListActiveBookingsByLessons(ctx context.Context, lessons []pgtype.UUID) ([]Booking, error) {
+	rows, err := q.db.Query(ctx, listActiveBookingsByLessons, lessons)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Booking
+	for rows.Next() {
+		var i Booking
+		if err := rows.Scan(
+			&i.ID,
+			&i.LessonID,
+			&i.PersonID,
+			&i.GuestName,
+			&i.GuestEmail,
+			&i.Status,
+			&i.Trial,
+			&i.BookedAt,
+			&i.CanceledAt,
+			&i.Source,
+			&i.Late,
+			&i.Released,
+			&i.TrialNote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActiveBookingsByLessonsAndPersons = `-- name: ListActiveBookingsByLessonsAndPersons :many
 SELECT id, lesson_id, person_id, guest_name, guest_email, status, trial, booked_at, canceled_at, source, late, released, trial_note FROM bookings
 WHERE lesson_id = ANY($1::uuid[]) AND person_id = ANY($2::uuid[])

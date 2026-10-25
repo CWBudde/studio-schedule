@@ -39,6 +39,9 @@ ORDER BY starts_at, id;
 -- name: ListLessonsByClassStartingAfter :many
 SELECT * FROM lessons WHERE class_id = $1 AND starts_at > $2 ORDER BY starts_at, id;
 
+-- name: ListLessonsByCourseTypeStartingAfter :many
+SELECT * FROM lessons WHERE course_type_id = $1 AND starts_at > $2 ORDER BY starts_at, id;
+
 -- name: ListLessonsByClass :many
 SELECT * FROM lessons
 WHERE class_id = sqlc.arg(class_id)

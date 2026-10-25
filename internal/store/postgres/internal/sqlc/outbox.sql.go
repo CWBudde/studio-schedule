@@ -22,7 +22,7 @@ type CreateOutboxMailParams struct {
 	ID            pgtype.UUID
 	Recipient     string
 	Subject       string
-	BodyText      string
+	BodyText      pgtype.Text
 	BodyHtml      pgtype.Text
 	Template      pgtype.Text
 	CreatedAt     pgtype.Timestamptz
@@ -51,6 +51,18 @@ func (q *Queries) CreateOutboxMail(ctx context.Context, arg CreateOutboxMailPara
 		arg.ReceiptID,
 	)
 	return err
+}
+
+const deleteOldOutboxMails = `-- name: DeleteOldOutboxMails :execrows
+DELETE FROM outbox_mails WHERE created_at < $1
+`
+
+func (q *Queries) DeleteOldOutboxMails(ctx context.Context, createdBefore pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOldOutboxMails, createdBefore)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getOutboxMail = `-- name: GetOutboxMail :one
@@ -127,11 +139,41 @@ func (q *Queries) ListDueOutboxMails(ctx context.Context, arg ListDueOutboxMails
 }
 
 const listOutboxMails = `-- name: ListOutboxMails :many
-SELECT id, recipient, subject, body_text, body_html, template, created_at, attempts, next_attempt_at, sent_at, last_error, reply_to, receipt_id FROM outbox_mails ORDER BY created_at DESC, id DESC LIMIT $1
+SELECT id, recipient, subject, body_text, body_html, template, created_at, attempts, next_attempt_at, sent_at, last_error, reply_to, receipt_id FROM outbox_mails
+WHERE ($1::text = ''
+        OR ($1 = 'sent' AND sent_at IS NOT NULL)
+        OR ($1 = 'failed' AND sent_at IS NULL AND next_attempt_at IS NULL)
+        OR ($1 = 'pending' AND sent_at IS NULL AND next_attempt_at IS NOT NULL))
+    AND ($2::text = '' OR template = $2)
+    AND ($3::text = ''
+        OR strpos(lower(recipient COLLATE "C"), lower($3::text COLLATE "C")) > 0)
+    AND ($4::timestamptz IS NULL
+        OR (created_at, id) < ($4::timestamptz, $5::uuid))
+ORDER BY created_at DESC, id DESC
+LIMIT $6
 `
 
-func (q *Queries) ListOutboxMails(ctx context.Context, maxRows int32) ([]OutboxMail, error) {
-	rows, err := q.db.Query(ctx, listOutboxMails, maxRows)
+type ListOutboxMailsParams struct {
+	Status          string
+	Template        string
+	Recipient       string
+	BeforeCreatedAt pgtype.Timestamptz
+	BeforeID        pgtype.UUID
+	MaxRows         int32
+}
+
+// The status is derived as in domain.OutboxMail.Status. The recipient
+// matches ignoring ASCII case: lower() under collation "C" folds ASCII only.
+// The cursor, if given, keeps the mails after it in the order.
+func (q *Queries) ListOutboxMails(ctx context.Context, arg ListOutboxMailsParams) ([]OutboxMail, error) {
+	rows, err := q.db.Query(ctx, listOutboxMails,
+		arg.Status,
+		arg.Template,
+		arg.Recipient,
+		arg.BeforeCreatedAt,
+		arg.BeforeID,
+		arg.MaxRows,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +206,19 @@ func (q *Queries) ListOutboxMails(ctx context.Context, maxRows int32) ([]OutboxM
 	return items, nil
 }
 
+const purgeOutboxBodies = `-- name: PurgeOutboxBodies :execrows
+UPDATE outbox_mails SET body_text = NULL, body_html = NULL
+WHERE sent_at < $1 AND body_text IS NOT NULL
+`
+
+func (q *Queries) PurgeOutboxBodies(ctx context.Context, sentBefore pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeOutboxBodies, sentBefore)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateOutboxMail = `-- name: UpdateOutboxMail :execrows
 UPDATE outbox_mails
 SET recipient = $2, subject = $3, body_text = $4, body_html = $5, template = $6, created_at = $7,
@@ -175,7 +230,7 @@ type UpdateOutboxMailParams struct {
 	ID            pgtype.UUID
 	Recipient     string
 	Subject       string
-	BodyText      string
+	BodyText      pgtype.Text
 	BodyHtml      pgtype.Text
 	Template      pgtype.Text
 	CreatedAt     pgtype.Timestamptz

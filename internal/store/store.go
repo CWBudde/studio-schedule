@@ -114,6 +114,7 @@ type Tx interface {
 	ReceiptCounters() ReceiptCounterRepo
 	Outbox() OutboxRepo
 	Audit() AuditRepo
+	Announcements() AnnouncementRepo
 }
 
 // SettingsRepo stores the single, school-wide settings record.
@@ -157,7 +158,8 @@ type PersonRepo interface {
 	Update(ctx context.Context, p domain.Person) error
 	// Delete fails with domain.ErrConflict while the person is referenced
 	// (account, staff, guardian link, class member, booking, a pass they own
-	// or paid for, a receipt they paid). The person's waiting-list entries are deleted with it.
+	// or paid for, a receipt they paid, an audit event about them). The
+	// person's waiting-list entries are deleted with it.
 	Delete(ctx context.Context, id domain.PersonID) error
 	// List returns all persons ordered by family name, given name and ID.
 	List(ctx context.Context) ([]domain.Person, error)
@@ -319,8 +321,8 @@ type CourseTypeRepo interface {
 	// type has the name, ignoring ASCII case.
 	Create(ctx context.Context, c domain.CourseType) error
 	Update(ctx context.Context, c domain.CourseType) error
-	// Delete fails with domain.ErrConflict while classes or lessons use the
-	// course type.
+	// Delete fails with domain.ErrConflict while classes, lessons or
+	// announcements use the course type.
 	Delete(ctx context.Context, id domain.CourseTypeID) error
 	// List returns all course types ordered by name and ID.
 	List(ctx context.Context) ([]domain.CourseType, error)
@@ -351,7 +353,7 @@ type ClassRepo interface {
 	Create(ctx context.Context, c domain.Class) error
 	Update(ctx context.Context, c domain.Class) error
 	// Delete fails with domain.ErrConflict while lessons or members belong
-	// to the class.
+	// to the class, or announcements are for its members.
 	Delete(ctx context.Context, id domain.ClassID) error
 	// ListByTerm returns the classes of a term ordered by weekday (Sunday
 	// first), start time and ID.
@@ -391,13 +393,19 @@ type LessonRepo interface {
 	// Update fails with domain.ErrConflict under the same rules as Create.
 	Update(ctx context.Context, l domain.Lesson) error
 	// Delete fails with domain.ErrConflict while bookings refer to the
-	// lesson, canceled ones included. The lesson's waiting-list entries are
-	// deleted with it; its notices stay, without the lesson.
+	// lesson, canceled ones included. The lesson's waiting-list entries and
+	// announcements are deleted with it; its notices stay, without the
+	// lesson.
 	Delete(ctx context.Context, id domain.LessonID) error
 	// ListByClassStartingAfter returns the lessons of a class that start
 	// after the instant, whatever their slot date, ordered by StartsAt and
 	// ID.
 	ListByClassStartingAfter(ctx context.Context, class domain.ClassID, after time.Time) ([]domain.Lesson, error)
+	// ListByCourseTypeStartingAfter returns the lessons of a course type
+	// that start after the instant, ordered by StartsAt and ID.
+	ListByCourseTypeStartingAfter(
+		ctx context.Context, courseType domain.CourseTypeID, after time.Time,
+	) ([]domain.Lesson, error)
 	// ListByClass returns the lessons of a class whose slot date is from or
 	// later (all of them for a zero from), ordered by StartsAt and ID.
 	ListByClass(ctx context.Context, class domain.ClassID, from domain.Date) ([]domain.Lesson, error)
@@ -456,6 +464,9 @@ type BookingRepo interface {
 	// (not canceled) booking in any of the given lessons; guests do not
 	// count.
 	CountActivePersons(ctx context.Context, lessons []domain.LessonID) (int, error)
+	// ListActiveByLessons returns the bookings that are not canceled of any
+	// of the given lessons, ordered by BookedAt and ID.
+	ListActiveByLessons(ctx context.Context, lessons []domain.LessonID) ([]domain.Booking, error)
 	// ListActiveByLessonsAndPersons returns the bookings that are not
 	// canceled of any of the given persons in any of the given lessons,
 	// ordered by BookedAt and ID.
@@ -763,17 +774,104 @@ type OutboxRepo interface {
 	// another transaction has locked, so concurrent workers never pick the
 	// same mail.
 	ListDue(ctx context.Context, now time.Time, limit int) ([]domain.OutboxMail, error)
-	// List returns at most limit mails, newest first: ordered by creation
-	// time and ID, both descending.
-	List(ctx context.Context, limit int) ([]domain.OutboxMail, error)
+	// List returns at most f.Limit mails that match f, newest first:
+	// ordered by creation time and ID, both descending.
+	List(ctx context.Context, f OutboxFilter) ([]domain.OutboxMail, error)
+	// PurgeBodies removes the text and HTML of every mail sent before the
+	// instant that still has them (ADR 0014) and returns how many it
+	// changed.
+	PurgeBodies(ctx context.Context, sentBefore time.Time) (int, error)
+	// DeleteCreatedBefore deletes every mail created before the instant,
+	// whatever its status, and returns how many it deleted.
+	DeleteCreatedBefore(ctx context.Context, before time.Time) (int, error)
+}
+
+// OutboxFilter selects mails for OutboxRepo.List. Its zero value selects
+// none (Limit 0).
+type OutboxFilter struct {
+	// Status keeps the mails in that state (domain.OutboxMail.Status);
+	// empty keeps all.
+	Status domain.MailStatus
+	// Template keeps the mails of that template; empty keeps all.
+	Template string
+	// Recipient keeps the mails whose recipient contains it, ignoring ASCII
+	// case; empty keeps all.
+	Recipient string
+	// After is the cursor: a non-zero After keeps only the mails that come
+	// after the mail with this creation time and ID in the order of List.
+	AfterCreatedAt time.Time
+	AfterID        domain.OutboxMailID
+	// Limit returns at most that many mails (zero or less: none).
+	Limit int
 }
 
 // AuditRepo stores audit events. Events are only ever added.
 type AuditRepo interface {
-	// Create fails with domain.ErrConflict if the ID is taken or an account
-	// does not exist.
+	// Create fails with domain.ErrConflict if the ID is taken or the actor,
+	// the target account or the target person does not exist.
 	Create(ctx context.Context, e domain.AuditEvent) error
 	// List returns at most limit events, newest first: ordered by time and
 	// ID, both descending.
 	List(ctx context.Context, limit int) ([]domain.AuditEvent, error)
+}
+
+// AnnouncementRepo stores announcements (ADR 0014), the accounts'
+// dismissals of them, and their mailings. An announcement goes with its
+// lesson (LessonRepo.Delete), its dismissals go with it, and its mailings
+// stay without it.
+type AnnouncementRepo interface {
+	Get(ctx context.Context, id domain.AnnouncementID) (domain.Announcement, error)
+	// Create fails with domain.ErrConflict if the ID is taken or the
+	// author, class, course type or lesson does not exist.
+	Create(ctx context.Context, a domain.Announcement) error
+	// Update writes everything the office edits: every field but the mail
+	// state (EmailedAt, EmailRecipients, MailCursor), which only
+	// SetMailState writes, so an edit never undoes a mailing. It fails
+	// under the same rules as Create.
+	Update(ctx context.Context, a domain.Announcement) error
+	// SetMailState writes the mail state of a (EmailedAt, EmailRecipients,
+	// MailCursor) and nothing else.
+	SetMailState(ctx context.Context, a domain.Announcement) error
+	// Lock returns the announcement and locks it until the transaction ends
+	// (in PostgreSQL: SELECT … FOR UPDATE), against a concurrent mailing.
+	// It needs a ReadWrite transaction and fails with ErrReadOnly
+	// otherwise.
+	Lock(ctx context.Context, id domain.AnnouncementID) (domain.Announcement, error)
+	Delete(ctx context.Context, id domain.AnnouncementID) error
+	// List returns all announcements, newest first: ordered by PublishAt
+	// and ID, both descending.
+	List(ctx context.Context) ([]domain.Announcement, error)
+	// ListShown returns the announcements shown at now (published at or
+	// before it, not expired at it), ordered like List.
+	ListShown(ctx context.Context, now time.Time) ([]domain.Announcement, error)
+	// ListDueForMail returns at most limit announcements to be emailed
+	// whose PublishAt is at or before now and that are not emailed yet
+	// (being sent included), ordered by PublishAt and ID. Like OutboxRepo.ListDue it needs a
+	// ReadWrite transaction and skips those another transaction has locked.
+	ListDueForMail(ctx context.Context, now time.Time, limit int) ([]domain.Announcement, error)
+	// CountScheduledForMail counts the announcements to be emailed and not
+	// emailed yet (being sent included) with from <= PublishAt < to, except the announcement
+	// except (none if zero).
+	CountScheduledForMail(ctx context.Context, from, to time.Time, except domain.AnnouncementID) (int, error)
+	// LockMail serializes the transactions that check or use the daily
+	// limit of emailed announcements, until the transaction ends. It needs
+	// a ReadWrite transaction and fails with ErrReadOnly otherwise.
+	LockMail(ctx context.Context) error
+
+	// Dismiss records a dismissal unless the account dismissed the
+	// announcement already (then it keeps the first). It fails with
+	// domain.ErrConflict if the announcement or the account does not exist.
+	Dismiss(ctx context.Context, d domain.AnnouncementDismissal) error
+	// ListDismissed returns those of the given announcements that the
+	// account dismissed, each once and ordered by ID.
+	ListDismissed(
+		ctx context.Context, account domain.AccountID, announcements []domain.AnnouncementID,
+	) ([]domain.AnnouncementID, error)
+
+	// CreateMailing fails with domain.ErrConflict if the ID is taken or the
+	// announcement or the sender does not exist.
+	CreateMailing(ctx context.Context, m domain.AnnouncementMailing) error
+	// ListMailings returns the mailings with from <= SentAt < to, ordered by
+	// SentAt and ID.
+	ListMailings(ctx context.Context, from, to time.Time) ([]domain.AnnouncementMailing, error)
 }

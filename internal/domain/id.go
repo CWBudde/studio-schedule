@@ -79,13 +79,15 @@ type (
 	passTypeKind      struct{}
 	passKind          struct{}
 	receiptKind       struct{}
-	messageKind       struct{}
+	announcementKind  struct{}
 	calendarFeedKind  struct{}
 	importRunKind     struct{}
 	sessionKind       struct{}
 	outboxMailKind    struct{}
 	auditEventKind    struct{}
 	lessonNoticeKind  struct{}
+
+	announcementMailingKind struct{}
 )
 
 // ID types, one per entity of the domain model.
@@ -135,8 +137,8 @@ type (
 	// ReceiptID identifies a receipt.
 	ReceiptID = ID[receiptKind]
 
-	// MessageID identifies a message.
-	MessageID = ID[messageKind]
+	// AnnouncementID identifies an announcement.
+	AnnouncementID = ID[announcementKind]
 
 	// CalendarFeedID identifies a calendar feed.
 	CalendarFeedID = ID[calendarFeedKind]
@@ -155,4 +157,7 @@ type (
 
 	// LessonNoticeID identifies a lesson notice.
 	LessonNoticeID = ID[lessonNoticeKind]
+
+	// AnnouncementMailingID identifies the mailing of an announcement.
+	AnnouncementMailingID = ID[announcementMailingKind]
 )

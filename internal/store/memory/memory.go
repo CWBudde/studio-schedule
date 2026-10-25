@@ -64,6 +64,15 @@ type state struct {
 	receiptCounters table[int, receiptCounter]
 	outbox          table[domain.OutboxMailID, domain.OutboxMail]
 	audit           table[domain.AuditEventID, domain.AuditEvent]
+
+	announcements         table[domain.AnnouncementID, domain.Announcement]
+	announcementDismissed table[dismissalKey, domain.AnnouncementDismissal]
+	announcementMailings  table[domain.AnnouncementMailingID, domain.AnnouncementMailing]
+}
+
+type dismissalKey struct {
+	announcement domain.AnnouncementID
+	account      domain.AccountID
 }
 
 type memberKey struct {
@@ -231,6 +240,9 @@ func (t *tx) ReceiptCounters() store.ReceiptCounterRepo {
 }
 func (t *tx) Outbox() store.OutboxRepo { return outboxRepo{t} }
 func (t *tx) Audit() store.AuditRepo   { return auditRepo{t} }
+func (t *tx) Announcements() store.AnnouncementRepo {
+	return announcementRepo{t}
+}
 
 func (t *tx) checkWritable() error {
 	if t.mode != store.ReadWrite {

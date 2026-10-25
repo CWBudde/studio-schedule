@@ -34,12 +34,53 @@ type AccountToken struct {
 	ExpiresAt pgtype.Timestamptz
 }
 
+type Announcement struct {
+	ID              pgtype.UUID
+	AuthorID        pgtype.UUID
+	Title           string
+	Body            string
+	Audience        string
+	Role            pgtype.Text
+	ClassID         pgtype.UUID
+	CourseTypeID    pgtype.UUID
+	LessonID        pgtype.UUID
+	PublishAt       pgtype.Timestamptz
+	ExpiresAt       pgtype.Timestamptz
+	Email           bool
+	EmailedAt       pgtype.Timestamptz
+	EmailRecipients int32
+	MailCursor      pgtype.Text
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
+type AnnouncementDismissal struct {
+	AnnouncementID pgtype.UUID
+	AccountID      pgtype.UUID
+	DismissedAt    pgtype.Timestamptz
+}
+
+type AnnouncementMailing struct {
+	ID             pgtype.UUID
+	AnnouncementID pgtype.UUID
+	SenderID       pgtype.UUID
+	SentAt         pgtype.Timestamptz
+	Recipients     int32
+}
+
+type AuditAction struct {
+	Action string
+}
+
 type AuditEvent struct {
-	ID         pgtype.UUID
-	OccurredAt pgtype.Timestamptz
-	ActorID    pgtype.UUID
-	Action     string
-	TargetID   pgtype.UUID
+	ID             pgtype.UUID
+	OccurredAt     pgtype.Timestamptz
+	ActorID        pgtype.UUID
+	Action         string
+	TargetID       pgtype.UUID
+	TargetKind     pgtype.Text
+	TargetPersonID pgtype.UUID
+	Details        []byte
 }
 
 type Booking struct {
@@ -146,7 +187,7 @@ type OutboxMail struct {
 	ID            pgtype.UUID
 	Recipient     string
 	Subject       string
-	BodyText      string
+	BodyText      pgtype.Text
 	BodyHtml      pgtype.Text
 	Template      pgtype.Text
 	CreatedAt     pgtype.Timestamptz

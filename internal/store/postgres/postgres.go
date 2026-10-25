@@ -218,3 +218,6 @@ func (t *tx) ReceiptCounters() store.ReceiptCounterRepo {
 }
 func (t *tx) Outbox() store.OutboxRepo { return outboxRepo{t.q} }
 func (t *tx) Audit() store.AuditRepo   { return auditRepo{t.q} }
+func (t *tx) Announcements() store.AnnouncementRepo {
+	return announcementRepo{t.q}
+}
