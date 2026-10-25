@@ -118,7 +118,7 @@ func (s *FamilyService) UpdatePerson(ctx context.Context, p Principal, d PersonD
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		var err error
-		if person, err = tx.Persons().Get(ctx, p.PersonID); err != nil {
+		if person, err = lockLivePerson(ctx, tx, p.PersonID); err != nil {
 			return err
 		}
 
@@ -140,6 +140,11 @@ func (s *FamilyService) AddDependent(ctx context.Context, p Principal, d PersonD
 	var person domain.Person
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		// The guardian is live and stays so (ADR 0015).
+		if _, err := lockLivePerson(ctx, tx, p.PersonID); err != nil {
+			return err
+		}
+
 		var err error
 		if person, err = s.apply(ctx, tx, domain.Person{ID: ids.New[domain.PersonID](s.ids)}, d); err != nil {
 			return err
@@ -172,13 +177,14 @@ func (s *FamilyService) UpdateDependent(
 	var person domain.Person
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		var err error
-		if person, err = dependentOf(ctx, tx, p.PersonID, id); err != nil {
+		if _, err := dependentOf(ctx, tx, p.PersonID, id); err != nil {
 			return err
 		}
 
-		// Under the lock, nothing can make the dependent managed meanwhile.
-		if err := tx.Persons().Lock(ctx, id); err != nil {
+		// Under the lock, nothing can make the dependent managed (or merge
+		// it, ADR 0015) meanwhile; the person is read under it.
+		var err error
+		if person, err = lockLivePerson(ctx, tx, id); err != nil {
 			return err
 		}
 

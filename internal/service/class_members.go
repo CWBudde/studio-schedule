@@ -84,7 +84,7 @@ var errMemberGone = fmt.Errorf("%w: the class or the person was deleted meanwhil
 // class's lessons from m.Since on that have not started (ADR 0009; see
 // enroll), even beyond a lesson's capacity. p is the office account, the
 // actor of the booking events. An unknown class is domain.ErrNotFound, an
-// unknown person a validation error on personId, a person who is a member
+// unknown or merged person a validation error on personId, a person who is a member
 // already domain.ErrDuplicate, a retired class ErrClassRetired, and a class
 // whose members fill its capacity ErrClassFull. A class or person deleted by a concurrent request is
 // domain.ErrNotFound as well.
@@ -101,7 +101,9 @@ func (s *TimetableService) AddClassMember(ctx context.Context, p Principal, m do
 			return err
 		}
 
-		person, err := tx.Persons().Get(ctx, m.PersonID)
+		// Lock order person → term → class → lesson: a merge (ADR 0015)
+		// cannot make the person a tombstone meanwhile.
+		person, err := lockLivePerson(ctx, tx, m.PersonID)
 		if errors.Is(err, domain.ErrNotFound) {
 			return errUnknownPerson
 		} else if err != nil {
@@ -110,7 +112,7 @@ func (s *TimetableService) AddClassMember(ctx context.Context, p Principal, m do
 
 		e = ClassMemberEntry{ClassMember: m, Person: person}
 
-		// Lock order term → class → lesson: the class lock keeps
+		// The class lock keeps
 		// generation, class edits and other membership changes out, and
 		// counts the members reliably.
 		if _, err := tx.Terms().Lock(ctx, cur.TermID); err != nil {

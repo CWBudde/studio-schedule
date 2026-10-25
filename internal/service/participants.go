@@ -187,7 +187,7 @@ type NewParticipant struct {
 // release window and the booking cutoff, and the lesson may have started:
 // it is allowed until the lesson's day is over (ErrDayOver; the office
 // always), but not into a lesson the school canceled (a *BookingClosedError
-// with ClosedCanceled). An unknown person is a validation error on
+// with ClosedCanceled). An unknown or merged person is a validation error on
 // personId, invalid guest details on guest.name or guest.email, a note
 // without a trial on trialNote. A person with an active booking is
 // ErrAlreadyBooked. A lesson whose active bookings and the places held by
@@ -214,9 +214,23 @@ func (s *ParticipantService) Add(
 			return err
 		}
 
+		// Lock order person → lesson, as a merge (ADR 0015) takes them: a
+		// merged person is unknown, and no merge makes it one meanwhile.
+		// Whether the caller manages the lesson is told first.
+		var personErr error
+		if !in.PersonID.IsZero() {
+			if _, personErr = lockLivePerson(ctx, tx, in.PersonID); errors.Is(personErr, domain.ErrNotFound) {
+				personErr = errUnknownPerson
+			}
+		}
+
 		l, err := lockManaged(ctx, tx, p, lesson)
 		if err != nil {
 			return err
+		}
+
+		if personErr != nil {
+			return personErr
 		}
 
 		now := s.clock.Now()

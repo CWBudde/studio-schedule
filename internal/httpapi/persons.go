@@ -28,9 +28,9 @@ func registerPersons(api huma.API, h *handlers) {
 		Method:      http.MethodGet,
 		Path:        BasePath + "/admin/persons",
 		Summary:     "Search persons",
-		Description: "Returns the persons whose given name, family name or email contains every word of `q`, " +
-			"ignoring case, ordered by family and given name; at most 50. For the office's pickers, e.g. " +
-			"linking a staff member to a person.",
+		Description: "Returns the persons whose given name, family name, email or member number contains every " +
+			"word of `q`, ignoring case, ordered by family and given name; at most 50; merged persons are left " +
+			"out. For the office's pickers, e.g. linking a staff member to a person.",
 		Tags: []string{"admin"},
 	}, h.listPersons)
 
@@ -121,6 +121,7 @@ type PersonMatch struct {
 	GivenName  string          `doc:"Given name."               json:"givenName"`
 	FamilyName string          `doc:"Family name."              json:"familyName"`
 	Email      string          `doc:"Email address, if known." json:"email,omitempty"`
+	MemberNo   string          `doc:"Member number, if any."   json:"memberNo,omitempty"`
 }
 
 // PersonMatchList is the response body of listPersons.
@@ -143,7 +144,7 @@ func (h *handlers) listPersons(ctx context.Context, in *PersonSearchInput) (*Per
 }
 
 func personMatch(p domain.Person) PersonMatch {
-	return PersonMatch{ID: p.ID, GivenName: p.GivenName, FamilyName: p.FamilyName, Email: p.Email}
+	return PersonMatch{ID: p.ID, GivenName: p.GivenName, FamilyName: p.FamilyName, Email: p.Email, MemberNo: p.MemberNo}
 }
 
 // PersonRecord is every field of a person, as the office edits it.
@@ -154,6 +155,7 @@ type PersonRecord struct {
 	Phone      string      `doc:"Phone number, if any."                       json:"phone,omitempty" maxLength:"50"`
 	BirthDate  domain.Date `doc:"Date of birth, if known; not in the future." format:"date" json:"birthDate,omitzero"`
 	Notes      string      `doc:"The office's internal notes, if any."        json:"notes,omitempty" maxLength:"2000"`
+	MemberNo   string      `doc:"The school's member number, if any; unique (a number another person has is a 409 duplicate). The member import finds a person by it." json:"memberNo,omitempty" maxLength:"40"`
 }
 
 // AdminPerson is a person with every field.
@@ -190,6 +192,8 @@ type PersonDetail struct {
 	Account    *PersonAccount `doc:"The person's account, if any."                         json:"account,omitempty"`
 	Staff      []StaffEntry   `doc:"Staff members linked to the person, by display name." json:"staff"      nullable:"false"`
 	Classes    []PersonClass  `doc:"Class memberships ordered by term, weekday and time." json:"classes"    nullable:"false"`
+	Merged     []PersonMatch  `doc:"Persons merged into this one; their receipts are listed as this person's." json:"merged" nullable:"false"`
+	MergedInto *PersonMatch   `doc:"The person this one was merged into; present only for such a hidden record, which cannot be changed." json:"mergedInto,omitempty"`
 }
 
 // PersonRefInput is the request of getPerson and deletePerson.
@@ -263,6 +267,12 @@ func (h *handlers) getPerson(ctx context.Context, in *PersonRefInput) (*PersonDe
 		Dependents:  personMatches(d.Dependents),
 		Staff:       make([]StaffEntry, 0, len(d.Staff)),
 		Classes:     make([]PersonClass, 0, len(d.Classes)),
+		Merged:      personMatches(d.Merged),
+	}
+
+	if d.Person.Merged() {
+		into := personMatch(d.MergedInto)
+		out.MergedInto = &into
 	}
 
 	if d.Account != nil {
@@ -355,14 +365,14 @@ func (h *handlers) adminPerson(ctx context.Context) func(domain.Person, error) (
 func (r PersonRecord) service() service.PersonRecord {
 	return service.PersonRecord{
 		GivenName: r.GivenName, FamilyName: r.FamilyName, Email: r.Email,
-		Phone: r.Phone, BirthDate: r.BirthDate, Notes: r.Notes,
+		Phone: r.Phone, BirthDate: r.BirthDate, Notes: r.Notes, MemberNo: r.MemberNo,
 	}
 }
 
 func adminPerson(p domain.Person) AdminPerson {
 	return AdminPerson{ID: p.ID, PersonRecord: PersonRecord{
 		GivenName: p.GivenName, FamilyName: p.FamilyName, Email: p.Email,
-		Phone: p.Phone, BirthDate: p.BirthDate, Notes: p.Notes,
+		Phone: p.Phone, BirthDate: p.BirthDate, Notes: p.Notes, MemberNo: p.MemberNo,
 	}}
 }
 

@@ -88,13 +88,16 @@ type AuditDetails struct {
 	MailID    domain.OutboxMailID `doc:"The mail of mail-requeued."        json:"mailId,omitzero"`
 	Recipient string              `doc:"Its recipient."                    json:"recipient,omitempty"`
 	Template  string              `doc:"Its template."                     json:"template,omitempty"`
+	// ADR 0015.
+	MergedPersonID domain.PersonID `doc:"The person of person-merged that was merged into the target, now a tombstone." json:"mergedPersonId,omitzero"`
+	MergedName     string          `doc:"Its name at the time."                                                           json:"mergedName,omitempty"`
 }
 
 // AuditEventEntry is an event in the audit log.
 type AuditEventEntry struct {
 	ID           domain.AuditEventID `doc:"Audit event ID."  json:"id"`
 	At           time.Time           `doc:"When it happened." json:"at"`
-	Action       string              `doc:"What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail); later versions may add actions." json:"action"`
+	Action       string              `doc:"What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one); later versions may add actions." json:"action"`
 	Actor        AuditAccount        `doc:"The account that acted."   json:"actor"`
 	Target       *AuditAccount       `doc:"The account acted upon; absent unless the event targets an account." json:"target,omitempty"`
 	TargetPerson *AuditPerson        `doc:"The person acted upon; absent unless the event targets a person." json:"targetPerson,omitempty"`
@@ -157,7 +160,10 @@ func (h *handlers) listAuditEvents(ctx context.Context, _ *struct{}) (*AuditEven
 		}
 
 		if d := e.Event.Details; !d.IsZero() {
-			entry.Details = &AuditDetails{MailID: d.MailID, Recipient: d.Recipient, Template: d.Template}
+			entry.Details = &AuditDetails{
+				MailID: d.MailID, Recipient: d.Recipient, Template: d.Template, MergedPersonID: d.MergedPersonID,
+				MergedName: d.MergedName,
+			}
 		}
 
 		items = append(items, entry)

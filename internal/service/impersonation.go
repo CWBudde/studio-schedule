@@ -165,7 +165,14 @@ func (s *AuthService) Accounts(ctx context.Context) ([]AccountEntry, error) {
 			return err
 		}
 
-		persons, err := tx.Persons().List(ctx)
+		personIDs := make([]domain.PersonID, len(accounts))
+		for i, a := range accounts {
+			personIDs[i] = a.PersonID
+		}
+
+		// By ID: a disabled account may stay with a merged person (ADR
+		// 0015), which lists leave out.
+		persons, err := tx.Persons().ListByIDs(ctx, personIDs)
 		if err != nil {
 			return err
 		}

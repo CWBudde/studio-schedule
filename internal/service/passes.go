@@ -213,7 +213,7 @@ func (s *PassService) Sell(ctx context.Context, p Principal, person domain.Perso
 
 		paidByOther := !d.PayerID.IsZero() && d.PayerID != person
 		if paidByOther {
-			if payer, err = tx.Persons().Get(ctx, d.PayerID); errors.Is(err, domain.ErrNotFound) {
+			if payer, err = livePerson(ctx, tx, d.PayerID); errors.Is(err, domain.ErrNotFound) {
 				return errUnknownPayer
 			} else if err != nil {
 				return err
@@ -319,13 +319,13 @@ func (s *PassService) Assign(
 // newPass returns an active pass of person of the active type typeID from
 // from (today in the school's time zone loc if zero), sold now by p,
 // without its origin and price, and its type. It locks person and the
-// persons in also (the payer), so that none is deleted before the pass
-// refers to them: a missing one is domain.ErrNotFound.
+// persons in also (the payer), so that none is deleted or merged before the
+// pass refers to them: a missing or merged one is domain.ErrNotFound.
 func (s *PassService) newPass(
 	ctx context.Context, tx store.Tx, loc *time.Location, p Principal, person domain.PersonID,
 	typeID domain.PassTypeID, from domain.Date, note string, also ...domain.PersonID,
 ) (domain.Pass, domain.PassType, error) {
-	if err := tx.Persons().Lock(ctx, append([]domain.PersonID{person}, also...)...); err != nil {
+	if _, err := lockLivePersons(ctx, tx, append([]domain.PersonID{person}, also...)...); err != nil {
 		return domain.Pass{}, domain.PassType{}, fmt.Errorf("person: %w", err)
 	}
 

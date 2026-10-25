@@ -162,6 +162,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 		Announcements: service.NewAnnouncementService(deps.Store, deps.Clock, deps.IDs, renderer,
 			func() { deps.Wake.Wake(announcementsJob) }),
 		MailLog: service.NewMailLogService(deps.Store, deps.Clock, deps.IDs),
+		Imports: service.NewImportService(deps.Store, deps.Clock, deps.IDs),
 	})
 
 	router.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {

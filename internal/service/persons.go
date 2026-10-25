@@ -51,8 +51,8 @@ func NewPersonService(st store.Store, clk clock.Clock, src ids.Source, mails Mai
 }
 
 // PersonRecord are the fields of a person the office edits: all of them,
-// including the email and the office's notes. Optional fields are empty or
-// zero when absent.
+// including the email, the office's notes and the member number. Optional
+// fields are empty or zero when absent.
 type PersonRecord struct {
 	GivenName  string
 	FamilyName string
@@ -60,6 +60,7 @@ type PersonRecord struct {
 	Phone      string
 	BirthDate  domain.Date
 	Notes      string
+	MemberNo   string
 }
 
 // PersonDetail is a person with everything that refers to it, as the
@@ -77,6 +78,12 @@ type PersonDetail struct {
 	// Classes are the person's class memberships, ordered by term start,
 	// weekday and start time.
 	Classes []PersonClass
+	// Merged are the persons merged into this one (ADR 0015), ordered by
+	// family and given name.
+	Merged []domain.Person
+	// MergedInto is the person this one was merged into; zero unless the
+	// person is a tombstone.
+	MergedInto domain.Person
 }
 
 // PersonClass is a class membership with its class, term and course type.
@@ -87,9 +94,10 @@ type PersonClass struct {
 	Since      domain.Date
 }
 
-// SearchPersons returns the persons whose given name, family name or email
-// contains every word of query, ignoring case, ordered by family name and
-// given name; at most MaxPersonMatches. An empty query matches everyone.
+// SearchPersons returns the persons whose given name, family name, email or
+// member number contains every word of query, ignoring case, ordered by
+// family name and given name; at most MaxPersonMatches. An empty query
+// matches everyone. Merged persons are left out.
 func (s *PersonService) SearchPersons(ctx context.Context, query string) ([]domain.Person, error) {
 	var persons []domain.Person
 
@@ -111,7 +119,7 @@ func (s *PersonService) SearchPersons(ctx context.Context, query string) ([]doma
 			break
 		}
 
-		text := strings.ToLower(p.GivenName + " " + p.FamilyName + " " + p.Email)
+		text := strings.ToLower(p.GivenName + " " + p.FamilyName + " " + p.Email + " " + p.MemberNo)
 		if containsAll(text, words) {
 			matches = append(matches, p)
 		}
@@ -149,6 +157,16 @@ func (s *PersonService) Person(ctx context.Context, id domain.PersonID) (PersonD
 
 		if d.Staff, err = tx.Staff().ListByPerson(ctx, id); err != nil {
 			return err
+		}
+
+		if d.Merged, err = tx.Persons().ListMerged(ctx, id); err != nil {
+			return err
+		}
+
+		if d.Person.Merged() {
+			if d.MergedInto, err = tx.Persons().Get(ctx, d.Person.MergedInto); err != nil {
+				return fmt.Errorf("merged into: %w", refErr(err))
+			}
 		}
 
 		d.Classes, err = personClasses(ctx, tx, id)
@@ -243,13 +261,14 @@ func (s *PersonService) CreatePerson(ctx context.Context, r PersonRecord) (domai
 
 // UpdatePerson replaces every field of the person id and returns it. It
 // leaves the person's account alone: its email is the login and changes
-// only through the account. An unknown person is domain.ErrNotFound.
+// only through the account. An unknown or merged person is
+// domain.ErrNotFound, a member number another person has domain.ErrDuplicate.
 func (s *PersonService) UpdatePerson(ctx context.Context, id domain.PersonID, r PersonRecord) (domain.Person, error) {
 	var person domain.Person
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		var err error
-		if person, err = tx.Persons().Get(ctx, id); err != nil {
+		if person, err = lockLivePerson(ctx, tx, id); err != nil {
 			return err
 		}
 
@@ -272,6 +291,7 @@ func (s *PersonService) apply(
 ) (domain.Person, error) {
 	person.Email = strings.TrimSpace(r.Email)
 	person.Notes = strings.TrimSpace(r.Notes)
+	person.MemberNo = strings.TrimSpace(r.MemberNo)
 
 	return applyPersonData(ctx, tx, s.clock, person, PersonData{
 		GivenName: r.GivenName, FamilyName: r.FamilyName, Phone: r.Phone, BirthDate: r.BirthDate,
@@ -287,7 +307,8 @@ func (s *PersonService) apply(
 // unknown person is domain.ErrNotFound.
 func (s *PersonService) DeletePerson(ctx context.Context, id domain.PersonID) error {
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		if err := tx.Persons().Lock(ctx, id); err != nil {
+		// A tombstone stays for its receipts.
+		if _, err := lockLivePerson(ctx, tx, id); err != nil {
 			return err
 		}
 
@@ -325,7 +346,7 @@ func (s *PersonService) AddGuardian(ctx context.Context, dependent, guardian dom
 			return lockErr
 		}
 
-		if _, err := tx.Persons().Get(ctx, dependent); err != nil {
+		if _, err := livePerson(ctx, tx, dependent); err != nil {
 			return err
 		}
 
@@ -336,7 +357,7 @@ func (s *PersonService) AddGuardian(ctx context.Context, dependent, guardian dom
 
 		var err error
 
-		g, err = tx.Persons().Get(ctx, guardian)
+		g, err = livePerson(ctx, tx, guardian)
 		if errors.Is(err, domain.ErrNotFound) {
 			return errUnknownGuardian
 		} else if err != nil {

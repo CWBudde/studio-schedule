@@ -77,6 +77,8 @@ type Deps struct {
 	Announcements *service.AnnouncementService
 	// MailLog is the outbox as admins see it (ADR 0014).
 	MailLog *service.MailLogService
+	// Imports is the member import (ADR 0015).
+	Imports *service.ImportService
 }
 
 // NewConfig returns the Huma configuration for the API: OpenAPI document at
@@ -129,6 +131,8 @@ func Register(api huma.API, deps Deps) {
 	registerStatistics(api, h)
 	registerAnnouncements(api, h)
 	registerMailLog(api, h)
+	registerImports(api, h)
+	registerDuplicates(api, h)
 }
 
 type handlers struct {

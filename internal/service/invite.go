@@ -62,7 +62,7 @@ func (s *AuthService) CreateAccount(
 	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		// The account makes a dependent managed: under the lock, a
 		// guardian's edit or removal of the person waits for it.
-		if err := tx.Persons().Lock(ctx, person); err != nil {
+		if _, err := lockLivePerson(ctx, tx, person); err != nil {
 			return err
 		}
 

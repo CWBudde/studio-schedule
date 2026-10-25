@@ -359,7 +359,10 @@ type feedEvent struct {
 	ScheduledLesson
 
 	names []string
-	role  TeachRole
+	// persons are the persons of names: a merge may leave a person two
+	// bookings of a lesson that started (ADR 0015), named once.
+	persons []domain.PersonID
+	role    TeachRole
 }
 
 // render builds the document of feed for owner at now, in the school of
@@ -474,7 +477,10 @@ func bookingEvents(
 			events = append(events, e)
 		}
 
-		e.names = append(e.names, fullName(fam.person(b.PersonID)))
+		if !slices.Contains(e.persons, b.PersonID) {
+			e.persons = append(e.persons, b.PersonID)
+			e.names = append(e.names, fullName(fam.person(b.PersonID)))
+		}
 	}
 
 	out := make([]feedEvent, len(events))

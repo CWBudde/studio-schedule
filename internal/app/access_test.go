@@ -160,6 +160,13 @@ var accessLevels = map[string]string{
 	"listMails":                   "admin",
 	"getMail":                     "admin",
 	"requeueMail":                 "admin",
+	// The member import, duplicates and merges (ADR 0015).
+	"inspectImport":    "office",
+	"runImport":        "office",
+	"listImportRuns":   "office",
+	"listDuplicates":   "office",
+	"dismissDuplicate": "office",
+	"mergePersons":     "office",
 }
 
 // minRoles is the least role each access level admits.

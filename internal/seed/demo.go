@@ -121,6 +121,7 @@ func demoAt(anchor domain.Date) (Dataset, error) {
 	b.attendance(anchor)
 	b.visitors(anchor)
 	b.announcements(anchor)
+	b.duplicates()
 
 	return b.d, nil
 }

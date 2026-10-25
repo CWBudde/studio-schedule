@@ -281,6 +281,11 @@
             "format": "uuid",
             "type": "string"
           },
+          "memberNo": {
+            "description": "The school's member number, if any; unique (a number another person has is a 409 duplicate). The member import finds a person by it.",
+            "maxLength": 40,
+            "type": "string"
+          },
           "notes": {
             "description": "The office's internal notes, if any.",
             "maxLength": 2000,
@@ -755,6 +760,15 @@
             "format": "uuid",
             "type": "string"
           },
+          "mergedName": {
+            "description": "Its name at the time.",
+            "type": "string"
+          },
+          "mergedPersonId": {
+            "description": "The person of person-merged that was merged into the target, now a tombstone.",
+            "format": "uuid",
+            "type": "string"
+          },
           "recipient": {
             "description": "Its recipient.",
             "type": "string"
@@ -770,7 +784,7 @@
         "additionalProperties": false,
         "properties": {
           "action": {
-            "description": "What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail); later versions may add actions.",
+            "description": "What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one); later versions may add actions.",
             "type": "string"
           },
           "actor": {
@@ -1968,7 +1982,7 @@
             "description": "The lesson that uses the room; only with reason room-taken."
           },
           "reason": {
-            "description": "in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead.",
+            "description": "in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead; two-accounts: both persons of a merge have an account, so one is disabled first; guardian-cycle: after the merge a guardian of the survivor would also be its dependent.",
             "enum": [
               "in-use",
               "duplicate",
@@ -1996,7 +2010,9 @@
               "mail-limit",
               "expired",
               "not-failed",
-              "secret-link"
+              "secret-link",
+              "two-accounts",
+              "guardian-cycle"
             ],
             "type": "string"
           },
@@ -2324,6 +2340,137 @@
         ],
         "type": "object"
       },
+      "DismissDuplicateInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "personA": {
+            "description": "One person of the pair.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "personB": {
+            "description": "The other person; it differs.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "personA",
+          "personB"
+        ],
+        "type": "object"
+      },
+      "DuplicateCandidate": {
+        "additionalProperties": false,
+        "properties": {
+          "accountEmail": {
+            "description": "The email of the person's account; absent without one.",
+            "type": "string"
+          },
+          "birthDate": {
+            "description": "Date of birth, if known; not in the future.",
+            "format": "date",
+            "type": "string"
+          },
+          "email": {
+            "description": "Contact email, if any; not the login name.",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "id": {
+            "description": "Person ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "memberNo": {
+            "description": "The school's member number, if any; unique (a number another person has is a 409 duplicate). The member import finds a person by it.",
+            "maxLength": 40,
+            "type": "string"
+          },
+          "notes": {
+            "description": "The office's internal notes, if any.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "phone": {
+            "description": "Phone number, if any.",
+            "maxLength": 50,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "givenName",
+          "familyName"
+        ],
+        "type": "object"
+      },
+      "DuplicateList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "The pairs, strong ones first.",
+            "items": {
+              "$ref": "#/components/schemas/DuplicatePair"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "DuplicatePair": {
+        "additionalProperties": false,
+        "properties": {
+          "a": {
+            "$ref": "#/components/schemas/DuplicateCandidate"
+          },
+          "b": {
+            "$ref": "#/components/schemas/DuplicateCandidate"
+          },
+          "reasons": {
+            "description": "What matched.",
+            "items": {
+              "enum": [
+                "email",
+                "name-birth-date",
+                "name"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "strength": {
+            "description": "strong: the same email, or the same name and birth date; weak: the same name, a birth date unknown.",
+            "enum": [
+              "strong",
+              "weak"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "strength",
+          "reasons"
+        ],
+        "type": "object"
+      },
       "ErrorDetail": {
         "additionalProperties": false,
         "properties": {
@@ -2632,6 +2779,582 @@
           "email",
           "givenName",
           "familyName"
+        ],
+        "type": "object"
+      },
+      "ImportColumns": {
+        "additionalProperties": false,
+        "properties": {
+          "birthDate": {
+            "description": "Birth date, DD.MM.YYYY or YYYY-MM-DD.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "email": {
+            "description": "Email address.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name; required.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name; required.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "guardian1Email": {
+            "description": "First guardian's email address.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "guardian1FamilyName": {
+            "description": "First guardian's family name; required with any of its columns.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "guardian1GivenName": {
+            "description": "First guardian's given name; required with any of its columns.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "guardian1Phone": {
+            "description": "First guardian's phone number.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "guardian2Email": {
+            "description": "Second guardian's email address.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "guardian2FamilyName": {
+            "description": "Second guardian's family name; required with any of its columns.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "guardian2GivenName": {
+            "description": "Second guardian's given name; required with any of its columns.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "guardian2Phone": {
+            "description": "Second guardian's phone number.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "memberNo": {
+            "description": "The member number, by which a member is found again; required.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "notes": {
+            "description": "Notes.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "phone": {
+            "description": "Phone number.",
+            "maxLength": 200,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ImportCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "created": {
+            "description": "Members created.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "failed": {
+            "description": "Rows left out for their problems.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "guardiansCreated": {
+            "description": "Guardians created.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "guardiansUpdated": {
+            "description": "Guardians updated.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "linksAdded": {
+            "description": "Guardian links added.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "rows": {
+            "description": "Data rows of the file.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "unchanged": {
+            "description": "Members unchanged.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "updated": {
+            "description": "Members updated.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "created",
+          "updated",
+          "unchanged",
+          "failed",
+          "guardiansCreated",
+          "guardiansUpdated",
+          "linksAdded"
+        ],
+        "type": "object"
+      },
+      "ImportDuplicate": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "Email address, if known.",
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "type": "string"
+          },
+          "id": {
+            "description": "The person; absent for one an earlier row of the dry run would create.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "memberNo": {
+            "description": "Member number, if any.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "givenName",
+          "familyName"
+        ],
+        "type": "object"
+      },
+      "ImportFileBody": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "contentEncoding": "base64",
+            "description": "The file, base64 encoded; at most 1 MiB.",
+            "maxLength": 1398104,
+            "type": "string"
+          },
+          "fileName": {
+            "description": "The file's name, for the run history.",
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "fileName",
+          "content"
+        ],
+        "type": "object"
+      },
+      "ImportGuardian": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "What happens to the guardian.",
+            "enum": [
+              "create",
+              "update",
+              "unchanged",
+              "error"
+            ],
+            "type": "string"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "type": "string"
+          },
+          "linked": {
+            "description": "The row links the guardian to the member.",
+            "type": "boolean"
+          },
+          "matchedBy": {
+            "description": "How an existing guardian was found.",
+            "enum": [
+              "email",
+              "name"
+            ],
+            "type": "string"
+          },
+          "personId": {
+            "description": "The person; absent if the dry run would create it.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "slot": {
+            "description": "1 or 2.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slot",
+          "givenName",
+          "familyName",
+          "action",
+          "linked"
+        ],
+        "type": "object"
+      },
+      "ImportInspection": {
+        "additionalProperties": false,
+        "properties": {
+          "delimiter": {
+            "description": "What separates the cells.",
+            "enum": [
+              "semicolon",
+              "comma",
+              "tab"
+            ],
+            "type": "string"
+          },
+          "encoding": {
+            "description": "How the file was decoded.",
+            "enum": [
+              "utf-8",
+              "windows-1252"
+            ],
+            "type": "string"
+          },
+          "headers": {
+            "description": "The column names, in file order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rows": {
+            "description": "How many data rows the file has.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "sample": {
+            "description": "The first data rows, a cell per header.",
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "type": "array"
+          },
+          "suggested": {
+            "$ref": "#/components/schemas/ImportMapping",
+            "description": "The headers recognized by their English or German names."
+          }
+        },
+        "required": [
+          "encoding",
+          "delimiter",
+          "headers",
+          "rows",
+          "sample",
+          "suggested"
+        ],
+        "type": "object"
+      },
+      "ImportIssue": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "required: the field is empty; invalid: not an email address, not a date as DD.MM.YYYY or YYYY-MM-DD, or too long; future: a birth date after today; member-no-repeated: an earlier row has the member number; guardian-ambiguous: several persons match the guardian; guardian-is-member: the guardian is the member; guardian-cycle: the guardian is a dependent of the member.",
+            "enum": [
+              "required",
+              "invalid",
+              "future",
+              "member-no-repeated",
+              "guardian-ambiguous",
+              "guardian-is-member",
+              "guardian-cycle"
+            ],
+            "type": "string"
+          },
+          "field": {
+            "description": "The field it is about.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "field"
+        ],
+        "type": "object"
+      },
+      "ImportMapping": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "$ref": "#/components/schemas/ImportColumns"
+          },
+          "notes": {
+            "description": "Further columns whose values go into the member's notes, each as a line \"Header: value\".",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "columns"
+        ],
+        "type": "object"
+      },
+      "ImportRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "apply": {
+            "description": "Import; without it, a dry run that writes nothing.",
+            "type": "boolean"
+          },
+          "content": {
+            "contentEncoding": "base64",
+            "description": "The file, base64 encoded; at most 1 MiB.",
+            "maxLength": 1398104,
+            "type": "string"
+          },
+          "fileName": {
+            "description": "The file's name, for the run history.",
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/ImportMapping"
+          }
+        },
+        "required": [
+          "mapping",
+          "fileName",
+          "content"
+        ],
+        "type": "object"
+      },
+      "ImportResult": {
+        "additionalProperties": false,
+        "properties": {
+          "applied": {
+            "description": "Whether the import was applied; false for a dry run.",
+            "type": "boolean"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/ImportCounts"
+          },
+          "rows": {
+            "description": "Every data row, in file order.",
+            "items": {
+              "$ref": "#/components/schemas/ImportRow"
+            },
+            "type": "array"
+          },
+          "runId": {
+            "description": "The recorded run; absent for a dry run.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "applied",
+          "counts",
+          "rows"
+        ],
+        "type": "object"
+      },
+      "ImportRow": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "What happens to the member.",
+            "enum": [
+              "create",
+              "update",
+              "unchanged",
+              "error"
+            ],
+            "type": "string"
+          },
+          "changes": {
+            "description": "The fields a create or update writes.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "duplicates": {
+            "description": "Persons a new member may be the same as (the same email, or name and birth date); a family's shared email does not count.",
+            "items": {
+              "$ref": "#/components/schemas/ImportDuplicate"
+            },
+            "type": "array"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "type": "string"
+          },
+          "guardians": {
+            "description": "The row's guardians.",
+            "items": {
+              "$ref": "#/components/schemas/ImportGuardian"
+            },
+            "type": "array"
+          },
+          "issues": {
+            "description": "The row's problems; a row with any is left out.",
+            "items": {
+              "$ref": "#/components/schemas/ImportIssue"
+            },
+            "type": "array"
+          },
+          "line": {
+            "description": "The row's line in the file; the header is line 1.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "memberNo": {
+            "description": "The member number.",
+            "type": "string"
+          },
+          "personId": {
+            "description": "The member; absent for an error, and for a member the dry run would create.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line",
+          "memberNo",
+          "givenName",
+          "familyName",
+          "action",
+          "changes",
+          "issues",
+          "duplicates",
+          "guardians"
+        ],
+        "type": "object"
+      },
+      "ImportRowError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "The problem, as in ImportIssue.",
+            "type": "string"
+          },
+          "field": {
+            "description": "The field it is about.",
+            "type": "string"
+          },
+          "line": {
+            "description": "The row's line in the file.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "line",
+          "code"
+        ],
+        "type": "object"
+      },
+      "ImportRunEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "by": {
+            "$ref": "#/components/schemas/AuditAccount",
+            "description": "Who ran it; absent for the command line."
+          },
+          "counts": {
+            "$ref": "#/components/schemas/ImportCounts"
+          },
+          "errors": {
+            "description": "The rows it could not take (at most 200).",
+            "items": {
+              "$ref": "#/components/schemas/ImportRowError"
+            },
+            "type": "array"
+          },
+          "fileName": {
+            "description": "The file's name.",
+            "type": "string"
+          },
+          "finishedAt": {
+            "description": "When it finished.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "Run ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "startedAt": {
+            "description": "When it started.",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fileName",
+          "startedAt",
+          "finishedAt",
+          "counts",
+          "errors"
+        ],
+        "type": "object"
+      },
+      "ImportRunList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "The latest runs, newest first.",
+            "items": {
+              "$ref": "#/components/schemas/ImportRunEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
         ],
         "type": "object"
       },
@@ -4088,6 +4811,246 @@
         ],
         "type": "object"
       },
+      "MergeCanceled": {
+        "additionalProperties": false,
+        "properties": {
+          "courseTypeName": {
+            "description": "Its course type's name.",
+            "type": "string"
+          },
+          "lessonId": {
+            "description": "The lesson.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "description": "booked: the survivor has a booking of the lesson; membership: an automatic class booking the survivor's membership of the class does not have (a pause, a later start, a date it gave up).",
+            "enum": [
+              "booked",
+              "membership"
+            ],
+            "type": "string"
+          },
+          "startsAt": {
+            "description": "Its start instant (UTC).",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lessonId",
+          "startsAt",
+          "courseTypeName",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "MergeClass": {
+        "additionalProperties": false,
+        "properties": {
+          "classId": {
+            "description": "The class.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "courseTypeName": {
+            "description": "Its course type's name.",
+            "type": "string"
+          },
+          "startTime": {
+            "description": "Start time (HH:MM) in the school time zone.",
+            "examples": [
+              "18:00"
+            ],
+            "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+            "type": "string"
+          },
+          "termName": {
+            "description": "Its term's name.",
+            "type": "string"
+          },
+          "weekday": {
+            "description": "Day of the week, 0 = Sunday to 6 = Saturday.",
+            "format": "int64",
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "classId",
+          "courseTypeName",
+          "termName",
+          "weekday",
+          "startTime"
+        ],
+        "type": "object"
+      },
+      "MergeInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "apply": {
+            "description": "Merge; without it, only tell what would happen.",
+            "type": "boolean"
+          },
+          "mergedId": {
+            "description": "The duplicate merged into it; it differs.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "notes": {
+            "description": "The survivor's notes after the merge, as the office edited them; absent: the notes of both. Longer than 2000 characters is a 422 on notes.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "survivorId": {
+            "description": "The person that stays.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "take": {
+            "$ref": "#/components/schemas/MergeTake",
+            "description": "The fields the survivor takes from the duplicate; the others keep the survivor's value."
+          }
+        },
+        "required": [
+          "survivorId",
+          "mergedId",
+          "take"
+        ],
+        "type": "object"
+      },
+      "MergeSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "accountMoved": {
+            "description": "The duplicate's account moves to the survivor.",
+            "type": "boolean"
+          },
+          "applied": {
+            "description": "Whether the merge was done; false for a preview.",
+            "type": "boolean"
+          },
+          "bookingsMoved": {
+            "description": "Bookings that move, canceled ones included.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "canceled": {
+            "description": "Bookings of the duplicate of lessons that have not started which the merge cancels, by start.",
+            "items": {
+              "$ref": "#/components/schemas/MergeCanceled"
+            },
+            "type": "array"
+          },
+          "history": {
+            "description": "Bookings of the duplicate of lessons that have started which the survivor has a booking of too; both stay, as they were.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "linksDropped": {
+            "description": "Guardian links the survivor has already, or between the two.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "linksMoved": {
+            "description": "Guardian links that move.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "membershipsDropped": {
+            "description": "Memberships of classes the survivor is a member of already; they end.",
+            "items": {
+              "$ref": "#/components/schemas/MergeClass"
+            },
+            "type": "array"
+          },
+          "membershipsMoved": {
+            "description": "Class memberships that move.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "paidPassesMoved": {
+            "description": "Passes the duplicate paid for.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "passesMoved": {
+            "description": "Passes the duplicate owns.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "receipts": {
+            "description": "Receipts the duplicate paid; they stay with it and are listed under the survivor.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "staffMoved": {
+            "description": "Staff members linked to the duplicate.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "survivor": {
+            "$ref": "#/components/schemas/AdminPerson",
+            "description": "The survivor as the merge leaves it."
+          },
+          "waitlistMoved": {
+            "description": "Waiting-list entries that move.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "waitlistWithdrawn": {
+            "description": "Waiting-list entries withdrawn because the survivor waits for, or is booked into, the lesson.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "applied",
+          "survivor",
+          "bookingsMoved",
+          "canceled",
+          "history",
+          "waitlistMoved",
+          "waitlistWithdrawn",
+          "membershipsMoved",
+          "membershipsDropped",
+          "passesMoved",
+          "paidPassesMoved",
+          "linksMoved",
+          "linksDropped",
+          "staffMoved",
+          "accountMoved",
+          "receipts"
+        ],
+        "type": "object"
+      },
+      "MergeTake": {
+        "additionalProperties": false,
+        "properties": {
+          "birthDate": {
+            "description": "The birth date.",
+            "type": "boolean"
+          },
+          "email": {
+            "description": "The email.",
+            "type": "boolean"
+          },
+          "memberNo": {
+            "description": "The member number.",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "The given and family name.",
+            "type": "boolean"
+          },
+          "phone": {
+            "description": "The phone.",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "MyLessonBooking": {
         "additionalProperties": false,
         "properties": {
@@ -4948,6 +5911,22 @@
             "format": "uuid",
             "type": "string"
           },
+          "memberNo": {
+            "description": "The school's member number, if any; unique (a number another person has is a 409 duplicate). The member import finds a person by it.",
+            "maxLength": 40,
+            "type": "string"
+          },
+          "merged": {
+            "description": "Persons merged into this one; their receipts are listed as this person's.",
+            "items": {
+              "$ref": "#/components/schemas/PersonMatch"
+            },
+            "type": "array"
+          },
+          "mergedInto": {
+            "$ref": "#/components/schemas/PersonMatch",
+            "description": "The person this one was merged into; present only for such a hidden record, which cannot be changed."
+          },
           "notes": {
             "description": "The office's internal notes, if any.",
             "maxLength": 2000,
@@ -4971,6 +5950,7 @@
           "dependents",
           "staff",
           "classes",
+          "merged",
           "id",
           "givenName",
           "familyName"
@@ -4995,6 +5975,10 @@
           "id": {
             "description": "Person ID.",
             "format": "uuid",
+            "type": "string"
+          },
+          "memberNo": {
+            "description": "Member number, if any.",
             "type": "string"
           }
         },
@@ -5044,6 +6028,11 @@
             "description": "Given name.",
             "maxLength": 100,
             "minLength": 1,
+            "type": "string"
+          },
+          "memberNo": {
+            "description": "The school's member number, if any; unique (a number another person has is a 409 duplicate). The member import finds a person by it.",
+            "maxLength": 40,
             "type": "string"
           },
           "notes": {
@@ -7773,6 +8762,192 @@
         "x-access": "office"
       }
     },
+    "/api/v1/admin/duplicates": {
+      "get": {
+        "description": "Returns pairs of persons that may be the same, at most 200: strong ones (the same email, a person's or its account's, ignoring case; or the same name and birth date) first, then weak ones (the same name, a birth date unknown). Names compare ignoring case, accents and hyphens, with umlauts spelled out. A guardian and its dependent, or two dependents of one guardian, do not match by the email alone. Dismissed pairs and merged persons are left out.",
+        "operationId": "listDuplicates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List possible duplicates",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/duplicates/dismissals": {
+      "post": {
+        "description": "Records that two persons are not the same, so the pair is no longer listed. Dismissing a pair again changes nothing; an unknown person is a 404.",
+        "operationId": "dismissDuplicate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DismissDuplicateInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Dismiss a pair",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/imports": {
+      "get": {
+        "description": "Returns the latest 50 applied imports, newest first, with who ran them, their counts and the rows they could not take.",
+        "operationId": "listImportRuns",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportRunList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List import runs",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      },
+      "post": {
+        "description": "Imports the members of a CSV file with a mapping of its columns. Each row is a member found by its member number, and up to two guardians found by their email (an account's or a person's, ignoring case) or else by their name; what is not found is created. An update writes only the mapped fields the row fills; guardian links are added, never removed; no accounts are created. Rows with problems are left out and reported. Without `apply` it is a dry run that writes nothing; with it, the import is recorded in the run history. A mapping that does not fit the file is a 422 on `body.mapping`, an unreadable file one on `body.content`.",
+        "operationId": "runImport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Import members",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/imports/inspect": {
+      "post": {
+        "description": "Reads a CSV file (UTF-8 or Windows-1252; separated by semicolons, commas or tabs; at most 1024 KiB and 5000 rows) and returns its headers, its first rows and a mapping of the headers it recognizes by their English or German names. A file it cannot read is a 422 on `body.content`. Nothing is stored.",
+        "operationId": "inspectImport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportFileBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportInspection"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read a member file",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      }
+    },
     "/api/v1/admin/lessons/clone": {
       "post": {
         "description": "Copies the scheduled lessons of a school day, or of a week from Monday to Sunday, to another day or week in one transaction. Each copy is a one-off lesson at the same school-local wall-clock time, with the course type, room, staff, length, capacity, kind and visibility of its source and no bookings. Canceled lessons are not copied. A source lesson is skipped with a reason: `class-slot` when its class has a slot in the target week within its term (generation makes that lesson), `started` when the copy would not start in the future, `staff-inactive` when its instructor or accompanist is no longer active, and `room-taken` when another lesson that is not canceled, a lesson of a class that generation has not created yet, or an earlier copy of the same clone uses the room at an overlapping time, checked in this order. Nothing is changed or deleted, and nobody is mailed. A week's dates must be Mondays (422 on `body.source` or `body.target`); a target equal to the source or before today (a week: its Monday) is a 422 on `body.target`.",
@@ -8361,7 +9536,7 @@
     },
     "/api/v1/admin/persons": {
       "get": {
-        "description": "Returns the persons whose given name, family name or email contains every word of `q`, ignoring case, ordered by family and given name; at most 50. For the office's pickers, e.g. linking a staff member to a person.",
+        "description": "Returns the persons whose given name, family name, email or member number contains every word of `q`, ignoring case, ordered by family and given name; at most 50; merged persons are left out. For the office's pickers, e.g. linking a staff member to a person.",
         "operationId": "listPersons",
         "parameters": [
           {
@@ -8450,6 +9625,59 @@
           }
         },
         "summary": "Create a person",
+        "tags": [
+          "admin"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/persons/merge": {
+      "post": {
+        "description": "Merges a duplicate person into the survivor: its bookings, waiting-list entries, class memberships, passes (owned and paid for), guardian links, staff links and account move to the survivor. Where both have a booking of the same lesson that has not started, the duplicate's is canceled (a visit it cost comes back); of a lesson that has started, both stay as history. Where both are members of a class, the survivor's membership stays, and the duplicate's automatic bookings of the class follow it. The survivor takes the fields `take` names from the duplicate and keeps both notes, or the `notes` given (at most 2000 characters, else a 422); the duplicate stays as a hidden record for its receipts, which are listed under the survivor. Without `apply` it only tells what would happen. Both with an account is a 409 `two-accounts` (disable one first: a disabled account of the duplicate stays with it); a merge after which a guardian would also be a dependent of the survivor a 409 `guardian-cycle`. Recorded in the audit log.",
+        "operationId": "mergePersons",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeSummary"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Merge two persons",
         "tags": [
           "admin"
         ],

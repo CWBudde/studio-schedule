@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -223,26 +224,36 @@ func (s *ReceiptService) renderInput(ctx context.Context, r domain.Receipt, inpu
 
 // mail queues the receipt mail with the PDF attached: to the payer's
 // account in its language, else to the address typed at the sale in the
-// school's, else nowhere. The mail is all in its recipient's language,
-// whatever language the PDF is in.
+// school's, else nowhere. A payer merged into another person (ADR 0015) is
+// that person: the receipt stays on the tombstone, the mail goes to the
+// survivor's account (a disabled account of the tombstone gets none). The
+// mail is all in its recipient's language, whatever language the PDF is in.
 func (s *ReceiptService) mail(
 	ctx context.Context, tx store.Tx, r domain.Receipt, orig *domain.Receipt, settings domain.Settings,
 	payer domain.PersonID, item func(locale string) string,
 ) error {
 	to := recipient{email: r.RecipientEmail}
 
-	acc, err := tx.Accounts().GetByPerson(ctx, payer)
-
-	switch {
-	case err == nil:
+	if !payer.IsZero() {
 		person, err := tx.Persons().Get(ctx, payer)
 		if err != nil {
-			return err
+			return fmt.Errorf("payer: %w", refErr(err))
 		}
 
-		to = recipient{email: acc.Email, locale: acc.Locale, givenName: person.GivenName, account: true}
-	case !errors.Is(err, domain.ErrNotFound):
-		return err
+		if person.Merged() { // tombstones never chain
+			if person, err = tx.Persons().Get(ctx, person.MergedInto); err != nil {
+				return fmt.Errorf("payer merged into: %w", refErr(err))
+			}
+		}
+
+		acc, err := tx.Accounts().GetByPerson(ctx, person.ID)
+
+		switch {
+		case err == nil:
+			to = recipient{email: acc.Email, locale: acc.Locale, givenName: person.GivenName, account: true}
+		case !errors.Is(err, domain.ErrNotFound):
+			return err
+		}
 	}
 
 	if to.email == "" || s.mails.Renderer == nil {
@@ -588,7 +599,8 @@ func (s *ReceiptService) Get(ctx context.Context, id domain.ReceiptID) (ReceiptV
 	return out, nil
 }
 
-// Mine returns the receipts the signed-in person paid, newest first.
+// Mine returns the receipts the signed-in person paid, newest first, those
+// of persons merged into them included (ADR 0015).
 func (s *ReceiptService) Mine(ctx context.Context, p Principal) ([]ReceiptView, error) {
 	var out []ReceiptView
 
@@ -599,7 +611,12 @@ func (s *ReceiptService) Mine(ctx context.Context, p Principal) ([]ReceiptView, 
 			return nil
 		}
 
-		receipts, err := tx.Receipts().ListByPayers(ctx, []domain.PersonID{p.PersonID})
+		payers, err := payersOf(ctx, tx, p.PersonID)
+		if err != nil {
+			return err
+		}
+
+		receipts, err := tx.Receipts().ListByPayers(ctx, payers)
 		if err != nil {
 			return err
 		}
@@ -625,16 +642,42 @@ type ReceiptFile struct {
 // receipt). A receipt without one (the seed's) gets it rendered now and
 // stored, once: later reads return the same bytes.
 func (s *ReceiptService) PDF(ctx context.Context, id domain.ReceiptID) (ReceiptFile, error) {
-	return s.pdf(ctx, id, func(domain.Receipt) bool { return true })
+	return s.pdf(ctx, id, func(context.Context, store.Tx, domain.Receipt) (bool, error) { return true, nil })
 }
 
-// MyPDF returns the PDF of a receipt the signed-in person paid; any other is
-// domain.ErrNotFound.
+// MyPDF returns the PDF of a receipt the signed-in person paid, or a person
+// merged into them paid; any other is domain.ErrNotFound.
 func (s *ReceiptService) MyPDF(ctx context.Context, p Principal, id domain.ReceiptID) (ReceiptFile, error) {
-	return s.pdf(ctx, id, func(r domain.Receipt) bool { return !p.PersonID.IsZero() && r.PayerID == p.PersonID })
+	return s.pdf(ctx, id, func(ctx context.Context, tx store.Tx, r domain.Receipt) (bool, error) {
+		if p.PersonID.IsZero() {
+			return false, nil
+		}
+
+		payers, err := payersOf(ctx, tx, p.PersonID)
+
+		return slices.Contains(payers, r.PayerID), err
+	})
 }
 
-func (s *ReceiptService) pdf(ctx context.Context, id domain.ReceiptID, visible func(domain.Receipt) bool) (ReceiptFile, error) {
+// payersOf returns person and the persons merged into it (ADR 0015), whose
+// receipts are listed as the person's.
+func payersOf(ctx context.Context, tx store.Tx, person domain.PersonID) ([]domain.PersonID, error) {
+	merged, err := tx.Persons().ListMerged(ctx, person)
+	if err != nil {
+		return nil, err
+	}
+
+	out := []domain.PersonID{person}
+	for _, m := range merged {
+		out = append(out, m.ID)
+	}
+
+	return out, nil
+}
+
+func (s *ReceiptService) pdf(
+	ctx context.Context, id domain.ReceiptID, visible func(context.Context, store.Tx, domain.Receipt) (bool, error),
+) (ReceiptFile, error) {
 	var (
 		out   ReceiptFile
 		r     domain.Receipt
@@ -647,7 +690,10 @@ func (s *ReceiptService) pdf(ctx context.Context, id domain.ReceiptID, visible f
 			return err
 		}
 
-		if !visible(r) {
+		switch ok, err := visible(ctx, tx, r); {
+		case err != nil:
+			return err
+		case !ok:
 			return fmt.Errorf("receipt: %w", domain.ErrNotFound)
 		}
 

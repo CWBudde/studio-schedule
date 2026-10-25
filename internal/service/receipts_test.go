@@ -435,6 +435,48 @@ func TestCancelReceipt(t *testing.T) {
 	}
 }
 
+// TestCancelReceiptOfMergedPayer mails the Storno of a receipt whose payer
+// was merged (ADR 0015) to the survivor's account; the receipts keep the
+// tombstone as their payer.
+func TestCancelReceiptOfMergedPayer(t *testing.T) {
+	t.Parallel()
+
+	f := newPassFixture(t, domain.RedeemOnBooking)
+	ctx := t.Context()
+
+	// Anna's duplicate, without an account, paid for Mia's pass: the sale
+	// mailed nobody.
+	dup := f.person(t, "Anna", "", "", "")
+
+	v, err := f.passService(t, bookingNow).Sell(ctx, f.office, f.mia.ID, PassSale{PassTypeID: f.tenVisits.ID, PayerID: dup.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if mails := f.mailsOf(t, mail.TemplateReceipt); len(mails) != 0 {
+		t.Fatalf("mails %+v, want none", mails)
+	}
+
+	persons := NewPersonService(f.st, clock.NewFixed(mustInstant(t, bookingNow)), f.seq, Mails{})
+	if _, err := persons.Merge(ctx, f.office, MergeRequest{SurvivorID: f.anna.ID, MergedID: dup.ID}, true); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := f.receiptService(t, bookingNow).Cancel(ctx, f.office, v.Pass.ReceiptID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if r, _ := f.receipt(t, c.Receipt.ID); r.PayerID != dup.ID {
+		t.Errorf("cancellation payer %v, want the tombstone", r.PayerID)
+	}
+
+	mails := f.mailsOf(t, mail.TemplateReceipt)
+	if len(mails) != 1 || mails[0].To != "anna@example.org" || mails[0].ReceiptID != c.Receipt.ID {
+		t.Fatalf("mails %+v, want the cancellation to Anna's account", mails)
+	}
+}
+
 // TestReceiptPDFRenderedOnce renders the PDF of a receipt that has none
 // (the seed's) on the first read, and stores it: later reads return the
 // same bytes without rendering. Members read only what they paid.
