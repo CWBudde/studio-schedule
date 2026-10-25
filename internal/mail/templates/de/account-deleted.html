@@ -1,0 +1,7 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>du hast dein Konto bei {{.SchoolName}} gelöscht. Mit dieser Adresse kannst du dich nicht mehr anmelden, und deine Kalender-Links funktionieren nicht mehr.</p>
+<p>Die Schule bewahrt auf, was sie aufbewahren muss, etwa Quittungen, und deine Buchungen als ihren Verlauf. Wenn auch deine persönlichen Daten exportiert oder gelöscht werden sollen, wende dich an {{.SchoolName}}.</p>
+<p>Falls du das nicht warst, melde dich bitte sofort bei {{.SchoolName}}.</p>
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

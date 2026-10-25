@@ -71,6 +71,10 @@ func emailChangedData() mail.EmailChangedData {
 	}
 }
 
+func accountDeletedData() mail.AccountDeletedData {
+	return mail.AccountDeletedData{SchoolName: "Studio Example", GivenName: "Anna"}
+}
+
 // golden compares got with testdata/<name> and rewrites the file with -update.
 func golden(t *testing.T, name, got string) {
 	t.Helper()
@@ -113,6 +117,7 @@ func TestRenderGolden(t *testing.T) {
 		{mail.TemplateChangeEmail, changeEmailData()},
 		{mail.TemplateEmailChanged, emailChangedData()},
 		{mail.TemplateInvite, inviteData()},
+		{mail.TemplateAccountDeleted, accountDeletedData()},
 	}
 
 	for _, tt := range tests {
@@ -170,6 +175,12 @@ func TestRenderAccountMailsContent(t *testing.T) {
 		}, ""},
 		{mail.TemplateEmailChanged, "de", emailChangedData(), []string{
 			"Anna", "Studio Example", "anna.new@example.org", "melde dich", "Anmelden",
+		}, ""},
+		{mail.TemplateAccountDeleted, "en", accountDeletedData(), []string{
+			"Anna", "Studio Example", "you deleted your account", "no longer sign in", "receipts",
+		}, ""},
+		{mail.TemplateAccountDeleted, "de", accountDeletedData(), []string{
+			"Anna", "Studio Example", "du hast dein Konto", "nicht mehr anmelden", "Quittungen",
 		}, ""},
 	}
 
@@ -637,6 +648,7 @@ func TestRenderAllTemplates(t *testing.T) {
 		mail.TemplateLessonNotice:     noticeData(t),
 		mail.TemplateReceipt:          receiptData(false),
 		mail.TemplateAnnouncement:     announcementData(),
+		mail.TemplateAccountDeleted:   accountDeletedData(),
 	}
 
 	for _, name := range mail.TemplateNames() {

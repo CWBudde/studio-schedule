@@ -1,0 +1,13 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+you deleted your account at {{.SchoolName}}. You can no longer sign in
+with this address, and your calendar links no longer work.
+
+The school keeps what it has to keep, such as receipts, and your bookings
+as its history. To have your personal data exported or erased as well,
+contact {{.SchoolName}}.
+
+If this was not you, contact {{.SchoolName}} right away.
+
+Kind regards,
+{{.SchoolName}}

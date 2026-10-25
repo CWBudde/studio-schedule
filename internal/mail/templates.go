@@ -61,6 +61,9 @@ const (
 	// TemplateAnnouncement brings an announcement of the school to its
 	// audience (ADR 0014). Data: AnnouncementData.
 	TemplateAnnouncement = "announcement"
+	// TemplateAccountDeleted confirms to the former address of an account
+	// that its holder deleted it (ADR 0016). Data: AccountDeletedData.
+	TemplateAccountDeleted = "account-deleted"
 )
 
 // TemplateNames returns all template names.
@@ -69,7 +72,7 @@ func TemplateNames() []string {
 		TemplateConfirmEmail, TemplateResetPassword, TemplateChangeEmail, TemplateEmailChanged, TemplateInvite,
 		TemplateLessonCanceled, TemplateLessonRestored, TemplateLessonChanged, TemplateBookingConfirmed,
 		TemplateBookingCanceled, TemplateWaitlistInvite, TemplateWaitlistExpired, TemplateLessonNotice,
-		TemplateReceipt, TemplateAnnouncement,
+		TemplateReceipt, TemplateAnnouncement, TemplateAccountDeleted,
 	}
 }
 
@@ -133,6 +136,24 @@ func (d EmailChangedData) Validate() error {
 		return fmt.Errorf("%w: school name must not be empty", domain.ErrValidation)
 	case strings.TrimSpace(d.NewEmail) == "":
 		return fmt.Errorf("%w: new email address must not be empty", domain.ErrValidation)
+	}
+
+	return nil
+}
+
+// AccountDeletedData is the data of TemplateAccountDeleted.
+type AccountDeletedData struct {
+	// SchoolName is the school the account belonged to.
+	SchoolName string
+	// GivenName greets the recipient; empty means a greeting without name.
+	GivenName string
+}
+
+// Validate checks the data before rendering. All errors wrap
+// domain.ErrValidation.
+func (d AccountDeletedData) Validate() error {
+	if strings.TrimSpace(d.SchoolName) == "" {
+		return fmt.Errorf("%w: school name must not be empty", domain.ErrValidation)
 	}
 
 	return nil
