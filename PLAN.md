@@ -701,7 +701,9 @@ Goal: prepaid passes and legally sound receipts.
 - [x] Playwright smoke suite against `serve` + Postgres in CI (real cookies, CSRF, Postgres semantics)
       (2026-10-25) — web/e2e-server with Mailpit (health, request IDs, CSRF, headers, booking,
       receipt PDF, password reset); demo data seeded around today (`seed --anchor today`)
-- [ ] Security review (OWASP ASVS L1 checklist), dependency scanning (Renovate, govulncheck)
+- [x] Security review (OWASP ASVS L1 checklist), dependency scanning (Renovate, govulncheck)
+      (2026-10-25) — docs/security.md; common-password check, password-changed mail, 30-day
+      sessions, `__Host-` cookie, office searches by POST, no echoed input in problem bodies
 - [x] Operator documentation: configuration reference, deployment guide (2026-10-25) —
       docs/operations.md, its configuration reference checked against the code by a test
 
@@ -711,6 +713,7 @@ Goal: prepaid passes and legally sound receipts.
 - [ ] Embeddable public schedule widget (iframe/script) for the school website
 - [ ] Events/workshops page with separate pricing
 - [ ] PWA (installable, offline schedule cache, web push for waitlist invites)
+- [ ] MFA (TOTP or passkeys; its own ADR)
 - [ ] Legacy data migration from the previous system into the generic import format. This lives in
       a **separate private repository** because it touches real data; the public repo only provides
       the import format and the `import` command.
