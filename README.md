@@ -57,8 +57,10 @@ just seed            # load the fictional demo data into the empty database
 just serve           # refuses to start unless the schema matches the binary
 ```
 
-Until the admin area arrives (Phase 3), `seed` is the only way to create the school settings the
-UI needs; `serve` logs a warning without them. The PostgreSQL tests (`just test-pg`, also part of `just test`) need Docker, or a server in
+For a real school, run `go run ./cmd/studio-schedule init` (or `bin/studio-schedule init`) instead
+of `seed`: it asks for the school's name, time zone, language and currency and the first admin, and
+prints a one-time link (valid 72 hours) that sets the admin's password; everything else is set in
+the app under Administration → Settings. The PostgreSQL tests (`just test-pg`, also part of `just test`) need Docker, or a server in
 `STUDIO_TEST_DATABASE_URL` whose role may create databases.
 
 ## Repository layout

@@ -661,8 +661,11 @@ Goal: prepaid passes and legally sound receipts.
 - [ ] Member CSV import with column mapping, dry-run preview, idempotent re-import (`member_no`),
       import run history
 - [ ] Duplicate detection and merge for persons (email, name + birth date)
-- [ ] Settings UI: school profile, branding (name, accent colour, logo), timezone, locale, release
-      rule, cutoffs, receipt data
+- [x] Settings UI: school profile, branding (name, accent colour, logo), timezone, locale, release
+      rule, cutoffs, receipt data (2026-10-25) — ADR 0013; one card per area, admin edits and the
+      office reads; accent checked for contrast with a derived dark variant; logo and name in the
+      header; timezone and currency only during first setup (`studio-schedule init`); the UI
+      follows the school's language unless the visitor chose one; e2e `settings.spec.ts`
 - [ ] Tests: import fixtures, merge correctness, statistics against seeded data
 
 ## Phase 8 — Production readiness

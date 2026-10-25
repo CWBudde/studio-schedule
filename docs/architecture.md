@@ -83,11 +83,14 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   `just check-sqlc`). `serve` uses PostgreSQL when `DATABASE_URL` is set and refuses to start unless
   exactly the embedded migrations are applied (checked read-only; `studio-schedule migrate up`); without it, `serve` runs the memory store
   with the demo data and logs a warning. `studio-schedule seed` loads the demo data into an empty
-  database only.
+  database only. A real installation starts with `studio-schedule init` instead: the school's
+  settings and its first admin, whose password is set through a printed one-time link, so no mail
+  server is needed yet ([ADR 0013](decisions/0013-settings-branding-and-init.md)).
 
 ## Time
 
-- The school timezone is a setting (IANA name). Class templates store local wall time (weekday,
+- The school timezone is a setting (IANA name), chosen at the first setup: it cannot change once
+  lessons exist, nor the currency once prices or receipts exist (ADR 0013). Class templates store local wall time (weekday,
   start, end). Lessons store instants (`timestamptz`), computed in Go so that DST is handled
   correctly.
 - `time.Local` is forbidden (golangci-lint forbidigo). The WASM build embeds `time/tzdata`.

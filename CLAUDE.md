@@ -23,6 +23,7 @@ Pages demo.
 just web-install # once: pnpm install for web/
 just serve       # API server on :8080 (PostgreSQL if DATABASE_URL is set, else memory + demo data)
 just migrate up  # apply migrations to DATABASE_URL (also: down, status); just seed loads demo data
+go run ./cmd/studio-schedule init  # new school: settings + first admin (prints a setup link)
 just test-pg     # PostgreSQL store tests only (Docker via testcontainers, or STUDIO_TEST_DATABASE_URL)
 just typst-wasm  # after changing tools/receipt-pdf: rebuild receipt.wasm reproducibly (Docker; Git LFS)
 just sqlc        # after changing internal/store/postgres/{migrations,queries}: regenerate sqlc code
@@ -80,6 +81,15 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `service.ReceiptRenderer` and stored, mail with the PDF attached via `OutboxMail.ReceiptID`),
   cancels one (Storno), lists them and keeps the receipt settings. The template data comes from
   `service/receipt_pdf.go`, the template itself is `tools/receipt-pdf/receipt.typ`.
+- **Settings:** `service.SettingsService` (`service/settings.go`, `httpapi/settings.go`; ADR 0013):
+  one card per area under `/api/v1/admin/settings/{school,branding,regional,booking-rules}` (office
+  reads, admin writes); the time zone and currency are locked by `SettingsRepo.Usage`, a wider
+  release window generates lessons at once. The accent's contrast and dark variant are
+  `domain/color.go`, mirrored for the form in `web/src/lib/color.ts`; the header, title, accent,
+  footer and (without a visitor's own choice, `web/src/i18n.ts`) the UI language follow the public
+  settings (`web/src/components/layout/branding.ts`). The `init` command
+  (`cmd/studio-schedule/init.go`, `service/setup.go`) sets up a new school and prints the first
+  admin's setup link.
 - **Admin writes:** the office maintains catalogue and timetable (`service/catalog_admin.go`,
   `httpapi/catalog_admin.go`; classes in `service/class_admin.go`, whose edits move the future
   lessons along in `class_sync.go`, terms in `service/term_admin.go`, whose new dates delete or
