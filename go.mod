@@ -2,6 +2,8 @@ module github.com/cwbudde/studio-schedule
 
 go 1.27.1
 
+toolchain go1.27.3
+
 require (
 	github.com/danielgtaylor/huma/v2 v2.39.1
 	github.com/go-chi/chi/v5 v5.5.0
@@ -14,7 +16,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/tetratelabs/wazero v1.12.0
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 	golang.org/x/text v0.41.0
 )
 
