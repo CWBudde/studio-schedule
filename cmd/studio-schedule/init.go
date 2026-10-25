@@ -84,15 +84,16 @@ func newInitCmdWith(env config.LookupFunc, open storeOpener) *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			var flags config.Flags
-			if cmd.Flags().Changed("database-url") {
+			if cmd.Flags().Changed(config.FlagDatabaseURL) {
 				flags.DatabaseURL = &o.db.url
 			}
 
-			if cmd.Flags().Changed("base-url") {
+			if cmd.Flags().Changed(config.FlagBaseURL) {
 				flags.BaseURL = &o.baseURL
 			}
 
-			cfg, err := config.Load(env, flags)
+			// init writes no log: the log settings are not checked.
+			cfg, err := config.LoadWithoutLog(env, flags)
 			if err != nil {
 				return err
 			}
@@ -116,7 +117,7 @@ func newInitCmdWith(env config.LookupFunc, open storeOpener) *cobra.Command {
 	}
 
 	o.db.register(cmd.Flags())
-	cmd.Flags().StringVar(&o.baseURL, "base-url", "",
+	cmd.Flags().StringVar(&o.baseURL, config.FlagBaseURL, "",
 		"public origin of the app that the setup link points to (env "+config.EnvBaseURL+")")
 
 	for _, f := range o.fields() {

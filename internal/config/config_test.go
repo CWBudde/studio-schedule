@@ -393,3 +393,123 @@ func TestLoadTrustedProxies(t *testing.T) {
 		t.Errorf("a host name: want ErrInvalid, got %v", err)
 	}
 }
+
+func TestLoadLog(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		env   map[string]string
+		flags config.Flags
+		want  config.Log
+	}{
+		{name: "default", want: config.Log{Level: slog.LevelInfo}},
+		{
+			name: "env",
+			env:  map[string]string{"LOG_FORMAT": "json", "LOG_LEVEL": "debug"},
+			want: config.Log{JSON: true, Level: slog.LevelDebug},
+		},
+		{
+			name: "case-insensitive",
+			env:  map[string]string{"LOG_FORMAT": "JSON", "LOG_LEVEL": "WARN"},
+			want: config.Log{JSON: true, Level: slog.LevelWarn},
+		},
+		{
+			name:  "flags over env",
+			env:   map[string]string{"LOG_FORMAT": "json", "LOG_LEVEL": "debug"},
+			flags: config.Flags{LogFormat: ptr("text"), LogLevel: ptr("error")},
+			want:  config.Log{Level: slog.LevelError},
+		},
+		{
+			name:  "empty flags mean the default",
+			env:   map[string]string{"LOG_FORMAT": "json", "LOG_LEVEL": "debug"},
+			flags: config.Flags{LogFormat: ptr(""), LogLevel: ptr("")},
+			want:  config.Log{Level: slog.LevelInfo},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := config.Load(env(tt.env), tt.flags)
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+
+			if got.Log != tt.want {
+				t.Fatalf("Log = %+v, want %+v", got.Log, tt.want)
+			}
+		})
+	}
+
+	for name, tc := range map[string]struct {
+		env           map[string]string
+		flags         config.Flags
+		want, notWant string
+	}{
+		"env format":  {env: map[string]string{"LOG_FORMAT": "xml"}, want: "LOG_FORMAT:", notWant: "--log"},
+		"env level":   {env: map[string]string{"LOG_LEVEL": "loud"}, want: "LOG_LEVEL:", notWant: "--log"},
+		"flag format": {flags: config.Flags{LogFormat: ptr("xml")}, want: "--log-format:", notWant: "LOG_FORMAT"},
+		"flag level":  {flags: config.Flags{LogLevel: ptr("loud")}, want: "--log-level:", notWant: "LOG_LEVEL"},
+		"flag over a bad env value": {
+			env:   map[string]string{"LOG_FORMAT": "yaml"},
+			flags: config.Flags{LogFormat: ptr("xml")}, want: "--log-format:", notWant: "LOG_FORMAT",
+		},
+	} {
+		_, err := config.Load(env(tc.env), tc.flags)
+		if !errors.Is(err, config.ErrInvalid) || !strings.Contains(err.Error(), tc.want) ||
+			strings.Contains(err.Error(), tc.notWant) {
+			t.Errorf("%s: error %v, want ErrInvalid naming %s and not %s", name, err, tc.want, tc.notWant)
+		}
+	}
+}
+
+// TestLoadWithoutLog checks that the commands without a log are not blocked
+// by bad log settings, while the other settings are still validated.
+func TestLoadWithoutLog(t *testing.T) {
+	t.Parallel()
+
+	bad := map[string]string{"LOG_FORMAT": "xml", "LOG_LEVEL": "loud", "DATABASE_URL": "host=db.example.test"}
+
+	cfg, err := config.LoadWithoutLog(env(bad), config.Flags{LogFormat: ptr("yaml")})
+	if err != nil {
+		t.Fatalf("LoadWithoutLog: %v", err)
+	}
+
+	if cfg.DatabaseURL != "host=db.example.test" || cfg.Log != (config.Log{}) {
+		t.Errorf("config = %#v, log %+v", cfg, cfg.Log)
+	}
+
+	bad["HTTP_ADDR"] = "nonsense"
+	if _, err := config.LoadWithoutLog(env(bad), config.Flags{}); !errors.Is(err, config.ErrInvalid) ||
+		strings.Contains(err.Error(), "LOG_") {
+		t.Errorf("bad HTTP_ADDR: error %v, want ErrInvalid without the log settings", err)
+	}
+}
+
+// TestLoadNamesTheSource checks that an error names the flag when a flag
+// supplied the bad value, and the environment variable otherwise.
+func TestLoadNamesTheSource(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		env           map[string]string
+		flags         config.Flags
+		want, notWant string
+	}{
+		"env addr":      {env: map[string]string{"HTTP_ADDR": "nonsense"}, want: "HTTP_ADDR:", notWant: "--addr"},
+		"flag addr":     {flags: config.Flags{HTTPAddr: ptr("nonsense")}, want: "--addr:", notWant: "HTTP_ADDR"},
+		"env base url":  {env: map[string]string{"BASE_URL": "/relative"}, want: "BASE_URL:", notWant: "--base-url"},
+		"flag base url": {flags: config.Flags{BaseURL: ptr("/relative")}, want: "--base-url:", notWant: "BASE_URL"},
+		"flag database url": {
+			flags: config.Flags{DatabaseURL: ptr("mysql://db.example.test")}, want: "--database-url:", notWant: "DATABASE_URL",
+		},
+	} {
+		_, err := config.Load(env(tc.env), tc.flags)
+		if !errors.Is(err, config.ErrInvalid) || !strings.Contains(err.Error(), tc.want) ||
+			strings.Contains(err.Error(), tc.notWant) {
+			t.Errorf("%s: error %v, want ErrInvalid naming %s and not %s", name, err, tc.want, tc.notWant)
+		}
+	}
+}

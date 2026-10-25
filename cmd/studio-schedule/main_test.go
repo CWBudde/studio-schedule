@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -74,17 +75,73 @@ func TestVersionCommand(t *testing.T) {
 	}
 }
 
-func TestLogOptions(t *testing.T) {
-	for _, o := range []logOptions{{"text", "info"}, {"json", "debug"}, {"JSON", "warn"}} {
-		if _, err := o.logger(&bytes.Buffer{}); err != nil {
-			t.Errorf("%+v: %v", o, err)
-		}
+func TestNewLogger(t *testing.T) {
+	var buf bytes.Buffer
+
+	newLogger(&buf, config.Log{JSON: true, Level: slog.LevelWarn}).Info("hidden")
+	newLogger(&buf, config.Log{JSON: true, Level: slog.LevelWarn}).Warn("shown")
+
+	if got := strings.TrimSpace(buf.String()); !strings.HasPrefix(got, "{") || strings.Contains(got, "hidden") || !strings.Contains(got, "shown") {
+		t.Errorf("JSON at warn: %q", got)
 	}
 
-	for _, o := range []logOptions{{"xml", "info"}, {"text", "loud"}} {
-		if _, err := o.logger(&bytes.Buffer{}); err == nil {
-			t.Errorf("%+v: want error", o)
-		}
+	buf.Reset()
+	newLogger(&buf, config.Log{}).Info("line")
+
+	if got := buf.String(); !strings.Contains(got, "level=INFO msg=line") {
+		t.Errorf("text at info: %q", got)
+	}
+}
+
+// TestServeLogSettings checks that serve reads the log settings from the
+// environment and that a flag wins over it. An invalid HTTP_ADDR keeps the
+// server from starting.
+func TestServeLogSettings(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		env     map[string]string
+		args    []string
+		naming  []string
+		missing []string
+	}{
+		"env": {
+			env:    map[string]string{"HTTP_ADDR": "nonsense", "LOG_FORMAT": "xml", "LOG_LEVEL": "loud"},
+			naming: []string{"LOG_FORMAT", "LOG_LEVEL"},
+		},
+		"flags over env": {
+			env:     map[string]string{"HTTP_ADDR": "nonsense", "LOG_FORMAT": "xml", "LOG_LEVEL": "loud"},
+			args:    []string{"--log-format", "json", "--log-level", "debug"},
+			naming:  []string{"HTTP_ADDR"},
+			missing: []string{"LOG_FORMAT", "LOG_LEVEL"},
+		},
+		"invalid flags": {
+			env:     map[string]string{"HTTP_ADDR": "nonsense"},
+			args:    []string{"--log-format", "xml", "--log-level", "loud"},
+			naming:  []string{"--log-format", "--log-level"},
+			missing: []string{"LOG_FORMAT", "LOG_LEVEL"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := execute(tc.env, append([]string{"serve"}, tc.args...)...)
+			if !errors.Is(err, config.ErrInvalid) {
+				t.Fatalf("serve error = %v, want ErrInvalid", err)
+			}
+
+			for _, key := range tc.naming {
+				if !strings.Contains(err.Error(), key) {
+					t.Errorf("error %q does not name %s", err, key)
+				}
+			}
+
+			for _, key := range tc.missing {
+				if strings.Contains(err.Error(), key) {
+					t.Errorf("error %q names %s", err, key)
+				}
+			}
+		})
 	}
 }
 

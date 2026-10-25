@@ -46,10 +46,29 @@ const (
 	// EnvMetricsAddr is the host:port of the Prometheus metrics server;
 	// empty means no metrics.
 	EnvMetricsAddr = "METRICS_ADDR"
+	// EnvLogFormat (text or json) and EnvLogLevel (debug, info, warn or
+	// error) set the server's log output.
+	EnvLogFormat = "LOG_FORMAT"
+	EnvLogLevel  = "LOG_LEVEL"
 )
 
-// DefaultHTTPAddr is the listen address when neither flag nor env sets one.
-const DefaultHTTPAddr = ":8080"
+// Flag names of the settings that a flag can set. The commands bind them;
+// errors name the flag when a flag supplied the bad value.
+const (
+	FlagDatabaseURL = "database-url"
+	FlagHTTPAddr    = "addr"
+	FlagBaseURL     = "base-url"
+	FlagLogFormat   = "log-format"
+	FlagLogLevel    = "log-level"
+	FlagMetricsAddr = "metrics-addr"
+)
+
+// Defaults when neither flag nor env sets a value.
+const (
+	DefaultHTTPAddr  = ":8080"
+	DefaultLogFormat = "text"
+	DefaultLogLevel  = "info"
+)
 
 // redactedMask replaces secrets in printed values (the same mask as
 // url.URL.Redacted uses).
@@ -77,6 +96,17 @@ type Config struct {
 	// MetricsAddr is the host:port of the separate server of the
 	// Prometheus metrics (/metrics). Empty means no metrics.
 	MetricsAddr string
+
+	// Log is the log output; the zero value is text at level info.
+	Log Log
+}
+
+// Log is the server's log output.
+type Log struct {
+	// JSON selects JSON lines instead of the text format.
+	JSON bool
+	// Level is the minimum level logged; the zero value is info.
+	Level slog.Level
 }
 
 // SMTP is the outgoing mail server. Package mail/smtp validates it fully;
@@ -115,45 +145,71 @@ type Flags struct {
 	HTTPAddr    *string
 	BaseURL     *string
 	MetricsAddr *string
+	LogFormat   *string
+	LogLevel    *string
 }
 
 // Load combines flags, the environment (read through lookup; nil means an
 // empty environment) and defaults, and validates the result. All problems are
-// reported at once; the errors wrap ErrInvalid and never contain secrets.
+// reported at once, each naming the flag or environment variable that
+// supplied the bad value; the errors wrap ErrInvalid and never contain
+// secrets.
 func Load(lookup LookupFunc, flags Flags) (Config, error) {
+	return load(lookup, flags, true)
+}
+
+// LoadWithoutLog is Load for the commands that write no log (migrate, seed,
+// init, import, healthcheck): it ignores the log settings, so a mistake there
+// cannot block, say, a migration. The returned Log is the zero value.
+func LoadWithoutLog(lookup LookupFunc, flags Flags) (Config, error) {
+	return load(lookup, flags, false)
+}
+
+// setting is a value with the name of its source: the flag (with dashes) or
+// the environment variable that supplied it.
+type setting struct {
+	value, source string
+}
+
+func load(lookup LookupFunc, flags Flags, withLog bool) (Config, error) {
 	if lookup == nil {
 		lookup = func(string) (string, bool) { return "", false }
 	}
 
-	pick := func(flag *string, key, def string) string {
+	pick := func(flag *string, flagName, key, def string) setting {
 		if flag != nil {
-			return strings.TrimSpace(*flag)
+			return setting{strings.TrimSpace(*flag), "--" + flagName}
 		}
 
 		if v, ok := lookup(key); ok && strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
+			return setting{strings.TrimSpace(v), key}
 		}
 
-		return def
+		return setting{def, key}
 	}
+	env := func(key string) string { return pick(nil, "", key, "").value }
+
+	databaseURL := pick(flags.DatabaseURL, FlagDatabaseURL, EnvDatabaseURL, "")
+	httpAddr := pick(flags.HTTPAddr, FlagHTTPAddr, EnvHTTPAddr, DefaultHTTPAddr)
+	baseURL := pick(flags.BaseURL, FlagBaseURL, EnvBaseURL, "")
+	metricsAddr := pick(flags.MetricsAddr, FlagMetricsAddr, EnvMetricsAddr, "")
 
 	cfg := Config{
-		DatabaseURL: pick(flags.DatabaseURL, EnvDatabaseURL, ""),
-		HTTPAddr:    pick(flags.HTTPAddr, EnvHTTPAddr, DefaultHTTPAddr),
-		BaseURL:     pick(flags.BaseURL, EnvBaseURL, ""),
-		MetricsAddr: pick(flags.MetricsAddr, EnvMetricsAddr, ""),
+		DatabaseURL: databaseURL.value,
+		HTTPAddr:    httpAddr.value,
+		MetricsAddr: metricsAddr.value,
 		SMTP: SMTP{
-			Host:     pick(nil, EnvSMTPHost, ""),
-			Username: pick(nil, EnvSMTPUsername, ""),
-			Password: pick(nil, EnvSMTPPassword, ""),
-			From:     pick(nil, EnvSMTPFrom, ""),
-			TLS:      pick(nil, EnvSMTPTLS, ""),
+			Host:     env(EnvSMTPHost),
+			Username: env(EnvSMTPUsername),
+			Password: env(EnvSMTPPassword),
+			From:     env(EnvSMTPFrom),
+			TLS:      env(EnvSMTPTLS),
 		},
 	}
 
 	var errs []error
 
-	if port := pick(nil, EnvSMTPPort, ""); port != "" {
+	if port := env(EnvSMTPPort); port != "" {
 		n, err := strconv.ParseUint(port, 10, 16)
 		if err != nil || n == 0 {
 			errs = append(errs, fmt.Errorf("%s: %q is not a port (1-65535)", EnvSMTPPort, port))
@@ -162,12 +218,19 @@ func Load(lookup LookupFunc, flags Flags) (Config, error) {
 		cfg.SMTP.Port = int(n)
 	}
 
-	trusted, err := clientip.ParseTrusted(pick(nil, EnvTrustedProxies, ""))
+	trusted, err := clientip.ParseTrusted(env(EnvTrustedProxies))
 	if err != nil {
 		errs = append(errs, fmt.Errorf("%s: %w", EnvTrustedProxies, err))
 	}
 
 	cfg.TrustedProxies = trusted
+
+	if withLog {
+		logCfg, logErrs := loadLog(pick(flags.LogFormat, FlagLogFormat, EnvLogFormat, DefaultLogFormat),
+			pick(flags.LogLevel, FlagLogLevel, EnvLogLevel, DefaultLogLevel))
+		errs = append(errs, logErrs...)
+		cfg.Log = logCfg
+	}
 
 	if cfg.SMTP.Host == "" && (cfg.SMTP.From != "" || cfg.SMTP.Username != "" || cfg.SMTP.Password != "") {
 		errs = append(errs, fmt.Errorf("%s: required when other SMTP_* variables are set", EnvSMTPHost))
@@ -177,29 +240,27 @@ func Load(lookup LookupFunc, flags Flags) (Config, error) {
 		errs = append(errs, fmt.Errorf("%s: required with %s", EnvSMTPFrom, EnvSMTPHost))
 	}
 
-	if err := validateDatabaseURL(cfg.DatabaseURL); err != nil {
+	if err := validateDatabaseURL(databaseURL); err != nil {
 		errs = append(errs, err)
 	}
 
-	if err := validateAddr(EnvHTTPAddr, cfg.HTTPAddr); err != nil {
+	if err := validateAddr(httpAddr); err != nil {
 		errs = append(errs, err)
 	}
 
-	if cfg.MetricsAddr != "" {
-		if err := validateAddr(EnvMetricsAddr, cfg.MetricsAddr); err != nil {
+	if metricsAddr.value != "" {
+		if err := validateAddr(metricsAddr); err != nil {
 			errs = append(errs, err)
-		} else if addrsConflict(cfg.MetricsAddr, cfg.HTTPAddr) {
+		} else if addrsConflict(metricsAddr.value, httpAddr.value) {
 			errs = append(errs, fmt.Errorf("%s: %q would listen on the port of %s %q; choose another port",
-				EnvMetricsAddr, cfg.MetricsAddr, EnvHTTPAddr, cfg.HTTPAddr))
+				metricsAddr.source, metricsAddr.value, httpAddr.source, httpAddr.value))
 		}
 	}
 
-	baseURL, err := normalizeBaseURL(cfg.BaseURL)
+	cfg.BaseURL, err = normalizeBaseURL(baseURL)
 	if err != nil {
 		errs = append(errs, err)
 	}
-
-	cfg.BaseURL = baseURL
 
 	if len(errs) > 0 {
 		return Config{}, fmt.Errorf("%w: %w", ErrInvalid, errors.Join(errs...))
@@ -208,20 +269,47 @@ func Load(lookup LookupFunc, flags Flags) (Config, error) {
 	return cfg, nil
 }
 
+// loadLog parses the log format and level; an empty value (an explicitly
+// empty flag) means the default.
+func loadLog(format, level setting) (Log, []error) {
+	var (
+		l    Log
+		errs []error
+	)
+
+	switch strings.ToLower(format.value) {
+	case "", DefaultLogFormat:
+	case "json":
+		l.JSON = true
+	default:
+		errs = append(errs, fmt.Errorf("%s: %q is not a log format (text or json)", format.source, format.value))
+	}
+
+	if level.value != "" {
+		if err := l.Level.UnmarshalText([]byte(level.value)); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %q is not a log level (debug, info, warn or error)", level.source, level.value))
+		}
+	}
+
+	return l, errs
+}
+
 // validateDatabaseURL checks the syntax only; it does not connect. The
 // errors never include the value, which may contain a password.
-func validateDatabaseURL(s string) error {
+func validateDatabaseURL(v setting) error {
+	s, name := v.value, v.source
+
 	switch {
 	case s == "":
 		return nil
 	case urlForm.MatchString(s):
 		u, err := url.Parse(s)
 		if err != nil {
-			return fmt.Errorf("%s: not a valid URL", EnvDatabaseURL)
+			return fmt.Errorf("%s: not a valid URL", name)
 		}
 
 		if u.Scheme != "postgres" && u.Scheme != "postgresql" {
-			return fmt.Errorf("%s: scheme must be postgres or postgresql", EnvDatabaseURL)
+			return fmt.Errorf("%s: scheme must be postgres or postgresql", name)
 		}
 
 		return nil
@@ -229,19 +317,21 @@ func validateDatabaseURL(s string) error {
 		// libpq key=value DSN; the driver checks the keywords.
 		return nil
 	default:
-		return fmt.Errorf("%s: want a postgres:// URL or a key=value DSN", EnvDatabaseURL)
+		return fmt.Errorf("%s: want a postgres:// URL or a key=value DSN", name)
 	}
 }
 
-// validateAddr checks the listen address s of the variable env.
-func validateAddr(env, s string) error {
+// validateAddr checks the listen address v.
+func validateAddr(v setting) error {
+	s, name := v.value, v.source
+
 	_, port, err := net.SplitHostPort(s)
 	if err != nil {
-		return fmt.Errorf("%s: %q is not host:port", env, s)
+		return fmt.Errorf("%s: %q is not host:port", name, s)
 	}
 
 	if _, err := strconv.ParseUint(port, 10, 16); err != nil {
-		return fmt.Errorf("%s: %q needs a numeric port (0-65535)", env, s)
+		return fmt.Errorf("%s: %q needs a numeric port (0-65535)", name, s)
 	}
 
 	return nil
@@ -303,7 +393,8 @@ func listenHosts(host string) []string {
 
 // normalizeBaseURL accepts an absolute http(s) origin and strips a trailing
 // slash. Paths are rejected because the app is served from the root.
-func normalizeBaseURL(s string) (string, error) {
+func normalizeBaseURL(v setting) (string, error) {
+	s, name := v.value, v.source
 	if s == "" {
 		return "", nil
 	}
@@ -312,15 +403,15 @@ func normalizeBaseURL(s string) (string, error) {
 
 	switch {
 	case err != nil:
-		return "", fmt.Errorf("%s: not a valid URL", EnvBaseURL)
+		return "", fmt.Errorf("%s: not a valid URL", name)
 	case u.Scheme != "http" && u.Scheme != "https":
-		return "", fmt.Errorf("%s: must be an absolute http or https URL", EnvBaseURL)
+		return "", fmt.Errorf("%s: must be an absolute http or https URL", name)
 	case u.Host == "":
-		return "", fmt.Errorf("%s: has no host", EnvBaseURL)
+		return "", fmt.Errorf("%s: has no host", name)
 	case u.User != nil:
-		return "", fmt.Errorf("%s: must not contain credentials", EnvBaseURL)
+		return "", fmt.Errorf("%s: must not contain credentials", name)
 	case u.Path != "" && u.Path != "/", u.RawQuery != "", u.ForceQuery, u.Fragment != "":
-		return "", fmt.Errorf("%s: must be an origin without path, query or fragment", EnvBaseURL)
+		return "", fmt.Errorf("%s: must be an origin without path, query or fragment", name)
 	}
 
 	return strings.TrimSuffix(s, "/"), nil
@@ -370,6 +461,10 @@ func (c Config) LogValue() slog.Value {
 			slog.String("tls", r.SMTP.TLS),
 		),
 		slog.String("metricsAddr", r.MetricsAddr),
+		slog.Group("log",
+			slog.Bool("json", r.Log.JSON),
+			slog.String("level", r.Log.Level.String()),
+		),
 	)
 }
 

@@ -33,10 +33,7 @@ import (
 const shutdownTimeout = 10 * time.Second
 
 func newServeCmd(env config.LookupFunc) *cobra.Command {
-	var (
-		flags serveFlags
-		logs  logOptions
-	)
+	var flags serveFlags
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -51,10 +48,7 @@ func newServeCmd(env config.LookupFunc) *cobra.Command {
 				return err
 			}
 
-			logger, err := logs.logger(cmd.ErrOrStderr())
-			if err != nil {
-				return err
-			}
+			logger := newLogger(cmd.ErrOrStderr(), cfg.Log)
 
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -64,7 +58,6 @@ func newServeCmd(env config.LookupFunc) *cobra.Command {
 	}
 
 	flags.register(cmd)
-	logs.register(cmd)
 
 	return cmd
 }
@@ -77,17 +70,23 @@ type serveFlags struct {
 	httpAddr    string
 	baseURL     string
 	metricsAddr string
+	logFormat   string
+	logLevel    string
 }
 
 func (f *serveFlags) register(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&f.httpAddr, "addr", config.DefaultHTTPAddr,
+	cmd.Flags().StringVar(&f.httpAddr, config.FlagHTTPAddr, config.DefaultHTTPAddr,
 		"listen address host:port (env "+config.EnvHTTPAddr+")")
-	cmd.Flags().StringVar(&f.databaseURL, "database-url", "", databaseURLUsage)
-	cmd.Flags().StringVar(&f.baseURL, "base-url", "",
+	cmd.Flags().StringVar(&f.databaseURL, config.FlagDatabaseURL, "", databaseURLUsage)
+	cmd.Flags().StringVar(&f.baseURL, config.FlagBaseURL, "",
 		"public origin of the app, e.g. https://schedule.example.org (env "+config.EnvBaseURL+")")
-	cmd.Flags().StringVar(&f.metricsAddr, "metrics-addr", "",
+	cmd.Flags().StringVar(&f.metricsAddr, config.FlagMetricsAddr, "",
 		"listen address host:port of the Prometheus metrics (/metrics); empty: no metrics (env "+
 			config.EnvMetricsAddr+")")
+	cmd.Flags().StringVar(&f.logFormat, config.FlagLogFormat, config.DefaultLogFormat,
+		"log format: text or json (env "+config.EnvLogFormat+")")
+	cmd.Flags().StringVar(&f.logLevel, config.FlagLogLevel, config.DefaultLogLevel,
+		"log level: debug, info, warn or error (env "+config.EnvLogLevel+")")
 }
 
 // explicit returns the flags given on the command line.
@@ -101,10 +100,12 @@ func (f *serveFlags) explicit(cmd *cobra.Command) config.Flags {
 	}
 
 	return config.Flags{
-		DatabaseURL: changed("database-url", &f.databaseURL),
-		HTTPAddr:    changed("addr", &f.httpAddr),
-		BaseURL:     changed("base-url", &f.baseURL),
-		MetricsAddr: changed("metrics-addr", &f.metricsAddr),
+		DatabaseURL: changed(config.FlagDatabaseURL, &f.databaseURL),
+		HTTPAddr:    changed(config.FlagHTTPAddr, &f.httpAddr),
+		BaseURL:     changed(config.FlagBaseURL, &f.baseURL),
+		LogFormat:   changed(config.FlagLogFormat, &f.logFormat),
+		LogLevel:    changed(config.FlagLogLevel, &f.logLevel),
+		MetricsAddr: changed(config.FlagMetricsAddr, &f.metricsAddr),
 	}
 }
 

@@ -33,6 +33,22 @@ func TestMigrateNeedsDatabaseURL(t *testing.T) {
 	}
 }
 
+// TestDatabaseCommandsIgnoreLogSettings checks that bad log settings, which
+// only serve uses, do not block the commands that write no log: they get as
+// far as asking for the database.
+func TestDatabaseCommandsIgnoreLogSettings(t *testing.T) {
+	t.Parallel()
+
+	env := map[string]string{"LOG_FORMAT": "xml", "LOG_LEVEL": "loud"}
+
+	for _, args := range [][]string{{"migrate", "up"}, {"migrate", "status"}, {"seed"}, {"init"}} {
+		out, err := execute(env, args...)
+		if !errors.Is(err, errNoDatabaseURL) {
+			t.Errorf("%v error = %v, want errNoDatabaseURL\n%s", args, err, out)
+		}
+	}
+}
+
 func TestMigrateRejectsInvalidDatabaseURL(t *testing.T) {
 	t.Parallel()
 

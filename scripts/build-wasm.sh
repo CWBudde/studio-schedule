@@ -22,7 +22,9 @@ if [[ -z $GO_WASM_EXEC ]]; then
 fi
 
 mkdir -p "$OUT_DIR"
-cp "$GO_WASM_EXEC" "$OUT_DIR/wasm_exec.js"
+# install, not cp: a toolchain in the module cache is read-only, and a
+# read-only copy would fail the next build.
+install -m 0644 "$GO_WASM_EXEC" "$OUT_DIR/wasm_exec.js"
 
 cd "$ROOT_DIR"
 GOOS=js GOARCH=wasm go build \

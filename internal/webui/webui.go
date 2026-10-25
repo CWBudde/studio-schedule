@@ -62,7 +62,8 @@ func NewHandler(files fs.FS) http.Handler {
 				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			}
 
-			http.ServeFileFS(w, r, files, name)
+			// name is cleaned above and fs.FS paths cannot leave files.
+			http.ServeFileFS(w, r, files, name) //nolint:gosec // G703: see above
 
 			return
 		}

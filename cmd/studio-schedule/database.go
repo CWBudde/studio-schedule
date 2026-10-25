@@ -29,17 +29,18 @@ const databaseURLUsage = "PostgreSQL connection URL or key=value DSN; prefer the
 type databaseFlag struct{ url string }
 
 func (f *databaseFlag) register(flags *pflag.FlagSet) {
-	flags.StringVar(&f.url, "database-url", "", databaseURLUsage)
+	flags.StringVar(&f.url, config.FlagDatabaseURL, "", databaseURLUsage)
 }
 
 // load returns the configured database URL (flag > env) or errNoDatabaseURL.
+// These commands write no log, so the log settings are not checked.
 func (f *databaseFlag) load(cmd *cobra.Command, env config.LookupFunc) (string, error) {
 	var flags config.Flags
-	if cmd.Flags().Changed("database-url") {
+	if cmd.Flags().Changed(config.FlagDatabaseURL) {
 		flags.DatabaseURL = &f.url
 	}
 
-	cfg, err := config.Load(env, flags)
+	cfg, err := config.LoadWithoutLog(env, flags)
 	if err != nil {
 		return "", err
 	}
