@@ -79,7 +79,7 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email, locale st
 // an invitation confirms the invited account as well: it proves the
 // address.
 func (s *AuthService) ResetPassword(ctx context.Context, token, password string) error {
-	if err := checkPassword(password); err != nil {
+	if err := checkPassword("password", password); err != nil {
 		return err
 	}
 
@@ -145,7 +145,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, p Principal, current, 
 		return ErrImpersonating
 	}
 
-	if err := checkPassword(password); err != nil {
+	if err := checkPassword("newPassword", password); err != nil {
 		return err
 	}
 
@@ -209,10 +209,19 @@ func (s *AuthService) checkCurrentPassword(ctx context.Context, p Principal, pas
 // setPassword stores a new password hash, ends every session acting for
 // account except keep (zero: all of them; endSessions audits the
 // impersonations it ends), and invalidates every open link: whoever
-// requested one may have known the old password.
+// requested one may have known the old password. If the account had a
+// password, it is told by mail (ASVS 2.2.3); setting the first one (an
+// invitation, the setup link) is no change to report.
 func (s *AuthService) setPassword(
 	ctx context.Context, tx store.Tx, account domain.AccountID, hash string, keep domain.SessionID,
 ) error {
+	_, err := tx.Credentials().Get(ctx, account)
+	changed := err == nil
+
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+		return err
+	}
+
 	cred := domain.Credential{AccountID: account, PasswordHash: hash, ChangedAt: s.clock.Now()}
 	if err := tx.Credentials().Put(ctx, cred); err != nil {
 		return err
@@ -222,7 +231,43 @@ func (s *AuthService) setPassword(
 		return err
 	}
 
-	return deleteTokens(ctx, tx, account)
+	if err := deleteTokens(ctx, tx, account); err != nil {
+		return err
+	}
+
+	if !changed {
+		return nil
+	}
+
+	return s.notifyPasswordChanged(ctx, tx, account)
+}
+
+// notifyPasswordChanged mails account, in its language, that its password
+// was changed. The mail has no link: it tells whoever did not change it to
+// contact the school.
+func (s *AuthService) notifyPasswordChanged(ctx context.Context, tx store.Tx, account domain.AccountID) error {
+	acc, err := tx.Accounts().Get(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	settings, err := tx.Settings().Get(ctx)
+	if err != nil {
+		return fmt.Errorf("school settings: %w", err)
+	}
+
+	person, err := tx.Persons().Get(ctx, acc.PersonID)
+	if err != nil {
+		return err
+	}
+
+	rendered, err := s.mails.Render(cmp.Or(acc.Locale, settings.DefaultLocale), mail.TemplatePasswordChanged,
+		mail.PasswordChangedData{SchoolName: settings.SchoolName, GivenName: person.GivenName})
+	if err != nil {
+		return fmt.Errorf("render %s mail: %v", mail.TemplatePasswordChanged, err) //nolint:errorlint // see sendLink
+	}
+
+	return enqueueMail(ctx, tx, s.ids, s.clock.Now(), acc.Email, mail.TemplatePasswordChanged, mailOpts{}, rendered)
 }
 
 // deleteTokens invalidates every open link of account.

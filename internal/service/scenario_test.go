@@ -8,7 +8,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/store/memory"
 )
 
-// The merge, import and privacy scenarios on the memory store; the PostgreSQL
+// The merge, import, privacy and credential scenarios on the memory store; the PostgreSQL
 // store's tests run them too.
 
 func TestMergeScenarios(t *testing.T) {
@@ -24,4 +24,9 @@ func TestImportScenarios(t *testing.T) {
 func TestPrivacyScenarios(t *testing.T) {
 	t.Parallel()
 	servicetest.Privacy(t, func(*testing.T) store.Store { return memory.New() })
+}
+
+func TestCredentialScenarios(t *testing.T) {
+	t.Parallel()
+	servicetest.Credentials(t, func(*testing.T) store.Store { return memory.New() })
 }

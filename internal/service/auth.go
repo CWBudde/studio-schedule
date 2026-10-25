@@ -9,7 +9,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
+	authpassword "github.com/cwbudde/studio-schedule/internal/auth/password"
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/ids"
@@ -21,8 +23,9 @@ import (
 const (
 	// SessionIdleTimeout ends a session that was not used for this long.
 	SessionIdleTimeout = 14 * 24 * time.Hour
-	// SessionMaxAge ends every session this long after the login.
-	SessionMaxAge = 90 * 24 * time.Hour
+	// SessionMaxAge ends every session this long after the login: members
+	// sign in again at least every 30 days (ADR 0004, amendment; ASVS 3.3.2).
+	SessionMaxAge = 30 * 24 * time.Hour
 	// sessionRefreshAfter limits how often a used session is extended, so
 	// that most requests only read.
 	sessionRefreshAfter = 24 * time.Hour
@@ -30,10 +33,11 @@ const (
 	ConfirmTokenTTL = 24 * time.Hour
 )
 
-// Password limits. The upper limit bounds the hashing work per request.
+// Password limits, in characters as the API counts them. The upper limit
+// bounds the hashing work per request.
 const (
-	MinPasswordLength = 8   // characters
-	MaxPasswordLength = 256 // bytes
+	MinPasswordLength = 8
+	MaxPasswordLength = 256
 )
 
 // tokenBytes is the entropy of session and email tokens.
@@ -141,7 +145,7 @@ func (s *AuthService) Register(ctx context.Context, r Registration) error {
 	r.Email = strings.TrimSpace(r.Email)
 	r.GivenName, r.FamilyName = strings.TrimSpace(r.GivenName), strings.TrimSpace(r.FamilyName)
 
-	if err := checkPassword(r.Password); err != nil {
+	if err := checkPassword("password", r.Password); err != nil {
 		return err
 	}
 
@@ -355,7 +359,7 @@ func mapTokenErr(err error) error {
 
 // Login signs an account in with its email and password.
 func (s *AuthService) Login(ctx context.Context, email, password string) (SignedIn, error) {
-	if len(password) > MaxPasswordLength {
+	if tooLong(password) {
 		return SignedIn{}, ErrInvalidCredentials
 	}
 
@@ -416,7 +420,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (Signed
 
 // verify checks password against the stored credential.
 func (s *AuthService) verify(cred domain.Credential, password string) error {
-	if len(password) > MaxPasswordLength {
+	if tooLong(password) {
 		return ErrInvalidCredentials
 	}
 
@@ -751,16 +755,30 @@ func mayActAs(acc domain.Account) bool {
 	return !acc.ConfirmedAt.IsZero() && acc.DisabledAt.IsZero()
 }
 
-// checkPassword enforces the password length limits.
-func checkPassword(pw string) error {
-	switch {
-	case len([]rune(pw)) < MinPasswordLength:
-		return fmt.Errorf("%w: password must have at least %d characters", domain.ErrValidation, MinPasswordLength)
-	case len(pw) > MaxPasswordLength:
-		return fmt.Errorf("%w: password must have at most %d bytes", domain.ErrValidation, MaxPasswordLength)
+// checkPassword enforces the rules for a new password (ADR 0004): its length
+// and that it is none of the most common passwords (ASVS 2.1.7). A broken
+// rule is a field error on field, the JSON name of the new password.
+func checkPassword(field, pw string) error {
+	switch n := utf8.RuneCountInString(pw); {
+	case n < MinPasswordLength:
+		return &domain.FieldError{
+			Field: field, Msg: fmt.Sprintf("the password must have at least %d characters", MinPasswordLength),
+		}
+	case n > MaxPasswordLength:
+		return &domain.FieldError{
+			Field: field, Msg: fmt.Sprintf("the password must have at most %d characters", MaxPasswordLength),
+		}
+	case authpassword.IsCommon(pw):
+		return &domain.FieldError{Field: field, Msg: "the password is one of the most common ones; choose another"}
 	}
 
 	return nil
+}
+
+// tooLong reports a password longer than any that can be set, which
+// therefore matches no stored hash.
+func tooLong(pw string) bool {
+	return len(pw) > utf8.UTFMax*MaxPasswordLength || utf8.RuneCountInString(pw) > MaxPasswordLength
 }
 
 // newToken returns a random URL-safe token with 256 bits of entropy.
