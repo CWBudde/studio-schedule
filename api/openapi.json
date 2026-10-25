@@ -632,6 +632,186 @@
         ],
         "type": "object"
       },
+      "BookingRules": {
+        "additionalProperties": false,
+        "properties": {
+          "bookingCutoffMinutes": {
+            "description": "Booking closes this many minutes before a lesson starts; 0: at the start.",
+            "format": "int64",
+            "maximum": 43200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "cancellationCutoffMinutes": {
+            "description": "Canceling without losing the visit closes this many minutes before a lesson starts; 0: at the start.",
+            "format": "int64",
+            "maximum": 43200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "defaultVisibleDays": {
+            "description": "Early access: members see the lessons they may see this many days ahead, released or not, unless their account says otherwise.",
+            "format": "int64",
+            "maximum": 366,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "generatedLessons": {
+            "description": "How many lessons the change generated at once because the window grew; 0 for a read.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "releaseTime": {
+            "description": "The time of the release (HH:MM) in the school time zone.",
+            "examples": [
+              "18:00"
+            ],
+            "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+            "type": "string"
+          },
+          "releaseWeekday": {
+            "description": "The day of the weekly release, 0 = Sunday to 6 = Saturday.",
+            "format": "int64",
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "releaseWeeksAhead": {
+            "description": "Each release opens the lessons up to the same weekday this many weeks later.",
+            "format": "int64",
+            "maximum": 52,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "waitlistInviteExpiryMinutes": {
+            "description": "How long a waiting-list invite holds its place, in minutes (never beyond the booking cutoff).",
+            "format": "int64",
+            "maximum": 43200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "window": {
+            "$ref": "#/components/schemas/ReleaseWindowBody",
+            "description": "The release window of these rules now."
+          }
+        },
+        "required": [
+          "window",
+          "generatedLessons",
+          "releaseWeekday",
+          "releaseTime",
+          "releaseWeeksAhead",
+          "bookingCutoffMinutes",
+          "cancellationCutoffMinutes",
+          "waitlistInviteExpiryMinutes",
+          "defaultVisibleDays"
+        ],
+        "type": "object"
+      },
+      "BookingRulesData": {
+        "additionalProperties": false,
+        "properties": {
+          "bookingCutoffMinutes": {
+            "description": "Booking closes this many minutes before a lesson starts; 0: at the start.",
+            "format": "int64",
+            "maximum": 43200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "cancellationCutoffMinutes": {
+            "description": "Canceling without losing the visit closes this many minutes before a lesson starts; 0: at the start.",
+            "format": "int64",
+            "maximum": 43200,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "defaultVisibleDays": {
+            "description": "Early access: members see the lessons they may see this many days ahead, released or not, unless their account says otherwise.",
+            "format": "int64",
+            "maximum": 366,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "releaseTime": {
+            "description": "The time of the release (HH:MM) in the school time zone.",
+            "examples": [
+              "18:00"
+            ],
+            "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+            "type": "string"
+          },
+          "releaseWeekday": {
+            "description": "The day of the weekly release, 0 = Sunday to 6 = Saturday.",
+            "format": "int64",
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "releaseWeeksAhead": {
+            "description": "Each release opens the lessons up to the same weekday this many weeks later.",
+            "format": "int64",
+            "maximum": 52,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "waitlistInviteExpiryMinutes": {
+            "description": "How long a waiting-list invite holds its place, in minutes (never beyond the booking cutoff).",
+            "format": "int64",
+            "maximum": 43200,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "releaseWeekday",
+          "releaseTime",
+          "releaseWeeksAhead",
+          "bookingCutoffMinutes",
+          "cancellationCutoffMinutes",
+          "waitlistInviteExpiryMinutes",
+          "defaultVisibleDays"
+        ],
+        "type": "object"
+      },
+      "BrandingSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "accentColor": {
+            "description": "The accent color, #rrggbb; empty or absent: the app's own.",
+            "pattern": "^(#[0-9a-fA-F]{6})?$",
+            "type": "string"
+          },
+          "accentColorDark": {
+            "description": "The dark theme's variant of the accent color; absent without one.",
+            "type": "string"
+          },
+          "hasLogo": {
+            "description": "Whether the school has a logo (set with the receipt settings).",
+            "type": "boolean"
+          },
+          "minContrast": {
+            "description": "The WCAG contrast the accent color needs against the text on it and the page: 4.5.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "minContrast",
+          "hasLogo"
+        ],
+        "type": "object"
+      },
+      "BrandingSettingsData": {
+        "additionalProperties": false,
+        "properties": {
+          "accentColor": {
+            "description": "The accent color, #rrggbb; empty or absent: the app's own.",
+            "pattern": "^(#[0-9a-fA-F]{6})?$",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "CalendarFeed": {
         "additionalProperties": false,
         "properties": {
@@ -1360,7 +1540,7 @@
             "description": "The lesson that uses the room; only with reason room-taken."
           },
           "reason": {
-            "description": "in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled.",
+            "description": "in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change.",
             "enum": [
               "in-use",
               "duplicate",
@@ -1382,7 +1562,9 @@
               "already-voided",
               "receipt-settings-incomplete",
               "pass-used",
-              "cancellation"
+              "cancellation",
+              "timezone-locked",
+              "currency-locked"
             ],
             "type": "string"
           },
@@ -4209,12 +4391,32 @@
       "PublicSettings": {
         "additionalProperties": false,
         "properties": {
+          "accentColor": {
+            "description": "The school's accent color (#rrggbb) for the light theme; absent: the app's own.",
+            "type": "string"
+          },
+          "accentColorDark": {
+            "description": "Its variant for the dark theme; absent without an accent.",
+            "type": "string"
+          },
           "currency": {
             "description": "ISO 4217 code of every amount, e.g. EUR; amounts are in its minor units.",
             "type": "string"
           },
           "defaultLocale": {
-            "description": "Default UI locale (BCP 47 tag), e.g. en.",
+            "description": "The school's language for visitors who chose none: en or de.",
+            "enum": [
+              "en",
+              "de"
+            ],
+            "type": "string"
+          },
+          "hasLogo": {
+            "description": "Whether getSchoolLogo has a logo.",
+            "type": "boolean"
+          },
+          "legalNotice": {
+            "description": "The legal notice (imprint) for the footer, plain text with line breaks; absent if none.",
             "type": "string"
           },
           "schoolName": {
@@ -4228,6 +4430,7 @@
         },
         "required": [
           "schoolName",
+          "hasLogo",
           "timezone",
           "defaultLocale",
           "currency"
@@ -4691,6 +4894,76 @@
         ],
         "type": "object"
       },
+      "RegionalSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "description": "ISO 4217 code of every amount, e.g. EUR; fixed once a price or a receipt exists.",
+            "pattern": "^[A-Z]{3}$",
+            "type": "string"
+          },
+          "currencyLocked": {
+            "description": "Whether the currency is fixed: a pass type has a price, a pass was paid or a receipt issued.",
+            "type": "boolean"
+          },
+          "defaultLocale": {
+            "description": "The language of visitors, and of mails to accounts without one of their own.",
+            "enum": [
+              "en",
+              "de"
+            ],
+            "type": "string"
+          },
+          "timezone": {
+            "description": "IANA time zone of the school, e.g. Europe/Berlin; fixed once lessons exist.",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "timezoneLocked": {
+            "description": "Whether the time zone is fixed: lessons exist.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "timezoneLocked",
+          "currencyLocked",
+          "timezone",
+          "defaultLocale",
+          "currency"
+        ],
+        "type": "object"
+      },
+      "RegionalSettingsData": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "description": "ISO 4217 code of every amount, e.g. EUR; fixed once a price or a receipt exists.",
+            "pattern": "^[A-Z]{3}$",
+            "type": "string"
+          },
+          "defaultLocale": {
+            "description": "The language of visitors, and of mails to accounts without one of their own.",
+            "enum": [
+              "en",
+              "de"
+            ],
+            "type": "string"
+          },
+          "timezone": {
+            "description": "IANA time zone of the school, e.g. Europe/Berlin; fixed once lessons exist.",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "timezone",
+          "defaultLocale",
+          "currency"
+        ],
+        "type": "object"
+      },
       "RegisterInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -4729,6 +5002,38 @@
           "familyName",
           "email",
           "password"
+        ],
+        "type": "object"
+      },
+      "ReleaseWindowBody": {
+        "additionalProperties": false,
+        "properties": {
+          "lastReleaseAt": {
+            "description": "The latest release at or before now.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "nextReleaseAt": {
+            "description": "The next release.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "now": {
+            "description": "The instant the window is computed at.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "releasedUntil": {
+            "description": "Regular lessons that start before this instant are released.",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "now",
+          "lastReleaseAt",
+          "nextReleaseAt",
+          "releasedUntil"
         ],
         "type": "object"
       },
@@ -5167,6 +5472,26 @@
           "instructor",
           "freePlaces",
           "bookingClosesAt"
+        ],
+        "type": "object"
+      },
+      "SchoolSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "legalNotice": {
+            "description": "The legal notice (imprint) shown in the footer, plain text with line breaks; empty or absent: none.",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "schoolName": {
+            "description": "Display name of the school.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "schoolName"
         ],
         "type": "object"
       },
@@ -7779,6 +8104,232 @@
         "x-access": "office"
       }
     },
+    "/api/v1/admin/settings/booking-rules": {
+      "get": {
+        "description": "Returns the weekly release rule, the cutoffs, the hold of waiting-list invites and the members' early access, with the release window now.",
+        "operationId": "getBookingRules",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingRules"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Booking rules",
+        "tags": [
+          "settings"
+        ],
+        "x-access": "office"
+      },
+      "put": {
+        "description": "Replaces the booking rules from now on. A wider window (more weeks ahead, more days of early access) generates the lessons it reaches at once (`generatedLessons`). Invalid fields are a 422 on them.",
+        "operationId": "updateBookingRules",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookingRulesData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingRules"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update the booking rules",
+        "tags": [
+          "settings"
+        ],
+        "x-access": "admin"
+      }
+    },
+    "/api/v1/admin/settings/booking-rules/preview": {
+      "get": {
+        "description": "Returns the release window that a release rule would have now, without changing anything.",
+        "operationId": "previewReleaseWindow",
+        "parameters": [
+          {
+            "description": "The day of the weekly release, 0 = Sunday to 6 = Saturday.",
+            "explode": false,
+            "in": "query",
+            "name": "releaseWeekday",
+            "required": true,
+            "schema": {
+              "description": "The day of the weekly release, 0 = Sunday to 6 = Saturday.",
+              "format": "int64",
+              "maximum": 6,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The time of the release (HH:MM) in the school time zone.",
+            "explode": false,
+            "in": "query",
+            "name": "releaseTime",
+            "required": true,
+            "schema": {
+              "description": "The time of the release (HH:MM) in the school time zone.",
+              "examples": [
+                "18:00"
+              ],
+              "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "How many weeks each release opens.",
+            "explode": false,
+            "in": "query",
+            "name": "releaseWeeksAhead",
+            "required": true,
+            "schema": {
+              "description": "How many weeks each release opens.",
+              "format": "int64",
+              "maximum": 52,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseWindowBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Preview a release rule",
+        "tags": [
+          "settings"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/settings/branding": {
+      "get": {
+        "description": "Returns the accent color, its dark-mode variant and whether a logo exists.",
+        "operationId": "getBrandingSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandingSettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Branding",
+        "tags": [
+          "settings"
+        ],
+        "x-access": "office"
+      },
+      "put": {
+        "description": "Sets the accent color, or the app's own without one. It must reach a WCAG contrast of 4.5:1 against the text on it and the page; else a 422 on `body.accentColor`. The dark mode shows a variant derived from it. The logo is the receipts' logo (updateReceiptLogo).",
+        "operationId": "updateBrandingSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrandingSettingsData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandingSettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update the branding",
+        "tags": [
+          "settings"
+        ],
+        "x-access": "admin"
+      }
+    },
     "/api/v1/admin/settings/passes": {
       "get": {
         "description": "Returns when bookings use a pass.",
@@ -8040,6 +8591,164 @@
         "summary": "Set the receipt logo",
         "tags": [
           "receipts"
+        ],
+        "x-access": "admin"
+      }
+    },
+    "/api/v1/admin/settings/regional": {
+      "get": {
+        "description": "Returns the time zone, the default language and the currency, and which of them are fixed by the data.",
+        "operationId": "getRegionalSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionalSettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Time and language",
+        "tags": [
+          "settings"
+        ],
+        "x-access": "office"
+      },
+      "put": {
+        "description": "Replaces the time zone, the default language and the currency. The language may always change. A new time zone once lessons exist is a 409 `timezone-locked`, a new currency once a price or a receipt exists a 409 `currency-locked`: they are chosen at the first setup. Invalid fields are a 422 on them.",
+        "operationId": "updateRegionalSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegionalSettingsData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionalSettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update time and language",
+        "tags": [
+          "settings"
+        ],
+        "x-access": "admin"
+      }
+    },
+    "/api/v1/admin/settings/school": {
+      "get": {
+        "description": "Returns the school's name and legal notice.",
+        "operationId": "getSchoolSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolSettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "School profile",
+        "tags": [
+          "settings"
+        ],
+        "x-access": "office"
+      },
+      "put": {
+        "description": "Replaces the school's name (shown in the header, the page title and mails) and its legal notice (shown in the footer). Invalid fields are a 422 on them.",
+        "operationId": "updateSchoolSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchoolSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchoolSettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update the school profile",
+        "tags": [
+          "settings"
         ],
         "x-access": "admin"
       }
@@ -11553,9 +12262,82 @@
         "x-access": "public"
       }
     },
+    "/api/v1/settings/logo": {
+      "get": {
+        "description": "Returns the school's logo (the one printed on receipts) for the app's header; a 404 without one. Cacheable: with the `ETag` in `If-None-Match` an unchanged logo is a 304.",
+        "operationId": "getSchoolLogo",
+        "parameters": [
+          {
+            "description": "The ETag of the logo the client has; unchanged: a 304.",
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "description": "The ETag of the logo the client has; unchanged: a 304.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The logo.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The logo did not change since the ETag in If-None-Match."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "School logo",
+        "tags": [
+          "settings"
+        ],
+        "x-access": "public"
+      }
+    },
     "/api/v1/settings/public": {
       "get": {
-        "description": "Returns the school settings that are visible without signing in.",
+        "description": "Returns the school settings that are visible without signing in: the name, legal notice and branding, the time zone, language and currency.",
         "operationId": "getPublicSettings",
         "responses": {
           "200": {

@@ -26,6 +26,9 @@ func DemoSettings() domain.Settings {
 		BookingCutoff:      0,
 		CancellationCutoff: 2 * time.Hour,
 		DefaultVisibleDays: 14,
+		// A fictional imprint for the footer (ADR 0013).
+		LegalNotice: "Studio Demo Dance School · Pirouette Lane 7 · 10999 Exampletown\n" +
+			"A fictional school: every name, address and number in this demo is made up.",
 
 		WaitlistInviteExpiry: 12 * time.Hour,
 		// Like the previous system: a visit is used when attendance is

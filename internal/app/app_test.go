@@ -93,6 +93,8 @@ func TestPublicSettings(t *testing.T) {
 		"timezone":      demo.Timezone,
 		"defaultLocale": demo.DefaultLocale,
 		"currency":      demo.Currency,
+		"legalNotice":   demo.LegalNotice,
+		"hasLogo":       false,
 	}
 
 	if len(got) != len(want) {

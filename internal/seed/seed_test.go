@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/auth/password"
+	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/service"
 	"github.com/cwbudde/studio-schedule/internal/store"
@@ -34,12 +36,12 @@ func TestLoadDemo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := service.NewSettingsService(st).Public(t.Context())
+	got, err := service.NewSettingsService(st, clock.System{}, ids.NewSequence()).Public(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if got != seed.DemoSettings() {
+	if got.Settings != seed.DemoSettings() {
 		t.Fatalf("got %+v, want demo settings", got)
 	}
 }

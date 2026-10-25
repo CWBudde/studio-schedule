@@ -126,7 +126,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 	receipts := service.NewReceiptService(deps.Store, deps.Clock, deps.IDs, mails, deps.PDF)
 
 	httpapi.Register(api, httpapi.Deps{
-		Settings:     service.NewSettingsService(deps.Store),
+		Settings:     service.NewSettingsService(deps.Store, deps.Clock, deps.IDs),
 		Catalog:      service.NewCatalogService(deps.Store, deps.IDs),
 		Timetable:    service.NewTimetableService(deps.Store, deps.Clock, deps.IDs, mails),
 		Schedule:     service.NewScheduleService(deps.Store, deps.Clock),

@@ -27,6 +27,7 @@ func newRootCmd(env config.LookupFunc) *cobra.Command {
 	}
 
 	root.AddCommand(newServeCmd(env), newMigrateCmd(env), newSeedCmd(env), newOpenAPICmd(), newVersionCmd())
+	root.AddCommand(newInitCmd(env))
 
 	return root
 }
