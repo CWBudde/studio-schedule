@@ -1,0 +1,92 @@
+name: test-e2e-server
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  # The server smoke tests (web/e2e-server) against `serve` on PostgreSQL,
+  # with Mailpit catching the mails (scripts/e2e-server.sh).
+  test-e2e-server:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: studio
+          POSTGRES_PASSWORD: smoke
+          POSTGRES_DB: studio
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U studio -d studio"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      mailpit:
+        image: axllent/mailpit:v1.31
+        ports:
+          - 1025:1025
+          - 8025:8025
+    env:
+      E2E_DATABASE_URL: postgres://studio:smoke@localhost:5432/studio?sslmode=disable
+      MAILPIT_URL: http://localhost:8025
+      MAILPIT_SMTP: localhost:1025
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Pull Git LFS files
+        uses: ./.github/actions/lfs-pull
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Setup just
+        uses: extractions/setup-just@v3
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install web dependencies
+        run: just web-install
+
+      - name: Install Playwright browser
+        run: just e2e-install
+
+      # The receipt renderer compiled by wazero (about 60 MB); without it
+      # the first receipt waits for the compilation.
+      - name: Cache the compiled receipt renderer
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/studio-schedule/wazero
+          key: wazero-${{ runner.os }}-${{ hashFiles('internal/pdf/typstwasm/receipt.wasm', 'go.sum') }}
+
+      - name: Build the server
+        run: just build
+
+      - name: Run the server smoke tests
+        run: ./scripts/e2e-server.sh
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-server
+          path: |
+            web/playwright-report
+            web/test-results
+          retention-days: 7

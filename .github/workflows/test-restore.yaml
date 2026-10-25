@@ -1,0 +1,45 @@
+name: test-restore
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  # The restore drill of docs/operations.md (scripts/restore-drill.sh):
+  # pg_dump a seeded database, pg_restore it into a new one, and check that
+  # the copy is migrated, complete and served.
+  test-restore:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: studio
+          POSTGRES_PASSWORD: drill
+          POSTGRES_DB: source
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U studio -d source"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Pull Git LFS files
+        uses: ./.github/actions/lfs-pull
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Run the restore drill
+        env:
+          RESTORE_DRILL_CONTAINER: ${{ job.services.postgres.id }}
+          RESTORE_DRILL_PG_PORT: "5432"
+        run: ./scripts/restore-drill.sh

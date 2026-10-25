@@ -2,6 +2,11 @@ name: test-vuln
 
 on:
   workflow_call:
+  # Weekly as well: a vulnerability disclosed in a dependency shows up even
+  # while nothing is pushed.
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
