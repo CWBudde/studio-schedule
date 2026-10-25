@@ -70,6 +70,9 @@ type Deps struct {
 	// RateLimits limit logins and mail-sending requests; the zero value
 	// imposes no limits.
 	RateLimits RateLimits
+
+	// Statistics are the office's figures of lessons, bookings and sales.
+	Statistics *service.StatisticsService
 }
 
 // NewConfig returns the Huma configuration for the API: OpenAPI document at
@@ -119,6 +122,7 @@ func Register(api huma.API, deps Deps) {
 	registerDemo(api, h)
 	registerAdmin(api, h)
 	registerPersons(api, h)
+	registerStatistics(api, h)
 }
 
 type handlers struct {

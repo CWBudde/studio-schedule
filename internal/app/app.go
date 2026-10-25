@@ -145,6 +145,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 		Family:         service.NewFamilyService(deps.Store, deps.Clock, deps.IDs, mails),
 		Persons:        service.NewPersonService(deps.Store, deps.Clock, deps.IDs, mails),
 		Outbox:         service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer, receipts),
+		Statistics:     service.NewStatisticsService(deps.Store, deps.Clock),
 		Version:        deps.Version,
 		Logger:         deps.Logger,
 		SecureCookies:  !deps.InsecureCookies,

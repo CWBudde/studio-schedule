@@ -114,6 +114,7 @@ var accessLevels = map[string]string{
 	"getReceiptLogo":              "office",
 	"updateReceiptLogo":           "admin",
 	"deleteReceiptLogo":           "admin",
+	"getStatistics":               "office",
 	"register":                    "public",
 	"confirmEmail":                "public",
 	"login":                       "public",

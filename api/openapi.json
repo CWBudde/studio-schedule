@@ -1131,6 +1131,121 @@
         },
         "type": "object"
       },
+      "ClassStatistics": {
+        "additionalProperties": false,
+        "properties": {
+          "attended": {
+            "description": "Bookings marked as attended.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "bookings": {
+            "description": "Their active (not canceled) bookings, trials and guests included.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "capacity": {
+            "description": "Their places.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "classId": {
+            "description": "The class; absent for a one-off lesson.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "courseTypeName": {
+            "description": "Name of the course type.",
+            "type": "string"
+          },
+          "guests": {
+            "description": "Active guest bookings (without a person).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lateCancellations": {
+            "description": "Bookings canceled after the cancellation cutoff.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lessonId": {
+            "description": "The one-off lesson; absent for a class.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "lessons": {
+            "description": "Lessons held or scheduled (canceled ones left out).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "level": {
+            "description": "Level of the class; absent for a one-off lesson.",
+            "enum": [
+              "beginner",
+              "intermediate",
+              "advanced",
+              "professional",
+              "open"
+            ],
+            "type": "string"
+          },
+          "noShowRate": {
+            "description": "No-shows per booking whose attendance was taken; absent if none was.",
+            "format": "double",
+            "type": "number"
+          },
+          "noShows": {
+            "description": "Bookings marked as not attended.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "startTime": {
+            "description": "Start time (HH:MM) of the class in the school time zone; absent for a one-off lesson.",
+            "type": "string"
+          },
+          "startsAt": {
+            "description": "Start of the one-off lesson (UTC); absent for a class.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "trials": {
+            "description": "Active trial bookings.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "utilization": {
+            "description": "Bookings per place (0 without places); above 1 if overbooked.",
+            "format": "double",
+            "type": "number"
+          },
+          "waitlistEntries": {
+            "description": "Waiting-list entries, ended ones included: the demand for full lessons.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "weekday": {
+            "description": "Day of the week of the class, 0 = Sunday to 6 = Saturday; absent for a one-off lesson.",
+            "format": "int64",
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "courseTypeName",
+          "lessons",
+          "capacity",
+          "bookings",
+          "utilization",
+          "attended",
+          "noShows",
+          "lateCancellations",
+          "trials",
+          "guests",
+          "waitlistEntries"
+        ],
+        "type": "object"
+      },
       "CloneConflictLesson": {
         "additionalProperties": false,
         "properties": {
@@ -1414,6 +1529,90 @@
         "required": [
           "id",
           "name"
+        ],
+        "type": "object"
+      },
+      "CourseTypeStatistics": {
+        "additionalProperties": false,
+        "properties": {
+          "attended": {
+            "description": "Bookings marked as attended.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "bookings": {
+            "description": "Their active (not canceled) bookings, trials and guests included.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "capacity": {
+            "description": "Their places.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "courseTypeId": {
+            "description": "The course type.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "guests": {
+            "description": "Active guest bookings (without a person).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lateCancellations": {
+            "description": "Bookings canceled after the cancellation cutoff.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lessons": {
+            "description": "Lessons held or scheduled (canceled ones left out).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Name of the course type.",
+            "type": "string"
+          },
+          "noShowRate": {
+            "description": "No-shows per booking whose attendance was taken; absent if none was.",
+            "format": "double",
+            "type": "number"
+          },
+          "noShows": {
+            "description": "Bookings marked as not attended.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "trials": {
+            "description": "Active trial bookings.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "utilization": {
+            "description": "Bookings per place (0 without places); above 1 if overbooked.",
+            "format": "double",
+            "type": "number"
+          },
+          "waitlistEntries": {
+            "description": "Waiting-list entries, ended ones included: the demand for full lessons.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "courseTypeId",
+          "name",
+          "lessons",
+          "capacity",
+          "bookings",
+          "utilization",
+          "attended",
+          "noShows",
+          "lateCancellations",
+          "trials",
+          "guests",
+          "waitlistEntries"
         ],
         "type": "object"
       },
@@ -1819,6 +2018,90 @@
           "email",
           "givenName",
           "familyName"
+        ],
+        "type": "object"
+      },
+      "InstructorStatistics": {
+        "additionalProperties": false,
+        "properties": {
+          "attended": {
+            "description": "Bookings marked as attended.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "bookings": {
+            "description": "Their active (not canceled) bookings, trials and guests included.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "capacity": {
+            "description": "Their places.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "guests": {
+            "description": "Active guest bookings (without a person).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lateCancellations": {
+            "description": "Bookings canceled after the cancellation cutoff.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lessons": {
+            "description": "Lessons held or scheduled (canceled ones left out).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Display name of the staff member.",
+            "type": "string"
+          },
+          "noShowRate": {
+            "description": "No-shows per booking whose attendance was taken; absent if none was.",
+            "format": "double",
+            "type": "number"
+          },
+          "noShows": {
+            "description": "Bookings marked as not attended.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "staffId": {
+            "description": "The staff member.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "trials": {
+            "description": "Active trial bookings.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "utilization": {
+            "description": "Bookings per place (0 without places); above 1 if overbooked.",
+            "format": "double",
+            "type": "number"
+          },
+          "waitlistEntries": {
+            "description": "Waiting-list entries, ended ones included: the demand for full lessons.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "staffId",
+          "name",
+          "lessons",
+          "capacity",
+          "bookings",
+          "utilization",
+          "attended",
+          "noShows",
+          "lateCancellations",
+          "trials",
+          "guests",
+          "waitlistEntries"
         ],
         "type": "object"
       },
@@ -4612,6 +4895,95 @@
         ],
         "type": "object"
       },
+      "RoomStatistics": {
+        "additionalProperties": false,
+        "properties": {
+          "attended": {
+            "description": "Bookings marked as attended.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "bookings": {
+            "description": "Their active (not canceled) bookings, trials and guests included.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "capacity": {
+            "description": "Their places.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "guests": {
+            "description": "Active guest bookings (without a person).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lateCancellations": {
+            "description": "Bookings canceled after the cancellation cutoff.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lessons": {
+            "description": "Lessons held or scheduled (canceled ones left out).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "locationName": {
+            "description": "Name of its location.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of the room.",
+            "type": "string"
+          },
+          "noShowRate": {
+            "description": "No-shows per booking whose attendance was taken; absent if none was.",
+            "format": "double",
+            "type": "number"
+          },
+          "noShows": {
+            "description": "Bookings marked as not attended.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "roomId": {
+            "description": "The room.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "trials": {
+            "description": "Active trial bookings.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "utilization": {
+            "description": "Bookings per place (0 without places); above 1 if overbooked.",
+            "format": "double",
+            "type": "number"
+          },
+          "waitlistEntries": {
+            "description": "Waiting-list entries, ended ones included: the demand for full lessons.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "roomId",
+          "name",
+          "locationName",
+          "lessons",
+          "capacity",
+          "bookings",
+          "utilization",
+          "attended",
+          "noShows",
+          "lateCancellations",
+          "trials",
+          "guests",
+          "waitlistEntries"
+        ],
+        "type": "object"
+      },
       "Schedule": {
         "additionalProperties": false,
         "properties": {
@@ -5139,6 +5511,324 @@
         "required": [
           "id",
           "displayName"
+        ],
+        "type": "object"
+      },
+      "Statistics": {
+        "additionalProperties": false,
+        "properties": {
+          "classes": {
+            "description": "By class, from Monday by start time; the one-off lessons after them by start.",
+            "items": {
+              "$ref": "#/components/schemas/ClassStatistics"
+            },
+            "type": "array"
+          },
+          "courseTypes": {
+            "description": "By course type, ordered by name.",
+            "items": {
+              "$ref": "#/components/schemas/CourseTypeStatistics"
+            },
+            "type": "array"
+          },
+          "currency": {
+            "description": "ISO 4217 currency of the sales.",
+            "type": "string"
+          },
+          "from": {
+            "description": "First school date of the range.",
+            "format": "date",
+            "type": "string"
+          },
+          "granularity": {
+            "description": "Length of the periods.",
+            "enum": [
+              "week",
+              "month"
+            ],
+            "type": "string"
+          },
+          "instructors": {
+            "description": "By instructor, ordered by name.",
+            "items": {
+              "$ref": "#/components/schemas/InstructorStatistics"
+            },
+            "type": "array"
+          },
+          "periods": {
+            "description": "The weeks (Monday to Sunday) or months of the range, in order.",
+            "items": {
+              "$ref": "#/components/schemas/StatisticsPeriod"
+            },
+            "type": "array"
+          },
+          "range": {
+            "description": "The range asked for.",
+            "enum": [
+              "last4Weeks",
+              "last12Weeks",
+              "term",
+              "custom"
+            ],
+            "type": "string"
+          },
+          "rooms": {
+            "description": "By room, ordered by location and name.",
+            "items": {
+              "$ref": "#/components/schemas/RoomStatistics"
+            },
+            "type": "array"
+          },
+          "term": {
+            "$ref": "#/components/schemas/StatisticsTerm",
+            "description": "The term of the term range; absent otherwise."
+          },
+          "timezone": {
+            "description": "IANA time zone of the school; school dates are local to it.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Last school date of the range (inclusive).",
+            "format": "date",
+            "type": "string"
+          },
+          "today": {
+            "description": "Today's school date, where the presets end.",
+            "format": "date",
+            "type": "string"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/StatisticsTotals",
+            "description": "The figures of the whole range."
+          }
+        },
+        "required": [
+          "timezone",
+          "currency",
+          "today",
+          "range",
+          "from",
+          "to",
+          "granularity",
+          "totals",
+          "periods",
+          "classes",
+          "rooms",
+          "courseTypes",
+          "instructors"
+        ],
+        "type": "object"
+      },
+      "StatisticsPeriod": {
+        "additionalProperties": false,
+        "properties": {
+          "attended": {
+            "description": "Bookings marked as attended.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "bookings": {
+            "description": "Their active (not canceled) bookings, trials and guests included.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "capacity": {
+            "description": "Their places.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "end": {
+            "description": "Last school date of the period (inclusive, cut to the range).",
+            "format": "date",
+            "type": "string"
+          },
+          "guests": {
+            "description": "Active guest bookings (without a person).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lateCancellations": {
+            "description": "Bookings canceled after the cancellation cutoff.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lessons": {
+            "description": "Lessons held or scheduled (canceled ones left out).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "noShowRate": {
+            "description": "No-shows per booking whose attendance was taken; absent if none was.",
+            "format": "double",
+            "type": "number"
+          },
+          "noShows": {
+            "description": "Bookings marked as not attended.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "passesSold": {
+            "description": "Passes sold less sales canceled (Storno), by the receipts' issue dates.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "salesGross": {
+            "description": "Gross total of the receipts in minor units, cancellations negative.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "start": {
+            "description": "First school date of the period (cut to the range).",
+            "format": "date",
+            "type": "string"
+          },
+          "trials": {
+            "description": "Active trial bookings.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "utilization": {
+            "description": "Bookings per place (0 without places); above 1 if overbooked.",
+            "format": "double",
+            "type": "number"
+          },
+          "waitlistEntries": {
+            "description": "Waiting-list entries, ended ones included: the demand for full lessons.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "lessons",
+          "capacity",
+          "bookings",
+          "utilization",
+          "attended",
+          "noShows",
+          "lateCancellations",
+          "trials",
+          "guests",
+          "waitlistEntries",
+          "passesSold",
+          "salesGross"
+        ],
+        "type": "object"
+      },
+      "StatisticsTerm": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "The term.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of the term.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "StatisticsTotals": {
+        "additionalProperties": false,
+        "properties": {
+          "activeMembers": {
+            "description": "Persons with at least one active booking (guests not counted).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "attended": {
+            "description": "Bookings marked as attended.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "bookings": {
+            "description": "Their active (not canceled) bookings, trials and guests included.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "canceledLessons": {
+            "description": "Lessons the school canceled; left out of every other figure.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "capacity": {
+            "description": "Their places.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "guests": {
+            "description": "Active guest bookings (without a person).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lateCancellations": {
+            "description": "Bookings canceled after the cancellation cutoff.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lessons": {
+            "description": "Lessons held or scheduled (canceled ones left out).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "noShowRate": {
+            "description": "No-shows per booking whose attendance was taken; absent if none was.",
+            "format": "double",
+            "type": "number"
+          },
+          "noShows": {
+            "description": "Bookings marked as not attended.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "passesSold": {
+            "description": "Passes sold less sales canceled (Storno), by the receipts' issue dates.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "salesGross": {
+            "description": "Gross total of the receipts in minor units, cancellations negative.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "trials": {
+            "description": "Active trial bookings.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "utilization": {
+            "description": "Bookings per place (0 without places); above 1 if overbooked.",
+            "format": "double",
+            "type": "number"
+          },
+          "waitlistEntries": {
+            "description": "Waiting-list entries, ended ones included: the demand for full lessons.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canceledLessons",
+          "activeMembers",
+          "lessons",
+          "capacity",
+          "bookings",
+          "utilization",
+          "attended",
+          "noShows",
+          "lateCancellations",
+          "trials",
+          "guests",
+          "waitlistEntries",
+          "passesSold",
+          "salesGross"
         ],
         "type": "object"
       },
@@ -7383,6 +8073,80 @@
         "summary": "List all staff",
         "tags": [
           "catalog"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/statistics": {
+      "get": {
+        "description": "Returns the school's figures of a range of school dates, in the school time zone: bookings, attendance, late cancellations, trials and guests, waiting lists and utilization by week (by month beyond 26 weeks) and by class, room, course type and instructor, the active members, and the pass sales from the receipts, cancellations netted. Aggregates only: no person is named. Canceled lessons count only as such. The presets end today; a custom range has at most 366 days (else a 422). The term range without a term that includes today is a 404.",
+        "operationId": "getStatistics",
+        "parameters": [
+          {
+            "description": "The range: the current week and the 3 or 11 before it, the current term up to today, or from–to.",
+            "explode": false,
+            "in": "query",
+            "name": "range",
+            "schema": {
+              "default": "last4Weeks",
+              "description": "The range: the current week and the 3 or 11 before it, the current term up to today, or from–to.",
+              "enum": [
+                "last4Weeks",
+                "last12Weeks",
+                "term",
+                "custom"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "First school date of a custom range.",
+            "explode": false,
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "description": "First school date of a custom range.",
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Last school date (inclusive) of a custom range.",
+            "explode": false,
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "description": "Last school date (inclusive) of a custom range.",
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Statistics"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get the statistics",
+        "tags": [
+          "admin"
         ],
         "x-access": "office"
       }
