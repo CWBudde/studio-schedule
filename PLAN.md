@@ -579,9 +579,11 @@ no repository yet.
   - [x] Notify participants: a short message to everyone booked, as mails through the outbox,
         rate-limited (2026-10-24) — `notifyParticipants` (Reply-To the sender, 5 per hour per
         account, 3 per lesson per day); "Message participants" on `/teach`
-- [ ] "My lessons" (upcoming, history), booking audit trail for office/admin
-  - [ ] `/my-lessons` for the account and its dependents: upcoming with cancel, history with
-        status, waitlist entries
+- [x] "My lessons" (upcoming, history), booking audit trail for office/admin
+  - [x] `/my-lessons` for the account and its dependents: upcoming with cancel, history with
+        status, waitlist entries (2026-10-25) — `listMyLessons`, `listMyLessonHistory` (three
+        months per page); waiting lists, the next four weeks and "Load earlier" history; e2e
+        `my-lessons.spec.ts`
   - [x] Booking history (`listBookingEvents`, office) in the participant list of the lesson sheet
         (2026-10-24) — `GET /api/v1/admin/bookings/{id}/events`, "History" per participant
 - [x] UI: book/cancel from schedule and detail views, for-whom selector (family), waitlist state,
@@ -593,14 +595,15 @@ no repository yet.
         joins, leaves, accepts and declines the waiting list
   - [x] List and week grid: free-place and booked badges; optimistic update with rollback on a
         409, toasts with the reason (2026-10-24) — `AvailabilityBadges`; e2e `booking.spec.ts`
-- [ ] Tests: concurrent booking (contract suite, both stores), cutoffs, waitlist invite
+- [x] Tests: concurrent booking (contract suite, both stores), cutoffs, waitlist invite
       expiry/acceptance, e2e booking flow in the demo
-  - [ ] Service tests: cutoffs at the exact edge, booking for a stranger's child, override,
-        auto-enrolment and release, invite chain on expiry (2026-10-24) — partial: cutoff edges,
-        strangers, override, auto-enrolment, release and pause are tested; the invite chain comes
-        with the waitlist
-  - [ ] e2e in the demo: book, cancel, join the waitlist and accept the invite from the demo
-        mailbox, instructor marks attendance; desktop and phone
+  - [x] Service tests: cutoffs at the exact edge, booking for a stranger's child, override,
+        auto-enrolment and release, invite chain on expiry (2026-10-24) — cutoff edges, strangers,
+        override, auto-enrolment, release and pause; the invite chain in `waitlist_test.go`
+  - [x] e2e in the demo: book, cancel, join the waitlist and accept the invite from the demo
+        mailbox, instructor marks attendance; desktop and phone (2026-10-25) — `booking.spec.ts`,
+        `my-lessons.spec.ts`, `waitlist.spec.ts`, `teach.spec.ts` (the instructor takes attendance
+        of a lesson that started today), `participants.spec.ts`
 
 ## Phase 5 — Calendar feeds
 
