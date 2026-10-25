@@ -73,7 +73,7 @@ func TestAuditLogLimit(t *testing.T) {
 			err := tx.Audit().Create(ctx, domain.AuditEvent{
 				ID: domain.AuditEventID{0xa0, byte(i >> 8), byte(i)}, At: start.Add(time.Duration(i) * time.Minute),
 				ActorID: admin.Principal.AccountID, Action: domain.AuditImpersonationStarted,
-				TargetID: member.Principal.AccountID,
+				TargetKind: domain.AuditTargetAccount, TargetID: member.Principal.AccountID,
 			})
 			if err != nil {
 				return err

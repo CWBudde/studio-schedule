@@ -20,6 +20,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/config"
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/jobs"
 	"github.com/cwbudde/studio-schedule/internal/mail"
 	"github.com/cwbudde/studio-schedule/internal/mail/smtp"
 	"github.com/cwbudde/studio-schedule/internal/pdf/typstwasm"
@@ -133,6 +134,8 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		Mailer:  mailer,
 		PDF:     pdf,
 		Demo:    demo,
+		// Requests wake the background jobs started below.
+		Wake: jobs.NewWaker(),
 
 		TrustedProxies: cfg.TrustedProxies,
 	}

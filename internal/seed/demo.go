@@ -120,6 +120,7 @@ func demoAt(anchor domain.Date) (Dataset, error) {
 	b.passes(anchor)
 	b.attendance(anchor)
 	b.visitors(anchor)
+	b.announcements(anchor)
 
 	return b.d, nil
 }

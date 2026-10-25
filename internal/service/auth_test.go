@@ -103,7 +103,7 @@ func (f *authFixture) mails() []domain.OutboxMail {
 
 	err := f.st.InTx(f.t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 		var err error
-		mails, err = tx.Outbox().List(ctx, 100)
+		mails, err = tx.Outbox().List(ctx, store.OutboxFilter{Limit: 100})
 
 		return err
 	})

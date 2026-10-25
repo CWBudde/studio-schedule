@@ -148,6 +148,18 @@ var accessLevels = map[string]string{
 	"listAccounts":                "admin",
 	"impersonateAccount":          "admin",
 	"listAuditEvents":             "admin",
+
+	// Announcements and the mail log (ADR 0014).
+	"listAnnouncements":           "signedIn",
+	"dismissAnnouncement":         "signedIn",
+	"listAllAnnouncements":        "office",
+	"createAnnouncement":          "office",
+	"updateAnnouncement":          "office",
+	"deleteAnnouncement":          "office",
+	"countAnnouncementRecipients": "office",
+	"listMails":                   "admin",
+	"getMail":                     "admin",
+	"requeueMail":                 "admin",
 }
 
 // minRoles is the least role each access level admits.

@@ -37,17 +37,6 @@ const (
 	NoticesPerLessonPerDay = 3
 )
 
-var (
-	errNoticeEmpty error = &domain.FieldError{Field: "message", Msg: "message must not be empty"}
-	errNoticeLong  error = &domain.FieldError{
-		Field: "message", Msg: fmt.Sprintf("message must not exceed %d characters", MaxNoticeLen),
-	}
-	errNoticeControl error = &domain.FieldError{
-		Field: "message", Msg: "message must not contain control or invisible format characters, " +
-			"other than line breaks and tabs",
-	}
-)
-
 // TooManyNoticesError refuses a notice over the limits: NoticesPerHour per
 // account, NoticesPerLessonPerDay per lesson. RetryAfter is when the next
 // notice is allowed again.
@@ -290,19 +279,29 @@ func teachLessons(
 // joiners that emoji and some scripts need (a *domain.FieldError on
 // message).
 func noticeText(message string) (string, error) {
-	message = strings.NewReplacer("\r\n", "\n", "\r", "\n", "\u2028", "\n", "\u2029", "\n").Replace(message)
-	message = strings.TrimSpace(message)
+	return plainText(message, "message", MaxNoticeLen)
+}
 
-	switch n := utf8.RuneCountInString(message); {
+// plainText is noticeText for any text of at most maxLen characters, its
+// errors a *domain.FieldError on field. Announcements use it too (ADR
+// 0014).
+func plainText(text, field string, maxLen int) (string, error) {
+	text = strings.NewReplacer("\r\n", "\n", "\r", "\n", "\u2028", "\n", "\u2029", "\n").Replace(text)
+	text = strings.TrimSpace(text)
+
+	switch n := utf8.RuneCountInString(text); {
 	case n == 0:
-		return "", errNoticeEmpty
-	case n > MaxNoticeLen:
-		return "", errNoticeLong
-	case !utf8.ValidString(message) || strings.ContainsFunc(message, hiddenRune):
-		return "", errNoticeControl
+		return "", &domain.FieldError{Field: field, Msg: field + " must not be empty"}
+	case n > maxLen:
+		return "", &domain.FieldError{Field: field, Msg: fmt.Sprintf("%s must not exceed %d characters", field, maxLen)}
+	case !utf8.ValidString(text) || strings.ContainsFunc(text, hiddenRune):
+		return "", &domain.FieldError{
+			Field: field, Msg: field + " must not contain control or invisible format characters, " +
+				"other than line breaks and tabs",
+		}
 	}
 
-	return message, nil
+	return text, nil
 }
 
 // hiddenRune reports a control or format character that a notice must not

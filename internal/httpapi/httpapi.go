@@ -73,6 +73,10 @@ type Deps struct {
 
 	// Statistics are the office's figures of lessons, bookings and sales.
 	Statistics *service.StatisticsService
+	// Announcements are the school's announcements (ADR 0014).
+	Announcements *service.AnnouncementService
+	// MailLog is the outbox as admins see it (ADR 0014).
+	MailLog *service.MailLogService
 }
 
 // NewConfig returns the Huma configuration for the API: OpenAPI document at
@@ -123,6 +127,8 @@ func Register(api huma.API, deps Deps) {
 	registerAdmin(api, h)
 	registerPersons(api, h)
 	registerStatistics(api, h)
+	registerAnnouncements(api, h)
+	registerMailLog(api, h)
 }
 
 type handlers struct {

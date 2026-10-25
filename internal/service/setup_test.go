@@ -71,7 +71,7 @@ func TestSetupInit(t *testing.T) {
 
 	// No mail: the link is the only way in.
 	err = st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
-		mails, err := tx.Outbox().List(ctx, 10)
+		mails, err := tx.Outbox().List(ctx, store.OutboxFilter{Limit: 10})
 		if err != nil || len(mails) != 0 {
 			t.Errorf("outbox %v, %v; want empty", mails, err)
 		}

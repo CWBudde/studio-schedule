@@ -162,7 +162,7 @@ func TestIDSchemaRegisteredForEveryIDType(t *testing.T) {
 		reflect.TypeFor[domain.PassTypeID](),
 		reflect.TypeFor[domain.PassID](),
 		reflect.TypeFor[domain.ReceiptID](),
-		reflect.TypeFor[domain.MessageID](),
+		reflect.TypeFor[domain.AnnouncementID](),
 		reflect.TypeFor[domain.CalendarFeedID](),
 		reflect.TypeFor[domain.ImportRunID](),
 		reflect.TypeFor[*domain.LessonID](),

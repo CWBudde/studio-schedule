@@ -264,7 +264,7 @@ func (s *OutboxService) List(ctx context.Context, limit int) ([]MailboxEntry, er
 	var out []MailboxEntry
 
 	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
-		mails, err := tx.Outbox().List(ctx, limit)
+		mails, err := tx.Outbox().List(ctx, store.OutboxFilter{Limit: limit})
 		if err != nil {
 			return err
 		}

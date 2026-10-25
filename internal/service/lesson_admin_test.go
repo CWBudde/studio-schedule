@@ -64,7 +64,7 @@ func (f *genFixture) mails(t *testing.T) []domain.OutboxMail {
 
 	err := f.st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 		var err error
-		out, err = tx.Outbox().List(ctx, 1000)
+		out, err = tx.Outbox().List(ctx, store.OutboxFilter{Limit: 1000})
 
 		return err
 	})

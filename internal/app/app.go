@@ -21,6 +21,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/httpapi"
 	"github.com/cwbudde/studio-schedule/internal/ids"
+	"github.com/cwbudde/studio-schedule/internal/jobs"
 	"github.com/cwbudde/studio-schedule/internal/mail"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/service"
@@ -74,6 +75,11 @@ type Deps struct {
 	// TrustedProxies are the reverse proxies whose X-Forwarded-For entries
 	// name the client, for the rate limits; empty: the connection's address.
 	TrustedProxies []netip.Prefix
+	// Wake connects the handler to the background jobs (Jobs): a request
+	// that leaves work for a job now, such as an announcement to email,
+	// wakes it instead of waiting for its next tick. Pass the same Waker to
+	// New and Jobs; without one, jobs run on their ticks only.
+	Wake *jobs.Waker
 }
 
 // withDefaults fills in the optional dependencies. It panics without a
@@ -153,6 +159,9 @@ func New(deps Deps) (http.Handler, huma.API) {
 		DemoLogins:     demoLogins(deps.DemoLogins),
 		TrustedProxies: deps.TrustedProxies,
 		RateLimits:     httpapi.DefaultRateLimits(deps.Clock),
+		Announcements: service.NewAnnouncementService(deps.Store, deps.Clock, deps.IDs, renderer,
+			func() { deps.Wake.Wake(announcementsJob) }),
+		MailLog: service.NewMailLogService(deps.Store, deps.Clock, deps.IDs),
 	})
 
 	router.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {

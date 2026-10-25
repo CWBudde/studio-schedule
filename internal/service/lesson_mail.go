@@ -60,40 +60,61 @@ func lessonRecipients(ctx context.Context, tx store.Tx, lesson domain.LessonID) 
 		return nil, err
 	}
 
-	var out []recipient
-
-	add := func(r recipient, participant string) {
-		i := slices.IndexFunc(out, func(o recipient) bool { return strings.EqualFold(o.email, r.email) })
-
-		switch {
-		case i < 0:
-			r.participants = nil // added below
-			out = append(out, r)
-			i = len(out) - 1
-		case r.account && !out[i].account:
-			out[i].email, out[i].locale, out[i].givenName, out[i].account = r.email, r.locale, r.givenName, true
-		}
-
-		if !slices.Contains(out[i].participants, participant) {
-			out[i].participants = append(out[i].participants, participant)
-		}
-	}
+	var set recipientSet
 
 	for _, b := range bookings {
 		if b.PersonID.IsZero() {
 			if r, ok := guestRecipient(b); ok {
-				add(r, b.GuestName)
+				set.add(r, b.GuestName)
 			}
 
 			continue
 		}
 
 		for _, r := range chains[b.PersonID] {
-			add(r, r.participants[0])
+			set.add(r, r.participants[0])
 		}
 	}
 
-	return out, nil
+	return set.list, nil
+}
+
+// recipientSet collects recipients, each address once ignoring case, in
+// the order they first come, with every participant each gets the mail
+// for. An address that comes as an account's and as a person's own is
+// mailed as the account's. The zero value is empty.
+type recipientSet struct {
+	list []recipient
+	// index is the position in list by lowercased address.
+	index map[string]int
+}
+
+// add adds r with participants (r's own are ignored).
+func (s *recipientSet) add(r recipient, participants ...string) {
+	key := strings.ToLower(r.email)
+
+	i, ok := s.index[key]
+
+	switch {
+	case !ok:
+		if s.index == nil {
+			s.index = map[string]int{}
+		}
+
+		r.participants = nil // added below
+		s.list = append(s.list, r)
+		i = len(s.list) - 1
+		s.index[key] = i
+	case r.account && !s.list[i].account:
+		o := &s.list[i]
+		o.email, o.locale, o.givenName, o.account = r.email, r.locale, r.givenName, true
+	}
+
+	for _, p := range participants {
+		if !slices.Contains(s.list[i].participants, p) {
+			s.list[i].participants = append(s.list[i].participants, p)
+		}
+	}
 }
 
 // guestRecipient returns the guest of booking b as the recipient of the

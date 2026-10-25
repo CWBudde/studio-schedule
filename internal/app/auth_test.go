@@ -40,6 +40,7 @@ type authApp struct {
 	t     *testing.T
 	h     http.Handler
 	clock *stepClock
+	deps  app.Deps
 }
 
 func newAuthApp(t *testing.T, deps app.Deps) *authApp {
@@ -64,7 +65,7 @@ func newAuthApp(t *testing.T, deps app.Deps) *authApp {
 	}
 	h, _ := app.New(deps)
 
-	return &authApp{t: t, h: h, clock: clk}
+	return &authApp{t: t, h: h, clock: clk, deps: deps}
 }
 
 // authResponse is the part of a response the auth tests inspect.

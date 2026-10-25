@@ -12,11 +12,14 @@ import (
 const AuditLogLimit = 200
 
 // AuditEntry is an audit event with its actor and target account, each with
-// its person, as listed for admins.
+// its person, or its target person, as listed for admins. Target is zero
+// unless the event targets an account, TargetPerson unless it targets a
+// person (then with the ID only if the person can no longer be found).
 type AuditEntry struct {
-	Event  domain.AuditEvent
-	Actor  AccountEntry
-	Target AccountEntry
+	Event        domain.AuditEvent
+	Actor        AccountEntry
+	Target       AccountEntry
+	TargetPerson domain.Person
 }
 
 // AuditLog returns the latest AuditLogLimit audit events, newest first, with
@@ -37,17 +40,38 @@ func (s *AuthService) AuditLog(ctx context.Context) ([]AuditEntry, error) {
 		}
 
 		ids := make([]domain.AccountID, 0, 2*len(events))
+
+		var personIDs []domain.PersonID
+
 		for _, e := range events {
-			ids = append(ids, e.ActorID, e.TargetID)
+			ids = append(ids, e.ActorID)
+			if !e.TargetID.IsZero() {
+				ids = append(ids, e.TargetID)
+			}
+
+			if !e.TargetPersonID.IsZero() {
+				personIDs = append(personIDs, e.TargetPersonID)
+			}
 		}
 
-		byID, err := auditAccounts(ctx, tx, ids)
+		accounts, err := auditAccounts(ctx, tx, ids)
 		if err != nil {
 			return err
 		}
 
+		var personByID map[domain.PersonID]domain.Person
+
+		if len(personIDs) > 0 {
+			persons, err := tx.Persons().ListByIDs(ctx, personIDs)
+			if err != nil {
+				return err
+			}
+
+			personByID = byID(persons)
+		}
+
 		entry := func(id domain.AccountID) AccountEntry {
-			if a, ok := byID[id]; ok {
+			if a, ok := accounts[id]; ok {
 				return a
 			}
 
@@ -56,7 +80,17 @@ func (s *AuthService) AuditLog(ctx context.Context) ([]AuditEntry, error) {
 
 		out = make([]AuditEntry, 0, len(events))
 		for _, e := range events {
-			out = append(out, AuditEntry{Event: e, Actor: entry(e.ActorID), Target: entry(e.TargetID)})
+			ae := AuditEntry{Event: e, Actor: entry(e.ActorID)}
+
+			switch e.TargetKind {
+			case domain.AuditTargetAccount:
+				ae.Target = entry(e.TargetID)
+			case domain.AuditTargetPerson:
+				ae.TargetPerson = personByID[e.TargetPersonID]
+				ae.TargetPerson.ID = e.TargetPersonID
+			}
+
+			out = append(out, ae)
 		}
 
 		return nil

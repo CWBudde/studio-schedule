@@ -75,13 +75,30 @@ type AuditAccount struct {
 	FamilyName string           `doc:"Family name. Absent if the account or its person can no longer be found."            json:"familyName,omitempty"`
 }
 
+// AuditPerson is a person named by an audit event; one that can no longer
+// be found has only its ID.
+type AuditPerson struct {
+	ID         domain.PersonID `doc:"Person ID."                                                  json:"id"`
+	GivenName  string          `doc:"Given name. Absent if the person can no longer be found."   json:"givenName,omitempty"`
+	FamilyName string          `doc:"Family name. Absent if the person can no longer be found."  json:"familyName,omitempty"`
+}
+
+// AuditDetails is what an audit event records beyond its target.
+type AuditDetails struct {
+	MailID    domain.OutboxMailID `doc:"The mail of mail-requeued."        json:"mailId,omitzero"`
+	Recipient string              `doc:"Its recipient."                    json:"recipient,omitempty"`
+	Template  string              `doc:"Its template."                     json:"template,omitempty"`
+}
+
 // AuditEventEntry is an event in the audit log.
 type AuditEventEntry struct {
-	ID     domain.AuditEventID `doc:"Audit event ID."  json:"id"`
-	At     time.Time           `doc:"When it happened." json:"at"`
-	Action string              `doc:"What happened, e.g. impersonation-started or impersonation-ended; later versions may add actions." json:"action"`
-	Actor  AuditAccount        `doc:"The account that acted."   json:"actor"`
-	Target AuditAccount        `doc:"The account acted upon."   json:"target"`
+	ID           domain.AuditEventID `doc:"Audit event ID."  json:"id"`
+	At           time.Time           `doc:"When it happened." json:"at"`
+	Action       string              `doc:"What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail); later versions may add actions." json:"action"`
+	Actor        AuditAccount        `doc:"The account that acted."   json:"actor"`
+	Target       *AuditAccount       `doc:"The account acted upon; absent unless the event targets an account." json:"target,omitempty"`
+	TargetPerson *AuditPerson        `doc:"The person acted upon; absent unless the event targets a person." json:"targetPerson,omitempty"`
+	Details      *AuditDetails       `doc:"What the event records beyond its target; absent if nothing." json:"details,omitempty"`
 }
 
 // AuditEventList is the response body of listAuditEvents.
@@ -125,10 +142,25 @@ func (h *handlers) listAuditEvents(ctx context.Context, _ *struct{}) (*AuditEven
 
 	items := make([]AuditEventEntry, 0, len(events))
 	for _, e := range events {
-		items = append(items, AuditEventEntry{
-			ID: e.Event.ID, At: e.Event.At, Action: string(e.Event.Action),
-			Actor: auditAccount(e.Actor), Target: auditAccount(e.Target),
-		})
+		entry := AuditEventEntry{
+			ID: e.Event.ID, At: e.Event.At, Action: string(e.Event.Action), Actor: auditAccount(e.Actor),
+		}
+
+		switch e.Event.TargetKind {
+		case domain.AuditTargetAccount:
+			target := auditAccount(e.Target)
+			entry.Target = &target
+		case domain.AuditTargetPerson:
+			entry.TargetPerson = &AuditPerson{
+				ID: e.TargetPerson.ID, GivenName: e.TargetPerson.GivenName, FamilyName: e.TargetPerson.FamilyName,
+			}
+		}
+
+		if d := e.Event.Details; !d.IsZero() {
+			entry.Details = &AuditDetails{MailID: d.MailID, Recipient: d.Recipient, Template: d.Template}
+		}
+
+		items = append(items, entry)
 	}
 
 	return &AuditEventListOutput{Body: AuditEventList{Items: items}}, nil

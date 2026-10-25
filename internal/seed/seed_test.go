@@ -350,6 +350,7 @@ func TestDemoValid(t *testing.T) {
 	validAll(t, d.Passes)
 	validAll(t, d.Redemptions)
 	validAll(t, d.Receipts)
+	validAll(t, d.Announcements)
 }
 
 // TestDemoMemberBookings checks that the class lessons of the demo have
@@ -1248,6 +1249,13 @@ func TestLoadDemoRoundTrip(t *testing.T) {
 				t.Errorf("stored receipt %+v is not the seed's", r)
 			}
 		}
+
+		announcements, err := tx.Announcements().List(ctx)
+		if err != nil {
+			return err
+		}
+
+		sameSet(t, "announcements", announcements, want.Announcements)
 
 		return nil
 	})

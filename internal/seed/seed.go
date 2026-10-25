@@ -85,6 +85,8 @@ type Dataset struct {
 	// the pass sold by mistake, in the order they were issued; their PDFs
 	// are rendered when first read (ADR 0012).
 	Receipts []domain.Receipt
+	// Announcements are the office's announcements, not emailed (ADR 0014).
+	Announcements []domain.Announcement
 }
 
 // LoadDemo writes the complete demo data set for FixedDemoAnchor (Demo)
@@ -246,6 +248,12 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 	for _, r := range d.Redemptions {
 		if err := tx.Redemptions().Create(ctx, r); err != nil {
 			return fmt.Errorf("redemption of booking %v: %w", r.BookingID, err)
+		}
+	}
+
+	for _, a := range d.Announcements {
+		if err := tx.Announcements().Create(ctx, a); err != nil {
+			return fmt.Errorf("announcement %v: %w", a.ID, err)
 		}
 	}
 

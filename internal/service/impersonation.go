@@ -138,7 +138,8 @@ func (s *AuthService) audit(
 	ctx context.Context, tx store.Tx, actor domain.AccountID, action domain.AuditAction, target domain.AccountID,
 ) error {
 	e := domain.AuditEvent{
-		ID: ids.New[domain.AuditEventID](s.ids), At: s.clock.Now(), ActorID: actor, Action: action, TargetID: target,
+		ID: ids.New[domain.AuditEventID](s.ids), At: s.clock.Now(), ActorID: actor, Action: action,
+		TargetKind: domain.AuditTargetAccount, TargetID: target,
 	}
 	if err := e.Validate(); err != nil {
 		return err

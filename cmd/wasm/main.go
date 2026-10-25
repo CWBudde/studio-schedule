@@ -19,6 +19,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/app"
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/jobs"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/store/memory"
 	"github.com/cwbudde/studio-schedule/internal/wasmbridge"
@@ -78,6 +79,8 @@ func main() {
 		PDF:        wasmbridge.PDFRenderer{},
 		Demo:       true,
 		DemoLogins: seed.DemoLogins(),
+		// Requests wake the background jobs started below.
+		Wake: jobs.NewWaker(),
 	}
 	handler, _ := app.New(deps)
 
