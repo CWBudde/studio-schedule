@@ -75,19 +75,26 @@ docker compose run --rm app migrate up
 docker compose run --rm app init        # or `seed` for the fictional demo data
 ```
 
-The app is at http://localhost:8080 and Mailpit shows the sent mail at http://localhost:8025. See
-[docs/operations.md](docs/operations.md) for the image, compose and releases.
+The app is at http://localhost:8080 and Mailpit shows the sent mail at http://localhost:8025.
+
+## Running it for a school
+
+- [docs/operations.md](docs/operations.md): configuration reference, deployment behind a reverse
+  proxy with TLS, mail, health checks, metrics and logs, backups and restore, upgrades, releases.
+- [docs/privacy.md](docs/privacy.md): what personal data the app stores, why and for how long,
+  export and erasure, and what the operator still has to do.
+- [docs/security.md](docs/security.md): the OWASP ASVS Level 1 checklist and its open items.
 
 ## Repository layout
 
-| Path                   | Purpose                                                      |
-| ---------------------- | ------------------------------------------------------------ |
-| `cmd/studio-schedule/` | CLI and HTTP server                                          |
-| `cmd/wasm/`            | WebAssembly entry point for the browser demo                 |
-| `internal/`            | Domain, services, stores, HTTP API, WASM bridge, embedded UI |
-| `web/`                 | React frontend                                               |
-| `api/openapi.json`     | Generated API contract                                       |
-| `docs/`                | Architecture, demo mode, glossary, decision records          |
+| Path                   | Purpose                                                       |
+| ---------------------- | ------------------------------------------------------------- |
+| `cmd/studio-schedule/` | CLI and HTTP server                                           |
+| `cmd/wasm/`            | WebAssembly entry point for the browser demo                  |
+| `internal/`            | Domain, services, stores, HTTP API, WASM bridge, embedded UI  |
+| `web/`                 | React frontend                                                |
+| `api/openapi.json`     | Generated API contract                                        |
+| `docs/`                | Architecture, operations, privacy, security, decision records |
 
 ## Contributing
 
