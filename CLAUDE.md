@@ -70,8 +70,12 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
 - **Auth & mail:** `service.AuthService` (register → confirm with password → sessions; ADR 0004;
   password reset/change and email change in `service/credentials.go`, rate limits in
   `httpapi/ratelimit.go`; ADR 0006; the account's mail language in `SetLocale`, ADR 0008),
-  the `studio_session` cookie middleware in `httpapi/auth.go` (`principalFrom(ctx)`), argon2id in
-  `internal/auth/password`. Mails: render with `internal/mail` and call `enqueueMail` inside the
+  the session cookie middleware in `httpapi/auth.go` (`principalFrom(ctx)`, `sessionTokenFrom(ctx)`;
+  the cookie is `__Host-studio_session` with an https `BASE_URL` (`Deps.HostCookie`), else
+  `studio_session`, so never read it as a Huma `cookie:` input), argon2id in
+  `internal/auth/password`. Every new password goes through `checkPassword` (8–256 characters, not
+  in the embedded common list `password.IsCommon`; a field error), and a change or reset mails
+  `password-changed` (ADR 0004, amendment). Mails: render with `internal/mail` and call `enqueueMail` inside the
   causing transaction; the `deliver-mail` job sends them (`internal/mail/smtp`, server only).
   `Deps.Demo` (WASM demo, `serve` without DB) exposes `/api/v1/demo/{mailbox,logins}`.
 - **Access:** every operation is registered with `register(api, Access…, op, handler)` in
@@ -110,7 +114,9 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `reason` (`domain.ErrInUse` → `in-use`, `domain.ErrDuplicate` → `duplicate`). A domain rule built
   with `on(field, …)` fails as a `*domain.FieldError`, which `toHTTPError` reports as a 422 on
   `body.<field>`. Office-only reads live under `/api/v1/admin/…` (`listAllStaff`, `listAllClasses`, `listClassMembers`, and
-  `listPersons` from `service.PersonService`, the person search for the office's pickers).
+  `searchPersons` from `service.PersonService`, the person search for the office's pickers). A
+  search by name, email or other personal data is a `POST …/search` with a JSON body, never a query
+  parameter (ASVS 8.3.1; `searchPersons`, `searchPersonsForStaff`, `searchReceipts`, `searchMails`).
 - **Bookings:** `service.BookingService` (`service/booking.go`, `httpapi/booking.go`; ADR 0009):
   book and cancel for the caller's family under `Lessons().Lock` with member rules for everyone,
   late cancellations flagged, "cancel following weeks" under the class lock. The schedule's

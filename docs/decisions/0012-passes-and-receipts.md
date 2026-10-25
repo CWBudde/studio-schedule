@@ -234,8 +234,9 @@ to the receipt (`outbox_mails.receipt_id`) instead of copying the PDF; the `deli
 attaches the stored PDF (`multipart/mixed`, base64), the demo mailbox lists the attachment and
 serves it (`getDemoMailAttachment`).
 
-**Reads.** The office: `listReceipts` (year, a search in the number and the recipient's name,
-paging, newest first, with the total), `getReceipt` (with the cancellation or the canceled receipt,
+**Reads.** The office: `searchReceipts` (year, a search in the number and the recipient's name,
+paging, newest first, with the total; a POST with the filter in the body, so that names stay out
+of URLs), `getReceipt` (with the cancellation or the canceled receipt,
 the pass, and `cancelable`), `getReceiptPdf` (the PDF as an attachment named after the number). The list also returns `years`,
 the years with receipts (from the counters), for its year filter. A list costs a fixed number of
 queries.

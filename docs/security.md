@@ -2,11 +2,12 @@
 
 How Studio Schedule meets [OWASP ASVS 4.0.3](https://owasp.org/www-project-application-security-verification-standard/)
 Level 1, checked against the code on 2026-10-25. Each requirement that applies to the app is
-listed with its status and where it is handled; the open items at the end say what is missing and
-propose how to close it.
+listed with its status and where it is handled; the [open items](#open-items) at the end record
+what the review found and what became of it.
 
 - ✅ met
 - ⚠️ partly met or not met: see [Open items](#open-items)
+- 🟰 a deliberate deviation, with the reason in [Open items](#open-items)
 - n/a does not apply to this app (the reason is given)
 
 Paths are relative to the repository root. The operator's part (TLS, backups, updates, access to
@@ -25,32 +26,32 @@ are the ADRs in [docs/decisions](decisions), the layering and the trust boundari
 Accounts, sessions and mail links: [ADR 0004](decisions/0004-accounts-sessions-and-mail.md);
 password reset, email change and rate limits: [ADR 0006](decisions/0006-credentials-rate-limits-and-headers.md).
 
-| ID     | Requirement                                                 | Status | Where                                                                                                                                                                                                                                                                                 |
-| ------ | ----------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2.1.1  | Passwords of at least 12 characters                         | ⚠️     | The minimum is 8 (`MinPasswordLength`, `internal/service/auth.go`; `minLength` in `internal/httpapi/auth.go`, `credentials.go`; `web/src/features/auth/form.ts`). See [O1](#o1-password-length).                                                                                      |
-| 2.1.2  | Passwords of 64 characters and more are allowed             | ✅     | Up to 256 bytes (`MaxPasswordLength`); the bound limits the hashing work per request.                                                                                                                                                                                                 |
-| 2.1.3  | No truncation of passwords                                  | ✅     | The password is hashed as entered: no trimming, no truncation (`internal/auth/password`).                                                                                                                                                                                             |
-| 2.1.4  | Any printable Unicode character allowed                     | ✅     | No character rules; `internal/auth/password/password_test.go` hashes Unicode and emoji.                                                                                                                                                                                               |
-| 2.1.5  | Users can change their password                             | ✅     | `changePassword` (`internal/httpapi/credentials.go`, `AuthService.ChangePassword` in `internal/service/credentials.go`), on the account page.                                                                                                                                         |
-| 2.1.6  | Changing the password requires the current and the new one  | ✅     | `checkCurrentPassword`; wrong ones count against the per-email limit.                                                                                                                                                                                                                 |
-| 2.1.7  | Passwords are checked against breached or common passwords  | ⚠️     | No check. See [O2](#o2-common-passwords).                                                                                                                                                                                                                                             |
-| 2.1.8  | A password strength meter                                   | ⚠️     | None. See [O2](#o2-common-passwords).                                                                                                                                                                                                                                                 |
-| 2.1.9  | No composition rules                                        | ✅     | Only the length is checked (`checkPassword`).                                                                                                                                                                                                                                         |
-| 2.1.10 | No periodic rotation or password history                    | ✅     | None.                                                                                                                                                                                                                                                                                 |
-| 2.1.11 | Pasting, browser helpers and password managers work         | ✅     | Plain inputs without paste blocking; `autoComplete="current-password"` / `"new-password"` on every password field.                                                                                                                                                                    |
-| 2.1.12 | The password can be shown while typing                      | ⚠️     | No show/hide toggle. See [O3](#o3-show-password).                                                                                                                                                                                                                                     |
-| 2.2.1  | Anti-automation against credential stuffing and brute force | ✅     | `DefaultRateLimits` (`internal/httpapi/ratelimit.go`): 5 wrong passwords per email per 15 min, 20 logins per IP per 15 min, 5 mails on request per IP per hour; 429 with `Retry-After`. Unknown emails verify a dummy hash.                                                           |
-| 2.2.2  | Weak authenticators (email) only for recovery               | ✅     | Email links only confirm an address, reset a password or change the email; sign-in always needs the password.                                                                                                                                                                         |
-| 2.2.3  | Notification after changes of authentication details        | ⚠️     | An email change notifies the old address (`notifyEmailChanged`), a deleted account gets a confirmation; a password change or reset sends nothing. See [O4](#o4-password-changed-mail).                                                                                                |
-| 2.3.1  | Initial activation secrets are random and expire            | ✅     | Invitations and the `init` link: 32 random bytes, 72 h, single use, only the SHA-256 stored (`internal/service/invite.go`, `setup.go`).                                                                                                                                               |
-| 2.5.1  | No initial or recovery secret sent in clear text            | ✅     | The app never sends a password; links expire (1 h for a reset) and work once.                                                                                                                                                                                                         |
-| 2.5.2  | No password hints or secret questions                       | ✅     | None.                                                                                                                                                                                                                                                                                 |
-| 2.5.3  | Recovery does not reveal the current password               | ✅     | Reset sets a new password; the hash is never shown.                                                                                                                                                                                                                                   |
-| 2.5.4  | No shared or default accounts                               | ✅     | A real installation starts empty (`init` creates the first admin). The demo data (`seed`) has accounts with a published password; `seed` warns, and [operations.md](operations.md) forbids it for real use. The demo endpoints are 404 outside the demo (`internal/httpapi/demo.go`). |
-| 2.5.5  | Notification when an authentication factor changes          | ⚠️     | As 2.2.3.                                                                                                                                                                                                                                                                             |
-| 2.5.6  | Forgotten password through a secure recovery mechanism      | ✅     | A single-use, 1-hour link to the account's address; setting the password ends every session and does not sign in (`internal/service/credentials.go`). The request answers 202 for any address.                                                                                        |
-| 2.7.x  | Out-of-band verifiers                                       | n/a    | No SMS or push authenticators.                                                                                                                                                                                                                                                        |
-| 2.8.1  | Time-based one-time passwords                               | n/a    | No OTP authenticators (see [O6](#o6-multi-factor-authentication-for-staff)).                                                                                                                                                                                                          |
+| ID     | Requirement                                                 | Status | Where                                                                                                                                                                                                                                                                                                             |
+| ------ | ----------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2.1.1  | Passwords of at least 12 characters                         | 🟰     | The minimum stays 8 characters (`MinPasswordLength`, `internal/service/auth.go`; `minLength` in `internal/httpapi/auth.go`, `credentials.go`; `web/src/features/auth/form.ts`), together with the common-password check of 2.1.7. See [O1](#o1-password-length).                                                  |
+| 2.1.2  | Passwords of 64 characters and more are allowed             | ✅     | Up to 256 characters, counted in characters by the API (`maxLength`) and the service (`checkPassword`) alike; a longer one is a 422 on the password field (`TestPasswordLengthInCharacters`, `internal/app/credentials_test.go`). The bound limits the hashing work per request.                                  |
+| 2.1.3  | No truncation of passwords                                  | ✅     | The password is hashed as entered: no trimming, no truncation (`internal/auth/password`).                                                                                                                                                                                                                         |
+| 2.1.4  | Any printable Unicode character allowed                     | ✅     | No character rules; `internal/auth/password/password_test.go` hashes Unicode and emoji.                                                                                                                                                                                                                           |
+| 2.1.5  | Users can change their password                             | ✅     | `changePassword` (`internal/httpapi/credentials.go`, `AuthService.ChangePassword` in `internal/service/credentials.go`), on the account page.                                                                                                                                                                     |
+| 2.1.6  | Changing the password requires the current and the new one  | ✅     | `checkCurrentPassword`; wrong ones count against the per-email limit.                                                                                                                                                                                                                                             |
+| 2.1.7  | Passwords are checked against breached or common passwords  | ✅     | A new password (registration, reset, change, invitation and setup links) must not be one of the 10,000 most common passwords, ignoring case: `IsCommon` (`internal/auth/password/common.go`, SecLists list embedded, works offline and in the demo), checked in `checkPassword`; a 422 on the password field.     |
+| 2.1.8  | A password strength meter                                   | ✅     | Under every new-password field, as text and bars: `PasswordStrengthMeter` (`web/src/components`), a heuristic on length and kinds of characters (`web/src/lib/passwordStrength.ts`).                                                                                                                              |
+| 2.1.9  | No composition rules                                        | ✅     | Only the length and the common-password list are checked (`checkPassword`).                                                                                                                                                                                                                                       |
+| 2.1.10 | No periodic rotation or password history                    | ✅     | None.                                                                                                                                                                                                                                                                                                             |
+| 2.1.11 | Pasting, browser helpers and password managers work         | ✅     | Plain inputs without paste blocking; `autoComplete="current-password"` / `"new-password"` on every password field.                                                                                                                                                                                                |
+| 2.1.12 | The password can be shown while typing                      | ✅     | Every password field is a `PasswordInput` (`web/src/components/PasswordInput.tsx`) with a show/hide button ("Show password", `aria-pressed`).                                                                                                                                                                     |
+| 2.2.1  | Anti-automation against credential stuffing and brute force | ✅     | `DefaultRateLimits` (`internal/httpapi/ratelimit.go`): 5 wrong passwords per email per 15 min, 20 logins per IP per 15 min, 5 mails on request per IP per hour; 429 with `Retry-After`. Unknown emails verify a dummy hash.                                                                                       |
+| 2.2.2  | Weak authenticators (email) only for recovery               | ✅     | Email links only confirm an address, reset a password or change the email; sign-in always needs the password.                                                                                                                                                                                                     |
+| 2.2.3  | Notification after changes of authentication details        | ✅     | An email change notifies the old address (`notifyEmailChanged`), a password change or reset the account (`notifyPasswordChanged`, `internal/service/credentials.go`; mail `password-changed`, no link), a deleted account gets a confirmation; each in the transaction of the change (`servicetest.Credentials`). |
+| 2.3.1  | Initial activation secrets are random and expire            | ✅     | Invitations and the `init` link: 32 random bytes, 72 h, single use, only the SHA-256 stored (`internal/service/invite.go`, `setup.go`).                                                                                                                                                                           |
+| 2.5.1  | No initial or recovery secret sent in clear text            | ✅     | The app never sends a password; links expire (1 h for a reset) and work once.                                                                                                                                                                                                                                     |
+| 2.5.2  | No password hints or secret questions                       | ✅     | None.                                                                                                                                                                                                                                                                                                             |
+| 2.5.3  | Recovery does not reveal the current password               | ✅     | Reset sets a new password; the hash is never shown.                                                                                                                                                                                                                                                               |
+| 2.5.4  | No shared or default accounts                               | ✅     | A real installation starts empty (`init` creates the first admin). The demo data (`seed`) has accounts with a published password; `seed` warns, and [operations.md](operations.md) forbids it for real use. The demo endpoints are 404 outside the demo (`internal/httpapi/demo.go`).                             |
+| 2.5.5  | Notification when an authentication factor changes          | ✅     | As 2.2.3.                                                                                                                                                                                                                                                                                                         |
+| 2.5.6  | Forgotten password through a secure recovery mechanism      | ✅     | A single-use, 1-hour link to the account's address; setting the password ends every session and does not sign in (`internal/service/credentials.go`). The request answers 202 for any address.                                                                                                                    |
+| 2.7.x  | Out-of-band verifiers                                       | n/a    | No SMS or push authenticators.                                                                                                                                                                                                                                                                                    |
+| 2.8.1  | Time-based one-time passwords                               | n/a    | No OTP authenticators (see [O6](#o6-multi-factor-authentication-for-staff)).                                                                                                                                                                                                                                      |
 
 Passwords are hashed with argon2id at the OWASP parameters (19 MiB, t=2, p=1;
 `internal/auth/password/params.go`), with a per-hash salt; outdated hashes are upgraded at the next
@@ -58,20 +59,20 @@ sign-in, and at most `GOMAXPROCS` hashes run at once.
 
 ## V3 Session management
 
-| ID    | Requirement                                            | Status | Where                                                                                                                                                                                                                |
-| ----- | ------------------------------------------------------ | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 3.1.1 | No session token in URLs                               | ✅     | Only in the `studio_session` cookie; `/api/v1/auth/me` never returns it.                                                                                                                                             |
-| 3.2.1 | A new session token at authentication                  | ✅     | Sign-in, confirmation and impersonation create a new session and end the previous one (`internal/service/auth.go` `signIn`, `internal/httpapi/auth.go`).                                                             |
-| 3.2.2 | Session tokens with at least 64 bits of entropy        | ✅     | 32 bytes from `crypto/rand` (`newToken`); the database stores only their SHA-256 (`domain.HashToken`).                                                                                                               |
-| 3.2.3 | Session tokens stored securely in the browser          | ✅     | An HttpOnly cookie; nothing in local or session storage.                                                                                                                                                             |
-| 3.3.1 | Logout and expiry invalidate the session on the server | ✅     | `Logout` deletes the session row; expired sessions fail `Authenticate` and are deleted hourly (`purge-sessions`).                                                                                                    |
-| 3.3.2 | Re-authentication at least every 30 days               | ⚠️     | Sessions end after 14 idle days and at most 90 days after sign-in (`SessionIdleTimeout`, `SessionMaxAge`). See [O5](#o5-session-lifetime).                                                                           |
-| 3.4.1 | Cookies with the `Secure` attribute                    | ✅     | When `BASE_URL` is `https://` (`setTransportSecurity`, `cmd/studio-schedule/serve.go`); plain HTTP is for local development only, and `serve` warns.                                                                 |
-| 3.4.2 | Cookies with the `HttpOnly` attribute                  | ✅     | `sessionCookie` (`internal/httpapi/auth.go`).                                                                                                                                                                        |
-| 3.4.3 | Cookies with `SameSite`                                | ✅     | `SameSite=Lax`.                                                                                                                                                                                                      |
-| 3.4.4 | Cookies with the `__Host-` prefix                      | ⚠️     | The cookie is `studio_session`. See [O7](#o7-__host--cookie-prefix).                                                                                                                                                 |
-| 3.4.5 | Cookie path when the domain is shared                  | ✅     | `Path=/`, no `Domain`: the app runs on a host of its own (`BASE_URL` has no path).                                                                                                                                   |
-| 3.7.1 | Re-authentication before sensitive account changes     | ✅     | Changing the password or email and deleting one's own account require the password; credential changes are refused while an admin impersonates the account (`internal/service/credentials.go`, `accounts_admin.go`). |
+| ID    | Requirement                                            | Status | Where                                                                                                                                                                                                                                                                                                                                                     |
+| ----- | ------------------------------------------------------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1.1 | No session token in URLs                               | ✅     | Only in the session cookie (`__Host-studio_session`, or `studio_session` over plain HTTP); `/api/v1/auth/me` never returns it.                                                                                                                                                                                                                            |
+| 3.2.1 | A new session token at authentication                  | ✅     | Sign-in, confirmation and impersonation create a new session and end the previous one (`internal/service/auth.go` `signIn`, `internal/httpapi/auth.go`).                                                                                                                                                                                                  |
+| 3.2.2 | Session tokens with at least 64 bits of entropy        | ✅     | 32 bytes from `crypto/rand` (`newToken`); the database stores only their SHA-256 (`domain.HashToken`).                                                                                                                                                                                                                                                    |
+| 3.2.3 | Session tokens stored securely in the browser          | ✅     | An HttpOnly cookie; nothing in local or session storage.                                                                                                                                                                                                                                                                                                  |
+| 3.3.1 | Logout and expiry invalidate the session on the server | ✅     | `Logout` deletes the session row; expired sessions fail `Authenticate` and are deleted hourly (`purge-sessions`).                                                                                                                                                                                                                                         |
+| 3.3.2 | Re-authentication at least every 30 days               | ✅     | Sessions end after 14 idle days and at most 30 days after sign-in (`SessionIdleTimeout`, `SessionMaxAge`, `internal/service/auth.go`).                                                                                                                                                                                                                    |
+| 3.4.1 | Cookies with the `Secure` attribute                    | ✅     | When `BASE_URL` is `https://` (`setTransportSecurity`, `cmd/studio-schedule/serve.go`); plain HTTP is for local development only, and `serve` warns.                                                                                                                                                                                                      |
+| 3.4.2 | Cookies with the `HttpOnly` attribute                  | ✅     | `sessionCookie` (`internal/httpapi/auth.go`).                                                                                                                                                                                                                                                                                                             |
+| 3.4.3 | Cookies with `SameSite`                                | ✅     | `SameSite=Lax`.                                                                                                                                                                                                                                                                                                                                           |
+| 3.4.4 | Cookies with the `__Host-` prefix                      | ✅     | With an `https://` `BASE_URL` the cookie is `__Host-studio_session` (`cookieName`, `internal/httpapi/auth.go`; `setTransportSecurity`, `cmd/studio-schedule/serve.go`); a cookie of the other name is ignored (`TestSessionCookieName`). Over plain HTTP (local development) and in the web demo it is `studio_session`, because the prefix needs Secure. |
+| 3.4.5 | Cookie path when the domain is shared                  | ✅     | `Path=/`, no `Domain`: the app runs on a host of its own (`BASE_URL` has no path).                                                                                                                                                                                                                                                                        |
+| 3.7.1 | Re-authentication before sensitive account changes     | ✅     | Changing the password or email and deleting one's own account require the password; credential changes are refused while an admin impersonates the account (`internal/service/credentials.go`, `accounts_admin.go`).                                                                                                                                      |
 
 ## V4 Access control
 
@@ -86,7 +87,7 @@ Roles and impersonation: [ADR 0005](decisions/0005-rbac-and-impersonation.md); f
 | 4.1.5 | Access controls fail securely                               | ✅     | An unknown access level panics at registration; an operation without one answers 500 (`accessMiddleware`). `TestAccessLevelsPinned` and `TestAccessMatrix` (`internal/app/access_test.go`) pin every operation's level.                                 |
 | 4.2.1 | Protection against insecure direct object references        | ✅     | Services check ownership and answer 404 for anything outside the caller's reach: `dependentOf` (`internal/service/family.go`), `manages` (`participants.go`), receipts by payer (`receipts.go`).                                                        |
 | 4.2.2 | Protection against cross-site request forgery               | ✅     | `http.CrossOriginProtection` rejects every cross-origin POST, PUT, PATCH and DELETE with 403 (`crossOriginProtection`, `internal/app/app.go`), plus `SameSite=Lax` and JSON bodies. Pinned by the server smoke tests (`web/e2e-server/system.spec.ts`). |
-| 4.3.1 | Administrative interfaces use multi-factor authentication   | ⚠️     | Admin and office sign in with a password only. See [O6](#o6-multi-factor-authentication-for-staff).                                                                                                                                                     |
+| 4.3.1 | Administrative interfaces use multi-factor authentication   | ⚠️     | Admin and office sign in with a password only; planned as a feature of its own. See [O6](#o6-multi-factor-authentication-for-staff).                                                                                                                    |
 | 4.3.2 | No directory browsing, no metadata files                    | ✅     | The embedded UI serves only the built files (`internal/webui`), no directory listings, no source maps; unknown `/api` paths are 404 problems.                                                                                                           |
 
 ## V5 Validation, sanitization and encoding
@@ -142,8 +143,8 @@ encrypted by the app; disk and backup encryption are the operator's.
 | ----- | -------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 8.2.1 | Anti-caching headers for sensitive data                        | ✅     | Every API answer carries `Cache-Control: no-store` (`securityHeaders`, `internal/app/app.go`; `TestAPIAnswersAreNotCached`), except the files that set their own: receipt PDFs (and the demo mailbox's attachments) `private, no-store`; the logo `public, no-cache` at `getSchoolLogo` (public, no personal data) and `no-cache` at `getReceiptLogo`. Calendar feeds (`/ical/`, outside the API) send `private, max-age=900`. |
 | 8.2.2 | No sensitive data in browser storage                           | ✅     | localStorage keeps the UI language and the import's column mapping (header names); IndexedDB only in the demo, with fictional data.                                                                                                                                                                                                                                                                                            |
-| 8.2.3 | Client-side data cleared after the session ends                | ✅     | Signing out or deleting the account resets the query cache (`changeIdentity`, `web/src/api/queries.ts`), as does a 401 on a change. A 401 on a plain read does not; see [O9](#o9-minor-items).                                                                                                                                                                                                                                 |
-| 8.3.1 | Sensitive data in the body or headers, not in the query string | ⚠️     | No secrets in API query strings (mail-link tokens go in POST bodies). The office's search terms (names, email parts) are query parameters of GET requests, which reverse-proxy logs record. See [O8](#o8-search-terms-in-query-strings).                                                                                                                                                                                       |
+| 8.2.3 | Client-side data cleared after the session ends                | ✅     | Signing out, deleting the account and any 401 from the API reset the query cache and show the app signed out (`changeIdentity`, `sessionCaches`, `web/src/api/queries.ts`).                                                                                                                                                                                                                                                    |
+| 8.3.1 | Sensitive data in the body or headers, not in the query string | ✅     | No secrets in API query strings (mail-link tokens go in POST bodies). The office's and staff's searches by name or email are POSTs with a JSON body: `searchPersons`, `searchPersonsForStaff`, `searchReceipts`, `searchMails`. See [O8](#o8-search-terms-in-query-strings).                                                                                                                                                   |
 | 8.3.2 | Users can export and delete their data                         | ✅     | Export for oneself and one's dependents, self-deletion of the account, anonymization by the office (`internal/httpapi/privacy.go`, [ADR 0016](decisions/0016-privacy-and-account-administration.md), [privacy.md](privacy.md)).                                                                                                                                                                                                |
 | 8.3.3 | Users are told how their data is used                          | n/a    | The school's privacy policy, an operator duty ([privacy.md](privacy.md#what-the-operator-still-has-to-do)).                                                                                                                                                                                                                                                                                                                    |
 | 8.3.4 | Sensitive data is identified and handled by a policy           | ✅     | [privacy.md](privacy.md): what is stored, why and for how long, with automatic retention jobs.                                                                                                                                                                                                                                                                                                                                 |
@@ -209,7 +210,7 @@ encrypted by the app; disk and backup encryption are the operator's.
 | 14.2.2 | Unneeded features, documentation and samples removed | ✅     | The demo endpoints (mailbox, logins) answer only in the demo; no debug or profiling routes; metrics only on a separate, opt-in listener.                                                                                                                                                                                                                                          |
 | 14.2.3 | Subresource Integrity for externally hosted assets   | ✅     | As 10.3.2.                                                                                                                                                                                                                                                                                                                                                                        |
 | 14.3.2 | Debug modes disabled in production                   | ✅     | There is no debug mode; `LOG_LEVEL=debug` adds log lines only.                                                                                                                                                                                                                                                                                                                    |
-| 14.3.3 | No version information of components in responses    | ⚠️     | No `Server` or `X-Powered-By` header. The public `GET /api/v1/health` returns the app's build version, which the web app shows in its footer. See [O9](#o9-minor-items).                                                                                                                                                                                                          |
+| 14.3.3 | No version information of components in responses    | ✅     | No `Server` or `X-Powered-By` header; the public `GET /api/v1/health` names no version. The office and admins get it in `getMe`, for support, and see it in the web app's footer.                                                                                                                                                                                                 |
 | 14.4.1 | A Content-Type with a charset on every response      | ✅     | `text/html; charset=utf-8`, `text/calendar; charset=utf-8`; JSON and problem+json are UTF-8 by definition.                                                                                                                                                                                                                                                                        |
 | 14.4.2 | API answers with `Content-Disposition: attachment`   | ✅     | `securityHeaders` (`internal/app/app.go`) on every API answer (`/api` and below) except the API's documentation (`/api/v1/docs`, `/api/v1/openapi*`); file answers set their own: receipt PDFs an attachment with a file name, the logo (`getSchoolLogo`, `getReceiptLogo`) `inline`. Calendar feeds (`/ical/`) are not API answers: `inline`, or an attachment with `?download`. |
 | 14.4.3 | A Content Security Policy                            | ✅     | `default-src 'self'`, no inline or eval scripts, `object-src 'none'`, `frame-ancestors 'none'`, `base-uri`, `form-action` (`contentSecurityPolicy`; `TestContentSecurityPolicy`). Styles allow `'unsafe-inline'` for two UI libraries (ADR 0006).                                                                                                                                 |
@@ -223,71 +224,77 @@ encrypted by the app; disk and backup encryption are the operator's.
 
 ## Open items
 
-Gaps against Level 1, each with a proposal. Items O1 and O5 would change an accepted decision
-(ADR 0004), the others add features.
+What the review of 2026-10-25 found against Level 1, and what became of it. Only O6 is still open.
 
 ### O1 Password length
 
-ASVS 2.1.1 asks for at least 12 characters; the app allows 8 (ADR 0004, after NIST SP 800-63B).
-**Proposal:** raise `MinPasswordLength`, the API's `minLength` and the form's check to 12 for new
-passwords (registration, reset, change, invitation). Existing passwords keep working; the demo
-password `demo-password` has 13 characters.
+ASVS 2.1.1 asks for at least 12 characters; the app keeps **8** ([ADR 0004](decisions/0004-accounts-sessions-and-mail.md),
+amendment), an **accepted deviation**. NIST SP 800-63B, which ASVS 4.0.3 builds on elsewhere,
+asks for 8 together with a check against common passwords. That check (O2) refuses the weak
+passwords people choose at that length, the strength meter steers toward longer ones, and
+sign-ins are rate-limited (2.2.1). A longer minimum mostly produces predictable padding
+("Password1234") in a school app whose members sign in rarely. ASVS 5.0 (6.2.1) also asks for 8
+characters, recommending 15.
 
 ### O2 Common passwords
 
-ASVS 2.1.7 asks for a check against breached or common passwords, 2.1.8 for a strength meter.
-**Proposal:** embed a list of the 10,000 most common passwords that fit the length rule and refuse
-them with a field error when a password is set, offline (no call to an outside service, so it
-works in the WebAssembly demo and leaks nothing). The form shows the length and the result of the
-same check as a simple meter.
+ASVS 2.1.7, 2.1.8. **Done.** The 10,000 most common passwords (SecLists' `10k-most-common.txt`,
+MIT License; source, checksum and license next to it in `internal/auth/password`) are embedded and
+refused, ignoring case, wherever a password is set, as a 422 on that field (`IsCommon`,
+`checkPassword`). The set is built on first use, so sign-ins never pay for it, and the check works
+offline, in the web demo too. The web app shows a strength meter (length and kinds of characters,
+no list in the client) under new passwords, and the "too common" message on a refused one.
 
 ### O3 Show password
 
-ASVS 2.1.12. **Proposal:** a `PasswordInput` with a show/hide button (shadcn input group), used
-for every password field.
+ASVS 2.1.12. **Done.** `PasswordInput` (`web/src/components/PasswordInput.tsx`), a show/hide
+button with "Show password"/"Hide password" and `aria-pressed`, on every password field.
 
 ### O4 Password-changed mail
 
-ASVS 2.2.3 and 2.5.5. **Proposal:** a mail `password-changed` (en, de) to the account's address
-after a password change and a reset, in the same transaction, without a link ("if this was not
-you, reset your password and contact the school").
+ASVS 2.2.3 and 2.5.5. **Done.** The mail `password-changed` (en, de, in the account's language)
+goes to the account after a password change and a reset, in the same transaction, without a link
+("if this was not you, contact the school"). Setting the first password with an invitation or the
+setup link sends none: nothing changed.
 
 ### O5 Session lifetime
 
-ASVS 3.3.2 asks for re-authentication at least every 30 days; sessions last up to 90 days (14 days
-idle). **Proposal:** `SessionMaxAge` of 30 days. Members then sign in once a month.
+ASVS 3.3.2. **Done.** `SessionMaxAge` is 30 days (was 90), with 14 days idle as before. Members
+sign in at least once a month.
 
 ### O6 Multi-factor authentication for staff
 
 ASVS 4.3.1 asks for multi-factor authentication on administrative interfaces; office and admin
-accounts see and change the personal data of every member. **Proposal:** TOTP (or passkeys) for
-`office` and `admin` accounts, required by a school setting, with recovery codes. A larger
-feature, for its own ADR.
+accounts see and change the personal data of every member. **Open, planned** as a feature of its
+own: TOTP or passkeys for `office` and `admin` accounts, required by a school setting, with
+recovery codes, decided in its own ADR.
 
 ### O7 `__Host-` cookie prefix
 
-ASVS 3.4.4. The prefix requires `Secure`, which local development over plain HTTP lacks, and the
-cookie's name is part of three operations' signatures. **Proposal:** name the cookie
-`__Host-studio_session` when `BASE_URL` is https and keep `studio_session` otherwise, reading the
-cookie in the session middleware instead of the operations' input structs; existing sessions end
-once with the rename.
+ASVS 3.4.4. **Done.** With an `https://` `BASE_URL` the session cookie is `__Host-studio_session`,
+otherwise `studio_session` (the prefix needs Secure, which local development over plain HTTP
+lacks). The session middleware reads the cookie by the configured name and hands its token to
+sign-in and sign-out; no operation names the cookie any more. The upgrade that turns the prefix on
+signs everyone out once ([operations.md](operations.md#upgrades)).
 
 ### O8 Search terms in query strings
 
-ASVS 8.3.1. The office's searches (persons, participants, receipts, the mail log) send names or
-email parts as query parameters. The app logs no query strings, but a reverse proxy does.
-**Proposal:** accept, and document it (done in [operations.md](operations.md) and
-[privacy.md](privacy.md)): keep the proxy's access log short or drop query strings from it.
-Moving the searches into POST bodies would cost the REST semantics and caching of these reads.
+ASVS 8.3.1. **Done.** The searches by name or email are POSTs with a JSON body and change nothing:
+`searchPersons` (the office's pickers, was `GET /admin/persons?q=`), `searchPersonsForStaff`
+(was `GET /staff/persons?q=`), `searchReceipts` (was `GET /admin/receipts?q=`) and `searchMails`
+(the mail log's recipient filter, was `GET /admin/mails?recipient=`); the GETs are gone. Their
+answers carry `Cache-Control: no-store` like every API answer. The persons page keeps its search
+in the page's address (`/admin/persons?q=…`) so that Back restores it; that address reaches the
+server only when the page is opened or reloaded directly, and the app never logs query strings
+([privacy.md](privacy.md#what-the-operator-still-has-to-do)).
 
 ### O9 Minor items
 
-- **Version disclosure (14.3.3):** the public health endpoint names the build version. It is an
-  open-source app whose releases are public; showing the version only to staff would make
-  support harder. **Proposal:** accept.
-- **Cache after a 401 on a read (8.2.3):** a session that expires while a page is open keeps the
-  page's data in memory until the next change or reload. **Proposal:** reset the query cache on any
-  401, as on a change.
-- **Password length counted in bytes (2.1.2):** the API counts characters, the service bytes, so a
-  password of more than 85 three-byte characters passes the form and fails with a 422 that names
-  no field. **Proposal:** a field error on `password` for it.
+**Done**, all three:
+
+- **Version disclosure (14.3.3):** `GET /api/v1/health` names no version; `getMe` gives it to the
+  office and admins only, and only they see it in the footer and on the home page.
+- **Cache after a 401 on a read (8.2.3):** any 401 from the API resets the query cache and shows
+  the app signed out (`sessionCaches`, `web/src/api/queries.ts`), as signing out does.
+- **Password length counted in bytes (2.1.2):** the service counts characters like the API, at
+  most 256, and a broken rule is a field error on the password field.

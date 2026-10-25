@@ -96,7 +96,8 @@ mails a minute.
 log lists every mail's metadata (time, recipient, template, subject, status, attempts, next attempt,
 sent time, last error, attachment name), newest first, filtered by status, template (an enum of
 `mail.TemplateNames` in the API, so the client's types know every template) and a part of the
-recipient (ignoring ASCII case), 50 to a page with an opaque cursor (creation time and ID). The
+recipient (ignoring ASCII case), 50 to a page with an opaque cursor (creation time and ID); the
+filter travels in the body of a POST (`searchMails`), so that addresses stay out of URLs. The
 list never carries bodies. The detail shows them, except for the five templates with a secret,
 single-use link: confirm-email, change-email, reset-password, invite and waitlist-invite
 (`mail.SecretLink`). Their bodies never leave the server: reading them would let an admin take over

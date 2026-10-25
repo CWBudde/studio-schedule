@@ -79,7 +79,7 @@ thing.
 - The 409 of a refused removal (bookings, class memberships) is now the `Conflict` problem with the
   reason `in-use` (ADR 0007), like the office's deletions.
 
-**Office** (`office`, under `/api/v1/admin/persons`). Next to the search (`listPersons`), the office
+**Office** (`office`, under `/api/v1/admin/persons`). Next to the search (`searchPersons`, a POST so the terms stay out of URLs), the office
 sees a person with its guardians, dependents, account (email, role, status), staff links and class
 memberships (`getPerson`), creates persons and edits every field including the email and its notes
 (`createPerson`, `updatePerson`; a person's email is contact data, the account's email stays the

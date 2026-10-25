@@ -252,11 +252,12 @@ under `/admin` like the office's other reads): every event
 of a booking, oldest first, with status, `late`, `override`, `note` and the actor's account, name and
 email (none for the system).
 
-**Finding persons** (`searchPersonsForStaff`, `GET /api/v1/staff/persons?q=…`, access `staff`).
+**Finding persons** (`searchPersonsForStaff`, `POST /api/v1/staff/persons/search` with the words
+in the body since ADR 0004's amendment, so that names stay out of URLs; access `staff`).
 Instructors need to find the person they add, but not the office's person records: the search
 matches the given and family name only (not email addresses), needs at least two characters, returns
 at most 20, ordered by family and given name, and gives only the ID, the name and the birth year (to
-tell namesakes apart), no contact data. The office keeps `listPersons`.
+tell namesakes apart), no contact data. The office keeps its own search (`searchPersons`).
 
 **Demo.** Felix Keysworth, the demo accompanist, has an instructor account (signing in by email, as
 the login page lists Alina for instructors), and Alina's ballet workshop, which Felix accompanies,

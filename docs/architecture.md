@@ -52,7 +52,8 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   access log and metrics, cross-origin protection; see "Observability") and the health probes. In
   `httpapi`, a middleware resolves the client IP (`internal/clientip`, trusting
   `X-Forwarded-For` only from `TRUSTED_PROXIES`), the session middleware resolves the
-  `studio_session` cookie to the signed-in account, and the access middleware after it enforces
+  session cookie (`__Host-studio_session` over HTTPS, `studio_session` otherwise; ADR 0004) to the
+  signed-in account, and the access middleware after it enforces
   each operation's declared access level ([ADR 0005](decisions/0005-rbac-and-impersonation.md)).
 - `internal/ratelimit`: in-memory fixed-window limiters for logins and mail-sending requests
   ([ADR 0006](decisions/0006-credentials-rate-limits-and-headers.md)).

@@ -219,7 +219,8 @@ most once every 2 seconds and shares the result between the probes in that time 
 probes costs one database query per 2 s); a hanging database fails the check after 3 seconds. The
 log says when the app turns unready (Warn, with the cause) and ready again (Info). The image's
 `HEALTHCHECK` runs `studio-schedule healthcheck` against `/healthz`. `GET /api/v1/health` stays
-for the web app and also names the version.
+for the web app; it names no version (`studio-schedule version` does, and the office and admins
+see it in the web app's footer).
 
 ### Metrics
 
@@ -459,6 +460,12 @@ is not up to date: run `studio-schedule migrate up`") or has migrations the bina
 ("the database schema is newer than this binary"), and `/readyz` answers 503 while either is true.
 So the order is: migrate, then start the new binary. The old binary stops serving at the next
 restart once the schema is newer, which is why the update replaces it right after `migrate up`.
+
+**Signing in again after the session-cookie upgrade.** From the release that adds the
+`__Host-` prefix, an installation whose `BASE_URL` is `https://` names its session cookie
+`__Host-studio_session` instead of `studio_session` ([ADR 0004](decisions/0004-accounts-sessions-and-mail.md),
+amendment). The old cookie is ignored, so everyone signs in again once after that upgrade; nothing
+else changes. The same release ends sessions 30 days after the sign-in (was 90).
 
 **Migration policy.** In production, migrations only go forward. Each release's migrations are
 written so that `migrate up` works on the data of the release before. `migrate down` rolls back

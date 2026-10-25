@@ -46,11 +46,12 @@ database stores only their SHA-256 hash (`domain.HashToken`), so a database leak
 token. Email tokens are single use: using one deletes it, and of two concurrent uses only one
 succeeds.
 
-**Sessions** are server-side rows. The cookie `studio_session` is HttpOnly, SameSite=Lax, Path=/,
+**Sessions** are server-side rows. The cookie `studio_session` (`__Host-studio_session` over HTTPS,
+see the amendment) is HttpOnly, SameSite=Lax, Path=/,
 and Secure unless `BASE_URL` is unset or `http://` (local development). Cross-origin unsafe
 requests are already rejected by `http.CrossOriginProtection`.
 
-- Expiry slides: 14 days idle, at most 90 days after the login.
+- Expiry slides: 14 days idle, at most 30 days after the login (90 before the amendment).
 - A session is extended (and the cookie re-set) at most once a day, so most requests only read.
 - Expired sessions and tokens are deleted by the hourly `purge-sessions` job.
 
@@ -98,3 +99,40 @@ public installation.
   `TokenPurpose` values, a delete by account).
 - Rate limiting of login and registration comes with the security-headers item; until then,
   argon2id is the only brake on password guessing.
+
+## Amendment (2026-10-25): ASVS Level 1
+
+The ASVS 4.0.3 Level 1 review ([security.md](../security.md)) changes the following.
+
+**Session lifetime (ASVS 3.3.2).** A session ends at most **30 days** after the login
+(`SessionMaxAge`, was 90); the 14 idle days stay. Members sign in again at least once a month.
+
+**`__Host-` cookie (ASVS 3.4.4).** When `BASE_URL` is `https://`, the session cookie is named
+`__Host-studio_session`: browsers accept that name only with Secure, Path=/ and no Domain, so
+neither a subdomain nor a page over plain HTTP can set or shadow it. Over plain HTTP (local
+development), in the web demo and with `serve` without `BASE_URL` it stays `studio_session`,
+because the prefix needs Secure. The session middleware reads and writes the cookie by the
+configured name (`httpapi.Deps.HostCookie`) and hands its token to sign-in and sign-out through
+the request context; no operation names the cookie in its signature any more, so the OpenAPI
+document pins no cookie name. A cookie of the other name is ignored: the upgrade that turns the
+prefix on signs everyone out once ([operations.md](../operations.md#upgrades)).
+
+**Password rules (ASVS 2.1.1, 2.1.2, 2.1.7).** The minimum stays at **8 characters**, as above
+(NIST SP 800-63B; ASVS asks for 12, an accepted deviation: the common-password check below keeps
+out the weak passwords of 8 to 11 characters that matter, and a longer minimum mostly produces
+predictable padding). New: a new password (registration, reset, change, and so the invitation and
+setup links) must not be one of the **10,000 most common passwords**, compared ignoring case.
+The list is SecLists' `10k-most-common.txt` (MIT License), embedded in `internal/auth/password`
+(`IsCommon`; source, checksum and license in `common-passwords-LICENSE.txt`), so the check needs
+no network and works in the web demo; the set is built on first use, so sign-ins never pay for
+it. The length is counted in characters, by the API (`maxLength`) and the service alike, at most 256. A broken rule is a 422 on the field that carried the password (`body.password`,
+`body.newPassword`). The web app shows a strength meter (length and kinds of characters) under
+new passwords and a show/hide button on every password field.
+
+**Password-changed mail (ASVS 2.2.3, 2.5.5).** Changing or resetting the password of an account
+that had one mails the account, in its language, that its password was changed, in the same
+transaction (`password-changed`, no link; whoever did not change it contacts the school).
+Setting the first password with an invitation or the setup link sends nothing.
+
+**Multi-factor authentication (ASVS 4.3.1)** for the office and admins is left for a feature of
+its own (TOTP or passkeys, with its own ADR).
