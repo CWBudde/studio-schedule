@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { AppWindow, Loader2, RotateCcw, ServerCrash } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useBackendStatus } from '@/api/backendStatus';
+import { useOnline } from '@/lib/online';
 import { demoControls } from '@/api/transport';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,10 +16,17 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { ResetDemoDialog } from './ResetDemo';
 
-/** Renders children only once the backend is ready (instant in HTTP mode). */
+/**
+ * Renders children only once the backend is ready (instant in HTTP mode).
+ * Offline, the web demo's backend may not load at all (its WebAssembly is
+ * not cached): the pages show what the offline cache holds instead, and
+ * take no changes (ADR 0017).
+ */
 export function BackendGate({ children }: { children: ReactNode }) {
   const status = useBackendStatus();
+  const online = useOnline();
 
+  if (!online && (status.state === 'loading' || status.state === 'error')) return children;
   if (status.state === 'loading') return <BackendLoading />;
   if (status.state === 'error') return <BackendCrashed message={status.message} />;
   if (status.state === 'elsewhere') return <DemoElsewhere />;

@@ -119,5 +119,14 @@
       "good": "good",
       "strong": "strong"
     }
+  },
+  "offline": {
+    "title": "You are offline",
+    "description": "You see the schedule and your lessons as they were last loaded. Booking and every other change wait until you are back online.",
+    "unavailable": "Not available offline"
+  },
+  "pwa": {
+    "updateReady": "A new version of the app is ready.",
+    "reload": "Reload"
   }
 }

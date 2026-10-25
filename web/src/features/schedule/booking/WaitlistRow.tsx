@@ -116,6 +116,7 @@ export function WaitlistRow({
       {active && invited && (
         <span className="flex w-full flex-wrap gap-2">
           <Button
+            requiresOnline
             size="sm"
             disabled={pending}
             aria-label={t('booking.waitlist.acceptFor', { name })}
@@ -125,6 +126,7 @@ export function WaitlistRow({
             {t('booking.waitlist.accept')}
           </Button>
           <Button
+            requiresOnline
             variant="outline"
             size="sm"
             disabled={pending}
@@ -139,6 +141,7 @@ export function WaitlistRow({
       {canLeave && (
         <span className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
           <Button
+            requiresOnline
             variant="outline"
             size="sm"
             disabled={pending}

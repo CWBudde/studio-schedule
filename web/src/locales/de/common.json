@@ -119,5 +119,14 @@
       "good": "gut",
       "strong": "stark"
     }
+  },
+  "offline": {
+    "title": "Du bist offline",
+    "description": "Du siehst den Stundenplan und deine Stunden so, wie sie zuletzt geladen wurden. Buchen und alle anderen Änderungen gehen erst wieder, wenn du online bist.",
+    "unavailable": "Offline nicht verfügbar"
+  },
+  "pwa": {
+    "updateReady": "Eine neue Version der App ist bereit.",
+    "reload": "Neu laden"
   }
 }

@@ -114,5 +114,16 @@
     "deleted": "Dein Konto wurde gelöscht.",
     "lastAdmin": "Du bist die einzige Person in der Administration. Mach zuerst jemand anderen zur Administration.",
     "inUse": "Quittungen oder das Protokoll nennen dein Konto, deshalb kann es nicht gelöscht werden. Bitte die Administration, es zu sperren."
+  },
+  "push": {
+    "title": "Benachrichtigungen auf diesem Gerät",
+    "description": "Erhalte auf diesem Gerät eine Benachrichtigung, wenn auf einer Warteliste ein Platz für dich oder deine Kinder reserviert wird – zusätzlich zur E-Mail.",
+    "switch": "Benachrichtigungen auf diesem Gerät",
+    "on": "Dieses Gerät erhält zu jeder Einladung von der Warteliste eine Benachrichtigung. Beim Abmelden werden sie hier ausgeschaltet.",
+    "blocked": "Dein Browser blockiert Benachrichtigungen dieser Seite. Erlaube sie in den Website-Einstellungen des Browsers und schalte sie dann hier ein.",
+    "unsupported": "Dieser Browser kann keine Benachrichtigungen der App anzeigen. Auf iPhone und iPad füge die App zuerst zum Home-Bildschirm hinzu.",
+    "offline": "Offline nicht verfügbar",
+    "enableFailed": "Die Benachrichtigungen konnten nicht eingeschaltet werden. Bitte versuche es noch einmal.",
+    "disableFailed": "Die Benachrichtigungen konnten nicht ausgeschaltet werden. Bitte versuche es noch einmal."
   }
 }

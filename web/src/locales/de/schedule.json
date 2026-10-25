@@ -86,7 +86,8 @@
     "capacity": "Plätze",
     "places_one": "{{count}} Platz",
     "places_other": "{{count}} Plätze",
-    "about": "Über den Kurs"
+    "about": "Über den Kurs",
+    "offline": "Offline sind nur die Stunden zu sehen, die du vorher geöffnet hast. Diese lädt, sobald du wieder online bist."
   },
   "countdown": {
     "in": "Nächste Freigabe in {{duration}}",

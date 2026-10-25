@@ -247,6 +247,7 @@ function MemberBooking({
               {!started && (
                 <span className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
                   <Button
+                    requiresOnline
                     variant="outline"
                     size="sm"
                     disabled={b.bookingId === ''}
@@ -258,6 +259,7 @@ function MemberBooking({
                   </Button>
                   {lesson.classId && (
                     <Button
+                      requiresOnline
                       variant="ghost"
                       size="sm"
                       disabled={b.bookingId === ''}
@@ -312,12 +314,13 @@ function MemberBooking({
             </div>
           )}
           {canJoin ? (
-            <Button disabled={join.isPending} onClick={onJoin}>
+            <Button requiresOnline disabled={join.isPending} onClick={onJoin}>
               <ListPlus aria-hidden="true" />
               {join.isPending ? t('booking.waitlist.joining') : t('booking.waitlist.join')}
             </Button>
           ) : (
             <Button
+              requiresOnline
               disabled={!canBook}
               aria-describedby={showHint ? hintId : undefined}
               onClick={onBook}

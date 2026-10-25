@@ -86,7 +86,8 @@
     "capacity": "Capacity",
     "places_one": "{{count}} place",
     "places_other": "{{count}} places",
-    "about": "About this course"
+    "about": "About this course",
+    "offline": "Offline, only the lessons you opened before show. This one loads once you are back online."
   },
   "countdown": {
     "in": "Next release in {{duration}}",

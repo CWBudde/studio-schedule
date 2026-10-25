@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormError } from '@/features/auth/FormError';
 import { CalendarFeedsCard } from '@/features/calendar-feeds/CalendarFeedsCard';
+import { PushCard } from '@/features/push/PushCard';
 import { ChangeEmailCard } from './ChangeEmailCard';
 import { ChangePasswordCard } from './ChangePasswordCard';
 import { DeleteAccountCard } from './DeleteAccountCard';
@@ -18,7 +19,8 @@ import { ProfileCard } from './ProfileCard';
 
 /**
  * The signed-in person's account settings (/account): their person data and
- * mail language, their children, their calendar feeds, the download of
+ * mail language, their children, their calendar feeds, notifications on
+ * this device, the download of
  * their data, the password, the email address, and deleting the account.
  * Signed out, the page asks to sign in. While an admin is signed in as
  * someone else, the person data and children stay editable (for support),
@@ -45,6 +47,8 @@ export function AccountPage() {
           <ProfileCard me={me.data} />
           <DependentsCard />
           <CalendarFeedsCard />
+          {/* An admin signed in as the account would get its notifications. */}
+          {!me.data.impersonator && <PushCard accountId={me.data.accountId} />}
           <MyDataCard />
           {me.data.impersonator ? (
             <Impersonating me={me.data} />

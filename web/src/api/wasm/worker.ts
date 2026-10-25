@@ -54,6 +54,8 @@ interface WasmGlobals {
   __studioScheduleChanged?: () => void;
   /** Called by Go to render a receipt PDF (internal/wasmbridge.RenderPDFGlobal). */
   __studioScheduleRenderPDF?: (input: Uint8Array) => Promise<Uint8Array>;
+  /** Called by Go to show a web push notification (internal/wasmbridge.NotifyGlobal). */
+  __studioScheduleNotify?: (payload: string) => void;
 }
 
 const g = globalThis as unknown as WasmGlobals;
@@ -83,6 +85,14 @@ g.__studioScheduleChanged = () => {
 function post(msg: WorkerToMainMessage, transfer: Transferable[] = []): void {
   self.postMessage(msg, { transfer });
 }
+
+/**
+ * The demo's web push (ADR 0017): a worker cannot show notifications, so
+ * the page does (bridge.ts).
+ */
+g.__studioScheduleNotify = (payload: string) => {
+  post({ type: 'notify', payload: String(payload) });
+};
 
 function fatal(message: string): void {
   if (fatalSent) return;

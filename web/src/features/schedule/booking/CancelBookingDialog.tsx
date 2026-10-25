@@ -83,7 +83,12 @@ export function CancelBookingDialog({
             {t('booking.confirm.keep')}
           </AlertDialogCancel>
           {/* No AlertDialogAction: it would close the dialog before the answer. */}
-          <Button variant="destructive" disabled={cancel.isPending} onClick={onConfirm}>
+          <Button
+            requiresOnline
+            variant="destructive"
+            disabled={cancel.isPending}
+            onClick={onConfirm}
+          >
             {cancel.isPending ? t('booking.confirm.canceling') : t('booking.confirm.confirm')}
           </Button>
         </AlertDialogFooter>

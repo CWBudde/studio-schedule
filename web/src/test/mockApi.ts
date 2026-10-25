@@ -1129,6 +1129,7 @@ export const personExport = (
   mergedPersons: [],
   account: { id: meMember.accountId, email: meMember.email, role: 'member' },
   calendarFeeds: [],
+  pushDevices: [],
   dismissedAnnouncements: [],
   classMemberships: [],
   bookings: [

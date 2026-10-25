@@ -313,6 +313,7 @@ function UpcomingRow({
       {canCancel && (
         <div className="flex flex-wrap gap-2 px-4 pb-4 sm:flex-col sm:items-stretch sm:py-4 sm:pr-4 sm:pl-0">
           <Button
+            requiresOnline
             variant="outline"
             size="sm"
             aria-label={tSchedule('booking.cancelFor', { name: personName })}
@@ -323,6 +324,7 @@ function UpcomingRow({
           </Button>
           {lesson.classId && (
             <Button
+              requiresOnline
               variant="ghost"
               size="sm"
               aria-label={tSchedule('booking.cancelFollowingFor', { name: personName })}

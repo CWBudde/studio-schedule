@@ -114,5 +114,16 @@
     "deleted": "Your account has been deleted.",
     "lastAdmin": "You are the school’s only administrator. Make someone else an administrator first.",
     "inUse": "Receipts or the audit log name your account, so it cannot be deleted. Ask an administrator to disable it."
+  },
+  "push": {
+    "title": "Notifications on this device",
+    "description": "Get a notification on this device when a place on a waiting list is reserved for you or your children — besides the email.",
+    "switch": "Notifications on this device",
+    "on": "This device gets a notification for every waiting-list invite. Signing out turns them off here.",
+    "blocked": "Your browser blocks notifications from this site. Allow them in the browser’s site settings, then turn them on here.",
+    "unsupported": "This browser cannot show notifications from the app. On iPhone and iPad, add the app to the home screen first.",
+    "offline": "Not available offline",
+    "enableFailed": "Notifications could not be turned on. Please try again.",
+    "disableFailed": "Notifications could not be turned off. Please try again."
   }
 }

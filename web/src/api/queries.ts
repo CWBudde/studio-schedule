@@ -9,6 +9,14 @@ import {
 } from '@tanstack/react-query';
 import { chooseLanguage, supportedLanguage } from '@/i18n';
 import {
+  type DeviceSubscription,
+  deviceLabel,
+  pushDevice,
+  pushOwner,
+  setPushOwner,
+} from '@/features/push/device';
+import { clearOfflineCache } from '@/lib/offlineCache';
+import {
   api,
   type ConfirmEmailBody,
   type LoginBody,
@@ -258,9 +266,11 @@ export const adminQueryKey = ['admin'] as const;
  * example), so every other query is reset: it loses the data of the previous
  * identity and refetches if it is shown. Admin queries are dropped instead,
  * so a page that shows one does not ask again with the new identity before
- * it renders the change.
+ * it renders the change. The offline copy of the cache goes too (ADR 0017):
+ * it held the previous identity's lessons.
  */
 function changeIdentity(queryClient: QueryClient, me: Me | null) {
+  void clearOfflineCache();
   queryClient.removeQueries({ queryKey: adminQueryKey });
   queryClient.setQueryData(meQuery.queryKey, me);
   const meHash = hashKey(meQuery.queryKey);
@@ -549,7 +559,11 @@ export const removeDependentMutation = (queryClient: QueryClient) =>
 /** Signs out; the `me` query becomes null. */
 export const logoutMutation = (queryClient: QueryClient) =>
   mutationOptions({
-    mutationFn: () => expectOk(api.POST('/api/v1/auth/logout')),
+    mutationFn: async () => {
+      // This device stops getting the account's notifications (ADR 0017).
+      await forgetPushDevice();
+      await expectOk(api.POST('/api/v1/auth/logout'));
+    },
     onSuccess: () => changeIdentity(queryClient, null),
   });
 
@@ -2395,6 +2409,120 @@ export const revokeCalendarFeedMutation = (queryClient: QueryClient) =>
       expectOk(api.DELETE('/api/v1/my/calendar-feeds/{feedId}', { params: { path: { feedId } } })),
     onSettled: () => refreshCalendarFeeds(queryClient),
   });
+
+/** Whether the installation sends web push notifications, and the VAPID key to subscribe with (ADR 0017). */
+export type PushStatus = components['schemas']['PushStatus'];
+
+/** Prefix of the web push query keys. */
+export const pushQueryKey = ['push'] as const;
+
+/** Whether push is on (getPushStatus); it changes only with the server's configuration. */
+export const pushStatusQuery = queryOptions({
+  queryKey: [...pushQueryKey, 'status'],
+  queryFn: ({ signal }) => unwrap(api.GET('/api/v1/my/push', { signal })),
+  staleTime: Infinity,
+});
+
+/** This device's notifications for an account: on, and what the browser allows. */
+export interface PushDeviceState {
+  on: boolean;
+  permission: NotificationPermission;
+}
+
+/**
+ * Whether this device gets the account's notifications: it has a
+ * subscription, and this account turned it on (pushOwner).
+ */
+export const pushDeviceQuery = (accountId: string) =>
+  queryOptions({
+    queryKey: [...pushQueryKey, 'device', accountId],
+    queryFn: async (): Promise<PushDeviceState> => ({
+      on: pushOwner() === accountId && (await pushDevice.current()) !== null,
+      permission: pushDevice.permission(),
+    }),
+  });
+
+/** The browser refused the permission to show notifications. */
+export class NotificationsBlockedError extends Error {
+  constructor() {
+    super('Notifications are blocked');
+    this.name = 'NotificationsBlockedError';
+  }
+}
+
+/** Saves this device's subscription for the signed-in account (savePushSubscription). */
+const savePushSubscription = (sub: DeviceSubscription) =>
+  expectOk(
+    api.POST('/api/v1/my/push/subscriptions', { body: { ...sub, deviceLabel: deviceLabel() } }),
+  );
+
+/**
+ * Turns notifications on for this device: asks the browser's permission,
+ * subscribes (or takes the device's subscription over from an account that
+ * signed in here before) and saves it for the account.
+ */
+export const enablePushMutation = (queryClient: QueryClient, accountId: string) =>
+  mutationOptions({
+    mutationFn: async (publicKey: string | undefined) => {
+      if ((await pushDevice.requestPermission()) !== 'granted')
+        throw new NotificationsBlockedError();
+      const sub = (await pushDevice.current()) ?? (await pushDevice.subscribe(publicKey));
+      await savePushSubscription(sub);
+      setPushOwner(accountId);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: [...pushQueryKey, 'device'] }),
+  });
+
+/** Turns notifications off for this device: the server forgets it, then the browser. */
+export const disablePushMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: async () => {
+      const sub = await pushDevice.current();
+      if (sub) {
+        await expectOk(
+          api.DELETE('/api/v1/my/push/subscriptions', { body: { endpoint: sub.endpoint } }),
+        );
+        await pushDevice.unsubscribe();
+      }
+      setPushOwner(null);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: [...pushQueryKey, 'device'] }),
+  });
+
+/**
+ * Saves this device's subscription again if the account turned it on, so
+ * the server sees it is still in use (it drops subscriptions unused for six
+ * months). Failures are ignored: it is tried again next time.
+ */
+export async function refreshPushSubscription(accountId: string): Promise<void> {
+  if (pushOwner() !== accountId) return;
+  try {
+    const sub = await pushDevice.current();
+    if (sub) await savePushSubscription(sub);
+  } catch {
+    // Offline or push off: next time.
+  }
+}
+
+/**
+ * Before a sign-out: the device stops getting notifications (ADR 0017).
+ * Best effort; the sign-out goes on whatever happens here.
+ */
+async function forgetPushDevice(): Promise<void> {
+  if (!pushOwner()) return;
+  try {
+    const sub = await pushDevice.current();
+    if (sub) {
+      await api.DELETE('/api/v1/my/push/subscriptions', { body: { endpoint: sub.endpoint } });
+      await pushDevice.unsubscribe();
+    }
+  } catch {
+    // The push service drops a subscription the server keeps once the
+    // browser unsubscribed; the server then deletes it (410).
+  } finally {
+    setPushOwner(null);
+  }
+}
 
 /** A pass type of the school's catalogue (office). */
 export type PassType = components['schemas']['PassType'];

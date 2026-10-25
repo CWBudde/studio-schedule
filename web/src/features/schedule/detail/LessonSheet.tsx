@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { canAdminister } from '@/features/admin/access';
+import { useOnline } from '@/lib/online';
 import { formatDayHeading, formatTimeRange, formatTimestamp, schoolDateOf } from '@/lib/schoolTime';
 import { LessonActions } from '../admin/LessonActions';
 import { BookingSection } from '../booking/BookingSection';
@@ -87,6 +88,7 @@ function LessonSheetBody({ lessonId, onDeleted }: { lessonId: string; onDeleted:
   const { t } = useTranslation('schedule');
   const settings = useQuery(publicSettingsQuery);
   const lesson = useQuery(lessonQuery(lessonId));
+  const online = useOnline();
 
   if (isNotFound(lesson.error)) {
     return (
@@ -125,6 +127,17 @@ function LessonSheetBody({ lessonId, onDeleted }: { lessonId: string; onDeleted:
           </Alert>
         </div>
       </>
+    );
+  }
+
+  // Offline, a lesson opened before shows from the offline cache; any other
+  // cannot load until the connection is back (ADR 0017).
+  if (!online && (!lesson.data || !settings.data)) {
+    return (
+      <SheetHeader className="pr-12">
+        <SheetTitle className="text-lg">{t('detail.title')}</SheetTitle>
+        <SheetDescription>{t('detail.offline')}</SheetDescription>
+      </SheetHeader>
     );
   }
 

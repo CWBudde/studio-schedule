@@ -252,6 +252,14 @@ describe('WasmBridge', () => {
     expect(onSaveFailed).toHaveBeenCalledWith('QuotaExceededError');
   });
 
+  it("hands the backend's web push notifications to the page", () => {
+    const worker = new FakeWorker();
+    const onNotify = vi.fn();
+    new WasmBridge(worker, undefined, { onNotify });
+    worker.emit({ type: 'notify', payload: '{"title":"A place is free: Tap"}' });
+    expect(onNotify).toHaveBeenCalledWith('{"title":"A place is free: Tap"}');
+  });
+
   it('works as the fetch implementation of openapi-fetch', async () => {
     const worker = new FakeWorker();
     worker.respond = (m) =>

@@ -6,12 +6,15 @@ import { BackendGate } from '@/components/layout/BackendGate';
 import { DemoBanner } from '@/components/layout/DemoBanner';
 import { DemoNotices } from '@/components/layout/DemoNotices';
 import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner';
+import { OfflineBanner } from '@/components/layout/OfflineBanner';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { AnnouncementBanner } from '@/features/announcements/AnnouncementBanner';
+import { usePushKeepAlive } from '@/features/push/usePushKeepAlive';
 
 export function RootLayout() {
   const { t } = useTranslation();
+  usePushKeepAlive();
   return (
     <div className="flex min-h-svh flex-col">
       <a
@@ -21,6 +24,7 @@ export function RootLayout() {
         {t('a11y.skipToContent')}
       </a>
       <DemoBanner />
+      <OfflineBanner />
       <ImpersonationBanner />
       <AppHeader />
       <AnnouncementBanner />

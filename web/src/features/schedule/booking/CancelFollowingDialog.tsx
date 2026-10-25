@@ -176,6 +176,7 @@ export function CancelFollowingDialog({
             {t('booking.following.keep')}
           </AlertDialogCancel>
           <Button
+            requiresOnline
             variant="destructive"
             disabled={apply.isPending || bookings.length === 0}
             onClick={onConfirm}

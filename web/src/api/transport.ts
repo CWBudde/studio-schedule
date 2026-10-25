@@ -1,6 +1,9 @@
+import { onlineManager } from '@tanstack/react-query';
 import { transport } from '@/lib/env';
+import { isWrite, OfflineError } from '@/lib/online';
 import { setBackendStatus } from './backendStatus';
 import { WasmBridge } from './wasm/bridge';
+import { showDemoNotification } from './wasm/demoNotification';
 import { clearSnapshot, indexedDbStorage, resetDemoData } from './wasm/persistence';
 import { TAKEOVER_WAIT_MS, TabLock } from './wasm/tabLock';
 
@@ -78,6 +81,7 @@ function startBridge(): WasmBridge {
   });
   const started = new WasmBridge(worker, setBackendStatus, {
     onSaveFailed: () => notify('save-failed'),
+    onNotify: (payload) => void showDemoNotification(payload),
   });
   // Best effort: save what is pending before the tab goes away.
   const flush = () => void started.flush();
@@ -172,8 +176,12 @@ async function wasmFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
 
 /**
  * `fetch` used by the API client: the browser's fetch in HTTP mode, the
- * worker-hosted Go backend in WASM mode.
+ * worker-hosted Go backend in WASM mode. Offline it sends no write at all
+ * (OfflineError): the app is read-only then (ADR 0017), also in the demo,
+ * whose backend runs in the browser.
  */
 export function transportFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const method = init?.method ?? (input instanceof Request ? input.method : 'GET');
+  if (isWrite(method) && !onlineManager.isOnline()) return Promise.reject(new OfflineError());
   return transport === 'wasm' ? wasmFetch(input, init) : globalThis.fetch(input, init);
 }

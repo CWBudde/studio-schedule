@@ -2,8 +2,12 @@ import { QueryClient } from '@tanstack/react-query';
 import { createBrowserHistory, createRouter } from '@tanstack/react-router';
 import { ApiError, sessionCaches } from '@/api/queries';
 import { routerHistory } from '@/lib/env';
+import { watchOnline } from '@/lib/online';
 import { createAppHashHistory } from '@/lib/hashHistory';
 import { routeTree } from './routeTree.gen';
+
+// Offline (ADR 0017) queries pause and show the offline cache.
+watchOnline();
 
 export const queryClient: QueryClient = new QueryClient({
   // Any 401 signs out and clears the cache.
@@ -16,6 +20,12 @@ export const queryClient: QueryClient = new QueryClient({
       retry: (failures, error) =>
         failures < 1 && !(error instanceof ApiError && error.status < 500),
       refetchOnWindowFocus: false,
+    },
+    mutations: {
+      // A write runs at once, offline too, where the transport refuses it
+      // (OfflineError) rather than sending it later unseen: the app is
+      // read-only offline (ADR 0017).
+      networkMode: 'always',
     },
   },
 });
