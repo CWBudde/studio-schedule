@@ -10,7 +10,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
-	"strings"
 	"testing"
 )
 
@@ -44,12 +43,10 @@ func b64(t *testing.T, s string) []byte {
 func rfcSubscription(t *testing.T) Subscription {
 	t.Helper()
 
-	p, a, err := ParseSubscriptionKeys(rfcUAPublic, rfcAuth)
-	if err != nil {
-		t.Fatal(err)
+	return Subscription{
+		Endpoint: "https://push.example.net/push/JzLQ3raZJfFBR0aqvOMsLrt54w4rJUsV",
+		P256DH:   [PublicKeyLen]byte(b64(t, rfcUAPublic)), Auth: [AuthLen]byte(b64(t, rfcAuth)),
 	}
-
-	return Subscription{Endpoint: "https://push.example.net/push/JzLQ3raZJfFBR0aqvOMsLrt54w4rJUsV", P256DH: p, Auth: a}
 }
 
 func rfcSender(t *testing.T) *ecdh.PrivateKey {
@@ -153,28 +150,6 @@ func TestEncryptPayloadLimit(t *testing.T) {
 	_, err = Encrypt(sub, bytes.Repeat([]byte("x"), MaxPayload+1))
 	if !errors.Is(err, ErrPayloadTooLarge) {
 		t.Errorf("want ErrPayloadTooLarge, got %v", err)
-	}
-}
-
-func TestParseSubscriptionKeys(t *testing.T) {
-	t.Parallel()
-
-	notOnCurve := "BA" + strings.Repeat("A", 85) // 0x04 and zeros: not a point
-
-	for name, keys := range map[string][2]string{
-		"short p256dh":     {"BCVx", rfcAuth},
-		"not on the curve": {notOnCurve, rfcAuth},
-		"short auth":       {rfcUAPublic, "BTBZ"},
-		"not base64":       {rfcUAPublic, "!!!"},
-	} {
-		if _, _, err := ParseSubscriptionKeys(keys[0], keys[1]); !errors.Is(err, ErrInvalidKey) {
-			t.Errorf("%s: want ErrInvalidKey, got %v", name, err)
-		}
-	}
-
-	// Padding is accepted.
-	if _, _, err := ParseSubscriptionKeys(rfcUAPublic, rfcAuth+"=="); err != nil {
-		t.Errorf("padded auth: %v", err)
 	}
 }
 

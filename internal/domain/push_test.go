@@ -1,6 +1,7 @@
 package domain_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +27,7 @@ func TestPushValidate(t *testing.T) {
 			"zero id":           func(s *domain.PushSubscription) { s.ID = domain.PushSubscriptionID{} },
 			"zero account":      func(s *domain.PushSubscription) { s.AccountID = domain.AccountID{} },
 			"plain http":        func(s *domain.PushSubscription) { s.Endpoint = "http://push.example.net/push/abc" },
+			"upper-case scheme": func(s *domain.PushSubscription) { s.Endpoint = "HTTPS://push.example.net/push/abc" },
 			"no host":           func(s *domain.PushSubscription) { s.Endpoint = "https:///push" },
 			"credentials":       func(s *domain.PushSubscription) { s.Endpoint = "https://u:p@push.example.net/x" },
 			"long endpoint":     func(s *domain.PushSubscription) { s.Endpoint += strings.Repeat("x", 2048) },
@@ -61,4 +63,33 @@ func TestPushValidate(t *testing.T) {
 			"sent before create": func(m *domain.PushMessage) { m.SentAt, m.NextAttemptAt = t0.Add(-time.Second), time.Time{} },
 		})
 	})
+}
+
+func TestParsePushKeys(t *testing.T) {
+	t.Parallel()
+
+	// The keys of RFC 8291's example.
+	const p256dh = "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4"
+	const auth = "BTBZMqHH6r4Tts7J_aSIgg"
+
+	pub, secret, err := domain.ParsePushKeys(p256dh, auth+"==") // padding is accepted
+	if err != nil || pub[0] != 4 || secret[0] != 0x05 {
+		t.Fatalf("ParsePushKeys: %x %x %v", pub[:2], secret[:2], err)
+	}
+
+	notOnCurve := "BA" + strings.Repeat("A", 85) // 0x04 and zeros: not a point
+
+	for name, tc := range map[string]struct{ p256dh, auth, field string }{
+		"short p256dh":     {"BCVx", auth, "keys.p256dh"},
+		"not on the curve": {notOnCurve, auth, "keys.p256dh"},
+		"short auth":       {p256dh, "BTBZ", "keys.auth"},
+		"not base64":       {p256dh, "!!!", "keys.auth"},
+	} {
+		_, _, err := domain.ParsePushKeys(tc.p256dh, tc.auth)
+
+		var fe *domain.FieldError
+		if !errors.As(err, &fe) || fe.Field != tc.field || !errors.Is(err, domain.ErrValidation) {
+			t.Errorf("%s: want a field error on %s, got %v", name, tc.field, err)
+		}
+	}
 }

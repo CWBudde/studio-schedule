@@ -9,7 +9,6 @@
 package webpush
 
 import (
-	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -116,27 +115,6 @@ func (k Keys) PrivateKey() string {
 
 // IsZero reports whether k holds no key.
 func (k Keys) IsZero() bool { return k.private == nil }
-
-// ParseSubscriptionKeys decodes the keys of a browser subscription
-// (PushSubscription.toJSON().keys, base64url): the ECDH public key must be
-// a point on P-256, the authentication secret 16 bytes.
-func ParseSubscriptionKeys(p256dh, auth string) (pub [PublicKeyLen]byte, secret [AuthLen]byte, err error) {
-	p, err := decodeBase64URL(p256dh)
-	if err != nil || len(p) != PublicKeyLen {
-		return pub, secret, fmt.Errorf("%w: p256dh must be the base64url of a 65-byte point", ErrInvalidKey)
-	}
-
-	if _, err := ecdh.P256().NewPublicKey(p); err != nil {
-		return pub, secret, fmt.Errorf("%w: p256dh is not a P-256 point", ErrInvalidKey)
-	}
-
-	a, err := decodeBase64URL(auth)
-	if err != nil || len(a) != AuthLen {
-		return pub, secret, fmt.Errorf("%w: auth must be the base64url of 16 bytes", ErrInvalidKey)
-	}
-
-	return [PublicKeyLen]byte(p), [AuthLen]byte(a), nil
-}
 
 // decodeBase64URL accepts base64url with or without padding.
 func decodeBase64URL(s string) ([]byte, error) {

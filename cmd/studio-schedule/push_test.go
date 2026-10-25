@@ -49,7 +49,7 @@ func TestPushSenderErrors(t *testing.T) {
 	}
 
 	sub := domain.PushSubscription{}
-	p256dh, auth, err := webpush.ParseSubscriptionKeys(
+	p256dh, auth, err := domain.ParsePushKeys(
 		"BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4", "BTBZMqHH6r4Tts7J_aSIgg")
 	if err != nil {
 		t.Fatal(err)

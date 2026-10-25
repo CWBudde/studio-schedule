@@ -199,12 +199,14 @@ func (s *Sender) Send(ctx context.Context, sub Subscription, payload []byte, opt
 }
 
 // ValidateEndpoint checks a subscription endpoint: an absolute https URL
-// with a host name, without credentials, at most 2048 bytes long.
+// (a literal, lowercase "https://") with a host name, without
+// credentials, at most 2048 bytes long.
 func ValidateEndpoint(endpoint string) error {
 	const maxLen = 2048
 
 	u, err := url.Parse(endpoint)
-	if err != nil || len(endpoint) > maxLen || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
+	if err != nil || len(endpoint) > maxLen || !strings.HasPrefix(endpoint, "https://") || u.Hostname() == "" ||
+		u.User != nil {
 		return fmt.Errorf("%w: the endpoint must be an https URL", ErrInvalidEndpoint)
 	}
 
