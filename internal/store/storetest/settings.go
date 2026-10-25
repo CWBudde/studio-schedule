@@ -18,6 +18,7 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 		ReleaseWeekday: time.Saturday, ReleaseTime: domain.TimeOfDay{Hour: 9, Minute: 30}, ReleaseWeeksAhead: 2,
 		BookingCutoff: 30 * time.Minute, CancellationCutoff: 12 * time.Hour, DefaultVisibleDays: 21,
 		LegalNotice:          "Contract School, Example Street 1, 00000 Example Town",
+		AccentColor:          "#7a1f3d",
 		WaitlistInviteExpiry: 90 * time.Minute,
 		RedemptionMode:       domain.RedeemOnAttendance,
 		Receipts: domain.ReceiptSettings{
@@ -59,6 +60,7 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 			updated.SchoolName = "Renamed School"
 			updated.BookingCutoff = 0
 			updated.LegalNotice = ""
+			updated.AccentColor = ""
 			updated.WaitlistInviteExpiry = 30 * 24 * time.Hour
 			updated.RedemptionMode = domain.RedeemOnBooking
 			updated.Receipts = domain.ReceiptSettings{}
@@ -102,7 +104,17 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 			}
 			png := domain.Logo{ContentType: domain.LogoPNG, Data: []byte("\x89PNG\r\n\x1a\nlogo")}
 
+			jpeg := domain.Logo{ContentType: domain.LogoJPEG, Data: []byte{0xFF, 0xD8, 0xFF, 'l', 'o', 'g', 'o'}}
+
+			info := func() (domain.LogoInfo, error) {
+				return query(e, func(ctx context.Context, tx store.Tx) (domain.LogoInfo, error) {
+					return tx.Settings().LogoInfo(ctx)
+				})
+			}
+
 			_, err := logo()
+			wantErr(e.t, err, domain.ErrNotFound)
+			_, err = info()
 			wantErr(e.t, err, domain.ErrNotFound)
 			wantErr(e.t, putLogo(png), domain.ErrNotFound)
 
@@ -111,6 +123,10 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 			got, err := logo()
 			if err != nil || !got.IsZero() {
 				e.t.Fatalf("no logo: got %+v, %v", got, err)
+			}
+
+			if li, err := info(); err != nil || !li.IsZero() || li != (domain.LogoInfo{}) {
+				e.t.Fatalf("no logo: info %+v, %v", li, err)
 			}
 
 			if err := putLogo(png); err != nil {
@@ -122,11 +138,26 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 				e.t.Fatalf("got %+v, %v", got, err)
 			}
 
+			// The digest is the one of what was written.
+			if li, err := info(); err != nil || li != (domain.LogoInfo{ContentType: domain.LogoPNG, Digest: png.Digest()}) {
+				e.t.Fatalf("logo info %+v, %v", li, err)
+			}
+
 			// Settings writes keep the logo.
 			put(e, want)
 
 			if got, _ = logo(); got.IsZero() {
 				e.t.Fatal("the logo is gone after a settings write")
+			}
+
+			// A new logo, a new digest.
+			if err := putLogo(jpeg); err != nil {
+				e.t.Fatal(err)
+			}
+
+			if li, err := info(); err != nil || li != (domain.LogoInfo{ContentType: domain.LogoJPEG, Digest: jpeg.Digest()}) ||
+				li.Digest == png.Digest() {
+				e.t.Fatalf("new logo info %+v, %v", li, err)
 			}
 
 			err = e.read(func(ctx context.Context, tx store.Tx) error { return tx.Settings().PutLogo(ctx, domain.Logo{}) })
@@ -139,6 +170,38 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 			if got, _ = logo(); !got.IsZero() {
 				e.t.Fatalf("logo not removed: %+v", got)
 			}
+
+			if li, err := info(); err != nil || !li.IsZero() {
+				e.t.Fatalf("removed logo: info %+v, %v", li, err)
+			}
+		},
+		"Usage": func(e *env) {
+			usage := func() store.SettingsUsage {
+				e.t.Helper()
+
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) (store.SettingsUsage, error) {
+					return tx.Settings().Usage(ctx)
+				})
+			}
+
+			// No settings needed, and nothing uses them yet.
+			wantEqual(e.t, usage(), store.SettingsUsage{})
+
+			// A free pass type and a pass given away fix no currency.
+			free := e.newPassType("Trial")
+			free.Price, free.VATRate = 0, 0
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.PassTypes().Create(ctx, free) })
+			e.pass(free, e.person("Ada", "Example"), 1, t0)
+			wantEqual(e.t, usage(), store.SettingsUsage{})
+
+			e.passType("10 visits")
+			wantEqual(e.t, usage(), store.SettingsUsage{Prices: true})
+
+			e.lesson(e.setting(), t0, 10)
+			wantEqual(e.t, usage(), store.SettingsUsage{Lessons: true, Prices: true})
+
+			e.receipt(e.newReceipt(2026, 1, e.person("Ben", "Example")))
+			wantEqual(e.t, usage(), store.SettingsUsage{Lessons: true, Prices: true, Receipts: true})
 		},
 		"ReadOnlyRejectsWrites": func(e *env) {
 			err := e.read(func(ctx context.Context, tx store.Tx) error { return tx.Settings().Put(ctx, want) })

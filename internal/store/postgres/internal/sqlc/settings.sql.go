@@ -16,7 +16,7 @@ SELECT
     school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time,
     release_weeks_ahead, booking_cutoff, cancellation_cutoff, default_visible_days, legal_notice,
     waitlist_invite_expiry, redemption_mode, issuer_name, issuer_address, issuer_tax_id, issuer_email,
-    issuer_phone, tax_mode, tax_note, receipt_footer
+    issuer_phone, tax_mode, tax_note, receipt_footer, accent_color
 FROM settings
 `
 
@@ -43,6 +43,7 @@ type GetSettingsRow struct {
 	TaxMode              pgtype.Text
 	TaxNote              pgtype.Text
 	ReceiptFooter        pgtype.Text
+	AccentColor          pgtype.Text
 }
 
 // Everything but the logo, which only receipts read (GetSettingsLogo).
@@ -72,6 +73,7 @@ func (q *Queries) GetSettings(ctx context.Context) (GetSettingsRow, error) {
 		&i.TaxMode,
 		&i.TaxNote,
 		&i.ReceiptFooter,
+		&i.AccentColor,
 	)
 	return i, err
 }
@@ -92,14 +94,31 @@ func (q *Queries) GetSettingsLogo(ctx context.Context) (GetSettingsLogoRow, erro
 	return i, err
 }
 
+const getSettingsLogoInfo = `-- name: GetSettingsLogoInfo :one
+SELECT logo_type, logo_digest FROM settings
+`
+
+type GetSettingsLogoInfoRow struct {
+	LogoType   pgtype.Text
+	LogoDigest pgtype.Text
+}
+
+// The logo's type and digest, without reading the logo.
+func (q *Queries) GetSettingsLogoInfo(ctx context.Context) (GetSettingsLogoInfoRow, error) {
+	row := q.db.QueryRow(ctx, getSettingsLogoInfo)
+	var i GetSettingsLogoInfoRow
+	err := row.Scan(&i.LogoType, &i.LogoDigest)
+	return i, err
+}
+
 const putSettings = `-- name: PutSettings :exec
 INSERT INTO settings (
     school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time,
     release_weeks_ahead, booking_cutoff, cancellation_cutoff, default_visible_days, legal_notice,
     waitlist_invite_expiry, redemption_mode, issuer_name, issuer_address, issuer_tax_id, issuer_email,
-    issuer_phone, tax_mode, tax_note, receipt_footer
+    issuer_phone, tax_mode, tax_note, receipt_footer, accent_color
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
 )
 ON CONFLICT (id) DO UPDATE SET
     school_name = excluded.school_name,
@@ -123,7 +142,8 @@ ON CONFLICT (id) DO UPDATE SET
     issuer_phone = excluded.issuer_phone,
     tax_mode = excluded.tax_mode,
     tax_note = excluded.tax_note,
-    receipt_footer = excluded.receipt_footer
+    receipt_footer = excluded.receipt_footer,
+    accent_color = excluded.accent_color
 `
 
 type PutSettingsParams struct {
@@ -149,6 +169,7 @@ type PutSettingsParams struct {
 	TaxMode              pgtype.Text
 	TaxNote              pgtype.Text
 	ReceiptFooter        pgtype.Text
+	AccentColor          pgtype.Text
 }
 
 func (q *Queries) PutSettings(ctx context.Context, arg PutSettingsParams) error {
@@ -175,23 +196,47 @@ func (q *Queries) PutSettings(ctx context.Context, arg PutSettingsParams) error 
 		arg.TaxMode,
 		arg.TaxNote,
 		arg.ReceiptFooter,
+		arg.AccentColor,
 	)
 	return err
 }
 
 const putSettingsLogo = `-- name: PutSettingsLogo :execrows
-UPDATE settings SET logo = $1, logo_type = $2
+UPDATE settings SET logo = $1, logo_type = $2, logo_digest = $3
 `
 
 type PutSettingsLogoParams struct {
-	Logo     []byte
-	LogoType pgtype.Text
+	Logo       []byte
+	LogoType   pgtype.Text
+	LogoDigest pgtype.Text
 }
 
 func (q *Queries) PutSettingsLogo(ctx context.Context, arg PutSettingsLogoParams) (int64, error) {
-	result, err := q.db.Exec(ctx, putSettingsLogo, arg.Logo, arg.LogoType)
+	result, err := q.db.Exec(ctx, putSettingsLogo, arg.Logo, arg.LogoType, arg.LogoDigest)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const settingsUsage = `-- name: SettingsUsage :one
+SELECT
+    EXISTS (SELECT 1 FROM lessons) AS lessons,
+    (EXISTS (SELECT 1 FROM pass_types WHERE price > 0) OR EXISTS (SELECT 1 FROM passes WHERE price_paid > 0))::boolean
+        AS prices,
+    EXISTS (SELECT 1 FROM receipts) AS receipts
+`
+
+type SettingsUsageRow struct {
+	Lessons  bool
+	Prices   bool
+	Receipts bool
+}
+
+// What fixes the time zone (lessons) and the currency (prices, receipts).
+func (q *Queries) SettingsUsage(ctx context.Context) (SettingsUsageRow, error) {
+	row := q.db.QueryRow(ctx, settingsUsage)
+	var i SettingsUsageRow
+	err := row.Scan(&i.Lessons, &i.Prices, &i.Receipts)
+	return i, err
 }

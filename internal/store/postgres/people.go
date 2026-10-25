@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/postgres/internal/sqlc"
 )
 
@@ -34,6 +35,7 @@ func (r settingsRepo) Get(ctx context.Context) (domain.Settings, error) {
 		CancellationCutoff: fromPgInterval(row.CancellationCutoff),
 		DefaultVisibleDays: int(row.DefaultVisibleDays),
 		LegalNotice:        row.LegalNotice.String,
+		AccentColor:        row.AccentColor.String,
 
 		WaitlistInviteExpiry: fromPgInterval(row.WaitlistInviteExpiry),
 		RedemptionMode:       domain.RedemptionMode(row.RedemptionMode),
@@ -60,10 +62,30 @@ func (r settingsRepo) Logo(ctx context.Context) (domain.Logo, error) {
 	return domain.Logo{ContentType: row.LogoType.String, Data: row.Logo}, nil
 }
 
+func (r settingsRepo) LogoInfo(ctx context.Context) (domain.LogoInfo, error) {
+	row, err := r.q.GetSettingsLogoInfo(ctx)
+	if err != nil {
+		return domain.LogoInfo{}, notFound("settings", err)
+	}
+
+	return domain.LogoInfo{ContentType: row.LogoType.String, Digest: row.LogoDigest.String}, nil
+}
+
+func (r settingsRepo) Usage(ctx context.Context) (store.SettingsUsage, error) {
+	row, err := r.q.SettingsUsage(ctx)
+	if err != nil {
+		return store.SettingsUsage{}, mapErr(err)
+	}
+
+	return store.SettingsUsage{Lessons: row.Lessons, Prices: row.Prices, Receipts: row.Receipts}, nil
+}
+
 func (r settingsRepo) PutLogo(ctx context.Context, l domain.Logo) error {
 	params := sqlc.PutSettingsLogoParams{}
 	if !l.IsZero() {
-		params = sqlc.PutSettingsLogoParams{Logo: l.Data, LogoType: pgText(l.ContentType)}
+		params = sqlc.PutSettingsLogoParams{
+			Logo: l.Data, LogoType: pgText(l.ContentType), LogoDigest: pgText(l.Digest()),
+		}
 	}
 
 	n, err := r.q.PutSettingsLogo(ctx, params)
@@ -100,6 +122,7 @@ func (r settingsRepo) Put(ctx context.Context, s domain.Settings) error {
 		CancellationCutoff: pgInterval(s.CancellationCutoff),
 		DefaultVisibleDays: visibleDays,
 		LegalNotice:        pgText(s.LegalNotice),
+		AccentColor:        pgText(s.AccentColor),
 
 		WaitlistInviteExpiry: pgInterval(s.WaitlistInviteExpiry),
 		RedemptionMode:       string(s.RedemptionMode),

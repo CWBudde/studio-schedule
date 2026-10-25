@@ -2,6 +2,8 @@ package domain
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"slices"
@@ -369,6 +371,32 @@ const (
 
 // IsZero reports whether there is no logo.
 func (l Logo) IsZero() bool { return len(l.Data) == 0 }
+
+// Digest identifies the logo: the hex SHA-256 of its content type, a line
+// feed and its bytes, so it changes with either. The stores keep it next to
+// the logo (LogoInfo), so a cache check (the logo's ETag, ADR 0013) need
+// not read the image. "" for no logo.
+func (l Logo) Digest() string {
+	if l.IsZero() {
+		return ""
+	}
+
+	h := sha256.New()
+	h.Write([]byte(l.ContentType + "\n"))
+	h.Write(l.Data)
+
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// LogoInfo describes the logo without its bytes: its content type and its
+// Digest. The zero LogoInfo is no logo.
+type LogoInfo struct {
+	ContentType string
+	Digest      string
+}
+
+// IsZero reports whether there is no logo.
+func (l LogoInfo) IsZero() bool { return l.Digest == "" }
 
 // Validate checks that the logo is a PNG or JPEG image within the size
 // limit whose bytes match its type. All errors wrap ErrValidation.

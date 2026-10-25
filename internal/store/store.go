@@ -129,6 +129,25 @@ type SettingsRepo interface {
 	// PutLogo replaces the logo; the zero Logo removes it. It fails with
 	// domain.ErrNotFound if no settings were stored.
 	PutLogo(ctx context.Context, l domain.Logo) error
+	// LogoInfo returns the content type and the digest of the logo
+	// (domain.Logo.Digest, kept when the logo is written) without reading
+	// it, the zero LogoInfo without one, or domain.ErrNotFound if no
+	// settings were stored.
+	LogoInfo(ctx context.Context) (domain.LogoInfo, error)
+	// Usage reports which data depends on the time zone and the currency
+	// (ADR 0013); it needs no stored settings.
+	Usage(ctx context.Context) (SettingsUsage, error)
+}
+
+// SettingsUsage is the data that fixes settings chosen at the first setup.
+type SettingsUsage struct {
+	// Lessons: some lesson exists, whose instants were computed in the
+	// school's time zone.
+	Lessons bool
+	// Prices: some pass type has a price above 0, or some pass was paid.
+	Prices bool
+	// Receipts: some receipt was issued.
+	Receipts bool
 }
 
 // PersonRepo stores persons and the guardian links between them.

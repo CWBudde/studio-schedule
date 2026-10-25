@@ -219,11 +219,27 @@ var codecs = []codec{
 	},
 	{
 		field: "logo",
+		// The logo alone: its digest is derived again on restore.
 		encode: func(enc *jsontext.Encoder, s *state) error {
-			return json.MarshalEncode(enc, s.logo, jsonOptions)
+			var l *domain.Logo
+			if s.logo != nil {
+				l = &s.logo.logo
+			}
+
+			return json.MarshalEncode(enc, l, jsonOptions)
 		},
 		decode: func(dec *jsontext.Decoder, s *state) error {
-			return json.UnmarshalDecode(dec, &s.logo, jsonOptions)
+			var l *domain.Logo
+			if err := json.UnmarshalDecode(dec, &l, jsonOptions); err != nil {
+				return err
+			}
+
+			s.logo = nil
+			if l != nil {
+				s.logo = newStoredLogo(*l)
+			}
+
+			return nil
 		},
 		// PutLogo stores a new pointer (or nil).
 		changed: func(before, after *state) bool { return before.logo != after.logo },

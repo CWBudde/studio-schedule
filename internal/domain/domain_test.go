@@ -1,6 +1,8 @@
 package domain_test
 
 import (
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,5 +87,57 @@ func TestSettingsValidate(t *testing.T) {
 		"huge booking cut":      func(s *domain.Settings) { s.BookingCutoff = 31 * 24 * time.Hour },
 		"huge cancel cut":       func(s *domain.Settings) { s.CancellationCutoff = 1<<63 - 1 },
 		"too many visible days": func(s *domain.Settings) { s.DefaultVisibleDays = 367 },
+		"regional locale":       func(s *domain.Settings) { s.DefaultLocale = "de-DE" },
+		"unknown locale":        func(s *domain.Settings) { s.DefaultLocale = "fr" },
+		"long name":             func(s *domain.Settings) { s.SchoolName = strings.Repeat("a", 201) },
+		"long legal notice":     func(s *domain.Settings) { s.LegalNotice = strings.Repeat("a", 2001) },
 	})
+}
+
+// The school's texts are limited in characters, as the API's maxLength and
+// the forms count them, not in bytes.
+func TestSettingsTextLengthsInCharacters(t *testing.T) {
+	t.Parallel()
+
+	s := domain.Settings{
+		SchoolName: strings.Repeat("ä", domain.MaxSchoolNameLength), Timezone: "Europe/Berlin", DefaultLocale: "de",
+		Currency: "EUR", ReceiptPrefix: "TS",
+		ReleaseWeekday: time.Sunday, ReleaseTime: domain.TimeOfDay{Hour: 18}, ReleaseWeeksAhead: 1,
+		DefaultVisibleDays: 14, WaitlistInviteExpiry: time.Hour, RedemptionMode: domain.RedeemOnAttendance,
+		LegalNotice: strings.Repeat("ü", domain.MaxLegalNoticeLength),
+	}
+	if err := s.Validate(); err != nil {
+		t.Fatalf("%d umlauts: %v", domain.MaxSchoolNameLength, err)
+	}
+
+	s.SchoolName += "ä"
+	if err := s.Validate(); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("one more: %v", err)
+	}
+}
+
+func TestMatchLocale(t *testing.T) {
+	t.Parallel()
+
+	for tag, want := range map[string]string{
+		"en": "en", "de": "de", "DE": "de", " de-DE ": "de", "de_AT": "de", "en-US": "en", "en-GB-oxendict": "en",
+	} {
+		if got, ok := domain.MatchLocale(tag); !ok || got != want {
+			t.Errorf("MatchLocale(%q) = %q, %v; want %q", tag, got, ok, want)
+		}
+
+		if got := domain.SchoolLocale(tag); got != want {
+			t.Errorf("SchoolLocale(%q) = %q, want %q", tag, got, want)
+		}
+	}
+
+	for _, tag := range []string{"", "fr", "fr-FR", "deu", "-de"} {
+		if got, ok := domain.MatchLocale(tag); ok {
+			t.Errorf("MatchLocale(%q) = %q, want no match", tag, got)
+		}
+
+		if got := domain.SchoolLocale(tag); got != domain.Locales[0] {
+			t.Errorf("SchoolLocale(%q) = %q, want the fallback %q", tag, got, domain.Locales[0])
+		}
+	}
 }

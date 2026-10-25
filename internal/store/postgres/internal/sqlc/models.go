@@ -307,6 +307,8 @@ type Setting struct {
 	ReceiptFooter        pgtype.Text
 	Logo                 []byte
 	LogoType             pgtype.Text
+	AccentColor          pgtype.Text
+	LogoDigest           pgtype.Text
 }
 
 type Staff struct {

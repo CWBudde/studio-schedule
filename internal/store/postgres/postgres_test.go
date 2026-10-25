@@ -466,7 +466,7 @@ func TestUniqueNamesMigration(t *testing.T) {
 	t.Cleanup(func() { _ = m.Close() })
 
 	for _, want := range []string{
-		"00017_receipts.sql", "00016_passes.sql", "00015_calendar_feeds.sql", "00014_lesson_notices.sql", "00013_staff_bookings.sql", "00012_waitlist.sql", "00011_class_member_bookings.sql",
+		"00018_settings_accent.sql", "00017_receipts.sql", "00016_passes.sql", "00015_calendar_feeds.sql", "00014_lesson_notices.sql", "00013_staff_bookings.sql", "00012_waitlist.sql", "00011_class_member_bookings.sql",
 		"00010_booking_rules.sql", "00009_lesson_admin.sql",
 		"00008_lesson_slots.sql", "00007_course_type_unique_names.sql",
 		"00006_catalog_unique_names.sql",
@@ -535,7 +535,7 @@ func TestLessonSlotsMigration(t *testing.T) {
 	t.Cleanup(func() { _ = m.Close() })
 
 	for _, want := range []string{
-		"00017_receipts.sql", "00016_passes.sql", "00015_calendar_feeds.sql", "00014_lesson_notices.sql", "00013_staff_bookings.sql", "00012_waitlist.sql", "00011_class_member_bookings.sql",
+		"00018_settings_accent.sql", "00017_receipts.sql", "00016_passes.sql", "00015_calendar_feeds.sql", "00014_lesson_notices.sql", "00013_staff_bookings.sql", "00012_waitlist.sql", "00011_class_member_bookings.sql",
 		"00010_booking_rules.sql", "00009_lesson_admin.sql",
 		"00008_lesson_slots.sql",
 	} {
@@ -595,6 +595,54 @@ func TestLessonSlotsMigration(t *testing.T) {
 		WHERE NOT detached AND cancel_note IS NULL AND canceled_at IS NULL AND canceled_by IS NULL`,
 	).Scan(&attached); err != nil || attached != 2 {
 		t.Errorf("undetached lessons = %d, %v; want 2", attached, err)
+	}
+}
+
+// TestSettingsMigration upgrades settings from before ADR 0013 (00018): the
+// default language becomes one of the app's locales, and a stored logo gets
+// the digest that domain.Logo.Digest computes.
+func TestSettingsMigration(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	logo := domain.Logo{ContentType: domain.LogoPNG, Data: []byte("\x89PNG\r\n\x1a\nlogo")}
+
+	for stored, want := range map[string]string{"de-DE": "de", " DE_at ": "de", "en": "en", "en-GB": "en", "fr-FR": "en"} {
+		t.Run(stored, func(t *testing.T) {
+			t.Parallel()
+
+			m, err := NewMigrator(newTestDatabase(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			t.Cleanup(func() { _ = m.Close() })
+
+			if res, err := m.Down(ctx); err != nil || res.Name != "00018_settings_accent.sql" {
+				t.Fatalf("down = %+v, %v; want 00018 rolled back", res, err)
+			}
+
+			if _, err := m.db.ExecContext(ctx, `INSERT INTO settings (school_name, timezone, default_locale, currency,
+				receipt_prefix, release_weekday, release_time, release_weeks_ahead, booking_cutoff, cancellation_cutoff,
+				default_visible_days, logo, logo_type)
+				VALUES ('Example School', 'Europe/Berlin', $1, 'EUR', 'R', 0, '18:00', 2, '0', '0', 14, $2, $3)`,
+				stored, logo.Data, logo.ContentType); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := m.Up(ctx); err != nil {
+				t.Fatalf("up: %v", err)
+			}
+
+			var locale, digest string
+			if err := m.db.QueryRowContext(ctx, `SELECT default_locale, logo_digest FROM settings`).Scan(&locale, &digest); err != nil {
+				t.Fatal(err)
+			}
+
+			if locale != want || digest != logo.Digest() {
+				t.Errorf("locale %q, digest %s; want %q, %s", locale, digest, want, logo.Digest())
+			}
+		})
 	}
 }
 

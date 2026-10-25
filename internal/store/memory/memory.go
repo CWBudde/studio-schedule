@@ -35,7 +35,7 @@ type Store struct {
 // state is cheap.
 type state struct {
 	settings *domain.Settings
-	logo     *domain.Logo // nil: none
+	logo     *storedLogo // nil: none
 
 	persons         table[domain.PersonID, domain.Person]
 	guardians       table[domain.Guardian, struct{}]
@@ -250,6 +250,22 @@ func instant(t time.Time) time.Time {
 	return t.UTC().Truncate(time.Microsecond)
 }
 
+// storedLogo is the logo with its digest, computed when it is written.
+type storedLogo struct {
+	logo   domain.Logo
+	digest string
+}
+
+// newStoredLogo returns l, which it owns from now on, with its digest; nil
+// for no logo.
+func newStoredLogo(l domain.Logo) *storedLogo {
+	if l.IsZero() {
+		return nil
+	}
+
+	return &storedLogo{logo: l, digest: l.Digest()}
+}
+
 type settingsRepo struct{ tx *tx }
 
 func (r settingsRepo) Get(context.Context) (domain.Settings, error) {
@@ -278,10 +294,34 @@ func (r settingsRepo) Logo(context.Context) (domain.Logo, error) {
 		return domain.Logo{}, nil
 	}
 
-	l := *r.tx.state.logo
+	l := r.tx.state.logo.logo
 	l.Data = slices.Clone(l.Data)
 
 	return l, nil
+}
+
+func (r settingsRepo) LogoInfo(context.Context) (domain.LogoInfo, error) {
+	switch {
+	case r.tx.state.settings == nil:
+		return domain.LogoInfo{}, notFound("settings")
+	case r.tx.state.logo == nil:
+		return domain.LogoInfo{}, nil
+	}
+
+	l := r.tx.state.logo
+
+	return domain.LogoInfo{ContentType: l.logo.ContentType, Digest: l.digest}, nil
+}
+
+func (r settingsRepo) Usage(context.Context) (store.SettingsUsage, error) {
+	s := r.tx.state
+
+	return store.SettingsUsage{
+		Lessons: s.lessons.exists(func(domain.Lesson) bool { return true }),
+		Prices: s.passTypes.exists(func(t domain.PassType) bool { return t.Price > 0 }) ||
+			s.passes.exists(func(p domain.Pass) bool { return p.PricePaid > 0 }),
+		Receipts: s.receipts.exists(func(domain.Receipt) bool { return true }),
+	}, nil
 }
 
 func (r settingsRepo) PutLogo(_ context.Context, l domain.Logo) error {
@@ -293,14 +333,8 @@ func (r settingsRepo) PutLogo(_ context.Context, l domain.Logo) error {
 		return notFound("settings")
 	}
 
-	if l.IsZero() {
-		r.tx.state.logo = nil
-
-		return nil
-	}
-
 	l.Data = slices.Clone(l.Data)
-	r.tx.state.logo = &l
+	r.tx.state.logo = newStoredLogo(l)
 
 	return nil
 }
