@@ -3,7 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 // End-to-end tests against the GitHub Pages demo build (`just demo-build`):
 // the real WASM backend in a Web Worker, served by `vite preview`.
 const base = '/studio-schedule/';
-const port = 4173;
+// E2E_PORT lets parallel worktrees run the suite side by side.
+const port = Number(process.env.E2E_PORT ?? 4173);
 const ci = !!process.env.CI;
 
 export default defineConfig({
