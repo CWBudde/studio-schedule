@@ -11,6 +11,29 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countUnsentOutboxMails = `-- name: CountUnsentOutboxMails :one
+SELECT
+    (SELECT count(*) FROM outbox_mails o
+        WHERE o.sent_at IS NULL AND o.next_attempt_at IS NOT NULL)::bigint AS pending,
+    (SELECT count(*) FROM outbox_mails o
+        WHERE o.sent_at IS NULL AND o.next_attempt_at IS NULL)::bigint AS failed
+`
+
+type CountUnsentOutboxMailsRow struct {
+	Pending int64
+	Failed  int64
+}
+
+// The status is derived as in domain.OutboxMail.Status. Each count reads
+// its partial index only: outbox_mails_due_idx for the pending mails,
+// outbox_mails_failed_idx for the failed ones.
+func (q *Queries) CountUnsentOutboxMails(ctx context.Context) (CountUnsentOutboxMailsRow, error) {
+	row := q.db.QueryRow(ctx, countUnsentOutboxMails)
+	var i CountUnsentOutboxMailsRow
+	err := row.Scan(&i.Pending, &i.Failed)
+	return i, err
+}
+
 const createOutboxMail = `-- name: CreateOutboxMail :exec
 INSERT INTO outbox_mails (
     id, recipient, subject, body_text, body_html, template, created_at,

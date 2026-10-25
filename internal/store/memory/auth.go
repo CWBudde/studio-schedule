@@ -313,6 +313,22 @@ func (r outboxRepo) PurgeBodies(_ context.Context, sentBefore time.Time) (int, e
 	return len(mails), nil
 }
 
+func (r outboxRepo) CountUnsent(context.Context) (store.OutboxCounts, error) {
+	var c store.OutboxCounts
+
+	for _, m := range r.tx.state.outbox.filter(func(m domain.OutboxMail) bool { return m.SentAt.IsZero() }) {
+		switch m.Status() {
+		case domain.MailPending:
+			c.Pending++
+		case domain.MailFailed:
+			c.Failed++
+		case domain.MailSent:
+		}
+	}
+
+	return c, nil
+}
+
 func (r outboxRepo) DeleteCreatedBefore(_ context.Context, before time.Time) (int, error) {
 	if err := r.tx.checkWritable(); err != nil {
 		return 0, err

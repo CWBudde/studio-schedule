@@ -118,6 +118,15 @@ func (r outboxRepo) PurgeBodies(ctx context.Context, sentBefore time.Time) (int,
 	return int(n), mapErr(err)
 }
 
+func (r outboxRepo) CountUnsent(ctx context.Context) (store.OutboxCounts, error) {
+	row, err := r.q.CountUnsentOutboxMails(ctx)
+	if err != nil {
+		return store.OutboxCounts{}, mapErr(err)
+	}
+
+	return store.OutboxCounts{Pending: int(row.Pending), Failed: int(row.Failed)}, nil
+}
+
 func (r outboxRepo) DeleteCreatedBefore(ctx context.Context, before time.Time) (int, error) {
 	n, err := r.q.DeleteOldOutboxMails(ctx, pgAt(before))
 

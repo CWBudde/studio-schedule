@@ -804,6 +804,15 @@ type OutboxRepo interface {
 	// DeleteCreatedBefore deletes every mail created before the instant,
 	// whatever its status, and returns how many it deleted.
 	DeleteCreatedBefore(ctx context.Context, before time.Time) (int, error)
+	// CountUnsent counts the mails that are not sent, by status (the
+	// metrics of the outbox).
+	CountUnsent(ctx context.Context) (OutboxCounts, error)
+}
+
+// OutboxCounts are the numbers of unsent mails by status.
+type OutboxCounts struct {
+	Pending int // domain.MailPending: another attempt is due
+	Failed  int // domain.MailFailed: delivery was given up
 }
 
 // OutboxFilter selects mails for OutboxRepo.List. Its zero value selects

@@ -42,5 +42,15 @@ LIMIT sqlc.arg(max_rows);
 UPDATE outbox_mails SET body_text = NULL, body_html = NULL
 WHERE sent_at < sqlc.arg(sent_before) AND body_text IS NOT NULL;
 
+-- name: CountUnsentOutboxMails :one
+-- The status is derived as in domain.OutboxMail.Status. Each count reads
+-- its partial index only: outbox_mails_due_idx for the pending mails,
+-- outbox_mails_failed_idx for the failed ones.
+SELECT
+    (SELECT count(*) FROM outbox_mails o
+        WHERE o.sent_at IS NULL AND o.next_attempt_at IS NOT NULL)::bigint AS pending,
+    (SELECT count(*) FROM outbox_mails o
+        WHERE o.sent_at IS NULL AND o.next_attempt_at IS NULL)::bigint AS failed;
+
 -- name: DeleteOldOutboxMails :execrows
 DELETE FROM outbox_mails WHERE created_at < sqlc.arg(created_before);

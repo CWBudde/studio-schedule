@@ -97,6 +97,33 @@ func testOutbox(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantSlice(e.t, listDue(e, t0, 1), []domain.OutboxMail{first})
 			wantSlice(e.t, listDue(e, t0.Add(time.Hour), 10), []domain.OutboxMail{first, edge, later})
 		},
+		"CountUnsent": func(e *env) {
+			count := func() store.OutboxCounts {
+				c, err := query(e, func(ctx context.Context, tx store.Tx) (store.OutboxCounts, error) {
+					return tx.Outbox().CountUnsent(ctx)
+				})
+				if err != nil {
+					e.t.Fatal(err)
+				}
+
+				return c
+			}
+
+			if got := count(); got != (store.OutboxCounts{}) {
+				e.t.Errorf("empty outbox: CountUnsent = %+v", got)
+			}
+
+			due := e.outboxMail(t0, t0)
+			later := e.outboxMail(t0, t0.Add(time.Hour))
+			sent := e.outboxMail(t0, time.Time{})
+			sent.SentAt = t0
+			failed := e.outboxMail(t0, time.Time{})
+			e.createMails(due, later, sent, failed)
+
+			if got, want := count(), (store.OutboxCounts{Pending: 2, Failed: 1}); got != want {
+				e.t.Errorf("CountUnsent = %+v, want %+v", got, want)
+			}
+		},
 		"ListDueNeedsReadWrite": func(e *env) {
 			// It locks the mails it returns.
 			_, err := query(e, func(ctx context.Context, tx store.Tx) ([]domain.OutboxMail, error) {

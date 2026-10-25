@@ -66,11 +66,6 @@ func NewMigrator(databaseURL string) (*Migrator, error) {
 		return nil, err
 	}
 
-	fsys, err := fs.Sub(migrationFiles, "migrations")
-	if err != nil {
-		return nil, err
-	}
-
 	locker, err := lock.NewPostgresSessionLocker()
 	if err != nil {
 		return nil, err
@@ -78,11 +73,11 @@ func NewMigrator(databaseURL string) (*Migrator, error) {
 
 	db := stdlib.OpenDB(*cfg.ConnConfig)
 
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, fsys, goose.WithSessionLocker(locker))
+	provider, err := newProvider(db, goose.WithSessionLocker(locker))
 	if err != nil {
 		_ = db.Close()
 
-		return nil, fmt.Errorf("postgres: migrations: %w", err)
+		return nil, err
 	}
 
 	return &Migrator{db: db, provider: provider}, nil
@@ -132,9 +127,42 @@ const appliedVersionsQuery = `SELECT version_id FROM (
 // ErrSchemaNewer if the database has migrations this binary does not know,
 // e.g. after rolling back to an older binary.
 func (m *Migrator) CheckSchema(ctx context.Context) error {
+	return checkSchema(ctx, m.db, embeddedVersions(m.provider))
+}
+
+// newProvider returns the goose provider of the embedded migrations on db.
+// It does not connect.
+func newProvider(db *sql.DB, opts ...goose.ProviderOption) (*goose.Provider, error) {
+	fsys, err := fs.Sub(migrationFiles, "migrations")
+	if err != nil {
+		return nil, err
+	}
+
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, fsys, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: migrations: %w", err)
+	}
+
+	return provider, nil
+}
+
+// embeddedVersions are the versions of the provider's migrations.
+func embeddedVersions(p *goose.Provider) []int64 {
+	sources := p.ListSources()
+
+	versions := make([]int64, 0, len(sources))
+	for _, src := range sources {
+		versions = append(versions, src.Version)
+	}
+
+	return versions
+}
+
+// checkSchema is Migrator.CheckSchema on db with the embedded versions.
+func checkSchema(ctx context.Context, db *sql.DB, embedded []int64) error {
 	var exists bool
 
-	err := m.db.QueryRowContext(ctx, "SELECT to_regclass($1) IS NOT NULL", goose.DefaultTablename).Scan(&exists)
+	err := db.QueryRowContext(ctx, "SELECT to_regclass($1) IS NOT NULL", goose.DefaultTablename).Scan(&exists)
 	if err != nil {
 		return fmt.Errorf("postgres: check schema: %w", mapErr(err))
 	}
@@ -145,7 +173,7 @@ func (m *Migrator) CheckSchema(ctx context.Context) error {
 
 	// The provider deletes the row of a rolled back migration; the latest
 	// row per version decides, in case older tools appended is_applied=false.
-	rows, err := m.db.QueryContext(ctx, appliedVersionsQuery)
+	rows, err := db.QueryContext(ctx, appliedVersionsQuery)
 	if err != nil {
 		return fmt.Errorf("postgres: check schema: %w", mapErr(err))
 	}
@@ -167,14 +195,21 @@ func (m *Migrator) CheckSchema(ctx context.Context) error {
 		return fmt.Errorf("postgres: check schema: %w", mapErr(err))
 	}
 
+	return compareSchema(applied, embedded)
+}
+
+// compareSchema compares the applied migrations with the embedded versions:
+// ErrSchemaNewer if the database has one the binary does not know,
+// ErrSchemaPending if one of the binary's is not applied.
+func compareSchema(applied map[int64]bool, embedded []int64) error {
 	pending := false
 
-	for _, src := range m.provider.ListSources() {
-		if !applied[src.Version] {
+	for _, v := range embedded {
+		if !applied[v] {
 			pending = true
 		}
 
-		delete(applied, src.Version)
+		delete(applied, v)
 	}
 
 	switch {
@@ -185,6 +220,14 @@ func (m *Migrator) CheckSchema(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// Ready reports whether the store can serve requests, for the server's
+// readiness probe: the database answers and has exactly the embedded
+// migrations applied, as Migrator.CheckSchema checks it (ErrSchemaPending,
+// ErrSchemaNewer). It uses the store's pool and writes nothing.
+func (s *Store) Ready(ctx context.Context) error {
+	return checkSchema(ctx, s.sqlDB, s.migrations)
 }
 
 // Status lists every embedded migration in version order.

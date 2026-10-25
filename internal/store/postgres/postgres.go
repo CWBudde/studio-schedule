@@ -16,12 +16,14 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/postgres/internal/sqlc"
@@ -32,6 +34,11 @@ import (
 type Store struct {
 	pool  *pgxpool.Pool
 	retry retryPolicy
+
+	// sqlDB is pool as a *sql.DB, and migrations the versions of the
+	// embedded migrations, both for Ready.
+	sqlDB      *sql.DB
+	migrations []int64
 }
 
 var _ store.Store = (*Store)(nil)
@@ -68,7 +75,18 @@ func Open(ctx context.Context, databaseURL string) (*Store, error) {
 		return nil, fmt.Errorf("postgres: connect: %w", mapErr(err))
 	}
 
-	return &Store{pool: pool, retry: defaultRetry}, nil
+	// Closing sqlDB leaves the pool open.
+	sqlDB := stdlib.OpenDBFromPool(pool)
+
+	provider, err := newProvider(sqlDB)
+	if err != nil {
+		_ = sqlDB.Close()
+		pool.Close()
+
+		return nil, err
+	}
+
+	return &Store{pool: pool, retry: defaultRetry, sqlDB: sqlDB, migrations: embeddedVersions(provider)}, nil
 }
 
 // poolConfig parses databaseURL. Unless the URL sets default_query_exec_mode,
@@ -98,6 +116,7 @@ func poolConfig(databaseURL string) (*pgxpool.Config, error) {
 
 // Close closes all connections. Transactions in progress fail.
 func (s *Store) Close() {
+	_ = s.sqlDB.Close()
 	s.pool.Close()
 }
 
