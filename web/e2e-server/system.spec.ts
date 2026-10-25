@@ -72,3 +72,33 @@ test('the server sends the security headers', async ({ request }) => {
   const api = await request.get('/api/v1/health');
   expect(api.headers()['cache-control']).toBe('no-store');
 });
+
+test('the server makes the app installable from the school settings', async ({ page, request }) => {
+  // The manifest carries the seeded school's name, and the page links it.
+  const settings = await (await request.get('/api/v1/settings/public')).json();
+  const res = await request.get('/manifest.webmanifest');
+  expect(res.status()).toBe(200);
+  expect(res.headers()['content-type']).toBe('application/manifest+json');
+  const manifest = await res.json();
+  expect(manifest.name).toBe(settings.schoolName);
+  expect(manifest).toMatchObject({ start_url: '/', scope: '/', display: 'standalone' });
+
+  await page.goto('/');
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute(
+    'href',
+    '/manifest.webmanifest',
+  );
+
+  // The policy names the service worker and the manifest, both the app's own.
+  const csp = (await request.get('/')).headers()['content-security-policy'] ?? '';
+  expect(csp).toContain("worker-src 'self'");
+  expect(csp).toContain("manifest-src 'self'");
+
+  // The service worker is revalidated on every load, and registers.
+  const sw = await request.get('/sw.js');
+  expect(sw.status()).toBe(200);
+  expect(sw.headers()['cache-control']).toBe('no-cache');
+  expect(sw.headers()['content-type']).toContain('text/javascript');
+  const scope = await page.evaluate(async () => (await navigator.serviceWorker.ready).scope);
+  expect(new URL(scope).pathname).toBe('/');
+});
