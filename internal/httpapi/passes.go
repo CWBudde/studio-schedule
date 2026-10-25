@@ -172,8 +172,9 @@ type PassTypeRef struct {
 
 // PassPerson names a person a pass refers to.
 type PassPerson struct {
-	ID   domain.PersonID `doc:"Person ID."              json:"id"`
-	Name string          `doc:"Given and family name." json:"name"`
+	ID         domain.PersonID `doc:"Person ID."              json:"id"`
+	Name       string          `doc:"Given and family name." json:"name"`
+	Anonymized bool            `doc:"Whether the office anonymized the person (ADR 0016); its name is then the fixed one (Deleted person), which clients show translated." json:"anonymized,omitempty"`
 }
 
 // Pass is a pass of a person.
@@ -503,7 +504,7 @@ func passBody(v service.PassView) Pass {
 	p := v.Pass
 	out := Pass{
 		ID: p.ID, PassType: PassTypeRef{ID: v.PassType.ID, Name: v.PassType.Name},
-		Owner: PassPerson{ID: p.PersonID, Name: v.OwnerName}, Kind: string(p.Kind),
+		Owner: PassPerson{ID: p.PersonID, Name: v.OwnerName, Anonymized: v.OwnerAnonymized}, Kind: string(p.Kind),
 		VisitsTotal: p.VisitsTotal, VisitsRemaining: p.VisitsRemaining, ValidFrom: p.ValidFrom, ValidUntil: p.ValidUntil,
 		Status: string(p.Status), Usable: v.Usable, Origin: string(p.Origin), SoldAt: p.SoldAt.UTC(),
 		PricePaid: int64(p.PricePaid), VoidedAt: p.VoidedAt.UTC(), ReceiptID: p.ReceiptID, Uses: make([]PassUse, 0, len(v.Uses)),
@@ -511,7 +512,7 @@ func passBody(v service.PassView) Pass {
 	}
 
 	if !p.PayerID.IsZero() {
-		out.Payer = &PassPerson{ID: p.PayerID, Name: v.PayerName}
+		out.Payer = &PassPerson{ID: p.PayerID, Name: v.PayerName, Anonymized: v.PayerAnonymized}
 	}
 
 	for _, u := range v.Uses {

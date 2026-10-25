@@ -97,7 +97,7 @@ type PersonClass struct {
 // SearchPersons returns the persons whose given name, family name, email or
 // member number contains every word of query, ignoring case, ordered by
 // family name and given name; at most MaxPersonMatches. An empty query
-// matches everyone. Merged persons are left out.
+// matches everyone. Merged and anonymized persons are left out.
 func (s *PersonService) SearchPersons(ctx context.Context, query string) ([]domain.Person, error) {
 	var persons []domain.Person
 

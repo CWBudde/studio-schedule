@@ -374,7 +374,9 @@ func (s *PersonService) mergeLessons(
 		return err
 	}
 
-	lessons, bookings, entries, err := lockMergeLessons(ctx, tx, merged)
+	lessons, bookings, entries, err := lockBookedLessons(ctx, tx, store.BookingQuery{
+		Persons: []domain.PersonID{merged},
+	})
 	if err != nil {
 		return err
 	}
@@ -574,22 +576,24 @@ func lockMemberships(ctx context.Context, tx store.Tx, person domain.PersonID) (
 	}
 }
 
-// lockMergeLessons locks the lessons of the bookings and open waiting-list
-// entries of person, in ID order, and returns them with the bookings and
-// entries read under the locks. A booking made meanwhile for a lesson not
-// locked yet adds its lesson.
-func lockMergeLessons(
-	ctx context.Context, tx store.Tx, person domain.PersonID,
+// lockBookedLessons locks the lessons of the bookings q finds and of the
+// open waiting-list entries of q's persons, in ID order, and returns them
+// with those bookings and entries read under the locks. A booking or an
+// entry added meanwhile for a lesson not locked yet adds its lesson. The
+// merge takes every booking of the merged person, anonymizing the active
+// bookings of lessons that have not started.
+func lockBookedLessons(
+	ctx context.Context, tx store.Tx, q store.BookingQuery,
 ) (map[domain.LessonID]domain.Lesson, []domain.Booking, []domain.WaitlistEntry, error) {
 	lessons := map[domain.LessonID]domain.Lesson{}
 
 	for {
-		bookings, err := tx.Bookings().ListByPersons(ctx, store.BookingQuery{Persons: []domain.PersonID{person}})
+		bookings, err := tx.Bookings().ListByPersons(ctx, q)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		entries, err := tx.Waitlist().ListOpenByPersons(ctx, []domain.PersonID{person})
+		entries, err := tx.Waitlist().ListOpenByPersons(ctx, q.Persons)
 		if err != nil {
 			return nil, nil, nil, err
 		}

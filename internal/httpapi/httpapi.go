@@ -135,6 +135,7 @@ func Register(api huma.API, deps Deps) {
 	registerMailLog(api, h)
 	registerImports(api, h)
 	registerDuplicates(api, h)
+	registerPrivacy(api, h)
 }
 
 type handlers struct {

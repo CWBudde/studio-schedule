@@ -147,6 +147,14 @@ var accessLevels = map[string]string{
 	"listDemoLogins":              "public",
 	"listAccounts":                "admin",
 	"impersonateAccount":          "admin",
+	"disableAccount":              "admin",
+	"enableAccount":               "admin",
+	"setAccountRole":              "admin",
+	"deleteAccount":               "admin",
+	"exportPerson":                "office",
+	"anonymizePerson":             "office",
+	"exportMyData":                "signedIn",
+	"deleteMyAccount":             "signedIn",
 	"listAuditEvents":             "admin",
 
 	// Announcements and the mail log (ADR 0014).

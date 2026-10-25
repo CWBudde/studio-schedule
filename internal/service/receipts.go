@@ -410,8 +410,11 @@ type ReceiptView struct {
 	// tells that it paid for visits.
 	Pass     domain.Pass
 	PassUsed bool
-	// PayerName is the payer's current name, empty without one.
-	PayerName string
+	// PayerName is the payer's current name, empty without one;
+	// PayerAnonymized tells that the payer is anonymized (ADR 0016), so that
+	// it is the fixed one (the receipt keeps the name it printed).
+	PayerName       string
+	PayerAnonymized bool
 }
 
 // Cancelable reports whether the office can cancel the receipt now.
@@ -502,7 +505,7 @@ func (s *ReceiptService) views(ctx context.Context, tx store.Tx, receipts []doma
 		}
 
 		if p, ok := names[r.PayerID]; ok {
-			v.PayerName = fullName(p)
+			v.PayerName, v.PayerAnonymized = fullName(p), p.Anonymized()
 		}
 
 		out[i] = v

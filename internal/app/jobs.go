@@ -83,6 +83,7 @@ func Jobs(deps Deps) *jobs.Runner {
 	}}
 
 	all = append(all, communicationJobs(deps, renderer)...)
+	all = append(all, privacyJobs(deps)...)
 
 	if deps.Mailer != nil {
 		// Mails attach receipt PDFs, which a seeded receipt gets rendered

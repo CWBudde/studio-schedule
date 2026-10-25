@@ -221,6 +221,23 @@ func TestPasswordResetEndsImpersonation(t *testing.T) {
 	}
 
 	f.wantSignedIn(as, false)
+	f.wantImpersonationEnded(admin.Principal.AccountID, as.Principal.AccountID)
+}
+
+// wantImpersonationEnded checks that the latest audit event records that
+// admin's impersonation of target ended.
+func (f *authFixture) wantImpersonationEnded(admin, target domain.AccountID) {
+	f.t.Helper()
+
+	events := f.auditLog()
+	if len(events) == 0 {
+		f.t.Fatal("no audit events")
+	}
+
+	last := events[len(events)-1]
+	if last.Action != domain.AuditImpersonationEnded || last.ActorID != admin || last.TargetID != target {
+		f.t.Errorf("latest audit event %+v, want %s ending the impersonation of %s", last, admin, target)
+	}
 }
 
 func TestChangePassword(t *testing.T) {
@@ -266,6 +283,7 @@ func TestChangePasswordEndsImpersonationsOfTheAdmin(t *testing.T) {
 
 	f.wantSignedIn(admin, true)
 	f.wantSignedIn(as, false)
+	f.wantImpersonationEnded(admin.Principal.AccountID, as.Principal.AccountID)
 }
 
 func TestCredentialsRefusedWhileImpersonating(t *testing.T) {

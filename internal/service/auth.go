@@ -523,7 +523,8 @@ func (s *AuthService) createSession(
 // by SessionMaxAge); then the returned SignedIn carries the new expiry for
 // the cookie, otherwise it is the zero value. An impersonation session is
 // never extended, and it ends as soon as its admin may no longer sign in or
-// is no admin any more.
+// is no admin any more, or its account may no longer sign in or becomes an
+// admin.
 func (s *AuthService) Authenticate(ctx context.Context, token string) (Principal, SignedIn, error) {
 	if token == "" {
 		return Principal{}, SignedIn{}, ErrNoSession
@@ -563,7 +564,8 @@ func (s *AuthService) Authenticate(ctx context.Context, token string) (Principal
 
 	now := s.clock.Now()
 	if !now.Before(sessionEnd(sess)) || !mayActAs(acc) ||
-		(!sess.ImpersonatorID.IsZero() && (!mayActAs(admin) || admin.Role != domain.RoleAdmin)) {
+		(!sess.ImpersonatorID.IsZero() && (!mayActAs(admin) || admin.Role != domain.RoleAdmin ||
+			acc.Role == domain.RoleAdmin)) { // an admin is never impersonated, even once promoted (ADR 0016)
 		return Principal{}, SignedIn{}, ErrNoSession
 	}
 

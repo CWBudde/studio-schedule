@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -122,6 +123,7 @@ type PersonMatch struct {
 	FamilyName string          `doc:"Family name."              json:"familyName"`
 	Email      string          `doc:"Email address, if known." json:"email,omitempty"`
 	MemberNo   string          `doc:"Member number, if any."   json:"memberNo,omitempty"`
+	Anonymized bool            `doc:"Whether the office anonymized the person (ADR 0016); its name is then the fixed one (Deleted person), which clients show translated." json:"anonymized,omitempty"`
 }
 
 // PersonMatchList is the response body of listPersons.
@@ -144,7 +146,10 @@ func (h *handlers) listPersons(ctx context.Context, in *PersonSearchInput) (*Per
 }
 
 func personMatch(p domain.Person) PersonMatch {
-	return PersonMatch{ID: p.ID, GivenName: p.GivenName, FamilyName: p.FamilyName, Email: p.Email, MemberNo: p.MemberNo}
+	return PersonMatch{
+		ID: p.ID, GivenName: p.GivenName, FamilyName: p.FamilyName, Email: p.Email, MemberNo: p.MemberNo,
+		Anonymized: p.Anonymized(),
+	}
 }
 
 // PersonRecord is every field of a person, as the office edits it.
@@ -194,6 +199,8 @@ type PersonDetail struct {
 	Classes    []PersonClass  `doc:"Class memberships ordered by term, weekday and time." json:"classes"    nullable:"false"`
 	Merged     []PersonMatch  `doc:"Persons merged into this one; their receipts are listed as this person's." json:"merged" nullable:"false"`
 	MergedInto *PersonMatch   `doc:"The person this one was merged into; present only for such a hidden record, which cannot be changed." json:"mergedInto,omitempty"`
+	// ADR 0016.
+	AnonymizedAt time.Time `doc:"When the office anonymized the person; present only for such a hidden record, which cannot be changed." json:"anonymizedAt,omitzero"`
 }
 
 // PersonRefInput is the request of getPerson and deletePerson.
@@ -268,6 +275,8 @@ func (h *handlers) getPerson(ctx context.Context, in *PersonRefInput) (*PersonDe
 		Staff:       make([]StaffEntry, 0, len(d.Staff)),
 		Classes:     make([]PersonClass, 0, len(d.Classes)),
 		Merged:      personMatches(d.Merged),
+
+		AnonymizedAt: d.Person.AnonymizedAt,
 	}
 
 	if d.Person.Merged() {

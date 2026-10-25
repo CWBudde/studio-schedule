@@ -18,17 +18,21 @@ import (
 // (domain.ErrNotFound) or commits before the merge, which then moves what it
 // wrote; and no stale copy of a person can revive a tombstone.
 
-// livePerson returns the person id unless it is merged: a merged person, a
-// tombstone, is domain.ErrNotFound for everything but reading it. It takes
-// no lock; a write uses lockLivePersons.
+// livePerson returns the person id unless it is merged or anonymized: a
+// merged person, a tombstone, and an anonymized one (ADR 0016) are
+// domain.ErrNotFound for everything but reading them. It takes no lock; a
+// write uses lockLivePersons.
 func livePerson(ctx context.Context, tx store.Tx, id domain.PersonID) (domain.Person, error) {
 	p, err := tx.Persons().Get(ctx, id)
 	if err != nil {
 		return domain.Person{}, err
 	}
 
-	if p.Merged() {
+	switch {
+	case p.Merged():
 		return domain.Person{}, fmt.Errorf("person %s is merged: %w", id, domain.ErrNotFound)
+	case p.Anonymized():
+		return domain.Person{}, fmt.Errorf("person %s is anonymized: %w", id, domain.ErrNotFound)
 	}
 
 	return p, nil
@@ -36,7 +40,8 @@ func livePerson(ctx context.Context, tx store.Tx, id domain.PersonID) (domain.Pe
 
 // lockLivePersons locks the persons ids (PersonRepo.Lock: together, in ID
 // order) and returns them, read under the lock, in the order given. An
-// unknown person, or a tombstone, is domain.ErrNotFound. Persons come first
+// unknown person, a tombstone or an anonymized person is
+// domain.ErrNotFound. Persons come first
 // in the lock order: persons → terms → classes → lessons → passes.
 func lockLivePersons(ctx context.Context, tx store.Tx, ids ...domain.PersonID) ([]domain.Person, error) {
 	if err := tx.Persons().Lock(ctx, ids...); err != nil {
@@ -65,4 +70,43 @@ func lockLivePerson(ctx context.Context, tx store.Tx, id domain.PersonID) (domai
 	}
 
 	return persons[0], nil
+}
+
+// lockPersonSet locks the persons collect names, together and in ID order
+// (PersonRepo.Lock), and calls collect again under the locks until it names
+// no person that is not locked yet, so that what collect read last was read
+// under the locks of everyone it named. A person added meanwhile is locked
+// in a later call. Persons come first in the lock order.
+func lockPersonSet(ctx context.Context, tx store.Tx, collect func() ([]domain.PersonID, error)) error {
+	locked := map[domain.PersonID]bool{}
+
+	for {
+		ids, err := collect()
+		if err != nil {
+			return err
+		}
+
+		var missing []domain.PersonID
+
+		for _, id := range ids {
+			if !locked[id] {
+				locked[id] = true
+
+				missing = append(missing, id)
+			}
+		}
+
+		if len(missing) == 0 {
+			return nil
+		}
+
+		if err := tx.Persons().Lock(ctx, missing...); err != nil {
+			return err
+		}
+	}
+}
+
+// personIDs returns the IDs of persons.
+func personIDs(persons []domain.Person) []domain.PersonID {
+	return mapSlice(persons, func(p domain.Person) domain.PersonID { return p.ID })
 }

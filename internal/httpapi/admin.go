@@ -81,6 +81,7 @@ type AuditPerson struct {
 	ID         domain.PersonID `doc:"Person ID."                                                  json:"id"`
 	GivenName  string          `doc:"Given name. Absent if the person can no longer be found."   json:"givenName,omitempty"`
 	FamilyName string          `doc:"Family name. Absent if the person can no longer be found."  json:"familyName,omitempty"`
+	Anonymized bool            `doc:"Whether the office anonymized the person (ADR 0016); its name is then the fixed one (Deleted person), which clients show translated." json:"anonymized,omitempty"`
 }
 
 // AuditDetails is what an audit event records beyond its target.
@@ -91,14 +92,17 @@ type AuditDetails struct {
 	// ADR 0015.
 	MergedPersonID domain.PersonID `doc:"The person of person-merged that was merged into the target, now a tombstone." json:"mergedPersonId,omitzero"`
 	MergedName     string          `doc:"Its name at the time."                                                           json:"mergedName,omitempty"`
+	// ADR 0016.
+	PreviousRole string `doc:"The role before account-role-changed." enum:"member,instructor,office,admin" json:"previousRole,omitempty"`
+	Role         string `doc:"The role after account-role-changed."  enum:"member,instructor,office,admin" json:"role,omitempty"`
 }
 
 // AuditEventEntry is an event in the audit log.
 type AuditEventEntry struct {
 	ID           domain.AuditEventID `doc:"Audit event ID."  json:"id"`
 	At           time.Time           `doc:"When it happened." json:"at"`
-	Action       string              `doc:"What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one); later versions may add actions." json:"action"`
-	Actor        AuditAccount        `doc:"The account that acted."   json:"actor"`
+	Action       string              `doc:"What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one), person-anonymized (target: the person), account-disabled, account-enabled and account-role-changed (target: the account; details of a role change: both roles), account-deleted (target: the account's person, which stays; without an actor its holder deleted it); later versions may add actions. An event that targeted an account deleted since targets its person." json:"action"`
+	Actor        *AuditAccount       `doc:"The account that acted; absent only for account-deleted when the account's holder deleted it." json:"actor,omitempty"`
 	Target       *AuditAccount       `doc:"The account acted upon; absent unless the event targets an account." json:"target,omitempty"`
 	TargetPerson *AuditPerson        `doc:"The person acted upon; absent unless the event targets a person." json:"targetPerson,omitempty"`
 	Details      *AuditDetails       `doc:"What the event records beyond its target; absent if nothing." json:"details,omitempty"`
@@ -145,8 +149,11 @@ func (h *handlers) listAuditEvents(ctx context.Context, _ *struct{}) (*AuditEven
 
 	items := make([]AuditEventEntry, 0, len(events))
 	for _, e := range events {
-		entry := AuditEventEntry{
-			ID: e.Event.ID, At: e.Event.At, Action: string(e.Event.Action), Actor: auditAccount(e.Actor),
+		entry := AuditEventEntry{ID: e.Event.ID, At: e.Event.At, Action: string(e.Event.Action)}
+
+		if !e.Event.ActorID.IsZero() {
+			actor := auditAccount(e.Actor)
+			entry.Actor = &actor
 		}
 
 		switch e.Event.TargetKind {
@@ -156,13 +163,14 @@ func (h *handlers) listAuditEvents(ctx context.Context, _ *struct{}) (*AuditEven
 		case domain.AuditTargetPerson:
 			entry.TargetPerson = &AuditPerson{
 				ID: e.TargetPerson.ID, GivenName: e.TargetPerson.GivenName, FamilyName: e.TargetPerson.FamilyName,
+				Anonymized: e.TargetPerson.Anonymized(),
 			}
 		}
 
 		if d := e.Event.Details; !d.IsZero() {
 			entry.Details = &AuditDetails{
 				MailID: d.MailID, Recipient: d.Recipient, Template: d.Template, MergedPersonID: d.MergedPersonID,
-				MergedName: d.MergedName,
+				MergedName: d.MergedName, PreviousRole: string(d.PreviousRole), Role: string(d.Role),
 			}
 		}
 

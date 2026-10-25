@@ -270,13 +270,19 @@ func (w *world) receipt(payer domain.Person) domain.Receipt {
 }
 
 func (w *world) persons() *service.PersonService {
+	return service.NewPersonService(w.st, clock.NewFixed(now), w.seq,
+		service.Mails{Renderer: w.renderer(), AppURL: "https://school.example.org/"})
+}
+
+func (w *world) renderer() *mail.Renderer {
+	w.t.Helper()
+
 	r, err := mail.NewRenderer()
 	if err != nil {
 		w.t.Fatal(err)
 	}
 
-	return service.NewPersonService(w.st, clock.NewFixed(now), w.seq,
-		service.Mails{Renderer: r, AppURL: "https://school.example.org/"})
+	return r
 }
 
 func (w *world) imports() *service.ImportService {

@@ -132,6 +132,7 @@ type LessonParticipant struct {
 	BookingID    domain.BookingID `doc:"The booking."                       json:"bookingId"`
 	PersonID     domain.PersonID  `doc:"The booked person; absent for a guest." json:"personId,omitzero"`
 	Name         string           `doc:"Given and family name of the person, or the guest's name." json:"name"`
+	Anonymized   bool             `doc:"Whether the office anonymized the person (ADR 0016); its name is then the fixed one (Deleted person), which clients show translated." json:"anonymized,omitempty"`
 	Guest        bool             `doc:"Whether this is a guest without a person record."           json:"guest"`
 	ContactEmail string           `doc:"Where mails about the participant go first: the person's account, their own address or a guardian's account; a guest's address. Absent if none." json:"contactEmail,omitempty"`
 	ContactPhone string           `doc:"The person's phone, else the first of their guardians' with one; absent if none." json:"contactPhone,omitempty"`
@@ -151,6 +152,7 @@ type LessonWaitlistEntry struct {
 	EntryID    domain.WaitlistEntryID `doc:"The entry."                          json:"entryId"`
 	PersonID   domain.PersonID        `doc:"The person on the list."             json:"personId"`
 	Name       string                 `doc:"Given and family name of the person." json:"name"`
+	Anonymized bool                   `doc:"Whether the office anonymized the person (ADR 0016); its name is then the fixed one (Deleted person), which clients show translated." json:"anonymized,omitempty"`
 	Status     string                 `doc:"As in WaitlistEntry, except that an invite whose expiry has passed is expired." enum:"waiting,invited,accepted,expired,withdrawn" json:"status"`
 	Position   int                    `doc:"Place among the waiting entries, 1 for the next to be invited; absent unless waiting." json:"position,omitzero" minimum:"1"`
 	StayOnList bool                   `doc:"Whether an invite that expires or is declined puts the entry back at the end of the list." json:"stayOnList"`
@@ -314,7 +316,7 @@ func (h *handlers) listLessonParticipants(
 	for _, pt := range lp.Bookings {
 		b := pt.Booking
 		body.Bookings = append(body.Bookings, LessonParticipant{
-			BookingID: b.ID, PersonID: b.PersonID, Name: pt.Name, Guest: b.PersonID.IsZero(),
+			BookingID: b.ID, PersonID: b.PersonID, Name: pt.Name, Anonymized: pt.Anonymized, Guest: b.PersonID.IsZero(),
 			ContactEmail: pt.ContactEmail, ContactPhone: pt.ContactPhone, Status: string(b.Status),
 			Source: string(b.Source), Trial: b.Trial, TrialNote: b.TrialNote, Late: b.Late,
 			BookedAt: b.BookedAt.UTC(), CanceledAt: b.CanceledAt.UTC(), Payment: paymentBody(pt.Payment),
@@ -324,7 +326,8 @@ func (h *handlers) listLessonParticipants(
 	for _, w := range lp.Waitlist {
 		e := w.Entry
 		entry := LessonWaitlistEntry{
-			EntryID: e.ID, PersonID: e.PersonID, Name: w.Name, Status: string(w.Status), Position: w.Position,
+			EntryID: e.ID, PersonID: e.PersonID, Name: w.Name, Anonymized: w.Anonymized, Status: string(w.Status),
+			Position:   w.Position,
 			StayOnList: e.StayOnList, JoinedAt: e.JoinedAt.UTC(),
 		}
 

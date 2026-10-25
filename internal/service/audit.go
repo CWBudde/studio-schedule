@@ -44,7 +44,10 @@ func (s *AuthService) AuditLog(ctx context.Context) ([]AuditEntry, error) {
 		var personIDs []domain.PersonID
 
 		for _, e := range events {
-			ids = append(ids, e.ActorID)
+			if !e.ActorID.IsZero() { // zero: an account its holder deleted (ADR 0016)
+				ids = append(ids, e.ActorID)
+			}
+
 			if !e.TargetID.IsZero() {
 				ids = append(ids, e.TargetID)
 			}

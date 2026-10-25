@@ -234,7 +234,7 @@ func receiptBody(v service.ReceiptView) Receipt {
 	}
 
 	if !r.PayerID.IsZero() {
-		out.Payer = &PassPerson{ID: r.PayerID, Name: v.PayerName}
+		out.Payer = &PassPerson{ID: r.PayerID, Name: v.PayerName, Anonymized: v.PayerAnonymized}
 	}
 
 	for i, l := range r.Lines {

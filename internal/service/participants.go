@@ -645,8 +645,10 @@ func (s *ParticipantService) mailParticipant(
 // name and how to reach them.
 type Participant struct {
 	Booking domain.Booking
-	// Name is the person's full name or the guest's name.
-	Name string
+	// Name is the person's full name or the guest's name; Anonymized tells
+	// that the person is anonymized (ADR 0016), so that Name is the fixed one.
+	Name       string
+	Anonymized bool
 	// ContactEmail is where the lesson mails about a person go first (the
 	// head of their recipient chain: their account, their own address, or
 	// a guardian's account), or a guest's address; empty if none.
@@ -663,7 +665,9 @@ type Participant struct {
 type WaitingParticipant struct {
 	WaitlistPlace
 
-	Name string
+	// Name is the person's full name; Anonymized as in Participant.
+	Name       string
+	Anonymized bool
 	// Status is the entry's status, except that an invite whose expiry has
 	// passed shows as expired, like in the schedule.
 	Status domain.WaitlistStatus
@@ -783,7 +787,7 @@ func participantsOf(
 	for _, b := range bookings {
 		pt := Participant{Booking: b, Name: b.GuestName, ContactEmail: b.GuestEmail}
 		if c, ok := contacts[b.PersonID]; ok && !b.PersonID.IsZero() {
-			pt.Name, pt.ContactEmail, pt.ContactPhone = c.name, c.email, c.phone
+			pt.Name, pt.ContactEmail, pt.ContactPhone, pt.Anonymized = c.name, c.email, c.phone, c.anonymized
 		}
 
 		if b.Status != domain.BookingCanceled {
@@ -809,7 +813,7 @@ func participantsOf(
 
 		out.Waitlist = append(out.Waitlist, WaitingParticipant{
 			WaitlistPlace: WaitlistPlace{Entry: e, Position: position(open, e.ID)},
-			Name:          fullName(names[e.PersonID]), Status: status,
+			Name:          fullName(names[e.PersonID]), Anonymized: names[e.PersonID].Anonymized(), Status: status,
 		})
 	}
 
@@ -819,6 +823,7 @@ func participantsOf(
 // contact is how staff reach a booked person.
 type contact struct {
 	name, email, phone string
+	anonymized         bool
 }
 
 // contactsOf returns, by person, the full name and the contact data of the
@@ -854,7 +859,7 @@ func contactsOf(ctx context.Context, tx store.Tx, ids []domain.PersonID) (map[do
 
 	for _, id := range ids {
 		p := persons[id]
-		c := contact{name: fullName(p), phone: p.Phone}
+		c := contact{name: fullName(p), phone: p.Phone, anonymized: p.Anonymized()}
 
 		if chain := chainOf(p, accounts, guardiansOf[id], guardians, guardianAccounts); len(chain) > 0 {
 			c.email = chain[0].email

@@ -512,6 +512,9 @@ type PassView struct {
 	// PayerName is the full name of the person who paid, if not the owner;
 	// empty otherwise.
 	PayerName string
+	// OwnerAnonymized and PayerAnonymized tell that the owner or the payer
+	// is anonymized (ADR 0016), so that its name is the fixed one.
+	OwnerAnonymized, PayerAnonymized bool
 	// Usable tells that the pass pays for a visit today (domain.Pass.Covers
 	// on the school's date).
 	Usable bool
@@ -692,11 +695,12 @@ func (s *PassService) build(
 
 	for _, p := range passes {
 		v := PassView{
-			Pass: p, PassType: types[p.PassTypeID], OwnerName: fullName(names[p.PersonID]), Usable: p.Covers(today),
-			Uses: uses[p.ID], UseCount: counts[p.ID],
+			Pass: p, PassType: types[p.PassTypeID], OwnerName: fullName(names[p.PersonID]),
+			OwnerAnonymized: names[p.PersonID].Anonymized(), Usable: p.Covers(today), Uses: uses[p.ID],
+			UseCount: counts[p.ID],
 		}
 		if !p.PayerID.IsZero() {
-			v.PayerName = fullName(names[p.PayerID])
+			v.PayerName, v.PayerAnonymized = fullName(names[p.PayerID]), names[p.PayerID].Anonymized()
 		}
 
 		out = append(out, v)

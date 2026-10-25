@@ -207,8 +207,9 @@ func (s *AuthService) checkCurrentPassword(ctx context.Context, p Principal, pas
 }
 
 // setPassword stores a new password hash, ends every session acting for
-// account except keep (zero: all of them), and invalidates every open link:
-// whoever requested one may have known the old password.
+// account except keep (zero: all of them; endSessions audits the
+// impersonations it ends), and invalidates every open link: whoever
+// requested one may have known the old password.
 func (s *AuthService) setPassword(
 	ctx context.Context, tx store.Tx, account domain.AccountID, hash string, keep domain.SessionID,
 ) error {
@@ -217,7 +218,7 @@ func (s *AuthService) setPassword(
 		return err
 	}
 
-	if _, err := tx.Sessions().DeleteByAccount(ctx, account, keep); err != nil {
+	if err := endSessions(ctx, tx, s.ids, s.clock.Now(), account, keep); err != nil {
 		return err
 	}
 
