@@ -24,6 +24,7 @@ just web-install # once: pnpm install for web/
 just serve       # API server on :8080 (PostgreSQL if DATABASE_URL is set, else memory + demo data)
 just migrate up  # apply migrations to DATABASE_URL (also: down, status); just seed loads demo data
 just test-pg     # PostgreSQL store tests only (Docker via testcontainers, or STUDIO_TEST_DATABASE_URL)
+just typst-wasm  # after changing tools/receipt-pdf: rebuild receipt.wasm reproducibly (Docker; Git LFS)
 just sqlc        # after changing internal/store/postgres/{migrations,queries}: regenerate sqlc code
 just web-dev     # Vite on :5173, proxies /api to :8080
 just test        # go test ./...
@@ -74,6 +75,11 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   unlinked. The office's person administration and invitations are `service.PersonService`
   (`service/persons.go`, `service/invite.go`, `/api/v1/admin/persons`); guardian links are written
   under `Persons().Lock`.
+- **Receipts:** `service.ReceiptService` (`service/receipts.go`, ADR 0012) issues a receipt in the
+  transaction of `PassService.Sell` (number from `ReceiptCounters().Next`, PDF rendered through
+  `service.ReceiptRenderer` and stored, mail with the PDF attached via `OutboxMail.ReceiptID`),
+  cancels one (Storno), lists them and keeps the receipt settings. The template data comes from
+  `service/receipt_pdf.go`, the template itself is `tools/receipt-pdf/receipt.typ`.
 - **Admin writes:** the office maintains catalogue and timetable (`service/catalog_admin.go`,
   `httpapi/catalog_admin.go`; classes in `service/class_admin.go`, whose edits move the future
   lessons along in `class_sync.go`, terms in `service/term_admin.go`, whose new dates delete or
@@ -121,8 +127,10 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
 - **No real data.** Never add real school names, people, addresses, prices or credentials. Seed and
   test data are fictional. Secrets come from env/config only.
 - **One app, two targets.** Everything goes through `internal/app.New`. Nothing may be demo-only
-  except the transport (WASM bridge) and the store/mailer implementations. `cmd/wasm` must not
-  depend on pgx, goose, cobra, net/smtp, httptest or os/exec (`just check-wasm-deps`). Keep request
+  except the transport (WASM bridge) and the store, mailer and PDF renderer implementations (the
+  typst module runs with wazero on the server, in the browser's WebAssembly in the demo). `cmd/wasm`
+  must not depend on pgx, goose, cobra, net/smtp, httptest, os/exec or wazero
+  (`just check-wasm-deps`). Keep request
   handlers cheap: the WASM runtime is single-threaded.
 - **Layering:** `httpapi` → `service` → `store` interfaces. Services never import a concrete store.
   No SQL outside `internal/store/postgres`. `httpapi` maps domain errors (`internal/domain`) to

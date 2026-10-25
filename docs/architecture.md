@@ -28,6 +28,7 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
 | Transport | `net/http` server     | `internal/wasmbridge` + Web Worker   |
 | Store     | `store/postgres`      | `store/memory` + fictional seed      |
 | Mail      | Outbox + SMTP worker  | Outbox only, shown in the UI         |
+| PDF       | typst module, wazero  | Same module, browser WebAssembly     |
 | Entry     | `cmd/studio-schedule` | `cmd/wasm` (`//go:build js && wasm`) |
 
 ## Layers (Go)
@@ -43,6 +44,10 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
 - `internal/mail`: mail templates (`en`, `de`; HTML plus text) and the `Mailer` interface;
   `internal/mail/smtp` is the server-only SMTP sender. Services write mails to the outbox in their
   transaction; a job sends them ([ADR 0004](decisions/0004-accounts-sessions-and-mail.md)).
+- `internal/pdf`: the receipt renderer's input format; `internal/pdf/typstwasm` (server only) runs
+  the typst WebAssembly module built from `tools/receipt-pdf` with wazero, the demo hands the same
+  module to the browser through `internal/wasmbridge` (`service.ReceiptRenderer`,
+  [ADR 0012](decisions/0012-passes-and-receipts.md)).
 - `internal/app`: wiring and cross-cutting middleware (security headers, recovery, cross-origin
   protection). In `httpapi`, a middleware resolves the client IP (`internal/clientip`, trusting
   `X-Forwarded-For` only from `TRUSTED_PROXIES`), the session middleware resolves the

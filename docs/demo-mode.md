@@ -27,6 +27,7 @@ only serves static files, and we don't host a backend for the demo. Instead:
 | Passwords  | argon2id, production params | Cheap parameters so login is fast in WASM; seeded demo accounts  |
 | Sign-in    | Registered accounts         | The login page lists one demo account per role                   |
 | Downloads  | Plain links (iCal, PDF)     | Fetched through the bridge and opened as Blob URLs               |
+| Receipts   | typst module run by wazero  | **The same module in the Worker's WebAssembly**, loaded on use   |
 | Routing    | Browser history             | Hash history (`/#/…`), because Pages has no SPA fallback         |
 | Timezone   | Host tzdata or embedded     | Embedded `time/tzdata`                                           |
 
@@ -57,6 +58,19 @@ The server (`studio-schedule serve` with the memory store) and `studio-schedule 
 `seed.LoadDemo`, which builds the same data for the fixed `seed.FixedDemoAnchor`: the term is the
 school year 2026-09-01 to 2027-07-31 on every run, and its workshops lie in September and
 October 2026. Only the dates differ between the two; names, IDs and the timetable are the same.
+
+## Receipt PDFs
+
+Receipts (ADR 0012) are rendered by the typst module built from `tools/receipt-pdf`
+(`internal/pdf/typstwasm/receipt.wasm`, about 24 MB, 8.5 MB gzipped). The server embeds it and runs
+it with wazero; the demo build copies the same file to its assets (`scripts/build-wasm.sh`), and
+the Worker fetches and compiles it only when the first receipt is rendered
+(`web/src/api/wasm/receiptPdf.ts`, a small WASI shim). Go asks for a render through
+`__studioScheduleRenderPDF` (`wasmbridge.PDFRenderer`) and waits for its promise; the first render
+waits for the download. Random numbers are zeros on both sides, so the demo renders the same bytes
+as the server (`scripts/receipt-pdf-smoke.mjs` checks this in CI, and `scripts/wasm-smoke.mjs`
+downloads a receipt through the whole bridge). The seeded receipts have no PDF yet: each is
+rendered on its first download and then stored, like the original of a receipt sold in the demo.
 
 ## Saved data and "Reset demo"
 
@@ -184,7 +198,8 @@ brings the lessons of the week before the visit, so the schedule has a recent pa
 ## Constraints to keep in mind
 
 - `cmd/wasm` must not import server-only packages (database drivers, SMTP, CLI, `os/exec`,
-  `httptest`). `scripts/check-wasm-deps.sh` enforces this in CI.
+  `httptest`, wazero and the embedded typst module). `scripts/check-wasm-deps.sh` enforces this in
+  CI.
 - Go's WASM runtime is single-threaded. CPU-heavy work blocks the Worker (not the UI), so keep
   request handlers cheap.
 - A panic that escapes recovery terminates the Go program. The UI then shows "Demo crashed —

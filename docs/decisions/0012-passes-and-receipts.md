@@ -1,6 +1,6 @@
 # 0012 — Passes and receipts
 
-- Status: accepted (passes implemented; receipts follow in Phase 6 B)
+- Status: accepted (passes and receipts implemented)
 - Date: 2026-10-25
 
 ## Context
@@ -149,25 +149,109 @@ daughter Ella one that Clara paid, both used by drop-ins in the week before the 
 marked attended; Kai a 30-day pass with a drop-in; Irene a single visit given away; and Vera a single
 visit voided the day after it was sold by mistake.
 
-### Receipts (Phase 6 B)
+### Receipts
 
-Decided, implemented in Phase 6 B:
+**What a receipt is.** A payment confirmation for a pass sale (a drop-in is a single-visit pass),
+recording the payment method (`cash`, `transfer`, `card`). The app is not a cash register: it keeps
+no till, has no TSE, and the office records what was paid. Not legal advice; the school checks its
+obligations. Assignments (`assignPass`) get no receipt.
 
-- Receipts are **payment confirmations for pass sales** (a drop-in is a single-visit pass), recording
-  the payment method (cash, transfer, card). The app is not a cash register (no TSE); the docs say so.
-- Numbers `PREFIX-YYYY-NNNN`, gapless per year (the year of the issue date in school time), from a
-  counter row locked in the issuing transaction; a cancellation (Storno) is in the same series and
-  references the original. Receipts and lines are immutable (no update or delete in the repository, a
-  PostgreSQL trigger rejects both).
-- `sellPass` issues the receipt in its transaction and sets `passes.receipt_id` (the column exists;
-  its foreign key comes with the table). Assignments get none.
-- Tax: the school's tax mode (small business, exempt with a note, standard VAT) and the pass type's
-  VAT rate; gross prices, net and VAT printed; the issuer block, tax data and logo are snapshotted
-  per receipt.
-- A Storno voids the pass if it is unused; a full Storno of a used pass is refused (the office voids
-  the pass separately).
-- The PDF is rendered at issuance (typst compiled to WebAssembly, run in-process, the same in the
-  demo), stored as the immutable original and mailed with the outbox as an attachment to the payer.
+**Issued with the sale** (`PassService.Sell` → `ReceiptService.issueSale`, one transaction): the
+next number of the year from `receipt_counters` (`INSERT … ON CONFLICT DO UPDATE … RETURNING`, which
+locks the year's row until the transaction ends, so numbers are gapless and a rollback gives the
+number back), `PREFIX-YYYY-NNNN` with the year of the issue date in the school's time zone; one line
+(the pass type, the owner, the validity) for the price paid; the receipt is stored, then the PDF is
+rendered and stored, then the mail is queued, then the pass is created with `receipt_id` (a foreign
+key, unique). Any failure (an invalid recipient, a render error) rolls back the sale and the number.
+`sellPass` takes `paymentMethod` (default `cash`) and optionally `recipientName` (default: the
+payer's name), `recipientAddress` and `recipientEmail`. The receipt keeps what it prints or uses:
+the typed email only if the payer has no account (a payer with one gets the receipt there, and a
+typed address is dropped). The owner and the payer are locked for the sale, so neither is deleted
+before the pass refers to them; any other conflict of the store passes through. For the form,
+`getReceiptSettings` reports `logoMaxBytes` and, in the standard tax mode in euros,
+`addressRequiredAbove` (25000: the German small-amount invoice limit of 250 €, § 33 UStDV, above
+which a receipt should name the recipient's address; a hint, not enforced).
+
+**Every sale has a receipt**, so incomplete receipt settings refuse the sale: a 409
+`receipt-settings-incomplete` that names what is missing. Complete means the issuer's name, address
+and tax number or VAT ID, a tax mode, and in the exempt mode the note with its legal basis.
+
+**Tax** (`domain.NewReceiptLine`). The school's tax mode, snapshotted on the receipt:
+
+- `standard`: the price is gross and includes VAT at the pass type's rate; net = gross × 10000 /
+  (10000 + rate), rounded to the minor unit half away from zero, **per line**, VAT = gross − net.
+  The PDF prints net and VAT per rate and the gross total. A negated line rounds to the negated
+  amounts, so a cancellation mirrors its original exactly. `Receipt.Validate` recomputes every line.
+- `small_business` (§ 19 UStG): no VAT (rate 0 on the line), the default note or the school's.
+- `exempt`: no VAT, the school's note naming the legal basis (required).
+
+**Immutable.** `ReceiptRepo` has no update or delete; in PostgreSQL triggers reject `UPDATE`,
+`DELETE` and `TRUNCATE` on `receipts`, `receipt_lines` and `receipt_pdfs`. The receipt snapshots the
+issuer (name, address, tax number, email, phone), the tax mode and note, the footer, the language,
+the payer and recipient, the currency and the amounts; the logo is snapshotted in the PDF.
+
+**The PDF** is the stored original (`receipt_pdfs`, apart from the receipt so lists do not read it):
+downloads and mails read it, never re-render it. It is rendered by [typst](https://typst.app)
+compiled to a WebAssembly reactor (`tools/receipt-pdf`: the template `receipt.typ`, Libertinus
+Serif, no file or network access, a fixed "today", the document ID from the receipt), from JSON that
+`service/receipt_pdf.go` builds with every text preformatted. Receipts are printed **in the school's
+default language** at issuance (German or English), because they are the school's records, not the
+recipient's; the mail around it is in the recipient's language. **The renderer is a swappable
+adapter** like the store and the mailer (`service.ReceiptRenderer`): the server runs the module with
+wazero (`internal/pdf/typstwasm`: compiled once in the background at startup, cached in the user's
+cache directory, a small pool of instances since an instance serves one render at a time), the web
+demo runs the same module in the Worker's WebAssembly (`internal/wasmbridge`, ADR 0001; loaded on
+the first render). Both give the same bytes for the same input (random numbers are zeros; a golden
+checksum in Go and a Node smoke test of the Worker's shim compare them). Receipts without a PDF (the
+seed's, which does not render) get it rendered on their first read, outside any transaction (in the
+demo the first render waits for the module's download, which must not hold the store), and stored
+once; a request that stored it meanwhile stored the same bytes. Amounts are formatted by the
+currency's ISO 4217 exponent (`domain.CurrencyExponent`; the settings refuse unknown codes), and
+the wording a seeded receipt shares with an issued one (the language, dates, the pass line) is in
+`internal/receiptfmt`. The demo's WASI shim mirrors wazero's defaults: zero random bytes and fake
+clocks (the wall clock from 2022-01-01, both advancing a millisecond per reading).
+
+**The module is built reproducibly** (`just typst-wasm`): Rust 1.99.1 in a pinned linux/amd64
+container image, `Cargo.lock`, paths remapped out of the binary, typst's commit stamp fixed (the
+host matters: cargo mixes the compiler's host into symbol hashes, which changes what LTO makes of
+the code). It is committed with Git LFS (`internal/pdf/typstwasm/receipt.wasm`, about 24 MB) with
+its sha256 pinned next to it; CI rebuilds it and fails on a mismatch (`test-typst`), and every
+workflow pulls the LFS files through the Actions cache.
+
+**Storno** (`cancelReceipt`, `POST /api/v1/admin/receipts/{id}/cancel`, office, optional `reason`):
+a cancellation receipt in the same series that negates every line and total, references the
+original, keeps its tax mode and note, payer, recipient and payment method (the refund goes the same
+way), takes the current issuer, and is mailed like the receipt. It voids the pass if the pass paid
+for no visit (under the lock of the owner's passes); a pass that paid for visits is a 409
+`pass-used` (the office voids the pass separately, `voidPass`); a receipt canceled before is a 409
+`already-canceled` (`UNIQUE (cancels_receipt_id)` backs it), a cancellation a 409 `cancellation`.
+
+**Delivery.** The mail (`receipt` template) goes to the payer's account in its language, else to
+the `recipientEmail` typed at the sale in the school's language, else nowhere. The mail is in one
+language: it describes the pass in the recipient's (a cancellation mail names the item only in the
+receipt's own language). The outbox mail refers
+to the receipt (`outbox_mails.receipt_id`) instead of copying the PDF; the `deliver-mail` job
+attaches the stored PDF (`multipart/mixed`, base64), the demo mailbox lists the attachment and
+serves it (`getDemoMailAttachment`).
+
+**Reads.** The office: `listReceipts` (year, a search in the number and the recipient's name,
+paging, newest first, with the total), `getReceipt` (with the cancellation or the canceled receipt,
+the pass, and `cancelable`), `getReceiptPdf` (the PDF as an attachment named after the number). The list also returns `years`,
+the years with receipts (from the counters), for its year filter. A list costs a fixed number of
+queries.
+Members: `listMyReceipts` and `getMyReceiptPdf`, the receipts **they paid** (the payer is the owner
+unless someone else paid; a child's pass should be sold with the parent as payer); anyone else's is a 404.
+
+**Settings.** `getReceiptSettings` (office: whether they are complete and what is missing) and
+`updateReceiptSettings` (admin): issuer name, address, tax number, email, phone, tax mode, tax note,
+footer and the number prefix; the logo apart (`updateReceiptLogo` with base64 data, PNG or JPEG of
+at most 512 KiB whose bytes match the type, `deleteReceiptLogo`, `getReceiptLogo`), stored in
+`settings.logo` and read only for rendering. Phase 7 folds the form into the settings UI.
+
+**Demo.** The fictional issuer "Studio Demo Dance School" with a fictional address and tax number,
+standard VAT at 19 %. The seed issues receipts for the four sold passes in the order they were sold,
+paid by card, transfer and cash, and cancels Vera's single visit the day after its sale, which voids
+it.
 
 ## Consequences
 
@@ -178,4 +262,10 @@ Decided, implemented in Phase 6 B:
 - A lesson moved to another date keeps a redemption only from a pass valid on the new date.
 - Unpaid bookings need the office: there is no automatic payment by a pass sold later.
 - Personal data: passes and their uses belong to the person; Phase 8's export includes them, and
-  deletion must keep what receipts reference.
+  deletion must keep what receipts reference (a payer of a receipt cannot be deleted; the receipt
+  keeps the name and address it printed).
+- A sale needs complete receipt settings and a working renderer; the server compiles the 24 MB
+  module at startup (a few seconds, cached across restarts), the demo downloads it on the first
+  receipt.
+- Changing the template or typst means `just typst-wasm` and new golden checksums; receipts issued
+  before keep their stored PDFs.

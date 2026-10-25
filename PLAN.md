@@ -626,16 +626,27 @@ no repository yet.
 
 Goal: prepaid passes and legally sound receipts.
 
-- [ ] Pass types (visits, validity, price in minor units); sell or assign a pass (office); pass
-      overview for members
-- [ ] Redemption on attendance or booking (configurable): oldest valid pass first, under the
+- [x] Pass types (visits, validity, price in minor units); sell or assign a pass (office); pass
+      overview for members (2026-10-25) — ADR 0012; visit and time passes with a VAT rate;
+      sell, assign, void and retire in the admin area; My passes for the family
+- [x] Redemption on attendance or booking (configurable): oldest valid pass first, under the
       transaction, with a unique redemption per booking; refund on cancellation within the deadline
-- [ ] Receipts: gapless per-year numbering via `receipt_counters` in the same transaction; immutable
+      (2026-10-25) — `service/ledger.go` + `redemption.go`: on transitions only, time passes
+      first, late cancellations and no-shows cost a visit, class-member bookings never redeem; a
+      moved lesson or a voided pass moves its visits
+- [x] Receipts: gapless per-year numbering via `receipt_counters` in the same transaction; immutable
       receipts and lines; corrections only via cancellation receipts referencing the original
-- [ ] PDF generation in pure Go (works in WASM too), template driven by settings (school legal data,
-      tax note, logo); email receipt via outbox
-- [ ] UI: pass management, receipt list/detail, PDF download (Blob in the demo)
-- [ ] Tests: concurrent redemption, numbering under concurrency, PDF golden tests (text extraction)
+      (2026-10-25) — migration 00017 with triggers against UPDATE/DELETE; issued with the sale;
+      tax mode and VAT snapshotted; Storno voids an unused pass
+- [x] PDF generation in pure Go (works in WASM too), template driven by settings (school legal data,
+      tax note, logo); email receipt via outbox (2026-10-25) — changed by decision: typst compiled
+      to WebAssembly (`tools/receipt-pdf`, reproducible Docker build, Git LFS), run with wazero on
+      the server and with the browser's WebAssembly in the demo; mail with the PDF attached
+- [x] UI: pass management, receipt list/detail, PDF download (Blob in the demo) (2026-10-25) —
+      pass types, person passes, receipts page with Storno, receipt settings, My passes and My
+      receipts; e2e `passes.spec.ts`, `receipts.spec.ts`
+- [x] Tests: concurrent redemption, numbering under concurrency, PDF golden tests (text extraction)
+      (2026-10-25) — both stores; real typst renders in all tax modes; `internal/pdf/pdftext`
 
 ## Phase 7 — Communication & administration
 
