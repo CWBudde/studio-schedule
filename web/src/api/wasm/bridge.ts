@@ -26,8 +26,8 @@ interface Pending {
 export interface WasmBridgeOptions {
   /** Saving the demo's data failed; reported once. */
   onSaveFailed?: (message: string) => void;
-  /** The backend sends a web push notification (its JSON payload) to this device. */
-  onNotify?: (payload: string) => void;
+  /** The backend sends a web push notification (its JSON payload) to the subscription's endpoint. */
+  onNotify?: (payload: string, endpoint: string) => void;
 }
 
 /** Statuses for which `new Response()` must not be given a body. */
@@ -167,7 +167,7 @@ export class WasmBridge {
         this.options.onSaveFailed?.(msg.message);
         break;
       case 'notify':
-        this.options.onNotify?.(msg.payload);
+        this.options.onNotify?.(msg.payload, msg.endpoint);
         break;
       case 'ready':
         this.resolveReady();

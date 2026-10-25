@@ -22,6 +22,11 @@ export interface PushDevice {
   requestPermission(): Promise<NotificationPermission>;
   /** This device's subscription, if it has one. */
   current(): Promise<DeviceSubscription | null>;
+  /**
+   * The VAPID key (base64url, unpadded) the subscription was made with;
+   * null without one, or where it does not matter (the demo).
+   */
+  serverKey(): Promise<string | null>;
   /** Subscribes this device (with the VAPID public key, for a real push service). */
   subscribe(publicKey: string | undefined): Promise<DeviceSubscription>;
   /** Ends this device's subscription and returns it; null if there was none. */
@@ -91,6 +96,12 @@ function browserDevice(): PushDevice {
       const sub = await reg?.pushManager.getSubscription();
       return sub ? fromJSON(sub.toJSON()) : null;
     },
+    async serverKey() {
+      if (!hasServiceWorker()) return null;
+      const reg = await navigator.serviceWorker.getRegistration();
+      const key = (await reg?.pushManager.getSubscription())?.options.applicationServerKey;
+      return key ? bytesToBase64Url(key) : null;
+    },
     async subscribe(publicKey) {
       if (!publicKey) throw new Error('No VAPID key');
       const reg = await registration();
@@ -130,6 +141,7 @@ export function demoDevice(): PushDevice {
     permission,
     requestPermission,
     current: () => Promise.resolve(readDemo()),
+    serverKey: () => Promise.resolve(null),
     async subscribe() {
       await registration(); // the page shows the notifications through it
       const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, [

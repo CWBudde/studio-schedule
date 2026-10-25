@@ -267,10 +267,12 @@ export const adminQueryKey = ['admin'] as const;
  * identity and refetches if it is shown. Admin queries are dropped instead,
  * so a page that shows one does not ask again with the new identity before
  * it renders the change. The offline copy of the cache goes too (ADR 0017):
- * it held the previous identity's lessons.
+ * it held the previous identity's lessons; and so do this device's
+ * notifications, unless they are the new identity's (settlePushDevice).
  */
 function changeIdentity(queryClient: QueryClient, me: Me | null) {
   void clearOfflineCache();
+  void settlePushDevice(queryClient.getQueryData(meQuery.queryKey) ?? null, me);
   queryClient.removeQueries({ queryKey: adminQueryKey });
   queryClient.setQueryData(meQuery.queryKey, me);
   const meHash = hashKey(meQuery.queryKey);
@@ -423,6 +425,13 @@ export const resetPasswordMutation = (queryClient: QueryClient) =>
 /** Changes the signed-in account's password; its other sessions end, this one stays. */
 export const changePasswordMutation = mutationOptions({
   mutationFn: (body: ChangePasswordBody) => expectOk(api.POST('/api/v1/auth/password', { body })),
+  // The server ended the account's other sessions and with them its push
+  // subscriptions (ADR 0017): this device, still signed in, saves its own
+  // again.
+  onSuccess: (_data, _body, _context, { client }) => {
+    const accountId = client.getQueryData(meQuery.queryKey)?.accountId;
+    if (accountId) void refreshPushSubscription(accountId);
+  },
 });
 
 /**
@@ -561,7 +570,7 @@ export const logoutMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: async () => {
       // This device stops getting the account's notifications (ADR 0017).
-      await forgetPushDevice();
+      await forgetPushDevice(queryClient.getQueryData(meQuery.queryKey)?.accountId);
       await expectOk(api.POST('/api/v1/auth/logout'));
     },
     onSuccess: () => changeIdentity(queryClient, null),
@@ -2466,7 +2475,15 @@ export const enablePushMutation = (queryClient: QueryClient, accountId: string) 
     mutationFn: async (publicKey: string | undefined) => {
       if ((await pushDevice.requestPermission()) !== 'granted')
         throw new NotificationsBlockedError();
-      const sub = (await pushDevice.current()) ?? (await pushDevice.subscribe(publicKey));
+      let sub = await pushDevice.current();
+      // A subscription made with another VAPID key (the server's keys
+      // changed) would be refused by the push service: subscribe anew.
+      const key = await pushDevice.serverKey();
+      if (sub && publicKey && key && key !== publicKey.replace(/=+$/, '')) {
+        await pushDevice.unsubscribe();
+        sub = null;
+      }
+      sub ??= await pushDevice.subscribe(publicKey);
       await savePushSubscription(sub);
       setPushOwner(accountId);
     },
@@ -2505,22 +2522,58 @@ export async function refreshPushSubscription(accountId: string): Promise<void> 
 }
 
 /**
- * Before a sign-out: the device stops getting notifications (ADR 0017).
- * Best effort; the sign-out goes on whatever happens here.
+ * Before the account `accountId` signs out: if it turned notifications on
+ * here, the server forgets the device, then the browser, and only then is
+ * the device no longer the account's. Another account's subscription on
+ * this device stays untouched. Best effort: the sign-out goes on whatever
+ * happens here, and the change of identity settles what is left
+ * (settlePushDevice).
  */
-async function forgetPushDevice(): Promise<void> {
-  if (!pushOwner()) return;
+async function forgetPushDevice(accountId: string | undefined): Promise<void> {
+  if (!accountId || pushOwner() !== accountId) return;
   try {
     const sub = await pushDevice.current();
     if (sub) {
-      await api.DELETE('/api/v1/my/push/subscriptions', { body: { endpoint: sub.endpoint } });
+      await expectOk(
+        api.DELETE('/api/v1/my/push/subscriptions', { body: { endpoint: sub.endpoint } }),
+      );
       await pushDevice.unsubscribe();
     }
-  } catch {
-    // The push service drops a subscription the server keeps once the
-    // browser unsubscribed; the server then deletes it (410).
-  } finally {
     setPushOwner(null);
+  } catch {
+    // Kept as the account's: settlePushDevice ends it after the sign-out.
+  }
+}
+
+/** Whether `me` is the account, or the admin signed in as it. */
+const actsAs = (me: Me | null | undefined, accountId: string) =>
+  me?.accountId === accountId || me?.impersonator?.accountId === accountId;
+
+/**
+ * After a change of identity from `prev` to `next` (a sign-in, a sign-out,
+ * a 401): notifications on this device belong to the account that turned
+ * them on. The device leaves when that account is no longer signed in
+ * here: someone else signed in, or it was the one that left. Then the
+ * server forgets it if this session may (it deletes only the new account's
+ * row; after a 401 there is none, and the push service's 410 removes it
+ * later), the browser unsubscribes, and the device has no owner any more.
+ * A sign-out of another account leaves the owner's subscription alone.
+ */
+async function settlePushDevice(prev: Me | null, next: Me | null): Promise<void> {
+  const owner = pushOwner();
+  if (!owner || actsAs(next, owner) || (!next && !actsAs(prev, owner))) return;
+  try {
+    const sub = await pushDevice.current();
+    if (sub) {
+      if (next) {
+        // Scoped to the new account: it deletes only a row it owns.
+        await api.DELETE('/api/v1/my/push/subscriptions', { body: { endpoint: sub.endpoint } });
+      }
+      await pushDevice.unsubscribe();
+    }
+    setPushOwner(null);
+  } catch {
+    // Settled again at the next change of identity.
   }
 }
 

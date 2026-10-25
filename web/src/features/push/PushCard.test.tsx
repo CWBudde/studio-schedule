@@ -19,8 +19,12 @@ function device({
   current = null as DeviceSubscription | null,
   permission = 'default' as NotificationPermission,
   supported = true,
+  serverKey = null as string | null,
 } = {}) {
   let subscribed = current;
+  vi.spyOn(pushDevice, 'serverKey').mockImplementation(() =>
+    Promise.resolve(subscribed ? serverKey : null),
+  );
   Object.defineProperty(pushDevice, 'supported', { value: supported, configurable: true });
   vi.spyOn(pushDevice, 'permission').mockImplementation(() => permission);
   vi.spyOn(pushDevice, 'current').mockImplementation(() => Promise.resolve(subscribed));
@@ -84,6 +88,40 @@ describe('PushCard', () => {
     expect(
       (await card()).getByText(/This device gets a notification for every waiting-list invite/),
     ).toBeVisible();
+  });
+
+  it('subscribes anew when the server has another key than the subscription', async () => {
+    const old = { ...sub, endpoint: 'https://push.example.net/push/old-key' };
+    const d = device({ current: old, permission: 'granted', serverKey: 'BOldVapidKey' });
+    mockApiGet(pushOn);
+    const post = mockApiPost({ '/api/v1/my/push/subscriptions': { status: 204 } });
+    renderCard();
+
+    const toggle = (await card()).getByRole('switch', { name: 'Notifications on this device' });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    await userEvent.setup().click(toggle);
+
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(d.unsubscribe).toHaveBeenCalled();
+    expect(d.subscribe).toHaveBeenCalledWith('BVapidKey');
+    expect(post).toHaveBeenCalledWith('/api/v1/my/push/subscriptions', {
+      body: { ...sub, deviceLabel: expect.any(String) },
+    });
+  });
+
+  it('keeps a subscription made with the same key', async () => {
+    const d = device({ current: sub, permission: 'granted', serverKey: 'BVapidKey' });
+    mockApiGet(pushOn);
+    mockApiPost({ '/api/v1/my/push/subscriptions': { status: 204 } });
+    renderCard();
+
+    const toggle = (await card()).getByRole('switch', { name: 'Notifications on this device' });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    await userEvent.setup().click(toggle);
+
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(d.unsubscribe).not.toHaveBeenCalled();
+    expect(d.subscribe).not.toHaveBeenCalled();
   });
 
   it('turns them off: the server forgets the device, then the browser', async () => {

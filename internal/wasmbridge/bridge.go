@@ -59,8 +59,9 @@ const ChangedGlobal = "__studioScheduleChanged"
 const RenderPDFGlobal = "__studioScheduleRenderPDF"
 
 // NotifyGlobal is the name of the worker's function that shows a web push
-// notification of the demo (ADR 0017): (payload: string) → void, the JSON
-// the server queued; the worker posts it to the page.
+// notification of the demo (ADR 0017): (payload: string, endpoint: string)
+// → void, the JSON the server queued and the subscription's endpoint; the
+// worker posts them to the page.
 const NotifyGlobal = "__studioScheduleNotify"
 
 // Persistence lets the worker keep the demo's data across page loads (see

@@ -81,7 +81,7 @@ function startBridge(): WasmBridge {
   });
   const started = new WasmBridge(worker, setBackendStatus, {
     onSaveFailed: () => notify('save-failed'),
-    onNotify: (payload) => void showDemoNotification(payload),
+    onNotify: (payload, endpoint) => void showDemoNotification(payload, endpoint),
   });
   // Best effort: save what is pending before the tab goes away.
   const flush = () => void started.flush();

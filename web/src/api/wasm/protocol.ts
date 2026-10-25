@@ -37,7 +37,7 @@ export type WorkerToMainMessage =
   /** Saving the demo's data failed (sent once): changes will not survive a reload. */
   | { type: 'save-failed'; message: string }
   /** The demo backend sends a web push notification: the page shows it (ADR 0017). */
-  | { type: 'notify'; payload: string };
+  | { type: 'notify'; payload: string; endpoint: string };
 
 /** Request shape passed to the Go side: `StudioScheduleAPI.fetch(req)`. */
 export interface GoBridgeRequest {

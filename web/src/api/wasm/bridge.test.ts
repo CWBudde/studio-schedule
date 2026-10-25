@@ -256,8 +256,15 @@ describe('WasmBridge', () => {
     const worker = new FakeWorker();
     const onNotify = vi.fn();
     new WasmBridge(worker, undefined, { onNotify });
-    worker.emit({ type: 'notify', payload: '{"title":"A place is free: Tap"}' });
-    expect(onNotify).toHaveBeenCalledWith('{"title":"A place is free: Tap"}');
+    worker.emit({
+      type: 'notify',
+      payload: '{"title":"A place is free: Tap"}',
+      endpoint: 'https://push.invalid/demo/x',
+    });
+    expect(onNotify).toHaveBeenCalledWith(
+      '{"title":"A place is free: Tap"}',
+      'https://push.invalid/demo/x',
+    );
   });
 
   it('works as the fetch implementation of openapi-fetch', async () => {
