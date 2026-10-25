@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { CircleCheck, KeyRound } from 'lucide-react';
 import { useId } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
@@ -29,8 +29,7 @@ export function ChangePasswordCard() {
   const { t } = useTranslation('account');
   const { t: tAuth } = useTranslation('auth');
   const titleId = useId();
-  const queryClient = useQueryClient();
-  const change = useMutation(changePasswordMutation(queryClient));
+  const change = useMutation(changePasswordMutation);
   const errorText = useFieldErrorText();
   const form = useForm<PasswordChange>({
     resolver: zodResolver(changePasswordSchema),

@@ -115,7 +115,7 @@ function CloneForm({ shown, view, today, timeZone }: CloneContext) {
   const errorText = useAdminErrorText();
   const unitLabel = useId();
   const queryClient = useQueryClient();
-  const preview = useMutation(previewLessonCloneMutation(queryClient));
+  const preview = useMutation(previewLessonCloneMutation);
   const apply = useMutation(cloneLessonsMutation(queryClient));
   const schema = useMemo(() => cloneSchema(today), [today]);
   const form = useForm<CloneInput, unknown, CloneInput>({

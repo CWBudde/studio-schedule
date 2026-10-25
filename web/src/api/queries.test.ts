@@ -38,6 +38,7 @@ import {
   createCourseTypeMutation,
   createLessonMutation,
   deleteLessonMutation,
+  deleteMyAccountMutation,
   deleteStaffMutation,
   deleteTermMutation,
   demoMailboxQuery,
@@ -80,6 +81,15 @@ afterEach(() => {
 
 const range = { from: '2026-10-26', to: '2026-11-09' };
 
+/** A query client with the app's caches (router.ts): a 401 signs out. */
+function appQueryClient(): QueryClient {
+  const queryClient: QueryClient = new QueryClient({
+    ...sessionCaches(() => queryClient),
+    defaultOptions: { queries: { retry: false } },
+  });
+  return queryClient;
+}
+
 /** An instructor view without lessons, as cached data. */
 const teachLessons = {
   timezone: 'Europe/Berlin',
@@ -94,7 +104,7 @@ const teachLessons = {
  * shown, one that is, and the account list.
  */
 async function signedInClient() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = appQueryClient();
   queryClient.setQueryData(meQuery.queryKey, meAdmin);
   queryClient.setQueryData(scheduleQuery({ from: '2026-11-09', to: '2026-11-23' }).queryKey, {
     ...schedule,
@@ -180,10 +190,7 @@ describe('identity changes', () => {
 describe('a 401 of any request', () => {
   /** A client with the app's caches (router.ts) and a signed-in member. */
   function appClient() {
-    const queryClient: QueryClient = new QueryClient({
-      ...sessionCaches(() => queryClient),
-      defaultOptions: { queries: { retry: false } },
-    });
+    const queryClient = appQueryClient();
     queryClient.setQueryData(meQuery.queryKey, meMember);
     queryClient.setQueryData(familyQuery.queryKey, family);
     return queryClient;
@@ -608,7 +615,7 @@ describe('credentials', () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(meQuery.queryKey, meMember);
 
-    await new MutationObserver(queryClient, changePasswordMutation(queryClient)).mutate({
+    await new MutationObserver(queryClient, changePasswordMutation).mutate({
       currentPassword: 'old-password',
       newPassword: 'new-secret-password',
     });
@@ -622,7 +629,7 @@ describe('credentials', () => {
   it.each([
     {
       name: 'changePassword',
-      mutation: changePasswordMutation,
+      mutation: () => changePasswordMutation,
       path: '/api/v1/auth/password',
       variables: { currentPassword: 'old-password', newPassword: 'new-secret-password' },
     },
@@ -636,19 +643,82 @@ describe('credentials', () => {
     '$name signs out locally when the session has ended (401)',
     async ({ mutation, path, variables }) => {
       mockApiPost({ [path]: { status: 401 } });
-      const queryClient = new QueryClient();
+      const queryClient = appQueryClient();
       queryClient.setQueryData(meQuery.queryKey, meMember);
 
       await expect(
         new MutationObserver(
           queryClient,
-          mutation(queryClient) as ReturnType<typeof changePasswordMutation>,
+          mutation(queryClient) as typeof changePasswordMutation,
         ).mutate(variables as never),
       ).rejects.toThrow();
 
       expect(queryClient.getQueryData(meQuery.queryKey)).toBeNull();
     },
   );
+
+  // A wrong password is no ended session: who is signed in stays.
+  it.each([
+    {
+      name: 'login (401)',
+      mutation: loginMutation,
+      path: '/api/v1/auth/login',
+      answer: problem(401, 'invalid email or password'),
+      variables: { email: meMember.email, password: 'wrong-password' },
+    },
+    {
+      name: 'confirmEmail (401)',
+      mutation: confirmEmailMutation,
+      path: '/api/v1/auth/confirm',
+      answer: problem(401, 'invalid email or password'),
+      variables: { token: 'tok-confirm', password: 'wrong-password' },
+    },
+    {
+      name: 'changePassword (422)',
+      mutation: () => changePasswordMutation,
+      path: '/api/v1/auth/password',
+      answer: problem(422, 'validation failed', [
+        { location: 'body.currentPassword', message: 'the password is wrong' },
+      ]),
+      variables: { currentPassword: 'wrong-password', newPassword: 'new-secret-password' },
+    },
+  ])(
+    'a wrong password on $name keeps the signed-in account',
+    async ({ mutation, path, answer, variables }) => {
+      mockApiPost({ [path]: answer });
+      const queryClient = appQueryClient();
+      queryClient.setQueryData(meQuery.queryKey, meMember);
+      queryClient.setQueryData(familyQuery.queryKey, family);
+
+      await expect(
+        new MutationObserver(
+          queryClient,
+          mutation(queryClient) as unknown as typeof changePasswordMutation,
+        ).mutate(variables as never),
+      ).rejects.toThrow();
+
+      expect(queryClient.getQueryData(meQuery.queryKey)).toEqual(meMember);
+      expect(queryClient.getQueryData(familyQuery.queryKey)).toEqual(family);
+    },
+  );
+
+  it('a wrong password on deleteMyAccount (422) keeps the signed-in account', async () => {
+    const queryClient = appQueryClient();
+    queryClient.setQueryData(meQuery.queryKey, meMember);
+    mockApiDelete({
+      '/api/v1/my/account': problem(422, 'validation failed', [
+        { location: 'body.password', message: 'the password is wrong' },
+      ]),
+    });
+
+    await expect(
+      new MutationObserver(queryClient, deleteMyAccountMutation(queryClient)).mutate({
+        password: 'wrong-password',
+      }),
+    ).rejects.toThrow();
+
+    expect(queryClient.getQueryData(meQuery.queryKey)).toEqual(meMember);
+  });
 
   it('requests an email change and refreshes the demo mailbox', async () => {
     const post = mockApiPost({ '/api/v1/auth/email': { status: 202 } });
@@ -766,7 +836,7 @@ describe('family', () => {
 
   /** A client with me and the family cached, as /account has them. */
   function familyClient() {
-    const queryClient = new QueryClient();
+    const queryClient = appQueryClient();
     queryClient.setQueryData(meQuery.queryKey, meMember);
     queryClient.setQueryData(familyQuery.queryKey, family);
     return queryClient;

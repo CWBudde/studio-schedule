@@ -285,6 +285,8 @@ export const loginMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (body: LoginBody) => unwrap(api.POST('/api/v1/auth/login', { body })),
     onSuccess: (me: Me) => signIn(queryClient, me),
+    // A 401 is a wrong email or password.
+    meta: { credentialCheck: true },
   });
 
 /** Confirms an email address with the link's token and the password, and signs in. */
@@ -292,6 +294,8 @@ export const confirmEmailMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (body: ConfirmEmailBody) => unwrap(api.POST('/api/v1/auth/confirm', { body })),
     onSuccess: (me: Me) => signIn(queryClient, me),
+    // A 401 is a wrong password.
+    meta: { credentialCheck: true },
   });
 
 /** Registers an account; the API mails a confirmation link (shown in the demo mailbox). */
@@ -341,6 +345,19 @@ async function refreshMe(queryClient: QueryClient): Promise<void> {
   }
 }
 
+declare module '@tanstack/react-query' {
+  interface Register {
+    mutationMeta: {
+      /**
+       * The operation checks a password, and its 401 means a wrong one
+       * (login, confirmEmail), not that the session is over: it does not
+       * sign out (sessionCaches).
+       */
+      credentialCheck?: boolean;
+    };
+  }
+}
+
 /**
  * A 401 means the session is over (it expired, or ended on another device):
  * nobody is signed in any more, and the data of the account leaves the
@@ -348,22 +365,27 @@ async function refreshMe(queryClient: QueryClient): Promise<void> {
  * the queries that refetch after the reset cannot start it again. `getMe`
  * answers a guest's 401 as null, not as an error.
  */
-function signedOutOn401(queryClient: QueryClient) {
-  return (error: Error) => {
-    if (!(error instanceof ApiError) || error.status !== 401) return;
-    if (queryClient.getQueryData(meQuery.queryKey) === null) return;
-    changeIdentity(queryClient, null);
-  };
+function signOutOn401(queryClient: QueryClient, error: Error) {
+  if (!(error instanceof ApiError) || error.status !== 401) return;
+  if (queryClient.getQueryData(meQuery.queryKey) === null) return;
+  changeIdentity(queryClient, null);
 }
 
 /**
  * The query and mutation caches of the app's QueryClient: a 401 of any
- * query or mutation signs out (signedOutOn401). `client` returns the
- * QueryClient they belong to.
+ * query or mutation signs out (signOutOn401), except a mutation's whose meta
+ * marks a `credentialCheck`. This is the one place a 401 is handled. `client`
+ * returns the QueryClient they belong to.
  */
 export function sessionCaches(client: () => QueryClient) {
-  const onError = (error: Error) => signedOutOn401(client())(error);
-  return { queryCache: new QueryCache({ onError }), mutationCache: new MutationCache({ onError }) };
+  return {
+    queryCache: new QueryCache({ onError: (error) => signOutOn401(client(), error) }),
+    mutationCache: new MutationCache({
+      onError: (error, _variables, _context, mutation) => {
+        if (!mutation.meta?.credentialCheck) signOutOn401(client(), error);
+      },
+    }),
+  };
 }
 
 /**
@@ -389,11 +411,9 @@ export const resetPasswordMutation = (queryClient: QueryClient) =>
   });
 
 /** Changes the signed-in account's password; its other sessions end, this one stays. */
-export const changePasswordMutation = (queryClient: QueryClient) =>
-  mutationOptions({
-    mutationFn: (body: ChangePasswordBody) => expectOk(api.POST('/api/v1/auth/password', { body })),
-    onError: signedOutOn401(queryClient),
-  });
+export const changePasswordMutation = mutationOptions({
+  mutationFn: (body: ChangePasswordBody) => expectOk(api.POST('/api/v1/auth/password', { body })),
+});
 
 /**
  * Mails a confirmation link to a new address of the signed-in account (shown
@@ -404,7 +424,6 @@ export const requestEmailChangeMutation = (queryClient: QueryClient) =>
     mutationFn: (body: RequestEmailChangeBody) =>
       expectOk(api.POST('/api/v1/auth/email', { body })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey }),
-    onError: signedOutOn401(queryClient),
   });
 
 /**
@@ -434,7 +453,6 @@ export const updateLocaleMutation = (queryClient: QueryClient) =>
         const { locale: _previous, ...rest } = me;
         return locale ? { ...rest, locale } : rest;
       }),
-    onError: signedOutOn401(queryClient),
   });
 
 /** The signed-in person and their dependents (children without their own login). */
@@ -453,9 +471,7 @@ const refreshFamily = (queryClient: QueryClient) =>
  * meanwhile and is read-only now: either way, the family is asked again.
  */
 function onDependentError(queryClient: QueryClient) {
-  const signedOut = signedOutOn401(queryClient);
   return (error: Error) => {
-    signedOut(error);
     const gone = error instanceof ApiError && error.status === 404;
     if (gone || conflictReason(error) === 'managed') void refreshFamily(queryClient);
   };
@@ -476,7 +492,6 @@ export const updateMyPersonMutation = (queryClient: QueryClient) =>
         queryClient.invalidateQueries({ queryKey: meQuery.queryKey }),
       ]);
     },
-    onError: signedOutOn401(queryClient),
   });
 
 /** Adds a child without their own login, with the signed-in person as guardian. */
@@ -484,7 +499,6 @@ export const addDependentMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (body: PersonData) => unwrap(api.POST('/api/v1/family/dependents', { body })),
     onSuccess: () => refreshFamily(queryClient),
-    onError: signedOutOn401(queryClient),
   });
 
 /**
@@ -752,7 +766,6 @@ export const runImportMutation = (queryClient: QueryClient) =>
     mutationFn: (body: PostBody<'/api/v1/admin/imports'>) =>
       unwrap(api.POST('/api/v1/admin/imports', { body })),
     onSuccess: (result: ImportResult) => (result.applied ? refreshPersons(queryClient) : undefined),
-    onError: signedOutOn401(queryClient),
   });
 
 /** The latest applied imports, newest first (office). */
@@ -784,7 +797,6 @@ export const dismissDuplicateMutation = (queryClient: QueryClient) =>
     mutationFn: (body: { personA: string; personB: string }) =>
       expectOk(api.POST('/api/v1/admin/duplicates/dismissals', { body })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: duplicatesQuery.queryKey }),
-    onError: signedOutOn401(queryClient),
   });
 
 /** The persons and fields of a merge. */
@@ -938,9 +950,7 @@ function refreshPersons(queryClient: QueryClient, { except }: { except?: string 
  * again.
  */
 function onPersonError(queryClient: QueryClient) {
-  const signedOut = signedOutOn401(queryClient);
   return (error: Error) => {
-    signedOut(error);
     if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
       void refreshPersons(queryClient);
     }
@@ -1045,25 +1055,19 @@ export type AnonymizeResult = components['schemas']['AnonymizeResult'];
 export type AccountRole = components['schemas']['AccountEntry']['role'];
 
 /** Fetches the data export of any person (office); a merged or anonymized one too. */
-export const exportPersonMutation = (queryClient: QueryClient) =>
-  mutationOptions({
-    mutationFn: (personId: string) =>
-      unwrap(
-        api.GET('/api/v1/admin/persons/{personId}/export', { params: { path: { personId } } }),
-      ),
-    onError: signedOutOn401(queryClient),
-  });
+export const exportPersonMutation = mutationOptions({
+  mutationFn: (personId: string) =>
+    unwrap(api.GET('/api/v1/admin/persons/{personId}/export', { params: { path: { personId } } })),
+});
 
 /**
  * Fetches the data export of the signed-in person or one of their
  * dependents; anyone else is a 404.
  */
-export const exportMyDataMutation = (queryClient: QueryClient) =>
-  mutationOptions({
-    mutationFn: (personId: string) =>
-      unwrap(api.GET('/api/v1/my/export', { params: { query: { person: personId } } })),
-    onError: signedOutOn401(queryClient),
-  });
+export const exportMyDataMutation = mutationOptions({
+  mutationFn: (personId: string) =>
+    unwrap(api.GET('/api/v1/my/export', { params: { query: { person: personId } } })),
+});
 
 /**
  * Anonymizes a person (office): the personal data goes, the history stays.
@@ -1090,9 +1094,7 @@ const refreshAdmin = (queryClient: QueryClient) =>
 
 /** The errors of the account administration: a 404 or 409 asks for the accounts again. */
 function onAccountError(queryClient: QueryClient) {
-  const signedOut = signedOutOn401(queryClient);
   return (error: Error) => {
-    signedOut(error);
     if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
       void refreshAdmin(queryClient);
     }
@@ -1165,7 +1167,6 @@ export const deleteMyAccountMutation = (queryClient: QueryClient) =>
       void queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey });
       changeIdentity(queryClient, null);
     },
-    onError: signedOutOn401(queryClient),
   });
 
 /**
@@ -1196,9 +1197,7 @@ function refreshCatalogue(queryClient: QueryClient) {
  * record meanwhile, so the lists are asked again.
  */
 function onCatalogueError(queryClient: QueryClient) {
-  const signedOut = signedOutOn401(queryClient);
   return (error: Error) => {
-    signedOut(error);
     if (error instanceof ApiError && error.status === 404) void refreshCatalogue(queryClient);
   };
 }
@@ -1394,9 +1393,7 @@ function refreshTimetable(queryClient: QueryClient) {
  * meanwhile, so the timetable is asked again.
  */
 function onTimetableError(queryClient: QueryClient) {
-  const signedOut = signedOutOn401(queryClient);
   return (error: Error) => {
-    signedOut(error);
     if (error instanceof ApiError && error.status === 404) void refreshTimetable(queryClient);
   };
 }
@@ -1662,9 +1659,7 @@ export function refusedAt(
  * are asked again.
  */
 function onLessonError(queryClient: QueryClient) {
-  const signedOut = signedOutOn401(queryClient);
   return (error: Error) => {
-    signedOut(error);
     const gone = error instanceof ApiError && error.status === 404;
     if (gone || refusedAsStarted(error, 'path.lessonId')) void refreshLessons(queryClient);
   };
@@ -1744,12 +1739,10 @@ export type LessonClone = components['schemas']['LessonClone'];
  * What cloneLessonsMutation would create and skip now, without changing
  * anything (office). The answer may be stale by the time the clone runs.
  */
-export const previewLessonCloneMutation = (queryClient: QueryClient) =>
-  mutationOptions({
-    mutationFn: (body: LessonCloneData) =>
-      unwrap(api.POST('/api/v1/admin/lessons/clone/preview', { body })),
-    onError: signedOutOn401(queryClient),
-  });
+export const previewLessonCloneMutation = mutationOptions({
+  mutationFn: (body: LessonCloneData) =>
+    unwrap(api.POST('/api/v1/admin/lessons/clone/preview', { body })),
+});
 
 /**
  * Copies the scheduled lessons of a day or a week as one-off lessons
@@ -1761,7 +1754,6 @@ export const cloneLessonsMutation = (queryClient: QueryClient) =>
     mutationFn: (body: LessonCloneData) =>
       unwrap(api.POST('/api/v1/admin/lessons/clone', { body })),
     onSuccess: () => refreshLessons(queryClient),
-    onError: signedOutOn401(queryClient),
   });
 
 /** A booking of a lesson, as bookLesson and cancelBooking answer. */
@@ -1914,9 +1906,8 @@ export const bookLessonMutation = (queryClient: QueryClient) =>
       ),
     onMutate: ({ lessonId, personId, name }: BookLessonVariables) =>
       patchAvailability(queryClient, lessonId, addPending(personId, name)),
-    onError: (error: Error, { lessonId, personId }: BookLessonVariables) => {
+    onError: (_error: Error, { lessonId, personId }: BookLessonVariables) => {
       applyAvailability(queryClient, lessonId, removePending(personId));
-      signedOutOn401(queryClient)(error);
     },
     onSettled: () => refreshAfterBooking(queryClient),
   });
@@ -1957,12 +1948,11 @@ export const cancelBookingMutation = (queryClient: QueryClient) =>
       return { entry };
     },
     onError: (
-      error: Error,
+      _error: Error,
       { lessonId }: CancelBookingVariables,
       context: { entry?: BookedFor } | undefined,
     ) => {
       if (context?.entry) applyAvailability(queryClient, lessonId, restoreBooked(context.entry));
-      signedOutOn401(queryClient)(error);
     },
     onSettled: () => refreshAfterBooking(queryClient),
   });
@@ -2006,7 +1996,6 @@ export const cancelFollowingMutation = (queryClient: QueryClient) =>
         }),
       ),
     mutationKey: bookingMutationKey,
-    onError: signedOutOn401(queryClient),
     onSettled: () => refreshAfterBooking(queryClient),
   });
 
@@ -2045,7 +2034,6 @@ export const joinWaitlistMutation = (queryClient: QueryClient) =>
           body: { personId, stayOnList },
         }),
       ),
-    onError: signedOutOn401(queryClient),
     onSettled: () => refreshAfterBooking(queryClient),
   });
 
@@ -2062,7 +2050,6 @@ export const leaveWaitlistMutation = (queryClient: QueryClient) =>
     mutationKey: bookingMutationKey,
     mutationFn: ({ entryId }: WaitlistEntryVariables) =>
       expectOk(api.DELETE('/api/v1/waitlist/{entryId}', { params: { path: { entryId } } })),
-    onError: signedOutOn401(queryClient),
     onSettled: () => refreshAfterBooking(queryClient),
   });
 
@@ -2077,7 +2064,6 @@ export const acceptWaitlistInviteMutation = (queryClient: QueryClient) =>
     mutationKey: bookingMutationKey,
     mutationFn: ({ entryId }: WaitlistEntryVariables) =>
       unwrap(api.POST('/api/v1/waitlist/{entryId}/accept', { params: { path: { entryId } } })),
-    onError: signedOutOn401(queryClient),
     onSettled: () => refreshAfterBooking(queryClient),
   });
 
@@ -2092,7 +2078,6 @@ export const declineWaitlistInviteMutation = (queryClient: QueryClient) =>
     mutationKey: bookingMutationKey,
     mutationFn: ({ entryId }: WaitlistEntryVariables) =>
       unwrap(api.POST('/api/v1/waitlist/{entryId}/decline', { params: { path: { entryId } } })),
-    onError: signedOutOn401(queryClient),
     onSettled: () => refreshAfterBooking(queryClient),
   });
 
@@ -2253,7 +2238,6 @@ export const addLessonParticipantMutation = (queryClient: QueryClient) =>
           body,
         }),
       ),
-    onError: signedOutOn401(queryClient),
     onSettled: () => refreshAfterParticipants(queryClient),
   });
 
@@ -2271,7 +2255,6 @@ export const updateLessonParticipantMutation = (queryClient: QueryClient) =>
           body,
         }),
       ),
-    onError: signedOutOn401(queryClient),
     onSettled: () => refreshAfterParticipants(queryClient),
   });
 
@@ -2285,7 +2268,6 @@ export const removeLessonParticipantMutation = (queryClient: QueryClient) =>
     mutationKey: bookingMutationKey,
     mutationFn: ({ bookingId }: { bookingId: string }) =>
       unwrap(api.POST('/api/v1/bookings/{bookingId}/remove', { params: { path: { bookingId } } })),
-    onError: signedOutOn401(queryClient),
     onSettled: () => refreshAfterParticipants(queryClient),
   });
 
@@ -2303,7 +2285,6 @@ export const setAttendanceMutation = (queryClient: QueryClient) =>
           body: { status },
         }),
       ),
-    onError: signedOutOn401(queryClient),
     onSettled: () => refreshAfterParticipants(queryClient),
   });
 
@@ -2319,7 +2300,6 @@ export const markAllAttendedMutation = (queryClient: QueryClient) =>
           }),
         )
       ).items,
-    onError: signedOutOn401(queryClient),
     onSettled: () => refreshAfterParticipants(queryClient),
   });
 
@@ -2348,7 +2328,6 @@ export const notifyParticipantsMutation = (queryClient: QueryClient) =>
           }),
         )
       ).recipients,
-    onError: signedOutOn401(queryClient),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey }),
   });
 
@@ -2403,7 +2382,6 @@ export const createCalendarFeedMutation = (queryClient: QueryClient) =>
     mutationFn: (body: CalendarFeedSubject) =>
       unwrap(api.POST('/api/v1/my/calendar-feeds', { body })),
     onSuccess: () => refreshCalendarFeeds(queryClient),
-    onError: signedOutOn401(queryClient),
   });
 
 /**
@@ -2415,7 +2393,6 @@ export const revokeCalendarFeedMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (feedId: string) =>
       expectOk(api.DELETE('/api/v1/my/calendar-feeds/{feedId}', { params: { path: { feedId } } })),
-    onError: signedOutOn401(queryClient),
     onSettled: () => refreshCalendarFeeds(queryClient),
   });
 
@@ -2494,9 +2471,7 @@ function refreshPassTypes(queryClient: QueryClient) {
 
 /** The errors of a write to the pass catalogue: a 404 means it changed meanwhile. */
 function onPassTypeError(queryClient: QueryClient) {
-  const signedOut = signedOutOn401(queryClient);
   return (error: Error) => {
-    signedOut(error);
     if (error instanceof ApiError && error.status === 404) void refreshPassTypes(queryClient);
   };
 }
@@ -2588,7 +2563,6 @@ export const sellPassMutation = (queryClient: QueryClient) =>
         }),
       ),
     onSuccess: () => refreshPasses(queryClient),
-    onError: signedOutOn401(queryClient),
   });
 
 /** Gives a person a pass without payment (office); it fails like sellPassMutation. */
@@ -2602,7 +2576,6 @@ export const assignPassMutation = (queryClient: QueryClient) =>
         }),
       ),
     onSuccess: () => refreshPasses(queryClient),
-    onError: signedOutOn401(queryClient),
   });
 
 /**
@@ -2614,7 +2587,6 @@ export const voidPassMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (passId: string) =>
       unwrap(api.POST('/api/v1/admin/passes/{passId}/void', { params: { path: { passId } } })),
-    onError: signedOutOn401(queryClient),
     onSettled: () => refreshPasses(queryClient),
   });
 
@@ -2632,7 +2604,6 @@ export const updatePassSettingsMutation = (queryClient: QueryClient) =>
       // How bookings are paid follows the mode: pending or paid.
       return refreshLessons(queryClient);
     },
-    onError: signedOutOn401(queryClient),
   });
 
 /** The office's figures of a range of school dates (aggregates only). */
@@ -2726,7 +2697,6 @@ export const updateReceiptSettingsMutation = (queryClient: QueryClient) =>
     mutationFn: (body: ReceiptSettingsData) =>
       unwrap(api.PUT('/api/v1/admin/settings/receipts', { body })),
     onSuccess: (settings) => queryClient.setQueryData(receiptSettingsQuery.queryKey, settings),
-    onError: signedOutOn401(queryClient),
   });
 
 /** After the logo changes: the settings (their logo type), the logo, and the header's. */
@@ -2750,7 +2720,6 @@ export const updateReceiptLogoMutation = (queryClient: QueryClient) =>
     mutationFn: (body: components['schemas']['ReceiptLogoInputBody']) =>
       expectOk(api.PUT('/api/v1/admin/settings/receipts/logo', { body })),
     onSuccess: () => refreshLogo(queryClient),
-    onError: signedOutOn401(queryClient),
   });
 
 /** Removes the logo of later receipts (admin). */
@@ -2758,7 +2727,6 @@ export const deleteReceiptLogoMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: () => expectOk(api.DELETE('/api/v1/admin/settings/receipts/logo')),
     onSuccess: () => refreshLogo(queryClient),
-    onError: signedOutOn401(queryClient),
   });
 
 /** The school's name and legal notice (office reads, an admin writes; ADR 0013). */
@@ -2798,7 +2766,6 @@ export const updateSchoolSettingsMutation = (queryClient: QueryClient) =>
       queryClient.setQueryData(schoolSettingsQuery.queryKey, settings);
       return refreshPublicSettings(queryClient);
     },
-    onError: signedOutOn401(queryClient),
   });
 
 export const brandingSettingsQuery = queryOptions({
@@ -2815,7 +2782,6 @@ export const updateBrandingSettingsMutation = (queryClient: QueryClient) =>
       queryClient.setQueryData(brandingSettingsQuery.queryKey, settings);
       return refreshPublicSettings(queryClient);
     },
-    onError: signedOutOn401(queryClient),
   });
 
 export const regionalSettingsQuery = queryOptions({
@@ -2838,7 +2804,6 @@ export const updateRegionalSettingsMutation = (queryClient: QueryClient) =>
       return refreshPublicSettings(queryClient);
     },
     onError: (error: Error) => {
-      signedOutOn401(queryClient)(error);
       if (conflictReason(error)) {
         void queryClient.invalidateQueries({ queryKey: regionalSettingsQuery.queryKey });
       }
@@ -2880,7 +2845,6 @@ export const updateBookingRulesMutation = (queryClient: QueryClient) =>
       queryClient.setQueryData(bookingRulesQuery.queryKey, rules);
       return refreshLessons(queryClient);
     },
-    onError: signedOutOn401(queryClient),
   });
 
 /**
@@ -2900,7 +2864,6 @@ export const cancelReceiptMutation = (queryClient: QueryClient) =>
           body: reason ? { reason } : {},
         }),
       ),
-    onError: signedOutOn401(queryClient),
     onSettled: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: receiptsKey }),

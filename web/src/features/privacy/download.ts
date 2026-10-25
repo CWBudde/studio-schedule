@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import type { PersonExport } from '@/api/queries';
 import { exportMyDataMutation, exportPersonMutation } from '@/api/queries';
 
@@ -42,8 +42,7 @@ type ExportMutation = typeof exportPersonMutation | typeof exportMyDataMutation;
  * after the file is handed over; a failure shows through `error`.
  */
 export function useExportDownload(mutation: ExportMutation) {
-  const queryClient: QueryClient = useQueryClient();
-  const exportData = useMutation(mutation(queryClient));
+  const exportData = useMutation(mutation);
   return {
     download: (personId: string) =>
       exportData.mutate(personId, {
