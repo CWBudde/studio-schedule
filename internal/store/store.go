@@ -429,6 +429,14 @@ type BookingRepo interface {
 	// are not canceled, for each of the given lessons that has one; lessons
 	// without an active booking (or that do not exist) are left out.
 	CountsByLessons(ctx context.Context, lessons []domain.LessonID) (map[domain.LessonID]BookingCounts, error)
+	// CountLateCanceledByLessons returns, by lesson, the number of bookings
+	// canceled late, for each of the given lessons that has one; other
+	// lessons (and those that do not exist) are left out.
+	CountLateCanceledByLessons(ctx context.Context, lessons []domain.LessonID) (map[domain.LessonID]int, error)
+	// CountActivePersons returns how many different persons have an active
+	// (not canceled) booking in any of the given lessons; guests do not
+	// count.
+	CountActivePersons(ctx context.Context, lessons []domain.LessonID) (int, error)
 	// ListActiveByLessonsAndPersons returns the bookings that are not
 	// canceled of any of the given persons in any of the given lessons,
 	// ordered by BookedAt and ID.
@@ -490,6 +498,9 @@ type BookingCounts struct {
 	// lessons, that are a guest's (no person), and whose attendance is
 	// unknown (status booked).
 	Trials, Guests, Booked int
+	// Attended and NoShow count the active bookings whose attendance was
+	// taken: present or absent.
+	Attended, NoShow int
 }
 
 // WaitlistRepo stores the waiting-list entries of lessons (ADR 0010). A
@@ -514,6 +525,9 @@ type WaitlistRepo interface {
 	// ListOpenByLessons returns the open (waiting or invited) entries of the
 	// given lessons, ordered by JoinedAt and ID.
 	ListOpenByLessons(ctx context.Context, lessons []domain.LessonID) ([]domain.WaitlistEntry, error)
+	// CountByLessons returns, by lesson, how many entries each of the given
+	// lessons has, ended ones included; lessons without one are left out.
+	CountByLessons(ctx context.Context, lessons []domain.LessonID) (map[domain.LessonID]int, error)
 	// ListOpenByPersons returns the open (waiting or invited) entries of
 	// the given persons, ordered by JoinedAt and ID.
 	ListOpenByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.WaitlistEntry, error)
@@ -655,6 +669,16 @@ type ReceiptFilter struct {
 	Offset, Limit int
 }
 
+// ReceiptDayTotals sums the receipts of one issue date and currency.
+type ReceiptDayTotals struct {
+	Date     domain.Date
+	Currency string
+	// Sales and Cancellations count the receipts of each kind.
+	Sales, Cancellations int
+	// Gross is the sum of their totals; cancellations count negative.
+	Gross domain.Money
+}
+
 // ReceiptRepo stores receipts (ADR 0012). Receipts are immutable: there is
 // no Update or Delete, and the PostgreSQL store rejects both with a
 // trigger. Receipts come with their lines, ordered by position.
@@ -682,6 +706,10 @@ type ReceiptRepo interface {
 	// ListCancellations returns the cancellations of the given receipts,
 	// ordered by the ID of the receipt they cancel.
 	ListCancellations(ctx context.Context, ids []domain.ReceiptID) ([]domain.Receipt, error)
+	// TotalsByDay sums the receipts issued on the school dates from to to
+	// (both inclusive) by issue date and currency, ordered by date and
+	// currency; days without a receipt are left out.
+	TotalsByDay(ctx context.Context, from, to domain.Date) ([]ReceiptDayTotals, error)
 	// PutPDF stores the rendered PDF of a receipt, once: it fails with
 	// domain.ErrDuplicate if the receipt has one, and with
 	// domain.ErrConflict if the receipt does not exist.

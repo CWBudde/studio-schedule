@@ -61,6 +61,22 @@ ORDER BY year DESC, sequence DESC, id;
 -- name: ListReceiptCancellations :many
 SELECT * FROM receipts WHERE cancels_receipt_id = ANY(sqlc.arg(receipts)::uuid[]) ORDER BY cancels_receipt_id;
 
+-- name: ReceiptTotalsByDay :many
+-- There is no index on issue_date. The year bounds, implied by the dates
+-- (receipts_issue_year), are integers like the column, so the planner can
+-- range-scan receipts_order_idx over the range's years instead of reading
+-- every receipt.
+SELECT issue_date, currency,
+    count(*) FILTER (WHERE kind = 'sale') AS sales,
+    count(*) FILTER (WHERE kind = 'cancellation') AS cancellations,
+    sum(gross)::bigint AS gross
+FROM receipts
+WHERE issue_date BETWEEN sqlc.arg(from_date)::date AND sqlc.arg(to_date)::date
+    AND year BETWEEN extract(year FROM sqlc.arg(from_date)::date)::integer
+        AND extract(year FROM sqlc.arg(to_date)::date)::integer
+GROUP BY issue_date, currency
+ORDER BY issue_date, currency;
+
 -- name: ListReceiptLines :many
 SELECT * FROM receipt_lines WHERE receipt_id = ANY(sqlc.arg(receipts)::uuid[]) ORDER BY receipt_id, position;
 

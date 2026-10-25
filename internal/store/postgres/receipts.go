@@ -245,6 +245,21 @@ func (r receiptRepo) ListCancellations(ctx context.Context, ids []domain.Receipt
 	return r.withLines(ctx, rows, err)
 }
 
+func (r receiptRepo) TotalsByDay(ctx context.Context, from, to domain.Date) ([]store.ReceiptDayTotals, error) {
+	if !from.Valid() || !to.Valid() || from.Compare(to) > 0 {
+		return nil, nil
+	}
+
+	rows, err := r.q.ReceiptTotalsByDay(ctx, sqlc.ReceiptTotalsByDayParams{FromDate: pgDate(from), ToDate: pgDate(to)})
+
+	return convertRows(rows, err, func(row sqlc.ReceiptTotalsByDayRow) store.ReceiptDayTotals {
+		return store.ReceiptDayTotals{
+			Date: fromPgDate(row.IssueDate), Currency: row.Currency,
+			Sales: int(row.Sales), Cancellations: int(row.Cancellations), Gross: domain.Money(row.Gross),
+		}
+	})
+}
+
 func (r receiptRepo) PutPDF(ctx context.Context, id domain.ReceiptID, pdf []byte) error {
 	if len(pdf) == 0 {
 		return fmt.Errorf("%w: empty PDF", domain.ErrValidation)

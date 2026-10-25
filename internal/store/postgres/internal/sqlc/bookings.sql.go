@@ -41,6 +41,18 @@ func (q *Queries) AddBookingEvent(ctx context.Context, arg AddBookingEventParams
 	return err
 }
 
+const countActiveBookingPersons = `-- name: CountActiveBookingPersons :one
+SELECT count(DISTINCT person_id) FROM bookings
+WHERE lesson_id = ANY($1::uuid[]) AND status <> 'canceled' AND person_id IS NOT NULL
+`
+
+func (q *Queries) CountActiveBookingPersons(ctx context.Context, lessons []pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveBookingPersons, lessons)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countActiveBookings = `-- name: CountActiveBookings :one
 SELECT count(*) FROM bookings WHERE lesson_id = $1 AND status <> 'canceled'
 `
@@ -89,7 +101,9 @@ SELECT lesson_id,
     count(*) AS active,
     count(*) FILTER (WHERE trial) AS trials,
     count(*) FILTER (WHERE person_id IS NULL) AS guests,
-    count(*) FILTER (WHERE status = 'booked') AS booked
+    count(*) FILTER (WHERE status = 'booked') AS booked,
+    count(*) FILTER (WHERE status = 'attended') AS attended,
+    count(*) FILTER (WHERE status = 'no_show') AS no_show
 FROM bookings
 WHERE lesson_id = ANY($1::uuid[]) AND status <> 'canceled'
 GROUP BY lesson_id
@@ -101,6 +115,8 @@ type CountBookingsByLessonsRow struct {
 	Trials   int64
 	Guests   int64
 	Booked   int64
+	Attended int64
+	NoShow   int64
 }
 
 func (q *Queries) CountBookingsByLessons(ctx context.Context, lessons []pgtype.UUID) ([]CountBookingsByLessonsRow, error) {
@@ -118,7 +134,41 @@ func (q *Queries) CountBookingsByLessons(ctx context.Context, lessons []pgtype.U
 			&i.Trials,
 			&i.Guests,
 			&i.Booked,
+			&i.Attended,
+			&i.NoShow,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countLateCanceledBookingsByLessons = `-- name: CountLateCanceledBookingsByLessons :many
+SELECT lesson_id, count(*) AS late
+FROM bookings
+WHERE lesson_id = ANY($1::uuid[]) AND status = 'canceled' AND late
+GROUP BY lesson_id
+`
+
+type CountLateCanceledBookingsByLessonsRow struct {
+	LessonID pgtype.UUID
+	Late     int64
+}
+
+func (q *Queries) CountLateCanceledBookingsByLessons(ctx context.Context, lessons []pgtype.UUID) ([]CountLateCanceledBookingsByLessonsRow, error) {
+	rows, err := q.db.Query(ctx, countLateCanceledBookingsByLessons, lessons)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountLateCanceledBookingsByLessonsRow
+	for rows.Next() {
+		var i CountLateCanceledBookingsByLessonsRow
+		if err := rows.Scan(&i.LessonID, &i.Late); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

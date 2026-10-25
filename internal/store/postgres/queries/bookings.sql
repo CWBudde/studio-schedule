@@ -35,10 +35,22 @@ SELECT lesson_id,
     count(*) AS active,
     count(*) FILTER (WHERE trial) AS trials,
     count(*) FILTER (WHERE person_id IS NULL) AS guests,
-    count(*) FILTER (WHERE status = 'booked') AS booked
+    count(*) FILTER (WHERE status = 'booked') AS booked,
+    count(*) FILTER (WHERE status = 'attended') AS attended,
+    count(*) FILTER (WHERE status = 'no_show') AS no_show
 FROM bookings
 WHERE lesson_id = ANY(sqlc.arg(lessons)::uuid[]) AND status <> 'canceled'
 GROUP BY lesson_id;
+
+-- name: CountLateCanceledBookingsByLessons :many
+SELECT lesson_id, count(*) AS late
+FROM bookings
+WHERE lesson_id = ANY(sqlc.arg(lessons)::uuid[]) AND status = 'canceled' AND late
+GROUP BY lesson_id;
+
+-- name: CountActiveBookingPersons :one
+SELECT count(DISTINCT person_id) FROM bookings
+WHERE lesson_id = ANY(sqlc.arg(lessons)::uuid[]) AND status <> 'canceled' AND person_id IS NOT NULL;
 
 -- name: ListActiveBookingsByLessonsAndPersons :many
 SELECT * FROM bookings

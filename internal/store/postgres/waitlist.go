@@ -106,6 +106,22 @@ func (r waitlistRepo) ListOpenByLessons(
 	return convertRows(rows, err, toWaitlistEntry)
 }
 
+func (r waitlistRepo) CountByLessons(
+	ctx context.Context, lessons []domain.LessonID,
+) (map[domain.LessonID]int, error) {
+	rows, err := r.q.CountWaitlistEntriesByLessons(ctx, pgIDs(lessons))
+	if err != nil {
+		return nil, mapErr(err)
+	}
+
+	out := make(map[domain.LessonID]int, len(rows))
+	for _, row := range rows {
+		out[fromPgID[domain.LessonID](row.LessonID)] = int(row.Entries)
+	}
+
+	return out, nil
+}
+
 func (r waitlistRepo) ListOpenByPersons(
 	ctx context.Context, persons []domain.PersonID,
 ) ([]domain.WaitlistEntry, error) {

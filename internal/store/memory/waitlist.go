@@ -100,6 +100,21 @@ func (r waitlistRepo) ListOpenByLessons(_ context.Context, lessons []domain.Less
 	}), byJoined), nil
 }
 
+func (r waitlistRepo) CountByLessons(_ context.Context, lessons []domain.LessonID) (map[domain.LessonID]int, error) {
+	wanted := setOf(lessons)
+	out := map[domain.LessonID]int{}
+
+	for _, e := range r.tx.state.waitlist.filter(func(e domain.WaitlistEntry) bool {
+		_, ok := wanted[e.LessonID]
+
+		return ok
+	}) {
+		out[e.LessonID]++
+	}
+
+	return out, nil
+}
+
 func (r waitlistRepo) ListOpenByPersons(_ context.Context, persons []domain.PersonID) ([]domain.WaitlistEntry, error) {
 	wanted := setOf(persons)
 

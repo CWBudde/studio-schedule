@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -142,6 +143,39 @@ func (r receiptRepo) ListCancellations(_ context.Context, ids []domain.ReceiptID
 		return ok && !rc.CancelsReceiptID.IsZero()
 	})
 	slices.SortFunc(out, func(a, b domain.Receipt) int { return compareID(a.CancelsReceiptID, b.CancelsReceiptID) })
+
+	return out, nil
+}
+
+func (r receiptRepo) TotalsByDay(_ context.Context, from, to domain.Date) ([]store.ReceiptDayTotals, error) {
+	type key struct {
+		date     domain.Date
+		currency string
+	}
+
+	sums := map[key]store.ReceiptDayTotals{}
+
+	for _, rc := range r.tx.state.receipts.filter(func(rc domain.Receipt) bool {
+		return rc.IssueDate.Compare(from) >= 0 && rc.IssueDate.Compare(to) <= 0
+	}) {
+		k := key{rc.IssueDate, rc.Currency}
+		t := sums[k]
+		t.Date, t.Currency = rc.IssueDate, rc.Currency
+		t.Gross += rc.Gross
+
+		if rc.Kind == domain.ReceiptCancellation {
+			t.Cancellations++
+		} else {
+			t.Sales++
+		}
+
+		sums[k] = t
+	}
+
+	out := slices.Collect(maps.Values(sums))
+	slices.SortFunc(out, func(a, b store.ReceiptDayTotals) int {
+		return cmp.Or(a.Date.Compare(b.Date), strings.Compare(a.Currency, b.Currency))
+	})
 
 	return out, nil
 }

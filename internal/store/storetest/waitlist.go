@@ -232,6 +232,32 @@ func testWaitlist(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			wantSlice(e.t, got, nil)
 		},
+		"CountByLessons": func(e *env) {
+			s := e.setting()
+			l, other, none := e.lesson(s, t0, 2), e.lesson(s, t0.Add(time.Hour), 2), e.lesson(s, t0.Add(2*time.Hour), 2)
+			ana, bea := e.person("Ana", "Waiter"), e.person("Bea", "Waiter")
+
+			e.entry(l, ana, t0.Add(-time.Hour))
+			ended := e.newEntry(l, bea, t0.Add(-2*time.Hour))
+			ended.Status = domain.WaitlistWithdrawn
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Waitlist().Create(ctx, ended) })
+			e.entry(other, bea, t0.Add(-time.Hour))
+
+			// Ended entries count; lessons without one are left out.
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) (map[domain.LessonID]int, error) {
+				return tx.Waitlist().CountByLessons(ctx, []domain.LessonID{l.ID, none.ID, newID[domain.LessonID](e)})
+			})
+			if len(got) != 1 || got[l.ID] != 2 {
+				e.t.Fatalf("CountByLessons = %v, want %v: 2", got, l.ID)
+			}
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) (map[domain.LessonID]int, error) {
+				return tx.Waitlist().CountByLessons(ctx, nil)
+			})
+			if len(got) != 0 {
+				e.t.Fatalf("CountByLessons(nil) = %v", got)
+			}
+		},
 		"ListDueLessons": func(e *env) {
 			s := e.setting()
 			now := t0

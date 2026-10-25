@@ -1176,14 +1176,52 @@ func (r bookingRepo) CountsByLessons(
 			c.Guests++
 		}
 
-		if b.Status == domain.BookingBooked {
+		switch b.Status {
+		case domain.BookingBooked:
 			c.Booked++
+		case domain.BookingAttended:
+			c.Attended++
+		case domain.BookingNoShow:
+			c.NoShow++
+		case domain.BookingCanceled:
 		}
 
 		out[b.LessonID] = c
 	}
 
 	return out, nil
+}
+
+func (r bookingRepo) CountLateCanceledByLessons(
+	_ context.Context, lessons []domain.LessonID,
+) (map[domain.LessonID]int, error) {
+	out := map[domain.LessonID]int{}
+	wanted := setOf(lessons)
+
+	for _, b := range r.tx.state.bookings.filter(func(b domain.Booking) bool {
+		_, ok := wanted[b.LessonID]
+
+		return ok && b.Status == domain.BookingCanceled && b.Late
+	}) {
+		out[b.LessonID]++
+	}
+
+	return out, nil
+}
+
+func (r bookingRepo) CountActivePersons(_ context.Context, lessons []domain.LessonID) (int, error) {
+	wanted := setOf(lessons)
+	persons := map[domain.PersonID]struct{}{}
+
+	for _, b := range r.tx.state.bookings.filter(func(b domain.Booking) bool {
+		_, ok := wanted[b.LessonID]
+
+		return ok && active(b) && !b.PersonID.IsZero()
+	}) {
+		persons[b.PersonID] = struct{}{}
+	}
+
+	return len(persons), nil
 }
 
 func (r bookingRepo) ListActiveByLessonsAndPersons(

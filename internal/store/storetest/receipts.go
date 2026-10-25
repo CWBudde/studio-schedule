@@ -296,6 +296,42 @@ func testReceipts(t *testing.T, newStore func(*testing.T) store.Store) {
 		},
 		// The search folds ASCII letters only, also in the query: "Öztürk"
 		// finds itself whatever the database's default collation.
+		"TotalsByDay": func(e *env) {
+			payer := e.person("Paula", "Payer")
+			on := func(r domain.Receipt, d domain.Date) domain.Receipt {
+				r.IssueDate, r.Year = d, d.Year
+				valid(e.t, r)
+
+				return e.receipt(r)
+			}
+			newYearsEve := domain.Date{Year: 2025, Month: time.December, Day: 31}
+			march2 := domain.Date{Year: 2026, Month: time.March, Day: 2}
+			march3 := domain.Date{Year: 2026, Month: time.March, Day: 3}
+
+			on(e.newReceipt(2025, 1, payer), newYearsEve)
+			sale := on(e.newReceipt(2026, 1, payer), march2)
+			on(e.newReceipt(2026, 2, payer), march2)
+			chf := e.newReceipt(2026, 3, payer)
+			chf.Currency = "CHF"
+			on(chf, march2)
+			on(e.cancellationOf(sale, 4), march3)
+			on(e.newReceipt(2026, 5, payer), domain.Date{Year: 2026, Month: time.March, Day: 4}) // after the range
+
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]store.ReceiptDayTotals, error) {
+				return tx.Receipts().TotalsByDay(ctx, newYearsEve, march3)
+			})
+			wantSlice(e.t, got, []store.ReceiptDayTotals{
+				{Date: newYearsEve, Currency: "EUR", Sales: 1, Gross: sale.Gross},
+				{Date: march2, Currency: "CHF", Sales: 1, Gross: sale.Gross},
+				{Date: march2, Currency: "EUR", Sales: 2, Gross: 2 * sale.Gross},
+				{Date: march3, Currency: "EUR", Cancellations: 1, Gross: -sale.Gross},
+			})
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) ([]store.ReceiptDayTotals, error) {
+				return tx.Receipts().TotalsByDay(ctx, march3, march2)
+			})
+			wantSlice(e.t, got, nil)
+		},
 		"SearchFoldsASCIIOnly": func(e *env) {
 			r := e.newReceipt(2026, 1, e.person("Jürgen", "Öztürk"))
 			e.receipt(r)

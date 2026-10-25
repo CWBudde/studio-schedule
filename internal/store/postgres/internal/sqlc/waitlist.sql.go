@@ -11,6 +11,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countWaitlistEntriesByLessons = `-- name: CountWaitlistEntriesByLessons :many
+SELECT lesson_id, count(*) AS entries FROM waitlist_entries
+WHERE lesson_id = ANY($1::uuid[])
+GROUP BY lesson_id
+`
+
+type CountWaitlistEntriesByLessonsRow struct {
+	LessonID pgtype.UUID
+	Entries  int64
+}
+
+func (q *Queries) CountWaitlistEntriesByLessons(ctx context.Context, lessons []pgtype.UUID) ([]CountWaitlistEntriesByLessonsRow, error) {
+	rows, err := q.db.Query(ctx, countWaitlistEntriesByLessons, lessons)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountWaitlistEntriesByLessonsRow
+	for rows.Next() {
+		var i CountWaitlistEntriesByLessonsRow
+		if err := rows.Scan(&i.LessonID, &i.Entries); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createWaitlistEntry = `-- name: CreateWaitlistEntry :exec
 INSERT INTO waitlist_entries (
     id, lesson_id, person_id, status, joined_at, stay_on_list, joined_by, invite_token_hash, invited_at, expires_at
