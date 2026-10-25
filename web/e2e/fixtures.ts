@@ -53,3 +53,57 @@ export function addDays(date: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+/** The roles of the demo accounts, as the login page names them. */
+export type DemoRole = 'Member' | 'Instructor' | 'Office' | 'Administrator';
+
+/** The button of the demo account of a role on the login page. */
+export function demoAccount(page: Page, role: DemoRole): Locator {
+  return page
+    .getByRole('region', { name: 'Demo accounts' })
+    .getByRole('button', { name: new RegExp(`^Sign in as .+ \\(${role}\\)$`) });
+}
+
+/** The name of the demo account of a role, read on the login page. */
+export async function demoName(page: Page, role: DemoRole): Promise<string> {
+  const label = (await demoAccount(page, role).getAttribute('aria-label')) ?? '';
+  const name = new RegExp(`^Sign in as (.+) \\(${role}\\)$`).exec(label)?.[1] ?? '';
+  expect(name).not.toBe('');
+  return name;
+}
+
+/** The email of the demo account of a role, read on the login page. */
+export async function demoEmail(page: Page, role: DemoRole): Promise<string> {
+  // `has` is relative to each list item: the button without its region.
+  const button = page.getByRole('button', { name: new RegExp(`^Sign in as .+ \\(${role}\\)$`) });
+  const row = page
+    .getByRole('region', { name: 'Demo accounts' })
+    .getByRole('listitem')
+    .filter({ has: button });
+  const email = ((await row.getByRole('definition').first().textContent()) ?? '').trim();
+  expect(email).toContain('@');
+  return email;
+}
+
+/**
+ * Signs in with the demo account of a role and returns its name. It uses
+ * the login page: the one shown, or else the one the header's "Sign in"
+ * opens, or, before anything is open, the demo's.
+ */
+export async function signIn(page: Page, role: DemoRole): Promise<string> {
+  if (!(await page.getByRole('region', { name: 'Demo accounts' }).isVisible())) {
+    if (page.url() === 'about:blank') await gotoDemo(page, '/login');
+    else await page.getByRole('banner').getByRole('link', { name: 'Sign in' }).click();
+  }
+  const name = await demoName(page, role);
+  await demoAccount(page, role).click();
+  await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
+  return name;
+}
+
+/** Signs the account `name` out from the account menu in the header. */
+export async function signOut(page: Page, name: string): Promise<void> {
+  await page.getByRole('banner').getByRole('button', { name }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Sign in' })).toBeVisible();
+}

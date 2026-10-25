@@ -1,27 +1,4 @@
-import { expect, gotoDemo, type Page, test } from './fixtures';
-
-/** The demo account button of a role on the login page. */
-const demoAccount = (page: Page, role: string) =>
-  page
-    .getByRole('region', { name: 'Demo accounts' })
-    .getByRole('button', { name: new RegExp(`^Sign in as .+ \\(${role}\\)$`) });
-
-/** The name of the demo account of a role, read on the login page. */
-async function demoName(page: Page, role: string): Promise<string> {
-  const label = (await demoAccount(page, role).getAttribute('aria-label')) ?? '';
-  const name = new RegExp(`^Sign in as (.+) \\(${role}\\)$`).exec(label)?.[1] ?? '';
-  expect(name).not.toBe('');
-  return name;
-}
-
-/** Signs in with the demo account of a role from the login page; returns its name. */
-async function signInAs(page: Page, role: string): Promise<string> {
-  await gotoDemo(page, '/login');
-  const name = await demoName(page, role);
-  await demoAccount(page, role).click();
-  await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
-  return name;
-}
+import { demoName, expect, gotoDemo, type Page, signIn, test } from './fixtures';
 
 /** Opens the administration from the account menu; it starts with the locations. */
 async function openAdministration(page: Page, name: string): Promise<void> {
@@ -35,7 +12,7 @@ const roomsList = (page: Page) =>
   page.getByRole('table', { name: 'Rooms' }).or(page.getByRole('list', { name: 'Rooms' }));
 
 test('the office adds, renames and deletes a location and a room', async ({ page }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openAdministration(page, office);
   await expect(
     page
@@ -105,7 +82,7 @@ test('the office adds, renames and deletes a location and a room', async ({ page
 });
 
 test('deleting a room that classes use says why it stays', async ({ page }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openAdministration(page, office);
 
   const deleteButton = roomsList(page)
@@ -127,7 +104,7 @@ test('deleting a room that classes use says why it stays', async ({ page }) => {
 });
 
 test('a member has no access to the administration', async ({ page }) => {
-  const member = await signInAs(page, 'Member');
+  const member = await signIn(page, 'Member');
   await page.getByRole('banner').getByRole('button', { name: member }).click();
   await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Administration' })).toHaveCount(0);
@@ -166,7 +143,7 @@ async function instructorOptions(page: Page): Promise<string[]> {
 }
 
 test('the office adds, renames and deletes a course type', async ({ page }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openAdministration(page, office);
   await openSection(page, 'Course types');
 
@@ -202,7 +179,7 @@ test('the office adds, renames and deletes a course type', async ({ page }) => {
 });
 
 test('deleting a course type that classes use says why it stays', async ({ page }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openAdministration(page, office);
   await openSection(page, 'Course types');
 
@@ -217,7 +194,7 @@ test('deleting a course type that classes use says why it stays', async ({ page 
 });
 
 test('a deactivated instructor leaves the schedule filter', async ({ page }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   expect(await instructorOptions(page)).toContain('Nina Tapworth');
 
   await openAdministration(page, office);
@@ -250,7 +227,7 @@ test('a deactivated instructor leaves the schedule filter', async ({ page }) => 
 });
 
 test('the office links a staff member to a person', async ({ page }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openAdministration(page, office);
   await openSection(page, 'Staff');
 
@@ -291,7 +268,7 @@ const classCard = (page: Page, name: string) =>
   page.getByRole('main').getByRole('article', { name, exact: true });
 
 test('the office adds a class, moves it, and the public classes follow', async ({ page }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openTermClasses(page, office);
 
   await page.getByRole('button', { name: 'Add class' }).click();
@@ -329,7 +306,7 @@ test('the office adds a class, moves it, and the public classes follow', async (
 });
 
 test('office edits a class and the schedule shows the change', async ({ page }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openTermClasses(page, office);
 
   await page.getByRole('button', { name: 'Edit Barre Fitness, Tuesday 19:00' }).click();
@@ -352,7 +329,7 @@ test('office edits a class and the schedule shows the change', async ({ page }) 
 test('a class with history is retired instead of deleted and leaves the public classes', async ({
   page,
 }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openMain(page, 'Classes');
   await expect(classCard(page, 'Pointe Work, Friday, 18:00–19:15')).toBeVisible();
 
@@ -382,7 +359,7 @@ async function openTerms(page: Page, office: string): Promise<void> {
 }
 
 test('the office adds a term, renames and shortens it, and deletes it', async ({ page }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openTerms(page, office);
 
   await page.getByRole('button', { name: 'Add term' }).click();
@@ -419,7 +396,7 @@ test('the office adds a term, renames and shortens it, and deletes it', async ({
 });
 
 test('deleting a term with classes says why it stays', async ({ page }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openTerms(page, office);
 
   const deleteButton = page.getByRole('button', { name: /^Delete School Year / });
@@ -439,7 +416,7 @@ test('deleting a term with classes says why it stays', async ({ page }) => {
 });
 
 test('a term cannot leave out lessons that took place', async ({ page }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openTerms(page, office);
 
   await page.getByRole('button', { name: /^Edit School Year / }).click();
@@ -460,7 +437,7 @@ test('a term cannot leave out lessons that took place', async ({ page }) => {
 });
 
 test('the office adds and removes a class member', async ({ page }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openTermClasses(page, office);
 
   await page.getByRole('button', { name: 'Members of Creative Dance, Saturday 10:00' }).click();
@@ -504,7 +481,7 @@ test('the office adds and removes a class member', async ({ page }) => {
 test('the office edits a person, links a guardian and creates an account with an invitation', async ({
   page,
 }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openAdministration(page, office);
   await openSection(page, 'Persons');
 
@@ -565,7 +542,7 @@ test('the office edits a person, links a guardian and creates an account with an
 test('the office deletes a person added by mistake, but not one with family links', async ({
   page,
 }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openAdministration(page, office);
   await openSection(page, 'Persons');
 
@@ -603,7 +580,7 @@ const auditLog = (page: Page) =>
 test('an admin signs in as a member, returns and finds both in the audit log', async ({ page }) => {
   await gotoDemo(page, '/login');
   const member = await demoName(page, 'Member');
-  const admin = await signInAs(page, 'Administrator');
+  const admin = await signIn(page, 'Administrator');
 
   await page.getByRole('banner').getByRole('button', { name: admin }).click();
   await page.getByRole('menuitem', { name: 'Accounts' }).click();
@@ -632,7 +609,7 @@ test('an admin signs in as a member, returns and finds both in the audit log', a
 });
 
 test('the office has no audit log', async ({ page }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openAdministration(page, office);
   await expect(
     page

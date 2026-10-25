@@ -1,5 +1,5 @@
 import type { Locator } from '@playwright/test';
-import { expect, gotoDemo, lessons, type Page, test } from './fixtures';
+import { expect, gotoDemo, lessons, type Page, signIn, test } from './fixtures';
 
 // The demo seed has a ballet workshop of Alina Starling (the demo's
 // instructor login) 24 days ahead, 13:30–15:30, to which she added a guest
@@ -14,15 +14,7 @@ type Role = 'Instructor' | 'Office';
  * header's "Sign in" opens) and opens the schedule; returns the account's name.
  */
 async function signInAs(page: Page, role: Role): Promise<string> {
-  await page.getByRole('banner').getByRole('link', { name: 'Sign in' }).click();
-  const account = page
-    .getByRole('region', { name: 'Demo accounts' })
-    .getByRole('button', { name: new RegExp(`^Sign in as .+ \\(${role}\\)$`) });
-  const label = (await account.getAttribute('aria-label')) ?? '';
-  const name = new RegExp(`^Sign in as (.+) \\(${role}\\)$`).exec(label)?.[1] ?? '';
-  expect(name).not.toBe('');
-  await account.click();
-  await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
+  const name = await signIn(page, role);
   await page
     .getByRole('navigation', { name: 'Main' })
     .getByRole('link', { name: 'Schedule' })

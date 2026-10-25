@@ -1,22 +1,13 @@
 import type { Locator } from '@playwright/test';
-import { addDays, expect, gotoDemo, type Page, test } from './fixtures';
+import { addDays, expect, type Page, signIn, test } from './fixtures';
 
 // The demo books class members into every lesson of their classes, so these
 // tests change a lesson of the one class without members and see "nobody
 // gets a mail"; the cancellation mails are covered by the Go tests.
 
-/** Signs in with the office's demo account from the login page and opens the schedule. */
+/** Signs in with the office's demo account and opens the schedule. */
 async function signInAsOffice(page: Page): Promise<void> {
-  await gotoDemo(page, '/login');
-  const account = page
-    .getByRole('region', { name: 'Demo accounts' })
-    .getByRole('button', { name: /^Sign in as .+ \(Office\)$/ });
-  const label = (await account.getAttribute('aria-label')) ?? '';
-  const name = /^Sign in as (.+) \(Office\)$/.exec(label)?.[1] ?? '';
-  expect(name).not.toBe('');
-  await account.click();
-  await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
-
+  await signIn(page, 'Office');
   await page
     .getByRole('navigation', { name: 'Main' })
     .getByRole('link', { name: 'Schedule' })

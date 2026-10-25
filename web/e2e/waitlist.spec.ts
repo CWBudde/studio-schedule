@@ -1,5 +1,5 @@
 import type { Locator } from '@playwright/test';
-import { expect, gotoDemo, type Page, test } from './fixtures';
+import { expect, gotoDemo, type Page, signIn, signOut, test } from './fixtures';
 
 // The demo seed has a small tap workshop ten days ahead (13:30–15:00, in
 // the schedule's first 14 days) that four members booked up, with two others on its waiting list (none of the
@@ -10,23 +10,9 @@ import { expect, gotoDemo, type Page, test } from './fixtures';
  * header's "Sign in" opens) and opens the schedule; returns the account's name.
  */
 async function signInAs(page: Page, role: 'Member' | 'Office'): Promise<string> {
-  await page.getByRole('banner').getByRole('link', { name: 'Sign in' }).click();
-  const account = page
-    .getByRole('region', { name: 'Demo accounts' })
-    .getByRole('button', { name: new RegExp(`^Sign in as .+ \\(${role}\\)$`) });
-  const label = (await account.getAttribute('aria-label')) ?? '';
-  const name = new RegExp(`^Sign in as (.+) \\(${role}\\)$`).exec(label)?.[1] ?? '';
-  expect(name).not.toBe('');
-  await account.click();
-  await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
+  const name = await signIn(page, role);
   await openSchedule(page);
   return name;
-}
-
-async function signOut(page: Page, name: string): Promise<void> {
-  await page.getByRole('banner').getByRole('button', { name }).click();
-  await page.getByRole('menuitem', { name: 'Sign out' }).click();
-  await expect(page.getByRole('banner').getByRole('link', { name: 'Sign in' })).toBeVisible();
 }
 
 async function openSchedule(page: Page): Promise<void> {

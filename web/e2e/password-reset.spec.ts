@@ -1,21 +1,7 @@
-import { expect, gotoDemo, type Page, test } from './fixtures';
-
-/** The name and email of the demo member, from the demo accounts on the login page. */
-async function demoMember(page: Page): Promise<{ name: string; email: string }> {
-  const accounts = page.getByRole('region', { name: 'Demo accounts' });
-  const member = page.getByRole('button', { name: /^Sign in as .+ \(Member\)$/ });
-  const button = accounts.locator(member);
-  const label = (await button.getAttribute('aria-label')) ?? '';
-  const name = /^Sign in as (.+) \(Member\)$/.exec(label)?.[1] ?? '';
-  const row = accounts.getByRole('listitem').filter({ has: member });
-  const email = ((await row.getByRole('definition').first().textContent()) ?? '').trim();
-  expect(name).not.toBe('');
-  expect(email).toContain('@');
-  return { name, email };
-}
+import { demoEmail, demoName, expect, gotoDemo, type Page, test } from './fixtures';
 
 /** Signs in with the login form (not a demo account button). */
-async function signIn(page: Page, email: string, password: string): Promise<void> {
+async function signInWithForm(page: Page, email: string, password: string): Promise<void> {
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -26,7 +12,8 @@ test('resets a forgotten password from the demo mailbox and signs in with the ne
 }) => {
   const password = 'a-fresh-start-2026';
   await gotoDemo(page, '/login');
-  const { name, email } = await demoMember(page);
+  const name = await demoName(page, 'Member');
+  const email = await demoEmail(page, 'Member');
 
   await page.getByRole('link', { name: 'Forgot password?' }).click();
   await expect(
@@ -58,17 +45,17 @@ test('resets a forgotten password from the demo mailbox and signs in with the ne
   await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();
 
   // The old password is gone.
-  await signIn(page, email, 'demo-password');
+  await signInWithForm(page, email, 'demo-password');
   await expect(page.getByText('The email address or password is incorrect.')).toBeVisible();
 
-  await signIn(page, email, password);
+  await signInWithForm(page, email, password);
   await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
   expect(new URL(page.url()).hash).toBe('#/');
 });
 
 test('a reset link works only once', async ({ page }) => {
   await gotoDemo(page, '/login');
-  const { email } = await demoMember(page);
+  const email = await demoEmail(page, 'Member');
 
   await page.getByRole('link', { name: 'Forgot password?' }).click();
   await expect(

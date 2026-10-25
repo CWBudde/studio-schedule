@@ -1,4 +1,4 @@
-import { expect, gotoDemo, lessons, type Page, test } from './fixtures';
+import { expect, gotoDemo, lessons, type Page, signIn, signOut, test } from './fixtures';
 
 // The demo seed has a ballet workshop of Alina Starling (the demo's
 // instructor login) 24 days ahead, 13:30–15:30, with a guest with an email
@@ -15,15 +15,7 @@ type Role = 'Instructor' | 'Office';
  * navigation; returns the account's name.
  */
 async function openTeachAs(page: Page, role: Role): Promise<string> {
-  await page.getByRole('banner').getByRole('link', { name: 'Sign in' }).click();
-  const account = page
-    .getByRole('region', { name: 'Demo accounts' })
-    .getByRole('button', { name: new RegExp(`^Sign in as .+ \\(${role}\\)$`) });
-  const label = (await account.getAttribute('aria-label')) ?? '';
-  const name = new RegExp(`^Sign in as (.+) \\(${role}\\)$`).exec(label)?.[1] ?? '';
-  expect(name).not.toBe('');
-  await account.click();
-  await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
+  const name = await signIn(page, role);
   await page
     .getByRole('navigation', { name: 'Main' })
     .getByRole('link', { name: 'Teaching' })
@@ -31,6 +23,10 @@ async function openTeachAs(page: Page, role: Role): Promise<string> {
   await expect(page.getByRole('heading', { level: 1, name: 'Teaching' })).toBeVisible();
   return name;
 }
+
+/** Today's date at the school (Europe/Berlin), whatever the browser's zone. */
+const schoolToday = () =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date());
 
 test('the instructor sees her lessons and messages the participants of one', async ({ page }) => {
   await gotoDemo(page, '/');
@@ -129,4 +125,71 @@ test('the office sees every lesson and narrows them to one instructor', async ({
   await expect(rows.first()).toBeVisible();
   await expect(rows.filter({ hasNotText: 'Nina Tapworth' })).toHaveCount(0);
   await expect(main.getByRole('button', { name: /^Tap, / }).first()).toBeVisible();
+});
+
+test('the instructor takes attendance of her lesson that started today', async ({ page }) => {
+  // Instructors take attendance from the start of a lesson to the end of its
+  // school day, and which of Alina's seeded lessons that is depends on the
+  // weekday and the hour the test runs. So the office records a lesson of
+  // hers that began at midnight today (a lesson in the past, confirmed).
+  await gotoDemo(page, '/');
+  const office = await signIn(page, 'Office');
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Schedule' })
+    .click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Schedule' })).toBeVisible();
+  await page.getByRole('button', { name: 'New lesson' }).click();
+  const form = page.getByRole('dialog', { name: 'New one-off lesson' });
+  await form.getByRole('combobox', { name: 'Course type' }).click();
+  await page.getByRole('option', { name: 'Classical Ballet' }).click();
+  await form.getByLabel('Date').fill(schoolToday());
+  await form.getByLabel('Start time').fill('00:00');
+  await form.getByLabel('Duration (minutes)').fill('45');
+  await form.getByRole('combobox', { name: 'Room' }).click();
+  await page.getByRole('option', { name: 'Studio North · Studio C' }).click();
+  await form.getByRole('combobox', { name: 'Instructor' }).click();
+  await page.getByRole('option', { name: 'Alina Starling' }).click();
+  await form.getByRole('button', { name: 'Add lesson' }).click();
+  await form
+    .getByRole('alert')
+    .filter({ hasText: 'This lesson is in the past' })
+    .getByRole('button', { name: 'Save anyway' })
+    .click();
+  await expect(form).toBeHidden();
+  const sheet = page.getByRole('dialog', { name: 'Classical Ballet' });
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toBeHidden();
+  await signOut(page, office);
+
+  // Alina finds it among today's lessons; nobody to mark yet.
+  await openTeachAs(page, 'Instructor');
+  const main = page.getByRole('main');
+  const row = main
+    .getByRole('listitem')
+    .filter({ has: page.getByRole('button', { name: /^Classical Ballet, .+, 00:00–00:45/ }) });
+  await expect(row.getByText('0/10 booked')).toBeVisible();
+  await row.getByRole('button', { name: /^Classical Ballet, / }).click();
+  const section = sheet.getByRole('region', { name: 'Participants' });
+
+  // A walk-in joins, and she marks them as attended.
+  await section.getByRole('button', { name: 'Add participant' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add participant' });
+  await dialog.getByRole('tab', { name: 'Guest' }).click();
+  await dialog.getByRole('textbox', { name: 'Name' }).fill('Gus Visitor');
+  await dialog.getByRole('button', { name: 'Add' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText('Gus Visitor has been added.')).toBeVisible();
+
+  const attended = section.getByRole('button', { name: 'Gus Visitor attended' });
+  await expect(attended).toHaveAttribute('aria-pressed', 'false');
+  await attended.click();
+  await expect(page.getByText('Gus Visitor attended.')).toBeVisible();
+  await expect(attended).toHaveAttribute('aria-pressed', 'true');
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toBeHidden();
+
+  // Nobody is left to mark: the instructor view says so.
+  await expect(row.getByText('1/10 booked')).toBeVisible();
+  await expect(row.getByText('Attendance taken')).toBeVisible();
 });

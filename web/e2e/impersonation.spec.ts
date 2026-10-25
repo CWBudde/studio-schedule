@@ -1,4 +1,4 @@
-import { expect, gotoDemo, lessons, type Page, test } from './fixtures';
+import { demoName, expect, gotoDemo, lessons, type Page, signIn, test } from './fixtures';
 
 /*
  * The demo seed has a workshop for members only 5 days after the visit date
@@ -7,29 +7,6 @@ import { expect, gotoDemo, lessons, type Page, test } from './fixtures';
  */
 const membersOnly = /, Members only$/;
 const hidden = /, Hidden – staff only$/;
-
-/** The name of the demo account of a role, from the demo accounts on the login page. */
-async function demoName(page: Page, role: string): Promise<string> {
-  const button = page
-    .getByRole('region', { name: 'Demo accounts' })
-    .getByRole('button', { name: new RegExp(`^Sign in as .+ \\(${role}\\)$`) });
-  const label = (await button.getAttribute('aria-label')) ?? '';
-  const name = new RegExp(`^Sign in as (.+) \\(${role}\\)$`).exec(label)?.[1] ?? '';
-  expect(name).not.toBe('');
-  return name;
-}
-
-/** Signs in with the demo account of a role from the login page; returns its name. */
-async function signInAs(page: Page, role: string): Promise<string> {
-  await gotoDemo(page, '/login');
-  const name = await demoName(page, role);
-  await page
-    .getByRole('region', { name: 'Demo accounts' })
-    .getByRole('button', { name: `Sign in as ${name} (${role})` })
-    .click();
-  await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
-  return name;
-}
 
 /** Opens the schedule from the main navigation and waits for its lessons. */
 async function openSchedule(page: Page): Promise<void> {
@@ -44,7 +21,7 @@ async function openSchedule(page: Page): Promise<void> {
 test('an admin signs in as a member, sees what they see and returns', async ({ page }) => {
   await gotoDemo(page, '/login');
   const member = await demoName(page, 'Member');
-  const admin = await signInAs(page, 'Administrator');
+  const admin = await signIn(page, 'Administrator');
   const header = page.getByRole('banner');
 
   await header.getByRole('button', { name: admin }).click();
@@ -94,7 +71,7 @@ test('a visitor sees neither the workshop for members nor the hidden one', async
 });
 
 test('an instructor sees the hidden workshop with its badge', async ({ page }) => {
-  await signInAs(page, 'Instructor');
+  await signIn(page, 'Instructor');
 
   await openSchedule(page);
 

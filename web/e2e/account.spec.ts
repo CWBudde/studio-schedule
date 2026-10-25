@@ -1,19 +1,19 @@
-import { expect, gotoDemo, type Page, test } from './fixtures';
+import {
+  demoEmail,
+  demoName,
+  expect,
+  gotoDemo,
+  type Page,
+  signIn,
+  signOut,
+  test,
+} from './fixtures';
 
 /** Signs in with the demo member from the login page; returns its name and email. */
 async function signInAsMember(page: Page): Promise<{ name: string; email: string }> {
   await gotoDemo(page, '/login');
-  const accounts = page.getByRole('region', { name: 'Demo accounts' });
-  const member = page.getByRole('button', { name: /^Sign in as .+ \(Member\)$/ });
-  const button = accounts.locator(member);
-  const label = (await button.getAttribute('aria-label')) ?? '';
-  const name = /^Sign in as (.+) \(Member\)$/.exec(label)?.[1] ?? '';
-  const row = accounts.getByRole('listitem').filter({ has: member });
-  const email = ((await row.getByRole('definition').first().textContent()) ?? '').trim();
-  expect(name).not.toBe('');
-  await button.click();
-  await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
-  return { name, email };
+  const email = await demoEmail(page, 'Member');
+  return { name: await signIn(page, 'Member'), email };
 }
 
 /** Opens the account settings from the account menu in the header. */
@@ -43,9 +43,7 @@ test('changes the password from the account settings', async ({ page }) => {
   // This session stays.
   await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
 
-  await page.getByRole('banner').getByRole('button', { name }).click();
-  await page.getByRole('menuitem', { name: 'Sign out' }).click();
-  await expect(page.getByRole('banner').getByRole('link', { name: 'Sign in' })).toBeVisible();
+  await signOut(page, name);
 
   await page.getByRole('banner').getByRole('link', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();
@@ -180,8 +178,7 @@ test('signs in in the language chosen for emails', async ({ page }) => {
   // Choosing it does not switch the UI.
   await expect(page.getByRole('heading', { level: 1, name: 'Your account' })).toBeVisible();
 
-  await page.getByRole('banner').getByRole('button', { name }).click();
-  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await signOut(page, name);
   await page.getByRole('banner').getByRole('link', { name: 'Sign in' }).click();
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('demo-password');
@@ -191,31 +188,12 @@ test('signs in in the language chosen for emails', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Sprache ändern' })).toBeVisible();
 });
 
-/** Signs in with the demo account of a role from the login page shown; returns its name. */
-async function signInWithDemoAccount(page: Page, role: string): Promise<string> {
-  const button = page
-    .getByRole('region', { name: 'Demo accounts' })
-    .getByRole('button', { name: new RegExp(`^Sign in as .+ \\(${role}\\)$`) });
-  const label = (await button.getAttribute('aria-label')) ?? '';
-  const name = new RegExp(`^Sign in as (.+) \\(${role}\\)$`).exec(label)?.[1] ?? '';
-  expect(name).not.toBe('');
-  await button.click();
-  await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
-  return name;
-}
-
 test('a child with an account of their own is read-only and only unlinked', async ({ page }) => {
   await gotoDemo(page, '/login');
-  const member = (
-    (await page
-      .getByRole('region', { name: 'Demo accounts' })
-      .getByRole('button', { name: /^Sign in as .+ \(Member\)$/ })
-      .getAttribute('aria-label')) ?? ''
-  ).replace(/^Sign in as (.+) \(Member\)$/, '$1');
-  expect(member).not.toBe('');
+  const member = await demoName(page, 'Member');
 
   // The office creates an account for a child of the member.
-  const office = await signInWithDemoAccount(page, 'Office');
+  const office = await signIn(page, 'Office');
   await page.getByRole('banner').getByRole('button', { name: office }).click();
   await page.getByRole('menuitem', { name: 'Administration' }).click();
   await page
@@ -239,10 +217,8 @@ test('a child with an account of their own is read-only and only unlinked', asyn
   await expect(create).toBeHidden();
 
   // The member sees the child read-only and can only unlink it.
-  await page.getByRole('banner').getByRole('button', { name: office }).click();
-  await page.getByRole('menuitem', { name: 'Sign out' }).click();
-  await page.getByRole('banner').getByRole('link', { name: 'Sign in' }).click();
-  await signInWithDemoAccount(page, 'Member');
+  await signOut(page, office);
+  await signIn(page, 'Member');
   await openAccount(page, member);
   const entry = page
     .getByRole('region', { name: 'Your children' })

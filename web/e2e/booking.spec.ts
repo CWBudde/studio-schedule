@@ -1,17 +1,8 @@
-import { expect, gotoDemo, type Page, test } from './fixtures';
+import { expect, type Page, signIn, test } from './fixtures';
 
-/** Signs in with the demo member from the login page and opens the schedule; returns the name. */
+/** Signs in with the demo member and opens the schedule; returns the name. */
 async function signInAsMember(page: Page): Promise<string> {
-  await gotoDemo(page, '/login');
-  const account = page
-    .getByRole('region', { name: 'Demo accounts' })
-    .getByRole('button', { name: /^Sign in as .+ \(Member\)$/ });
-  const label = (await account.getAttribute('aria-label')) ?? '';
-  const name = /^Sign in as (.+) \(Member\)$/.exec(label)?.[1] ?? '';
-  expect(name).not.toBe('');
-  await account.click();
-  await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
-
+  const name = await signIn(page, 'Member');
   await page
     .getByRole('navigation', { name: 'Main' })
     .getByRole('link', { name: 'Schedule' })

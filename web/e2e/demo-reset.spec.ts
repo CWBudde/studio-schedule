@@ -1,18 +1,4 @@
-import { expect, gotoDemo, hashSearch, type Page, test } from './fixtures';
-
-/** Signs in with the demo account of a role from the login page; returns its name. */
-async function signInAs(page: Page, role: string): Promise<string> {
-  await gotoDemo(page, '/login');
-  const button = page
-    .getByRole('region', { name: 'Demo accounts' })
-    .getByRole('button', { name: new RegExp(`^Sign in as .+ \\(${role}\\)$`) });
-  const label = (await button.getAttribute('aria-label')) ?? '';
-  const name = new RegExp(`^Sign in as (.+) \\(${role}\\)$`).exec(label)?.[1] ?? '';
-  expect(name).not.toBe('');
-  await button.click();
-  await expect(page.getByRole('banner').getByRole('button', { name })).toBeVisible();
-  return name;
-}
+import { expect, gotoDemo, hashSearch, type Page, signIn, test } from './fixtures';
 
 /** Opens the administration from the account menu; it starts with the locations. */
 async function openAdministration(page: Page, name: string): Promise<void> {
@@ -70,7 +56,7 @@ const elsewhere = (page: Page) =>
 test('the demo keeps changes and the session across reloads until it is reset', async ({
   page,
 }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openAdministration(page, office);
 
   await page.getByRole('button', { name: 'Edit Studio North' }).click();
@@ -99,7 +85,7 @@ test('the demo keeps changes and the session across reloads until it is reset', 
   });
   await expect(page.getByRole('banner').getByRole('button', { name: office })).toHaveCount(0);
 
-  await signInAs(page, 'Office');
+  await signIn(page, 'Office');
   await openAdministration(page, office);
   await expect(page.getByRole('button', { name: 'Edit Studio North' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Edit Studio Lantern' })).toHaveCount(0);
@@ -127,7 +113,7 @@ test('one tab runs the demo; "Use here" moves it with its changes and session', 
   page,
   context,
 }) => {
-  const office = await signInAs(page, 'Office');
+  const office = await signIn(page, 'Office');
   await openAdministration(page, office);
   await page.getByRole('button', { name: 'Edit Studio North' }).click();
   const edit = page.getByRole('dialog', { name: 'Edit Studio North' });
