@@ -2016,6 +2016,10 @@
             ],
             "type": "string"
           },
+          "requestId": {
+            "description": "The ID of the request (the X-Request-Id response header), for finding it in the server's logs.",
+            "type": "string"
+          },
           "status": {
             "description": "HTTP status code",
             "examples": [
@@ -2514,6 +2518,10 @@
               "https://example.com/error-log/abc123"
             ],
             "format": "uri",
+            "type": "string"
+          },
+          "requestId": {
+            "description": "The ID of the request (the X-Request-Id response header), for finding it in the server's logs.",
             "type": "string"
           },
           "status": {
@@ -3476,6 +3484,10 @@
               "not-started",
               "day-over"
             ],
+            "type": "string"
+          },
+          "requestId": {
+            "description": "The ID of the request (the X-Request-Id response header), for finding it in the server's logs.",
             "type": "string"
           },
           "status": {

@@ -5,12 +5,10 @@
 package app
 
 import (
-	"encoding/json"
-	"errors"
+	"context"
 	"log/slog"
 	"net/http"
 	"net/netip"
-	"runtime/debug"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -23,6 +21,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/jobs"
 	"github.com/cwbudde/studio-schedule/internal/mail"
+	"github.com/cwbudde/studio-schedule/internal/requestid"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/service"
 	"github.com/cwbudde/studio-schedule/internal/store"
@@ -80,6 +79,19 @@ type Deps struct {
 	// wakes it instead of waiting for its next tick. Pass the same Waker to
 	// New and Jobs; without one, jobs run on their ticks only.
 	Wake *jobs.Waker
+
+	// RequestIDs generates the IDs of requests that come without a trusted
+	// X-Request-Id; defaults to ids.V7. It is separate from IDs so that
+	// requests do not shift the entity IDs of a deterministic source.
+	RequestIDs ids.Source
+	// Ready reports whether the app can serve requests, for /readyz: the
+	// server checks its database and schema. Nil means always ready (the
+	// memory store).
+	Ready func(ctx context.Context) error
+	// Metrics receives the measurements of requests and jobs; defaults to
+	// none. The server passes its Prometheus collectors when METRICS_ADDR
+	// is set.
+	Metrics Metrics
 }
 
 // withDefaults fills in the optional dependencies. It panics without a
@@ -109,20 +121,39 @@ func (d Deps) withDefaults() Deps {
 		d.Hasher = password.New()
 	}
 
+	if d.RequestIDs == nil {
+		d.RequestIDs = ids.V7{}
+	}
+
+	if d.Metrics == nil {
+		d.Metrics = noMetrics{}
+	}
+
 	return d
 }
 
 // New builds the application handler. The returned huma.API gives access to
 // the OpenAPI document and allows tests to register extra operations.
 //
-// Middleware order (outermost first): security headers, panic recovery,
-// access log, cross-origin protection for unsafe methods, router. The
-// headers come first so that every response carries them, including the
-// 500 of a recovered panic.
+// Middleware order (outermost first): security headers, request ID, access
+// log and metrics, panic recovery, cross-origin protection for unsafe
+// methods, router. The headers come first so that every response carries
+// them, including the 500 of a recovered panic; the request ID comes next
+// so that the recovery and access log lines and every problem document
+// name it; the access log wraps the recovery so that a panic's 500 is
+// logged and counted. Paths in logs and error details have their secret
+// parameters redacted (redact.go). Besides the API the router serves /healthz and /readyz (see
+// health.go); everything else falls through to Deps.UI.
 func New(deps Deps) (http.Handler, huma.API) {
 	deps = deps.withDefaults()
+	// Every line logged with a request's context names the request.
+	deps.Logger = slog.New(requestid.NewLogHandler(deps.Logger.Handler()))
 
 	router := chi.NewRouter()
+	// Before any route: the access log reads the matched route's pattern.
+	router.Use(recordRoute)
+	registerHealth(router, deps)
+
 	cfg := httpapi.NewConfig()
 	cfg.Transformers = append(cfg.Transformers, maskServerErrors(deps.Logger))
 	api := humachi.New(router, cfg)
@@ -165,12 +196,14 @@ func New(deps Deps) (http.Handler, huma.API) {
 		Imports: service.NewImportService(deps.Store, deps.Clock, deps.IDs),
 	})
 
-	router.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
-		writeProblem(w, http.StatusMethodNotAllowed, "method not allowed")
+	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		writeProblem(w, r, http.StatusMethodNotAllowed, "method not allowed")
 	})
+	paths := newPathRedactor(router)
+
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		if deps.UI == nil || isAPIPath(r.URL.Path) {
-			writeProblem(w, http.StatusNotFound, "no route for "+redactPath(r.URL.Path))
+			writeProblem(w, r, http.StatusNotFound, "no route for "+paths.redact(r.URL.Path))
 
 			return
 		}
@@ -181,8 +214,9 @@ func New(deps Deps) (http.Handler, huma.API) {
 	var h http.Handler = router
 
 	h = crossOriginProtection(h)
-	h = accessLog(h, deps.Logger, deps.Clock)
-	h = recoverer(h, deps.Logger)
+	h = recoverer(h, deps.Logger, paths)
+	h = accessLog(h, deps.Logger, deps.Clock, deps.Metrics, paths)
+	h = requestIDs(h, deps.RequestIDs, deps.TrustedProxies)
 	h = securityHeaders(h, deps.HSTS)
 
 	return h, api
@@ -240,7 +274,7 @@ const serverErrorDetail = "internal server error"
 // here and replaced by serverErrorDetail.
 func maskServerErrors(logger *slog.Logger) huma.Transformer {
 	return func(ctx huma.Context, _ string, v any) (any, error) {
-		problem, ok := v.(*huma.ErrorModel)
+		problem, ok := v.(*httpapi.ErrorModel)
 		if !ok || problem.Status < http.StatusInternalServerError {
 			return v, nil
 		}
@@ -268,11 +302,11 @@ func maskServerErrors(logger *slog.Logger) huma.Transformer {
 			slog.Any("causes", causes),
 		)
 
-		return &huma.ErrorModel{
-			Title:  http.StatusText(problem.Status),
-			Status: problem.Status,
-			Detail: serverErrorDetail,
-		}, nil
+		// The request ID stays: it finds the line logged above.
+		masked := httpapi.NewProblem(problem.Status, serverErrorDetail)
+		masked.RequestID = problem.RequestID
+
+		return masked, nil
 	}
 }
 
@@ -311,108 +345,14 @@ func isAPIPath(p string) bool {
 	return p == "/api" || strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, httpapi.FeedPathPrefix)
 }
 
-// redactPath returns p without the secret token of a calendar feed path
-// (/ical/{token}.ics becomes /ical/<redacted>.ics), for logs and error
-// details: the token alone grants access to the feed.
-func redactPath(p string) string {
-	if !strings.HasPrefix(p, httpapi.FeedPathPrefix) {
-		return p
-	}
-
-	out := httpapi.FeedPathPrefix + "<redacted>"
-	if strings.HasSuffix(p, service.FeedPathSuffix) {
-		out += service.FeedPathSuffix
-	}
-
-	return out
-}
-
 // crossOriginProtection rejects cross-origin unsafe requests (POST, PUT,
 // ...) based on Sec-Fetch-Site / Origin. Requests without either header,
 // such as those from non-browser clients or the in-page WASM bridge, pass.
 func crossOriginProtection(next http.Handler) http.Handler {
 	cop := http.NewCrossOriginProtection()
-	cop.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		writeProblem(w, http.StatusForbidden, "cross-origin request rejected")
+	cop.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeProblem(w, r, http.StatusForbidden, "cross-origin request rejected")
 	}))
 
 	return cop.Handler(next)
-}
-
-func recoverer(next http.Handler, logger *slog.Logger) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			rec := recover()
-			if rec == nil {
-				return
-			}
-
-			if err, ok := rec.(error); ok && errors.Is(err, http.ErrAbortHandler) {
-				panic(rec) // let net/http abort the connection silently
-			}
-
-			logger.ErrorContext(r.Context(), "panic in handler",
-				slog.String("method", r.Method),
-				slog.String("path", redactPath(r.URL.Path)),
-				slog.Any("panic", rec),
-				slog.String("stack", string(debug.Stack())),
-			)
-			writeProblem(w, http.StatusInternalServerError, serverErrorDetail)
-		}()
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-func accessLog(next http.Handler, logger *slog.Logger, clk clock.Clock) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := clk.Now()
-		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
-
-		next.ServeHTTP(sw, r)
-
-		logger.DebugContext(r.Context(), "http request",
-			slog.String("method", r.Method),
-			slog.String("path", redactPath(r.URL.Path)),
-			slog.Int("status", sw.status),
-			slog.Duration("duration", clk.Now().Sub(start)),
-		)
-	})
-}
-
-type statusWriter struct {
-	http.ResponseWriter
-
-	status      int
-	wroteHeader bool
-}
-
-func (w *statusWriter) WriteHeader(code int) {
-	if !w.wroteHeader {
-		w.status = code
-		w.wroteHeader = true
-	}
-
-	w.ResponseWriter.WriteHeader(code)
-}
-
-func (w *statusWriter) Write(p []byte) (int, error) {
-	w.wroteHeader = true
-
-	return w.ResponseWriter.Write(p)
-}
-
-// Unwrap lets http.ResponseController reach the underlying writer.
-func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
-
-// writeProblem writes a minimal RFC 9457 problem document, matching the
-// format Huma uses for its own errors.
-func writeProblem(w http.ResponseWriter, status int, detail string) {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(huma.ErrorModel{
-		Title:  http.StatusText(status),
-		Status: status,
-		Detail: detail,
-	})
 }

@@ -214,6 +214,10 @@ func TestProblemJSON(t *testing.T) {
 			t.Errorf("%s: problem %s lacks a detail", c.name, body)
 		}
 
+		if id := res.Header.Get("X-Request-Id"); id == "" || problem["requestId"] != id {
+			t.Errorf("%s: problem %s lacks the request ID %q of the header", c.name, body, id)
+		}
+
 		for _, leak := range []string{secretDetail, "goroutine", ".go:", "runtime."} {
 			if strings.Contains(string(body), leak) {
 				t.Errorf("%s: body leaks %q: %s", c.name, leak, body)
@@ -222,7 +226,8 @@ func TestProblemJSON(t *testing.T) {
 
 		if c.status >= http.StatusInternalServerError {
 			keys := sortedJSONKeys(problem)
-			if !slices.Equal(keys, []string{"detail", "status", "title"}) || problem["detail"] != "internal server error" {
+			if !slices.Equal(keys, []string{"detail", "requestId", "status", "title"}) ||
+				problem["detail"] != "internal server error" {
 				t.Errorf("%s: a 500 must say nothing but %q, got %s", c.name, "internal server error", body)
 			}
 		}

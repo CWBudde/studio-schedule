@@ -51,7 +51,7 @@ func registerDemo(api huma.API, h *handlers) {
 				Description: "The attached file.",
 				Content:     map[string]*huma.MediaType{"application/pdf": {Schema: &huma.Schema{Type: "string", Format: "binary"}}},
 			},
-			"default": problem(api, reflect.TypeFor[huma.ErrorModel](), "Error"),
+			"default": problem(api, reflect.TypeFor[ErrorModel](), "Error"),
 		},
 	}, h.getDemoMailAttachment)
 }

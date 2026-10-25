@@ -75,6 +75,23 @@ func TestLoadPrecedence(t *testing.T) {
 			want:  config.Config{HTTPAddr: ":7000"},
 		},
 		{
+			name: "metrics from env",
+			env:  map[string]string{"METRICS_ADDR": "127.0.0.1:9090"},
+			want: config.Config{HTTPAddr: ":8080", MetricsAddr: "127.0.0.1:9090"},
+		},
+		{
+			name:  "metrics flag over env",
+			env:   map[string]string{"METRICS_ADDR": "127.0.0.1:9090"},
+			flags: config.Flags{MetricsAddr: ptr(":9100")},
+			want:  config.Config{HTTPAddr: ":8080", MetricsAddr: ":9100"},
+		},
+		{
+			name:  "empty metrics flag turns metrics off",
+			env:   map[string]string{"METRICS_ADDR": "127.0.0.1:9090"},
+			flags: config.Flags{MetricsAddr: ptr("")},
+			want:  config.Config{HTTPAddr: ":8080"},
+		},
+		{
 			name:  "empty flag clears env",
 			env:   map[string]string{"DATABASE_URL": "postgres://app@db.example.test/studio"},
 			flags: config.Flags{DatabaseURL: ptr("")},
@@ -163,6 +180,9 @@ func TestLoadInvalid(t *testing.T) {
 		{"http addr empty port", map[string]string{"HTTP_ADDR": "localhost:"}, "HTTP_ADDR"},
 		{"http addr bad port", map[string]string{"HTTP_ADDR": ":http"}, "HTTP_ADDR"},
 		{"http addr port range", map[string]string{"HTTP_ADDR": ":70000"}, "HTTP_ADDR"},
+		{"metrics addr without port", map[string]string{"METRICS_ADDR": "localhost"}, "METRICS_ADDR"},
+		{"metrics addr bad port", map[string]string{"METRICS_ADDR": ":metrics"}, "METRICS_ADDR"},
+		{"metrics addr is the http addr", map[string]string{"METRICS_ADDR": ":8080"}, "METRICS_ADDR"},
 		{"base url relative", map[string]string{"BASE_URL": "/schedule"}, "BASE_URL"},
 		{"base url no host", map[string]string{"BASE_URL": "https://"}, "BASE_URL"},
 		{"base url scheme", map[string]string{"BASE_URL": "ftp://schedule.example.test"}, "BASE_URL"},
@@ -189,6 +209,43 @@ func TestLoadInvalid(t *testing.T) {
 				t.Errorf("error %q leaks a secret", err)
 			}
 		})
+	}
+}
+
+// TestMetricsAddrConflict checks that METRICS_ADDR may not take the socket
+// of HTTP_ADDR, whatever the spelling of the host.
+func TestMetricsAddrConflict(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		http, metrics string
+		conflict      bool
+	}{
+		{":8080", ":8080", true},
+		{":8080", "0.0.0.0:8080", true},
+		{":8080", "127.0.0.1:8080", true},
+		{"0.0.0.0:8080", "[::]:8080", true},
+		{"[::]:8080", "10.0.0.5:8080", true},
+		{"127.0.0.1:8080", ":8080", true},
+		{"localhost:8080", "127.0.0.1:8080", true},
+		{"[::1]:8080", "LOCALHOST:8080", true},
+		{"[::ffff:127.0.0.1]:8080", "127.0.0.1:8080", true},
+		{"app.example.test:8080", "APP.example.test:8080", true},
+		{":8080", ":08080", true},
+		{":8080", ":9090", false},
+		{"127.0.0.1:8080", "10.0.0.5:8080", false},
+		{"localhost:8080", "10.0.0.5:8080", false},
+		{"app.example.test:8080", "10.0.0.5:8080", false},
+		{":0", ":0", false},
+	} {
+		_, err := config.Load(env(map[string]string{"HTTP_ADDR": tc.http, "METRICS_ADDR": tc.metrics}), config.Flags{})
+
+		switch {
+		case tc.conflict && (!errors.Is(err, config.ErrInvalid) || !strings.Contains(err.Error(), "METRICS_ADDR")):
+			t.Errorf("HTTP_ADDR %q, METRICS_ADDR %q: error = %v, want a conflict", tc.http, tc.metrics, err)
+		case !tc.conflict && err != nil:
+			t.Errorf("HTTP_ADDR %q, METRICS_ADDR %q: %v", tc.http, tc.metrics, err)
+		}
 	}
 }
 

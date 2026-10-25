@@ -83,7 +83,8 @@ type Deps struct {
 
 // NewConfig returns the Huma configuration for the API: OpenAPI document at
 // BasePath/openapi.json, docs at BasePath/docs, and no `$schema` response
-// field or `Link` header (keeps generated client types clean). Domain IDs
+// field or `Link` header (keeps generated client types clean), and the
+// request ID in every problem document (stampRequestID). Domain IDs
 // are documented as `{type: string, format: uuid}` (see registerIDSchemas).
 func NewConfig() huma.Config {
 	cfg := huma.DefaultConfig(Title, SpecVersion)
@@ -93,6 +94,7 @@ func NewConfig() huma.Config {
 	cfg.DocsPath = BasePath + "/docs"
 	cfg.SchemasPath = ""
 	cfg.CreateHooks = nil
+	cfg.Transformers = append(cfg.Transformers, stampRequestID)
 
 	return cfg
 }

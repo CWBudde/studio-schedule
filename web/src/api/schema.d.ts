@@ -3479,6 +3479,8 @@ export interface components {
              * @enum {string}
              */
             reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation" | "timezone-locked" | "currency-locked" | "mail-limit" | "expired" | "not-failed" | "secret-link" | "two-accounts" | "guardian-cycle";
+            /** @description The ID of the request (the X-Request-Id response header), for finding it in the server's logs. */
+            requestId?: string;
             /**
              * Format: int64
              * @description HTTP status code
@@ -3721,6 +3723,8 @@ export interface components {
              * @example https://example.com/error-log/abc123
              */
             instance?: string;
+            /** @description The ID of the request (the X-Request-Id response header), for finding it in the server's logs. */
+            requestId?: string;
             /**
              * Format: int64
              * @description HTTP status code
@@ -4175,6 +4179,8 @@ export interface components {
              * @enum {string}
              */
             reason?: "not-started" | "day-over";
+            /** @description The ID of the request (the X-Request-Id response header), for finding it in the server's logs. */
+            requestId?: string;
             /**
              * Format: int64
              * @description HTTP status code

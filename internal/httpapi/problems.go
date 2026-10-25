@@ -8,6 +8,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/requestid"
 )
 
 // Reasons of a Conflict (ADR 0007, ADR 0008, ADR 0009, ADR 0010, ADR 0012, ADR 0014, ADR 0015;
@@ -42,10 +43,66 @@ const (
 	reasonGuardianCycle   = "guardian-cycle"
 )
 
+// ErrorModel is the problem document (RFC 9457) of every error response:
+// Huma's, plus the ID of the request, which support can look up in the logs.
+// It keeps Huma's schema name, so the OpenAPI document and the generated
+// client types name it as before.
+type ErrorModel struct {
+	huma.ErrorModel
+
+	RequestID string `doc:"The ID of the request (the X-Request-Id response header), for finding it in the server's logs." json:"requestId,omitempty"`
+}
+
+func (e *ErrorModel) setRequestID(id string) { e.RequestID = id }
+
+// NewProblem is the problem document for status with detail msg and the
+// details of errs, as huma.NewError builds it.
+func NewProblem(status int, msg string, errs ...error) *ErrorModel {
+	details := make([]*huma.ErrorDetail, 0, len(errs))
+
+	for _, err := range errs {
+		// Like huma.NewError: only the error itself, not one it wraps,
+		// gives its detail.
+		switch e := err.(type) { //nolint:errorlint // see above
+		case nil:
+		case huma.ErrorDetailer:
+			details = append(details, e.ErrorDetail())
+		default:
+			details = append(details, &huma.ErrorDetail{Message: e.Error()})
+		}
+	}
+
+	return &ErrorModel{ErrorModel: huma.ErrorModel{
+		Status: status, Title: http.StatusText(status), Detail: msg, Errors: details,
+	}}
+}
+
+// Every error Huma creates, from the handlers' huma.Error404NotFound to its
+// own validation errors, is an ErrorModel, and the generated responses
+// document it (Huma takes the error schema from NewError). The request ID
+// is stamped on by stampRequestID.
+func init() { //nolint:gochecknoinits // Huma's documented way to replace its error type
+	huma.NewError = func(status int, msg string, errs ...error) huma.StatusError {
+		return NewProblem(status, msg, errs...)
+	}
+}
+
+// stampRequestID is a Huma transformer that puts the ID of the request
+// (internal/requestid) into every problem document.
+func stampRequestID(ctx huma.Context, _ string, v any) (any, error) {
+	if p, ok := v.(interface{ setRequestID(id string) }); ok {
+		if id := requestid.From(ctx.Context()); id != "" {
+			p.setRequestID(id)
+		}
+	}
+
+	return v, nil
+}
+
 // Conflict is the problem document of a 409 the UI can explain: Reason
 // says why, without internals (ADR 0007).
 type Conflict struct {
-	huma.ErrorModel
+	ErrorModel
 
 	Reason string          `doc:"in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead; two-accounts: both persons of a merge have an account, so one is disabled first; guardian-cycle: after the merge a guardian of the survivor would also be its dependent." enum:"in-use,duplicate,managed,has-account,room-taken,past,generated,already-booked,full,closed,already-canceled,not-full,already-waiting,not-invited,invite-expired,invite-used,not-waiting,already-voided,receipt-settings-incomplete,pass-used,cancellation,timezone-locked,currency-locked,mail-limit,expired,not-failed,secret-link,two-accounts,guardian-cycle" json:"reason"`
 	Lesson *ConflictLesson `doc:"The lesson that uses the room; only with reason room-taken." json:"lesson,omitempty"`
@@ -62,7 +119,7 @@ const (
 // rather than the request body, which the UI can explain without its own
 // clock: Reason says why. A 422 about the body has no reason.
 type Invalid struct {
-	huma.ErrorModel
+	ErrorModel
 
 	Reason string `doc:"Why the target cannot be changed now; absent for a 422 about the request body. not-started: the lesson has not started, so attendance cannot be taken yet; day-over: the lesson's school day is over, so its instructor and accompanist no longer change its participants (the office does)." enum:"not-started,day-over" json:"reason,omitempty"`
 }
@@ -71,10 +128,10 @@ type Invalid struct {
 // parameter at.
 func invalid(reason, msg, at string) *Invalid {
 	return &Invalid{
-		ErrorModel: huma.ErrorModel{
+		ErrorModel: ErrorModel{ErrorModel: huma.ErrorModel{
 			Title: http.StatusText(http.StatusUnprocessableEntity), Status: http.StatusUnprocessableEntity,
 			Detail: "validation failed", Errors: []*huma.ErrorDetail{{Message: msg, Location: at}},
-		},
+		}},
 		Reason: reason,
 	}
 }
@@ -89,8 +146,10 @@ type ConflictLesson struct {
 
 func conflict(reason, detail string) *Conflict {
 	return &Conflict{
-		ErrorModel: huma.ErrorModel{Title: http.StatusText(http.StatusConflict), Status: http.StatusConflict, Detail: detail},
-		Reason:     reason,
+		ErrorModel: ErrorModel{ErrorModel: huma.ErrorModel{
+			Title: http.StatusText(http.StatusConflict), Status: http.StatusConflict, Detail: detail,
+		}},
+		Reason: reason,
 	}
 }
 
@@ -101,7 +160,7 @@ func conflict(reason, detail string) *Conflict {
 func withConflict(api huma.API, op huma.Operation) huma.Operation {
 	op.Responses = map[string]*huma.Response{
 		"409":     problem(api, reflect.TypeFor[Conflict](), http.StatusText(http.StatusConflict)),
-		"default": problem(api, reflect.TypeFor[huma.ErrorModel](), "Error"),
+		"default": problem(api, reflect.TypeFor[ErrorModel](), "Error"),
 	}
 
 	return op

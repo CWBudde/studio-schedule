@@ -79,7 +79,7 @@ func registerCalendarFeeds(api huma.API, h *handlers) {
 				Content:     map[string]*huma.MediaType{"text/calendar": {Schema: &huma.Schema{Type: "string"}}},
 			},
 			"304":     {Description: "The feed did not change since the ETag in If-None-Match."},
-			"default": problem(api, reflect.TypeFor[huma.ErrorModel](), "Error"),
+			"default": problem(api, reflect.TypeFor[ErrorModel](), "Error"),
 		},
 	}, h.getCalendarFeed)
 }

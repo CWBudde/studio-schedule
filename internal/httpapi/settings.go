@@ -58,7 +58,7 @@ func registerSettings(api huma.API, h *handlers) {
 				},
 			},
 			"304":     {Description: "The logo did not change since the ETag in If-None-Match."},
-			"default": problem(api, reflect.TypeFor[huma.ErrorModel](), "Error"),
+			"default": problem(api, reflect.TypeFor[ErrorModel](), "Error"),
 		},
 	}, h.getSchoolLogo)
 

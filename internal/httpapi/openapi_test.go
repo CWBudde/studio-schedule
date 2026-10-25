@@ -40,7 +40,8 @@ func spec(t *testing.T) map[string]any {
 var idQueryParams = map[string]bool{"location": true, "instructor": true, "courseType": true}
 
 func isIDName(name string) bool {
-	return name == "id" || strings.HasSuffix(name, "Id")
+	// A request ID is not an entity's: a proxy may set it (requestid.Valid).
+	return name == "id" || strings.HasSuffix(name, "Id") && name != "requestId"
 }
 
 func checkUUIDSchema(t *testing.T, where string, s any) {

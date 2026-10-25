@@ -105,6 +105,15 @@ func FromAddr(remote string, header http.Header, trusted []netip.Prefix) netip.A
 	return last
 }
 
+// PeerTrusted reports whether the direct peer of r (its RemoteAddr) is one
+// of the trusted proxies, so that headers the proxy sets, such as a request
+// ID, may be believed. Without trusted prefixes it is always false.
+func PeerTrusted(r *http.Request, trusted []netip.Prefix) bool {
+	peer := remoteAddr(r.RemoteAddr)
+
+	return peer.IsValid() && isTrusted(peer, trusted)
+}
+
 // remoteAddr parses the host of an http.Request.RemoteAddr ("ip:port",
 // "[ipv6%zone]:port" or, leniently, a bare IP).
 func remoteAddr(s string) netip.Addr {

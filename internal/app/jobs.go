@@ -105,5 +105,32 @@ func Jobs(deps Deps) *jobs.Runner {
 		})
 	}
 
+	for i := range all {
+		all[i].Run = measured(all[i], deps)
+	}
+
 	return jobs.NewRunner(deps.Logger, all...)
 }
+
+// measured returns the Run of j reporting each run to deps.Metrics: its
+// duration and whether it failed or panicked (the panic goes on to the
+// runner, which recovers and logs it).
+func measured(j jobs.Job, deps Deps) func(ctx context.Context) error {
+	return func(ctx context.Context) (err error) {
+		start := deps.Clock.Now()
+
+		defer func() {
+			if rec := recover(); rec != nil {
+				deps.Metrics.ObserveJob(j.Name, errJobPanicked, deps.Clock.Now().Sub(start))
+				panic(rec)
+			}
+
+			deps.Metrics.ObserveJob(j.Name, err, deps.Clock.Now().Sub(start))
+		}()
+
+		return j.Run(ctx)
+	}
+}
+
+// errJobPanicked is the error a panicking job reports to Metrics.
+var errJobPanicked = errors.New("job panicked")

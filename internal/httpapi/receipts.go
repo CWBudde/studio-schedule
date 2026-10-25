@@ -26,7 +26,7 @@ func registerReceipts(api huma.API, h *handlers) {
 				Description: description,
 				Content:     map[string]*huma.MediaType{"application/pdf": {Schema: &huma.Schema{Type: "string", Format: "binary"}}},
 			},
-			"default": problem(api, reflect.TypeFor[huma.ErrorModel](), "Error"),
+			"default": problem(api, reflect.TypeFor[ErrorModel](), "Error"),
 		}
 	}
 
@@ -128,7 +128,7 @@ func registerReceipts(api huma.API, h *handlers) {
 					domain.LogoJPEG: {Schema: &huma.Schema{Type: "string", Format: "binary"}},
 				},
 			},
-			"default": problem(api, reflect.TypeFor[huma.ErrorModel](), "Error"),
+			"default": problem(api, reflect.TypeFor[ErrorModel](), "Error"),
 		},
 	}, h.getReceiptLogo)
 

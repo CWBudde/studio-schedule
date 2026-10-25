@@ -257,3 +257,29 @@ func mustParseTrusted(t *testing.T, s string) []netip.Prefix {
 
 	return p
 }
+
+func TestPeerTrusted(t *testing.T) {
+	t.Parallel()
+
+	trusted, err := clientip.ParseTrusted("10.0.0.0/8")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		remote  string
+		trusted []netip.Prefix
+		want    bool
+	}{
+		{"10.1.2.3:4567", trusted, true},
+		{"[::ffff:10.1.2.3]:4567", trusted, true},
+		{"192.0.2.1:4567", trusted, false},
+		{"10.1.2.3:4567", nil, false},
+		{"garbage", trusted, false},
+	} {
+		r := &http.Request{RemoteAddr: tc.remote}
+		if got := clientip.PeerTrusted(r, tc.trusted); got != tc.want {
+			t.Errorf("PeerTrusted(%q, %v) = %v, want %v", tc.remote, tc.trusted, got, tc.want)
+		}
+	}
+}

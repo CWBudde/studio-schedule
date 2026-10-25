@@ -16,6 +16,7 @@ import (
 	"net/netip"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -41,6 +42,10 @@ const (
 	// addresses, comma-separated) whose X-Forwarded-For entries name the
 	// client (environment only).
 	EnvTrustedProxies = "TRUSTED_PROXIES"
+
+	// EnvMetricsAddr is the host:port of the Prometheus metrics server;
+	// empty means no metrics.
+	EnvMetricsAddr = "METRICS_ADDR"
 )
 
 // DefaultHTTPAddr is the listen address when neither flag nor env sets one.
@@ -69,6 +74,9 @@ type Config struct {
 	// TrustedProxies are the reverse proxies in front of the app; empty
 	// means the connection's address is the client's.
 	TrustedProxies []netip.Prefix
+	// MetricsAddr is the host:port of the separate server of the
+	// Prometheus metrics (/metrics). Empty means no metrics.
+	MetricsAddr string
 }
 
 // SMTP is the outgoing mail server. Package mail/smtp validates it fully;
@@ -106,6 +114,7 @@ type Flags struct {
 	DatabaseURL *string
 	HTTPAddr    *string
 	BaseURL     *string
+	MetricsAddr *string
 }
 
 // Load combines flags, the environment (read through lookup; nil means an
@@ -132,6 +141,7 @@ func Load(lookup LookupFunc, flags Flags) (Config, error) {
 		DatabaseURL: pick(flags.DatabaseURL, EnvDatabaseURL, ""),
 		HTTPAddr:    pick(flags.HTTPAddr, EnvHTTPAddr, DefaultHTTPAddr),
 		BaseURL:     pick(flags.BaseURL, EnvBaseURL, ""),
+		MetricsAddr: pick(flags.MetricsAddr, EnvMetricsAddr, ""),
 		SMTP: SMTP{
 			Host:     pick(nil, EnvSMTPHost, ""),
 			Username: pick(nil, EnvSMTPUsername, ""),
@@ -171,8 +181,17 @@ func Load(lookup LookupFunc, flags Flags) (Config, error) {
 		errs = append(errs, err)
 	}
 
-	if err := validateHTTPAddr(cfg.HTTPAddr); err != nil {
+	if err := validateAddr(EnvHTTPAddr, cfg.HTTPAddr); err != nil {
 		errs = append(errs, err)
+	}
+
+	if cfg.MetricsAddr != "" {
+		if err := validateAddr(EnvMetricsAddr, cfg.MetricsAddr); err != nil {
+			errs = append(errs, err)
+		} else if addrsConflict(cfg.MetricsAddr, cfg.HTTPAddr) {
+			errs = append(errs, fmt.Errorf("%s: %q would listen on the port of %s %q; choose another port",
+				EnvMetricsAddr, cfg.MetricsAddr, EnvHTTPAddr, cfg.HTTPAddr))
+		}
 	}
 
 	baseURL, err := normalizeBaseURL(cfg.BaseURL)
@@ -214,17 +233,72 @@ func validateDatabaseURL(s string) error {
 	}
 }
 
-func validateHTTPAddr(s string) error {
+// validateAddr checks the listen address s of the variable env.
+func validateAddr(env, s string) error {
 	_, port, err := net.SplitHostPort(s)
 	if err != nil {
-		return fmt.Errorf("%s: %q is not host:port", EnvHTTPAddr, s)
+		return fmt.Errorf("%s: %q is not host:port", env, s)
 	}
 
 	if _, err := strconv.ParseUint(port, 10, 16); err != nil {
-		return fmt.Errorf("%s: %q needs a numeric port (0-65535)", EnvHTTPAddr, s)
+		return fmt.Errorf("%s: %q needs a numeric port (0-65535)", env, s)
 	}
 
 	return nil
+}
+
+// addrsConflict reports whether the valid listen addresses a and b would
+// take the same socket: the same port (not 0, which the system picks) on
+// the same host, or on any host where either listens on every interface
+// (an empty host, 0.0.0.0 or ::). localhost is 127.0.0.1 and ::1; other
+// host names are compared by name, without resolving them.
+func addrsConflict(a, b string) bool {
+	hostA, portA, _ := net.SplitHostPort(a)
+	hostB, portB, _ := net.SplitHostPort(b)
+
+	pa, _ := strconv.ParseUint(portA, 10, 16)
+	pb, _ := strconv.ParseUint(portB, 10, 16)
+
+	if pa != pb || pa == 0 {
+		return false
+	}
+
+	keysA, keysB := listenHosts(hostA), listenHosts(hostB)
+	if keysA == nil || keysB == nil {
+		return true // every interface
+	}
+
+	for _, k := range keysA {
+		if slices.Contains(keysB, k) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// listenHosts returns the hosts a listener on host binds, or nil for every
+// interface.
+func listenHosts(host string) []string {
+	if strings.EqualFold(host, "localhost") {
+		return []string{"127.0.0.1", "::1"}
+	}
+
+	if host == "" {
+		return nil
+	}
+
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return []string{strings.ToLower(host)}
+	}
+
+	addr = addr.Unmap()
+	if addr.IsUnspecified() {
+		return nil
+	}
+
+	return []string{addr.String()}
 }
 
 // normalizeBaseURL accepts an absolute http(s) origin and strips a trailing
@@ -267,15 +341,16 @@ func (c Config) Redacted() Config {
 func (c Config) String() string {
 	r := c.Redacted()
 
-	return fmt.Sprintf("{DatabaseURL:%s HTTPAddr:%s BaseURL:%s SMTP:%s}", r.DatabaseURL, r.HTTPAddr, r.BaseURL, r.SMTP)
+	return fmt.Sprintf("{DatabaseURL:%s HTTPAddr:%s BaseURL:%s SMTP:%s MetricsAddr:%s}",
+		r.DatabaseURL, r.HTTPAddr, r.BaseURL, r.SMTP, r.MetricsAddr)
 }
 
 // GoString implements fmt.GoStringer (%#v) with secrets masked.
 func (c Config) GoString() string {
 	r := c.Redacted()
 
-	return fmt.Sprintf("config.Config{DatabaseURL:%q, HTTPAddr:%q, BaseURL:%q, SMTP:%s}",
-		r.DatabaseURL, r.HTTPAddr, r.BaseURL, r.SMTP)
+	return fmt.Sprintf("config.Config{DatabaseURL:%q, HTTPAddr:%q, BaseURL:%q, SMTP:%s, MetricsAddr:%q}",
+		r.DatabaseURL, r.HTTPAddr, r.BaseURL, r.SMTP, r.MetricsAddr)
 }
 
 // LogValue implements slog.LogValuer with secrets masked.
@@ -294,6 +369,7 @@ func (c Config) LogValue() slog.Value {
 			slog.String("from", r.SMTP.From),
 			slog.String("tls", r.SMTP.TLS),
 		),
+		slog.String("metricsAddr", r.MetricsAddr),
 	)
 }
 

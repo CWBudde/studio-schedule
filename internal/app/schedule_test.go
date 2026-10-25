@@ -553,7 +553,16 @@ func TestGetLessonNotVisible(t *testing.T) {
 			t.Errorf("%s: Content-Type = %q", name, res.Header.Get("Content-Type"))
 		}
 
-		// An invisible lesson must be indistinguishable from a missing one.
+		// An invisible lesson must be indistinguishable from a missing one
+		// (but for the request's ID).
+		problem := decode(t, body)
+		delete(problem, "requestId")
+
+		body, err := json.Marshal(problem)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		if first == nil {
 			first = body
 		} else if string(body) != string(first) {

@@ -245,6 +245,30 @@ func (s *MailLogService) Purge(ctx context.Context) (bodies, deleted int, err er
 	return bodies, deleted, nil
 }
 
+// MailCounts are the numbers of unsent mails in the outbox.
+type MailCounts struct {
+	Pending int // another attempt is due
+	Failed  int // delivery was given up
+}
+
+// Unsent counts the mails of the outbox that are not sent, for the
+// server's metrics.
+func (s *MailLogService) Unsent(ctx context.Context) (MailCounts, error) {
+	var c store.OutboxCounts
+
+	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		c, err = tx.Outbox().CountUnsent(ctx)
+
+		return err
+	})
+	if err != nil {
+		return MailCounts{}, fmt.Errorf("count unsent mails: %w", err)
+	}
+
+	return MailCounts{Pending: c.Pending, Failed: c.Failed}, nil
+}
+
 // mailLogEntries adds the attachment names and body states to mails, with
 // one query for the receipts.
 func mailLogEntries(ctx context.Context, tx store.Tx, mails []domain.OutboxMail) ([]MailLogEntry, error) {
