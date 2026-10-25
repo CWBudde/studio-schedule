@@ -32,7 +32,14 @@ where it differs.
 | Attendance         | Attendance          | Anwesenheit           | `attended` / `no_show`; instructors until the day's end, then office    |
 | `WaitlistEntry`    | Waiting list        | Warteliste            | Timed invites instead of "notify all"                                   |
 | My lessons         | My lessons          | Meine Stunden         | A family's upcoming bookings, waiting-list entries and history (0009)   |
-| `Pass`             | Pass                | Karte (z. B. 10er)    | Prepaid visits, formerly "Credits"                                      |
+| `Pass`             | Pass                | Karte (z. B. 10er)    | Prepaid visits, formerly "Credits"; one person's (ADR 0012)             |
+| `PassType`         | Pass type           | Kartenart             | Catalog product: visit pass or time pass, price, VAT rate (0012)        |
+| Visit pass         | Visit pass          | Mehrfachkarte         | A number of visits, valid some days or without expiry (0012)            |
+| Time pass          | Time pass           | Zeitkarte             | Any number of visits for some days, e.g. a 30-day pass (0012)           |
+| `PassRedemption`   | Used for            | Eingelöst für         | A pass paid for a booking; at most one per booking (0012)               |
+| Redemption mode    | Use passes on       | Karte belasten bei    | School setting: on booking or on attendance (0012)                      |
+| Payment            | Paid / unpaid       | Bezahlt / offen       | Derived from the redemption: paid, unpaid, free, pending (0012)         |
+| Void a pass        | Void                | Entwerten             | A voided pass pays for nothing more; what it paid stays paid (0012)     |
 | `Receipt`          | Receipt             | Quittung / Beleg      | Gapless numbering per year; corrections via cancellation receipt        |
 | Release window     | Release             | Freischaltung         | Next weeks become bookable at a configured weekday/time                 |
 | Visible days       | Visible days        | Sichtbare Tage        | Per-account override of how far ahead lessons are visible               |

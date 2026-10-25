@@ -57,7 +57,9 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
 
 - **Postgres:** READ COMMITTED transactions. Aggregates that need serialisation (a lesson's
   capacity, a person's passes, the receipt counter of a year) are locked explicitly through repo
-  methods (`Lessons().Lock`), which use `SELECT … FOR UPDATE`. Serialization and deadlock failures
+  methods (`Lessons().Lock`, `Passes().LockByPersons`), which use `SELECT … FOR UPDATE`. The lock
+  order is term → class → lesson → the passes of the persons concerned
+  ([ADR 0012](decisions/0012-passes-and-receipts.md)). Serialization and deadlock failures
   are retried. Constraints are backstops: a partial unique index for active bookings,
   `visits_remaining >= 0`, and a unique redemption per booking.
 - **Memory:** one mutex for all transactions (so they are serialised). Tables are copied on their

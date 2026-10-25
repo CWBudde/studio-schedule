@@ -162,7 +162,7 @@ themselves cannot deadlock.
 - One rule set for members and staff: the office books itself like a member and handles exceptions
   through the staff actions that come later in Phase 4 (beyond capacity, after the start, guests).
 - Late cancellations are recorded but cost nothing yet; Phase 6 (passes) reads `late` to decide
-  whether a late cancellation uses up a visit.
+  whether a late cancellation uses up a visit (it does; ADR 0012).
 - Bookings of canceled lessons remain, so the office knows whom a cancellation affected.
 - A full lesson answers `full`; the UI offers the waiting list once it exists.
 - The availability costs extra queries per request, independent of the schedule's size: one for
@@ -363,3 +363,11 @@ the bookings by persons and lesson times (`Bookings().ListByPersons`, a join on 
 `Classes().ListByIDs`); for the upcoming list also the family's open entries
 (`Waitlist().ListOpenByPersons`) and the open entries of their lessons for the positions. The
 bookings come by lesson start, then lesson, so a family's bookings of one lesson stay together.
+
+## Amendment (2026-10-25): passes
+
+ADR 0012 decides what bookings cost: class members' automatic bookings, trials, bookings of lessons
+the school canceled, timely cancellations and staff removals never use a pass; late cancellations
+and no-shows do. Every booking change in this ADR settles its pass in the same transaction, after the
+lesson lock (term → class → lesson → passes). The participant list and My lessons carry each
+booking's `payment`, which costs up to three more queries per request.
