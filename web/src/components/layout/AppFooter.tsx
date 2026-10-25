@@ -1,15 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useBackendStatus } from '@/api/backendStatus';
-import { healthQuery } from '@/api/queries';
+import { useMe } from '@/api/useMe';
 import { repositoryUrl } from '@/lib/env';
 import { usePublicSettings } from './branding';
 
 export function AppFooter() {
   const { t } = useTranslation();
   const { t: tSettings } = useTranslation('settings');
-  const backend = useBackendStatus();
-  const { data } = useQuery({ ...healthQuery, enabled: backend.state === 'ready' });
+  // Only the office and admins learn the version, for support (ASVS 14.3.3).
+  const version = useMe().data?.version;
   const legalNotice = usePublicSettings().data?.legalNotice;
 
   return (
@@ -24,8 +22,8 @@ export function AppFooter() {
       )}
       <div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
         <p>
-          {t('app.name')} ·{' '}
-          {data ? t('footer.version', { version: data.version }) : t('footer.versionUnknown')}
+          {t('app.name')}
+          {version && <> · {t('footer.version', { version })}</>}
         </p>
         <a
           href={repositoryUrl}

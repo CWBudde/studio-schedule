@@ -75,7 +75,7 @@
     "current": "Aktuelles Passwort",
     "new": "Neues Passwort",
     "repeat": "Neues Passwort wiederholen",
-    "hint": "Mindestens 8 Zeichen.",
+    "hint": "Mindestens 8 Zeichen. Vermeide verbreitete Passwörter.",
     "submit": "Passwort ändern",
     "submitting": "Ändern…",
     "success": "Dein Passwort wurde geändert. Auf deinen anderen Geräten wurdest du abgemeldet."

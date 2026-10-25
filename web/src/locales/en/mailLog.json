@@ -44,7 +44,8 @@
     "lesson-notice": "Message about a lesson",
     "receipt": "Receipt",
     "announcement": "Announcement",
-    "account-deleted": "Account deleted"
+    "account-deleted": "Account deleted",
+    "password-changed": "Password changed"
   },
   "attempts_one": "{{count}} attempt",
   "attempts_other": "{{count}} attempts",

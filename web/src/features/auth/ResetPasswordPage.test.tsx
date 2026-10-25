@@ -67,7 +67,7 @@ describe('ResetPasswordPage', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it('shows the errors the API finds at their fields', async () => {
+  it('says when the API refuses the password as too common', async () => {
     mockApiGet({});
     mockApiPost({
       '/api/v1/auth/password-reset/confirm': problem(422, 'validation failed', [
@@ -79,7 +79,9 @@ describe('ResetPasswordPage', () => {
     await setPassword('new-secret-password');
 
     expect(await screen.findByText('Please check your entries.')).toBeInTheDocument();
-    expect(screen.getByText('Please check this entry.')).toBeInTheDocument();
+    expect(
+      screen.getByText('This password is too common. Please choose another one.'),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText('New password')).toHaveAttribute('aria-invalid', 'true');
   });
 

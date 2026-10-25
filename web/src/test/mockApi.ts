@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { afterEach, expect, vi } from 'vitest';
 import { api } from '@/api/client';
 import type { components } from '@/api/schema';
 import type {
@@ -53,15 +53,39 @@ export function mockApiGet(fixtures: Fixtures) {
 }
 
 /**
+ * The POST fixtures of each spy, so that later calls within a test add to
+ * earlier ones; forgotten after every test.
+ */
+let postFixtures = new WeakMap<object, Fixtures>();
+afterEach(() => {
+  postFixtures = new WeakMap();
+});
+
+/**
  * Replaces `api.POST` like mockApiGet; a fixture function sees the request
  * body in `init.body`. An answer without `body` (e.g. `{ status: 202 }`) has
- * no data, as with openapi-fetch. Unknown paths answer 404.
+ * no data, as with openapi-fetch. Unknown paths answer 404. Unlike the other
+ * methods, a later call within a test keeps the earlier fixtures and only
+ * adds or replaces paths: searches are POSTs too (ASVS 8.3.1), so a page's
+ * search fixture and a test's mutation fixtures meet here.
  */
 export function mockApiPost(fixtures: Fixtures) {
-  return vi
-    .spyOn(api, 'POST')
-    .mockImplementation(((path: string, init?: MockRequest) =>
-      answerFrom(fixtures, path, init)) as unknown as typeof api.POST);
+  const spy = vi.spyOn(api, 'POST');
+  const all = { ...postFixtures.get(spy), ...fixtures };
+  postFixtures.set(spy, all);
+  return spy.mockImplementation(((path: string, init?: MockRequest) =>
+    answerFrom(all, path, init)) as unknown as typeof api.POST);
+}
+
+/** The words of a search request's body (`{ query }`), or ''. */
+export const searchQueryOf = (init: MockRequest) =>
+  (init.body as { query?: string } | undefined)?.query ?? '';
+
+/** Expects the POST spy to have sent searches only (paths ending in /search), no writes. */
+export function expectOnlySearches(post: { mock: { calls: unknown[][] } }) {
+  expect(
+    post.mock.calls.map(([path]) => String(path)).filter((p) => !p.endsWith('/search')),
+  ).toEqual([]);
 }
 
 /** Replaces `api.PUT` like mockApiPost. */
@@ -80,7 +104,7 @@ export function mockApiDelete(fixtures: Fixtures) {
       answerFrom(fixtures, path, init)) as unknown as typeof api.DELETE);
 }
 
-export const healthOk = { status: 'ok', version: '0.1.0-test' };
+export const healthOk = { status: 'ok' };
 export const publicSettings = {
   schoolName: 'Example Dance Studio',
   timezone: 'Europe/Berlin',

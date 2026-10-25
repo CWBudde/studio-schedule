@@ -1,6 +1,14 @@
 import { screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { healthOk, ids, mockApiGet, publicSettings, schedule } from '@/test/mockApi';
+import {
+  healthOk,
+  ids,
+  meMember,
+  meOffice,
+  mockApiGet,
+  publicSettings,
+  schedule,
+} from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { HomePage } from './HomePage';
 
@@ -9,7 +17,7 @@ afterEach(() => {
 });
 
 describe('HomePage', () => {
-  it('shows an OK badge, version and public settings when the backend is healthy', async () => {
+  it('shows an OK badge and public settings when the backend is healthy', async () => {
     mockApiGet({
       '/api/v1/health': { body: healthOk },
       '/api/v1/settings/public': { body: publicSettings },
@@ -21,12 +29,32 @@ describe('HomePage', () => {
     const status = within(await screen.findByRole('region', { name: 'System status' }));
 
     expect(await status.findByText('OK')).toBeInTheDocument();
-    expect(status.getByText('0.1.0-test')).toBeInTheDocument();
     expect(status.getByText('Europe/Berlin')).toBeInTheDocument();
+    // The version is no public information (ASVS 14.3.3).
+    expect(status.queryByText('Version')).not.toBeInTheDocument();
     expect(status.getByText('Example Dance Studio')).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { level: 1, name: 'Example Dance Studio' }),
     ).toBeInTheDocument();
+  });
+
+  it.each([
+    ['the office', { ...meOffice, version: '0.1.0-test' }, true],
+    ['a member', meMember, false],
+  ])('shows the version to %s only if the API names it', async (_, me, shown) => {
+    mockApiGet({
+      '/api/v1/health': { body: healthOk },
+      '/api/v1/settings/public': { body: publicSettings },
+      '/api/v1/schedule': { body: schedule },
+      '/api/v1/auth/me': { body: me },
+    });
+
+    renderInRouter(<HomePage />);
+
+    const status = within(await screen.findByRole('region', { name: 'System status' }));
+    expect(await status.findByText('Europe/Berlin')).toBeInTheDocument();
+    if (shown) expect(await status.findByText('0.1.0-test')).toBeInTheDocument();
+    else expect(status.queryByText('Version')).not.toBeInTheDocument();
   });
 
   it('teases the next lessons and links them into the schedule', async () => {

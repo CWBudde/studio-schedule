@@ -75,7 +75,7 @@
     "current": "Current password",
     "new": "New password",
     "repeat": "Repeat new password",
-    "hint": "At least 8 characters.",
+    "hint": "At least 8 characters. Avoid common passwords.",
     "submit": "Change password",
     "submitting": "Changing…",
     "success": "Your password has been changed. Your other devices have been signed out."

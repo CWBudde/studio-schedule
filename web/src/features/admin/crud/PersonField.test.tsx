@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PersonMatch } from '@/api/queries';
-import { ids, mockApiGet, persons, problem } from '@/test/mockApi';
+import { ids, mockApiPost, persons, problem, searchQueryOf } from '@/test/mockApi';
 import type { MockRequest } from '@/test/mockApi';
 import { renderWithQuery } from '@/test/utils';
 import { PersonField } from './PersonField';
@@ -12,12 +12,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The persons whose name or email contains every word of the request's `q`. */
+/** The persons whose name or email contains every word of the request's `query`. */
 function search(init: MockRequest) {
-  const words = String(init.params?.query?.q ?? '')
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
+  const words = searchQueryOf(init).toLowerCase().split(/\s+/).filter(Boolean);
   const items = persons.filter((p) =>
     words.every((w) => `${p.givenName} ${p.familyName} ${p.email ?? ''}`.toLowerCase().includes(w)),
   );
@@ -54,7 +51,7 @@ const trigger = () => screen.getByRole('combobox', { name: 'Person (optional)' }
 
 describe('PersonField', () => {
   it('searches the persons as one types and picks one', async () => {
-    const get = mockApiGet({ '/api/v1/admin/persons': search });
+    const post = mockApiPost({ '/api/v1/admin/persons/search': search });
     const onChange = vi.fn();
     const user = userEvent.setup();
 
@@ -65,20 +62,20 @@ describe('PersonField', () => {
     const list = within(await screen.findByRole('listbox', { name: 'Persons' }));
     expect(await list.findByRole('option', { name: /Alex Example/ })).toBeInTheDocument();
     expect(list.getAllByRole('option')).toHaveLength(3);
-    expect(get).toHaveBeenCalledWith('/api/v1/admin/persons', {
-      params: { query: {} },
+    expect(post).toHaveBeenCalledWith('/api/v1/admin/persons/search', {
+      body: {},
       signal: expect.anything(),
     });
 
     await user.type(screen.getByRole('combobox', { name: 'Search by name or email' }), 'sam');
     await waitFor(() => expect(list.getAllByRole('option')).toHaveLength(2));
-    expect(get).toHaveBeenCalledWith('/api/v1/admin/persons', {
-      params: { query: { q: 'sam' } },
+    expect(post).toHaveBeenCalledWith('/api/v1/admin/persons/search', {
+      body: { query: 'sam' },
       signal: expect.anything(),
     });
     // Debounced: not every keystroke is a request.
-    expect(get).not.toHaveBeenCalledWith('/api/v1/admin/persons', {
-      params: { query: { q: 's' } },
+    expect(post).not.toHaveBeenCalledWith('/api/v1/admin/persons/search', {
+      body: { query: 's' },
       signal: expect.anything(),
     });
 
@@ -90,7 +87,7 @@ describe('PersonField', () => {
   });
 
   it('shows the linked person and removes the link', async () => {
-    mockApiGet({ '/api/v1/admin/persons': search });
+    mockApiPost({ '/api/v1/admin/persons/search': search });
     const onChange = vi.fn();
     const user = userEvent.setup();
 
@@ -110,7 +107,7 @@ describe('PersonField', () => {
       familyName: `Sample ${i}`,
     }));
     let items = many;
-    mockApiGet({ '/api/v1/admin/persons': () => ({ body: { items } }) });
+    mockApiPost({ '/api/v1/admin/persons/search': () => ({ body: { items } }) });
     const user = userEvent.setup();
 
     renderWithQuery(<Harness />);
@@ -127,7 +124,7 @@ describe('PersonField', () => {
   });
 
   it('says when nobody matches', async () => {
-    mockApiGet({ '/api/v1/admin/persons': search });
+    mockApiPost({ '/api/v1/admin/persons/search': search });
     const user = userEvent.setup();
 
     renderWithQuery(<Harness />);
@@ -141,7 +138,7 @@ describe('PersonField', () => {
   });
 
   it('says when the search fails', async () => {
-    mockApiGet({ '/api/v1/admin/persons': problem(500, 'boom') });
+    mockApiPost({ '/api/v1/admin/persons/search': problem(500, 'boom') });
     const user = userEvent.setup();
 
     renderWithQuery(<Harness />);
@@ -151,7 +148,7 @@ describe('PersonField', () => {
   });
 
   it('shows an error', () => {
-    mockApiGet({});
+    mockApiPost({});
 
     renderWithQuery(<Harness error="Please check this entry." />);
 

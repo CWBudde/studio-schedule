@@ -2,11 +2,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { MailCheck, UserPlus } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { registerMutation } from '@/api/queries';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -35,6 +36,7 @@ export function RegisterPage() {
     defaultValues: { givenName: '', familyName: '', email: '', password: '' },
   });
   const { errors } = form.formState;
+  const typed = useWatch({ control: form.control, name: 'password' });
 
   const onSubmit = (values: Registration) =>
     register.mutate(
@@ -42,7 +44,12 @@ export function RegisterPage() {
       {
         onError: (error) => {
           for (const field of invalidFields(error, fields)) {
-            form.setError(field, { type: 'server', message: 'invalid' });
+            // The form checks the password's length, so the server refuses
+            // it for being too common.
+            form.setError(field, {
+              type: 'server',
+              message: field === 'password' ? 'passwordCommon' : 'invalid',
+            });
           }
         },
       },
@@ -98,6 +105,7 @@ export function RegisterPage() {
                 type="password"
                 autoComplete="new-password"
                 hint={t('register.passwordHint')}
+                meter={<PasswordStrengthMeter password={typed} />}
                 error={errorText(errors.password)}
                 {...form.register('password')}
               />

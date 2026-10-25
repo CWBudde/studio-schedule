@@ -24,6 +24,8 @@ import {
   mockApiPut,
   problem,
   publicSettings,
+  expectOnlySearches,
+  searchQueryOf,
 } from '@/test/mockApi';
 import { renderAtSchedule } from '@/test/utils';
 import { LessonSheet } from '../detail/LessonSheet';
@@ -162,20 +164,22 @@ function mockStaff({
   list?: Answer | (() => Answer);
   lesson?: LessonDetail;
 } = {}) {
-  return mockApiGet({
-    '/api/v1/settings/public': { body: publicSettings },
-    '/api/v1/auth/me': { body: me },
-    '/api/v1/family': { body: { ...family, dependents: [] } },
-    '/api/v1/lessons/{lessonId}': { body: lesson },
-    '/api/v1/lessons/{lessonId}/participants': list,
-    '/api/v1/staff/persons': (init: MockRequest) => {
-      const q = String(init.params?.query?.q ?? '').toLowerCase();
+  mockApiPost({
+    '/api/v1/staff/persons/search': (init: MockRequest) => {
+      const q = searchQueryOf(init).toLowerCase();
       const all = [
         { id: id(346), name: 'Ute Tallowfield', birthYear: 1961 },
         { id: id(347), name: 'Uwe Tallowfield' },
       ];
       return { body: { items: all.filter((p) => p.name.toLowerCase().includes(q)) } };
     },
+  });
+  return mockApiGet({
+    '/api/v1/settings/public': { body: publicSettings },
+    '/api/v1/auth/me': { body: me },
+    '/api/v1/family': { body: { ...family, dependents: [] } },
+    '/api/v1/lessons/{lessonId}': { body: lesson },
+    '/api/v1/lessons/{lessonId}/participants': list,
     '/api/v1/admin/bookings/{bookingId}/events': {
       body: {
         items: [
@@ -359,7 +363,7 @@ describe('ParticipantsSection', () => {
   });
 
   it('adds a person found by the search as a trial with a note', async () => {
-    const get = mockStaff();
+    mockStaff();
     const post = mockApiPost({
       '/api/v1/lessons/{lessonId}/participants': {
         status: 201,
@@ -381,8 +385,8 @@ describe('ParticipantsSection', () => {
     await user.type(search, 'te');
     const option = await screen.findByRole('option', { name: /Ute Tallowfield/ });
     expect(option).toHaveTextContent('born 1961');
-    expect(get).toHaveBeenCalledWith('/api/v1/staff/persons', {
-      params: { query: { q: 'ute' } },
+    expect(post).toHaveBeenCalledWith('/api/v1/staff/persons/search', {
+      body: { query: 'ute' },
       signal: expect.anything(),
     });
     await user.click(option);
@@ -416,7 +420,7 @@ describe('ParticipantsSection', () => {
     await user.click(dialog.getByRole('button', { name: 'Add' }));
 
     expect(await dialog.findByText('Please choose a person.')).toBeInTheDocument();
-    expect(post).not.toHaveBeenCalled();
+    expectOnlySearches(post);
   });
 
   it('adds a guest without an email', async () => {
@@ -457,7 +461,7 @@ describe('ParticipantsSection', () => {
     await user.click(dialog.getByRole('button', { name: 'Add' }));
 
     expect(await dialog.findByText('Please enter a valid email address.')).toBeInTheDocument();
-    expect(post).not.toHaveBeenCalled();
+    expectOnlySearches(post);
   });
 
   it('books beyond capacity once confirmed, as the form is now', async () => {
@@ -534,7 +538,7 @@ describe('ParticipantsSection', () => {
     expect(
       confirm.getByText(/They get an email about it if there is an address\.$/),
     ).toBeInTheDocument();
-    expect(post).not.toHaveBeenCalled();
+    expectOnlySearches(post);
     await user.click(confirm.getByRole('button', { name: 'Remove' }));
 
     expect(post).toHaveBeenCalledWith('/api/v1/bookings/{bookingId}/remove', {

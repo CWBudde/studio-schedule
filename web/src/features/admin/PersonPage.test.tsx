@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Toaster } from '@/components/ui/sonner';
 import i18n from '@/i18n';
 import {
@@ -17,20 +17,23 @@ import {
   persons,
   problem,
   publicSettings,
+  searchQueryOf,
+  expectOnlySearches,
 } from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { PersonPage } from './PersonPage';
+
+beforeEach(() => {
+  mockApiPost({ '/api/v1/admin/persons/search': searchPersons });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The persons whose name or email contains every word of the request's `q`. */
+/** The persons whose name or email contains every word of the request's `query`. */
 function searchPersons(init: MockRequest) {
-  const words = String(init.params?.query?.q ?? '')
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
+  const words = searchQueryOf(init).toLowerCase().split(/\s+/).filter(Boolean);
   return {
     body: {
       items: persons.filter((p) =>
@@ -45,7 +48,6 @@ function searchPersons(init: MockRequest) {
 const fixtures = (me = meOffice) => ({
   '/api/v1/settings/public': { body: publicSettings },
   '/api/v1/auth/me': { body: me },
-  '/api/v1/admin/persons': searchPersons,
   '/api/v1/admin/persons/{personId}': (init: MockRequest) => {
     const detail = personDetails[init.params?.path?.personId ?? ''];
     return detail ? { body: detail } : problem(404, 'resource not found');
@@ -322,7 +324,7 @@ describe('PersonPage', () => {
       await user.click(form.getByRole('button', { name: 'Add guardian' }));
 
       expect(await form.findByText('A person cannot be their own guardian.')).toBeInTheDocument();
-      expect(post).not.toHaveBeenCalled();
+      expectOnlySearches(post);
     });
 
     it('does not offer a child of the person as their guardian', async () => {
@@ -337,7 +339,7 @@ describe('PersonPage', () => {
       expect(
         await form.findByText('A child of this person cannot be their guardian.'),
       ).toBeInTheDocument();
-      expect(post).not.toHaveBeenCalled();
+      expectOnlySearches(post);
     });
 
     it('marks the guardian the API refuses, e.g. a grandchild (a cycle)', async () => {

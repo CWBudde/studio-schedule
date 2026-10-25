@@ -1,11 +1,13 @@
 import { QueryClient } from '@tanstack/react-query';
 import { createBrowserHistory, createRouter } from '@tanstack/react-router';
-import { ApiError } from '@/api/queries';
+import { ApiError, sessionCaches } from '@/api/queries';
 import { routerHistory } from '@/lib/env';
 import { createAppHashHistory } from '@/lib/hashHistory';
 import { routeTree } from './routeTree.gen';
 
-export const queryClient = new QueryClient({
+export const queryClient: QueryClient = new QueryClient({
+  // Any 401 signs out and clears the cache.
+  ...sessionCaches(() => queryClient),
   defaultOptions: {
     queries: {
       staleTime: 30_000,

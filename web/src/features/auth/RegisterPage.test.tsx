@@ -117,6 +117,22 @@ describe('RegisterPage', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
+  it('rates the password while it is typed and says when the API finds it too common', async () => {
+    mockApiGet(notDemo);
+    mockApiPost({
+      '/api/v1/auth/register': problem(422, 'validation failed', [{ location: 'body.password' }]),
+    });
+
+    renderInRouter(<RegisterPage />, { at: '/register' });
+    await fillAndSubmit({ ...registration, password: 'abcdefgh' });
+
+    expect(screen.getByText('Password strength: weak')).toBeInTheDocument();
+    expect(
+      await screen.findByText('This password is too common. Please choose another one.'),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toHaveAttribute('aria-invalid', 'true');
+  });
+
   it('shows the errors the API finds at their fields', async () => {
     mockApiGet(notDemo);
     mockApiPost({

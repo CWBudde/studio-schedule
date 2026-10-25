@@ -40,15 +40,16 @@ function mockOffice(
     body: { items: receipts, total: receipts.length, years: [2026, 2025] },
   }),
 ) {
-  return mockApiGet({
+  const post = mockApiPost({ '/api/v1/admin/receipts/search': list });
+  mockApiGet({
     '/api/v1/settings/public': { body: publicSettings },
     '/api/v1/auth/me': { body: meOffice },
-    '/api/v1/admin/receipts': list,
     '/api/v1/admin/receipts/{receiptId}': (init: MockRequest) => {
       const r = byId[init.params?.path?.receiptId ?? ''];
       return r ? { body: r } : problem(404, 'not found');
     },
   });
+  return post;
 }
 
 function renderPage(receipt?: string) {
@@ -84,7 +85,7 @@ describe('ReceiptsPage', () => {
   });
 
   it('filters by year and searches by number or name', async () => {
-    const get = mockOffice();
+    const post = mockOffice();
     const user = userEvent.setup();
 
     renderPage();
@@ -98,24 +99,26 @@ describe('ReceiptsPage', () => {
     ]);
     await user.click(await screen.findByRole('option', { name: '2026' }));
     await waitFor(() =>
-      expect(get).toHaveBeenCalledWith('/api/v1/admin/receipts', {
-        params: { query: { year: 2026, offset: 0, limit: 50 } },
+      expect(post).toHaveBeenCalledWith('/api/v1/admin/receipts/search', {
+        body: { year: 2026, offset: 0, limit: 50 },
         signal: expect.anything(),
       }),
     );
     await user.type(screen.getByRole('searchbox', { name: 'Search receipts' }), ' mia ');
     await waitFor(() =>
-      expect(get).toHaveBeenCalledWith('/api/v1/admin/receipts', {
-        params: { query: { year: 2026, q: 'mia', offset: 0, limit: 50 } },
+      expect(post).toHaveBeenCalledWith('/api/v1/admin/receipts/search', {
+        body: { year: 2026, query: 'mia', offset: 0, limit: 50 },
         signal: expect.anything(),
       }),
     );
   });
 
   it('pages through many receipts', async () => {
-    const get = mockOffice((init) => ({
+    const post = mockOffice((init) => ({
       body: {
-        items: init.params?.query?.offset ? [receiptCanceled] : [receiptCancellation, receiptSale],
+        items: (init.body as { offset?: number } | undefined)?.offset
+          ? [receiptCanceled]
+          : [receiptCancellation, receiptSale],
         total: 51,
         years: [2026],
       },
@@ -129,8 +132,8 @@ describe('ReceiptsPage', () => {
     await user.click(pages.getByRole('button', { name: 'Next' }));
 
     expect(await pages.findByText('51–51 of 51')).toBeInTheDocument();
-    expect(get).toHaveBeenCalledWith('/api/v1/admin/receipts', {
-      params: { query: { offset: 50, limit: 50 } },
+    expect(post).toHaveBeenCalledWith('/api/v1/admin/receipts/search', {
+      body: { offset: 50, limit: 50 },
       signal: expect.anything(),
     });
     expect(pages.getByRole('button', { name: 'Next' })).toBeDisabled();

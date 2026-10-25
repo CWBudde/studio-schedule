@@ -3,6 +3,7 @@ import { CircleAlert, RotateCcw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { healthQuery, publicSettingsQuery } from '@/api/queries';
+import { useMe } from '@/api/useMe';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,8 @@ function StatusCard({ className }: { className?: string }) {
   const { t } = useTranslation();
   const health = useQuery(healthQuery);
   const settings = useQuery(publicSettingsQuery);
+  // Only the office and admins learn the version, for support (ASVS 14.3.3).
+  const version = useMe().data?.version;
   const isOk = health.data?.status === 'ok';
   const failed = health.isError || settings.isError;
 
@@ -84,9 +87,11 @@ function StatusCard({ className }: { className?: string }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-          <Row label={t('home.status.version')} loading={health.isPending}>
-            {health.data?.version}
-          </Row>
+          {version && (
+            <Row label={t('home.status.version')} loading={false}>
+              {version}
+            </Row>
+          )}
           <Row label={t('home.status.school')} loading={settings.isPending}>
             {settings.data?.schoolName}
           </Row>

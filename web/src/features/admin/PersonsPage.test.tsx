@@ -18,12 +18,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The persons whose name or email contains every word of the request's `q`. */
+/** The words of a person search's body. */
+const queryOf = (init: MockRequest) => (init.body as { query?: string } | undefined)?.query ?? '';
+
+/** The persons whose name or email contains every word of the request's `query`. */
 function searchPersons(init: MockRequest) {
-  const words = String(init.params?.query?.q ?? '')
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
+  const words = queryOf(init).toLowerCase().split(/\s+/).filter(Boolean);
   return {
     body: {
       items: persons.filter((p) =>
@@ -38,8 +38,13 @@ function searchPersons(init: MockRequest) {
 const asOffice = {
   '/api/v1/settings/public': { body: publicSettings },
   '/api/v1/auth/me': { body: meOffice },
-  '/api/v1/admin/persons': searchPersons,
 };
+
+/** Signs in as the office; `search` answers the person search. */
+function mockOffice(search: Parameters<typeof mockApiPost>[0][string] = searchPersons) {
+  const post = mockApiPost({ '/api/v1/admin/persons/search': search });
+  return { get: mockApiGet(asOffice), post };
+}
 
 function renderPage(search: Record<string, string> = {}) {
   render(<Toaster />);
@@ -55,7 +60,7 @@ const names = () =>
 
 describe('PersonsPage', () => {
   it('lists the persons in the order of the API, each a link to their page', async () => {
-    mockApiGet(asOffice);
+    mockOffice();
 
     renderPage();
 
@@ -72,7 +77,7 @@ describe('PersonsPage', () => {
   });
 
   it('asks the API once the typing pauses', async () => {
-    const get = mockApiGet(asOffice);
+    const { post } = mockOffice();
     const user = userEvent.setup();
 
     renderPage();
@@ -80,14 +85,14 @@ describe('PersonsPage', () => {
     await user.type(screen.getByRole('searchbox', { name: 'Search persons' }), 'sample');
 
     await waitFor(() => expect(names()).toEqual(['Mia Sample', 'Noah Sample']));
-    expect(get).toHaveBeenCalledWith('/api/v1/admin/persons', {
-      params: { query: { q: 'sample' } },
+    expect(post).toHaveBeenCalledWith('/api/v1/admin/persons/search', {
+      body: { query: 'sample' },
       signal: expect.any(AbortSignal),
     });
   });
 
   it('keeps the search in the URL', async () => {
-    mockApiGet(asOffice);
+    mockOffice();
     const user = userEvent.setup();
 
     const { router } = renderPage();
@@ -101,7 +106,7 @@ describe('PersonsPage', () => {
   });
 
   it('starts with the search of the URL', async () => {
-    mockApiGet(asOffice);
+    mockOffice();
 
     renderPage({ q: 'noah' });
 
@@ -110,7 +115,7 @@ describe('PersonsPage', () => {
   });
 
   it('keeps typing while its own search lands in the URL', async () => {
-    mockApiGet(asOffice);
+    mockOffice();
 
     const { router } = renderPage();
     const box = await screen.findByRole('searchbox', { name: 'Search persons' });
@@ -134,7 +139,7 @@ describe('PersonsPage', () => {
   });
 
   it('follows the URL when it changes elsewhere', async () => {
-    mockApiGet(asOffice);
+    mockOffice();
 
     const { router } = renderPage({ q: 'noah' });
     const box = await screen.findByRole('searchbox', { name: 'Search persons' });
@@ -146,11 +151,7 @@ describe('PersonsPage', () => {
   });
 
   it('shows a failed search as failed, not the rows of the last one', async () => {
-    mockApiGet({
-      ...asOffice,
-      '/api/v1/admin/persons': (init) =>
-        init.params?.query?.q === 'boom' ? problem(503, 'down') : searchPersons(init),
-    });
+    mockOffice((init) => (queryOf(init) === 'boom' ? problem(503, 'down') : searchPersons(init)));
     const user = userEvent.setup();
 
     renderPage();
@@ -164,7 +165,7 @@ describe('PersonsPage', () => {
   });
 
   it('says when nobody matches', async () => {
-    mockApiGet(asOffice);
+    mockOffice();
     const user = userEvent.setup();
 
     renderPage();
@@ -180,7 +181,7 @@ describe('PersonsPage', () => {
       givenName: `Person${i}`,
       familyName: 'Many',
     }));
-    mockApiGet({ ...asOffice, '/api/v1/admin/persons': { body: { items: many } } });
+    mockOffice({ body: { items: many } });
 
     renderPage();
 
@@ -191,10 +192,7 @@ describe('PersonsPage', () => {
 
   it('says when the persons could not be loaded and asks again', async () => {
     let fail = true;
-    mockApiGet({
-      ...asOffice,
-      '/api/v1/admin/persons': (init) => (fail ? problem(503, 'down') : searchPersons(init)),
-    });
+    mockOffice((init) => (fail ? problem(503, 'down') : searchPersons(init)));
     const user = userEvent.setup();
 
     renderPage();
@@ -206,7 +204,7 @@ describe('PersonsPage', () => {
   });
 
   it('adds a person in a sheet and opens their page', async () => {
-    mockApiGet(asOffice);
+    mockOffice();
     const post = mockApiPost({
       '/api/v1/admin/persons': ({ body }) => ({
         status: 201,
@@ -239,7 +237,7 @@ describe('PersonsPage', () => {
   });
 
   it('checks the fields before sending', async () => {
-    mockApiGet(asOffice);
+    mockOffice();
     const post = mockApiPost({});
     const user = userEvent.setup();
 
@@ -253,14 +251,14 @@ describe('PersonsPage', () => {
     expect(await sheet.findAllByText('Please fill in this field.')).toHaveLength(2);
     expect(sheet.getByText('Please enter a valid email address.')).toBeInTheDocument();
     expect(sheet.getByText('The birth date cannot be in the future.')).toBeInTheDocument();
-    expect(post).not.toHaveBeenCalled();
+    expect(post).not.toHaveBeenCalledWith('/api/v1/admin/persons', expect.anything());
   });
 
   it.each([
     ['birth date must not be in the future', 'The birth date cannot be in the future.'],
     ['invalid birth date', 'Please check this entry.'],
   ])('explains a refused birth date (%s)', async (message, shown) => {
-    mockApiGet(asOffice);
+    mockOffice();
     mockApiPost({
       '/api/v1/admin/persons': problem(422, 'validation failed', [
         { location: 'body.birthDate', message },
@@ -281,7 +279,7 @@ describe('PersonsPage', () => {
   });
 
   it('marks the fields the API refuses', async () => {
-    mockApiGet(asOffice);
+    mockOffice();
     mockApiPost({
       '/api/v1/admin/persons': problem(422, 'validation failed', [{ location: 'body.email' }]),
     });

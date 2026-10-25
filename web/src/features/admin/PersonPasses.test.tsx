@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Toaster } from '@/components/ui/sonner';
 import {
   conflict,
@@ -17,20 +17,23 @@ import {
   problem,
   publicSettings,
   receiptSettings,
+  searchQueryOf,
+  expectOnlySearches,
 } from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { PersonPage } from './PersonPage';
+
+beforeEach(() => {
+  mockApiPost({ '/api/v1/admin/persons/search': searchPersons });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The persons whose name contains every word of the request's `q`. */
+/** The persons whose name contains every word of the request's `query`. */
 function searchPersons(init: MockRequest) {
-  const words = String(init.params?.query?.q ?? '')
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
+  const words = searchQueryOf(init).toLowerCase().split(/\s+/).filter(Boolean);
   return {
     body: {
       items: persons.filter((p) =>
@@ -44,7 +47,6 @@ const fixtures = (passes = noahPasses, me = meOffice, settings: object = receipt
   '/api/v1/settings/public': { body: publicSettings },
   '/api/v1/auth/me': { body: me },
   '/api/v1/admin/settings/receipts': { body: settings },
-  '/api/v1/admin/persons': searchPersons,
   '/api/v1/admin/persons/{personId}': (init: MockRequest) => {
     const detail = personDetails[init.params?.path?.personId ?? ''];
     return detail ? { body: detail } : problem(404, 'resource not found');
@@ -347,7 +349,7 @@ describe('PersonPasses', () => {
     expect(dialog.getByLabelText('Price paid (EUR, optional)')).toHaveAccessibleDescription(
       expect.stringContaining('Enter an amount such as 12.50.'),
     );
-    expect(post).not.toHaveBeenCalled();
+    expectOnlySearches(post);
   });
 
   it('says when the pass type was retired meanwhile', async () => {

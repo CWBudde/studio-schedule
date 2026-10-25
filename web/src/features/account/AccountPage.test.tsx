@@ -183,6 +183,24 @@ describe('AccountPage', () => {
       expect(card.getByLabelText('New password')).not.toHaveAttribute('aria-invalid');
     });
 
+    it('says when the API refuses the new password as too common', async () => {
+      mockApiGet(signedInMember);
+      mockApiPost({
+        '/api/v1/auth/password': problem(422, 'validation failed', [
+          { location: 'body.newPassword' },
+        ]),
+      });
+
+      renderAccount();
+      const card = await changePassword('secret-password', 'password123');
+
+      expect(
+        await card.findByText('This password is too common. Please choose another one.'),
+      ).toBeInTheDocument();
+      expect(card.getByLabelText('New password')).toHaveAttribute('aria-invalid', 'true');
+      expect(card.getByText('Password strength: fair')).toBeInTheDocument();
+    });
+
     it('says how long to wait after too many wrong passwords', async () => {
       mockApiGet(signedInMember);
       mockApiPost({ '/api/v1/auth/password': tooManyRequests(600) });

@@ -24,7 +24,7 @@ afterEach(() => {
 
 const id = (n: number) => `0190a000-0000-7000-8000-${String(n).padStart(12, '0')}`;
 
-/** Fictional mails as GET /admin/mails lists them (newest first). */
+/** Fictional mails as POST /admin/mails/search finds them (newest first). */
 const mails: MailLogItem[] = [
   {
     id: id(931),
@@ -71,15 +71,23 @@ const details: Record<string, MailLogDetail> = {
 const asAdmin = {
   '/api/v1/auth/me': { body: meAdmin },
   '/api/v1/settings/public': { body: publicSettings },
-  '/api/v1/admin/mails': ({ params }: MockRequest) => {
-    const status = params?.query?.status;
-    const items = status ? mails.filter((m) => m.status === status) : mails;
-    return { body: { items } };
-  },
   '/api/v1/admin/mails/{mailId}': ({ params }: MockRequest) => ({
     body: details[params?.path?.mailId ?? ''],
   }),
 };
+
+/** The mail log search: the mails, filtered by the body's status. */
+function searchMails({ body }: MockRequest) {
+  const status = (body as { status?: string } | undefined)?.status;
+  const items = status ? mails.filter((m) => m.status === status) : mails;
+  return { body: { items } };
+}
+
+/** Signs in as an admin; `search` answers the mail log search. */
+function mockAdmin(search: Parameters<typeof mockApiPost>[0][string] = searchMails) {
+  const post = mockApiPost({ '/api/v1/admin/mails/search': search });
+  return { get: mockApiGet(asAdmin), post };
+}
 
 function renderPage() {
   render(<Toaster />);
@@ -102,7 +110,7 @@ async function rows() {
 
 describe('MailLogPage', () => {
   it('lists the mails, newest first, in the school time zone', async () => {
-    mockApiGet(asAdmin);
+    mockAdmin();
 
     renderPage();
 
@@ -125,7 +133,7 @@ describe('MailLogPage', () => {
   });
 
   it('filters by status', async () => {
-    const get = mockApiGet(asAdmin);
+    const { post } = mockAdmin();
     const user = userEvent.setup();
 
     renderPage();
@@ -134,14 +142,14 @@ describe('MailLogPage', () => {
     await user.click(await screen.findByRole('option', { name: 'Failed' }));
 
     await vi.waitFor(async () => expect(await rows()).toHaveLength(1));
-    expect(get).toHaveBeenCalledWith('/api/v1/admin/mails', {
-      params: { query: { status: 'failed' } },
+    expect(post).toHaveBeenCalledWith('/api/v1/admin/mails/search', {
+      body: { status: 'failed' },
       signal: expect.anything(),
     });
   });
 
   it('shows a mail with its text', async () => {
-    mockApiGet(asAdmin);
+    mockAdmin();
     const user = userEvent.setup();
 
     renderPage();
@@ -157,7 +165,7 @@ describe('MailLogPage', () => {
   });
 
   it('never shows the text of a mail with a secret link', async () => {
-    mockApiGet(asAdmin);
+    mockAdmin();
     const user = userEvent.setup();
 
     renderPage();
@@ -170,7 +178,7 @@ describe('MailLogPage', () => {
   });
 
   it('queues a failed mail again', async () => {
-    mockApiGet(asAdmin);
+    mockAdmin();
     const post = mockApiPost({
       '/api/v1/admin/mails/{mailId}/requeue': {
         body: { ...mails[2], status: 'pending', attempts: 0 },
@@ -198,7 +206,7 @@ describe('MailLogPage', () => {
   });
 
   it('says why a mail is not queued again', async () => {
-    mockApiGet(asAdmin);
+    mockAdmin();
     mockApiPost({ '/api/v1/admin/mails/{mailId}/requeue': conflict('not-failed') });
     const user = userEvent.setup();
 
@@ -215,7 +223,7 @@ describe('MailLogPage', () => {
   });
 
   it('says when the mails cannot be loaded', async () => {
-    mockApiGet({ ...asAdmin, '/api/v1/admin/mails': problem(503, 'unavailable') });
+    mockAdmin(problem(503, 'unavailable'));
 
     renderPage();
 
@@ -223,16 +231,17 @@ describe('MailLogPage', () => {
   });
 
   it('is for admins only', async () => {
-    const get = mockApiGet({ '/api/v1/auth/me': { body: meOffice } });
+    mockApiGet({ '/api/v1/auth/me': { body: meOffice } });
+    const post = mockApiPost({});
 
     renderPage();
 
     expect(await screen.findByText('Only administrators can see this page.')).toBeInTheDocument();
-    expect(get).not.toHaveBeenCalledWith('/api/v1/admin/mails', expect.anything());
+    expect(post).not.toHaveBeenCalledWith('/api/v1/admin/mails/search', expect.anything());
   });
 
   it('renders in German', async () => {
-    mockApiGet(asAdmin);
+    mockAdmin();
     await i18n.changeLanguage('de');
 
     renderPage();
@@ -247,7 +256,7 @@ describe('MailLogPage', () => {
 
 describe('mailTemplates', () => {
   it('has a label for every template of the API in every language', () => {
-    expect(mailTemplates).toHaveLength(16);
+    expect(mailTemplates).toHaveLength(17);
     for (const lng of ['en', 'de']) {
       for (const name of mailTemplates) {
         expect(i18n.exists(`mailLog:templates.${name}`, { lng }), `${lng}: ${name}`).toBe(true);

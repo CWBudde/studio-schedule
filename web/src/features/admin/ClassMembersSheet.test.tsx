@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Toaster } from '@/components/ui/sonner';
 import i18n from '@/i18n';
 import {
@@ -19,9 +19,14 @@ import {
   problem,
   staffEntries,
   terms,
+  expectOnlySearches,
 } from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { ClassesPage } from './ClassesPage';
+
+beforeEach(() => {
+  mockApiPost({ '/api/v1/admin/persons/search': { body: { items: persons } } });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -33,7 +38,6 @@ const asOffice = {
   '/api/v1/auth/me': { body: meOffice },
   '/api/v1/terms': { body: { items: terms } },
   '/api/v1/admin/staff': { body: { items: staffEntries } },
-  '/api/v1/admin/persons': { body: { items: persons } },
   '/api/v1/admin/terms/{termId}/classes': { body: { items: autumnClassEntries } },
   '/api/v1/admin/classes/{classId}/members': (init: MockRequest) => ({
     body: { items: init.params?.path?.classId === ids.classBallet ? balletMembers : [] },
@@ -170,7 +174,7 @@ describe('ClassMembersSheet', () => {
     expect(sheet.getByRole('combobox', { name: 'Person' })).toHaveAccessibleDescription(
       'Please choose a person.',
     );
-    expect(post).not.toHaveBeenCalled();
+    expectOnlySearches(post);
   });
 
   it('says when the person is a member already', async () => {

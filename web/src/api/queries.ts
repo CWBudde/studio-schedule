@@ -1,7 +1,9 @@
 import {
   hashKey,
   infiniteQueryOptions,
+  MutationCache,
   mutationOptions,
+  QueryCache,
   type QueryClient,
   queryOptions,
 } from '@tanstack/react-query';
@@ -339,11 +341,29 @@ async function refreshMe(queryClient: QueryClient): Promise<void> {
   }
 }
 
-/** A 401 of a signed-in operation means the session is over: nobody is signed in any more. */
+/**
+ * A 401 means the session is over (it expired, or ended on another device):
+ * nobody is signed in any more, and the data of the account leaves the
+ * cache (ASVS 8.2.3). Once `me` is null, a further 401 changes nothing, so
+ * the queries that refetch after the reset cannot start it again. `getMe`
+ * answers a guest's 401 as null, not as an error.
+ */
 function signedOutOn401(queryClient: QueryClient) {
   return (error: Error) => {
-    if (error instanceof ApiError && error.status === 401) changeIdentity(queryClient, null);
+    if (!(error instanceof ApiError) || error.status !== 401) return;
+    if (queryClient.getQueryData(meQuery.queryKey) === null) return;
+    changeIdentity(queryClient, null);
   };
+}
+
+/**
+ * The query and mutation caches of the app's QueryClient: a 401 of any
+ * query or mutation signs out (signedOutOn401). `client` returns the
+ * QueryClient they belong to.
+ */
+export function sessionCaches(client: () => QueryClient) {
+  const onError = (error: Error) => signedOutOn401(client())(error);
+  return { queryCache: new QueryCache({ onError }), mutationCache: new MutationCache({ onError }) };
 }
 
 /**
@@ -656,14 +676,12 @@ export type MailTemplate = NonNullable<MailLogItem['template']>;
 /** A mail of the log with its bodies, where they are shown. */
 export type MailLogDetail = components['schemas']['MailLogDetail'];
 /** The filters of the mail log. */
-export type MailLogFilter = Omit<
-  NonNullable<paths['/api/v1/admin/mails']['get']['parameters']['query']>,
-  'cursor'
->;
+export type MailLogFilter = Omit<PostBody<'/api/v1/admin/mails/search'>, 'cursor'>;
 
 /**
  * The mail log, newest first, page by page (admins only). Always stale, so
- * that it shows new mails whenever it is opened.
+ * that it shows new mails whenever it is opened. A POST, so that the
+ * recipient searched for stays out of URLs (ASVS 8.3.1).
  */
 export const mailLogQuery = (filter: MailLogFilter) =>
   infiniteQueryOptions({
@@ -672,8 +690,8 @@ export const mailLogQuery = (filter: MailLogFilter) =>
     staleTime: 0,
     queryFn: ({ pageParam, signal }) =>
       unwrap(
-        api.GET('/api/v1/admin/mails', {
-          params: { query: { ...filter, ...(pageParam ? { cursor: pageParam } : {}) } },
+        api.POST('/api/v1/admin/mails/search', {
+          body: { ...filter, ...(pageParam ? { cursor: pageParam } : {}) },
           signal,
         }),
       ),
@@ -857,6 +875,7 @@ export const allStaffQuery = queryOptions({
 /**
  * The persons whose name or email contains every word of `q` (office), at
  * most 50, ordered by family and given name; an empty `q` matches everyone.
+ * A POST, so that the search terms stay out of URLs (ASVS 8.3.1).
  */
 export const personsQuery = (q: string) =>
   queryOptions({
@@ -864,8 +883,8 @@ export const personsQuery = (q: string) =>
     queryFn: async ({ signal }) =>
       (
         await unwrap(
-          api.GET('/api/v1/admin/persons', {
-            params: { query: q.trim() ? { q: q.trim() } : {} },
+          api.POST('/api/v1/admin/persons/search', {
+            body: q.trim() ? { query: q.trim() } : {},
             signal,
           }),
         )
@@ -2195,8 +2214,8 @@ export const staffPersonsQuery = (q: string) =>
     queryFn: async ({ signal }) =>
       (
         await unwrap(
-          api.GET('/api/v1/staff/persons', {
-            params: { query: { q: staffPersonSearch(q) } },
+          api.POST('/api/v1/staff/persons/search', {
+            body: { query: staffPersonSearch(q) },
             signal,
           }),
         )
@@ -2645,19 +2664,21 @@ export type ReceiptSettings = components['schemas']['ReceiptSettingsBody'];
 /** The receipt settings an admin writes. */
 export type ReceiptSettingsData = components['schemas']['ReceiptSettingsData'];
 /** The receipt list filter: a year (0: all), a search, and a page. */
-export type ReceiptsParams = NonNullable<
-  paths['/api/v1/admin/receipts']['get']['parameters']['query']
->;
+export type ReceiptsParams = PostBody<'/api/v1/admin/receipts/search'>;
 
 /** Prefix of the office's receipt queries. */
 const receiptsKey = [...adminQueryKey, 'receipts'] as const;
 
-/** The receipts that match `params`, newest first, and how many match in all (office). */
+/**
+ * The receipts that match `params`, newest first, and how many match in all
+ * (office). A POST, so that the name searched for stays out of URLs (ASVS
+ * 8.3.1).
+ */
 export const receiptsQuery = (params: ReceiptsParams) =>
   queryOptions({
     queryKey: [...receiptsKey, 'list', params],
     queryFn: ({ signal }) =>
-      unwrap(api.GET('/api/v1/admin/receipts', { params: { query: params }, signal })),
+      unwrap(api.POST('/api/v1/admin/receipts/search', { body: params, signal })),
   });
 
 /** One receipt (office); an unknown one is a 404. */

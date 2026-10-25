@@ -44,7 +44,8 @@
     "lesson-notice": "Nachricht zu einer Stunde",
     "receipt": "Beleg",
     "announcement": "Mitteilung",
-    "account-deleted": "Konto gelöscht"
+    "account-deleted": "Konto gelöscht",
+    "password-changed": "Passwort geändert"
   },
   "attempts_one": "{{count}} Versuch",
   "attempts_other": "{{count}} Versuche",

@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-router';
 import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
+import { sessionCaches } from '@/api/queries';
 import { type ScheduleSearch, validateScheduleSearch } from '@/features/schedule/search';
 import { type MyLessonsSearch, validateMyLessonsSearch } from '@/features/my-lessons/search';
 import { type TeachSearch, validateTeachSearch } from '@/features/teach/search';
@@ -16,9 +17,12 @@ import { validateReceiptsSearch } from '@/features/admin/receiptsSearch';
 import { validateStatisticsSearch } from '@/features/admin/statisticsSearch';
 
 function testQueryClient() {
-  return new QueryClient({
+  const queryClient: QueryClient = new QueryClient({
+    // As in the app (router.ts): any 401 signs out.
+    ...sessionCaches(() => queryClient),
     defaultOptions: { queries: { retry: false, gcTime: Infinity } },
   });
+  return queryClient;
 }
 
 export function renderWithQuery(ui: ReactElement) {

@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Toaster } from '@/components/ui/sonner';
 import i18n from '@/i18n';
 import {
@@ -15,20 +15,23 @@ import {
   persons,
   problem,
   staffEntries,
+  searchQueryOf,
+  expectOnlySearches,
 } from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { StaffPage } from './StaffPage';
+
+beforeEach(() => {
+  mockApiPost({ '/api/v1/admin/persons/search': searchPersons });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The persons whose name or email contains every word of the request's `q`. */
+/** The persons whose name or email contains every word of the request's `query`. */
 function searchPersons(init: MockRequest) {
-  const words = String(init.params?.query?.q ?? '')
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
+  const words = searchQueryOf(init).toLowerCase().split(/\s+/).filter(Boolean);
   return {
     body: {
       items: persons.filter((p) =>
@@ -43,7 +46,6 @@ function searchPersons(init: MockRequest) {
 const asOffice = {
   '/api/v1/auth/me': { body: meOffice },
   '/api/v1/admin/staff': { body: { items: staffEntries } },
-  '/api/v1/admin/persons': searchPersons,
 };
 
 function renderPage() {
@@ -172,7 +174,7 @@ describe('StaffPage', () => {
     expect(sheet.getByLabelText('Display name')).toHaveAccessibleDescription(
       /Please fill in this field\.$/,
     );
-    expect(post).not.toHaveBeenCalled();
+    expectOnlySearches(post);
   });
 
   it('deactivates a staff member and keeps the linked person', async () => {

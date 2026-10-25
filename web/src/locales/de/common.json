@@ -101,7 +101,6 @@
   },
   "footer": {
     "version": "Version {{version}}",
-    "versionUnknown": "Version unbekannt",
     "source": "Quellcode auf GitHub"
   },
   "notFound": {
@@ -109,5 +108,16 @@
     "description": "Die gesuchte Seite existiert nicht.",
     "backHome": "Zur Startseite"
   },
-  "deletedPerson": "Gelöschte Person"
+  "deletedPerson": "Gelöschte Person",
+  "password": {
+    "show": "Passwort anzeigen",
+    "hide": "Passwort verbergen",
+    "strength": {
+      "label": "Passwortstärke: {{level}}",
+      "weak": "schwach",
+      "fair": "mittel",
+      "good": "gut",
+      "strong": "stark"
+    }
+  }
 }

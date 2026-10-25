@@ -15,6 +15,7 @@ const fieldErrors = [
   'required',
   'email',
   'passwordMin',
+  'passwordCommon',
   'tooLong',
   'invalid',
   'passwordMismatch',

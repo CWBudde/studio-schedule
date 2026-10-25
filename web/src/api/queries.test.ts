@@ -62,6 +62,7 @@ import {
   resetPasswordMutation,
   restoreLessonMutation,
   scheduleQuery,
+  sessionCaches,
   setAttendanceMutation,
   staffQuery,
   stopImpersonationMutation,
@@ -176,6 +177,41 @@ describe('identity changes', () => {
   );
 });
 
+describe('a 401 of any request', () => {
+  /** A client with the app's caches (router.ts) and a signed-in member. */
+  function appClient() {
+    const queryClient: QueryClient = new QueryClient({
+      ...sessionCaches(() => queryClient),
+      defaultOptions: { queries: { retry: false } },
+    });
+    queryClient.setQueryData(meQuery.queryKey, meMember);
+    queryClient.setQueryData(familyQuery.queryKey, family);
+    return queryClient;
+  }
+
+  it('signs out and drops the cached data of the account when a read fails', async () => {
+    mockApiGet({ '/api/v1/my/passes': { status: 401 } });
+    const queryClient = appClient();
+
+    await expect(queryClient.fetchQuery(myPassesQuery)).rejects.toThrow();
+
+    expect(queryClient.getQueryData(meQuery.queryKey)).toBeNull();
+    expect(queryClient.getQueryData(familyQuery.queryKey)).toBeUndefined();
+  });
+
+  it('does nothing more once nobody is signed in', async () => {
+    mockApiGet({ '/api/v1/my/passes': { status: 401 } });
+    const queryClient = appClient();
+    queryClient.setQueryData(meQuery.queryKey, null);
+    const reset = vi.spyOn(queryClient, 'resetQueries');
+
+    await expect(queryClient.fetchQuery(myPassesQuery)).rejects.toThrow();
+
+    expect(reset).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(familyQuery.queryKey)).toEqual(family);
+  });
+});
+
 describe('stopImpersonation', () => {
   it('signs out locally when the impersonation has expired (401)', async () => {
     mockApiGet({ '/api/v1/schedule': { body: schedule } });
@@ -249,18 +285,18 @@ describe('catalogue administration', () => {
   });
 
   it('searches the persons by the trimmed words and leaves an empty search out', async () => {
-    const get = mockApiGet({ '/api/v1/admin/persons': { body: { items: persons } } });
+    const post = mockApiPost({ '/api/v1/admin/persons/search': { body: { items: persons } } });
     const queryClient = new QueryClient();
 
     expect(await queryClient.fetchQuery(personsQuery('  mia sam '))).toEqual(persons);
     await queryClient.fetchQuery(personsQuery(''));
 
-    expect(get).toHaveBeenCalledWith('/api/v1/admin/persons', {
-      params: { query: { q: 'mia sam' } },
+    expect(post).toHaveBeenCalledWith('/api/v1/admin/persons/search', {
+      body: { query: 'mia sam' },
       signal: expect.anything(),
     });
-    expect(get).toHaveBeenCalledWith('/api/v1/admin/persons', {
-      params: { query: {} },
+    expect(post).toHaveBeenCalledWith('/api/v1/admin/persons/search', {
+      body: {},
       signal: expect.anything(),
     });
   });

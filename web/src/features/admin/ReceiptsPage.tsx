@@ -38,7 +38,7 @@ export function ReceiptsPage() {
   const [page, setPage] = useState(0);
   const params = {
     ...(year === 'all' ? {} : { year: Number(year) }),
-    ...(q ? { q } : {}),
+    ...(q ? { query: q } : {}),
     offset: page * receiptsPageSize,
     limit: receiptsPageSize,
   };

@@ -2,11 +2,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearch } from '@tanstack/react-router';
 import { CircleCheck, KeyRound, LinkIcon } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { resetPasswordMutation } from '@/api/queries';
 import { LinkPageCard } from '@/components/LinkPageCard';
+import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -38,6 +39,7 @@ export function ResetPasswordPage() {
     defaultValues: { password: '', repeat: '' },
   });
   const { errors } = form.formState;
+  const typed = useWatch({ control: form.control, name: 'password' });
 
   if (!token || statusOf(reset.error) === 410) return <InvalidLink />;
   if (reset.isSuccess) return <PasswordChanged />;
@@ -48,7 +50,9 @@ export function ResetPasswordPage() {
       {
         onError: (error) => {
           for (const field of invalidFields(error, ['password'] as const)) {
-            form.setError(field, { type: 'server', message: 'invalid' });
+            // The form checks the length, so the server refuses the
+            // password for being too common.
+            form.setError(field, { type: 'server', message: 'passwordCommon' });
           }
         },
       },
@@ -72,6 +76,7 @@ export function ResetPasswordPage() {
             type="password"
             autoComplete="new-password"
             hint={t('register.passwordHint')}
+            meter={<PasswordStrengthMeter password={typed} />}
             error={errorText(errors.password)}
             {...form.register('password')}
           />

@@ -2,11 +2,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CircleCheck, KeyRound } from 'lucide-react';
 import { useId } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import type { z } from 'zod';
 import { changePasswordMutation } from '@/api/queries';
 import { Alert, AlertTitle } from '@/components/ui/alert';
+import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormError } from '@/features/auth/FormError';
@@ -31,6 +32,7 @@ export function ChangePasswordCard() {
     defaultValues: { currentPassword: '', newPassword: '', repeat: '' },
   });
   const { errors } = form.formState;
+  const typed = useWatch({ control: form.control, name: 'newPassword' });
 
   const onSubmit = ({ currentPassword, newPassword }: PasswordChange) =>
     change.mutate(
@@ -41,7 +43,9 @@ export function ChangePasswordCard() {
           for (const field of invalidFields(error, ['currentPassword', 'newPassword'] as const)) {
             form.setError(field, {
               type: 'server',
-              message: field === 'currentPassword' ? 'wrongPassword' : 'invalid',
+              // The form checks the new password's length, so the server
+              // refuses it for being too common.
+              message: field === 'currentPassword' ? 'wrongPassword' : 'passwordCommon',
             });
           }
         },
@@ -86,6 +90,7 @@ export function ChangePasswordCard() {
               type="password"
               autoComplete="new-password"
               hint={t('password.hint')}
+              meter={<PasswordStrengthMeter password={typed} />}
               error={errorText(errors.newPassword)}
               {...form.register('newPassword')}
             />

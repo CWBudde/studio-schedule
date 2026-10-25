@@ -1,12 +1,16 @@
+import { useQuery } from '@tanstack/react-query';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { familyQuery } from '@/api/queries';
 import {
+  family,
   meAdmin,
   meMember,
   meOffice,
   mockApiGet,
   mockApiPost,
+  problem,
   publicSettings,
   signedOut,
 } from '@/test/mockApi';
@@ -186,5 +190,37 @@ describe('AppHeader', () => {
     // A demo server over HTTP keeps nothing in the browser, so there is
     // nothing to reset (ResetDemo.test.tsx covers the web demo).
     expect(screen.queryByRole('button', { name: 'Reset demo' })).not.toBeInTheDocument();
+  });
+
+  it('signs out and forgets the data of the account when any read answers 401', async () => {
+    // The session ends while the page is open (it expired, or ended on
+    // another device): the next read of private data is a 401.
+    let sessionOver = false;
+    mockApiGet({
+      ...notDemo,
+      '/api/v1/auth/me': () => (sessionOver ? { status: 401 } : { body: meMember }),
+      '/api/v1/family': () => (sessionOver ? problem(401, 'not signed in') : { body: family }),
+    });
+    function FamilyName() {
+      const { data } = useQuery(familyQuery);
+      return <p>{data ? `Family of ${data.me.givenName}` : 'No family data'}</p>;
+    }
+
+    const { queryClient } = renderInRouter(
+      <>
+        <AppHeader />
+        <FamilyName />
+      </>,
+    );
+    expect(await screen.findByRole('button', { name: 'Nora Example' })).toBeInTheDocument();
+    expect(await screen.findByText('Family of Nora')).toBeInTheDocument();
+
+    sessionOver = true;
+    await queryClient.refetchQueries({ queryKey: familyQuery.queryKey });
+
+    expect(await screen.findByRole('link', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Nora Example' })).not.toBeInTheDocument();
+    expect(await screen.findByText('No family data')).toBeInTheDocument();
+    expect(queryClient.getQueryData(familyQuery.queryKey)).toBeUndefined();
   });
 });
