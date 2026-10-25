@@ -10,7 +10,9 @@ cd "$ROOT_DIR"
 # wazero and the typst module (internal/pdf/typstwasm, 25 MB) are the
 # server's PDF renderer; the demo renders with the browser's WebAssembly.
 # The Prometheus client is the server's metrics; the demo has none.
-forbidden='^(github\.com/prometheus|github\.com/spf13/cobra|github\.com/jackc/pgx|github\.com/pressly/goose|github\.com/tetratelabs/wazero|github\.com/cwbudde/studio-schedule/internal/pdf/typstwasm|net/smtp|net/http/httptest|os/exec)(/|$)'
+# internal/webpush sends web push (ADR 0017); the demo shows its
+# notifications through the worker instead.
+forbidden='^(github\.com/prometheus|github\.com/spf13/cobra|github\.com/jackc/pgx|github\.com/pressly/goose|github\.com/tetratelabs/wazero|github\.com/cwbudde/studio-schedule/internal/pdf/typstwasm|github\.com/cwbudde/studio-schedule/internal/webpush|net/smtp|net/http/httptest|os/exec)(/|$)'
 
 deps=$(GOOS=js GOARCH=wasm go list -deps ./cmd/wasm)
 if bad=$(grep -E "$forbidden" <<<"$deps"); then

@@ -12,6 +12,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/config"
 	"github.com/cwbudde/studio-schedule/internal/seed"
+	"github.com/cwbudde/studio-schedule/internal/webpush"
 )
 
 func run(t *testing.T, args ...string) string {
@@ -259,5 +260,39 @@ func TestServeFlagHelpNamesEnv(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("serve --help lacks %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestVAPIDKeysCommand(t *testing.T) {
+	out := run(t, "vapid-keys")
+
+	vars := map[string]string{}
+	for line := range strings.Lines(out) {
+		name, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok {
+			t.Fatalf("line %q is no assignment", line)
+		}
+
+		vars[name] = value
+	}
+
+	if _, err := webpush.ParseKeys(vars[config.EnvVAPIDPublicKey], vars[config.EnvVAPIDPrivateKey]); err != nil {
+		t.Fatalf("the printed pair does not parse: %v\n%s", err, out)
+	}
+
+	if again := run(t, "vapid-keys"); again == out {
+		t.Error("two runs print the same keys")
+	}
+
+	// The printed lines configure push.
+	vars[config.EnvVAPIDSubject] = "mailto:office@example.test"
+
+	cfg, err := config.Load(func(key string) (string, bool) {
+		v, ok := vars[key]
+
+		return v, ok
+	}, config.Flags{})
+	if err != nil || !cfg.Push.Enabled() {
+		t.Fatalf("Load: %v, %#v", err, cfg.Push)
 	}
 }

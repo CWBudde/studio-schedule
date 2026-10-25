@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/cwbudde/studio-schedule/internal/config"
+	"github.com/cwbudde/studio-schedule/internal/webpush"
 )
 
 // env returns a lookup function backed by a map, so tests never touch the
@@ -305,13 +306,18 @@ func TestRedacted(t *testing.T) {
 func TestConfigNeverPrintsSecrets(t *testing.T) {
 	t.Parallel()
 
+	keys := vapidKeys(t)
+
 	cfg, err := config.Load(env(map[string]string{
-		"DATABASE_URL":  "postgres://app:change-me@db.example.test/studio",
-		"BASE_URL":      "https://schedule.example.test",
-		"SMTP_HOST":     "mail.example.test",
-		"SMTP_USERNAME": "schedule",
-		"SMTP_PASSWORD": "smtp-secret",
-		"SMTP_FROM":     "Studio <schedule@example.test>",
+		"DATABASE_URL":      "postgres://app:change-me@db.example.test/studio",
+		"BASE_URL":          "https://schedule.example.test",
+		"SMTP_HOST":         "mail.example.test",
+		"SMTP_USERNAME":     "schedule",
+		"SMTP_PASSWORD":     "smtp-secret",
+		"SMTP_FROM":         "Studio <schedule@example.test>",
+		"VAPID_PUBLIC_KEY":  keys.PublicKey(),
+		"VAPID_PRIVATE_KEY": keys.PrivateKey(),
+		"VAPID_SUBJECT":     "mailto:office@example.test",
 	}), config.Flags{})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -331,8 +337,10 @@ func TestConfigNeverPrintsSecrets(t *testing.T) {
 		"%#v":    fmt.Sprintf("%#v", cfg),
 		"%v ptr": fmt.Sprintf("%v", &cfg),
 		"SMTP":   fmt.Sprintf("%v %+v %#v %s", cfg.SMTP, cfg.SMTP, cfg.SMTP, cfg.SMTP),
+		"Push":   fmt.Sprintf("%v %+v %#v %s", cfg.Push, cfg.Push, cfg.Push, cfg.Push),
 	} {
-		if strings.Contains(out, "change-me") || strings.Contains(out, "smtp-secret") {
+		if strings.Contains(out, "change-me") || strings.Contains(out, "smtp-secret") ||
+			strings.Contains(out, keys.PrivateKey()) {
 			t.Errorf("%s output leaks a password: %s", name, out)
 		}
 
@@ -375,6 +383,70 @@ func TestLoadSMTP(t *testing.T) {
 	} {
 		if _, err := config.Load(env(vars), config.Flags{}); !errors.Is(err, config.ErrInvalid) {
 			t.Errorf("%s: want ErrInvalid, got %v", name, err)
+		}
+	}
+}
+
+func vapidKeys(t *testing.T) webpush.Keys {
+	t.Helper()
+
+	keys, err := webpush.GenerateKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return keys
+}
+
+func TestLoadPush(t *testing.T) {
+	t.Parallel()
+
+	keys, other := vapidKeys(t), vapidKeys(t)
+	vars := map[string]string{
+		"VAPID_PUBLIC_KEY": keys.PublicKey(), "VAPID_PRIVATE_KEY": keys.PrivateKey(),
+		"VAPID_SUBJECT": "mailto:office@example.test",
+	}
+
+	cfg, err := config.Load(env(vars), config.Flags{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := config.Push{PublicKey: keys.PublicKey(), PrivateKey: keys.PrivateKey(), Subject: "mailto:office@example.test"}
+	if cfg.Push != want || !cfg.Push.Enabled() {
+		t.Fatalf("Push = %#v, want %#v", cfg.Push, want)
+	}
+
+	if cfg, err := config.Load(env(nil), config.Flags{}); err != nil || cfg.Push.Enabled() {
+		t.Fatalf("no push: %#v, %v", cfg.Push, err)
+	}
+
+	with := func(key, value string) map[string]string {
+		out := map[string]string{}
+		for k, v := range vars {
+			out[k] = v
+		}
+
+		out[key] = value
+
+		return out
+	}
+
+	for name, vars := range map[string]map[string]string{
+		"no subject":         with("VAPID_SUBJECT", ""),
+		"no private key":     with("VAPID_PRIVATE_KEY", ""),
+		"only a subject":     {"VAPID_SUBJECT": "mailto:office@example.test"},
+		"another public key": with("VAPID_PUBLIC_KEY", other.PublicKey()),
+		"not a key":          with("VAPID_PRIVATE_KEY", "not-a-key"),
+		"plain address":      with("VAPID_SUBJECT", "office@example.test"),
+	} {
+		_, err := config.Load(env(vars), config.Flags{})
+		if !errors.Is(err, config.ErrInvalid) {
+			t.Errorf("%s: want ErrInvalid, got %v", name, err)
+		}
+
+		if err != nil && strings.Contains(err.Error(), keys.PrivateKey()) {
+			t.Errorf("%s: the error names the private key: %v", name, err)
 		}
 	}
 }

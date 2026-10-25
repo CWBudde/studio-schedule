@@ -23,6 +23,7 @@ func newRootCmd(env config.LookupFunc) *cobra.Command {
 	root.AddCommand(newInitCmd(env))
 	root.AddCommand(newImportCmd(env))
 	root.AddCommand(newHealthcheckCmd(env))
+	root.AddCommand(newVAPIDKeysCmd())
 
 	return root
 }

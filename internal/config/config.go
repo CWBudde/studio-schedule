@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/cwbudde/studio-schedule/internal/clientip"
+	"github.com/cwbudde/studio-schedule/internal/webpush"
 )
 
 // Environment variable names.
@@ -55,6 +56,14 @@ const (
 	// error) set the server's log output.
 	EnvLogFormat = "LOG_FORMAT"
 	EnvLogLevel  = "LOG_LEVEL"
+
+	// Web push (ADR 0017, environment only): the VAPID key pair that
+	// `studio-schedule vapid-keys` prints, and the contact the push
+	// services see (a mailto: or https: URL). All three or none: without
+	// them push is off.
+	EnvVAPIDPublicKey  = "VAPID_PUBLIC_KEY"
+	EnvVAPIDPrivateKey = "VAPID_PRIVATE_KEY"
+	EnvVAPIDSubject    = "VAPID_SUBJECT"
 )
 
 // Flag names of the settings that a flag can set. The commands bind them;
@@ -95,6 +104,9 @@ type Config struct {
 	BaseURL string
 	// SMTP is the mail server; a zero Host means none.
 	SMTP SMTP
+	// Push is the web push configuration; the zero value means push is
+	// off.
+	Push Push
 	// TrustedProxies are the reverse proxies in front of the app; empty
 	// means the connection's address is the client's.
 	TrustedProxies []netip.Prefix
@@ -140,6 +152,31 @@ func (s SMTP) GoString() string {
 	type plain SMTP // no methods, so %+v does not recurse
 
 	return fmt.Sprintf("%+v", plain(s))
+}
+
+// Push configures web push (ADR 0017). Load checks that the keys parse
+// and belong together.
+type Push struct {
+	PublicKey  string // base64url of the uncompressed P-256 point
+	PrivateKey string // secret: base64url of the P-256 scalar
+	Subject    string // mailto: or https: URL
+}
+
+// Enabled reports whether push is configured.
+func (p Push) Enabled() bool { return p.PrivateKey != "" }
+
+// String implements fmt.Stringer with the private key masked.
+func (p Push) String() string { return p.GoString() }
+
+// GoString implements fmt.GoStringer (%#v) with the private key masked.
+func (p Push) GoString() string {
+	if p.PrivateKey != "" {
+		p.PrivateKey = redactedMask
+	}
+
+	type plain Push // no methods, so %+v does not recurse
+
+	return fmt.Sprintf("%+v", plain(p))
 }
 
 // LookupFunc looks up an environment variable; os.LookupEnv satisfies it.
@@ -243,6 +280,10 @@ func load(lookup LookupFunc, flags Flags, withLog bool) (Config, error) {
 		cfg.HSTSIncludeSubdomains = b
 	}
 
+	push, pushErrs := loadPush(env(EnvVAPIDPublicKey), env(EnvVAPIDPrivateKey), env(EnvVAPIDSubject))
+	errs = append(errs, pushErrs...)
+	cfg.Push = push
+
 	if withLog {
 		logCfg, logErrs := loadLog(pick(flags.LogFormat, FlagLogFormat, EnvLogFormat, DefaultLogFormat),
 			pick(flags.LogLevel, FlagLogLevel, EnvLogLevel, DefaultLogLevel))
@@ -285,6 +326,42 @@ func load(lookup LookupFunc, flags Flags, withLog bool) (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// loadPush checks the VAPID settings: all three or none, keys that parse
+// and belong together, and a valid subject. The errors never contain the
+// private key.
+func loadPush(public, private, subject string) (Push, []error) {
+	if public == "" && private == "" && subject == "" {
+		return Push{}, nil
+	}
+
+	var errs []error
+
+	for name, v := range map[string]string{
+		EnvVAPIDPublicKey: public, EnvVAPIDPrivateKey: private, EnvVAPIDSubject: subject,
+	} {
+		if v == "" {
+			errs = append(errs, fmt.Errorf("%s: required when other VAPID_* variables are set", name))
+		}
+	}
+
+	if len(errs) > 0 {
+		slices.SortFunc(errs, func(a, b error) int { return strings.Compare(a.Error(), b.Error()) })
+
+		return Push{}, errs
+	}
+
+	if _, err := webpush.ParseKeys(public, private); err != nil {
+		errs = append(errs, fmt.Errorf("%s, %s: not a VAPID key pair (run `studio-schedule vapid-keys`)",
+			EnvVAPIDPublicKey, EnvVAPIDPrivateKey))
+	}
+
+	if err := webpush.ValidateSubject(subject); err != nil {
+		errs = append(errs, fmt.Errorf("%s: %q is not a mailto: or https: URL", EnvVAPIDSubject, subject))
+	}
+
+	return Push{PublicKey: public, PrivateKey: private, Subject: subject}, errs
 }
 
 // loadLog parses the log format and level; an empty value (an explicitly
@@ -443,6 +520,10 @@ func (c Config) Redacted() Config {
 		c.SMTP.Password = redactedMask
 	}
 
+	if c.Push.PrivateKey != "" {
+		c.Push.PrivateKey = redactedMask
+	}
+
 	return c
 }
 
@@ -450,16 +531,16 @@ func (c Config) Redacted() Config {
 func (c Config) String() string {
 	r := c.Redacted()
 
-	return fmt.Sprintf("{DatabaseURL:%s HTTPAddr:%s BaseURL:%s SMTP:%s MetricsAddr:%s}",
-		r.DatabaseURL, r.HTTPAddr, r.BaseURL, r.SMTP, r.MetricsAddr)
+	return fmt.Sprintf("{DatabaseURL:%s HTTPAddr:%s BaseURL:%s SMTP:%s Push:%s MetricsAddr:%s}",
+		r.DatabaseURL, r.HTTPAddr, r.BaseURL, r.SMTP, r.Push, r.MetricsAddr)
 }
 
 // GoString implements fmt.GoStringer (%#v) with secrets masked.
 func (c Config) GoString() string {
 	r := c.Redacted()
 
-	return fmt.Sprintf("config.Config{DatabaseURL:%q, HTTPAddr:%q, BaseURL:%q, SMTP:%s, MetricsAddr:%q}",
-		r.DatabaseURL, r.HTTPAddr, r.BaseURL, r.SMTP, r.MetricsAddr)
+	return fmt.Sprintf("config.Config{DatabaseURL:%q, HTTPAddr:%q, BaseURL:%q, SMTP:%s, Push:%s, MetricsAddr:%q}",
+		r.DatabaseURL, r.HTTPAddr, r.BaseURL, r.SMTP, r.Push, r.MetricsAddr)
 }
 
 // LogValue implements slog.LogValuer with secrets masked.
@@ -477,6 +558,11 @@ func (c Config) LogValue() slog.Value {
 			slog.String("password", r.SMTP.Password),
 			slog.String("from", r.SMTP.From),
 			slog.String("tls", r.SMTP.TLS),
+		),
+		slog.Group("push",
+			slog.String("publicKey", r.Push.PublicKey),
+			slog.String("privateKey", r.Push.PrivateKey),
+			slog.String("subject", r.Push.Subject),
 		),
 		slog.String("metricsAddr", r.MetricsAddr),
 		slog.Bool("hstsIncludeSubdomains", r.HSTSIncludeSubdomains),
