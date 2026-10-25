@@ -681,8 +681,10 @@ Goal: prepaid passes and legally sound receipts.
 
 ## Phase 8 — Production readiness
 
-- [ ] Single binary with embedded UI; `Dockerfile` (distroless); `docker-compose.yml` (app +
-      Postgres + Mailpit)
+- [x] Single binary with embedded UI; `Dockerfile` (distroless); `docker-compose.yml` (app +
+      Postgres + Mailpit) (2026-10-25) — changed by decision: Alpine runtime (amd64 + arm64,
+      non-root, `studio-schedule healthcheck`); compose with PostgreSQL 18 and Mailpit;
+      `LOG_FORMAT`/`LOG_LEVEL`; see docs/operations.md
 - [ ] Container image to ghcr.io on release (GitHub App or PAT token for release-please so tags
       trigger workflows)
 - [x] Structured logging (slog), request IDs, `/healthz` + `/readyz`, optional Prometheus metrics

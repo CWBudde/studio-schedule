@@ -37,7 +37,7 @@ just gen-api     # after changing any HTTP operation: regenerates api/openapi.js
 just web-check   # pnpm -C web check (eslint, tsc, prettier) && pnpm -C web test (vitest)
 just demo-serve  # WASM demo locally
 just e2e         # builds the demo, runs the Playwright tests in web/e2e (once: just e2e-install)
-just ci          # everything CI runs
+just ci          # everything CI runs (except `just vuln`: govulncheck + pnpm audit, needs network)
 ```
 
 Single tests:
@@ -55,7 +55,8 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   protection → router; `internal/app/observe.go`). The router also serves `/healthz` and `/readyz`
   (`health.go`, `Deps.Ready`, cached for 2 s). Unknown non-`/api` paths
   fall through to `Deps.UI` (the embedded SPA in `internal/webui`). `cmd/studio-schedule` (cobra:
-  `serve`, `migrate`, `seed`, `import`, `openapi`, `version`) and `cmd/wasm` both call it. `serve` uses
+  `serve`, `migrate`, `seed`, `init`, `import`, `healthcheck`, `openapi`, `version`) and `cmd/wasm`
+  both call it. `serve` uses
   PostgreSQL when `DATABASE_URL` is set (refusing to start unless the schema matches), otherwise the
   memory store with `seed.LoadDemo`.
 - **Observability:** request IDs (`internal/requestid`) reach the logs through a `slog` handler and

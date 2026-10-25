@@ -63,6 +63,21 @@ prints a one-time link (valid 72 hours) that sets the admin's password; everythi
 the app under Administration → Settings. The PostgreSQL tests (`just test-pg`, also part of `just test`) need Docker, or a server in
 `STUDIO_TEST_DATABASE_URL` whose role may create databases.
 
+## Run with Docker
+
+The image `ghcr.io/cwbudde/studio-schedule` (`edge` from `main`, `vX.Y.Z` and `latest` from
+releases) runs the server for amd64 and arm64. `docker-compose.yml` adds PostgreSQL and Mailpit:
+
+```sh
+cp .env.example .env                    # set POSTGRES_PASSWORD
+docker compose up -d --build            # needs `git lfs pull` first
+docker compose run --rm app migrate up
+docker compose run --rm app init        # or `seed` for the fictional demo data
+```
+
+The app is at http://localhost:8080 and Mailpit shows the sent mail at http://localhost:8025. See
+[docs/operations.md](docs/operations.md) for the image, compose and releases.
+
 ## Repository layout
 
 | Path                   | Purpose                                                      |
