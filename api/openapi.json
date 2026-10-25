@@ -447,6 +447,65 @@
         ],
         "type": "object"
       },
+      "CalendarFeed": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "description": "When the link was created (UTC).",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "description": "When a calendar last fetched the feed (UTC), updated at most once a day; absent if never.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "locationId": {
+            "description": "The location of a schedule feed of one location.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "locationName": {
+            "description": "The name of that location.",
+            "type": "string"
+          },
+          "scope": {
+            "description": "What the feed shows.",
+            "enum": [
+              "bookings",
+              "teaching",
+              "schedule"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "scope",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "CalendarFeedList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "Active feeds, oldest first.",
+            "items": {
+              "$ref": "#/components/schemas/CalendarFeed"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "CancelFollowingData": {
         "additionalProperties": false,
         "properties": {
@@ -1155,6 +1214,29 @@
         "required": [
           "id",
           "name"
+        ],
+        "type": "object"
+      },
+      "CreateCalendarFeedInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "locationId": {
+            "description": "Only for scope schedule: the location whose lessons the feed shows; absent: every location.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "scope": {
+            "description": "What the feed shows.",
+            "enum": [
+              "bookings",
+              "teaching",
+              "schedule"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope"
         ],
         "type": "object"
       },
@@ -2760,6 +2842,32 @@
           "entry",
           "lesson",
           "bookingClosesAt"
+        ],
+        "type": "object"
+      },
+      "NewCalendarFeed": {
+        "additionalProperties": false,
+        "properties": {
+          "feed": {
+            "$ref": "#/components/schemas/CalendarFeed"
+          },
+          "path": {
+            "description": "The feed's path below the app's origin, /ical/{token}.ics.",
+            "type": "string"
+          },
+          "token": {
+            "description": "The feed's secret token; it is not shown again.",
+            "type": "string"
+          },
+          "url": {
+            "description": "The feed's absolute URL to subscribe to; absent if the server does not know its own URL, and in a demo installation (calendars cannot reach the web demo): download the path instead.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "feed",
+          "token",
+          "path"
         ],
         "type": "object"
       },
@@ -7730,6 +7838,139 @@
         "x-access": "office"
       }
     },
+    "/api/v1/my/calendar-feeds": {
+      "get": {
+        "description": "Returns the active calendar feeds of the signed-in account, oldest first. Their links cannot be shown again: only a hash of the token is stored.",
+        "operationId": "listCalendarFeeds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarFeedList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List my calendar feeds",
+        "tags": [
+          "calendar feeds"
+        ],
+        "x-access": "signedIn"
+      },
+      "post": {
+        "description": "Creates the subscription link of a subject: `bookings` (the lessons the account and its dependents are booked for), `teaching` (the lessons of the account's staff records; staff only, else 403) or `schedule` (the schedule as the account sees it, of one location with `locationId`; an unknown location is a 422). An account has one link per subject: a new one revokes the old. The token and the link are in this response only. Not while an admin is signed in as the account (403).",
+        "operationId": "createCalendarFeed",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCalendarFeedInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewCalendarFeed"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invalid"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create a calendar feed",
+        "tags": [
+          "calendar feeds"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/my/calendar-feeds/{feedId}": {
+      "delete": {
+        "description": "Revokes an active feed of the signed-in account: its link answers 404 from now on.",
+        "operationId": "revokeCalendarFeed",
+        "parameters": [
+          {
+            "description": "The feed.",
+            "in": "path",
+            "name": "feedId",
+            "required": true,
+            "schema": {
+              "description": "The feed.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Revoke a calendar feed",
+        "tags": [
+          "calendar feeds"
+        ],
+        "x-access": "signedIn"
+      }
+    },
     "/api/v1/my/lessons": {
       "get": {
         "description": "Returns the active bookings of the signed-in person and their dependents (managed ones included) in lessons that are not over, by start, and their open waiting-list entries of lessons that have not started, with their place in the list or their invite. A booking is listed whatever its lesson's visibility: a hidden or unreleased lesson the family is booked for is still theirs. Canceled bookings are not listed here; the history has them once their lessons are over.",
@@ -9042,6 +9283,95 @@
           "waitlist"
         ],
         "x-access": "signedIn"
+      }
+    },
+    "/ical/{token}.ics": {
+      "get": {
+        "description": "Returns the iCalendar document (RFC 5545) of a feed, as its account may see it now: the lessons from four weeks back on, in the school's time zone, canceled ones with `STATUS:CANCELLED`. The token is the proof; no sign-in is needed. An unknown or revoked token, or the feed of a disabled account, is a 404. With the `ETag` in `If-None-Match` an unchanged feed is a 304. `download=true` asks for an attachment with a file name. Rate-limited per client, generously since calendar services poll from shared addresses, and per feed.",
+        "operationId": "getCalendarFeed",
+        "parameters": [
+          {
+            "description": "The feed's token.",
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "description": "The feed's token.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Send the feed as an attachment with a file name.",
+            "explode": false,
+            "in": "query",
+            "name": "download",
+            "schema": {
+              "description": "Send the feed as an attachment with a file name.",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "The ETag of the feed the client has; unchanged: a 304.",
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "description": "The ETag of the feed the client has; unchanged: a 304.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/calendar": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The feed.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The feed did not change since the ETag in If-None-Match."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Fetch a calendar feed",
+        "tags": [
+          "calendar feeds"
+        ],
+        "x-access": "public"
       }
     }
   }

@@ -22,6 +22,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:8080',
+      // Calendar feeds (ADR 0011) live outside /api.
+      '/ical': 'http://localhost:8080',
     },
   },
   build: {

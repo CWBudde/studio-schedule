@@ -16,8 +16,7 @@ import (
 )
 
 // RateLimits limit guessing passwords and tokens and sending mails (ADR
-// 0006, ADR 0010). A nil
-// limiter imposes no limit.
+// 0006, ADR 0010, ADR 0011). A nil limiter imposes no limit.
 type RateLimits struct {
 	// PasswordFailures counts wrong passwords per email address: at login
 	// and when changing the password or email.
@@ -30,15 +29,24 @@ type RateLimits struct {
 	// InviteLinks counts the requests on waiting-list invite links, which
 	// need no sign-in, per client IP (ADR 0010).
 	InviteLinks *ratelimit.Limiter
+	// CalendarFeeds counts the fetches of calendar feeds, which need no
+	// sign-in, per client IP (ADR 0011). Calendar services poll many feeds
+	// from few addresses, so the limit is generous.
+	CalendarFeeds *ratelimit.Limiter
+	// CalendarFeedTokens counts the fetches of each calendar feed, by its
+	// token, so a leaked link cannot be fetched without end (ADR 0011).
+	CalendarFeedTokens *ratelimit.Limiter
 }
 
-// DefaultRateLimits returns the limits of ADR 0006.
+// DefaultRateLimits returns the limits of ADR 0006, ADR 0010 and ADR 0011.
 func DefaultRateLimits(clk clock.Clock) RateLimits {
 	return RateLimits{
-		PasswordFailures: ratelimit.New(clk, 5, 15*time.Minute),
-		Logins:           ratelimit.New(clk, 20, 15*time.Minute),
-		Mails:            ratelimit.New(clk, 5, time.Hour),
-		InviteLinks:      ratelimit.New(clk, 20, 15*time.Minute),
+		PasswordFailures:   ratelimit.New(clk, 5, 15*time.Minute),
+		Logins:             ratelimit.New(clk, 20, 15*time.Minute),
+		Mails:              ratelimit.New(clk, 5, time.Hour),
+		InviteLinks:        ratelimit.New(clk, 20, 15*time.Minute),
+		CalendarFeeds:      ratelimit.New(clk, 2000, time.Hour),
+		CalendarFeedTokens: ratelimit.New(clk, 30, time.Hour),
 	}
 }
 

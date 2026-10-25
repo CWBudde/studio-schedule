@@ -121,16 +121,19 @@ func New(deps Deps) (http.Handler, huma.API) {
 	mails := service.Mails{Renderer: renderer, AppURL: deps.AppURL}
 
 	httpapi.Register(api, httpapi.Deps{
-		Settings:       service.NewSettingsService(deps.Store),
-		Catalog:        service.NewCatalogService(deps.Store, deps.IDs),
-		Timetable:      service.NewTimetableService(deps.Store, deps.Clock, deps.IDs, mails),
-		Schedule:       service.NewScheduleService(deps.Store, deps.Clock),
-		Lessons:        service.NewLessonService(deps.Store, deps.Clock, deps.IDs, mails),
-		Bookings:       service.NewBookingService(deps.Store, deps.Clock, deps.IDs, mails),
-		Waitlist:       service.NewWaitlistService(deps.Store, deps.Clock, deps.IDs, mails),
-		Participants:   service.NewParticipantService(deps.Store, deps.Clock, deps.IDs, mails),
-		Teach:          service.NewTeachService(deps.Store, deps.Clock, deps.IDs, renderer),
-		MyLessons:      service.NewMyLessonsService(deps.Store, deps.Clock),
+		Settings:     service.NewSettingsService(deps.Store),
+		Catalog:      service.NewCatalogService(deps.Store, deps.IDs),
+		Timetable:    service.NewTimetableService(deps.Store, deps.Clock, deps.IDs, mails),
+		Schedule:     service.NewScheduleService(deps.Store, deps.Clock),
+		Lessons:      service.NewLessonService(deps.Store, deps.Clock, deps.IDs, mails),
+		Bookings:     service.NewBookingService(deps.Store, deps.Clock, deps.IDs, mails),
+		Waitlist:     service.NewWaitlistService(deps.Store, deps.Clock, deps.IDs, mails),
+		Participants: service.NewParticipantService(deps.Store, deps.Clock, deps.IDs, mails),
+		Teach:        service.NewTeachService(deps.Store, deps.Clock, deps.IDs, renderer),
+		MyLessons:    service.NewMyLessonsService(deps.Store, deps.Clock),
+		// A demo installation's feeds have no URL: calendars cannot reach the
+		// web demo, and the demo server is for trying the app out.
+		Feeds:          service.NewCalendarFeedService(deps.Store, deps.Clock, deps.IDs, deps.AppURL, !deps.Demo),
 		Auth:           newAuthService(deps, renderer),
 		Family:         service.NewFamilyService(deps.Store, deps.Clock, deps.IDs, mails),
 		Persons:        service.NewPersonService(deps.Store, deps.Clock, deps.IDs, mails),
@@ -149,7 +152,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 	})
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		if deps.UI == nil || isAPIPath(r.URL.Path) {
-			writeProblem(w, http.StatusNotFound, "no route for "+r.URL.Path)
+			writeProblem(w, http.StatusNotFound, "no route for "+redactPath(r.URL.Path))
 
 			return
 		}
@@ -284,9 +287,26 @@ func newAuthService(deps Deps, renderer *mail.Renderer) *service.AuthService {
 }
 
 // isAPIPath reports whether p belongs to the API namespace, which never
-// falls back to the UI.
+// falls back to the UI: the API and the calendar feeds (a feed URL without
+// ".ics", say, is a 404 problem rather than the app's page).
 func isAPIPath(p string) bool {
-	return p == "/api" || strings.HasPrefix(p, "/api/")
+	return p == "/api" || strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, httpapi.FeedPathPrefix)
+}
+
+// redactPath returns p without the secret token of a calendar feed path
+// (/ical/{token}.ics becomes /ical/<redacted>.ics), for logs and error
+// details: the token alone grants access to the feed.
+func redactPath(p string) string {
+	if !strings.HasPrefix(p, httpapi.FeedPathPrefix) {
+		return p
+	}
+
+	out := httpapi.FeedPathPrefix + "<redacted>"
+	if strings.HasSuffix(p, service.FeedPathSuffix) {
+		out += service.FeedPathSuffix
+	}
+
+	return out
 }
 
 // crossOriginProtection rejects cross-origin unsafe requests (POST, PUT,
@@ -315,7 +335,7 @@ func recoverer(next http.Handler, logger *slog.Logger) http.Handler {
 
 			logger.ErrorContext(r.Context(), "panic in handler",
 				slog.String("method", r.Method),
-				slog.String("path", r.URL.Path),
+				slog.String("path", redactPath(r.URL.Path)),
 				slog.Any("panic", rec),
 				slog.String("stack", string(debug.Stack())),
 			)
@@ -335,7 +355,7 @@ func accessLog(next http.Handler, logger *slog.Logger, clk clock.Clock) http.Han
 
 		logger.DebugContext(r.Context(), "http request",
 			slog.String("method", r.Method),
-			slog.String("path", r.URL.Path),
+			slog.String("path", redactPath(r.URL.Path)),
 			slog.Int("status", sw.status),
 			slog.Duration("duration", clk.Now().Sub(start)),
 		)

@@ -1140,6 +1140,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/my/calendar-feeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List my calendar feeds
+         * @description Returns the active calendar feeds of the signed-in account, oldest first. Their links cannot be shown again: only a hash of the token is stored.
+         */
+        get: operations["listCalendarFeeds"];
+        put?: never;
+        /**
+         * Create a calendar feed
+         * @description Creates the subscription link of a subject: `bookings` (the lessons the account and its dependents are booked for), `teaching` (the lessons of the account's staff records; staff only, else 403) or `schedule` (the schedule as the account sees it, of one location with `locationId`; an unknown location is a 422). An account has one link per subject: a new one revokes the old. The token and the link are in this response only. Not while an admin is signed in as the account (403).
+         */
+        post: operations["createCalendarFeed"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/calendar-feeds/{feedId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a calendar feed
+         * @description Revokes an active feed of the signed-in account: its link answers 404 from now on.
+         */
+        delete: operations["revokeCalendarFeed"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/my/lessons": {
         parameters: {
             query?: never;
@@ -1512,6 +1556,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ical/{token}.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fetch a calendar feed
+         * @description Returns the iCalendar document (RFC 5545) of a feed, as its account may see it now: the lessons from four weeks back on, in the school's time zone, canceled ones with `STATUS:CANCELLED`. The token is the proof; no sign-in is needed. An unknown or revoked token, or the feed of a disabled account, is a 404. With the `ETag` in `If-None-Match` an unchanged feed is a 304. `download=true` asks for an attachment with a file name. Rate-limited per client, generously since calendar services poll from shared addresses, and per feed.
+         */
+        get: operations["getCalendarFeed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1726,6 +1790,36 @@ export interface components {
         BookingEventsOutputBody: {
             /** @description The history, oldest first. */
             items: components["schemas"]["BookingEvent"][];
+        };
+        CalendarFeed: {
+            /**
+             * Format: date-time
+             * @description When the link was created (UTC).
+             */
+            createdAt: string;
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When a calendar last fetched the feed (UTC), updated at most once a day; absent if never.
+             */
+            lastUsedAt?: string;
+            /**
+             * Format: uuid
+             * @description The location of a schedule feed of one location.
+             */
+            locationId?: string;
+            /** @description The name of that location. */
+            locationName?: string;
+            /**
+             * @description What the feed shows.
+             * @enum {string}
+             */
+            scope: "bookings" | "teaching" | "schedule";
+        };
+        CalendarFeedList: {
+            /** @description Active feeds, oldest first. */
+            items: components["schemas"]["CalendarFeed"][];
         };
         CancelFollowingData: {
             /**
@@ -2095,6 +2189,18 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+        };
+        CreateCalendarFeedInputBody: {
+            /**
+             * Format: uuid
+             * @description Only for scope schedule: the location whose lessons the feed shows; absent: every location.
+             */
+            locationId?: string;
+            /**
+             * @description What the feed shows.
+             * @enum {string}
+             */
+            scope: "bookings" | "teaching" | "schedule";
         };
         DemoLogin: {
             /** @description Email address (login name). */
@@ -2906,6 +3012,15 @@ export interface components {
             bookingClosesAt: string;
             entry: components["schemas"]["WaitlistFor"];
             lesson: components["schemas"]["LessonSummary"];
+        };
+        NewCalendarFeed: {
+            feed: components["schemas"]["CalendarFeed"];
+            /** @description The feed's path below the app's origin, /ical/{token}.ics. */
+            path: string;
+            /** @description The feed's secret token; it is not shown again. */
+            token: string;
+            /** @description The feed's absolute URL to subscribe to; absent if the server does not know its own URL, and in a demo installation (calendars cannot reach the web demo): download the path instead. */
+            url?: string;
         };
         NotifyData: {
             /** @description The message, plain text; line breaks are kept. At most 1000 characters once its line breaks are normalized and the space around it is trimmed. */
@@ -6207,6 +6322,116 @@ export interface operations {
             };
         };
     };
+    listCalendarFeeds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarFeedList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createCalendarFeed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCalendarFeedInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewCalendarFeed"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Invalid"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    revokeCalendarFeed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The feed. */
+                feedId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listMyLessons: {
         parameters: {
             query?: never;
@@ -7134,6 +7359,55 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["Conflict"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getCalendarFeed: {
+        parameters: {
+            query?: {
+                /** @description Send the feed as an attachment with a file name. */
+                download?: boolean;
+            };
+            header?: {
+                /** @description The ETag of the feed the client has; unchanged: a 304. */
+                "If-None-Match"?: string;
+            };
+            path: {
+                /** @description The feed's token. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The feed. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/calendar": string;
+                };
+            };
+            /** @description The feed did not change since the ETag in If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
