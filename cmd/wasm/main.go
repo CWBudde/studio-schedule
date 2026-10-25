@@ -76,7 +76,9 @@ func main() {
 		// links in mails, which the demo mailbox shows.
 		AppURL: os.Getenv("APP_URL"),
 		// Receipts render with the typst module in the worker.
-		PDF:        wasmbridge.PDFRenderer{},
+		PDF: wasmbridge.PDFRenderer{},
+		// Web push notifications show on the page (ADR 0017).
+		Pusher:     wasmbridge.PushSender{},
 		Demo:       true,
 		DemoLogins: seed.DemoLogins(),
 		// Requests wake the background jobs started below.

@@ -58,6 +58,11 @@ const ChangedGlobal = "__studioScheduleChanged"
 // (input: Uint8Array) → Promise<Uint8Array>, input as built by pdf.Input.
 const RenderPDFGlobal = "__studioScheduleRenderPDF"
 
+// NotifyGlobal is the name of the worker's function that shows a web push
+// notification of the demo (ADR 0017): (payload: string) → void, the JSON
+// the server queued; the worker posts it to the page.
+const NotifyGlobal = "__studioScheduleNotify"
+
 // Persistence lets the worker keep the demo's data across page loads (see
 // docs/demo-mode.md): it saves Snapshot after changes (NotifyChanged) and
 // passes it back through SnapshotGlobal on the next start.
