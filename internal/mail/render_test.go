@@ -75,6 +75,10 @@ func accountDeletedData() mail.AccountDeletedData {
 	return mail.AccountDeletedData{SchoolName: "Studio Example", GivenName: "Anna"}
 }
 
+func passwordChangedData() mail.PasswordChangedData {
+	return mail.PasswordChangedData{SchoolName: "Studio Example", GivenName: "Anna"}
+}
+
 // golden compares got with testdata/<name> and rewrites the file with -update.
 func golden(t *testing.T, name, got string) {
 	t.Helper()
@@ -118,6 +122,7 @@ func TestRenderGolden(t *testing.T) {
 		{mail.TemplateEmailChanged, emailChangedData()},
 		{mail.TemplateInvite, inviteData()},
 		{mail.TemplateAccountDeleted, accountDeletedData()},
+		{mail.TemplatePasswordChanged, passwordChangedData()},
 	}
 
 	for _, tt := range tests {
@@ -182,6 +187,12 @@ func TestRenderAccountMailsContent(t *testing.T) {
 		{mail.TemplateAccountDeleted, "de", accountDeletedData(), []string{
 			"Anna", "Studio Example", "du hast dein Konto", "nicht mehr anmelden", "Quittungen",
 		}, ""},
+		{mail.TemplatePasswordChanged, "en", passwordChangedData(), []string{
+			"Anna", "Studio Example", "password", "was changed", "If this was not you, contact",
+		}, ""},
+		{mail.TemplatePasswordChanged, "de", passwordChangedData(), []string{
+			"Anna", "Studio Example", "Passwort", "wurde geändert", "Falls du das nicht warst",
+		}, ""},
 	}
 
 	for _, tt := range tests {
@@ -227,21 +238,33 @@ func TestRenderResetPasswordExpiryPlural(t *testing.T) {
 	}
 }
 
-// TestRenderEmailChangedHasNoLink makes sure the notice to the old address
-// carries no link: it informs, it does not invite an action by link.
-func TestRenderEmailChangedHasNoLink(t *testing.T) {
+// TestRenderNoticesHaveNoLink makes sure the notices about a changed email
+// address or password carry no link: they inform, they do not invite an
+// action by link (a phishing mail would look the same).
+func TestRenderNoticesHaveNoLink(t *testing.T) {
 	t.Parallel()
 
 	r := newRenderer(t)
 
-	for _, locale := range []string{"en", "de"} {
-		got, err := r.Render(locale, mail.TemplateEmailChanged, emailChangedData())
-		if err != nil {
-			t.Fatal(err)
+	notices := map[string]any{
+		mail.TemplateEmailChanged:    emailChangedData(),
+		mail.TemplatePasswordChanged: passwordChangedData(),
+	}
+
+	for name, data := range notices {
+		if mail.SecretLink(name) {
+			t.Errorf("%s counts as a secret-link mail", name)
 		}
 
-		if strings.Contains(got.HTML, "<a ") || strings.Contains(got.Text, "http") {
-			t.Errorf("%s email-changed mail contains a link:\n%s\n%s", locale, got.Text, got.HTML)
+		for _, locale := range []string{"en", "de"} {
+			got, err := r.Render(locale, name, data)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if strings.Contains(got.HTML, "<a ") || strings.Contains(got.Text, "http") {
+				t.Errorf("%s %s mail contains a link:\n%s\n%s", locale, name, got.Text, got.HTML)
+			}
 		}
 	}
 }
@@ -649,6 +672,7 @@ func TestRenderAllTemplates(t *testing.T) {
 		mail.TemplateReceipt:          receiptData(false),
 		mail.TemplateAnnouncement:     announcementData(),
 		mail.TemplateAccountDeleted:   accountDeletedData(),
+		mail.TemplatePasswordChanged:  passwordChangedData(),
 	}
 
 	for _, name := range mail.TemplateNames() {

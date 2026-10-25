@@ -64,6 +64,10 @@ const (
 	// TemplateAccountDeleted confirms to the former address of an account
 	// that its holder deleted it (ADR 0016). Data: AccountDeletedData.
 	TemplateAccountDeleted = "account-deleted"
+	// TemplatePasswordChanged tells an account that its password was
+	// changed or reset (ASVS 2.2.3); it has no link. Data:
+	// PasswordChangedData.
+	TemplatePasswordChanged = "password-changed"
 )
 
 // TemplateNames returns all template names.
@@ -72,7 +76,7 @@ func TemplateNames() []string {
 		TemplateConfirmEmail, TemplateResetPassword, TemplateChangeEmail, TemplateEmailChanged, TemplateInvite,
 		TemplateLessonCanceled, TemplateLessonRestored, TemplateLessonChanged, TemplateBookingConfirmed,
 		TemplateBookingCanceled, TemplateWaitlistInvite, TemplateWaitlistExpired, TemplateLessonNotice,
-		TemplateReceipt, TemplateAnnouncement, TemplateAccountDeleted,
+		TemplateReceipt, TemplateAnnouncement, TemplateAccountDeleted, TemplatePasswordChanged,
 	}
 }
 
@@ -152,6 +156,24 @@ type AccountDeletedData struct {
 // Validate checks the data before rendering. All errors wrap
 // domain.ErrValidation.
 func (d AccountDeletedData) Validate() error {
+	if strings.TrimSpace(d.SchoolName) == "" {
+		return fmt.Errorf("%w: school name must not be empty", domain.ErrValidation)
+	}
+
+	return nil
+}
+
+// PasswordChangedData is the data of TemplatePasswordChanged.
+type PasswordChangedData struct {
+	// SchoolName is the school the account belongs to.
+	SchoolName string
+	// GivenName greets the recipient; empty means a greeting without name.
+	GivenName string
+}
+
+// Validate checks the data before rendering. All errors wrap
+// domain.ErrValidation.
+func (d PasswordChangedData) Validate() error {
 	if strings.TrimSpace(d.SchoolName) == "" {
 		return fmt.Errorf("%w: school name must not be empty", domain.ErrValidation)
 	}
