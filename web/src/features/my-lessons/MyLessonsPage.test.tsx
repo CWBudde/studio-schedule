@@ -85,6 +85,7 @@ const upcoming = (
   lesson: summary(lesson),
   ...(lesson.lateCancelFrom ? { lateCancelFrom: lesson.lateCancelFrom } : {}),
   canCancel: true,
+  payment: { status: 'pending' },
 });
 
 /** A full lesson on Thursday 2026-10-29, 18:30–20:00 in Berlin, with the family waiting. */
@@ -165,6 +166,7 @@ const past = (
   personName: person.name,
   lesson: summary(lesson),
   canCancel: false,
+  payment: { status: 'free' },
 });
 
 /** The first page of the history: the three months before now, newest first. */

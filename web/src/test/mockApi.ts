@@ -85,6 +85,7 @@ export const publicSettings = {
   schoolName: 'Example Dance Studio',
   timezone: 'Europe/Berlin',
   defaultLocale: 'en',
+  currency: 'EUR',
 };
 
 // Fictional catalogue and schedule. IDs are valid UUIDv7 strings.

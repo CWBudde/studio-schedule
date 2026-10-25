@@ -270,7 +270,9 @@ func (s *ParticipantService) Add(
 			return nil
 		}
 
-		switch err := tx.Bookings().Create(ctx, b); {
+		// Redeeming on booking, a person's booking uses a pass now (ADR
+		// 0012); a guest's and a trial do not.
+		switch err := createBooking(ctx, tx, chargesOf(settings, loc), now, l, b); {
 		case errors.Is(err, domain.ErrDuplicate):
 			return fmt.Errorf("%w (%w)", ErrAlreadyBooked, err)
 		case errors.Is(err, domain.ErrConflict):
@@ -324,14 +326,16 @@ type ParticipantUpdate struct {
 // (domain.ErrNotFound otherwise) is a trial, and its note, under the same
 // window as Add (ErrDayOver), on a lesson the school canceled too. A canceled booking is ErrBookingCanceled; a
 // note without a trial is a validation error on trialNote. It records no
-// booking event: its status does not change.
+// booking event: its status does not change. A trial is free: a booking
+// that becomes one gives its visit back, and one that stops being one uses
+// a pass if it is due (ADR 0012).
 func (s *ParticipantService) UpdateTrial(
 	ctx context.Context, p Principal, id domain.BookingID, in ParticipantUpdate,
 ) (domain.Booking, error) {
 	var b domain.Booking
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		_, loc, err := loadSchool(ctx, tx)
+		settings, loc, err := loadSchool(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -345,16 +349,19 @@ func (s *ParticipantService) UpdateTrial(
 			return ErrBookingCanceled
 		}
 
-		if err := changeable(p, loc, s.clock.Now(), l); err != nil {
+		now := s.clock.Now()
+		if err := changeable(p, loc, now, l); err != nil {
 			return err
 		}
 
+		old := b
 		b.Trial, b.TrialNote = in.Trial, strings.TrimSpace(in.TrialNote)
+
 		if err := b.Validate(); err != nil {
 			return err
 		}
 
-		return tx.Bookings().Update(ctx, b)
+		return updateBookings(ctx, tx, chargesOf(settings, loc), now, l, bookingChange{before: old, after: b})
 	})
 	if err != nil {
 		return domain.Booking{}, fmt.Errorf("update participant %v: %w", id, err)
@@ -400,7 +407,7 @@ func (s *ParticipantService) Remove(ctx context.Context, p Principal, id domain.
 		}
 
 		b.Late, b.Released = false, !b.PersonID.IsZero()
-		if b, err = cancelBooking(ctx, tx, s.w, actorOf(p), now, l, b); err != nil {
+		if b, err = cancelBooking(ctx, tx, s.w, chargesOf(settings, loc), actorOf(p), now, l, b); err != nil {
 			return err
 		}
 
@@ -442,7 +449,9 @@ func attendable(p Principal, loc *time.Location, now time.Time, l domain.Lesson)
 // unknown); any other status is a validation error on status. It is
 // allowed from the lesson's start (attendable). A canceled booking is
 // ErrBookingCanceled. A change records a booking event with p's real
-// account; setting the status a booking has changes nothing.
+// account; setting the status a booking has changes nothing. Redeeming on
+// attendance, attended and no-show use a pass, and back to booked gives
+// the visit back (ADR 0012).
 func (s *ParticipantService) SetAttendance(
 	ctx context.Context, p Principal, id domain.BookingID, status domain.BookingStatus,
 ) (domain.Booking, error) {
@@ -453,7 +462,7 @@ func (s *ParticipantService) SetAttendance(
 			return errInvalidAttendance
 		}
 
-		_, loc, err := loadSchool(ctx, tx)
+		settings, loc, err := loadSchool(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -473,9 +482,16 @@ func (s *ParticipantService) SetAttendance(
 			return err
 		}
 
-		b, _, err = s.attend(ctx, tx, p, now, b, status)
+		changed, err := s.attend(ctx, tx, p, chargesOf(settings, loc), now, l, []domain.Booking{b}, status)
+		if err != nil {
+			return err
+		}
 
-		return err
+		if len(changed) > 0 {
+			b = changed[0]
+		}
+
+		return nil
 	})
 	if err != nil {
 		return domain.Booking{}, fmt.Errorf("set attendance of booking %v: %w", id, err)
@@ -496,7 +512,7 @@ func (s *ParticipantService) MarkAllAttended(
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		out = nil // the callback may run more than once
 
-		_, loc, err := loadSchool(ctx, tx)
+		settings, loc, err := loadSchool(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -516,20 +532,11 @@ func (s *ParticipantService) MarkAllAttended(
 			return err
 		}
 
-		for _, b := range bookings {
-			if b.Status != domain.BookingBooked {
-				continue
-			}
+		unknown := slices.DeleteFunc(bookings, func(b domain.Booking) bool { return b.Status != domain.BookingBooked })
 
-			b, _, err := s.attend(ctx, tx, p, now, b, domain.BookingAttended)
-			if err != nil {
-				return err
-			}
+		out, err = s.attend(ctx, tx, p, chargesOf(settings, loc), now, l, unknown, domain.BookingAttended)
 
-			out = append(out, b)
-		}
-
-		return nil
+		return err
 	})
 	if err != nil {
 		return nil, fmt.Errorf("mark all attended in lesson %v: %w", lesson, err)
@@ -538,25 +545,46 @@ func (s *ParticipantService) MarkAllAttended(
 	return out, nil
 }
 
-// attend sets the active booking b to status and records the event, by p's
-// real account, if that changes it; it reports whether it did.
+// attend sets the active bookings of lesson l to status, through the
+// ledger under c, which settles their passes together, and records the
+// events, by p's real account; a booking that has the status already
+// changes nothing. It returns the bookings it changed.
 func (s *ParticipantService) attend(
-	ctx context.Context, tx store.Tx, p Principal, now time.Time, b domain.Booking, status domain.BookingStatus,
-) (domain.Booking, bool, error) {
-	if b.Status == status {
-		return b, false, nil
+	ctx context.Context, tx store.Tx, p Principal, c charges, now time.Time, l domain.Lesson,
+	bookings []domain.Booking, status domain.BookingStatus,
+) ([]domain.Booking, error) {
+	var (
+		changes []bookingChange
+		out     []domain.Booking
+	)
+
+	for _, b := range bookings {
+		if b.Status == status {
+			continue
+		}
+
+		old := b
+		b.Status = status
+
+		if err := b.Validate(); err != nil {
+			return nil, err
+		}
+
+		changes = append(changes, bookingChange{before: old, after: b})
+		out = append(out, b)
 	}
 
-	b.Status = status
-	if err := b.Validate(); err != nil {
-		return domain.Booking{}, false, err
+	if err := updateBookings(ctx, tx, c, now, l, changes...); err != nil {
+		return nil, err
 	}
 
-	if err := tx.Bookings().Update(ctx, b); err != nil {
-		return domain.Booking{}, false, err
+	for _, b := range out {
+		if err := recordEvent(ctx, tx, s.w.ids, actorOf(p), now, b, false); err != nil {
+			return nil, err
+		}
 	}
 
-	return b, true, recordEvent(ctx, tx, s.w.ids, actorOf(p), now, b, false)
+	return out, nil
 }
 
 // participantName is the name of the participant of booking b: the
@@ -612,6 +640,8 @@ type Participant struct {
 	// ContactPhone is the person's phone, else the phone of the first of
 	// their guardians who has one; empty for guests and if nobody has one.
 	ContactPhone string
+	// Payment is how the booking is paid (ADR 0012).
+	Payment BookingPayment
 }
 
 // WaitingParticipant is an entry of a lesson's waiting list as staff see
@@ -656,7 +686,7 @@ func (s *ParticipantService) Participants(
 	var out LessonParticipants
 
 	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
-		_, loc, err := loadSchool(ctx, tx)
+		settings, loc, err := loadSchool(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -680,10 +710,22 @@ func (s *ParticipantService) Participants(
 			return err
 		}
 
-		out, err = participantsOf(ctx, tx, s.clock.Now(), l, bookings, entries)
+		if out, err = participantsOf(ctx, tx, s.clock.Now(), l, bookings, entries); err != nil {
+			return err
+		}
+
 		out.DayOverAt = dayOverAt(loc, l)
 
-		return err
+		pays, err := chargesOf(settings, loc).payments(ctx, tx, map[domain.LessonID]domain.Lesson{l.ID: l}, bookings)
+		if err != nil {
+			return err
+		}
+
+		for i := range out.Bookings {
+			out.Bookings[i].Payment = pays[out.Bookings[i].Booking.ID]
+		}
+
+		return nil
 	})
 	if err != nil {
 		return LessonParticipants{}, fmt.Errorf("participants of lesson %v: %w", lesson, err)

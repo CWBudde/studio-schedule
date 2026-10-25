@@ -70,6 +70,7 @@ const booking = (
   trial: false,
   late: false,
   bookedAt: '2026-10-20T10:00:00Z',
+  payment: { status: 'pending' },
   ...extra,
 });
 

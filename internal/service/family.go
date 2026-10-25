@@ -204,7 +204,7 @@ func (s *FamilyService) UpdateDependent(
 
 // RemoveDependent ends p's guardianship of id. If no guardian is left, the
 // person is deleted as well, unless it is a managed dependent, which stays.
-// Then only bookings and class memberships can still refer to it; while
+// Then only bookings, class memberships and passes can still refer to it; while
 // they do, that fails with ErrDependentInUse and nothing changes. A deleted
 // person leaves the waiting lists first: their open entries are withdrawn,
 // and the places their invites held go to the next entries (ADR 0010).

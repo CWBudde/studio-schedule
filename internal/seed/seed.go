@@ -28,6 +28,9 @@ func DemoSettings() domain.Settings {
 		DefaultVisibleDays: 14,
 
 		WaitlistInviteExpiry: 12 * time.Hour,
+		// Like the previous system: a visit is used when attendance is
+		// taken (ADR 0012).
+		RedemptionMode: domain.RedeemOnAttendance,
 	}
 }
 
@@ -55,6 +58,12 @@ type Dataset struct {
 	BookingEvents []domain.BookingEvent
 	// WaitlistEntries are the waiting list of the full workshop.
 	WaitlistEntries []domain.WaitlistEntry
+	// PassTypes, Passes and Redemptions are the pass catalog, the passes
+	// sold and given away, and the drop-in bookings (in Bookings) the
+	// passes paid for when their attendance was taken (ADR 0012).
+	PassTypes   []domain.PassType
+	Passes      []domain.Pass
+	Redemptions []domain.PassRedemption
 }
 
 // LoadDemo writes the complete demo data set for FixedDemoAnchor (Demo)
@@ -184,13 +193,31 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 		}
 	}
 
+	for _, pt := range d.PassTypes {
+		if err := tx.PassTypes().Create(ctx, pt); err != nil {
+			return fmt.Errorf("pass type %v: %w", pt.ID, err)
+		}
+	}
+
+	for _, p := range d.Passes {
+		if err := tx.Passes().Create(ctx, p); err != nil {
+			return fmt.Errorf("pass %v: %w", p.ID, err)
+		}
+	}
+
+	for _, r := range d.Redemptions {
+		if err := tx.Redemptions().Create(ctx, r); err != nil {
+			return fmt.Errorf("redemption of booking %v: %w", r.BookingID, err)
+		}
+	}
+
 	return nil
 }
 
 // checkEmpty fails with domain.ErrConflict if the store has settings or any
 // root record: demo data is never mixed into a store that is in use. Every
-// other record references a person, location, staff member, course type or
-// term, so checking these covers the whole store.
+// other record references a person, location, staff member, course type,
+// term or pass type, so checking these covers the whole store.
 func checkEmpty(ctx context.Context, tx store.Tx) error {
 	switch _, err := tx.Settings().Get(ctx); {
 	case err == nil:
@@ -208,6 +235,7 @@ func checkEmpty(ctx context.Context, tx store.Tx) error {
 		{"staff", func() (int, error) { return count(tx.Staff().List(ctx)) }},
 		{"course types", func() (int, error) { return count(tx.CourseTypes().List(ctx)) }},
 		{"terms", func() (int, error) { return count(tx.Terms().List(ctx)) }},
+		{"pass types", func() (int, error) { return count(tx.PassTypes().List(ctx)) }},
 	}
 
 	for _, r := range roots {

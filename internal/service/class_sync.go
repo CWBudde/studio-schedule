@@ -37,8 +37,10 @@ func (s *TimetableService) syncLessons(ctx context.Context, tx store.Tx, t domai
 	now := s.clock.Now()
 	today := domain.DateOf(now, loc)
 
+	ch := chargesOf(settings, loc)
+
 	if !old.ID.IsZero() {
-		if err := s.moveFollowers(ctx, tx, t, old, c, now, loc); err != nil {
+		if err := s.moveFollowers(ctx, tx, t, old, c, now, ch); err != nil {
 			return err
 		}
 	}
@@ -48,7 +50,7 @@ func (s *TimetableService) syncLessons(ctx context.Context, tx store.Tx, t domai
 		return err
 	}
 
-	_, err = s.gen.fill(ctx, tx, c, t, from, to, loc, now)
+	_, err = s.gen.fill(ctx, tx, c, t, from, to, ch, now)
 
 	return err
 }
@@ -56,8 +58,10 @@ func (s *TimetableService) syncLessons(ctx context.Context, tx store.Tx, t domai
 // moveFollowers applies the edit from old to c to the future lessons that
 // follow the class; see syncLessons.
 func (s *TimetableService) moveFollowers(
-	ctx context.Context, tx store.Tx, t domain.Term, old, c domain.Class, now time.Time, loc *time.Location,
+	ctx context.Context, tx store.Tx, t domain.Term, old, c domain.Class, now time.Time, ch charges,
 ) error {
+	loc := ch.loc
+
 	lessons, err := tx.Lessons().ListByClass(ctx, c.ID, domain.DateOf(now, loc))
 	if err != nil {
 		return fmt.Errorf("list lessons of class %s: %w", c.ID, err)
@@ -84,7 +88,7 @@ func (s *TimetableService) moveFollowers(
 		moves := !c.Retired && !taken[weekOf(slot)] && start.After(now) &&
 			slot.Compare(t.StartsOn) >= 0 && slot.Compare(t.EndsOn) <= 0
 
-		if err := s.follow(ctx, tx, l.ID, c, slot, start, moves); err != nil {
+		if err := s.follow(ctx, tx, ch, l.ID, c, slot, start, moves); err != nil {
 			return err
 		}
 
@@ -98,9 +102,12 @@ func (s *TimetableService) moveFollowers(
 
 // follow moves lesson id of class c to slot, starting at start, or, unless
 // it moves, deletes it with its member bookings while it has no other
-// bookings. It locks the lesson first, as every capacity check must.
+// bookings. It locks the lesson first, as every capacity check must. A
+// moved lesson's bookings keep their passes only if valid on the new date
+// (updateLesson).
 func (s *TimetableService) follow(
-	ctx context.Context, tx store.Tx, id domain.LessonID, c domain.Class, slot domain.Date, start time.Time, moves bool,
+	ctx context.Context, tx store.Tx, ch charges, id domain.LessonID, c domain.Class, slot domain.Date,
+	start time.Time, moves bool,
 ) error {
 	l, err := tx.Lessons().Lock(ctx, id)
 	if err != nil {
@@ -134,12 +141,13 @@ func (s *TimetableService) follow(
 	}
 
 	raised := c.Capacity > l.Capacity
+	old := l
 
 	l.SlotDate, l.StartsAt, l.EndsAt = slot, start, start.Add(c.Duration)
 	l.CourseTypeID, l.RoomID, l.Capacity = c.CourseTypeID, c.RoomID, c.Capacity
 	l.InstructorID, l.AccompanistID = c.InstructorID, c.AccompanistID
 
-	if err := tx.Lessons().Update(ctx, l); err != nil || !raised {
+	if err := updateLesson(ctx, tx, ch, now, old, l); err != nil || !raised {
 		return err
 	}
 

@@ -144,6 +144,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/pass-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List pass types
+         * @description Returns every pass type ordered by name, retired ones included.
+         */
+        get: operations["listPassTypes"];
+        put?: never;
+        /**
+         * Create a pass type
+         * @description Adds a pass type. A name another pass type has (ignoring case) is a 409 `duplicate`.
+         */
+        post: operations["createPassType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/pass-types/{passTypeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update a pass type
+         * @description Replaces the fields of a pass type; `active: false` retires it, so it is no longer sold. Passes sold already keep their visits, days and price. A name another pass type has is a 409 `duplicate`.
+         */
+        put: operations["updatePassType"];
+        post?: never;
+        /**
+         * Delete a pass type
+         * @description Deletes a pass type that was never sold; a sold one is a 409 `in-use` and is retired instead.
+         */
+        delete: operations["deletePassType"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/passes/{passId}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Void a pass
+         * @description Voids a pass: it pays for nothing more, and what it paid for stays paid. A voided pass is a 409 `already-voided`.
+         */
+        post: operations["voidPass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/persons": {
         parameters: {
             query?: never;
@@ -188,7 +256,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a person
-         * @description Deletes a person, e.g. one created by mistake. While anything refers to it (an account, a staff link, bookings, class memberships, or a guardian link in either direction) that is a 409 `in-use` and nothing changes.
+         * @description Deletes a person, e.g. one created by mistake. While anything refers to it (an account, a staff link, bookings, class memberships, passes they own or paid for, or a guardian link in either direction) that is a 409 `in-use` and nothing changes.
          */
         delete: operations["deletePerson"];
         options?: never;
@@ -251,6 +319,90 @@ export interface paths {
          * @description Ends a guardianship. The person stays, even without a guardian left; a guardian who is not linked is a 404.
          */
         delete: operations["removeGuardian"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/persons/{personId}/passes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a person's passes
+         * @description Returns the passes of a person with what they paid for: the usable ones first, then the others, each newest sale first. An unknown person is a 404.
+         */
+        get: operations["listPersonPasses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/persons/{personId}/passes/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give a pass away
+         * @description Gives the person a pass of an active type without payment, with an optional note why. It fails like `sellPass`.
+         */
+        post: operations["assignPass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/persons/{personId}/passes/sell": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sell a pass
+         * @description Sells a pass of an active type to the person: it copies the type's visits and days from `validFrom` (default: today in the school's time zone) and records the price paid (default: the type's price) and who paid (`payerId`, default: the person). An unknown person is a 404; an unknown or retired type a 422 on `body.passTypeId`, an unknown payer on `body.payerId`. A new pass pays for nothing booked before.
+         */
+        post: operations["sellPass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/passes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pass settings
+         * @description Returns when bookings use a pass.
+         */
+        get: operations["getPassSettings"];
+        /**
+         * Update the pass settings
+         * @description Sets when bookings use a pass from now on. Bookings redeemed before stay as they are; a booking follows the new mode the next time it changes.
+         */
+        put: operations["updatePassSettings"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1224,6 +1376,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/my/passes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List my passes
+         * @description Returns the passes of the signed-in person and their dependents (managed ones included) with what they paid for: the usable ones first, then the others, each newest sale first.
+         */
+        get: operations["listMyPasses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms": {
         parameters: {
             query?: never;
@@ -1627,6 +1799,83 @@ export interface components {
             /** @description Note on the trial for the instructor; only with trial. */
             trialNote?: string;
         };
+        AdminPass: {
+            /**
+             * Format: uuid
+             * @description Pass ID.
+             */
+            id: string;
+            /**
+             * @description visits: a number of visits; time: any number of visits within its days.
+             * @enum {string}
+             */
+            kind: "visits" | "time";
+            /** @description The office's note, e.g. why it was given away. */
+            note?: string;
+            /**
+             * @description sale: sold; assignment: given without payment.
+             * @enum {string}
+             */
+            origin: "sale" | "assignment";
+            /** @description Whom the pass belongs to. */
+            owner: components["schemas"]["PassPerson"];
+            passType: components["schemas"]["PassTypeRef"];
+            /** @description Who paid, if not the owner. */
+            payer?: components["schemas"]["PassPerson"];
+            /**
+             * Format: int64
+             * @description Price paid in minor units of the school currency; 0 for an assignment.
+             */
+            pricePaid: number;
+            /**
+             * Format: date-time
+             * @description When it was sold or given.
+             */
+            soldAt: string;
+            /**
+             * @description active, or voided by the office.
+             * @enum {string}
+             */
+            status: "active" | "voided";
+            /** @description Whether the pass pays for a visit today: active, valid today, and a visit pass has visits left. */
+            usable: boolean;
+            /**
+             * Format: int64
+             * @description How many bookings it paid for in all.
+             */
+            useCount: number;
+            /** @description The latest bookings it paid for (at most 10, by when it paid), the latest lesson first. */
+            uses: components["schemas"]["PassUse"][];
+            /**
+             * Format: date
+             * @description First school date the pass pays for.
+             */
+            validFrom: string;
+            /**
+             * Format: date
+             * @description Last school date the pass pays for; absent for a visit pass without expiry.
+             */
+            validUntil?: string;
+            /**
+             * Format: int64
+             * @description Visits left of a visit pass; 0 for a time pass.
+             */
+            visitsRemaining: number;
+            /**
+             * Format: int64
+             * @description Visits of a visit pass; 0 for a time pass.
+             */
+            visitsTotal: number;
+            /**
+             * Format: date-time
+             * @description When it was voided, if so.
+             */
+            voidedAt?: string;
+        };
+        AdminPassList: {
+            /** @description The person's passes: usable first, then the others, each newest sale first. */
+            items: components["schemas"]["AdminPass"][];
+        };
         AdminPerson: {
             /**
              * Format: date
@@ -1648,6 +1897,20 @@ export interface components {
             notes?: string;
             /** @description Phone number, if any. */
             phone?: string;
+        };
+        AssignPassData: {
+            /** @description Why it is given away. */
+            note?: string;
+            /**
+             * Format: uuid
+             * @description The pass type; it must be active.
+             */
+            passTypeId: string;
+            /**
+             * Format: date
+             * @description First school date of the pass; default: today.
+             */
+            validFrom?: string;
         };
         AttendanceData: {
             /**
@@ -1790,6 +2053,15 @@ export interface components {
         BookingEventsOutputBody: {
             /** @description The history, oldest first. */
             items: components["schemas"]["BookingEvent"][];
+        };
+        BookingPayment: {
+            /** @description The pass that paid; only when paid. */
+            pass?: components["schemas"]["PaymentPass"];
+            /**
+             * @description paid: a pass paid for it (see pass). unpaid: it costs a visit, but no pass paid for it; the office settles it at the desk. free: it costs nothing (a class member's booking, a trial, a lesson the school canceled, a timely cancellation, a removal by staff). pending: the school uses passes on attendance, which has not been taken yet.
+             * @enum {string}
+             */
+            status: "paid" | "unpaid" | "free" | "pending";
         };
         CalendarFeed: {
             /**
@@ -2118,10 +2390,10 @@ export interface components {
             /** @description The lesson that uses the room; only with reason room-taken. */
             lesson?: components["schemas"]["ConflictLesson"];
             /**
-             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list.
+             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already.
              * @enum {string}
              */
-            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting";
+            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided";
             /**
              * Format: int64
              * @description HTTP status code
@@ -2710,6 +2982,8 @@ export interface components {
             late: boolean;
             /** @description Given and family name of the person, or the guest's name. */
             name: string;
+            /** @description How the booking is paid. */
+            payment: components["schemas"]["BookingPayment"];
             /**
              * Format: uuid
              * @description The booked person; absent for a guest.
@@ -2967,6 +3241,8 @@ export interface components {
              */
             lateCancelFrom?: string;
             lesson: components["schemas"]["LessonSummary"];
+            /** @description How the booking is paid. */
+            payment: components["schemas"]["BookingPayment"];
             /** @description Given and family name of the booked person. */
             personName: string;
         };
@@ -3006,6 +3282,17 @@ export interface components {
             /** @description Open waiting-list entries of lessons that have not started, by the lessons' start, the signed-in person first. */
             waitlist: components["schemas"]["MyWaitlistEntry"][];
         };
+        MyPasses: {
+            /** @description The family's passes: usable first, then the others, each newest sale first. */
+            items: components["schemas"]["Pass"][];
+            /** @description IANA time zone of the school; school dates are local to it. */
+            timezone: string;
+            /**
+             * Format: date
+             * @description Today's school date, which usable refers to.
+             */
+            today: string;
+        };
         MyWaitlistEntry: {
             /**
              * Format: date-time
@@ -3034,6 +3321,224 @@ export interface components {
              * @description How many addresses the message was mailed to.
              */
             recipients: number;
+        };
+        Pass: {
+            /**
+             * Format: uuid
+             * @description Pass ID.
+             */
+            id: string;
+            /**
+             * @description visits: a number of visits; time: any number of visits within its days.
+             * @enum {string}
+             */
+            kind: "visits" | "time";
+            /**
+             * @description sale: sold; assignment: given without payment.
+             * @enum {string}
+             */
+            origin: "sale" | "assignment";
+            /** @description Whom the pass belongs to. */
+            owner: components["schemas"]["PassPerson"];
+            passType: components["schemas"]["PassTypeRef"];
+            /** @description Who paid, if not the owner. */
+            payer?: components["schemas"]["PassPerson"];
+            /**
+             * Format: int64
+             * @description Price paid in minor units of the school currency; 0 for an assignment.
+             */
+            pricePaid: number;
+            /**
+             * Format: date-time
+             * @description When it was sold or given.
+             */
+            soldAt: string;
+            /**
+             * @description active, or voided by the office.
+             * @enum {string}
+             */
+            status: "active" | "voided";
+            /** @description Whether the pass pays for a visit today: active, valid today, and a visit pass has visits left. */
+            usable: boolean;
+            /**
+             * Format: int64
+             * @description How many bookings it paid for in all.
+             */
+            useCount: number;
+            /** @description The latest bookings it paid for (at most 10, by when it paid), the latest lesson first. */
+            uses: components["schemas"]["PassUse"][];
+            /**
+             * Format: date
+             * @description First school date the pass pays for.
+             */
+            validFrom: string;
+            /**
+             * Format: date
+             * @description Last school date the pass pays for; absent for a visit pass without expiry.
+             */
+            validUntil?: string;
+            /**
+             * Format: int64
+             * @description Visits left of a visit pass; 0 for a time pass.
+             */
+            visitsRemaining: number;
+            /**
+             * Format: int64
+             * @description Visits of a visit pass; 0 for a time pass.
+             */
+            visitsTotal: number;
+            /**
+             * Format: date-time
+             * @description When it was voided, if so.
+             */
+            voidedAt?: string;
+        };
+        PassPerson: {
+            /**
+             * Format: uuid
+             * @description Person ID.
+             */
+            id: string;
+            /** @description Given and family name. */
+            name: string;
+        };
+        PassSettings: {
+            /**
+             * @description When bookings use a pass. booking: when booked; a timely cancellation gives the visit back, a late one keeps it. attendance: when marked attended or no-show, or canceled late.
+             * @enum {string}
+             */
+            redemptionMode: "booking" | "attendance";
+        };
+        PassType: {
+            /** @description Whether the type is sold; a retired type stays for the passes sold. */
+            active: boolean;
+            /**
+             * Format: date-time
+             * @description When the type was created.
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Pass type ID.
+             */
+            id: string;
+            /**
+             * @description visits: a number of visits, valid validityDays days (0: no expiry); time: any number of visits for validityDays days.
+             * @enum {string}
+             */
+            kind: "visits" | "time";
+            /** @description Display name, unique (ignoring case). */
+            name: string;
+            /**
+             * Format: int64
+             * @description Gross price in minor units of the school currency (cents).
+             */
+            price: number;
+            /**
+             * Format: int64
+             * @description Visit pass: days valid from its first day, 0 for no expiry. Time pass: its length in days (at least 1).
+             */
+            validityDays: number;
+            /**
+             * Format: int64
+             * @description VAT rate of the price in basis points (1900 = 19 %); 0 for none.
+             */
+            vatRate: number;
+            /**
+             * Format: int64
+             * @description Number of visits of a visit pass (1–1000); 0 or absent for a time pass.
+             */
+            visits?: number;
+        };
+        PassTypeData: {
+            /** @description Whether the type is sold; a retired type stays for the passes sold. */
+            active: boolean;
+            /**
+             * @description visits: a number of visits, valid validityDays days (0: no expiry); time: any number of visits for validityDays days.
+             * @enum {string}
+             */
+            kind: "visits" | "time";
+            /** @description Display name, unique (ignoring case). */
+            name: string;
+            /**
+             * Format: int64
+             * @description Gross price in minor units of the school currency (cents).
+             */
+            price: number;
+            /**
+             * Format: int64
+             * @description Visit pass: days valid from its first day, 0 for no expiry. Time pass: its length in days (at least 1).
+             */
+            validityDays: number;
+            /**
+             * Format: int64
+             * @description VAT rate of the price in basis points (1900 = 19 %); 0 for none.
+             */
+            vatRate: number;
+            /**
+             * Format: int64
+             * @description Number of visits of a visit pass (1–1000); 0 or absent for a time pass.
+             */
+            visits?: number;
+        };
+        PassTypeList: {
+            /** @description All pass types ordered by name. */
+            items: components["schemas"]["PassType"][];
+        };
+        PassTypeRef: {
+            /**
+             * Format: uuid
+             * @description Pass type ID.
+             */
+            id: string;
+            /** @description Its current name. */
+            name: string;
+        };
+        PassUse: {
+            /**
+             * Format: uuid
+             * @description The booking.
+             */
+            bookingId: string;
+            /**
+             * @description State of the booking; a late cancellation is canceled.
+             * @enum {string}
+             */
+            bookingStatus: "booked" | "canceled" | "attended" | "no_show";
+            /** @description Whether the booking was canceled late. */
+            late: boolean;
+            lesson: components["schemas"]["LessonSummary"];
+            /** @description Given and family name of the booked person. */
+            personName: string;
+            /**
+             * Format: date-time
+             * @description When the pass paid for it.
+             */
+            redeemedAt: string;
+        };
+        PaymentPass: {
+            /**
+             * Format: uuid
+             * @description Pass ID.
+             */
+            id: string;
+            /**
+             * @description visits or time.
+             * @enum {string}
+             */
+            kind: "visits" | "time";
+            /** @description Name of its type. */
+            name: string;
+            /**
+             * Format: date
+             * @description Last school date it pays for; absent without expiry.
+             */
+            validUntil?: string;
+            /**
+             * Format: int64
+             * @description Visits left of a visit pass; 0 for a time pass.
+             */
+            visitsRemaining: number;
         };
         PersonAccount: {
             /** @description Email address (login name). */
@@ -3179,6 +3684,8 @@ export interface components {
             phone?: string;
         };
         PublicSettings: {
+            /** @description ISO 4217 code of every amount, e.g. EUR; amounts are in its minor units. */
+            currency: string;
             /** @description Default UI locale (BCP 47 tag), e.g. en. */
             defaultLocale: string;
             /** @description Display name of the school. */
@@ -3373,6 +3880,30 @@ export interface components {
             visibility: "public" | "members" | "hidden";
             /** @description The signed-in person and their dependents on the lesson's waiting list, the signed-in person first, with their place or invite; absent if there is none or the caller is not signed in (and in the responses of the lesson writes). */
             waitlist?: components["schemas"]["WaitlistFor"][];
+        };
+        SellPassData: {
+            /** @description A note for the office. */
+            note?: string;
+            /**
+             * Format: uuid
+             * @description The pass type; it must be active.
+             */
+            passTypeId: string;
+            /**
+             * Format: uuid
+             * @description Who paid; default: the person.
+             */
+            payerId?: string;
+            /**
+             * Format: int64
+             * @description Price paid in minor units; default: the type's price.
+             */
+            price?: number;
+            /**
+             * Format: date
+             * @description First school date of the pass; default: today.
+             */
+            validFrom?: string;
         };
         StaffBooking: {
             /**
@@ -3997,6 +4528,202 @@ export interface operations {
             };
         };
     };
+    listPassTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassTypeList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createPassType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PassTypeData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassType"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updatePassType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The pass type. */
+                passTypeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PassTypeData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassType"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deletePassType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The pass type. */
+                passTypeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    voidPass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The pass. */
+                passId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPass"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listPersons: {
         parameters: {
             query?: {
@@ -4297,6 +5024,190 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listPersonPasses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The person. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPassList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    assignPass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The person who gets the pass. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignPassData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPass"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    sellPass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The person who gets the pass. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SellPassData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPass"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getPassSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassSettings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updatePassSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PassSettings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassSettings"];
+                };
             };
             /** @description Error */
             default: {
@@ -6482,6 +7393,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MyLessonHistory"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMyPasses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyPasses"];
                 };
             };
             /** @description Error */

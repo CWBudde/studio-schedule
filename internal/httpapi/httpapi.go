@@ -45,7 +45,10 @@ type Deps struct {
 	// MyLessons are the bookings and waiting-list entries of a family.
 	MyLessons *service.MyLessonsService
 	// Feeds are the calendar feeds of accounts.
-	Feeds   *service.CalendarFeedService
+	Feeds *service.CalendarFeedService
+	// Passes are the pass catalog, the passes of persons and their
+	// redemption mode.
+	Passes  *service.PassService
 	Auth    *service.AuthService
 	Family  *service.FamilyService
 	Persons *service.PersonService
@@ -106,6 +109,7 @@ func Register(api huma.API, deps Deps) {
 	registerTeach(api, h)
 	registerMyLessons(api, h)
 	registerCalendarFeeds(api, h)
+	registerPasses(api, h)
 	registerAuth(api, h)
 	registerCredentials(api, h)
 	registerFamily(api, h)

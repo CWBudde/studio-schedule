@@ -22,6 +22,7 @@ type PublicSettings struct {
 	SchoolName    string `doc:"Display name of the school."                      json:"schoolName"`
 	Timezone      string `doc:"IANA time zone of the school, e.g. Europe/Berlin." json:"timezone"`
 	DefaultLocale string `doc:"Default UI locale (BCP 47 tag), e.g. en."         json:"defaultLocale"`
+	Currency      string `doc:"ISO 4217 code of every amount, e.g. EUR; amounts are in its minor units." json:"currency"`
 }
 
 // PublicSettingsOutput is the response of getPublicSettings.
@@ -39,5 +40,6 @@ func (h *handlers) getPublicSettings(ctx context.Context, _ *struct{}) (*PublicS
 		SchoolName:    s.SchoolName,
 		Timezone:      s.Timezone,
 		DefaultLocale: s.DefaultLocale,
+		Currency:      s.Currency,
 	}}, nil
 }

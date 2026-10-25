@@ -10,7 +10,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/domain"
 )
 
-// Reasons of a Conflict (ADR 0007, ADR 0008, ADR 0009, ADR 0010).
+// Reasons of a Conflict (ADR 0007, ADR 0008, ADR 0009, ADR 0010, ADR 0012).
 const (
 	reasonInUse           = "in-use"
 	reasonDuplicate       = "duplicate"
@@ -29,6 +29,7 @@ const (
 	reasonInviteExpired   = "invite-expired"
 	reasonInviteUsed      = "invite-used"
 	reasonNotWaiting      = "not-waiting"
+	reasonAlreadyVoided   = "already-voided"
 )
 
 // Conflict is the problem document of a 409 the UI can explain: Reason
@@ -36,7 +37,7 @@ const (
 type Conflict struct {
 	huma.ErrorModel
 
-	Reason string          `doc:"in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list." enum:"in-use,duplicate,managed,has-account,room-taken,past,generated,already-booked,full,closed,already-canceled,not-full,already-waiting,not-invited,invite-expired,invite-used,not-waiting" json:"reason"`
+	Reason string          `doc:"in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already." enum:"in-use,duplicate,managed,has-account,room-taken,past,generated,already-booked,full,closed,already-canceled,not-full,already-waiting,not-invited,invite-expired,invite-used,not-waiting,already-voided" json:"reason"`
 	Lesson *ConflictLesson `doc:"The lesson that uses the room; only with reason room-taken." json:"lesson,omitempty"`
 	Why    string          `doc:"Why the lesson cannot be booked; only with reason closed. cutoff: the booking cutoff before the start has passed; release: members may not book the lesson yet, or at all (staff book under member rules); canceled: the school canceled the lesson; started: the lesson has started or is over." enum:"cutoff,release,canceled,started" json:"why,omitempty"`
 }

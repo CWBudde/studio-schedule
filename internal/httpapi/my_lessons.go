@@ -47,8 +47,9 @@ type MyLessonBooking struct {
 	PersonName string        `doc:"Given and family name of the booked person." json:"personName"`
 	Lesson     LessonSummary `json:"lesson"`
 	// The cutoffs, as in getSchedule.
-	LateCancelFrom time.Time `doc:"From this instant on a cancellation is late: the cancellation cutoff before the start (UTC); absent for a lesson the school canceled, which is never canceled late." json:"lateCancelFrom,omitzero"`
-	CanCancel      bool      `doc:"Whether the booking may be canceled now (cancelBooking): it is active and its lesson has not started." json:"canCancel"`
+	LateCancelFrom time.Time      `doc:"From this instant on a cancellation is late: the cancellation cutoff before the start (UTC); absent for a lesson the school canceled, which is never canceled late." json:"lateCancelFrom,omitzero"`
+	CanCancel      bool           `doc:"Whether the booking may be canceled now (cancelBooking): it is active and its lesson has not started." json:"canCancel"`
+	Payment        BookingPayment `doc:"How the booking is paid." json:"payment"`
 }
 
 // MyWaitlistEntry is a waiting-list entry of the caller's family with its
@@ -135,7 +136,7 @@ func myLessonBookings(items []service.MyBooking) []MyLessonBooking {
 	for _, it := range items {
 		out = append(out, MyLessonBooking{
 			Booking: bookingBody(it.Booking), PersonName: it.Name, Lesson: lessonSummary(it.Lesson),
-			LateCancelFrom: it.Lesson.LateCancelFrom.UTC(), CanCancel: it.Cancelable,
+			LateCancelFrom: it.Lesson.LateCancelFrom.UTC(), CanCancel: it.Cancelable, Payment: paymentBody(it.Payment),
 		})
 	}
 

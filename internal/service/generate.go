@@ -123,7 +123,7 @@ func (g *LessonGenerator) generate(
 			}
 
 			for _, c := range classes {
-				n, err := g.fill(ctx, tx, c, term, from, to, loc, after)
+				n, err := g.fill(ctx, tx, c, term, from, to, chargesOf(settings, loc), after)
 				if err != nil {
 					return err
 				}
@@ -150,9 +150,11 @@ func (g *LessonGenerator) generate(
 // it too) is either complete or not begun. The caller has locked t
 // (TermRepo.Lock).
 func (g *LessonGenerator) fill(
-	ctx context.Context, tx store.Tx, c domain.Class, t domain.Term, from, to domain.Date, loc *time.Location,
+	ctx context.Context, tx store.Tx, c domain.Class, t domain.Term, from, to domain.Date, ch charges,
 	after time.Time,
 ) (int, error) {
+	loc := ch.loc
+
 	c, err := tx.Classes().Lock(ctx, c.ID)
 	if err != nil {
 		return 0, fmt.Errorf("lock class %s: %w", c.ID, err)
@@ -185,7 +187,7 @@ func (g *LessonGenerator) fill(
 			return 0, fmt.Errorf("create lesson of class %s at %s: %w", c.ID, l.StartsAt, err)
 		}
 
-		if err := bookMembers(ctx, tx, g.ids, now, l, members); err != nil {
+		if err := bookMembers(ctx, tx, g.ids, ch, now, l, members); err != nil {
 			return 0, err
 		}
 	}

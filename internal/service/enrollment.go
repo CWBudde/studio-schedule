@@ -45,14 +45,14 @@ func membersOn(members []domain.ClassMember, d domain.Date) []domain.PersonID {
 }
 
 // bookMember books person into lesson l as an automatic class member
-// booking at now. taken is the number of places of l taken before (its
+// booking at now, through the ledger under c (it never costs a visit). taken is the number of places of l taken before (its
 // active bookings, and places held by waiting-list invites); a booking
 // beyond l's capacity is made anyway and its event records an override. The actor is the office account, or zero for generation. The
 // caller holds the class lock and either the lesson lock or a lesson it has
 // just created.
 func bookMember(
-	ctx context.Context, tx store.Tx, src ids.Source, now time.Time, actor domain.AccountID, l domain.Lesson,
-	person domain.PersonID, taken int,
+	ctx context.Context, tx store.Tx, src ids.Source, c charges, now time.Time, actor domain.AccountID,
+	l domain.Lesson, person domain.PersonID, taken int,
 ) error {
 	b := domain.Booking{
 		ID: ids.New[domain.BookingID](src), LessonID: l.ID, PersonID: person, Status: domain.BookingBooked,
@@ -62,7 +62,7 @@ func bookMember(
 		return err
 	}
 
-	if err := tx.Bookings().Create(ctx, b); err != nil {
+	if err := createBooking(ctx, tx, c, now, l, b); err != nil {
 		return fmt.Errorf("book member %v into lesson %v: %w", person, l.ID, err)
 	}
 
@@ -75,14 +75,15 @@ func bookMember(
 // transaction commits, so it needs no lesson lock, and nobody is booked
 // into it yet.
 func bookMembers(
-	ctx context.Context, tx store.Tx, src ids.Source, now time.Time, l domain.Lesson, members []domain.ClassMember,
+	ctx context.Context, tx store.Tx, src ids.Source, c charges, now time.Time, l domain.Lesson,
+	members []domain.ClassMember,
 ) error {
 	if !l.StartsAt.After(now) {
 		return nil
 	}
 
 	for i, person := range membersOn(members, l.SlotDate) {
-		if err := bookMember(ctx, tx, src, now, domain.AccountID{}, l, person, i); err != nil {
+		if err := bookMember(ctx, tx, src, c, now, domain.AccountID{}, l, person, i); err != nil {
 			return err
 		}
 	}
@@ -143,6 +144,11 @@ func lessonIDs(lessons []domain.Lesson) []domain.LessonID {
 func (s *TimetableService) enroll(ctx context.Context, tx store.Tx, actor domain.AccountID, m domain.ClassMember) error {
 	now := s.clock.Now()
 
+	c, err := chargesIn(ctx, tx)
+	if err != nil {
+		return err
+	}
+
 	lessons, err := lockAhead(ctx, tx, m.ClassID, now)
 	if err != nil {
 		return err
@@ -188,7 +194,7 @@ func (s *TimetableService) enroll(ctx context.Context, tx store.Tx, actor domain
 			return e.PersonID == m.PersonID
 		})
 
-		if err := bookMember(ctx, tx, s.ids, now, actor, l, m.PersonID, active[l.ID]+heldPlaces(others, now)[l.ID]); err != nil {
+		if err := bookMember(ctx, tx, s.ids, c, now, actor, l, m.PersonID, active[l.ID]+heldPlaces(others, now)[l.ID]); err != nil {
 			return err
 		}
 
@@ -229,6 +235,11 @@ func (s *TimetableService) cancelAhead(
 ) error {
 	now := s.clock.Now()
 
+	charges, err := chargesIn(ctx, tx)
+	if err != nil {
+		return err
+	}
+
 	lessons, err := lockAhead(ctx, tx, c, now)
 	if err != nil {
 		return err
@@ -250,7 +261,7 @@ func (s *TimetableService) cancelAhead(
 		}
 
 		b.Late, b.Released = false, false
-		if _, err := cancelBooking(ctx, tx, s.w, actor, now, byID[b.LessonID], b); err != nil {
+		if _, err := cancelBooking(ctx, tx, s.w, charges, actor, now, byID[b.LessonID], b); err != nil {
 			return err
 		}
 	}

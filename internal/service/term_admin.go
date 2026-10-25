@@ -150,7 +150,7 @@ func (s *TimetableService) fitLessons(ctx context.Context, tx store.Tx, t domain
 			}
 		}
 
-		if _, err := s.gen.fill(ctx, tx, c, t, from, to, loc, now); err != nil {
+		if _, err := s.gen.fill(ctx, tx, c, t, from, to, chargesOf(settings, loc), now); err != nil {
 			return err
 		}
 	}

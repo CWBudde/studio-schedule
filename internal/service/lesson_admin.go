@@ -233,7 +233,9 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 			}
 		}
 
-		if err := tx.Lessons().Update(ctx, l); err != nil {
+		// A lesson moved to another date keeps its bookings paid only by
+		// passes valid on it (ADR 0012).
+		if err := updateLesson(ctx, tx, chargesOf(settings, loc), now, old, l); err != nil {
 			return err
 		}
 
@@ -268,7 +270,8 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 
 // CancelLesson cancels a lesson that has not started (ErrLessonStarted
 // otherwise) with an optional note, records when and by whom, and mails
-// everyone with an active booking. The bookings stay as they are; the
+// everyone with an active booking. The bookings stay as they are, but cost
+// nothing: the passes they used get their visits back (ADR 0012); the
 // invites of its waiting list are void and go back to waiting, without a
 // mail (ADR 0010). An admin
 // signed in as another account is recorded as the canceling account. A
@@ -289,7 +292,7 @@ func (s *LessonService) CancelLesson(
 // RestoreLesson lets a canceled lesson that has not started take place
 // after all (ErrLessonStarted otherwise): it clears the cancellation, keeps
 // the lesson detached and mails everyone with an active booking its current
-// time and room. Its free places go to the waiting list. Another lesson in the room at that time is a
+// time and room. Its bookings that are due use passes again (ADR 0012). Its free places go to the waiting list. Another lesson in the room at that time is a
 // *RoomTakenError unless confirmRoomOverlap is set. A scheduled lesson stays
 // as it is, started or not.
 func (s *LessonService) RestoreLesson(
@@ -332,6 +335,7 @@ func (s *LessonService) setStatus(
 				return ErrLessonStarted
 			}
 
+			old := l
 			l.Status, l.Detached = status, !l.ClassID.IsZero()
 			if err := change(ctx, tx, &l, now); err != nil {
 				return err
@@ -341,7 +345,9 @@ func (s *LessonService) setStatus(
 				return err
 			}
 
-			if err := tx.Lessons().Update(ctx, l); err != nil {
+			// The ledger settles the passes of its bookings: a canceled
+			// lesson costs nothing (ADR 0012).
+			if err := updateLesson(ctx, tx, chargesOf(settings, loc), now, old, l); err != nil {
 				return err
 			}
 

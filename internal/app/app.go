@@ -134,6 +134,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 		// A demo installation's feeds have no URL: calendars cannot reach the
 		// web demo, and the demo server is for trying the app out.
 		Feeds:          service.NewCalendarFeedService(deps.Store, deps.Clock, deps.IDs, deps.AppURL, !deps.Demo),
+		Passes:         service.NewPassService(deps.Store, deps.Clock, deps.IDs),
 		Auth:           newAuthService(deps, renderer),
 		Family:         service.NewFamilyService(deps.Store, deps.Clock, deps.IDs, mails),
 		Persons:        service.NewPersonService(deps.Store, deps.Clock, deps.IDs, mails),

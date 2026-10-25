@@ -167,7 +167,8 @@ func (s *BookingService) Book(
 			return err
 		}
 
-		switch err := tx.Bookings().Create(ctx, b); {
+		// Redeeming on booking, the booking uses a pass now (ADR 0012).
+		switch err := createBooking(ctx, tx, chargesOf(settings, loc), now, l, b); {
 		case errors.Is(err, domain.ErrDuplicate):
 			// Checked above under the lock; the unique index is the fallback.
 			return fmt.Errorf("%w (%w)", ErrAlreadyBooked, err)
@@ -242,7 +243,7 @@ func (s *BookingService) Cancel(ctx context.Context, p Principal, id domain.Book
 
 		now := s.clock.Now()
 
-		canceled, err := s.cancel(ctx, tx, p, settings, now, l, b, true)
+		canceled, err := s.cancel(ctx, tx, p, settings, chargesOf(settings, loc), now, l, b, true)
 		if err != nil {
 			return err
 		}
@@ -399,11 +400,12 @@ func (s *BookingService) CancelFollowing(
 		}
 
 		out.Bookings = nil // the callback may run more than once
+		c := chargesOf(settings, loc)
 
 		// A member pauses rather than releasing the dates, so ending the
 		// pause books them again (ADR 0009).
 		for _, fb := range pickFollowing(settings, now, id, ahead, active) {
-			canceled, err := s.cancel(ctx, tx, p, settings, now, fb.Lesson, fb.Booking, !member)
+			canceled, err := s.cancel(ctx, tx, p, settings, c, now, fb.Lesson, fb.Booking, !member)
 			if err != nil {
 				return err
 			}
@@ -539,8 +541,8 @@ func lateCancellation(settings domain.Settings, now time.Time, l domain.Lesson) 
 // (domain.Booking.Released): every cancellation of a member's family but a
 // class member's pause.
 func (s *BookingService) cancel(
-	ctx context.Context, tx store.Tx, p Principal, settings domain.Settings, now time.Time, l domain.Lesson,
-	b domain.Booking, released bool,
+	ctx context.Context, tx store.Tx, p Principal, settings domain.Settings, c charges, now time.Time,
+	l domain.Lesson, b domain.Booking, released bool,
 ) (FollowingBooking, error) {
 	switch {
 	case b.Status == domain.BookingCanceled:
@@ -551,7 +553,7 @@ func (s *BookingService) cancel(
 
 	b.Late, b.Released = lateCancellation(settings, now, l), released
 
-	b, err := cancelBooking(ctx, tx, s.w, actorOf(p), now, l, b)
+	b, err := cancelBooking(ctx, tx, s.w, c, actorOf(p), now, l, b)
 	if err != nil {
 		return FollowingBooking{}, err
 	}
@@ -561,21 +563,25 @@ func (s *BookingService) cancel(
 
 // cancelBooking cancels the active booking b of lesson l, which the caller
 // has locked, at now, keeping the Late and Released flags the caller set,
-// and records the event with the actor (zero for the system). It frees the
-// place in the caller's transaction and offers it to the lesson's waiting
-// list (ADR 0010). Every cancellation goes through here: a member's
-// (BookingService.cancel), the office's when a membership ends (unenroll)
-// and staff removing a participant (ParticipantService.Remove).
+// and records the event with the actor (zero for the system). It settles
+// the booking's pass under c (ADR 0012): a late cancellation costs a visit,
+// a timely one gives it back. It frees the place in the caller's
+// transaction and offers it to the lesson's waiting list (ADR 0010). Every
+// cancellation goes through here: a member's (BookingService.cancel), the
+// office's when a membership ends (unenroll) and staff removing a
+// participant (ParticipantService.Remove).
 func cancelBooking(
-	ctx context.Context, tx store.Tx, w waitlister, actor domain.AccountID, now time.Time, l domain.Lesson,
-	b domain.Booking,
+	ctx context.Context, tx store.Tx, w waitlister, c charges, actor domain.AccountID, now time.Time,
+	l domain.Lesson, b domain.Booking,
 ) (domain.Booking, error) {
+	old := b
 	b.Status, b.CanceledAt = domain.BookingCanceled, now
+
 	if err := b.Validate(); err != nil {
 		return domain.Booking{}, err
 	}
 
-	if err := tx.Bookings().Update(ctx, b); err != nil {
+	if err := updateBookings(ctx, tx, c, now, l, bookingChange{before: old, after: b}); err != nil {
 		return domain.Booking{}, err
 	}
 

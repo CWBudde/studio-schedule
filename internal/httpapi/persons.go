@@ -68,7 +68,8 @@ func registerPersons(api huma.API, h *handlers) {
 		Path:        BasePath + "/admin/persons/{personId}",
 		Summary:     "Delete a person",
 		Description: "Deletes a person, e.g. one created by mistake. While anything refers to it (an account, a " +
-			"staff link, bookings, class memberships, or a guardian link in either direction) that is a 409 " +
+			"staff link, bookings, class memberships, passes they own or paid for, or a guardian link in either " +
+			"direction) that is a 409 " +
 			"`in-use` and nothing changes.",
 		DefaultStatus: http.StatusNoContent,
 	}), h.deletePerson)

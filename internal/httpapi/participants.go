@@ -142,6 +142,7 @@ type LessonParticipant struct {
 	Late         bool             `doc:"Whether the cancellation came after the cancellation cutoff." json:"late"`
 	BookedAt     time.Time        `doc:"When the booking was made."           json:"bookedAt"`
 	CanceledAt   time.Time        `doc:"When it was canceled, if so."         json:"canceledAt,omitzero"`
+	Payment      BookingPayment   `doc:"How the booking is paid." json:"payment"`
 }
 
 // LessonWaitlistEntry is an entry of a lesson's waiting list as staff see
@@ -316,7 +317,7 @@ func (h *handlers) listLessonParticipants(
 			BookingID: b.ID, PersonID: b.PersonID, Name: pt.Name, Guest: b.PersonID.IsZero(),
 			ContactEmail: pt.ContactEmail, ContactPhone: pt.ContactPhone, Status: string(b.Status),
 			Source: string(b.Source), Trial: b.Trial, TrialNote: b.TrialNote, Late: b.Late,
-			BookedAt: b.BookedAt.UTC(), CanceledAt: b.CanceledAt.UTC(),
+			BookedAt: b.BookedAt.UTC(), CanceledAt: b.CanceledAt.UTC(), Payment: paymentBody(pt.Payment),
 		})
 	}
 

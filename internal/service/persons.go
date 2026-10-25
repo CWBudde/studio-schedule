@@ -280,7 +280,8 @@ func (s *PersonService) apply(
 
 // DeletePerson deletes the person id, e.g. one created by mistake. While
 // anything refers to it (an account, a staff link, bookings, class
-// memberships, or a guardian link in either direction) that is
+// memberships, passes it owns or paid for, or a guardian link in either
+// direction) that is
 // domain.ErrInUse and nothing changes. The person leaves the waiting lists
 // first, like a removed dependent (FamilyService.RemoveDependent). An
 // unknown person is domain.ErrNotFound.

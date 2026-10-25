@@ -114,6 +114,7 @@ func demoAt(anchor domain.Date) (Dataset, error) {
 	b.memberBookings()
 	b.fullWorkshop(anchor, demoFullWorkshop)
 	b.staffBookings(anchor, demoStaffBookings)
+	b.passes(anchor)
 
 	return b.d, nil
 }
@@ -778,6 +779,160 @@ func (b *builder) staffBookings(anchor domain.Date, spec staffBookingsSpec) {
 			ID: ids.New[domain.BookingEventID](b.seq), BookingID: booking.ID, At: booking.BookedAt,
 			Status: domain.BookingBooked, ActorAccountID: actor,
 		})
+	}
+}
+
+// demoPassTypes is the pass catalog: a drop-in, a 10-visit pass and a
+// 30-day pass, gross prices with 19 % VAT.
+var demoPassTypes = []domain.PassType{
+	{Name: "Single visit", Kind: domain.PassVisits, Visits: 1, ValidityDays: 90, Price: 1800, VATRate: 1900, Active: true},
+	{Name: "10-visit pass", Kind: domain.PassVisits, Visits: 10, ValidityDays: 180, Price: 15000, VATRate: 1900, Active: true},
+	{Name: "30-day pass", Kind: domain.PassTime, ValidityDays: 30, Price: 8900, VATRate: 1900, Active: true},
+}
+
+// passSpec is a pass of a person: sold (with an optional payer) or given
+// away (assigned, with a note) on the day soldDays from the anchor, valid
+// from that day, and perhaps voided a day later. dropIns are the classes
+// (by weekday and start) whose lesson in the week before the anchor the
+// person dropped into, attended and paid for with the pass.
+type passSpec struct {
+	person   string
+	passType string
+	soldDays int
+	payer    string
+	assigned bool
+	note     string
+	voided   bool
+	dropIns  []classSlot
+}
+
+// classSlot names a weekly class by its weekday and start.
+type classSlot struct {
+	day   time.Weekday
+	start domain.TimeOfDay
+}
+
+// demoPasses shows the passes of the member login's family (Clara with her
+// own card and her daughter's, which she paid for), a time pass, a pass
+// given away and one sold by mistake and voided. The demo redeems on
+// attendance (DemoSettings), so the passes paid for the drop-ins when the
+// office took their attendance.
+var demoPasses = []passSpec{
+	{
+		person: "Clara Amberly", passType: "10-visit pass", soldDays: -14,
+		dropIns: []classSlot{{time.Tuesday, at(18, 30)}, {time.Thursday, at(17, 0)}},
+	},
+	{
+		person: "Ella Amberly", passType: "10-visit pass", soldDays: -10, payer: "Clara Amberly",
+		dropIns: []classSlot{{time.Thursday, at(16, 0)}},
+	},
+	{
+		person: "Kai Lanternby", passType: "30-day pass", soldDays: -7,
+		dropIns: []classSlot{{time.Friday, at(17, 45)}},
+	},
+	{
+		person: "Irene Inkwell", passType: "Single visit", soldDays: -3, assigned: true,
+		note: "Goodwill: her workshop was canceled.",
+	},
+	{person: "Vera Rushwick", passType: "Single visit", soldDays: -20, voided: true, note: "Sold to the wrong person."},
+}
+
+// passes adds the pass catalog, created when the term starts, and the
+// passes of demoPasses, sold by the office, with their drop-in bookings
+// (each with its booking and attendance events) and redemptions.
+func (b *builder) passes(anchor domain.Date) {
+	created := b.termStart.At(domain.TimeOfDay{Hour: 9}, b.loc)
+	types := map[string]domain.PassType{}
+
+	for _, pt := range demoPassTypes {
+		pt.ID, pt.CreatedAt = ids.New[domain.PassTypeID](b.seq), created
+		b.d.PassTypes = append(b.d.PassTypes, pt)
+		types[pt.Name] = pt
+	}
+
+	office := b.accountOf(lookup(b.persons, "Olga Ledgerby"))
+
+	for _, spec := range demoPasses {
+		pt, ok := types[spec.passType]
+		if !ok {
+			panic("seed: unknown pass type " + spec.passType)
+		}
+
+		day := anchor.AddDays(spec.soldDays)
+		p := domain.Pass{
+			ID: ids.New[domain.PassID](b.seq), PassTypeID: pt.ID, PersonID: lookup(b.persons, spec.person), Kind: pt.Kind,
+			ValidFrom: day, ValidUntil: pt.ValidUntil(day), Status: domain.PassActive, Origin: domain.PassSold,
+			SoldAt: day.At(at(10, 0), b.loc), SoldBy: office, PricePaid: pt.Price, Note: spec.note,
+		}
+
+		if pt.Kind == domain.PassVisits {
+			p.VisitsTotal, p.VisitsRemaining = pt.Visits, pt.Visits
+		}
+
+		if spec.payer != "" {
+			p.PayerID = lookup(b.persons, spec.payer)
+		}
+
+		if spec.assigned {
+			p.Origin, p.PricePaid = domain.PassAssigned, 0
+		}
+
+		if spec.voided {
+			p.Status, p.VoidedAt = domain.PassVoided, p.SoldAt.Add(24*time.Hour)
+		}
+
+		for _, slot := range spec.dropIns {
+			b.dropIn(anchor, &p, slot, office)
+		}
+
+		b.d.Passes = append(b.d.Passes, p)
+	}
+}
+
+// dropIn books the owner of pass p into the lesson of the class at slot in
+// the week before the anchor, the evening before it (by the account of the
+// owner, or the payer's for a child), marks it attended by the office at
+// its end and lets p pay for it then.
+func (b *builder) dropIn(anchor domain.Date, p *domain.Pass, slot classSlot, office domain.AccountID) {
+	i := slices.IndexFunc(b.d.Lessons, func(l domain.Lesson) bool {
+		if l.ClassID.IsZero() || l.SlotDate.Compare(anchor) >= 0 || l.SlotDate.Weekday() != slot.day {
+			return false
+		}
+
+		c := b.d.Classes[slices.IndexFunc(b.d.Classes, func(c domain.Class) bool { return c.ID == l.ClassID })]
+
+		return c.StartTime == slot.start
+	})
+	if i < 0 {
+		panic(fmt.Sprintf("seed: no lesson of the class on %v at %v before the anchor", slot.day, slot.start))
+	}
+
+	l := b.d.Lessons[i]
+	booker := p.PersonID
+
+	if !p.PayerID.IsZero() {
+		booker = p.PayerID
+	}
+
+	booking := domain.Booking{
+		ID: ids.New[domain.BookingID](b.seq), LessonID: l.ID, PersonID: p.PersonID, Status: domain.BookingAttended,
+		Source: domain.BookingSourceSelf, BookedAt: l.StartsAt.Add(-20 * time.Hour),
+	}
+	b.d.Bookings = append(b.d.Bookings, booking)
+	b.d.BookingEvents = append(b.d.BookingEvents,
+		domain.BookingEvent{
+			ID: ids.New[domain.BookingEventID](b.seq), BookingID: booking.ID, At: booking.BookedAt,
+			Status: domain.BookingBooked, ActorAccountID: b.accountOf(booker),
+		},
+		domain.BookingEvent{
+			ID: ids.New[domain.BookingEventID](b.seq), BookingID: booking.ID, At: l.EndsAt,
+			Status: domain.BookingAttended, ActorAccountID: office,
+		},
+	)
+	b.d.Redemptions = append(b.d.Redemptions, domain.PassRedemption{PassID: p.ID, BookingID: booking.ID, At: l.EndsAt})
+
+	if p.Kind == domain.PassVisits {
+		p.VisitsRemaining--
 	}
 }
 

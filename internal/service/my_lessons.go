@@ -29,6 +29,8 @@ type MyBooking struct {
 	// Cancelable tells that the family may cancel the booking now: it is
 	// active and its lesson has not started (cancelBooking).
 	Cancelable bool
+	// Payment is how the booking is paid (ADR 0012).
+	Payment BookingPayment
 }
 
 // MyWaitlistEntry is an open waiting-list entry of the caller's family with
@@ -96,7 +98,7 @@ func (s *MyLessonsService) Upcoming(ctx context.Context, p Principal) (MyLessons
 	out := MyLessons{Now: s.clock.Now()}
 
 	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
-		settings, _, err := loadSchool(ctx, tx)
+		settings, loc, err := loadSchool(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -125,7 +127,10 @@ func (s *MyLessonsService) Upcoming(ctx context.Context, p Principal) (MyLessons
 			return err
 		}
 
-		out.Upcoming = myBookings(out.Now, fam, lessons, bookings)
+		if out.Upcoming, err = myBookings(ctx, tx, chargesOf(settings, loc), out.Now, fam, lessons, bookings); err != nil {
+			return err
+		}
+
 		out.Waitlist, err = myEntries(ctx, tx, out.Now, fam, lessons, entries)
 
 		return err
@@ -183,9 +188,9 @@ func (s *MyLessonsService) History(ctx context.Context, p Principal, before time
 			return err
 		}
 
-		out.Items = myBookings(out.Now, fam, lessons, bookings)
+		out.Items, err = myBookings(ctx, tx, chargesOf(settings, loc), out.Now, fam, lessons, bookings)
 
-		return nil
+		return err
 	})
 	if err != nil {
 		return MyLessonHistory{}, fmt.Errorf("my lesson history: %w", err)
@@ -259,10 +264,21 @@ func lessonsOf(
 }
 
 // myBookings combines the bookings of fam, in their order, with their
-// lessons and persons as of now.
+// lessons, persons and payments under c as of now.
 func myBookings(
-	now time.Time, fam family, lessons map[domain.LessonID]ScheduledLesson, bookings []domain.Booking,
-) []MyBooking {
+	ctx context.Context, tx store.Tx, c charges, now time.Time, fam family, lessons map[domain.LessonID]ScheduledLesson,
+	bookings []domain.Booking,
+) ([]MyBooking, error) {
+	plain := make(map[domain.LessonID]domain.Lesson, len(lessons))
+	for id, sl := range lessons {
+		plain[id] = sl.Lesson
+	}
+
+	pays, err := c.payments(ctx, tx, plain, bookings)
+	if err != nil {
+		return nil, err
+	}
+
 	out := make([]MyBooking, 0, len(bookings))
 
 	for _, b := range bookings {
@@ -275,10 +291,11 @@ func myBookings(
 		out = append(out, MyBooking{
 			Lesson: sl, Person: person, Name: fullName(person), Booking: b,
 			Cancelable: b.Status != domain.BookingCanceled && now.Before(sl.Lesson.StartsAt),
+			Payment:    pays[b.ID],
 		})
 	}
 
-	return out
+	return out, nil
 }
 
 // myEntries combines the open entries of fam whose lessons have not

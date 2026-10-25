@@ -345,9 +345,10 @@ func acceptable(settings domain.Settings, now time.Time, l domain.Lesson) error 
 // accept takes the place that entry e's invite holds in lesson l, which the
 // caller has locked: the invite must hold it (inviteErr) and the lesson be
 // acceptable. It books the person (source self, the event noting the
-// waiting list, by actor or the system) and marks the entry accepted.
+// waiting list, by actor or the system), settles the booking's pass like
+// Book (ADR 0012) and marks the entry accepted.
 func (s *WaitlistService) accept(
-	ctx context.Context, tx store.Tx, settings domain.Settings, now time.Time, l domain.Lesson,
+	ctx context.Context, tx store.Tx, settings domain.Settings, loc *time.Location, now time.Time, l domain.Lesson,
 	e domain.WaitlistEntry, actor domain.AccountID,
 ) (domain.Booking, error) {
 	if err := inviteErr(e, now); err != nil {
@@ -376,7 +377,7 @@ func (s *WaitlistService) accept(
 		return domain.Booking{}, err
 	}
 
-	switch err := tx.Bookings().Create(ctx, b); {
+	switch err := createBooking(ctx, tx, chargesOf(settings, loc), now, l, b); {
 	case errors.Is(err, domain.ErrDuplicate):
 		return domain.Booking{}, fmt.Errorf("%w (%w)", ErrAlreadyBooked, err)
 	case err != nil:
@@ -430,7 +431,7 @@ func (s *WaitlistService) Accept(ctx context.Context, p Principal, id domain.Wai
 
 		now := s.clock.Now()
 
-		if b, err = s.accept(ctx, tx, settings, now, l, e, actorOf(p)); err != nil {
+		if b, err = s.accept(ctx, tx, settings, loc, now, l, e, actorOf(p)); err != nil {
 			return err
 		}
 
@@ -567,7 +568,7 @@ func (s *WaitlistService) AcceptInvite(ctx context.Context, token string) (Invit
 			return ErrInviteExpired
 		}
 
-		b, err := s.accept(ctx, tx, settings, now, l, e, domain.AccountID{})
+		b, err := s.accept(ctx, tx, settings, loc, now, l, e, domain.AccountID{})
 		if err != nil {
 			return err
 		}

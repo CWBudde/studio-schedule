@@ -340,6 +340,9 @@ func TestDemoValid(t *testing.T) {
 	validAll(t, d.ClassMembers)
 	validAll(t, d.Bookings)
 	validAll(t, d.BookingEvents)
+	validAll(t, d.PassTypes)
+	validAll(t, d.Passes)
+	validAll(t, d.Redemptions)
 }
 
 // TestDemoMemberBookings checks that the class lessons of the demo have
@@ -350,10 +353,12 @@ func TestDemoMemberBookings(t *testing.T) {
 
 	d := seed.Demo()
 	// The members' own bookings of the full workshop: TestDemoFullWorkshop;
-	// the staff's: TestDemoStaffBookings.
+	// the staff's: TestDemoStaffBookings; the drop-ins paid with a pass:
+	// TestDemoPasses.
 	full := fullWorkshop(t, d)
 	d.Bookings = slices.DeleteFunc(d.Bookings, func(b domain.Booking) bool {
-		return b.LessonID == full.ID || b.Source == domain.BookingSourceStaff
+		return b.LessonID == full.ID || b.Source == domain.BookingSourceStaff ||
+			slices.ContainsFunc(d.Redemptions, func(r domain.PassRedemption) bool { return r.BookingID == b.ID })
 	})
 	d.BookingEvents = slices.DeleteFunc(d.BookingEvents, func(e domain.BookingEvent) bool {
 		return !slices.ContainsFunc(d.Bookings, func(b domain.Booking) bool { return b.ID == e.BookingID })
@@ -1056,6 +1061,37 @@ func TestLoadDemoRoundTrip(t *testing.T) {
 
 		sameSet(t, "waitlist entries", entries, want.WaitlistEntries)
 
+		passTypes, err := tx.PassTypes().List(ctx)
+		if err != nil {
+			return err
+		}
+
+		sameSet(t, "pass types", passTypes, want.PassTypes)
+
+		personIDs := make([]domain.PersonID, len(persons))
+		for i, p := range persons {
+			personIDs[i] = p.ID
+		}
+
+		passes, err := tx.Passes().ListByPersons(ctx, personIDs)
+		if err != nil {
+			return err
+		}
+
+		sameSet(t, "passes", passes, want.Passes)
+
+		passIDs := make([]domain.PassID, len(passes))
+		for i, p := range passes {
+			passIDs[i] = p.ID
+		}
+
+		redemptions, err := tx.Redemptions().ListByPasses(ctx, passIDs, 0)
+		if err != nil {
+			return err
+		}
+
+		sameSet(t, "redemptions", redemptions, want.Redemptions)
+
 		return nil
 	})
 	if err != nil {
@@ -1322,4 +1358,79 @@ func TestDemoLogins(t *testing.T) {
 	}
 
 	validAll(t, d.Credentials)
+}
+
+// TestDemoPasses checks the passes of every demo (ADR 0012): the catalog,
+// the member login's family with passes (one paid for a child by her
+// mother), a time pass, one given away and one voided; and that every
+// redemption is an attended drop-in of the pass's owner in a lesson before
+// the anchor that the pass covers, as the demo redeems on attendance, with
+// the visits it used counted.
+func TestDemoPasses(t *testing.T) {
+	t.Parallel()
+
+	loc, err := time.LoadLocation(seed.DemoSettings().Timezone)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
+		d := seed.DemoAt(anchor)
+
+		if d.Settings.RedemptionMode != domain.RedeemOnAttendance || len(d.PassTypes) != 3 || len(d.Redemptions) == 0 {
+			t.Fatalf("%v: mode %v, %d pass types, %d redemptions", anchor, d.Settings.RedemptionMode,
+				len(d.PassTypes), len(d.Redemptions))
+		}
+
+		passes := index(d.Passes, func(p domain.Pass) domain.PassID { return p.ID })
+		bookings := index(d.Bookings, func(b domain.Booking) domain.BookingID { return b.ID })
+		lessons := index(d.Lessons, func(l domain.Lesson) domain.LessonID { return l.ID })
+		used := map[domain.PassID]int{}
+
+		for _, r := range d.Redemptions {
+			p, b := passes[r.PassID], bookings[r.BookingID]
+			l := lessons[b.LessonID]
+			used[p.ID]++
+
+			if b.PersonID != p.PersonID || b.Status != domain.BookingAttended || b.Source != domain.BookingSourceSelf ||
+				domain.DateOf(l.StartsAt, loc).Compare(anchor) >= 0 || r.At.Before(l.StartsAt) {
+				t.Errorf("%v: redemption %+v of booking %+v in lesson %+v", anchor, r, b, l)
+			}
+
+			before := p
+			before.VisitsRemaining = p.VisitsTotal // as sold
+			if !before.Covers(domain.DateOf(l.StartsAt, loc)) {
+				t.Errorf("%v: pass %+v does not cover lesson %+v", anchor, p, l)
+			}
+		}
+
+		var kinds, origins, voided, paidByOthers int
+
+		for _, p := range d.Passes {
+			if p.Kind == domain.PassVisits && p.VisitsRemaining != p.VisitsTotal-used[p.ID] {
+				t.Errorf("%v: pass %+v used %d times", anchor, p, used[p.ID])
+			}
+
+			if p.Kind == domain.PassTime {
+				kinds++
+			}
+
+			if p.Origin == domain.PassAssigned {
+				origins++
+			}
+
+			if p.Status == domain.PassVoided {
+				voided++
+			}
+
+			if !p.PayerID.IsZero() {
+				paidByOthers++
+			}
+		}
+
+		if kinds != 1 || origins != 1 || voided != 1 || paidByOthers != 1 {
+			t.Errorf("%v: %d time passes, %d assigned, %d voided, %d paid by others; want one each", anchor, kinds,
+				origins, voided, paidByOthers)
+		}
+	}
 }
