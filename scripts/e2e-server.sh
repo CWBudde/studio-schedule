@@ -7,7 +7,8 @@
 # ports of their own (E2E_PG_PORT, E2E_MAILPIT_SMTP_PORT, E2E_MAILPIT_PORT),
 # and removes both afterwards. CI passes its service containers instead:
 # E2E_DATABASE_URL (an empty database), MAILPIT_URL (Mailpit's web API) and
-# MAILPIT_SMTP (host:port). The database is migrated and seeded first.
+# MAILPIT_SMTP (host:port). The database is migrated and seeded first, around
+# today's date, so the demo term always has lessons ahead to book.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,6 +25,22 @@ fi
 
 cleanup() {
 	docker rm -f "$PG_CONTAINER" "$MAILPIT_CONTAINER" >/dev/null 2>&1 || true
+}
+
+# wait_until NAME SECONDS COMMAND...: runs COMMAND once a second until it
+# succeeds, and fails the script if it never does.
+wait_until() {
+	local name="$1" seconds="$2"
+	shift 2
+	echo "waiting for $name"
+	for _ in $(seq "$seconds"); do
+		if "$@" >/dev/null 2>&1; then
+			return 0
+		fi
+		sleep 1
+	done
+	echo "$name did not become ready after $seconds seconds" >&2
+	exit 1
 }
 
 if [[ -z ${E2E_DATABASE_URL:-} ]]; then
@@ -43,28 +60,18 @@ if [[ -z ${E2E_DATABASE_URL:-} ]]; then
 	export MAILPIT_URL="http://localhost:$mailpit_port"
 	export MAILPIT_SMTP="localhost:$smtp_port"
 
-	echo "waiting for PostgreSQL"
-	for _ in $(seq 60); do
-		# pg_isready answers before the entrypoint's restart; a query does not.
-		if docker exec "$PG_CONTAINER" psql -U studio -d studio -c 'select 1' >/dev/null 2>&1; then
-			break
-		fi
-		sleep 1
-	done
+	# pg_isready answers before the entrypoint's restart; a query does not.
+	wait_until PostgreSQL 60 docker exec "$PG_CONTAINER" psql -U studio -d studio -c 'select 1'
 fi
 
 : "${MAILPIT_URL:?set MAILPIT_URL with E2E_DATABASE_URL}"
 : "${MAILPIT_SMTP:?set MAILPIT_SMTP with E2E_DATABASE_URL}"
 
-echo "waiting for Mailpit"
-for _ in $(seq 30); do
-	curl -fsS "$MAILPIT_URL/api/v1/info" >/dev/null 2>&1 && break
-	sleep 1
-done
+wait_until Mailpit 30 curl -fsS "$MAILPIT_URL/api/v1/info"
 
 export DATABASE_URL="$E2E_DATABASE_URL"
 "$BIN" migrate up
-"$BIN" seed
+"$BIN" seed --anchor today
 
 cd "$ROOT_DIR/web"
 pnpm exec playwright test -c playwright.server.config.ts "$@"

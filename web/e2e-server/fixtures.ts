@@ -4,23 +4,22 @@ import { expect, type Page, test as base } from '@playwright/test';
  * The Playwright test of the server smoke suite: any uncaught exception on
  * the page, or a console error other than the browser's note on a failed
  * request (the API answers 401 before sign-in, and a 4xx is part of some
- * flows), fails the test.
+ * flows), fails the test. The check wraps the `page` fixture, so it applies
+ * to every test that uses a page, and a test that only sends requests
+ * (`request`) opens no browser page for it.
  */
-export const test = base.extend<{ failOnPageErrors: void }>({
-  failOnPageErrors: [
-    async ({ page }, use) => {
-      const errors: string[] = [];
-      page.on('console', (msg) => {
-        if (msg.type() === 'error' && !msg.text().startsWith('Failed to load resource')) {
-          errors.push(`console: ${msg.text()}`);
-        }
-      });
-      page.on('pageerror', (err) => errors.push(`page: ${err.message}`));
-      await use();
-      expect(errors, 'errors on the page').toEqual([]);
-    },
-    { auto: true },
-  ],
+export const test = base.extend({
+  page: async ({ page }, use) => {
+    const errors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error' && !msg.text().startsWith('Failed to load resource')) {
+        errors.push(`console: ${msg.text()}`);
+      }
+    });
+    page.on('pageerror', (err) => errors.push(`page: ${err.message}`));
+    await use(page);
+    expect(errors, 'errors on the page').toEqual([]);
+  },
 });
 
 export { expect, type Page };

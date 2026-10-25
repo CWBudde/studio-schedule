@@ -5,8 +5,10 @@ import { defineConfig, devices } from '@playwright/test';
 // cookies, the cross-origin protection and PostgreSQL's semantics, which the
 // WASM demo of `playwright.config.ts` does not have. `just e2e-server`
 // (scripts/e2e-server.sh) starts PostgreSQL and Mailpit, migrates and seeds
-// the database and runs this suite; CI passes its service containers in
-// DATABASE_URL, MAILPIT_URL (Mailpit's web API) and MAILPIT_SMTP (host:port).
+// the database and runs this suite; CI passes its service containers to that
+// script in E2E_DATABASE_URL, MAILPIT_URL (Mailpit's web API) and
+// MAILPIT_SMTP (host:port). The script hands the database to this config as
+// DATABASE_URL.
 const port = Number(process.env.E2E_SERVER_PORT ?? 8090);
 const baseURL = `http://localhost:${port}`;
 const ci = !!process.env.CI;

@@ -56,15 +56,27 @@ fi
 psql() { docker exec -i -e PGOPTIONS="-c client_min_messages=warning" "$container" psql -U "$PG_USER" -v ON_ERROR_STOP=1 -qtA "$@"; }
 url() { echo "postgres://$PG_USER:$PG_PASSWORD@localhost:$pg_port/$1?sslmode=disable"; }
 
-echo "== waiting for PostgreSQL"
-for _ in $(seq 60); do
-	psql -d source -c 'select 1' >/dev/null 2>&1 && break
-	sleep 1
-done
+# wait_until NAME SECONDS COMMAND...: runs COMMAND once a second until it
+# succeeds, and fails the drill if it never does.
+wait_until() {
+	local name="$1" seconds="$2"
+	shift 2
+	echo "== waiting for $name"
+	for _ in $(seq "$seconds"); do
+		if "$@" >/dev/null 2>&1; then
+			return 0
+		fi
+		sleep 1
+	done
+	echo "$name did not become ready after $seconds seconds" >&2
+	exit 1
+}
+
+wait_until PostgreSQL 60 psql -d source -c 'select 1'
 
 echo "== migrate and seed the original"
 DATABASE_URL="$(url source)" "$BIN" migrate up >/dev/null
-DATABASE_URL="$(url source)" "$BIN" seed >/dev/null
+DATABASE_URL="$(url source)" "$BIN" seed --anchor today >/dev/null
 
 echo "== back up with pg_dump --format=custom"
 docker exec "$container" pg_dump -U "$PG_USER" -d source --format=custom >"$work/studio.dump"
@@ -108,18 +120,7 @@ echo "== serve the copy"
 HTTP_ADDR="127.0.0.1:$app_port" BASE_URL="http://localhost:$app_port" LOG_LEVEL=warn "$BIN" serve &
 server_pid=$!
 base="http://127.0.0.1:$app_port"
-ready=""
-for _ in $(seq 60); do
-	if [[ "$(curl -s -o /dev/null -w '%{http_code}' "$base/readyz")" == 200 ]]; then
-		ready=1
-		break
-	fi
-	sleep 1
-done
-if [[ -z $ready ]]; then
-	echo "/readyz did not answer 200" >&2
-	exit 1
-fi
+wait_until "studio-schedule serve (/readyz 200)" 60 curl -fsS "$base/readyz"
 echo "/readyz: 200"
 
 # A seeded account signs in, and its session reads its own data.
