@@ -76,6 +76,7 @@ type serveFlags struct {
 	databaseURL string
 	httpAddr    string
 	baseURL     string
+	metricsAddr string
 }
 
 func (f *serveFlags) register(cmd *cobra.Command) {
@@ -84,6 +85,9 @@ func (f *serveFlags) register(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.databaseURL, "database-url", "", databaseURLUsage)
 	cmd.Flags().StringVar(&f.baseURL, "base-url", "",
 		"public origin of the app, e.g. https://schedule.example.org (env "+config.EnvBaseURL+")")
+	cmd.Flags().StringVar(&f.metricsAddr, "metrics-addr", "",
+		"listen address host:port of the Prometheus metrics (/metrics); empty: no metrics (env "+
+			config.EnvMetricsAddr+")")
 }
 
 // explicit returns the flags given on the command line.
@@ -100,6 +104,7 @@ func (f *serveFlags) explicit(cmd *cobra.Command) config.Flags {
 		DatabaseURL: changed("database-url", &f.databaseURL),
 		HTTPAddr:    changed("addr", &f.httpAddr),
 		BaseURL:     changed("base-url", &f.baseURL),
+		MetricsAddr: changed("metrics-addr", &f.metricsAddr),
 	}
 }
 
@@ -148,6 +153,12 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if demo {
 		deps.DemoLogins = seed.DemoLogins()
 	}
+	// The readiness probe checks the database and its schema.
+	if r, ok := st.(readier); ok {
+		deps.Ready = r.Ready
+	}
+
+	metricsSrv := setUpMetrics(ctx, cfg, &deps, logger)
 	handler, _ := app.New(deps)
 
 	stopJobs := startJobs(ctx, deps, logger)
@@ -164,36 +175,114 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 	}
 
-	errCh := make(chan error, 1)
+	logger.Info("listening", slog.String("addr", cfg.HTTPAddr), slog.String("version", version),
+		slog.Any("config", cfg))
 
-	go func() {
-		logger.Info("listening", slog.String("addr", cfg.HTTPAddr), slog.String("version", version),
-			slog.Any("config", cfg))
-		errCh <- srv.ListenAndServe()
-	}()
-
-	select {
-	case err := <-errCh:
-		return fmt.Errorf("http server: %w", err)
-	case <-ctx.Done():
+	if metricsSrv != nil {
+		logger.Info("serving metrics", slog.String("addr", metricsSrv.Addr))
 	}
 
-	logger.Info("shutting down")
-
-	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
-	defer cancel()
-
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("graceful shutdown: %w", err)
-	}
-
-	if err := <-errCh; err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("http server: %w", err)
+	if err := runServers(ctx, logger, srv, metricsSrv); err != nil {
+		return err
 	}
 
 	logger.Info("stopped")
 
 	return nil
+}
+
+// readier is a store that can tell whether it is ready (postgres.Store).
+type readier interface {
+	Ready(ctx context.Context) error
+}
+
+// runServers runs the public server and, unless it is nil, the metrics
+// server until ctx is canceled or the public server fails, then shuts both
+// down gracefully. A failing metrics server is logged and leaves the app
+// serving without metrics: monitoring must not take the app down.
+func runServers(ctx context.Context, logger *slog.Logger, public, metrics *http.Server) error {
+	publicDone := make(chan error, 1)
+
+	go func() { publicDone <- listenAndServe(public) }()
+
+	metricsDone := make(chan struct{})
+
+	if metrics != nil {
+		go func() {
+			defer close(metricsDone)
+
+			if err := listenAndServe(metrics); err != nil {
+				logger.Error("metrics server failed; serving without metrics", slog.Any("err", err))
+			}
+		}()
+	} else {
+		close(metricsDone)
+	}
+
+	var errs []error
+
+	publicStopped := false
+
+	select {
+	case err := <-publicDone:
+		errs = append(errs, err) // the server stopped by itself: it failed
+		publicStopped = true
+	case <-ctx.Done():
+		logger.Info("shutting down")
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
+	defer cancel()
+
+	if err := public.Shutdown(shutdownCtx); err != nil {
+		errs = append(errs, fmt.Errorf("graceful shutdown of %s: %w", public.Addr, err))
+	}
+
+	if metrics != nil {
+		if err := metrics.Shutdown(shutdownCtx); err != nil {
+			logger.Warn("graceful shutdown of the metrics server", slog.Any("err", err))
+		}
+	}
+
+	if !publicStopped {
+		errs = append(errs, <-publicDone)
+	}
+
+	<-metricsDone
+
+	return errors.Join(errs...)
+}
+
+// listenAndServe runs s until it fails or is shut down (nil).
+func listenAndServe(s *http.Server) error {
+	if err := s.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("http server %s: %w", s.Addr, err)
+	}
+
+	return nil
+}
+
+// setUpMetrics returns the server of the Prometheus metrics at
+// cfg.MetricsAddr and reports the app's measurements to it (deps.Metrics),
+// or returns nil without METRICS_ADDR. The metrics have a server of their
+// own, never the public one: operators expose them to their monitoring
+// only.
+func setUpMetrics(ctx context.Context, cfg config.Config, deps *app.Deps, logger *slog.Logger) *http.Server {
+	if cfg.MetricsAddr == "" {
+		return nil
+	}
+
+	metrics, reg := newMetrics(version, app.UnsentMails(*deps), logger)
+	deps.Metrics = metrics
+
+	return &http.Server{
+		Addr:              cfg.MetricsAddr,
+		Handler:           metricsHandler(reg, logger),
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
+		BaseContext:       func(net.Listener) context.Context { return ctx },
+	}
 }
 
 // setTransportSecurity sets Secure session cookies and HSTS when BASE_URL is
