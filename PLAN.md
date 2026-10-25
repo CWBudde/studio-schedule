@@ -712,7 +712,11 @@ Goal: prepaid passes and legally sound receipts.
 - [ ] Media library (video links per course type, members only)
 - [ ] Embeddable public schedule widget (iframe/script) for the school website
 - [ ] Events/workshops page with separate pricing
-- [ ] PWA (installable, offline schedule cache, web push for waitlist invites)
+- [x] PWA (installable, offline schedule cache, web push for waitlist invites) (2026-10-26) — ADR
+      0017; own service worker (vite-plugin-pwa injectManifest), server manifest from the
+      settings; offline: allow-listed query cache in IndexedDB, read-only, wiped on sign-out and
+      401; web push for waiting-list invites through the stdlib `internal/webpush` (VAPID env,
+      `vapid-keys`); the demo shows a real local notification
 - [ ] MFA (TOTP or passkeys; its own ADR)
 - [ ] Legacy data migration from the previous system into the generic import format. This lives in
       a **separate private repository** because it touches real data; the public repo only provides
