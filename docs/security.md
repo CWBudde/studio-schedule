@@ -11,7 +11,8 @@ propose how to close it.
 
 Paths are relative to the repository root. The operator's part (TLS, backups, updates, access to
 the server) is in [operations.md](operations.md); personal data and its retention in
-[privacy.md](privacy.md).
+[privacy.md](privacy.md). To report a vulnerability, follow [SECURITY.md](../SECURITY.md): privately,
+never in a public issue.
 
 ## V1 Architecture, design and threat modeling
 
