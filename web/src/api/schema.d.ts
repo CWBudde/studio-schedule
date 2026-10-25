@@ -44,6 +44,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/announcements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all announcements
+         * @description Returns every announcement, scheduled and expired ones included, newest publication first.
+         */
+        get: operations["listAllAnnouncements"];
+        put?: never;
+        /**
+         * Publish an announcement
+         * @description Publishes an announcement at `publishAt` (default: now) until `expiresAt` (optional). The title is one line of 1 to 120 characters, the text plain text of 1 to 4000 (line breaks normalized to `\n`, trimmed, no control characters but line breaks and tabs, no invisible format characters but the zero-width joiners; a 422 on the field otherwise). With `email`, it is mailed once to its audience, each address once, in its account's language: at once if it publishes now, else at `publishAt`. Guests without an account are not reached. A school day has at most 3 emailed announcements, sent and scheduled together; beyond that a 409 `mail-limit`. An unknown class, course type or lesson is a 422 on its field.
+         */
+        post: operations["createAnnouncement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/announcements/recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Count an announcement's recipients
+         * @description Returns how many addresses an announcement for the audience would be mailed to now, for the confirmation before emailing. An unknown class, course type or lesson is a 422 on its field.
+         */
+        post: operations["countAnnouncementRecipients"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/announcements/{announcementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update an announcement
+         * @description Replaces an announcement's fields, like `createAnnouncement`, until it expires; an expired one is a 409 `expired`. An edit never mails again: one emailed already stays emailed, whatever `email` says; one not emailed yet is emailed like a new one.
+         */
+        put: operations["updateAnnouncement"];
+        post?: never;
+        /**
+         * Delete an announcement
+         * @description Deletes an announcement with its dismissals. If it was emailed, it still counts for that day's limit.
+         */
+        delete: operations["deleteAnnouncement"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/audit": {
         parameters: {
             query?: never;
@@ -138,6 +206,66 @@ export interface paths {
          * @description Returns what `cloneLessons` would create and skip now, without changing anything.
          */
         post: operations["previewLessonClone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/mails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the mail log
+         * @description Returns the mails of the outbox, newest first, 50 at most per page, without their bodies; `nextCursor` asks for the next page. Filters by status, template and a part of the recipient (ignoring ASCII case). The bodies of mails sent more than 30 days ago are removed, and mails older than 180 days deleted.
+         */
+        get: operations["listMails"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/mails/{mailId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Show a mail
+         * @description Returns a mail of the log with its text and HTML, except for the templates that send a secret link (confirm-email, change-email, reset-password, invite, waitlist-invite), whose bodies never leave the server, and for bodies the purge removed (see `body`).
+         */
+        get: operations["getMail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/mails/{mailId}/requeue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue a failed mail again
+         * @description Queues a failed mail again: its next attempt is now and its attempts start over. A pending or sent mail is a 409 `not-failed`; a mail with a secret link is a 409 `secret-link` (the flows that send a new link do that). Recorded in the audit log.
+         */
+        post: operations["requeueMail"];
         delete?: never;
         options?: never;
         head?: never;
@@ -730,6 +858,46 @@ export interface paths {
         get: operations["listAllClasses"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List my announcements
+         * @description Returns the announcements shown now (published, not expired) that reach the signed-in account, newest first, each with whether the account dismissed it. One reaches an account if it is for everyone, for the account's role, or for persons among which are the account's person or one of its dependents: the members of a class, or of the classes of a course type whose term has not ended, and those booked for one of their lessons that is not over; or those booked for a lesson.
+         */
+        get: operations["listAnnouncements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/announcements/{announcementId}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss an announcement
+         * @description Hides an announcement from the account's banner; it stays in its list. Dismissing it again changes nothing. While an admin is signed in as the account, nothing is stored. One that is not shown or does not reach the account is a 404.
+         */
+        post: operations["dismissAnnouncement"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2271,6 +2439,223 @@ export interface components {
             /** @description Phone number, if any. */
             phone?: string;
         };
+        Announcement: {
+            /**
+             * @description everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: those booked for the lesson. Persons are reached through their guardians too.
+             * @enum {string}
+             */
+            audience: "everyone" | "role" | "class" | "course-type" | "lesson";
+            /** @description Name of the author; absent if it can no longer be found. */
+            author?: string;
+            /** @description Plain text with line breaks. */
+            body: string;
+            /** @description The class; only with audience class. */
+            class?: components["schemas"]["AnnouncementClass"];
+            /**
+             * Format: uuid
+             * @description The class; only with audience class.
+             */
+            classId?: string;
+            /** @description The course type; only with audience course-type. */
+            courseType?: components["schemas"]["CourseTypeRef"];
+            /**
+             * Format: uuid
+             * @description The course type; only with audience course-type.
+             */
+            courseTypeId?: string;
+            /**
+             * Format: date-time
+             * @description When it was written.
+             */
+            createdAt: string;
+            /** @description Whether it is mailed to its audience once, at publishAt. */
+            email?: boolean;
+            /**
+             * Format: int64
+             * @description How many addresses it was mailed to.
+             */
+            emailRecipients: number;
+            /**
+             * Format: date-time
+             * @description When it was mailed; absent if not (yet).
+             */
+            emailedAt?: string;
+            /**
+             * Format: date-time
+             * @description When it stops showing; absent: never.
+             */
+            expiresAt?: string;
+            /**
+             * Format: uuid
+             * @description Announcement ID.
+             */
+            id: string;
+            /** @description The lesson; only with audience lesson. */
+            lesson?: components["schemas"]["AnnouncementLesson"];
+            /**
+             * Format: uuid
+             * @description The lesson; only with audience lesson.
+             */
+            lessonId?: string;
+            /**
+             * Format: date-time
+             * @description When it shows; default: now. It may lie in the future.
+             */
+            publishAt?: string;
+            /**
+             * @description The role; only with audience role.
+             * @enum {string}
+             */
+            role?: "member" | "instructor" | "office" | "admin";
+            /** @description One line. */
+            title: string;
+            /**
+             * Format: date-time
+             * @description When it was last changed.
+             */
+            updatedAt: string;
+        };
+        AnnouncementAudienceData: {
+            /**
+             * @description everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: those booked for the lesson. Persons are reached through their guardians too.
+             * @enum {string}
+             */
+            audience: "everyone" | "role" | "class" | "course-type" | "lesson";
+            /**
+             * Format: uuid
+             * @description The class; only with audience class.
+             */
+            classId?: string;
+            /**
+             * Format: uuid
+             * @description The course type; only with audience course-type.
+             */
+            courseTypeId?: string;
+            /**
+             * Format: uuid
+             * @description The lesson; only with audience lesson.
+             */
+            lessonId?: string;
+            /**
+             * @description The role; only with audience role.
+             * @enum {string}
+             */
+            role?: "member" | "instructor" | "office" | "admin";
+        };
+        AnnouncementClass: {
+            courseType: components["schemas"]["CourseTypeRef"];
+            /**
+             * Format: uuid
+             * @description Class ID.
+             */
+            id: string;
+            /** @description Start time, HH:MM. */
+            startTime: string;
+            /**
+             * Format: uuid
+             * @description Its term.
+             */
+            termId: string;
+            /** @description Name of its term. */
+            termName: string;
+            /**
+             * Format: int64
+             * @description Day of the week, 0 = Sunday.
+             */
+            weekday: number;
+        };
+        AnnouncementData: {
+            /**
+             * @description everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: those booked for the lesson. Persons are reached through their guardians too.
+             * @enum {string}
+             */
+            audience: "everyone" | "role" | "class" | "course-type" | "lesson";
+            /** @description Plain text with line breaks. */
+            body: string;
+            /**
+             * Format: uuid
+             * @description The class; only with audience class.
+             */
+            classId?: string;
+            /**
+             * Format: uuid
+             * @description The course type; only with audience course-type.
+             */
+            courseTypeId?: string;
+            /** @description Whether it is mailed to its audience once, at publishAt. */
+            email?: boolean;
+            /**
+             * Format: date-time
+             * @description When it stops showing; absent: never.
+             */
+            expiresAt?: string;
+            /**
+             * Format: uuid
+             * @description The lesson; only with audience lesson.
+             */
+            lessonId?: string;
+            /**
+             * Format: date-time
+             * @description When it shows; default: now. It may lie in the future.
+             */
+            publishAt?: string;
+            /**
+             * @description The role; only with audience role.
+             * @enum {string}
+             */
+            role?: "member" | "instructor" | "office" | "admin";
+            /** @description One line. */
+            title: string;
+        };
+        AnnouncementItem: {
+            /** @description Plain text with line breaks (\n). */
+            body: string;
+            /** @description Whether the account dismissed it. */
+            dismissed: boolean;
+            /**
+             * Format: date-time
+             * @description When it stops showing; absent: never.
+             */
+            expiresAt?: string;
+            /**
+             * Format: uuid
+             * @description Announcement ID.
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When it was published.
+             */
+            publishedAt: string;
+            /** @description Title, one line. */
+            title: string;
+        };
+        AnnouncementItemList: {
+            /** @description The announcements, newest first. */
+            items: components["schemas"]["AnnouncementItem"][];
+        };
+        AnnouncementLesson: {
+            courseType: components["schemas"]["CourseTypeRef"];
+            /**
+             * Format: date-time
+             * @description End instant (UTC).
+             */
+            endsAt: string;
+            /**
+             * Format: uuid
+             * @description Lesson ID.
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description Start instant (UTC).
+             */
+            startsAt: string;
+        };
+        AnnouncementList: {
+            /** @description All announcements, newest publication first. */
+            items: components["schemas"]["Announcement"][];
+        };
         AssignPassData: {
             /** @description Why it is given away. */
             note?: string;
@@ -2305,8 +2690,19 @@ export interface components {
              */
             id: string;
         };
+        AuditDetails: {
+            /**
+             * Format: uuid
+             * @description The mail of mail-requeued.
+             */
+            mailId?: string;
+            /** @description Its recipient. */
+            recipient?: string;
+            /** @description Its template. */
+            template?: string;
+        };
         AuditEventEntry: {
-            /** @description What happened, e.g. impersonation-started or impersonation-ended; later versions may add actions. */
+            /** @description What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail); later versions may add actions. */
             action: string;
             /** @description The account that acted. */
             actor: components["schemas"]["AuditAccount"];
@@ -2315,17 +2711,32 @@ export interface components {
              * @description When it happened.
              */
             at: string;
+            /** @description What the event records beyond its target; absent if nothing. */
+            details?: components["schemas"]["AuditDetails"];
             /**
              * Format: uuid
              * @description Audit event ID.
              */
             id: string;
-            /** @description The account acted upon. */
-            target: components["schemas"]["AuditAccount"];
+            /** @description The account acted upon; absent unless the event targets an account. */
+            target?: components["schemas"]["AuditAccount"];
+            /** @description The person acted upon; absent unless the event targets a person. */
+            targetPerson?: components["schemas"]["AuditPerson"];
         };
         AuditEventList: {
             /** @description The latest audit events, newest first. */
             items: components["schemas"]["AuditEventEntry"][];
+        };
+        AuditPerson: {
+            /** @description Family name. Absent if the person can no longer be found. */
+            familyName?: string;
+            /** @description Given name. Absent if the person can no longer be found. */
+            givenName?: string;
+            /**
+             * Format: uuid
+             * @description Person ID.
+             */
+            id: string;
         };
         BookLessonData: {
             /**
@@ -2951,10 +3362,10 @@ export interface components {
             /** @description The lesson that uses the room; only with reason room-taken. */
             lesson?: components["schemas"]["ConflictLesson"];
             /**
-             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change.
+             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead.
              * @enum {string}
              */
-            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation" | "timezone-locked" | "currency-locked";
+            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation" | "timezone-locked" | "currency-locked" | "mail-limit" | "expired" | "not-failed" | "secret-link";
             /**
              * Format: int64
              * @description HTTP status code
@@ -3859,6 +4270,120 @@ export interface components {
             /** @description Password. */
             password: string;
         };
+        MailLogDetail: {
+            /** @description File name of the attached PDF; absent if none. */
+            attachment?: string;
+            /**
+             * Format: int64
+             * @description Delivery attempts so far.
+             */
+            attempts: number;
+            /**
+             * @description shown: getMail returns the bodies; withheld: they contain a secret link and never leave the server; purged: removed 30 days after sending.
+             * @enum {string}
+             */
+            body: "shown" | "withheld" | "purged";
+            /**
+             * Format: date-time
+             * @description When the mail was written.
+             */
+            createdAt: string;
+            /** @description HTML body; only with body shown, and only if the mail has one. */
+            html?: string;
+            /**
+             * Format: uuid
+             * @description Mail ID.
+             */
+            id: string;
+            /** @description The error of the last failed attempt. */
+            lastError?: string;
+            /**
+             * Format: date-time
+             * @description When the next attempt is due; absent once sent or given up.
+             */
+            nextAttemptAt?: string;
+            /** @description Address replies go to; absent if the sender's. */
+            replyTo?: string;
+            /**
+             * Format: date-time
+             * @description When it was sent; absent if not.
+             */
+            sentAt?: string;
+            /**
+             * @description Delivery state.
+             * @enum {string}
+             */
+            status: "pending" | "sent" | "failed";
+            /** @description Subject. */
+            subject: string;
+            /**
+             * @description Template the mail was rendered from.
+             * @enum {string}
+             */
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement";
+            /** @description Plain text body; only with body shown. */
+            text?: string;
+            /** @description Recipient address. */
+            to: string;
+        };
+        MailLogItem: {
+            /** @description File name of the attached PDF; absent if none. */
+            attachment?: string;
+            /**
+             * Format: int64
+             * @description Delivery attempts so far.
+             */
+            attempts: number;
+            /**
+             * @description shown: getMail returns the bodies; withheld: they contain a secret link and never leave the server; purged: removed 30 days after sending.
+             * @enum {string}
+             */
+            body: "shown" | "withheld" | "purged";
+            /**
+             * Format: date-time
+             * @description When the mail was written.
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Mail ID.
+             */
+            id: string;
+            /** @description The error of the last failed attempt. */
+            lastError?: string;
+            /**
+             * Format: date-time
+             * @description When the next attempt is due; absent once sent or given up.
+             */
+            nextAttemptAt?: string;
+            /** @description Address replies go to; absent if the sender's. */
+            replyTo?: string;
+            /**
+             * Format: date-time
+             * @description When it was sent; absent if not.
+             */
+            sentAt?: string;
+            /**
+             * @description Delivery state.
+             * @enum {string}
+             */
+            status: "pending" | "sent" | "failed";
+            /** @description Subject. */
+            subject: string;
+            /**
+             * @description Template the mail was rendered from.
+             * @enum {string}
+             */
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement";
+            /** @description Recipient address. */
+            to: string;
+        };
+        MailLogPage: {
+            /** @description The mails, newest first. */
+            items: components["schemas"]["MailLogItem"][];
+            /** @description The cursor of the next page; absent after the last. */
+            nextCursor?: string;
+        };
         MailboxAttachment: {
             /**
              * @description Media type.
@@ -3892,8 +4417,11 @@ export interface components {
             status: "pending" | "sent" | "failed";
             /** @description Subject. */
             subject: string;
-            /** @description Template the mail was rendered from. */
-            template?: string;
+            /**
+             * @description Template the mail was rendered from.
+             * @enum {string}
+             */
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement";
             /** @description Plain text body. */
             text: string;
             /** @description Recipient address. */
@@ -4647,6 +5175,13 @@ export interface components {
             taxNote?: string;
             /** @description Tax number or VAT ID. */
             taxNumber?: string;
+        };
+        RecipientCountOutputBody: {
+            /**
+             * Format: int64
+             * @description How many addresses it would be mailed to now.
+             */
+            recipients: number;
         };
         RegionalSettings: {
             /** @description ISO 4217 code of every amount, e.g. EUR; fixed once a price or a receipt exists. */
@@ -5664,6 +6199,194 @@ export interface operations {
             };
         };
     };
+    listAllAnnouncements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createAnnouncement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnnouncementData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Announcement"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    countAnnouncementRecipients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnnouncementAudienceData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipientCountOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateAnnouncement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The announcement. */
+                announcementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnnouncementData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Announcement"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteAnnouncement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The announcement. */
+                announcementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listAuditEvents: {
         parameters: {
             query?: never;
@@ -5810,6 +6533,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LessonClone"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMails: {
+        parameters: {
+            query?: {
+                /** @description Only mails in this state. */
+                status?: "pending" | "sent" | "failed";
+                /** @description Only mails of this template. */
+                template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement";
+                /** @description Only mails whose recipient contains this, ignoring ASCII case. */
+                recipient?: string;
+                /** @description Where the page starts: the nextCursor of the previous page. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailLogPage"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getMail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The mail. */
+                mailId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailLogDetail"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    requeueMail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The mail. */
+                mailId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailLogItem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
                 };
             };
             /** @description Error */
@@ -7228,6 +8062,65 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ClassEntryList"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listAnnouncements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementItemList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    dismissAnnouncement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The announcement. */
+                announcementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

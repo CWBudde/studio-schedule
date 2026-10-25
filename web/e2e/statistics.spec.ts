@@ -63,7 +63,7 @@ test('the office reads the statistics of the last weeks', async ({ page }) => {
   await page.getByRole('radio', { name: 'Custom' }).click();
   await page.getByLabel('From', { exact: true }).fill('2020-01-01');
   await page.getByLabel('To', { exact: true }).fill('2021-06-30');
-  await page.getByRole('button', { name: 'Show' }).click();
+  await page.getByRole('button', { name: 'Show', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText('Choose at most 366 days.');
 });
 

@@ -21,11 +21,13 @@ const auditLogLimit = 200;
 const actionKeys: ReadonlyMap<string, `audit.actions.${KnownAction}`> = new Map([
   ['impersonation-started', 'audit.actions.impersonation-started'],
   ['impersonation-ended', 'audit.actions.impersonation-ended'],
+  ['mail-requeued', 'audit.actions.mail-requeued'],
 ]);
 
-type KnownAction = 'impersonation-started' | 'impersonation-ended';
+type KnownAction = 'impersonation-started' | 'impersonation-ended' | 'mail-requeued';
 
 type AuditAccount = AuditEventEntry['actor'];
+type AuditPerson = NonNullable<AuditEventEntry['targetPerson']>;
 
 /**
  * The audit log (/admin/audit), for admins only: the latest recorded
@@ -94,11 +96,14 @@ function AuditTable() {
               header: t('audit.actor'),
               cell: (info) => <Account account={info.row.original.actor} />,
             }),
-            columns.accessor((e) => accountText(e.target), {
-              id: 'target',
-              header: t('audit.target'),
-              cell: (info) => <Account account={info.row.original.target} />,
-            }),
+            columns.accessor(
+              (e) => targetText(e, t('audit.mail', { to: e.details?.recipient ?? '' })),
+              {
+                id: 'target',
+                header: t('audit.target'),
+                cell: (info) => <Target event={info.row.original} />,
+              },
+            ),
           ]),
     [t, lang, timeZone],
   );
@@ -128,11 +133,60 @@ function AuditTable() {
 const accountText = (a: AuditAccount) =>
   a.email === undefined ? a.id : `${accountName(a)} ${a.email} ${a.id}`.trimStart();
 
+/**
+ * What an event concerns, for the search and the sorting: its account, its
+ * person, or the mail it names (`mail` is the mail's label); '' for none.
+ */
+function targetText(e: AuditEventEntry, mail: string) {
+  if (e.target) return accountText(e.target);
+  if (e.targetPerson) return `${personText(e.targetPerson)} ${e.targetPerson.id}`.trimStart();
+  if (e.details?.mailId) return `${mail} ${e.details.template ?? ''}`.trimEnd();
+  return '';
+}
+
+const personText = (p: AuditPerson) =>
+  p.givenName === undefined && p.familyName === undefined
+    ? ''
+    : personName({ givenName: p.givenName ?? '', familyName: p.familyName ?? '' });
+
 /** The person's name, or '' for an account whose person can no longer be found. */
 const accountName = (a: AuditAccount) =>
   a.givenName === undefined && a.familyName === undefined
     ? ''
     : personName({ givenName: a.givenName ?? '', familyName: a.familyName ?? '' });
+
+/** What an event concerns: its account, its person, its mail, or nothing. */
+function Target({ event }: { event: AuditEventEntry }) {
+  const { t } = useTranslation('admin');
+  if (event.target) return <Account account={event.target} />;
+  if (event.targetPerson) {
+    const name = personText(event.targetPerson);
+    return name === '' ? (
+      <>
+        <span className="block font-medium">{t('audit.unknownPerson')}</span>
+        <span className="block text-xs break-all text-muted-foreground">
+          {event.targetPerson.id}
+        </span>
+      </>
+    ) : (
+      <span className="block font-medium">{name}</span>
+    );
+  }
+  const details = event.details;
+  if (details?.mailId) {
+    return (
+      <>
+        <span className="block font-medium break-all">
+          {t('audit.mail', { to: details.recipient ?? '' })}
+        </span>
+        {details.template && (
+          <span className="block text-xs text-muted-foreground">{details.template}</span>
+        )}
+      </>
+    );
+  }
+  return <span aria-label={t('audit.nothing')}>—</span>;
+}
 
 function Account({ account }: { account: AuditAccount }) {
   const { t } = useTranslation('admin');

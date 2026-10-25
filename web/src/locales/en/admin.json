@@ -446,19 +446,23 @@
   },
   "audit": {
     "title": "Audit log",
-    "description": "The latest {{count}} recorded actions, newest first: when an administrator signed in as someone else and when that ended. Times are in the school’s time zone.",
+    "description": "The latest {{count}} recorded actions, newest first: when an administrator signed in as someone else and when that ended, and which failed mails were queued again. Times are in the school’s time zone.",
     "table": "Audit log",
     "search": "Search the audit log",
     "empty": "Nothing has been recorded yet.",
     "at": "Time",
     "action": "Action",
     "actor": "By",
-    "target": "Account",
+    "target": "Concerns",
     "actions": {
       "impersonation-started": "Sign-in as started",
-      "impersonation-ended": "Sign-in as ended"
+      "impersonation-ended": "Sign-in as ended",
+      "mail-requeued": "Mail queued again"
     },
     "unknownAccount": "Unknown account",
+    "unknownPerson": "Unknown person",
+    "mail": "Mail to {{to}}",
+    "nothing": "Nothing",
     "noAccess": "Only administrators can see this page."
   },
   "lessons": {

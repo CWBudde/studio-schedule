@@ -62,7 +62,7 @@ describe('AuditPage', () => {
       'Time',
       'Action',
       'By',
-      'Account',
+      'Concerns',
     ]);
     // Berlin time, though the tests run in New York; an unknown action shows as it is.
     expect(await rows()).toEqual([
@@ -128,6 +128,47 @@ describe('AuditPage', () => {
     renderWithQuery(<AuditPage />);
 
     expect((await rows()).map((cells) => cells[3])).toEqual(['nameless@example.org']);
+  });
+
+  it('shows a mail queued again, and a person, as what an event concerns', async () => {
+    const requeued: AuditEventEntry = {
+      ...lostEvent,
+      id: '0190a000-0000-7000-8000-000000000397',
+      action: 'mail-requeued',
+      target: undefined,
+      details: {
+        mailId: '0190a000-0000-7000-8000-000000000396',
+        recipient: 'nora.example@example.org',
+        template: 'receipt',
+      },
+    };
+    const aboutPerson: AuditEventEntry = {
+      ...lostEvent,
+      id: '0190a000-0000-7000-8000-000000000395',
+      at: '2026-10-19T08:00:00Z',
+      action: 'person-merged',
+      target: undefined,
+      targetPerson: {
+        id: '0190a000-0000-7000-8000-000000000394',
+        givenName: 'Mia',
+        familyName: 'Example',
+      },
+    };
+    mockApiGet({
+      ...asAdmin,
+      '/api/v1/admin/audit': { body: { items: [requeued, aboutPerson] } },
+    });
+    const user = userEvent.setup();
+
+    renderWithQuery(<AuditPage />);
+
+    expect((await rows()).map((cells) => [cells[1], cells[3]])).toEqual([
+      ['Mail queued again', 'Mail to nora.example@example.orgreceipt'],
+      ['person-merged', 'Mia Example'],
+    ]);
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search the audit log' }), 'receipt');
+    expect((await rows()).map((cells) => cells[1])).toEqual(['Mail queued again']);
   });
 
   it('says how many of the latest events it lists', async () => {
@@ -208,7 +249,7 @@ describe('AuditPage', () => {
       'Zeitpunkt',
       'Aktion',
       'Von',
-      'Konto',
+      'Betrifft',
     ]);
     expect(table.getByText('26. Okt. 2026, 00:30')).toBeInTheDocument();
     expect(table.getByText('Anmelden als begonnen')).toBeInTheDocument();

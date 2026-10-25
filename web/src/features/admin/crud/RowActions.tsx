@@ -2,7 +2,11 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 
-/** The edit and delete buttons of a table row; the labels name the record. */
+/**
+ * The edit and delete buttons of a table row; the labels name the record.
+ * Without `onEdit`, the record cannot be edited (any more): its edit button
+ * is disabled.
+ */
 export function RowActions({
   editLabel,
   deleteLabel,
@@ -11,13 +15,19 @@ export function RowActions({
 }: {
   editLabel: string;
   deleteLabel: string;
-  onEdit: () => void;
+  onEdit?: () => void;
   onDelete: () => void;
 }) {
   const { t } = useTranslation('admin');
   return (
     <>
-      <Button variant="outline" size="sm" aria-label={editLabel} onClick={onEdit}>
+      <Button
+        variant="outline"
+        size="sm"
+        aria-label={editLabel}
+        disabled={!onEdit}
+        onClick={onEdit}
+      >
         <Pencil aria-hidden="true" />
         <span className="hidden md:inline">{t('form.edit')}</span>
       </Button>

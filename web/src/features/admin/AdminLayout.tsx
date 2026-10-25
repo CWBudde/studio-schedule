@@ -23,6 +23,8 @@ export function AdminLayout() {
 
 function Administration({ role }: { role: Role }) {
   const { t } = useTranslation('admin');
+  const { t: tAnnouncements } = useTranslation('announcements');
+  const { t: tMailLog } = useTranslation('mailLog');
   return (
     <div className="space-y-6">
       <nav
@@ -53,6 +55,9 @@ function Administration({ role }: { role: Role }) {
         <Link to="/admin/statistics" className={sectionLink}>
           {t('nav.statistics')}
         </Link>
+        <Link to="/admin/announcements" className={sectionLink}>
+          {tAnnouncements('nav')}
+        </Link>
         {role === 'admin' && (
           <>
             <Link to="/admin/accounts" className={sectionLink}>
@@ -60,6 +65,9 @@ function Administration({ role }: { role: Role }) {
             </Link>
             <Link to="/admin/audit" className={sectionLink}>
               {t('nav.audit')}
+            </Link>
+            <Link to="/admin/mails" className={sectionLink}>
+              {tMailLog('nav')}
             </Link>
           </>
         )}

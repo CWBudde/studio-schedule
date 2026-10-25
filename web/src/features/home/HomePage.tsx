@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/card';
 import { Ornament } from '@/components/layout/Ornament';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AnnouncementList } from '@/features/announcements/AnnouncementList';
 import { NextLessons } from './NextLessons';
 
 export function HomePage() {
@@ -38,6 +39,8 @@ export function HomePage() {
           {t('home.intro')}
         </p>
       </section>
+
+      <AnnouncementList />
 
       <div className="grid items-start gap-6 md:grid-cols-5">
         <NextLessons className="md:col-span-3" />

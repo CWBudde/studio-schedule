@@ -24,9 +24,11 @@ import { Route as ScheduleRouteImport } from './routes/schedule'
 import { Route as TeachRouteImport } from './routes/teach'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
+import { Route as AdminAnnouncementsRouteImport } from './routes/admin.announcements'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
 import { Route as AdminCourseTypesRouteImport } from './routes/admin.course-types'
 import { Route as AdminLocationsRouteImport } from './routes/admin.locations'
+import { Route as AdminMailsRouteImport } from './routes/admin.mails'
 import { Route as AdminPassTypesRouteImport } from './routes/admin.pass-types'
 import { Route as AdminReceiptsRouteImport } from './routes/admin.receipts'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
@@ -113,6 +115,11 @@ const AdminAccountsRoute = AdminAccountsRouteImport.update({
   path: '/accounts',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminAnnouncementsRoute = AdminAnnouncementsRouteImport.update({
+  id: '/announcements',
+  path: '/announcements',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAuditRoute = AdminAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -126,6 +133,11 @@ const AdminCourseTypesRoute = AdminCourseTypesRouteImport.update({
 const AdminLocationsRoute = AdminLocationsRouteImport.update({
   id: '/locations',
   path: '/locations',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminMailsRoute = AdminMailsRouteImport.update({
+  id: '/mails',
+  path: '/mails',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminPassTypesRoute = AdminPassTypesRouteImport.update({
@@ -194,9 +206,11 @@ export interface FileRoutesByFullPath {
   '/schedule': typeof ScheduleRoute
   '/teach': typeof TeachRoute
   '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/locations': typeof AdminLocationsRoute
+  '/admin/mails': typeof AdminMailsRoute
   '/admin/pass-types': typeof AdminPassTypesRoute
   '/admin/receipts': typeof AdminReceiptsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -223,9 +237,11 @@ export interface FileRoutesByTo {
   '/schedule': typeof ScheduleRoute
   '/teach': typeof TeachRoute
   '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/locations': typeof AdminLocationsRoute
+  '/admin/mails': typeof AdminMailsRoute
   '/admin/pass-types': typeof AdminPassTypesRoute
   '/admin/receipts': typeof AdminReceiptsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -254,9 +270,11 @@ export interface FileRoutesById {
   '/schedule': typeof ScheduleRoute
   '/teach': typeof TeachRoute
   '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/locations': typeof AdminLocationsRoute
+  '/admin/mails': typeof AdminMailsRoute
   '/admin/pass-types': typeof AdminPassTypesRoute
   '/admin/receipts': typeof AdminReceiptsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -286,9 +304,11 @@ export interface FileRouteTypes {
     | '/schedule'
     | '/teach'
     | '/admin/accounts'
+    | '/admin/announcements'
     | '/admin/audit'
     | '/admin/course-types'
     | '/admin/locations'
+    | '/admin/mails'
     | '/admin/pass-types'
     | '/admin/receipts'
     | '/admin/settings'
@@ -315,9 +335,11 @@ export interface FileRouteTypes {
     | '/schedule'
     | '/teach'
     | '/admin/accounts'
+    | '/admin/announcements'
     | '/admin/audit'
     | '/admin/course-types'
     | '/admin/locations'
+    | '/admin/mails'
     | '/admin/pass-types'
     | '/admin/receipts'
     | '/admin/settings'
@@ -345,9 +367,11 @@ export interface FileRouteTypes {
     | '/schedule'
     | '/teach'
     | '/admin/accounts'
+    | '/admin/announcements'
     | '/admin/audit'
     | '/admin/course-types'
     | '/admin/locations'
+    | '/admin/mails'
     | '/admin/pass-types'
     | '/admin/receipts'
     | '/admin/settings'
@@ -485,6 +509,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAccountsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/announcements': {
+      id: '/admin/announcements'
+      path: '/announcements'
+      fullPath: '/admin/announcements'
+      preLoaderRoute: typeof AdminAnnouncementsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/audit': {
       id: '/admin/audit'
       path: '/audit'
@@ -504,6 +535,13 @@ declare module '@tanstack/react-router' {
       path: '/locations'
       fullPath: '/admin/locations'
       preLoaderRoute: typeof AdminLocationsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/mails': {
+      id: '/admin/mails'
+      path: '/mails'
+      fullPath: '/admin/mails'
+      preLoaderRoute: typeof AdminMailsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/pass-types': {
@@ -581,9 +619,11 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminAccountsRoute: typeof AdminAccountsRoute
+  AdminAnnouncementsRoute: typeof AdminAnnouncementsRoute
   AdminAuditRoute: typeof AdminAuditRoute
   AdminCourseTypesRoute: typeof AdminCourseTypesRoute
   AdminLocationsRoute: typeof AdminLocationsRoute
+  AdminMailsRoute: typeof AdminMailsRoute
   AdminPassTypesRoute: typeof AdminPassTypesRoute
   AdminReceiptsRoute: typeof AdminReceiptsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
@@ -598,9 +638,11 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAccountsRoute: AdminAccountsRoute,
+  AdminAnnouncementsRoute: AdminAnnouncementsRoute,
   AdminAuditRoute: AdminAuditRoute,
   AdminCourseTypesRoute: AdminCourseTypesRoute,
   AdminLocationsRoute: AdminLocationsRoute,
+  AdminMailsRoute: AdminMailsRoute,
   AdminPassTypesRoute: AdminPassTypesRoute,
   AdminReceiptsRoute: AdminReceiptsRoute,
   AdminSettingsRoute: AdminSettingsRoute,

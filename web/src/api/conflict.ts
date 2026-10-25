@@ -42,6 +42,10 @@ const conflictReasons: readonly ConflictReason[] = [
   'cancellation',
   'timezone-locked',
   'currency-locked',
+  'mail-limit',
+  'expired',
+  'not-failed',
+  'secret-link',
 ];
 
 /** The lesson that uses the room, named by a 409 `room-taken`. */

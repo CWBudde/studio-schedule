@@ -746,7 +746,7 @@ export const confirmationMail = (appUrl: string): MailboxMail => ({
   subject: 'Confirm your email address',
   text: `Hello Nina,\n\nplease confirm your email address: ${appUrl}confirm?token=tok-123.\n\nHelp: https://example.org/help\n`,
   html: '<p>Hello Nina</p>',
-  template: 'confirm_email',
+  template: 'confirm-email',
   createdAt: '2026-10-23T10:00:00Z',
   status: 'pending',
 });

@@ -60,8 +60,10 @@ function renderAdmin(at: string, { accounts }: { accounts?: () => ReactElement }
         section('/persons', 'Persons section'),
         section('/receipts', 'Receipts section'),
         section('/statistics', 'Statistics section'),
+        section('/announcements', 'Announcements section'),
         section('/accounts', 'Accounts section', accounts),
         section('/audit', 'Audit log section'),
+        section('/mails', 'Mail log section'),
         section('/settings', 'Settings section'),
       ]),
     ]),
@@ -122,6 +124,12 @@ describe('AdminLayout', () => {
     );
     expect(nav.queryByRole('link', { name: 'Accounts' })).not.toBeInTheDocument();
     expect(nav.queryByRole('link', { name: 'Audit log' })).not.toBeInTheDocument();
+    // The office writes announcements; only admins see the mail log.
+    expect(nav.getByRole('link', { name: 'Announcements' })).toHaveAttribute(
+      'href',
+      '/admin/announcements',
+    );
+    expect(nav.queryByRole('link', { name: 'Mail log' })).not.toBeInTheDocument();
     expect(screen.getByText('Locations section')).toBeInTheDocument();
   });
 
@@ -156,8 +164,10 @@ describe('AdminLayout', () => {
       'Persons',
       'Receipts',
       'Statistics',
+      'Announcements',
       'Accounts',
       'Audit log',
+      'Mail log',
       'Settings',
     ]);
     await user.click(nav.getByRole('link', { name: 'Accounts' }));

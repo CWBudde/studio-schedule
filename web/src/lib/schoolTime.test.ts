@@ -7,10 +7,12 @@ import {
   formatDayHeading,
   formatTime,
   formatTimeRange,
+  instantAt,
   minutesSinceMidnight,
   schoolDateOf,
   startOfWeek,
   todayIn,
+  wallClockOf,
   weekdayOf,
 } from './schoolTime';
 
@@ -98,5 +100,38 @@ describe('formatting', () => {
   it('formats a timestamp with the year in the school time zone', () => {
     expect(formatTimestamp('2026-10-25T23:30:00Z', berlin, 'en')).toBe('Oct 26, 2026, 00:30');
     expect(formatTimestamp('2026-10-23T14:30:00Z', berlin, 'de')).toBe('23. Okt. 2026, 16:30');
+  });
+});
+
+describe('instantAt', () => {
+  it('turns a school date and time into the instant, whatever the browser zone', () => {
+    expect(instantAt('2026-10-21', '18:00', berlin)).toBe('2026-10-21T16:00:00.000Z');
+    expect(instantAt('2026-12-01', '09:30', berlin)).toBe('2026-12-01T08:30:00.000Z');
+    expect(wallClockOf('2026-12-01T08:30:00Z', berlin)).toBe('09:30');
+  });
+
+  it('handles the days the clocks change', () => {
+    // Back on 2026-10-25 at 03:00 to 02:00; forward on 2027-03-28 at 02:00.
+    expect(instantAt('2026-10-25', '12:00', berlin)).toBe('2026-10-25T11:00:00.000Z');
+    expect(instantAt('2027-03-28', '12:00', berlin)).toBe('2027-03-28T10:00:00.000Z');
+    expect(instantAt('2027-03-28', '00:30', berlin)).toBe('2027-03-27T23:30:00.000Z');
+  });
+
+  it('takes the first of a time that occurs twice when the clocks go back', () => {
+    // 02:30 is 00:30Z in summer time (+2) and 01:30Z in winter time (+1).
+    expect(instantAt('2026-10-25', '02:30', berlin)).toBe('2026-10-25T00:30:00.000Z');
+    expect(instantAt('2026-10-25', '02:00', berlin)).toBe('2026-10-25T00:00:00.000Z');
+    // Around the repeated hour, the one time each.
+    expect(instantAt('2026-10-25', '01:59', berlin)).toBe('2026-10-24T23:59:00.000Z');
+    expect(instantAt('2026-10-25', '03:00', berlin)).toBe('2026-10-25T02:00:00.000Z');
+  });
+
+  it('moves a time the clocks skip past the change', () => {
+    // 02:00 to 03:00 does not exist on 2027-03-28: 02:30 counts as 03:30
+    // summer time, the instant 02:30 winter time would be.
+    expect(instantAt('2027-03-28', '02:30', berlin)).toBe('2027-03-28T01:30:00.000Z');
+    expect(wallClockOf('2027-03-28T01:30:00.000Z', berlin)).toBe('03:30');
+    expect(instantAt('2027-03-28', '03:00', berlin)).toBe('2027-03-28T01:00:00.000Z');
+    expect(instantAt('2027-03-28', '01:59', berlin)).toBe('2027-03-28T00:59:00.000Z');
   });
 });

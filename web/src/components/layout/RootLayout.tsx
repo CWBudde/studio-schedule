@@ -8,6 +8,7 @@ import { DemoNotices } from '@/components/layout/DemoNotices';
 import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
+import { AnnouncementBanner } from '@/features/announcements/AnnouncementBanner';
 
 export function RootLayout() {
   const { t } = useTranslation();
@@ -22,6 +23,7 @@ export function RootLayout() {
       <DemoBanner />
       <ImpersonationBanner />
       <AppHeader />
+      <AnnouncementBanner />
       <main
         id="main"
         tabIndex={-1}

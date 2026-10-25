@@ -152,3 +152,43 @@ export function formatTimestamp(instant: Instant, timeZone: string, locale: stri
     new Date(instant),
   );
 }
+
+/** The wall-clock time of the instant in the school time zone as 'HH:MM'. */
+export function wallClockOf(instant: Instant, timeZone: string): string {
+  const p = parts(instant, timeZone);
+  return `${p.hour}:${p.minute}`;
+}
+
+/**
+ * The instant (ISO, UTC) at which the school date and wall-clock time
+ * ('HH:MM') occur in the school time zone. A time that a change to summer
+ * time skips counts as after the change (02:30 is 03:30 summer time); one
+ * that occurs twice when the clocks go back, the first (summer time).
+ */
+export function instantAt(date: SchoolDate, time: string, timeZone: string): string {
+  const [y = 0, m = 1, d = 1] = date.split('-').map(Number);
+  const [h = 0, mi = 0] = time.split(':').map(Number);
+  const wanted = Date.UTC(y, m - 1, d, h, mi);
+  /** The wall-clock time at an instant, written as if it were UTC. */
+  const wallAt = (at: number) => {
+    const p = parts(at, timeZone);
+    return Date.UTC(
+      Number(p.year),
+      Number(p.month) - 1,
+      Number(p.day),
+      Number(p.hour),
+      Number(p.minute),
+    );
+  };
+  // The zone's offsets a day before and a day after: they differ around a
+  // change of the clocks. Each gives a candidate; the earliest that shows
+  // the wanted time wins.
+  const day = 24 * 60 * 60 * 1000;
+  const before = wallAt(wanted - day) - (wanted - day);
+  const after = wallAt(wanted + day) - (wanted + day);
+  const matches = [wanted - before, wanted - after].filter((at) => wallAt(at) === wanted);
+  // None in a skipped hour: the offset from before the change moves it
+  // past the change.
+  const at = matches.length > 0 ? Math.min(...matches) : wanted - before;
+  return new Date(at).toISOString();
+}

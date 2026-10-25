@@ -537,6 +537,172 @@ export const listAuditEventsQuery = queryOptions({
   queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/admin/audit', { signal }))).items,
 });
 
+// ------------------------------------------------- announcements (ADR 0014)
+
+/** An announcement shown to the signed-in account. */
+export type MyAnnouncement = components['schemas']['AnnouncementItem'];
+/** An announcement as the office lists it. */
+export type Announcement = components['schemas']['Announcement'];
+/** What the office writes: the audience, title, text, window and email. */
+export type AnnouncementData = PostBody<'/api/v1/admin/announcements'>;
+/** Whom an announcement is for. */
+export type AnnouncementAudience = PostBody<'/api/v1/admin/announcements/recipients'>;
+
+/** Prefix of the signed-in account's announcement queries. */
+export const myAnnouncementsQueryKey = ['announcements'] as const;
+
+/**
+ * The announcements shown now that reach the signed-in account, newest
+ * first, dismissed ones included. Asked again every few minutes, so that a
+ * new one shows without a reload.
+ */
+export const myAnnouncementsQuery = queryOptions({
+  queryKey: [...myAnnouncementsQueryKey, 'mine'],
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/announcements', { signal }))).items,
+  staleTime: 60_000,
+  refetchInterval: 5 * 60_000,
+});
+
+/**
+ * Hides an announcement from the signed-in account's banner (it stays in
+ * its list). While an admin is signed in as the account, the API stores
+ * nothing; the banner hides it for the session.
+ */
+export const dismissAnnouncementMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (announcementId: string) =>
+      expectOk(
+        api.POST('/api/v1/announcements/{announcementId}/dismiss', {
+          params: { path: { announcementId } },
+        }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: myAnnouncementsQueryKey }),
+  });
+
+/** Every announcement, newest publication first (office). */
+export const allAnnouncementsQuery = queryOptions({
+  queryKey: [...adminQueryKey, 'announcements'],
+  queryFn: async ({ signal }) =>
+    (await unwrap(api.GET('/api/v1/admin/announcements', { signal }))).items,
+});
+
+/**
+ * How many addresses an announcement for the audience would be mailed to
+ * now (office), for the confirmation before emailing. Always asked anew.
+ */
+export const announcementRecipientsQuery = (audience: AnnouncementAudience) =>
+  queryOptions({
+    queryKey: [...adminQueryKey, 'announcements', 'recipients', audience],
+    queryFn: async () =>
+      (await unwrap(api.POST('/api/v1/admin/announcements/recipients', { body: audience })))
+        .recipients,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+/** After a write: both lists, and the mails it may have queued. */
+function refreshAnnouncements(queryClient: QueryClient) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: allAnnouncementsQuery.queryKey }),
+    queryClient.invalidateQueries({ queryKey: myAnnouncementsQueryKey }),
+    queryClient.invalidateQueries({ queryKey: [...adminQueryKey, 'mails'] }),
+    queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey }),
+  ]);
+}
+
+/**
+ * Publishes an announcement; with `email`, it is mailed at once or at its
+ * publication. A school day full of emailed announcements is a 409
+ * `mail-limit`; an unknown class, course type or lesson a 422 on its field.
+ */
+export const createAnnouncementMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: AnnouncementData) =>
+      unwrap(api.POST('/api/v1/admin/announcements', { body })),
+    onSuccess: () => refreshAnnouncements(queryClient),
+  });
+
+/** Changes an announcement until it expires (409 `expired`); it is never mailed again. */
+export const updateAnnouncementMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ announcementId, body }: { announcementId: string; body: AnnouncementData }) =>
+      unwrap(
+        api.PUT('/api/v1/admin/announcements/{announcementId}', {
+          params: { path: { announcementId } },
+          body,
+        }),
+      ),
+    onSuccess: () => refreshAnnouncements(queryClient),
+  });
+
+/** Deletes an announcement with its dismissals. */
+export const deleteAnnouncementMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (announcementId: string) =>
+      expectOk(
+        api.DELETE('/api/v1/admin/announcements/{announcementId}', {
+          params: { path: { announcementId } },
+        }),
+      ),
+    onSuccess: () => refreshAnnouncements(queryClient),
+  });
+
+// ---------------------------------------------------- mail log (ADR 0014)
+
+/** A mail of the log, without its bodies. */
+export type MailLogItem = components['schemas']['MailLogItem'];
+/** A mail template, as the API names it (the enum of mail.TemplateNames). */
+export type MailTemplate = NonNullable<MailLogItem['template']>;
+/** A mail of the log with its bodies, where they are shown. */
+export type MailLogDetail = components['schemas']['MailLogDetail'];
+/** The filters of the mail log. */
+export type MailLogFilter = Omit<
+  NonNullable<paths['/api/v1/admin/mails']['get']['parameters']['query']>,
+  'cursor'
+>;
+
+/**
+ * The mail log, newest first, page by page (admins only). Always stale, so
+ * that it shows new mails whenever it is opened.
+ */
+export const mailLogQuery = (filter: MailLogFilter) =>
+  infiniteQueryOptions({
+    queryKey: [...adminQueryKey, 'mails', 'list', filter],
+    initialPageParam: '',
+    staleTime: 0,
+    queryFn: ({ pageParam, signal }) =>
+      unwrap(
+        api.GET('/api/v1/admin/mails', {
+          params: { query: { ...filter, ...(pageParam ? { cursor: pageParam } : {}) } },
+          signal,
+        }),
+      ),
+    getNextPageParam: (last) => last.nextCursor,
+  });
+
+/** One mail of the log, with its bodies unless withheld or purged (admins only). */
+export const mailQuery = (mailId: string) =>
+  queryOptions({
+    queryKey: [...adminQueryKey, 'mails', 'detail', mailId],
+    queryFn: ({ signal }) =>
+      unwrap(api.GET('/api/v1/admin/mails/{mailId}', { params: { path: { mailId } }, signal })),
+  });
+
+/**
+ * Queues a failed mail again (admins only): a pending or sent one is a 409
+ * `not-failed`, one with a secret link a 409 `secret-link`.
+ */
+export const requeueMailMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (mailId: string) =>
+      unwrap(api.POST('/api/v1/admin/mails/{mailId}/requeue', { params: { path: { mailId } } })),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: [...adminQueryKey, 'mails'] }),
+        queryClient.invalidateQueries({ queryKey: listAuditEventsQuery.queryKey }),
+      ]),
+  });
+
 /**
  * Signs the admin in as another account ("login as"); that account, with
  * the admin as its impersonator, becomes the `me` query's data.

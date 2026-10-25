@@ -84,6 +84,7 @@ export function SelectField({
 export function SwitchField({
   label,
   checked,
+  disabled,
   onChange,
   onBlur,
   error,
@@ -91,6 +92,7 @@ export function SwitchField({
 }: {
   label: string;
   checked: boolean;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
   onBlur?: () => void;
   error?: string;
@@ -103,6 +105,7 @@ export function SwitchField({
         <Switch
           id={id}
           checked={checked}
+          disabled={disabled}
           onCheckedChange={onChange}
           onBlur={onBlur}
           aria-invalid={error ? true : undefined}

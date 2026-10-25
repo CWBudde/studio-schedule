@@ -446,19 +446,23 @@
   },
   "audit": {
     "title": "Protokoll",
-    "description": "Die letzten {{count}} protokollierten Aktionen, die neuesten zuerst: wann sich jemand aus der Administration als eine andere Person angemeldet hat und wann das endete. Die Zeiten gelten in der Zeitzone der Schule.",
+    "description": "Die letzten {{count}} protokollierten Aktionen, die neuesten zuerst: wann sich jemand aus der Administration als eine andere Person angemeldet hat und wann das endete, und welche fehlgeschlagenen Mails erneut eingereiht wurden. Die Zeiten gelten in der Zeitzone der Schule.",
     "table": "Protokoll",
     "search": "Protokoll durchsuchen",
     "empty": "Bisher wurde nichts protokolliert.",
     "at": "Zeitpunkt",
     "action": "Aktion",
     "actor": "Von",
-    "target": "Konto",
+    "target": "Betrifft",
     "actions": {
       "impersonation-started": "Anmelden als begonnen",
-      "impersonation-ended": "Anmelden als beendet"
+      "impersonation-ended": "Anmelden als beendet",
+      "mail-requeued": "Mail erneut eingereiht"
     },
     "unknownAccount": "Unbekanntes Konto",
+    "unknownPerson": "Unbekannte Person",
+    "mail": "Mail an {{to}}",
+    "nothing": "Nichts",
     "noAccess": "Nur die Administration kann diese Seite sehen."
   },
   "lessons": {
