@@ -149,7 +149,12 @@ The demo is a _demo installation_ (`app.Deps.Demo`, also set for `serve` without
   account of each role (Alina Starling for instructors), so he signs in by email.
 - **Mailbox:** nothing is ever delivered. `GET /api/v1/demo/mailbox` lists the outbox, and the
   mailbox panel in the header shows it, so a visitor can register, open the confirmation link and
-  sign in.
+  sign in. The admin's mail log (`/admin/mails`, ADR 0014) lists the same outbox: every mail stays
+  pending there, which the page says.
+- **Announcements:** the seed has two, written by the office and not emailed: one for everyone, and
+  one for the members of the Creative Dance classes, which the demo member sees through her son.
+  An announcement the office emails in the demo lands in the mailbox: publishing it wakes the
+  `announcements` job, which runs in the Worker too (every minute for scheduled ones).
 - **What each role sees:** the demo data has one workshop for members only and one hidden workshop
   (staff only), a few days after the visit date. Signing in as the demo member, instructor or admin
   shows the difference. The admin can open Accounts and "sign in as" another account; a banner

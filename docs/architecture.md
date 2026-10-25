@@ -106,9 +106,16 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
 
 `internal/jobs` runs named jobs on a Go ticker each. `app.Jobs(deps)` registers them:
 `generate-lessons` (hourly, over a rolling horizon), `purge-sessions` (hourly, deletes expired
-sessions and email links) and, when a mailer is configured, `deliver-mail` (every minute). The server and the WASM build run every job
+sessions and email links), `waitlist-expiry` (every minute), `announcements` (every minute, mails the
+announcements whose publication has come, once, at most 100 mails a run;
+[ADR 0014](decisions/0014-announcements-and-mail-log.md)),
+`purge-mail` (daily, removes the bodies of mails sent 30 days ago and the mails of 180 days ago) and,
+when a mailer is configured, `deliver-mail` (every minute). The server and the WASM build run every job
 once at startup (the demo before it answers its first request), then on its interval; Go timers
-work in `js/wasm`, so both targets use the same code. Jobs must be idempotent: the generator reads
+work in `js/wasm`, so both targets use the same code. A request that leaves work for a job now
+wakes it through `Deps.Wake` (a `jobs.Waker` both binaries pass to `app.New` and `app.Jobs`): an
+announcement published with email goes out right after the response, not at the next tick. Jobs
+must be idempotent: the generator reads
 the existing lessons of each class and creates only the missing slots that have not started yet.
 Office edits of a class or a term run the same per-class fill inside their own transaction, under
 the class lock, after moving or deleting the future lessons the edit affects

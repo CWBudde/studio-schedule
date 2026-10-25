@@ -43,7 +43,8 @@ where it differs.
 | `Receipt`          | Receipt             | Quittung / Beleg      | Gapless numbering per year; corrections via cancellation receipt        |
 | Release window     | Release             | Freischaltung         | Next weeks become bookable at a configured weekday/time                 |
 | Visible days       | Visible days        | Sichtbare Tage        | Per-account override of how far ahead lessons are visible               |
-| `Message`          | Announcement        | Mitteilung            | In-app and/or email                                                     |
+| `Announcement`     | Announcement        | Mitteilung            | Banner and home list; dismissed per account; emailed once (ADR 0014)    |
+| Mail log           | Mail log            | Mail-Protokoll        | The outbox for admins; no bodies of secret-link mails (ADR 0014)        |
 | Calendar feed      | Calendar feed       | Kalender-Abo          | iCal URL with a secret token                                            |
 | In use             | In use              | In Verwendung         | Still referenced, so it cannot be deleted (409 `in-use`; ADR 0007)      |
 | Retire             | Retire / deactivate | Stilllegen            | Hide from future use instead of deleting what is referenced (ADR 0007)  |

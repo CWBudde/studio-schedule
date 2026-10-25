@@ -72,7 +72,7 @@ Phase 1 refines this outline. "Legacy" names are listed in [docs/glossary.md](do
 | Waitlist      | `waitlist_entries` (hashed random invite token, expiry)                                                               |
 | Passes        | `pass_types`, `passes` (`visits_remaining >= 0`), `pass_redemptions` (unique booking)                                 |
 | Receipts      | `receipt_counters` (gapless per year), `receipts`, `receipt_lines` (immutable; corrections are cancellation receipts) |
-| Communication | `messages`, `message_reads`, `outbox_emails`                                                                          |
+| Communication | `announcements`, `announcement_dismissals`, `announcement_mailings`, `outbox_mails`                                   |
 | Integration   | `calendar_feeds` (secret token), `import_runs`                                                                        |
 
 Roles: `guest` (anonymous) · `member` · `instructor` · `office` · `admin`. Roles are stored as enum
@@ -650,9 +650,13 @@ Goal: prepaid passes and legally sound receipts.
 
 ## Phase 7 — Communication & administration
 
-- [ ] Announcements: audience (all / role / course type / lesson), publish window, in-app display
-      (dismissible), optional email
-- [ ] Mail log (outbox history with status, resend)
+- [x] Announcements: audience (all / role / course type / lesson), publish window, in-app display
+      (dismissible), optional email (2026-10-25) — ADR 0014; audience also by class; banner and
+      home list, dismissed per account; email sent by the `announcements` job in batches, with a
+      school-wide daily limit; edits never re-send; e2e `announcements.spec.ts`
+- [x] Mail log (outbox history with status, resend) (2026-10-25) — admins only; filtered and
+      paged, no bodies of secret-link mails; a failed mail is queued again (audited); the daily
+      `purge-mail` job drops bodies after 30 days and rows after 180
 - [x] Statistics dashboard: bookings per week, utilisation per class/room, no-show rate,
       active members, pass sales (aggregated in Go; shadcn charts) (2026-10-25) —
       `service/statistics.go` from a constant number of store reads; plus late cancellations,

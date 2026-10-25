@@ -118,6 +118,20 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `Waitlist().CountByLessons`, `Receipts().TotalsByDay`); see architecture.md "Statistics". The page
   is `web/src/features/admin/StatisticsPage.tsx`; recharts and what only it uses stay in the lazily
   loaded `charts` chunk (`web/vite.chunks.ts`, a build guard fails if the entry loads them).
+- **Announcements:** `service.AnnouncementService` (`service/announcements.go`, ADR 0014): the
+  office writes them (`/api/v1/admin/announcements`), accounts read and dismiss theirs
+  (`/api/v1/announcements`, the banner in `web/src/features/announcements`). The audience
+  resolves at read time (`reachOf`) and at mail time (`announcementRecipients`, the mail chain of
+  `lesson_mail.go`). Writing one only saves it (and checks the daily limit under
+  `Announcements().LockMail`); only `SendDue`, the `announcements` job (`app/jobs_communication.go`,
+  woken through `Deps.Wake` when one is due now), mails it, in batches with a `MailCursor`. Lock
+  order: `LockMail` → the announcement (`Announcements().Lock`); `Update` never writes the mail
+  state (`SetMailState` does).
+- **Mail log:** `service.MailLogService` (`service/mail_log.go`, ADR 0014; `/api/v1/admin/mails`,
+  admins only): filtered, paged outbox, bodies never for `mail.SecretLink` templates, requeue of a
+  failed mail (audited as `mail-requeued`), and the daily `purge-mail` job. `audit_events` targets
+  an account, a person or nothing and has typed `domain.AuditDetails`; a new audit action is a row
+  in `audit_actions` (migration) plus the domain constant.
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),
