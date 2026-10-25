@@ -45,6 +45,9 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 	t.Run("Waitlist", func(t *testing.T) { testWaitlist(t, newStore) })
 	t.Run("Notices", func(t *testing.T) { testNotices(t, newStore) })
 	t.Run("CalendarFeeds", func(t *testing.T) { testCalendarFeeds(t, newStore) })
+	t.Run("PassTypes", func(t *testing.T) { testPassTypes(t, newStore) })
+	t.Run("Passes", func(t *testing.T) { testPasses(t, newStore) })
+	t.Run("Redemptions", func(t *testing.T) { testRedemptions(t, newStore) })
 	t.Run("Outbox", func(t *testing.T) { testOutbox(t, newStore) })
 	t.Run("Audit", func(t *testing.T) { testAudit(t, newStore) })
 }

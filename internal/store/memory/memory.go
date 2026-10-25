@@ -54,6 +54,9 @@ type state struct {
 	waitlist      table[domain.WaitlistEntryID, domain.WaitlistEntry]
 	notices       table[domain.LessonNoticeID, domain.LessonNotice]
 	calendarFeeds table[domain.CalendarFeedID, domain.CalendarFeed]
+	passTypes     table[domain.PassTypeID, domain.PassType]
+	passes        table[domain.PassID, domain.Pass]
+	redemptions   table[domain.BookingID, domain.PassRedemption]
 	outbox        table[domain.OutboxMailID, domain.OutboxMail]
 	audit         table[domain.AuditEventID, domain.AuditEvent]
 }
@@ -211,6 +214,11 @@ func (t *tx) Waitlist() store.WaitlistRepo      { return waitlistRepo{t} }
 func (t *tx) Notices() store.LessonNoticeRepo   { return noticeRepo{t} }
 func (t *tx) CalendarFeeds() store.CalendarFeedRepo {
 	return calendarFeedRepo{t}
+}
+func (t *tx) PassTypes() store.PassTypeRepo { return passTypeRepo{t} }
+func (t *tx) Passes() store.PassRepo        { return passRepo{t} }
+func (t *tx) Redemptions() store.PassRedemptionRepo {
+	return redemptionRepo{t}
 }
 func (t *tx) Outbox() store.OutboxRepo { return outboxRepo{t} }
 func (t *tx) Audit() store.AuditRepo   { return auditRepo{t} }

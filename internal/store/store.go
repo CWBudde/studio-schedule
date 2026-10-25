@@ -107,6 +107,9 @@ type Tx interface {
 	Waitlist() WaitlistRepo
 	Notices() LessonNoticeRepo
 	CalendarFeeds() CalendarFeedRepo
+	PassTypes() PassTypeRepo
+	Passes() PassRepo
+	Redemptions() PassRedemptionRepo
 	Outbox() OutboxRepo
 	Audit() AuditRepo
 }
@@ -125,8 +128,8 @@ type PersonRepo interface {
 	Create(ctx context.Context, p domain.Person) error
 	Update(ctx context.Context, p domain.Person) error
 	// Delete fails with domain.ErrConflict while the person is referenced
-	// (account, staff, guardian link, class member, booking). The person's
-	// waiting-list entries are deleted with it.
+	// (account, staff, guardian link, class member, booking, a pass they own
+	// or paid for). The person's waiting-list entries are deleted with it.
 	Delete(ctx context.Context, id domain.PersonID) error
 	// List returns all persons ordered by family name, given name and ID.
 	List(ctx context.Context) ([]domain.Person, error)
@@ -430,6 +433,9 @@ type BookingRepo interface {
 	ListByLessonsAndPersons(
 		ctx context.Context, lessons []domain.LessonID, persons []domain.PersonID,
 	) ([]domain.Booking, error)
+	// ListByIDs returns the bookings with the given IDs, each once and
+	// ordered by BookedAt and ID. IDs that do not exist are left out.
+	ListByIDs(ctx context.Context, ids []domain.BookingID) ([]domain.Booking, error)
 	// ListByPersons returns the bookings of q.Persons (only the active ones
 	// with q.Active) whose lessons lie within the bounds of q, ordered by
 	// the lesson's StartsAt and ID, so that the bookings of a lesson stay
@@ -440,7 +446,8 @@ type BookingRepo interface {
 	// about by source, canceled ones included, together with their events,
 	// and returns how many bookings it deleted. The office's timetable edits
 	// delete a lesson with its automatic class member bookings this way
-	// (ADR 0007, ADR 0009).
+	// (ADR 0007, ADR 0009). A booking a pass paid for is not deleted: the
+	// call fails with domain.ErrConflict.
 	DeleteByLessonAndSource(ctx context.Context, lesson domain.LessonID, source domain.BookingSource) (int, error)
 
 	// AddEvent appends to the history of a booking. It fails with
@@ -551,6 +558,72 @@ type CalendarFeedRepo interface {
 	// TouchLastUsed sets the LastUsedAt of feed id, revoked or not, to the
 	// instant; a feed that does not exist is domain.ErrNotFound.
 	TouchLastUsed(ctx context.Context, id domain.CalendarFeedID, at time.Time) error
+}
+
+// PassTypeRepo stores the pass catalog (ADR 0012). Names are unique
+// ignoring ASCII case.
+type PassTypeRepo interface {
+	Get(ctx context.Context, id domain.PassTypeID) (domain.PassType, error)
+	// Create and Update fail with domain.ErrDuplicate if another pass type
+	// has the name, ignoring ASCII case; Create with domain.ErrConflict (but
+	// not ErrDuplicate) if the ID is taken.
+	Create(ctx context.Context, t domain.PassType) error
+	Update(ctx context.Context, t domain.PassType) error
+	// Delete fails with domain.ErrConflict while passes are of the type.
+	Delete(ctx context.Context, id domain.PassTypeID) error
+	// List returns all pass types ordered by name and ID.
+	List(ctx context.Context) ([]domain.PassType, error)
+}
+
+// PassRepo stores the passes of persons (ADR 0012). Passes are never
+// deleted; the office voids them.
+type PassRepo interface {
+	Get(ctx context.Context, id domain.PassID) (domain.Pass, error)
+	// Create fails with domain.ErrConflict if the ID is taken or the pass
+	// type, the owner, the payer or the selling account does not exist.
+	Create(ctx context.Context, p domain.Pass) error
+	// Update fails under the same rules as Create.
+	Update(ctx context.Context, p domain.Pass) error
+	// ListByIDs returns the passes with the given IDs, each once and ordered
+	// by ID. IDs that do not exist are left out.
+	ListByIDs(ctx context.Context, ids []domain.PassID) ([]domain.Pass, error)
+	// ListByPersons returns the passes the given persons own, ordered by
+	// SoldAt and ID.
+	ListByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.Pass, error)
+	// LockByPersons returns the passes the given persons own, ordered by ID,
+	// and locks them until the transaction ends (in PostgreSQL: SELECT …
+	// FOR UPDATE, in ID order, so that transactions locking the passes of
+	// the same persons do not deadlock). Every redemption and refund, and
+	// voiding a pass, runs under this lock, after the lesson lock if it
+	// takes one (term → class → lesson → passes). A pass sold while the
+	// lock is held is not locked. It needs a ReadWrite transaction and fails
+	// with ErrReadOnly otherwise.
+	LockByPersons(ctx context.Context, persons ...domain.PersonID) ([]domain.Pass, error)
+}
+
+// PassRedemptionRepo stores which bookings passes paid for. A booking has at
+// most one redemption.
+type PassRedemptionRepo interface {
+	// Create fails with domain.ErrDuplicate if the booking has a
+	// redemption, and with domain.ErrConflict (but not ErrDuplicate) if the
+	// pass or the booking does not exist.
+	Create(ctx context.Context, r domain.PassRedemption) error
+	// GetByBooking returns the redemption of a booking, or
+	// domain.ErrNotFound if no pass paid for it.
+	GetByBooking(ctx context.Context, booking domain.BookingID) (domain.PassRedemption, error)
+	// Delete deletes the redemption of a booking; one that has none is
+	// domain.ErrNotFound.
+	Delete(ctx context.Context, booking domain.BookingID) error
+	// ListByPasses returns the redemptions of the given passes, ordered by
+	// pass ID, At and booking ID. A positive latest keeps only the latest
+	// that many of each pass (by At and booking ID).
+	ListByPasses(ctx context.Context, passes []domain.PassID, latest int) ([]domain.PassRedemption, error)
+	// CountByPasses returns, by pass, how many redemptions each of the
+	// given passes has; passes without one are left out.
+	CountByPasses(ctx context.Context, passes []domain.PassID) (map[domain.PassID]int, error)
+	// ListByBookings returns the redemptions of the given bookings, ordered
+	// by booking ID.
+	ListByBookings(ctx context.Context, bookings []domain.BookingID) ([]domain.PassRedemption, error)
 }
 
 // OutboxRepo stores outgoing mails.

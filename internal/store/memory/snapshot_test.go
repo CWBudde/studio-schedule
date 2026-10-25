@@ -128,6 +128,15 @@ func fullStore(t *testing.T) *Store {
 			ID: ids.New[domain.BookingID](src), LessonID: lesson, PersonID: person,
 			Status: domain.BookingBooked, Source: domain.BookingSourceSelf, BookedAt: at,
 		}
+		passType := domain.PassType{
+			ID: ids.New[domain.PassTypeID](src), Name: "Snapshot pass", Kind: domain.PassVisits, Visits: 5,
+			ValidityDays: 90, Price: 5000, VATRate: 700, Active: true, CreatedAt: at,
+		}
+		pass := domain.Pass{
+			ID: ids.New[domain.PassID](src), PassTypeID: passType.ID, PersonID: person, Kind: domain.PassVisits,
+			VisitsTotal: 5, VisitsRemaining: 4, ValidFrom: domain.DateOf(at, time.UTC), Status: domain.PassActive,
+			Origin: domain.PassSold, SoldAt: at, SoldBy: account, PricePaid: 5000, Note: "snapshot",
+		}
 
 		return errors.Join(
 			tx.Sessions().Create(ctx, domain.Session{
@@ -143,6 +152,9 @@ func fullStore(t *testing.T) *Store {
 				ID: ids.New[domain.BookingEventID](src), BookingID: booking.ID, At: at,
 				Status: domain.BookingBooked, ActorAccountID: account, Note: "booked",
 			}),
+			tx.PassTypes().Create(ctx, passType),
+			tx.Passes().Create(ctx, pass),
+			tx.Redemptions().Create(ctx, domain.PassRedemption{PassID: pass.ID, BookingID: booking.ID, At: at}),
 			tx.Notices().Create(ctx, domain.LessonNotice{
 				ID: ids.New[domain.LessonNoticeID](src), LessonID: lesson, SenderID: account, SentAt: at, Recipients: 1,
 			}),

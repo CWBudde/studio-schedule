@@ -326,7 +326,6 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 				full.Source = domain.BookingSourceMember
 				full.Trial = true
 				full.TrialNote = "First class after a knee injury"
-				full.Prepaid = true
 				full.CanceledAt = t0.Add(-30 * time.Minute)
 				full.Late = true
 				full.Released = true
@@ -404,6 +403,18 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			n := mustQuery(e, func(ctx context.Context, tx store.Tx) (int, error) { return tx.Bookings().CountActive(ctx, l.ID) })
 			wantEqual(e.t, n, 3)
+		},
+		"ListByIDs": func(e *env) {
+			s := e.setting()
+			l := e.lesson(s, t0, 5)
+			later := e.booking(l, e.person("Ada", "Booker"), t0.Add(-time.Hour))
+			earlier := e.booking(e.lesson(s, t0.Add(time.Hour), 5), e.person("Bob", "Booker"), t0.Add(-2*time.Hour))
+			e.booking(l, e.person("Cy", "Booker"), t0.Add(-3*time.Hour))
+
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Booking, error) {
+				return tx.Bookings().ListByIDs(ctx, []domain.BookingID{later.ID, earlier.ID, later.ID, newID[domain.BookingID](e)})
+			})
+			wantSlice(e.t, got, []domain.Booking{earlier, later})
 		},
 		"ListByLessonAndCount": func(e *env) {
 			s := e.setting()

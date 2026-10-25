@@ -44,6 +44,10 @@ type Settings struct {
 
 	// LegalNotice is the optional imprint shown in the footer.
 	LegalNotice string
+
+	// RedemptionMode is when bookings use a pass: when they are booked, or
+	// when attendance is taken (ADR 0012).
+	RedemptionMode RedemptionMode
 }
 
 // Validate checks the settings for consistency. All errors wrap
@@ -65,6 +69,7 @@ func (s Settings) Validate() error {
 			"waitlist invite expiry must be between 1 minute and 30 days",
 		},
 		rule{s.DefaultVisibleDays >= 1 && s.DefaultVisibleDays <= maxVisibleDays, "default visible days must be between 1 and 366"},
+		on("redemptionMode", s.RedemptionMode.Valid(), "invalid redemption mode"),
 	)
 	if err != nil {
 		return err

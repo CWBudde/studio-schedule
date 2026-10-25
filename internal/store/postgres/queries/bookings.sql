@@ -3,17 +3,20 @@ SELECT * FROM bookings WHERE id = $1;
 
 -- name: CreateBooking :exec
 INSERT INTO bookings (
-    id, lesson_id, person_id, guest_name, guest_email, status, source, trial, prepaid, booked_at, canceled_at,
+    id, lesson_id, person_id, guest_name, guest_email, status, source, trial, booked_at, canceled_at,
     late, released, trial_note
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 );
 
 -- name: UpdateBooking :execrows
 UPDATE bookings
 SET lesson_id = $2, person_id = $3, guest_name = $4, guest_email = $5, status = $6, source = $7, trial = $8,
-    prepaid = $9, booked_at = $10, canceled_at = $11, late = $12, released = $13, trial_note = $14
+    booked_at = $9, canceled_at = $10, late = $11, released = $12, trial_note = $13
 WHERE id = $1;
+
+-- name: ListBookingsByIDs :many
+SELECT * FROM bookings WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY booked_at, id;
 
 -- name: ListBookingsByLesson :many
 SELECT * FROM bookings WHERE lesson_id = $1 ORDER BY booked_at, id;

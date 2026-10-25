@@ -145,7 +145,8 @@ func (r personRepo) Delete(_ context.Context, id domain.PersonID) error {
 	referenced := s.accounts.exists(func(a domain.Account) bool { return a.PersonID == id }) ||
 		s.staff.exists(func(st domain.Staff) bool { return st.PersonID == id }) ||
 		s.classMembers.exists(func(m domain.ClassMember) bool { return m.PersonID == id }) ||
-		s.bookings.exists(func(b domain.Booking) bool { return b.PersonID == id })
+		s.bookings.exists(func(b domain.Booking) bool { return b.PersonID == id }) ||
+		s.passes.exists(func(p domain.Pass) bool { return p.PersonID == id || p.PayerID == id })
 	for g := range s.guardians.rows {
 		referenced = referenced || g.GuardianID == id || g.DependentID == id
 	}
@@ -1118,12 +1119,19 @@ func (r bookingRepo) put(b domain.Booking) error {
 	return nil
 }
 
+// compareBookings orders bookings by BookedAt and ID.
+func compareBookings(a, b domain.Booking) int {
+	return cmp.Or(a.BookedAt.Compare(b.BookedAt), compareID(a.ID, b.ID))
+}
+
+func (r bookingRepo) ListByIDs(_ context.Context, ids []domain.BookingID) ([]domain.Booking, error) {
+	return sorted(byIDs(r.tx.state.bookings.get, ids), compareBookings), nil
+}
+
 func (r bookingRepo) ListByLesson(_ context.Context, lesson domain.LessonID) ([]domain.Booking, error) {
 	bookings := r.tx.state.bookings.filter(func(b domain.Booking) bool { return b.LessonID == lesson })
 
-	return sorted(bookings, func(a, b domain.Booking) int {
-		return cmp.Or(a.BookedAt.Compare(b.BookedAt), compareID(a.ID, b.ID))
-	}), nil
+	return sorted(bookings, compareBookings), nil
 }
 
 func (r bookingRepo) CountActive(_ context.Context, lesson domain.LessonID) (int, error) {
@@ -1188,9 +1196,7 @@ func (r bookingRepo) ListActiveByLessonsAndPersons(
 		return lessonOK && personOK && active(b) && !b.PersonID.IsZero()
 	})
 
-	return sorted(bookings, func(a, b domain.Booking) int {
-		return cmp.Or(a.BookedAt.Compare(b.BookedAt), compareID(a.ID, b.ID))
-	}), nil
+	return sorted(bookings, compareBookings), nil
 }
 
 func (r bookingRepo) ListByLessonsAndPersons(
@@ -1204,9 +1210,7 @@ func (r bookingRepo) ListByLessonsAndPersons(
 		return lessonOK && personOK && !b.PersonID.IsZero()
 	})
 
-	return sorted(bookings, func(a, b domain.Booking) int {
-		return cmp.Or(a.BookedAt.Compare(b.BookedAt), compareID(a.ID, b.ID))
-	}), nil
+	return sorted(bookings, compareBookings), nil
 }
 
 func (r bookingRepo) ListByPersons(_ context.Context, q store.BookingQuery) ([]domain.Booking, error) {
@@ -1237,7 +1241,7 @@ func (r bookingRepo) ListByPersons(_ context.Context, q store.BookingQuery) ([]d
 	bookings = sorted(bookings, func(a, b domain.Booking) int {
 		c := cmp.Or(
 			lessons[a.LessonID].StartsAt.Compare(lessons[b.LessonID].StartsAt), compareID(a.LessonID, b.LessonID),
-			a.BookedAt.Compare(b.BookedAt), compareID(a.ID, b.ID),
+			compareBookings(a, b),
 		)
 		if q.Desc {
 			return -c
@@ -1266,6 +1270,10 @@ func (r bookingRepo) DeleteByLessonAndSource(
 
 	for _, b := range bookings {
 		gone[b.ID] = true
+	}
+
+	if s.redemptions.exists(func(r domain.PassRedemption) bool { return gone[r.BookingID] }) {
+		return 0, conflict("a pass paid for a booking of lesson %s", lesson)
 	}
 
 	for _, e := range s.bookingEvents.filter(func(e domain.BookingEvent) bool { return gone[e.BookingID] }) {

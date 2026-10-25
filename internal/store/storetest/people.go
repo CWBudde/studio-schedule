@@ -217,6 +217,10 @@ func testPersons(t *testing.T, newStore func(*testing.T) store.Store) {
 			booker := e.person("Bo", "Booker")
 			e.booking(e.lesson(s, t0, 5), booker, t0.Add(-time.Hour))
 			deleteFails(booker.ID)
+
+			owner := e.person("Ow", "Owner")
+			e.pass(e.passType("10-visit pass"), owner, 3, t0)
+			deleteFails(owner.ID)
 		},
 	})
 }

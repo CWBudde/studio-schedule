@@ -68,7 +68,6 @@ type Booking struct {
 	// TrialNote is an optional note about a trial booking for the
 	// instructor; only a trial booking has one.
 	TrialNote string
-	Prepaid   bool // paid in advance (pass or receipt)
 	BookedAt  time.Time
 	// CanceledAt is set exactly when Status is BookingCanceled.
 	CanceledAt time.Time

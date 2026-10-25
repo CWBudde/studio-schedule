@@ -19,6 +19,7 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 		BookingCutoff: 30 * time.Minute, CancellationCutoff: 12 * time.Hour, DefaultVisibleDays: 21,
 		LegalNotice:          "Contract School, Example Street 1, 00000 Example Town",
 		WaitlistInviteExpiry: 90 * time.Minute,
+		RedemptionMode:       domain.RedeemOnAttendance,
 	}
 	get := func(e *env) (domain.Settings, error) {
 		return query(e, func(ctx context.Context, tx store.Tx) (domain.Settings, error) { return tx.Settings().Get(ctx) })
@@ -52,6 +53,7 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 			updated.BookingCutoff = 0
 			updated.LegalNotice = ""
 			updated.WaitlistInviteExpiry = 30 * 24 * time.Hour
+			updated.RedemptionMode = domain.RedeemOnBooking
 			put(e, updated)
 
 			got, err := get(e)

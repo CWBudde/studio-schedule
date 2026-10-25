@@ -36,6 +36,7 @@ func (r settingsRepo) Get(ctx context.Context) (domain.Settings, error) {
 		LegalNotice:        row.LegalNotice.String,
 
 		WaitlistInviteExpiry: fromPgInterval(row.WaitlistInviteExpiry),
+		RedemptionMode:       domain.RedemptionMode(row.RedemptionMode),
 	}, nil
 }
 
@@ -70,6 +71,7 @@ func (r settingsRepo) Put(ctx context.Context, s domain.Settings) error {
 		LegalNotice:        pgText(s.LegalNotice),
 
 		WaitlistInviteExpiry: pgInterval(s.WaitlistInviteExpiry),
+		RedemptionMode:       string(s.RedemptionMode),
 	}))
 }
 

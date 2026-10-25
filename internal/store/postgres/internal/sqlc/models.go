@@ -50,7 +50,6 @@ type Booking struct {
 	GuestEmail pgtype.Text
 	Status     string
 	Trial      bool
-	Prepaid    bool
 	BookedAt   pgtype.Timestamptz
 	CanceledAt pgtype.Timestamptz
 	Source     string
@@ -158,6 +157,44 @@ type OutboxMail struct {
 	ReplyTo       pgtype.Text
 }
 
+type Pass struct {
+	ID              pgtype.UUID
+	PassTypeID      pgtype.UUID
+	PersonID        pgtype.UUID
+	Kind            string
+	VisitsTotal     pgtype.Int4
+	VisitsRemaining pgtype.Int4
+	ValidFrom       pgtype.Date
+	ValidUntil      pgtype.Date
+	Status          string
+	Origin          string
+	SoldAt          pgtype.Timestamptz
+	SoldBy          pgtype.UUID
+	PayerPersonID   pgtype.UUID
+	ReceiptID       pgtype.UUID
+	PricePaid       int64
+	Note            pgtype.Text
+	VoidedAt        pgtype.Timestamptz
+}
+
+type PassRedemption struct {
+	PassID    pgtype.UUID
+	BookingID pgtype.UUID
+	At        pgtype.Timestamptz
+}
+
+type PassType struct {
+	ID           pgtype.UUID
+	Name         string
+	Kind         string
+	Visits       pgtype.Int4
+	ValidityDays int32
+	Price        int64
+	VatRateBp    int32
+	Active       bool
+	CreatedAt    pgtype.Timestamptz
+}
+
 type Person struct {
 	ID         pgtype.UUID
 	GivenName  string
@@ -205,6 +242,7 @@ type Setting struct {
 	DefaultVisibleDays   int32
 	LegalNotice          pgtype.Text
 	WaitlistInviteExpiry pgtype.Interval
+	RedemptionMode       string
 }
 
 type Staff struct {

@@ -207,5 +207,10 @@ func (t *tx) Notices() store.LessonNoticeRepo   { return noticeRepo{t.q} }
 func (t *tx) CalendarFeeds() store.CalendarFeedRepo {
 	return calendarFeedRepo{t.q}
 }
+func (t *tx) PassTypes() store.PassTypeRepo { return passTypeRepo{t.q} }
+func (t *tx) Passes() store.PassRepo        { return passRepo{t.q} }
+func (t *tx) Redemptions() store.PassRedemptionRepo {
+	return redemptionRepo{t.q}
+}
 func (t *tx) Outbox() store.OutboxRepo { return outboxRepo{t.q} }
 func (t *tx) Audit() store.AuditRepo   { return auditRepo{t.q} }

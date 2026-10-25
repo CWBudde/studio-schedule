@@ -21,6 +21,10 @@ func TestEnums(t *testing.T) {
 	t.Run("BookingSource", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.BookingSources()) })
 	t.Run("WaitlistStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.WaitlistStatuses()) })
 	t.Run("ReceiptKind", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.ReceiptKinds()) })
+	t.Run("PassKind", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.PassKinds()) })
+	t.Run("PassStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.PassStatuses()) })
+	t.Run("PassOrigin", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.PassOrigins()) })
+	t.Run("RedemptionMode", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.RedemptionModes()) })
 	t.Run("Audience", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.Audiences()) })
 	t.Run("FeedScope", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.FeedScopes()) })
 	t.Run("ImportStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.ImportStatuses()) })
@@ -461,17 +465,47 @@ func TestWaitlistEntryValidate(t *testing.T) {
 func TestPassValidate(t *testing.T) {
 	t.Parallel()
 
+	oct1 := domain.Date{Year: 2026, Month: time.October, Day: 1}
+
 	t.Run("PassType", func(t *testing.T) {
 		t.Parallel()
 		checkValidate(t, func() domain.PassType {
-			return domain.PassType{ID: newID[domain.PassTypeID](), Name: "10-visit pass", Visits: 10, Price: 12000, ValidityDays: 180}
+			return domain.PassType{
+				ID: newID[domain.PassTypeID](), Name: "10-visit pass", Kind: domain.PassVisits, Visits: 10,
+				Price: 12000, ValidityDays: 180, VATRate: 1900, Active: true, CreatedAt: t0,
+			}
 		}, map[string]func(*domain.PassType){
 			"zero id":           func(p *domain.PassType) { p.ID = domain.PassTypeID{} },
-			"no name":           func(p *domain.PassType) { p.Name = "" },
+			"no name":           func(p *domain.PassType) { p.Name = " " },
+			"padded name":       func(p *domain.PassType) { p.Name = " 10-visit pass" },
+			"no kind":           func(p *domain.PassType) { p.Kind = "" },
 			"zero visits":       func(p *domain.PassType) { p.Visits = 0 },
+			"too many visits":   func(p *domain.PassType) { p.Visits = domain.MaxPassVisits + 1 },
+			"time with visits":  func(p *domain.PassType) { p.Kind = domain.PassTime },
+			"time without days": func(p *domain.PassType) { p.Kind, p.Visits, p.ValidityDays = domain.PassTime, 0, 0 },
 			"negative price":    func(p *domain.PassType) { p.Price = -1 },
+			"huge price":        func(p *domain.PassType) { p.Price = domain.MaxPassPrice + 1 },
 			"negative validity": func(p *domain.PassType) { p.ValidityDays = -1 },
+			"huge validity":     func(p *domain.PassType) { p.ValidityDays = domain.MaxPassValidityDays + 1 },
+			"negative VAT":      func(p *domain.PassType) { p.VATRate = -1 },
+			"VAT above 100%":    func(p *domain.PassType) { p.VATRate = domain.MaxVATRate + 1 },
+			"no creation time":  func(p *domain.PassType) { p.CreatedAt = time.Time{} },
 		})
+
+		timePass := domain.PassType{
+			ID: newID[domain.PassTypeID](), Name: "30-day pass", Kind: domain.PassTime, ValidityDays: 30, CreatedAt: t0,
+		}
+		if err := timePass.Validate(); err != nil {
+			t.Errorf("a free time pass without VAT: %v", err)
+		}
+
+		if got, want := timePass.ValidUntil(oct1), (domain.Date{Year: 2026, Month: time.October, Day: 30}); got != want {
+			t.Errorf("ValidUntil = %v, want %v", got, want)
+		}
+
+		if got := (domain.PassType{Kind: domain.PassVisits, Visits: 1}).ValidUntil(oct1); !got.IsZero() {
+			t.Errorf("ValidUntil without validity = %v, want none", got)
+		}
 	})
 
 	t.Run("Pass", func(t *testing.T) {
@@ -479,20 +513,86 @@ func TestPassValidate(t *testing.T) {
 		checkValidate(t, func() domain.Pass {
 			return domain.Pass{
 				ID: newID[domain.PassID](), PassTypeID: newID[domain.PassTypeID](), PersonID: newID[domain.PersonID](),
-				VisitsTotal: 10, VisitsRemaining: 0,
-				PurchasedOn: domain.Date{Year: 2026, Month: time.October, Day: 1},
-				ExpiresOn:   domain.Date{Year: 2026, Month: time.October, Day: 1},
+				Kind: domain.PassVisits, VisitsTotal: 10, VisitsRemaining: 0, ValidFrom: oct1, ValidUntil: oct1,
+				Status: domain.PassVoided, Origin: domain.PassSold, SoldAt: t0, SoldBy: newID[domain.AccountID](),
+				PayerID: newID[domain.PersonID](), ReceiptID: newID[domain.ReceiptID](), PricePaid: 12000,
+				Note: "Paid in cash", VoidedAt: t0,
 			}
 		}, map[string]func(*domain.Pass){
 			"zero id":            func(p *domain.Pass) { p.ID = domain.PassID{} },
 			"zero type":          func(p *domain.Pass) { p.PassTypeID = domain.PassTypeID{} },
 			"zero person":        func(p *domain.Pass) { p.PersonID = domain.PersonID{} },
+			"no kind":            func(p *domain.Pass) { p.Kind = "" },
 			"zero total":         func(p *domain.Pass) { p.VisitsTotal = 0 },
 			"negative remaining": func(p *domain.Pass) { p.VisitsRemaining = -1 },
 			"remaining > total":  func(p *domain.Pass) { p.VisitsRemaining = 11 },
-			"no purchase date":   func(p *domain.Pass) { p.PurchasedOn = domain.Date{} },
-			"expires early":      func(p *domain.Pass) { p.ExpiresOn = domain.Date{Year: 2026, Month: time.September, Day: 30} },
+			"time with visits":   func(p *domain.Pass) { p.Kind = domain.PassTime },
+			"time without end": func(p *domain.Pass) {
+				p.Kind, p.VisitsTotal, p.ValidUntil = domain.PassTime, 0, domain.Date{}
+			},
+			"no first day":        func(p *domain.Pass) { p.ValidFrom = domain.Date{} },
+			"ends early":          func(p *domain.Pass) { p.ValidUntil = domain.Date{Year: 2026, Month: time.September, Day: 30} },
+			"no status":           func(p *domain.Pass) { p.Status = "" },
+			"no origin":           func(p *domain.Pass) { p.Origin = "" },
+			"no sale time":        func(p *domain.Pass) { p.SoldAt = time.Time{} },
+			"assigned with payer": func(p *domain.Pass) { p.Origin, p.ReceiptID, p.PricePaid = domain.PassAssigned, domain.ReceiptID{}, 0 },
+			"assigned with receipt": func(p *domain.Pass) {
+				p.Origin, p.PayerID, p.PricePaid = domain.PassAssigned, domain.PersonID{}, 0
+			},
+			"assigned with price": func(p *domain.Pass) {
+				p.Origin, p.PayerID, p.ReceiptID = domain.PassAssigned, domain.PersonID{}, domain.ReceiptID{}
+			},
+			"negative price":  func(p *domain.Pass) { p.PricePaid = -1 },
+			"padded note":     func(p *domain.Pass) { p.Note = "Paid in cash " },
+			"long note":       func(p *domain.Pass) { p.Note = strings.Repeat("x", domain.MaxPassNoteLength+1) },
+			"voided, no time": func(p *domain.Pass) { p.VoidedAt = time.Time{} },
+			"active, voided":  func(p *domain.Pass) { p.Status = domain.PassActive },
+			"voided early":    func(p *domain.Pass) { p.VoidedAt = t0.Add(-time.Second) },
 		})
+	})
+
+	t.Run("Covers", func(t *testing.T) {
+		t.Parallel()
+
+		oct31 := domain.Date{Year: 2026, Month: time.October, Day: 31}
+		visits := domain.Pass{
+			Kind: domain.PassVisits, VisitsTotal: 10, VisitsRemaining: 1, ValidFrom: oct1, ValidUntil: oct31,
+			Status: domain.PassActive,
+		}
+		timePass := visits
+		timePass.Kind, timePass.VisitsTotal, timePass.VisitsRemaining = domain.PassTime, 0, 0
+		forever := visits
+		forever.ValidUntil = domain.Date{}
+		used := visits
+		used.VisitsRemaining = 0
+		voided := visits
+		voided.Status = domain.PassVoided
+
+		for _, tc := range []struct {
+			name string
+			pass domain.Pass
+			day  domain.Date
+			want bool
+		}{
+			{"first day", visits, oct1, true},
+			{"last day", visits, oct31, true},
+			{"before", visits, oct1.AddDays(-1), false},
+			{"after", visits, oct31.AddDays(1), false},
+			{"time pass", timePass, oct31, true},
+			{"time pass after", timePass, oct31.AddDays(1), false},
+			{"no expiry", forever, oct31.AddDays(1000), true},
+			{"used up", used, oct1, false},
+			{"voided", voided, oct1, false},
+		} {
+			if got := tc.pass.Covers(tc.day); got != tc.want {
+				t.Errorf("%s: Covers(%v) = %v, want %v", tc.name, tc.day, got, tc.want)
+			}
+
+			// A used-up pass stays valid for the visits it paid.
+			if got, want := tc.pass.ValidOn(tc.day), tc.want || tc.name == "used up"; got != want {
+				t.Errorf("%s: ValidOn(%v) = %v, want %v", tc.name, tc.day, got, want)
+			}
+		}
 	})
 
 	t.Run("Redemption", func(t *testing.T) {

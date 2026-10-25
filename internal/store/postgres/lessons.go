@@ -181,7 +181,6 @@ func toBooking(row sqlc.Booking) domain.Booking {
 		Status:     domain.BookingStatus(row.Status),
 		Source:     domain.BookingSource(row.Source),
 		Trial:      row.Trial,
-		Prepaid:    row.Prepaid,
 		BookedAt:   fromPgInstant(row.BookedAt),
 		CanceledAt: fromPgInstant(row.CanceledAt),
 		Late:       row.Late,
@@ -200,7 +199,6 @@ func bookingParams(b domain.Booking) sqlc.CreateBookingParams {
 		Status:     string(b.Status),
 		Source:     string(b.Source),
 		Trial:      b.Trial,
-		Prepaid:    b.Prepaid,
 		BookedAt:   pgInstant(b.BookedAt),
 		CanceledAt: pgInstant(b.CanceledAt),
 		Late:       b.Late,
@@ -216,6 +214,12 @@ func (r bookingRepo) Get(ctx context.Context, id domain.BookingID) (domain.Booki
 	}
 
 	return toBooking(row), nil
+}
+
+func (r bookingRepo) ListByIDs(ctx context.Context, ids []domain.BookingID) ([]domain.Booking, error) {
+	rows, err := r.q.ListBookingsByIDs(ctx, pgIDs(ids))
+
+	return convertRows(rows, err, toBooking)
 }
 
 func (r bookingRepo) Create(ctx context.Context, b domain.Booking) error {

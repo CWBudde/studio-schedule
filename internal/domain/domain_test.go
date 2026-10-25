@@ -53,9 +53,11 @@ func TestSettingsValidate(t *testing.T) {
 			Currency: "EUR", ReceiptPrefix: "TS",
 			ReleaseWeekday: time.Sunday, ReleaseTime: domain.TimeOfDay{Hour: 18}, ReleaseWeeksAhead: 1,
 			BookingCutoff: 0, CancellationCutoff: 2 * time.Hour, DefaultVisibleDays: 14,
-			WaitlistInviteExpiry: 12 * time.Hour,
+			WaitlistInviteExpiry: 12 * time.Hour, RedemptionMode: domain.RedeemOnAttendance,
 		}
 	}, map[string]func(*domain.Settings){
+		"no redemption mode":    func(s *domain.Settings) { s.RedemptionMode = "" },
+		"bad redemption mode":   func(s *domain.Settings) { s.RedemptionMode = "never" },
 		"zero invite expiry":    func(s *domain.Settings) { s.WaitlistInviteExpiry = 0 },
 		"short invite expiry":   func(s *domain.Settings) { s.WaitlistInviteExpiry = 59 * time.Second },
 		"huge invite expiry":    func(s *domain.Settings) { s.WaitlistInviteExpiry = 31 * 24 * time.Hour },
