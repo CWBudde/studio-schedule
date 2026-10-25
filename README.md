@@ -53,7 +53,7 @@ With PostgreSQL (18+), copy `.env.example` to `.env` and set `DATABASE_URL`, the
 
 ```sh
 just migrate up      # apply the embedded migrations (also: down, status)
-just seed            # load the fictional demo data into the empty database
+just seed            # load the fictional demo data into the empty database (--anchor today: around today)
 just serve           # refuses to start unless the schema matches the binary
 ```
 

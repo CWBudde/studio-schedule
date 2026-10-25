@@ -7,8 +7,11 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/config"
+	"github.com/cwbudde/studio-schedule/internal/seed"
 )
 
 func run(t *testing.T, args ...string) string {
@@ -186,6 +189,38 @@ func TestSeedNeedsDatabaseURL(t *testing.T) {
 	out, err := execute(nil, "seed")
 	if !errors.Is(err, errNoDatabaseURL) {
 		t.Fatalf("seed error = %v, want errNoDatabaseURL\n%s", err, out)
+	}
+}
+
+// TestSeedAnchor: --anchor takes a date or "today" in the demo school's
+// time zone; anything else fails before the database is needed.
+func TestSeedAnchor(t *testing.T) {
+	t.Parallel()
+
+	// 23:30 UTC on 2026-10-25 is already the 26th in Europe/Berlin (UTC+1).
+	clk := clock.NewFixed(time.Date(2026, time.October, 25, 23, 30, 0, 0, time.UTC))
+
+	for value, want := range map[string]string{
+		"today":                       "2026-10-26",
+		"2027-09-14":                  "2027-09-14",
+		seed.FixedDemoAnchor.String(): seed.FixedDemoAnchor.String(),
+	} {
+		got, err := demoAnchor(value, clk)
+		if err != nil || got.String() != want {
+			t.Errorf("demoAnchor(%q) = %v, %v; want %s", value, got, err, want)
+		}
+	}
+
+	for _, value := range []string{"", "Today", "tomorrow", "2026-13-01", "2026-9-22", "22.09.2026"} {
+		if got, err := demoAnchor(value, clk); err == nil {
+			t.Errorf("demoAnchor(%q) = %v, want an error", value, got)
+		}
+
+		// Without a database URL: the anchor is checked first.
+		out, err := execute(nil, "seed", "--anchor", value)
+		if err == nil || errors.Is(err, errNoDatabaseURL) || !strings.Contains(err.Error(), "--anchor") {
+			t.Errorf("seed --anchor %q: error = %v, want one naming --anchor\n%s", value, err, out)
+		}
 	}
 }
 
