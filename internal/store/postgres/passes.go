@@ -176,6 +176,21 @@ func (r passRepo) Get(ctx context.Context, id domain.PassID) (domain.Pass, error
 	return toPass(row), nil
 }
 
+func (r passRepo) GetByReceipt(ctx context.Context, receipt domain.ReceiptID) (domain.Pass, error) {
+	row, err := r.q.GetPassByReceipt(ctx, pgID(receipt))
+	if err != nil {
+		return domain.Pass{}, notFound("pass", err)
+	}
+
+	return toPass(row), nil
+}
+
+func (r passRepo) ListByReceipts(ctx context.Context, receipts []domain.ReceiptID) ([]domain.Pass, error) {
+	rows, err := r.q.ListPassesByReceipts(ctx, pgIDs(receipts))
+
+	return convertRows(rows, err, toPass)
+}
+
 func (r passRepo) Create(ctx context.Context, p domain.Pass) error {
 	params, err := passParams(p)
 	if err != nil {

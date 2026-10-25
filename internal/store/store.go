@@ -110,6 +110,8 @@ type Tx interface {
 	PassTypes() PassTypeRepo
 	Passes() PassRepo
 	Redemptions() PassRedemptionRepo
+	Receipts() ReceiptRepo
+	ReceiptCounters() ReceiptCounterRepo
 	Outbox() OutboxRepo
 	Audit() AuditRepo
 }
@@ -120,6 +122,13 @@ type SettingsRepo interface {
 	Get(ctx context.Context) (domain.Settings, error)
 	// Put creates or replaces the settings.
 	Put(ctx context.Context, s domain.Settings) error
+	// Logo returns the school's logo, the zero Logo if it has none, or
+	// domain.ErrNotFound if no settings were stored. It is apart from Get,
+	// which every request reads, because only receipts need it.
+	Logo(ctx context.Context) (domain.Logo, error)
+	// PutLogo replaces the logo; the zero Logo removes it. It fails with
+	// domain.ErrNotFound if no settings were stored.
+	PutLogo(ctx context.Context, l domain.Logo) error
 }
 
 // PersonRepo stores persons and the guardian links between them.
@@ -129,7 +138,7 @@ type PersonRepo interface {
 	Update(ctx context.Context, p domain.Person) error
 	// Delete fails with domain.ErrConflict while the person is referenced
 	// (account, staff, guardian link, class member, booking, a pass they own
-	// or paid for). The person's waiting-list entries are deleted with it.
+	// or paid for, a receipt they paid). The person's waiting-list entries are deleted with it.
 	Delete(ctx context.Context, id domain.PersonID) error
 	// List returns all persons ordered by family name, given name and ID.
 	List(ctx context.Context) ([]domain.Person, error)
@@ -599,6 +608,14 @@ type PassRepo interface {
 	// lock is held is not locked. It needs a ReadWrite transaction and fails
 	// with ErrReadOnly otherwise.
 	LockByPersons(ctx context.Context, persons ...domain.PersonID) ([]domain.Pass, error)
+	// GetByReceipt returns the pass whose sale the receipt confirms, or
+	// domain.ErrNotFound. A receipt belongs to one pass at most; Create and
+	// Update fail with domain.ErrConflict for a receipt another pass has,
+	// or one that does not exist.
+	GetByReceipt(ctx context.Context, receipt domain.ReceiptID) (domain.Pass, error)
+	// ListByReceipts returns the passes the given receipts confirm, ordered
+	// by ID. Receipts without a pass are left out.
+	ListByReceipts(ctx context.Context, receipts []domain.ReceiptID) ([]domain.Pass, error)
 }
 
 // PassRedemptionRepo stores which bookings passes paid for. A booking has at
@@ -626,10 +643,71 @@ type PassRedemptionRepo interface {
 	ListByBookings(ctx context.Context, bookings []domain.BookingID) ([]domain.PassRedemption, error)
 }
 
+// ReceiptFilter selects receipts for ReceiptRepo.List.
+type ReceiptFilter struct {
+	// Year selects the receipts of one year; zero selects all.
+	Year int
+	// Query matches receipts whose number or recipient name contains it,
+	// ignoring ASCII case; empty matches all.
+	Query string
+	// Offset skips that many receipts; Limit returns at most that many
+	// (zero or less: none).
+	Offset, Limit int
+}
+
+// ReceiptRepo stores receipts (ADR 0012). Receipts are immutable: there is
+// no Update or Delete, and the PostgreSQL store rejects both with a
+// trigger. Receipts come with their lines, ordered by position.
+type ReceiptRepo interface {
+	// Create stores a receipt with its lines. It fails with
+	// domain.ErrDuplicate if the number, or the year and sequence, are
+	// taken or the receipt it cancels has a cancellation already, and with
+	// domain.ErrConflict if the ID is taken or the receipt it cancels, the
+	// payer or the creating account does not exist.
+	Create(ctx context.Context, r domain.Receipt) error
+	Get(ctx context.Context, id domain.ReceiptID) (domain.Receipt, error)
+	GetByNumber(ctx context.Context, number string) (domain.Receipt, error)
+	// ListByIDs returns the receipts with the given IDs, each once and
+	// ordered by ID. IDs that do not exist are left out.
+	ListByIDs(ctx context.Context, ids []domain.ReceiptID) ([]domain.Receipt, error)
+	// GetCancellation returns the cancellation of the receipt, or
+	// domain.ErrNotFound if it has none.
+	GetCancellation(ctx context.Context, id domain.ReceiptID) (domain.Receipt, error)
+	// List returns the receipts that match f, newest first (year and
+	// sequence descending, then ID), and how many match in all.
+	List(ctx context.Context, f ReceiptFilter) ([]domain.Receipt, int, error)
+	// ListByPayers returns the receipts the given persons paid, ordered
+	// like List.
+	ListByPayers(ctx context.Context, persons []domain.PersonID) ([]domain.Receipt, error)
+	// ListCancellations returns the cancellations of the given receipts,
+	// ordered by the ID of the receipt they cancel.
+	ListCancellations(ctx context.Context, ids []domain.ReceiptID) ([]domain.Receipt, error)
+	// PutPDF stores the rendered PDF of a receipt, once: it fails with
+	// domain.ErrDuplicate if the receipt has one, and with
+	// domain.ErrConflict if the receipt does not exist.
+	PutPDF(ctx context.Context, id domain.ReceiptID, pdf []byte) error
+	// PDF returns the stored PDF of a receipt, or domain.ErrNotFound if it
+	// has none (yet).
+	PDF(ctx context.Context, id domain.ReceiptID) ([]byte, error)
+}
+
+// ReceiptCounterRepo hands out the gapless sequence numbers of receipts.
+type ReceiptCounterRepo interface {
+	// Next returns the next sequence number of the year, starting at 1. The
+	// number belongs to the transaction: PostgreSQL locks the year's
+	// counter until it ends, so concurrent issuers wait, and a rollback
+	// gives the number back. It needs a ReadWrite transaction and fails
+	// with ErrReadOnly otherwise.
+	Next(ctx context.Context, year int) (int, error)
+	// Years returns the years with numbers issued, the latest first.
+	Years(ctx context.Context) ([]int, error)
+}
+
 // OutboxRepo stores outgoing mails.
 type OutboxRepo interface {
 	Get(ctx context.Context, id domain.OutboxMailID) (domain.OutboxMail, error)
-	// Create fails with domain.ErrConflict if the ID is taken.
+	// Create fails with domain.ErrConflict if the ID is taken or the
+	// attached receipt does not exist.
 	Create(ctx context.Context, m domain.OutboxMail) error
 	Update(ctx context.Context, m domain.OutboxMail) error
 	// ListDue returns at most limit pending mails whose next attempt is due

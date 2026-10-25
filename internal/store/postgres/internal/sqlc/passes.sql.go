@@ -195,6 +195,35 @@ func (q *Queries) GetPass(ctx context.Context, id pgtype.UUID) (Pass, error) {
 	return i, err
 }
 
+const getPassByReceipt = `-- name: GetPassByReceipt :one
+SELECT id, pass_type_id, person_id, kind, visits_total, visits_remaining, valid_from, valid_until, status, origin, sold_at, sold_by, payer_person_id, receipt_id, price_paid, note, voided_at FROM passes WHERE receipt_id = $1
+`
+
+func (q *Queries) GetPassByReceipt(ctx context.Context, receiptID pgtype.UUID) (Pass, error) {
+	row := q.db.QueryRow(ctx, getPassByReceipt, receiptID)
+	var i Pass
+	err := row.Scan(
+		&i.ID,
+		&i.PassTypeID,
+		&i.PersonID,
+		&i.Kind,
+		&i.VisitsTotal,
+		&i.VisitsRemaining,
+		&i.ValidFrom,
+		&i.ValidUntil,
+		&i.Status,
+		&i.Origin,
+		&i.SoldAt,
+		&i.SoldBy,
+		&i.PayerPersonID,
+		&i.ReceiptID,
+		&i.PricePaid,
+		&i.Note,
+		&i.VoidedAt,
+	)
+	return i, err
+}
+
 const getPassRedemptionByBooking = `-- name: GetPassRedemptionByBooking :one
 SELECT pass_id, booking_id, at FROM pass_redemptions WHERE booking_id = $1
 `
@@ -393,6 +422,48 @@ SELECT id, pass_type_id, person_id, kind, visits_total, visits_remaining, valid_
 
 func (q *Queries) ListPassesByPersons(ctx context.Context, persons []pgtype.UUID) ([]Pass, error) {
 	rows, err := q.db.Query(ctx, listPassesByPersons, persons)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Pass
+	for rows.Next() {
+		var i Pass
+		if err := rows.Scan(
+			&i.ID,
+			&i.PassTypeID,
+			&i.PersonID,
+			&i.Kind,
+			&i.VisitsTotal,
+			&i.VisitsRemaining,
+			&i.ValidFrom,
+			&i.ValidUntil,
+			&i.Status,
+			&i.Origin,
+			&i.SoldAt,
+			&i.SoldBy,
+			&i.PayerPersonID,
+			&i.ReceiptID,
+			&i.PricePaid,
+			&i.Note,
+			&i.VoidedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPassesByReceipts = `-- name: ListPassesByReceipts :many
+SELECT id, pass_type_id, person_id, kind, visits_total, visits_remaining, valid_from, valid_until, status, origin, sold_at, sold_by, payer_person_id, receipt_id, price_paid, note, voided_at FROM passes WHERE receipt_id = ANY($1::uuid[]) ORDER BY id
+`
+
+func (q *Queries) ListPassesByReceipts(ctx context.Context, receipts []pgtype.UUID) ([]Pass, error) {
+	rows, err := q.db.Query(ctx, listPassesByReceipts, receipts)
 	if err != nil {
 		return nil, err
 	}

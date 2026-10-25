@@ -16,7 +16,7 @@ import (
 
 // Constraints and unique indexes whose violation has a domain meaning beyond
 // "duplicate key" (see migrations/00001_core.sql, 00006, 00007, 00008, 00012,
-// 00015 and 00016).
+// 00015, 00016 and 00017).
 const (
 	constraintAccountEmail    = "accounts_email_key"
 	constraintAccountPerson   = "accounts_person_id_key"
@@ -32,13 +32,18 @@ const (
 	constraintPassTypeName    = "pass_types_name_key"
 	constraintRedemption      = "pass_redemptions_booking_key"
 	constraintRedemptionKey   = "pass_redemptions_pkey"
+	constraintReceiptNumber   = "receipts_number_key"
+	constraintReceiptSequence = "receipts_year_sequence_key"
+	constraintReceiptCancels  = "receipts_cancels_key"
+	constraintReceiptPDF      = "receipt_pdfs_pkey"
 )
 
 // conflicts describes the unique constraints above: the message, and the
 // error it wraps (domain.ErrDuplicate for the unique names of ADR 0007 and
 // for what exists only once per person: an account, a guardian link, a
 // class membership, an active booking of a lesson, an active calendar feed
-// of a subject, a pass type's name, a booking's redemption).
+// of a subject, a pass type's name, a booking's redemption, a receipt's
+// number, cancellation and PDF).
 // Other unique and foreign key violations get a generic message naming the
 // constraint.
 var conflicts = map[string]struct {
@@ -59,6 +64,10 @@ var conflicts = map[string]struct {
 	constraintPassTypeName:    {"pass type name is taken", domain.ErrDuplicate},
 	constraintRedemption:      {"a pass paid for the booking already", domain.ErrDuplicate},
 	constraintRedemptionKey:   {"a pass paid for the booking already", domain.ErrDuplicate},
+	constraintReceiptNumber:   {"the receipt number is taken", domain.ErrDuplicate},
+	constraintReceiptSequence: {"the receipt sequence number is taken", domain.ErrDuplicate},
+	constraintReceiptCancels:  {"the receipt is canceled already", domain.ErrDuplicate},
+	constraintReceiptPDF:      {"the receipt has its PDF already", domain.ErrDuplicate},
 }
 
 // retryableError reports a serialization failure or deadlock. InTx retries

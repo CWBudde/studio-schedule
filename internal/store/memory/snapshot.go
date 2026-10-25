@@ -217,6 +217,17 @@ var codecs = []codec{
 		// Put stores a new pointer.
 		changed: func(before, after *state) bool { return before.settings != after.settings },
 	},
+	{
+		field: "logo",
+		encode: func(enc *jsontext.Encoder, s *state) error {
+			return json.MarshalEncode(enc, s.logo, jsonOptions)
+		},
+		decode: func(dec *jsontext.Decoder, s *state) error {
+			return json.UnmarshalDecode(dec, &s.logo, jsonOptions)
+		},
+		// PutLogo stores a new pointer (or nil).
+		changed: func(before, after *state) bool { return before.logo != after.logo },
+	},
 	rows("persons", func(s *state) *table[domain.PersonID, domain.Person] { return &s.persons },
 		func(v domain.Person) domain.PersonID { return v.ID }),
 	keys("guardians", func(s *state) *table[domain.Guardian, struct{}] { return &s.guardians }),
@@ -260,6 +271,12 @@ var codecs = []codec{
 		func(v domain.Pass) domain.PassID { return v.ID }),
 	rows("redemptions", func(s *state) *table[domain.BookingID, domain.PassRedemption] { return &s.redemptions },
 		func(v domain.PassRedemption) domain.BookingID { return v.BookingID }),
+	rows("receipts", func(s *state) *table[domain.ReceiptID, domain.Receipt] { return &s.receipts },
+		func(v domain.Receipt) domain.ReceiptID { return v.ID }),
+	rows("receiptPDFs", func(s *state) *table[domain.ReceiptID, receiptPDF] { return &s.receiptPDFs },
+		func(v receiptPDF) domain.ReceiptID { return v.ReceiptID }),
+	rows("receiptCounters", func(s *state) *table[int, receiptCounter] { return &s.receiptCounters },
+		func(v receiptCounter) int { return v.Year }),
 	rows("outbox", func(s *state) *table[domain.OutboxMailID, domain.OutboxMail] { return &s.outbox },
 		func(v domain.OutboxMail) domain.OutboxMailID { return v.ID }),
 	rows("audit", func(s *state) *table[domain.AuditEventID, domain.AuditEvent] { return &s.audit },

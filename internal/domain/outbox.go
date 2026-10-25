@@ -18,7 +18,10 @@ type OutboxMail struct {
 	Template string
 	// ReplyTo is the address replies go to (optional), e.g. the staff
 	// member who sent a lesson notice.
-	ReplyTo   string
+	ReplyTo string
+	// ReceiptID names the receipt whose PDF is attached (optional). The
+	// mail refers to the stored, immutable PDF instead of copying it.
+	ReceiptID ReceiptID
 	CreatedAt time.Time
 	// Attempts counts the delivery attempts so far.
 	Attempts int

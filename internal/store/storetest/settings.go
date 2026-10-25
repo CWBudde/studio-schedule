@@ -20,6 +20,13 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 		LegalNotice:          "Contract School, Example Street 1, 00000 Example Town",
 		WaitlistInviteExpiry: 90 * time.Minute,
 		RedemptionMode:       domain.RedeemOnAttendance,
+		Receipts: domain.ReceiptSettings{
+			Issuer: domain.ReceiptIssuer{
+				Name: "Contract School Ltd", Address: "Example Street 1\n00000 Example Town", TaxID: "12/345/67890",
+				Email: "office@example.org", Phone: "+49 000 000000",
+			},
+			TaxMode: domain.TaxExempt, TaxNote: "Exempt under Example Law § 1", Footer: "Bank: Example Bank",
+		},
 	}
 	get := func(e *env) (domain.Settings, error) {
 		return query(e, func(ctx context.Context, tx store.Tx) (domain.Settings, error) { return tx.Settings().Get(ctx) })
@@ -54,6 +61,7 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 			updated.LegalNotice = ""
 			updated.WaitlistInviteExpiry = 30 * 24 * time.Hour
 			updated.RedemptionMode = domain.RedeemOnBooking
+			updated.Receipts = domain.ReceiptSettings{}
 			put(e, updated)
 
 			got, err := get(e)
@@ -84,6 +92,53 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 			}
 
 			wantEqual(e.t, got, want)
+		},
+		"Logo": func(e *env) {
+			logo := func() (domain.Logo, error) {
+				return query(e, func(ctx context.Context, tx store.Tx) (domain.Logo, error) { return tx.Settings().Logo(ctx) })
+			}
+			putLogo := func(l domain.Logo) error {
+				return e.write(func(ctx context.Context, tx store.Tx) error { return tx.Settings().PutLogo(ctx, l) })
+			}
+			png := domain.Logo{ContentType: domain.LogoPNG, Data: []byte("\x89PNG\r\n\x1a\nlogo")}
+
+			_, err := logo()
+			wantErr(e.t, err, domain.ErrNotFound)
+			wantErr(e.t, putLogo(png), domain.ErrNotFound)
+
+			put(e, want)
+
+			got, err := logo()
+			if err != nil || !got.IsZero() {
+				e.t.Fatalf("no logo: got %+v, %v", got, err)
+			}
+
+			if err := putLogo(png); err != nil {
+				e.t.Fatal(err)
+			}
+
+			got, err = logo()
+			if err != nil || got.ContentType != png.ContentType || string(got.Data) != string(png.Data) {
+				e.t.Fatalf("got %+v, %v", got, err)
+			}
+
+			// Settings writes keep the logo.
+			put(e, want)
+
+			if got, _ = logo(); got.IsZero() {
+				e.t.Fatal("the logo is gone after a settings write")
+			}
+
+			err = e.read(func(ctx context.Context, tx store.Tx) error { return tx.Settings().PutLogo(ctx, domain.Logo{}) })
+			wantErr(e.t, err, store.ErrReadOnly)
+
+			if err := putLogo(domain.Logo{}); err != nil {
+				e.t.Fatal(err)
+			}
+
+			if got, _ = logo(); !got.IsZero() {
+				e.t.Fatalf("logo not removed: %+v", got)
+			}
 		},
 		"ReadOnlyRejectsWrites": func(e *env) {
 			err := e.read(func(ctx context.Context, tx store.Tx) error { return tx.Settings().Put(ctx, want) })

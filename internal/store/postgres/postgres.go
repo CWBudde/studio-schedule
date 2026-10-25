@@ -212,5 +212,9 @@ func (t *tx) Passes() store.PassRepo        { return passRepo{t.q} }
 func (t *tx) Redemptions() store.PassRedemptionRepo {
 	return redemptionRepo{t.q}
 }
+func (t *tx) Receipts() store.ReceiptRepo { return receiptRepo{t.q} }
+func (t *tx) ReceiptCounters() store.ReceiptCounterRepo {
+	return receiptCounterRepo{t.q}
+}
 func (t *tx) Outbox() store.OutboxRepo { return outboxRepo{t.q} }
 func (t *tx) Audit() store.AuditRepo   { return auditRepo{t.q} }

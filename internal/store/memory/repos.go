@@ -146,7 +146,8 @@ func (r personRepo) Delete(_ context.Context, id domain.PersonID) error {
 		s.staff.exists(func(st domain.Staff) bool { return st.PersonID == id }) ||
 		s.classMembers.exists(func(m domain.ClassMember) bool { return m.PersonID == id }) ||
 		s.bookings.exists(func(b domain.Booking) bool { return b.PersonID == id }) ||
-		s.passes.exists(func(p domain.Pass) bool { return p.PersonID == id || p.PayerID == id })
+		s.passes.exists(func(p domain.Pass) bool { return p.PersonID == id || p.PayerID == id }) ||
+		s.receipts.exists(func(rc domain.Receipt) bool { return rc.PayerID == id })
 	for g := range s.guardians.rows {
 		referenced = referenced || g.GuardianID == id || g.DependentID == id
 	}

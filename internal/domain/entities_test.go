@@ -21,6 +21,8 @@ func TestEnums(t *testing.T) {
 	t.Run("BookingSource", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.BookingSources()) })
 	t.Run("WaitlistStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.WaitlistStatuses()) })
 	t.Run("ReceiptKind", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.ReceiptKinds()) })
+	t.Run("TaxMode", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.TaxModes()) })
+	t.Run("PaymentMethod", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.PaymentMethods()) })
 	t.Run("PassKind", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.PassKinds()) })
 	t.Run("PassStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.PassStatuses()) })
 	t.Run("PassOrigin", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.PassOrigins()) })
@@ -611,13 +613,17 @@ func TestReceiptValidate(t *testing.T) {
 	t.Parallel()
 
 	sale := func() domain.Receipt {
+		lines := []domain.ReceiptLine{
+			domain.NewReceiptLine(1, "10-visit pass", 1, 12000, 1900, domain.TaxStandard),
+			domain.NewReceiptLine(2, "Single visit", 2, 500, 700, domain.TaxStandard),
+		}
+
 		return domain.Receipt{
 			ID: newID[domain.ReceiptID](), Number: "R-2026-0001", Year: 2026, Sequence: 1,
-			Kind: domain.ReceiptSale, IssuedAt: t0, RecipientName: "Ada Example", Total: 13000,
-			Lines: []domain.ReceiptLine{
-				{Position: 1, Description: "10-visit pass", Quantity: 1, UnitPrice: 12000, Total: 12000},
-				{Position: 2, Description: "Trial lesson", Quantity: 2, UnitPrice: 500, Total: 1000},
-			},
+			Kind: domain.ReceiptSale, IssuedAt: t0, IssueDate: domain.Date{Year: 2026, Month: 3, Day: 2}, Locale: "de",
+			Issuer:  domain.ReceiptIssuer{Name: "Example Dance", Address: "Example Street 1\n00000 Example Town", TaxID: "12/345/67890"},
+			TaxMode: domain.TaxStandard, RecipientName: "Ada Example", PaymentMethod: domain.PaymentCash, Currency: "EUR",
+			Net: lines[0].Net + lines[1].Net, VAT: lines[0].VAT + lines[1].VAT, Gross: 13000, Lines: lines,
 		}
 	}
 
@@ -631,21 +637,39 @@ func TestReceiptValidate(t *testing.T) {
 			"bad kind":          func(r *domain.Receipt) { r.Kind = "refund" },
 			"cancels something": func(r *domain.Receipt) { r.CancelsReceiptID = newID[domain.ReceiptID]() },
 			"no issued at":      func(r *domain.Receipt) { r.IssuedAt = time.Time{} },
-			"no recipient":      func(r *domain.Receipt) { r.RecipientName = "" },
-			"no lines":          func(r *domain.Receipt) { r.Lines, r.Total = nil, 0 },
-			"wrong total":       func(r *domain.Receipt) { r.Total = 12999 },
-			"wrong line total":  func(r *domain.Receipt) { r.Lines[1].Total = 999; r.Total = 12999 },
-			"wrong position":    func(r *domain.Receipt) { r.Lines[1].Position = 3 },
-			"no description":    func(r *domain.Receipt) { r.Lines[0].Description = "" },
-			"zero quantity":     func(r *domain.Receipt) { r.Lines[1].Quantity, r.Lines[1].Total, r.Total = 0, 0, 12000 },
-			"huge quantity": func(r *domain.Receipt) {
-				r.Lines[1].Quantity, r.Lines[1].UnitPrice, r.Lines[1].Total, r.Total = 1<<32, 1, 1<<32, 12000+1<<32
+			"date of another year": func(r *domain.Receipt) {
+				r.IssueDate = domain.Date{Year: 2025, Month: 12, Day: 31}
 			},
+			"no locale":           func(r *domain.Receipt) { r.Locale = "" },
+			"no issuer":           func(r *domain.Receipt) { r.Issuer.Name = "" },
+			"no issuer address":   func(r *domain.Receipt) { r.Issuer.Address = "" },
+			"no tax id":           func(r *domain.Receipt) { r.Issuer.TaxID = "" },
+			"bad tax mode":        func(r *domain.Receipt) { r.TaxMode = "zero" },
+			"exempt without note": func(r *domain.Receipt) { r.TaxMode = domain.TaxExempt },
+			"bad method":          func(r *domain.Receipt) { r.PaymentMethod = "barter" },
+			"bad currency":        func(r *domain.Receipt) { r.Currency = "euro" },
+			"no recipient":        func(r *domain.Receipt) { r.RecipientName = "" },
+			"bad email":           func(r *domain.Receipt) { r.RecipientEmail = "ada" },
+			"reason on a sale":    func(r *domain.Receipt) { r.Reason = "typo" },
+			"no lines":            func(r *domain.Receipt) { r.Lines, r.Gross, r.Net, r.VAT = nil, 0, 0, 0 },
+			"wrong total":         func(r *domain.Receipt) { r.Gross = 12999 },
+			"wrong net":           func(r *domain.Receipt) { r.Net++ },
+			"wrong line total":    func(r *domain.Receipt) { r.Lines[1].Gross = 999; r.Gross = 12999 },
+			"wrong line VAT":      func(r *domain.Receipt) { r.Lines[0].VAT++; r.Lines[0].Net--; r.Net--; r.VAT++ },
+			"wrong position":      func(r *domain.Receipt) { r.Lines[1].Position = 3 },
+			"no description":      func(r *domain.Receipt) { r.Lines[0].Description = "" },
+			"zero quantity": func(r *domain.Receipt) {
+				r.Lines[1] = domain.NewReceiptLine(2, "Single visit", 0, 500, 700, domain.TaxStandard)
+				r.Gross, r.Net, r.VAT = 12000, r.Lines[0].Net, r.Lines[0].VAT
+			},
+			"VAT in small business mode": func(r *domain.Receipt) { r.TaxMode = domain.TaxSmallBusiness },
 			"huge unit price": func(r *domain.Receipt) {
-				r.Lines[1].Quantity, r.Lines[1].UnitPrice, r.Lines[1].Total, r.Total = 1, 1<<62, 1<<62, 1<<62
+				r.Lines = []domain.ReceiptLine{domain.NewReceiptLine(1, "x", 1, 1<<62, 0, domain.TaxStandard)}
+				r.Gross, r.Net, r.VAT = 1<<62, 1<<62, 0
 			},
 			"negative sale": func(r *domain.Receipt) {
-				r.Lines[0].UnitPrice, r.Lines[0].Total, r.Total = -12000, -12000, -11000
+				r.Lines = []domain.ReceiptLine{domain.NewReceiptLine(1, "x", 1, -100, 0, domain.TaxStandard)}
+				r.Gross, r.Net, r.VAT = -100, -100, 0
 			},
 		})
 	})
@@ -654,18 +678,106 @@ func TestReceiptValidate(t *testing.T) {
 		t.Parallel()
 		checkValidate(t, func() domain.Receipt {
 			r := sale()
-			r.Kind, r.CancelsReceiptID, r.Total = domain.ReceiptCancellation, newID[domain.ReceiptID](), -12000
-			r.Lines = []domain.ReceiptLine{{Position: 1, Description: "Cancellation", Quantity: 1, UnitPrice: -12000, Total: -12000}}
+			r.Kind, r.CancelsReceiptID, r.Reason = domain.ReceiptCancellation, newID[domain.ReceiptID](), "Sold twice"
+			for i, l := range r.Lines {
+				r.Lines[i] = l.Negated()
+			}
+
+			r.Net, r.VAT, r.Gross = -r.Net, -r.VAT, -r.Gross
 
 			return r
 		}, map[string]func(*domain.Receipt){
 			"no reference": func(r *domain.Receipt) { r.CancelsReceiptID = domain.ReceiptID{} },
 			"cancels self": func(r *domain.Receipt) { r.CancelsReceiptID = r.ID },
-			"positive": func(r *domain.Receipt) {
-				r.Lines[0].UnitPrice, r.Lines[0].Total, r.Total = 12000, 12000, 12000
+			"positive line": func(r *domain.Receipt) {
+				r.Lines[1] = r.Lines[1].Negated()
+				r.Net, r.VAT, r.Gross = r.Lines[0].Net+r.Lines[1].Net, r.Lines[0].VAT+r.Lines[1].VAT, r.Lines[0].Gross+r.Lines[1].Gross
 			},
 		})
 	})
+}
+
+func TestNewReceiptLine(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		name          string
+		qty           int
+		unit          domain.Money
+		rate          int
+		mode          domain.TaxMode
+		net, vat, rat domain.Money
+	}{
+		{"19 % of 150.00", 1, 15000, 1900, domain.TaxStandard, 12605, 2395, 1900},
+		{"7 % of 18.00", 1, 1800, 700, domain.TaxStandard, 1682, 118, 700},
+		{"rounds half away from zero", 1, 107, 700, domain.TaxStandard, 100, 7, 700},
+		{"half rounds up", 1, 1, 10000, domain.TaxStandard, 1, 0, 10000},
+		{"quantity", 3, 1190, 1900, domain.TaxStandard, 3000, 570, 1900},
+		{"no rate", 1, 999, 0, domain.TaxStandard, 999, 0, 0},
+		{"small business charges no VAT", 1, 15000, 1900, domain.TaxSmallBusiness, 15000, 0, 0},
+		{"exempt charges no VAT", 1, 15000, 1900, domain.TaxExempt, 15000, 0, 0},
+		{"negative mirrors", 1, -15000, 1900, domain.TaxStandard, -12605, -2395, 1900},
+		{"huge amounts stay exact", 10_000, 1_000_000_000_000, 1900, domain.TaxStandard, 8_403_361_344_537_815, 1_596_638_655_462_185, 1900},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			l := domain.NewReceiptLine(1, "x", c.qty, c.unit, c.rate, c.mode)
+			if l.Net != c.net || l.VAT != c.vat || int(c.rat) != l.VATRate || l.Gross != domain.Money(c.qty)*c.unit {
+				t.Fatalf("got net %d VAT %d rate %d gross %d, want net %d VAT %d rate %d", l.Net, l.VAT, l.VATRate, l.Gross, c.net, c.vat, c.rat)
+			}
+
+			if n := l.Negated(); n != domain.NewReceiptLine(1, "x", c.qty, -c.unit, c.rate, c.mode) {
+				t.Fatalf("negated %+v does not round like the negated price", n)
+			}
+		})
+	}
+}
+
+func TestReceiptSettings(t *testing.T) {
+	t.Parallel()
+
+	complete := domain.ReceiptSettings{
+		Issuer:  domain.ReceiptIssuer{Name: "Example Dance", Address: "Example Street 1", TaxID: "DE000000000"},
+		TaxMode: domain.TaxSmallBusiness,
+	}
+	if err := complete.Complete(); err != nil {
+		t.Fatalf("complete settings: %v", err)
+	}
+
+	for name, mutate := range map[string]func(*domain.ReceiptSettings){
+		"no name":             func(s *domain.ReceiptSettings) { s.Issuer.Name = " " },
+		"no address":          func(s *domain.ReceiptSettings) { s.Issuer.Address = "" },
+		"no tax id":           func(s *domain.ReceiptSettings) { s.Issuer.TaxID = "" },
+		"no tax mode":         func(s *domain.ReceiptSettings) { s.TaxMode = "" },
+		"exempt without note": func(s *domain.ReceiptSettings) { s.TaxMode = domain.TaxExempt },
+	} {
+		s := complete
+		mutate(&s)
+
+		var fe *domain.FieldError
+		if err := s.Complete(); !errors.As(err, &fe) {
+			t.Errorf("%s: want a field error, got %v", name, err)
+		}
+	}
+}
+
+func TestLogoValidate(t *testing.T) {
+	t.Parallel()
+
+	png := []byte("\x89PNG\r\n\x1a\n....")
+	checkValidate(t, func() domain.Logo { return domain.Logo{ContentType: domain.LogoPNG, Data: png} },
+		map[string]func(*domain.Logo){
+			"gif":              func(l *domain.Logo) { l.ContentType = "image/gif" },
+			"empty":            func(l *domain.Logo) { l.Data = nil },
+			"jpeg with png":    func(l *domain.Logo) { l.ContentType = domain.LogoJPEG },
+			"too large":        func(l *domain.Logo) { l.Data = append(png, make([]byte, domain.MaxLogoBytes)...) },
+			"not a png at all": func(l *domain.Logo) { l.Data = []byte("<svg/>") },
+		})
+
+	if err := (domain.Logo{ContentType: domain.LogoJPEG, Data: []byte{0xFF, 0xD8, 0xFF, 0xE0}}).Validate(); err != nil {
+		t.Fatalf("jpeg: %v", err)
+	}
 }
 
 func TestMessageValidate(t *testing.T) {

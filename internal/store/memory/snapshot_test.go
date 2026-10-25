@@ -138,7 +138,25 @@ func fullStore(t *testing.T) *Store {
 			Origin: domain.PassSold, SoldAt: at, SoldBy: account, PricePaid: 5000, Note: "snapshot",
 		}
 
+		seq, err := tx.ReceiptCounters().Next(ctx, 2099)
+		if err != nil {
+			return err
+		}
+
+		line := domain.NewReceiptLine(1, "Snapshot pass", 1, 5000, 700, domain.TaxStandard)
+		receipt := domain.Receipt{
+			ID: ids.New[domain.ReceiptID](src), Number: domain.ReceiptNumber("SNAP", 2099, seq), Year: 2099, Sequence: seq,
+			Kind: domain.ReceiptSale, IssuedAt: at, IssueDate: domain.Date{Year: 2099, Month: 1, Day: 2}, Locale: "en",
+			Issuer:  domain.ReceiptIssuer{Name: "Snapshot School", Address: "Street 1", TaxID: "1", Email: "s@example.org"},
+			TaxMode: domain.TaxStandard, PayerID: person, RecipientName: "Snapshot Payer", PaymentMethod: domain.PaymentCard,
+			Currency: "EUR", Net: line.Net, VAT: line.VAT, Gross: line.Gross, CreatedBy: account,
+			Lines: []domain.ReceiptLine{line},
+		}
+
 		return errors.Join(
+			tx.Receipts().Create(ctx, receipt),
+			tx.Receipts().PutPDF(ctx, receipt.ID, []byte("%PDF-1.7 snapshot")),
+			tx.Settings().PutLogo(ctx, domain.Logo{ContentType: domain.LogoPNG, Data: []byte("\x89PNG\r\n\x1a\nx")}),
 			tx.Sessions().Create(ctx, domain.Session{
 				ID: ids.New[domain.SessionID](src), AccountID: account, TokenHash: [32]byte{1, 2, 3},
 				CreatedAt: at, LastSeenAt: at, ExpiresAt: at.Add(time.Hour),
@@ -164,7 +182,7 @@ func fullStore(t *testing.T) *Store {
 			}),
 			tx.Outbox().Create(ctx, domain.OutboxMail{
 				ID: ids.New[domain.OutboxMailID](src), To: "someone@example.org", Subject: "Hello",
-				Text: "Hello", CreatedAt: at, NextAttemptAt: at, ReplyTo: "staff@example.org",
+				Text: "Hello", CreatedAt: at, NextAttemptAt: at, ReplyTo: "staff@example.org", ReceiptID: receipt.ID,
 			}),
 			tx.Audit().Create(ctx, domain.AuditEvent{
 				ID: ids.New[domain.AuditEventID](src), At: at, ActorID: account,

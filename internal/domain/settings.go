@@ -48,6 +48,11 @@ type Settings struct {
 	// RedemptionMode is when bookings use a pass: when they are booked, or
 	// when attendance is taken (ADR 0012).
 	RedemptionMode RedemptionMode
+
+	// Receipts are the issuer, tax mode and texts of receipts (ADR 0012);
+	// incomplete until the school fills them in, and receipts need them
+	// complete. The logo is stored apart (SettingsRepo.Logo).
+	Receipts ReceiptSettings
 }
 
 // Validate checks the settings for consistency. All errors wrap
@@ -58,7 +63,7 @@ func (s Settings) Validate() error {
 		rule{s.Timezone != "", "timezone must not be empty"},
 		rule{!blank(s.DefaultLocale), "default locale must not be empty"},
 		rule{validCurrency(s.Currency), "currency must be an ISO 4217 code"},
-		rule{validReceiptPrefix(s.ReceiptPrefix), "receipt prefix must be 1-16 of A-Z and 0-9"},
+		on("receiptPrefix", validReceiptPrefix(s.ReceiptPrefix), "receipt prefix must be 1-16 of A-Z and 0-9"),
 		rule{validWeekday(s.ReleaseWeekday), "invalid release weekday"},
 		rule{s.ReleaseTime.Valid(), "invalid release time"},
 		rule{s.ReleaseWeeksAhead >= 1 && s.ReleaseWeeksAhead <= maxWeeksAhead, "release weeks ahead must be between 1 and 52"},
@@ -72,6 +77,10 @@ func (s Settings) Validate() error {
 		on("redemptionMode", s.RedemptionMode.Valid(), "invalid redemption mode"),
 	)
 	if err != nil {
+		return err
+	}
+
+	if err := s.Receipts.validate(); err != nil {
 		return err
 	}
 
@@ -93,17 +102,9 @@ const (
 )
 
 func validCurrency(s string) bool {
-	if len(s) != 3 {
-		return false
-	}
+	_, ok := CurrencyExponent(s)
 
-	for _, c := range []byte(s) {
-		if c < 'A' || c > 'Z' {
-			return false
-		}
-	}
-
-	return true
+	return ok
 }
 
 func validReceiptPrefix(s string) bool {

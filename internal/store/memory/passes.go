@@ -125,8 +125,11 @@ func (r passRepo) put(p domain.Pass) error {
 	switch {
 	case !s.passTypes.has(p.PassTypeID), !s.persons.has(p.PersonID),
 		!p.PayerID.IsZero() && !s.persons.has(p.PayerID),
-		!p.SoldBy.IsZero() && !s.accounts.has(p.SoldBy):
+		!p.SoldBy.IsZero() && !s.accounts.has(p.SoldBy),
+		!p.ReceiptID.IsZero() && !s.receipts.has(p.ReceiptID):
 		return conflict("pass references a missing record")
+	case !p.ReceiptID.IsZero() && s.passes.exists(func(o domain.Pass) bool { return o.ID != p.ID && o.ReceiptID == p.ReceiptID }):
+		return conflict("another pass has the receipt")
 	}
 
 	p.SoldAt, p.VoidedAt = instant(p.SoldAt), instant(p.VoidedAt)
@@ -157,6 +160,26 @@ func (r passRepo) LockByPersons(_ context.Context, persons ...domain.PersonID) (
 
 	set := setOf(persons)
 	passes := r.tx.state.passes.filter(func(p domain.Pass) bool { _, ok := set[p.PersonID]; return ok })
+
+	return sorted(passes, byPassID), nil
+}
+
+func (r passRepo) GetByReceipt(_ context.Context, receipt domain.ReceiptID) (domain.Pass, error) {
+	found := r.tx.state.passes.filter(func(p domain.Pass) bool { return p.ReceiptID == receipt })
+	if receipt.IsZero() || len(found) == 0 {
+		return domain.Pass{}, notFound("pass")
+	}
+
+	return found[0], nil
+}
+
+func (r passRepo) ListByReceipts(_ context.Context, receipts []domain.ReceiptID) ([]domain.Pass, error) {
+	set := setOf(receipts)
+	passes := r.tx.state.passes.filter(func(p domain.Pass) bool {
+		_, ok := set[p.ReceiptID]
+
+		return ok && !p.ReceiptID.IsZero()
+	})
 
 	return sorted(passes, byPassID), nil
 }

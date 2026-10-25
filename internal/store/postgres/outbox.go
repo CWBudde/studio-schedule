@@ -25,6 +25,7 @@ func toOutboxMail(row sqlc.OutboxMail) domain.OutboxMail {
 		SentAt:        fromPgInstant(row.SentAt),
 		LastError:     row.LastError.String,
 		ReplyTo:       row.ReplyTo.String,
+		ReceiptID:     fromPgID[domain.ReceiptID](row.ReceiptID),
 	}
 }
 
@@ -60,6 +61,7 @@ func (r outboxRepo) Create(ctx context.Context, m domain.OutboxMail) error {
 		SentAt:        pgInstant(m.SentAt),
 		LastError:     pgText(m.LastError),
 		ReplyTo:       pgText(m.ReplyTo),
+		ReceiptID:     pgID(m.ReceiptID),
 	}))
 }
 
@@ -82,6 +84,7 @@ func (r outboxRepo) Update(ctx context.Context, m domain.OutboxMail) error {
 		SentAt:        pgInstant(m.SentAt),
 		LastError:     pgText(m.LastError),
 		ReplyTo:       pgText(m.ReplyTo),
+		ReceiptID:     pgID(m.ReceiptID),
 	})
 
 	return affected("outbox mail", n, err)

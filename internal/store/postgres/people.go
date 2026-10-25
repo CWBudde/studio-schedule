@@ -37,7 +37,38 @@ func (r settingsRepo) Get(ctx context.Context) (domain.Settings, error) {
 
 		WaitlistInviteExpiry: fromPgInterval(row.WaitlistInviteExpiry),
 		RedemptionMode:       domain.RedemptionMode(row.RedemptionMode),
+		Receipts: domain.ReceiptSettings{
+			Issuer: domain.ReceiptIssuer{
+				Name: row.IssuerName.String, Address: row.IssuerAddress.String, TaxID: row.IssuerTaxID.String,
+				Email: row.IssuerEmail.String, Phone: row.IssuerPhone.String,
+			},
+			TaxMode: domain.TaxMode(row.TaxMode.String), TaxNote: row.TaxNote.String, Footer: row.ReceiptFooter.String,
+		},
 	}, nil
+}
+
+func (r settingsRepo) Logo(ctx context.Context) (domain.Logo, error) {
+	row, err := r.q.GetSettingsLogo(ctx)
+	if err != nil {
+		return domain.Logo{}, notFound("settings", err)
+	}
+
+	if row.Logo == nil {
+		return domain.Logo{}, nil
+	}
+
+	return domain.Logo{ContentType: row.LogoType.String, Data: row.Logo}, nil
+}
+
+func (r settingsRepo) PutLogo(ctx context.Context, l domain.Logo) error {
+	params := sqlc.PutSettingsLogoParams{}
+	if !l.IsZero() {
+		params = sqlc.PutSettingsLogoParams{Logo: l.Data, LogoType: pgText(l.ContentType)}
+	}
+
+	n, err := r.q.PutSettingsLogo(ctx, params)
+
+	return affected("settings", n, err)
 }
 
 func (r settingsRepo) Put(ctx context.Context, s domain.Settings) error {
@@ -72,6 +103,14 @@ func (r settingsRepo) Put(ctx context.Context, s domain.Settings) error {
 
 		WaitlistInviteExpiry: pgInterval(s.WaitlistInviteExpiry),
 		RedemptionMode:       string(s.RedemptionMode),
+		IssuerName:           pgText(s.Receipts.Issuer.Name),
+		IssuerAddress:        pgText(s.Receipts.Issuer.Address),
+		IssuerTaxID:          pgText(s.Receipts.Issuer.TaxID),
+		IssuerEmail:          pgText(s.Receipts.Issuer.Email),
+		IssuerPhone:          pgText(s.Receipts.Issuer.Phone),
+		TaxMode:              pgText(string(s.Receipts.TaxMode)),
+		TaxNote:              pgText(s.Receipts.TaxNote),
+		ReceiptFooter:        pgText(s.Receipts.Footer),
 	}))
 }
 

@@ -58,6 +58,9 @@ func TestSettingsValidate(t *testing.T) {
 	}, map[string]func(*domain.Settings){
 		"no redemption mode":    func(s *domain.Settings) { s.RedemptionMode = "" },
 		"bad redemption mode":   func(s *domain.Settings) { s.RedemptionMode = "never" },
+		"bad tax mode":          func(s *domain.Settings) { s.Receipts.TaxMode = "none" },
+		"bad issuer email":      func(s *domain.Settings) { s.Receipts.Issuer.Email = "office" },
+		"padded issuer name":    func(s *domain.Settings) { s.Receipts.Issuer.Name = " School" },
 		"zero invite expiry":    func(s *domain.Settings) { s.WaitlistInviteExpiry = 0 },
 		"short invite expiry":   func(s *domain.Settings) { s.WaitlistInviteExpiry = 59 * time.Second },
 		"huge invite expiry":    func(s *domain.Settings) { s.WaitlistInviteExpiry = 31 * 24 * time.Hour },

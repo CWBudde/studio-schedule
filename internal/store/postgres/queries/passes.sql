@@ -19,6 +19,12 @@ SELECT * FROM pass_types ORDER BY name, id;
 -- name: GetPass :one
 SELECT * FROM passes WHERE id = $1;
 
+-- name: GetPassByReceipt :one
+SELECT * FROM passes WHERE receipt_id = $1;
+
+-- name: ListPassesByReceipts :many
+SELECT * FROM passes WHERE receipt_id = ANY(sqlc.arg(receipts)::uuid[]) ORDER BY id;
+
 -- name: CreatePass :exec
 INSERT INTO passes (
     id, pass_type_id, person_id, kind, visits_total, visits_remaining, valid_from, valid_until, status, origin,

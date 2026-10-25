@@ -176,7 +176,7 @@ func testPasses(t *testing.T, newStore func(*testing.T) store.Store) {
 				full.ValidUntil = oct1.AddDays(29)
 				full.Status, full.VoidedAt = domain.PassVoided, t0.Add(time.Hour)
 				full.Origin, full.SoldBy, full.PayerID = domain.PassSold, seller.ID, payer.ID
-				full.ReceiptID = newID[domain.ReceiptID](e) // no receipts yet (Phase 6 B)
+				full.ReceiptID = e.receipt(e.newReceipt(2026, 1, payer)).ID
 				full.PricePaid, full.Note = 9900, "Paid in cash"
 				valid(e.t, full)
 
@@ -195,6 +195,9 @@ func testPasses(t *testing.T, newStore func(*testing.T) store.Store) {
 				"owner":  func(p *domain.Pass) { p.PersonID = newID[domain.PersonID](e) },
 				"payer":  func(p *domain.Pass) { p.Origin, p.PayerID = domain.PassSold, newID[domain.PersonID](e) },
 				"seller": func(p *domain.Pass) { p.SoldBy = newID[domain.AccountID](e) },
+				"receipt": func(p *domain.Pass) {
+					p.Origin, p.ReceiptID = domain.PassSold, newID[domain.ReceiptID](e)
+				},
 			} {
 				p := e.newPass(pt, owner, 3, t0)
 				mutate(&p)

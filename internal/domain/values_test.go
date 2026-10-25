@@ -291,3 +291,19 @@ func TestDateOf(t *testing.T) {
 		t.Errorf("DateOf(UTC) = %v, want %v", got, want)
 	}
 }
+
+func TestCurrencyExponent(t *testing.T) {
+	t.Parallel()
+
+	for code, want := range map[string]int{"EUR": 2, "USD": 2, "CHF": 2, "JPY": 0, "KWD": 3, "CLF": 4} {
+		if got, ok := domain.CurrencyExponent(code); !ok || got != want {
+			t.Errorf("%s: %d, %v; want %d", code, got, ok, want)
+		}
+	}
+
+	for _, code := range []string{"", "EU", "eur", "XXX", "ABC", "D A", "EUR "} {
+		if _, ok := domain.CurrencyExponent(code); ok {
+			t.Errorf("%q is a currency", code)
+		}
+	}
+}

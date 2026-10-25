@@ -155,6 +155,7 @@ type OutboxMail struct {
 	SentAt        pgtype.Timestamptz
 	LastError     pgtype.Text
 	ReplyTo       pgtype.Text
+	ReceiptID     pgtype.UUID
 }
 
 type Pass struct {
@@ -210,6 +211,59 @@ type PersonGuardian struct {
 	DependentID pgtype.UUID
 }
 
+type Receipt struct {
+	ID               pgtype.UUID
+	Number           string
+	Year             int32
+	Sequence         int32
+	Kind             string
+	CancelsReceiptID pgtype.UUID
+	IssuedAt         pgtype.Timestamptz
+	IssueDate        pgtype.Date
+	Locale           string
+	IssuerName       string
+	IssuerAddress    string
+	IssuerTaxID      string
+	IssuerEmail      pgtype.Text
+	IssuerPhone      pgtype.Text
+	TaxMode          string
+	TaxNote          pgtype.Text
+	Footer           pgtype.Text
+	PayerPersonID    pgtype.UUID
+	RecipientName    string
+	RecipientAddress pgtype.Text
+	RecipientEmail   pgtype.Text
+	PaymentMethod    string
+	Currency         string
+	Net              int64
+	Vat              int64
+	Gross            int64
+	Reason           pgtype.Text
+	CreatedBy        pgtype.UUID
+}
+
+type ReceiptCounter struct {
+	Year int32
+	Last int32
+}
+
+type ReceiptLine struct {
+	ReceiptID   pgtype.UUID
+	Position    int32
+	Description string
+	Quantity    int32
+	UnitPrice   int64
+	VatRateBp   int32
+	Net         int64
+	Vat         int64
+	Gross       int64
+}
+
+type ReceiptPdf struct {
+	ReceiptID pgtype.UUID
+	Pdf       []byte
+}
+
 type Room struct {
 	ID         pgtype.UUID
 	LocationID pgtype.UUID
@@ -243,6 +297,16 @@ type Setting struct {
 	LegalNotice          pgtype.Text
 	WaitlistInviteExpiry pgtype.Interval
 	RedemptionMode       string
+	IssuerName           pgtype.Text
+	IssuerAddress        pgtype.Text
+	IssuerTaxID          pgtype.Text
+	IssuerEmail          pgtype.Text
+	IssuerPhone          pgtype.Text
+	TaxMode              pgtype.Text
+	TaxNote              pgtype.Text
+	ReceiptFooter        pgtype.Text
+	Logo                 []byte
+	LogoType             pgtype.Text
 }
 
 type Staff struct {

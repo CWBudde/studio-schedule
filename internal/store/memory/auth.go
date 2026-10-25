@@ -232,9 +232,7 @@ func (r outboxRepo) Create(_ context.Context, m domain.OutboxMail) error {
 		return conflict("outbox mail %s exists", m.ID)
 	}
 
-	r.put(m)
-
-	return nil
+	return r.put(m)
 }
 
 func (r outboxRepo) Update(_ context.Context, m domain.OutboxMail) error {
@@ -246,16 +244,20 @@ func (r outboxRepo) Update(_ context.Context, m domain.OutboxMail) error {
 		return notFound("outbox mail")
 	}
 
-	r.put(m)
-
-	return nil
+	return r.put(m)
 }
 
-func (r outboxRepo) put(m domain.OutboxMail) {
+func (r outboxRepo) put(m domain.OutboxMail) error {
+	if !m.ReceiptID.IsZero() && !r.tx.state.receipts.has(m.ReceiptID) {
+		return conflict("outbox mail references a missing receipt")
+	}
+
 	m.CreatedAt = instant(m.CreatedAt)
 	m.NextAttemptAt = instant(m.NextAttemptAt)
 	m.SentAt = instant(m.SentAt)
 	r.tx.state.outbox.put(r.tx.gen, m.ID, m)
+
+	return nil
 }
 
 func (r outboxRepo) ListDue(_ context.Context, now time.Time, limit int) ([]domain.OutboxMail, error) {

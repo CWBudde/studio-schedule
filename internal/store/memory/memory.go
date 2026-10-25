@@ -14,6 +14,7 @@ package memory
 import (
 	"context"
 	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -34,31 +35,35 @@ type Store struct {
 // state is cheap.
 type state struct {
 	settings *domain.Settings
+	logo     *domain.Logo // nil: none
 
-	persons       table[domain.PersonID, domain.Person]
-	guardians     table[domain.Guardian, struct{}]
-	accounts      table[domain.AccountID, domain.Account]
-	credentials   table[domain.AccountID, domain.Credential]
-	sessions      table[domain.SessionID, domain.Session]
-	accountTokens table[[32]byte, domain.AccountToken]
-	locations     table[domain.LocationID, domain.Location]
-	rooms         table[domain.RoomID, domain.Room]
-	staff         table[domain.StaffID, domain.Staff]
-	courseTypes   table[domain.CourseTypeID, domain.CourseType]
-	terms         table[domain.TermID, domain.Term]
-	classes       table[domain.ClassID, domain.Class]
-	classMembers  table[memberKey, domain.ClassMember]
-	lessons       table[domain.LessonID, domain.Lesson]
-	bookings      table[domain.BookingID, domain.Booking]
-	bookingEvents table[domain.BookingEventID, domain.BookingEvent]
-	waitlist      table[domain.WaitlistEntryID, domain.WaitlistEntry]
-	notices       table[domain.LessonNoticeID, domain.LessonNotice]
-	calendarFeeds table[domain.CalendarFeedID, domain.CalendarFeed]
-	passTypes     table[domain.PassTypeID, domain.PassType]
-	passes        table[domain.PassID, domain.Pass]
-	redemptions   table[domain.BookingID, domain.PassRedemption]
-	outbox        table[domain.OutboxMailID, domain.OutboxMail]
-	audit         table[domain.AuditEventID, domain.AuditEvent]
+	persons         table[domain.PersonID, domain.Person]
+	guardians       table[domain.Guardian, struct{}]
+	accounts        table[domain.AccountID, domain.Account]
+	credentials     table[domain.AccountID, domain.Credential]
+	sessions        table[domain.SessionID, domain.Session]
+	accountTokens   table[[32]byte, domain.AccountToken]
+	locations       table[domain.LocationID, domain.Location]
+	rooms           table[domain.RoomID, domain.Room]
+	staff           table[domain.StaffID, domain.Staff]
+	courseTypes     table[domain.CourseTypeID, domain.CourseType]
+	terms           table[domain.TermID, domain.Term]
+	classes         table[domain.ClassID, domain.Class]
+	classMembers    table[memberKey, domain.ClassMember]
+	lessons         table[domain.LessonID, domain.Lesson]
+	bookings        table[domain.BookingID, domain.Booking]
+	bookingEvents   table[domain.BookingEventID, domain.BookingEvent]
+	waitlist        table[domain.WaitlistEntryID, domain.WaitlistEntry]
+	notices         table[domain.LessonNoticeID, domain.LessonNotice]
+	calendarFeeds   table[domain.CalendarFeedID, domain.CalendarFeed]
+	passTypes       table[domain.PassTypeID, domain.PassType]
+	passes          table[domain.PassID, domain.Pass]
+	redemptions     table[domain.BookingID, domain.PassRedemption]
+	receipts        table[domain.ReceiptID, domain.Receipt]
+	receiptPDFs     table[domain.ReceiptID, receiptPDF]
+	receiptCounters table[int, receiptCounter]
+	outbox          table[domain.OutboxMailID, domain.OutboxMail]
+	audit           table[domain.AuditEventID, domain.AuditEvent]
 }
 
 type memberKey struct {
@@ -220,6 +225,10 @@ func (t *tx) Passes() store.PassRepo        { return passRepo{t} }
 func (t *tx) Redemptions() store.PassRedemptionRepo {
 	return redemptionRepo{t}
 }
+func (t *tx) Receipts() store.ReceiptRepo { return receiptRepo{t} }
+func (t *tx) ReceiptCounters() store.ReceiptCounterRepo {
+	return receiptCounterRepo{t}
+}
 func (t *tx) Outbox() store.OutboxRepo { return outboxRepo{t} }
 func (t *tx) Audit() store.AuditRepo   { return auditRepo{t} }
 
@@ -257,6 +266,41 @@ func (r settingsRepo) Put(_ context.Context, s domain.Settings) error {
 	}
 
 	r.tx.state.settings = &s
+
+	return nil
+}
+
+func (r settingsRepo) Logo(context.Context) (domain.Logo, error) {
+	switch {
+	case r.tx.state.settings == nil:
+		return domain.Logo{}, notFound("settings")
+	case r.tx.state.logo == nil:
+		return domain.Logo{}, nil
+	}
+
+	l := *r.tx.state.logo
+	l.Data = slices.Clone(l.Data)
+
+	return l, nil
+}
+
+func (r settingsRepo) PutLogo(_ context.Context, l domain.Logo) error {
+	if err := r.tx.checkWritable(); err != nil {
+		return err
+	}
+
+	if r.tx.state.settings == nil {
+		return notFound("settings")
+	}
+
+	if l.IsZero() {
+		r.tx.state.logo = nil
+
+		return nil
+	}
+
+	l.Data = slices.Clone(l.Data)
+	r.tx.state.logo = &l
 
 	return nil
 }

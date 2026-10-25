@@ -12,14 +12,44 @@ import (
 )
 
 const getSettings = `-- name: GetSettings :one
-SELECT id, school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time, release_weeks_ahead, booking_cutoff, cancellation_cutoff, default_visible_days, legal_notice, waitlist_invite_expiry, redemption_mode FROM settings
+SELECT
+    school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time,
+    release_weeks_ahead, booking_cutoff, cancellation_cutoff, default_visible_days, legal_notice,
+    waitlist_invite_expiry, redemption_mode, issuer_name, issuer_address, issuer_tax_id, issuer_email,
+    issuer_phone, tax_mode, tax_note, receipt_footer
+FROM settings
 `
 
-func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
+type GetSettingsRow struct {
+	SchoolName           string
+	Timezone             string
+	DefaultLocale        string
+	Currency             string
+	ReceiptPrefix        string
+	ReleaseWeekday       int16
+	ReleaseTime          pgtype.Time
+	ReleaseWeeksAhead    int32
+	BookingCutoff        pgtype.Interval
+	CancellationCutoff   pgtype.Interval
+	DefaultVisibleDays   int32
+	LegalNotice          pgtype.Text
+	WaitlistInviteExpiry pgtype.Interval
+	RedemptionMode       string
+	IssuerName           pgtype.Text
+	IssuerAddress        pgtype.Text
+	IssuerTaxID          pgtype.Text
+	IssuerEmail          pgtype.Text
+	IssuerPhone          pgtype.Text
+	TaxMode              pgtype.Text
+	TaxNote              pgtype.Text
+	ReceiptFooter        pgtype.Text
+}
+
+// Everything but the logo, which only receipts read (GetSettingsLogo).
+func (q *Queries) GetSettings(ctx context.Context) (GetSettingsRow, error) {
 	row := q.db.QueryRow(ctx, getSettings)
-	var i Setting
+	var i GetSettingsRow
 	err := row.Scan(
-		&i.ID,
 		&i.SchoolName,
 		&i.Timezone,
 		&i.DefaultLocale,
@@ -34,7 +64,31 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 		&i.LegalNotice,
 		&i.WaitlistInviteExpiry,
 		&i.RedemptionMode,
+		&i.IssuerName,
+		&i.IssuerAddress,
+		&i.IssuerTaxID,
+		&i.IssuerEmail,
+		&i.IssuerPhone,
+		&i.TaxMode,
+		&i.TaxNote,
+		&i.ReceiptFooter,
 	)
+	return i, err
+}
+
+const getSettingsLogo = `-- name: GetSettingsLogo :one
+SELECT logo, logo_type FROM settings
+`
+
+type GetSettingsLogoRow struct {
+	Logo     []byte
+	LogoType pgtype.Text
+}
+
+func (q *Queries) GetSettingsLogo(ctx context.Context) (GetSettingsLogoRow, error) {
+	row := q.db.QueryRow(ctx, getSettingsLogo)
+	var i GetSettingsLogoRow
+	err := row.Scan(&i.Logo, &i.LogoType)
 	return i, err
 }
 
@@ -42,9 +96,10 @@ const putSettings = `-- name: PutSettings :exec
 INSERT INTO settings (
     school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time,
     release_weeks_ahead, booking_cutoff, cancellation_cutoff, default_visible_days, legal_notice,
-    waitlist_invite_expiry, redemption_mode
+    waitlist_invite_expiry, redemption_mode, issuer_name, issuer_address, issuer_tax_id, issuer_email,
+    issuer_phone, tax_mode, tax_note, receipt_footer
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
 )
 ON CONFLICT (id) DO UPDATE SET
     school_name = excluded.school_name,
@@ -60,7 +115,15 @@ ON CONFLICT (id) DO UPDATE SET
     default_visible_days = excluded.default_visible_days,
     legal_notice = excluded.legal_notice,
     waitlist_invite_expiry = excluded.waitlist_invite_expiry,
-    redemption_mode = excluded.redemption_mode
+    redemption_mode = excluded.redemption_mode,
+    issuer_name = excluded.issuer_name,
+    issuer_address = excluded.issuer_address,
+    issuer_tax_id = excluded.issuer_tax_id,
+    issuer_email = excluded.issuer_email,
+    issuer_phone = excluded.issuer_phone,
+    tax_mode = excluded.tax_mode,
+    tax_note = excluded.tax_note,
+    receipt_footer = excluded.receipt_footer
 `
 
 type PutSettingsParams struct {
@@ -78,6 +141,14 @@ type PutSettingsParams struct {
 	LegalNotice          pgtype.Text
 	WaitlistInviteExpiry pgtype.Interval
 	RedemptionMode       string
+	IssuerName           pgtype.Text
+	IssuerAddress        pgtype.Text
+	IssuerTaxID          pgtype.Text
+	IssuerEmail          pgtype.Text
+	IssuerPhone          pgtype.Text
+	TaxMode              pgtype.Text
+	TaxNote              pgtype.Text
+	ReceiptFooter        pgtype.Text
 }
 
 func (q *Queries) PutSettings(ctx context.Context, arg PutSettingsParams) error {
@@ -96,6 +167,31 @@ func (q *Queries) PutSettings(ctx context.Context, arg PutSettingsParams) error 
 		arg.LegalNotice,
 		arg.WaitlistInviteExpiry,
 		arg.RedemptionMode,
+		arg.IssuerName,
+		arg.IssuerAddress,
+		arg.IssuerTaxID,
+		arg.IssuerEmail,
+		arg.IssuerPhone,
+		arg.TaxMode,
+		arg.TaxNote,
+		arg.ReceiptFooter,
 	)
 	return err
+}
+
+const putSettingsLogo = `-- name: PutSettingsLogo :execrows
+UPDATE settings SET logo = $1, logo_type = $2
+`
+
+type PutSettingsLogoParams struct {
+	Logo     []byte
+	LogoType pgtype.Text
+}
+
+func (q *Queries) PutSettingsLogo(ctx context.Context, arg PutSettingsLogoParams) (int64, error) {
+	result, err := q.db.Exec(ctx, putSettingsLogo, arg.Logo, arg.LogoType)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

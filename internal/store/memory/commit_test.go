@@ -7,7 +7,6 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/store"
 )
@@ -90,7 +89,7 @@ func TestChangedCoversEveryTable(t *testing.T) {
 
 		f := field(&after, name)
 		if f.Kind() == reflect.Pointer {
-			f.Set(reflect.ValueOf(&domain.Settings{}))
+			f.Set(reflect.New(f.Type().Elem()))
 		} else {
 			gen := f.FieldByName("gen")
 			reflect.NewAt(gen.Type(), unsafe.Pointer(gen.UnsafeAddr())).Elem().SetUint(7)
