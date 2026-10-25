@@ -685,7 +685,10 @@ Goal: prepaid passes and legally sound receipts.
       Postgres + Mailpit)
 - [ ] Container image to ghcr.io on release (GitHub App or PAT token for release-please so tags
       trigger workflows)
-- [ ] Structured logging (slog), request IDs, `/healthz` + `/readyz`, optional Prometheus metrics
+- [x] Structured logging (slog), request IDs, `/healthz` + `/readyz`, optional Prometheus metrics
+      (2026-10-25) — request IDs from trusted proxies or generated, in logs and problem bodies;
+      access log at Info with secret path parameters redacted; `/readyz` checks the schema
+      (cached 2 s); metrics only on `METRICS_ADDR`
 - [ ] Backup/restore documentation (pg_dump), migration strategy, upgrade notes
 - [ ] GDPR: data export per person, deletion/anonymisation (receipts retained), guest-data retention
       job, privacy notes in docs

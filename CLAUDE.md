@@ -51,11 +51,19 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
 ## Code map
 
 - **Wiring:** `internal/app.New(Deps)` builds services, calls `httpapi.Register`, and adds the
-  middleware (security headers → recovery → access log → cross-origin protection → router). Unknown non-`/api` paths
+  middleware (security headers → request ID → access log and metrics → recovery → cross-origin
+  protection → router; `internal/app/observe.go`). The router also serves `/healthz` and `/readyz`
+  (`health.go`, `Deps.Ready`, cached for 2 s). Unknown non-`/api` paths
   fall through to `Deps.UI` (the embedded SPA in `internal/webui`). `cmd/studio-schedule` (cobra:
   `serve`, `migrate`, `seed`, `import`, `openapi`, `version`) and `cmd/wasm` both call it. `serve` uses
   PostgreSQL when `DATABASE_URL` is set (refusing to start unless the schema matches), otherwise the
   memory store with `seed.LoadDemo`.
+- **Observability:** request IDs (`internal/requestid`) reach the logs through a `slog` handler and
+  problem bodies as `requestId` (`httpapi.ErrorModel` replaces Huma's error type). `Deps.Metrics`
+  is a no-op unless `serve` gets `METRICS_ADDR`: then `cmd/studio-schedule/metrics.go` (Prometheus,
+  server only) serves `/metrics` on its own listener. Name a secret path parameter `token` or
+  `…Token`: logs and error details redact it (`internal/app/redact.go`). See architecture.md
+  "Observability".
 - **Auth & mail:** `service.AuthService` (register → confirm with password → sessions; ADR 0004;
   password reset/change and email change in `service/credentials.go`, rate limits in
   `httpapi/ratelimit.go`; ADR 0006; the account's mail language in `SetLocale`, ADR 0008),
@@ -106,7 +114,7 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   availability (`freePlaces`, `bookedFor`, the cutoff instants) is filled in `service/schedule.go`.
 - **Calendar feeds:** `service.CalendarFeedService` (`service/calendar_feeds.go`; ADR 0011) manages
   an account's links under `/api/v1/my/calendar-feeds` and renders `GET /ical/{token}.ics`, the
-  one route outside `/api/v1`, with `internal/ical` (RFC 5545 writer, VTIMEZONE from Go's zone data);
+  one API route outside `/api/v1`, with `internal/ical` (RFC 5545 writer, VTIMEZONE from Go's zone data);
   golden files in `internal/service/testdata/feeds` (`go test ./internal/service -update`).
 - **Passes:** `service.PassService` (`service/passes.go`; ADR 0012): pass types, sell/assign/void,
   My passes. Every booking or lesson write goes through `service/ledger.go`, which settles
@@ -170,7 +178,7 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
 - **One app, two targets.** Everything goes through `internal/app.New`. Nothing may be demo-only
   except the transport (WASM bridge) and the store, mailer and PDF renderer implementations (the
   typst module runs with wazero on the server, in the browser's WebAssembly in the demo). `cmd/wasm`
-  must not depend on pgx, goose, cobra, net/smtp, httptest, os/exec or wazero
+  must not depend on pgx, goose, cobra, net/smtp, httptest, os/exec, wazero or prometheus
   (`just check-wasm-deps`). Keep request
   handlers cheap: the WASM runtime is single-threaded.
 - **Layering:** `httpapi` → `service` → `store` interfaces. Services never import a concrete store.

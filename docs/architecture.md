@@ -48,8 +48,9 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   the typst WebAssembly module built from `tools/receipt-pdf` with wazero, the demo hands the same
   module to the browser through `internal/wasmbridge` (`service.ReceiptRenderer`,
   [ADR 0012](decisions/0012-passes-and-receipts.md)).
-- `internal/app`: wiring and cross-cutting middleware (security headers, recovery, cross-origin
-  protection). In `httpapi`, a middleware resolves the client IP (`internal/clientip`, trusting
+- `internal/app`: wiring and cross-cutting middleware (security headers, request IDs, recovery,
+  access log and metrics, cross-origin protection; see "Observability") and the health probes. In
+  `httpapi`, a middleware resolves the client IP (`internal/clientip`, trusting
   `X-Forwarded-For` only from `TRUSTED_PROXIES`), the session middleware resolves the
   `studio_session` cookie to the signed-in account, and the access middleware after it enforces
   each operation's declared access level ([ADR 0005](decisions/0005-rbac-and-impersonation.md)).
@@ -162,6 +163,59 @@ responsive.
   `charts` chunk, which only that route loads, and fails if the entry's chunks hold any of them.
   Every chart has its figures in a table.
 
+## Observability
+
+`app.New` wraps the router in this order, outermost first: security headers, request ID, access
+log and metrics, panic recovery, cross-origin protection. The access log wraps the recovery, so a
+panicking request is logged and counted as the 500 it answers (one that aborts the connection,
+`http.ErrAbortHandler`, as a 500 too).
+
+- **Request IDs** (`internal/requestid`): every request gets an ID, the `X-Request-Id` of the
+  request if the direct peer is one of `TRUSTED_PROXIES` and the value is sane (at most 128
+  letters, digits and `-._~:+/=@`), otherwise a new UUIDv7 (`Deps.RequestIDs`, separate from the
+  entity IDs). It is echoed in the `X-Request-Id` response header, carried in the request's
+  context, added as `requestId` to every log line logged with that context (a `slog` handler
+  wrapper, so the access log, the recovery log and any service log name it) and to every
+  problem+json body (`httpapi.ErrorModel`, which replaces Huma's error type and keeps its schema
+  name; the problems written outside Huma carry it too).
+- **Access log:** one line per request: method, path, status, duration and request ID. The API
+  (its routes, and the API paths that match none) and every 5xx log at Info; the health probes and
+  the web app's pages and files (the requests that fall through to `Deps.UI`, a dozen per visit) at
+  Debug.
+- **Secrets in paths** (`internal/app/redact.go`): a path parameter named `token` or `…Token`
+  (`/ical/{token}.ics`, `/api/v1/waitlist-invites/{token}`) is a secret: the path of a matched
+  route is logged rebuilt from its pattern with that parameter as `<redacted>` and the others as
+  sent; a path that matches no route loses everything after the static prefix of any route with
+  a secret parameter (`/ical/<redacted>`). The recovery log and the 404 detail use the same
+  paths. `TestNoSecretPathInLogs` requests every route of the OpenAPI document and near misses
+  and fails if a secret value reaches the log or a response.
+- **Health probes:** `/healthz` (always 200 `{"status":"ok"}` while the process serves) and
+  `/readyz` (200 when `Deps.Ready` passes within 3 s, otherwise a 503 problem; the cause is only
+  logged). Both answer GET and HEAD and are plain router routes outside the API and its OpenAPI
+  document, public, `Cache-Control: no-store`. Since `/readyz` is public, a result answers the
+  probes for 2 s and concurrent probes share one check, so a flood costs one check per 2 s; a
+  change shows within 2 s (plus the 3 s timeout for a hanging database). It logs the change to not
+  ready (Warn, with the cause) and back (Info), not every failing probe. The server passes
+  `postgres.Store.Ready`: the same schema check as `serve` at startup (`checkSchema`: every
+  embedded migration applied, none unknown, with the versions from goose's provider), on the
+  store's pool. The
+  memory store (demo, `serve` without a database) has no check and is always ready. The web demo
+  serves the probes too but never asks. `/api/v1/health` stays as the API's own version check.
+- **Metrics** (`Deps.Metrics`, no-op by default): the access log reports every request with the
+  pattern of the matched chi route (`/api/v1/lessons/{lessonId}`, or `other` for the web app's pages
+  and unknown paths, so the label stays bounded), the method (`OTHER` for non-standard ones) and the
+  status; `app.Jobs` reports every job run with its duration and result (a panic is a failure).
+  The Prometheus implementation is in `cmd/studio-schedule/metrics.go` only (`check-wasm-deps`
+  keeps `client_golang` out of the demo). With `METRICS_ADDR` (`--metrics-addr`) `serve` starts a
+  second HTTP server that serves `/metrics` and nothing else, never on the public listener, and
+  shuts it down with the main one. `METRICS_ADDR` may not take the socket of `HTTP_ADDR` (the same
+  port on the same host, or on any host where either listens on every interface). If the metrics
+  server cannot listen, `serve` logs an error and serves on without metrics; only the public
+  server's failure ends the process. Besides the request and job metrics it reports the outbox's
+  pending and failed mails, counted at scrape time (`app.UnsentMails`, one query per scrape that
+  reads the partial indexes `outbox_mails_due_idx` and `outbox_mails_failed_idx` only), the build
+  version, and Go's runtime and process collectors.
+
 ## API contract
 
 - Huma generates OpenAPI 3.1 from Go types. `just gen-api` writes `api/openapi.json` and generates
@@ -178,7 +232,7 @@ responsive.
   logins and mail-sending requests are rate-limited (429 with `Retry-After`); every response
   carries a Content Security Policy, `nosniff` and `Referrer-Policy`, plus HSTS when `BASE_URL` is
   https ([ADR 0006](decisions/0006-credentials-rate-limits-and-headers.md)).
-- Calendar feeds: the one route outside `/api/v1` is `GET /ical/{token}.ics`, an iCalendar document
+- Calendar feeds: the one API route outside `/api/v1` is `GET /ical/{token}.ics`, an iCalendar document
   (`text/calendar`, written by `internal/ical`) that calendar apps poll with a secret token, built
   from what the token's account may see at the time
   ([ADR 0011](decisions/0011-calendar-feeds.md)).
