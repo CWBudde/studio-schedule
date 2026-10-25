@@ -86,6 +86,8 @@ type (
 	outboxMailKind    struct{}
 	auditEventKind    struct{}
 	lessonNoticeKind  struct{}
+	pushSubKind       struct{}
+	pushMessageKind   struct{}
 
 	announcementMailingKind struct{}
 )
@@ -160,4 +162,10 @@ type (
 
 	// AnnouncementMailingID identifies the mailing of an announcement.
 	AnnouncementMailingID = ID[announcementMailingKind]
+
+	// PushSubscriptionID identifies a web push subscription.
+	PushSubscriptionID = ID[pushSubKind]
+
+	// PushMessageID identifies a web push message.
+	PushMessageID = ID[pushMessageKind]
 )

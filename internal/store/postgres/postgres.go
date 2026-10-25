@@ -244,3 +244,8 @@ func (t *tx) Imports() store.ImportRunRepo { return importRunRepo{t.q} }
 func (t *tx) DuplicateDismissals() store.DuplicateDismissalRepo {
 	return dismissalRepo{t.q}
 }
+
+func (t *tx) PushSubscriptions() store.PushSubscriptionRepo {
+	return pushSubscriptionRepo{t.q}
+}
+func (t *tx) PushOutbox() store.PushOutboxRepo { return pushOutboxRepo{t.q} }

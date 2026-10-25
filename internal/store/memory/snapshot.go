@@ -335,6 +335,11 @@ var codecs = []codec{
 		func(v domain.ImportRun) domain.ImportRunID { return v.ID }),
 	rows("dismissals", func(s *state) *table[pairKey, domain.DuplicateDismissal] { return &s.dismissals },
 		func(v domain.DuplicateDismissal) pairKey { return pairKey{v.PersonA, v.PersonB} }),
+	rows("pushSubs",
+		func(s *state) *table[domain.PushSubscriptionID, domain.PushSubscription] { return &s.pushSubs },
+		func(v domain.PushSubscription) domain.PushSubscriptionID { return v.ID }),
+	rows("pushOutbox", func(s *state) *table[domain.PushMessageID, domain.PushMessage] { return &s.pushOutbox },
+		func(v domain.PushMessage) domain.PushMessageID { return v.ID }),
 }
 
 // OnCommit registers fn to run after every read-write transaction that

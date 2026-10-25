@@ -159,6 +159,11 @@ func fullStore(t *testing.T) *Store {
 			Email: true, EmailedAt: at, EmailRecipients: 2, CreatedAt: at, UpdatedAt: at,
 		}
 
+		pushSub := domain.PushSubscription{
+			ID: ids.New[domain.PushSubscriptionID](src), AccountID: account, Endpoint: "https://push.example.net/x",
+			P256DH: [65]byte{4, 1}, Auth: [16]byte{2}, DeviceLabel: "Firefox on Linux", CreatedAt: at, LastUsedAt: at,
+		}
+
 		return errors.Join(
 			tx.Receipts().Create(ctx, receipt),
 			tx.Receipts().PutPDF(ctx, receipt.ID, []byte("%PDF-1.7 snapshot")),
@@ -214,6 +219,11 @@ func fullStore(t *testing.T) *Store {
 			}),
 			tx.DuplicateDismissals().Create(ctx, domain.NewDuplicateDismissal(person, accounts[len(accounts)-1].PersonID,
 				account, at)),
+			tx.PushSubscriptions().Save(ctx, pushSub),
+			tx.PushOutbox().Create(ctx, domain.PushMessage{
+				ID: ids.New[domain.PushMessageID](src), SubscriptionID: pushSub.ID, Payload: `{"title":"Hello"}`,
+				CreatedAt: at, ExpiresAt: at.Add(time.Hour), NextAttemptAt: at,
+			}),
 		)
 	})
 	if err != nil {

@@ -448,6 +448,10 @@ func (r accountRepo) Delete(_ context.Context, id domain.AccountID) error {
 		s.calendarFeeds.delete(gen, f.ID)
 	}
 
+	for _, p := range s.pushSubs.filter(func(p domain.PushSubscription) bool { return p.AccountID == id }) {
+		deletePushSubscription(s, gen, p.ID)
+	}
+
 	for k := range s.announcementDismissed.rows {
 		if k.account == id {
 			s.announcementDismissed.delete(gen, k)

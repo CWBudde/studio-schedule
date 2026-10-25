@@ -117,6 +117,8 @@ type Tx interface {
 	Announcements() AnnouncementRepo
 	Imports() ImportRunRepo
 	DuplicateDismissals() DuplicateDismissalRepo
+	PushSubscriptions() PushSubscriptionRepo
+	PushOutbox() PushOutboxRepo
 }
 
 // SettingsRepo stores the single, school-wide settings record.
@@ -833,6 +835,54 @@ type OutboxRepo interface {
 	// CountUnsent counts the mails that are not sent, by status (the
 	// metrics of the outbox).
 	CountUnsent(ctx context.Context) (OutboxCounts, error)
+}
+
+// PushSubscriptionRepo stores the web push subscriptions of accounts (ADR
+// 0017). An endpoint belongs to one subscription. Subscriptions go with
+// their account, and their messages go with them.
+type PushSubscriptionRepo interface {
+	Get(ctx context.Context, id domain.PushSubscriptionID) (domain.PushSubscription, error)
+	// Save stores s by its endpoint. A new endpoint is created with s. The
+	// endpoint of the same account is updated: its keys, DeviceLabel and
+	// LastUsedAt change, its ID and CreatedAt stay. The endpoint of another
+	// account (the device changed hands) is deleted with its messages and
+	// created anew with s. It fails with domain.ErrConflict if the account
+	// does not exist or s.ID is another endpoint's.
+	Save(ctx context.Context, s domain.PushSubscription) error
+	// ListByAccount returns the subscriptions of an account ordered by
+	// CreatedAt and ID.
+	ListByAccount(ctx context.Context, account domain.AccountID) ([]domain.PushSubscription, error)
+	// Delete deletes subscription id with its messages; one that does not
+	// exist is domain.ErrNotFound.
+	Delete(ctx context.Context, id domain.PushSubscriptionID) error
+	// DeleteByEndpoint deletes the account's subscription of the endpoint
+	// with its messages, if it has one, and returns how many it deleted (0
+	// or 1).
+	DeleteByEndpoint(ctx context.Context, account domain.AccountID, endpoint string) (int, error)
+	// Touch sets the LastUsedAt of subscription id to the instant; one that
+	// does not exist is domain.ErrNotFound.
+	Touch(ctx context.Context, id domain.PushSubscriptionID, at time.Time) error
+	// DeleteUnusedBefore deletes, with their messages, the subscriptions
+	// last used before the instant and returns how many it deleted.
+	DeleteUnusedBefore(ctx context.Context, before time.Time) (int, error)
+}
+
+// PushOutboxRepo stores outgoing web push messages (ADR 0017).
+type PushOutboxRepo interface {
+	Get(ctx context.Context, id domain.PushMessageID) (domain.PushMessage, error)
+	// Create fails with domain.ErrConflict if the ID is taken or the
+	// subscription does not exist.
+	Create(ctx context.Context, m domain.PushMessage) error
+	// Update changes every field but the subscription and CreatedAt.
+	Update(ctx context.Context, m domain.PushMessage) error
+	// ListDue returns at most limit pending messages whose next attempt is
+	// due at now, ordered by next attempt and ID. Like OutboxRepo.ListDue
+	// it needs a ReadWrite transaction and skips messages that another
+	// transaction has locked.
+	ListDue(ctx context.Context, now time.Time, limit int) ([]domain.PushMessage, error)
+	// DeleteCreatedBefore deletes every message created before the
+	// instant, whatever its state, and returns how many it deleted.
+	DeleteCreatedBefore(ctx context.Context, before time.Time) (int, error)
 }
 
 // OutboxCounts are the numbers of unsent mails by status.

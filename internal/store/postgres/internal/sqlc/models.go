@@ -280,6 +280,30 @@ type PersonGuardian struct {
 	DependentID pgtype.UUID
 }
 
+type PushOutbox struct {
+	ID             pgtype.UUID
+	SubscriptionID pgtype.UUID
+	Payload        []byte
+	CreatedAt      pgtype.Timestamptz
+	ExpiresAt      pgtype.Timestamptz
+	Attempts       int32
+	NextAttemptAt  pgtype.Timestamptz
+	SentAt         pgtype.Timestamptz
+	FailedAt       pgtype.Timestamptz
+	LastError      pgtype.Text
+}
+
+type PushSubscription struct {
+	ID          pgtype.UUID
+	AccountID   pgtype.UUID
+	Endpoint    string
+	P256dh      []byte
+	Auth        []byte
+	DeviceLabel pgtype.Text
+	CreatedAt   pgtype.Timestamptz
+	LastUsedAt  pgtype.Timestamptz
+}
+
 type Receipt struct {
 	ID               pgtype.UUID
 	Number           string
