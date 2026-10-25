@@ -124,6 +124,7 @@ func TestAPIAnswersAreNotCached(t *testing.T) {
 		{"/api", true, http.StatusNotFound, "application/problem+json"},
 		{"/api/v1/settings/logo", true, http.StatusNotFound, "application/problem+json"}, // no logo yet
 		{"/ical/unknown-token.ics", false, http.StatusNotFound, "application/problem+json"},
+		{"/manifest.webmanifest", false, http.StatusOK, "application/manifest+json"},
 		{"/api/v1/openapi.json", false, http.StatusOK, "application/"},
 		{"/api/v1/docs", false, http.StatusOK, "text/html"},
 		{"/schedule/week", false, http.StatusOK, ""},
@@ -166,6 +167,8 @@ func TestContentSecurityPolicy(t *testing.T) {
 	for name, want := range map[string]string{
 		"default-src":     "'self'",
 		"img-src":         "'self' data:",
+		"worker-src":      "'self'", // the service worker (ADR 0017)
+		"manifest-src":    "'self'",
 		"style-src":       "'self' 'unsafe-inline'", // injected <style> elements of sonner and Radix
 		"frame-ancestors": "'none'",
 		"base-uri":        "'self'",

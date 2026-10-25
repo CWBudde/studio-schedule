@@ -124,6 +124,11 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return err
 	}
 
+	pusher, err := newPusher(cfg, clk, logger)
+	if err != nil {
+		return err
+	}
+
 	// Without a database the server runs on the demo data, like the web demo.
 	demo := cfg.DatabaseURL == ""
 
@@ -138,6 +143,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		UI:      webui.Handler(),
 		AppURL:  appURL(cfg),
 		Mailer:  mailer,
+		Pusher:  pusher,
 		PDF:     pdf,
 		Demo:    demo,
 		// Requests wake the background jobs started below.

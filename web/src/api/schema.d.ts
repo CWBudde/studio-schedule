@@ -2152,6 +2152,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/my/push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Web push status
+         * @description Tells whether this installation sends web push notifications (for waiting-list invites, besides the mail), and the VAPID key a browser subscribes with.
+         */
+        get: operations["getPushStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/push/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn on notifications on a device
+         * @description Saves the browser's push subscription (`PushSubscription.toJSON()`) for the signed-in account: the device gets the account's notifications from now on. Saving the same endpoint again updates it; an endpoint another account saved before (a shared device) is the caller's now. A 404 while push is off, a 403 while an admin is signed in as the account, a 422 on a field that is no https URL or key.
+         */
+        post: operations["savePushSubscription"];
+        /**
+         * Turn off notifications on a device
+         * @description Deletes the signed-in account's subscription of the endpoint in the body, if it has one; the answer is the same either way. The web app calls it before it signs out.
+         */
+        delete: operations["deletePushSubscription"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/my/receipts": {
         parameters: {
             query?: never;
@@ -2556,6 +2600,26 @@ export interface paths {
          * @description Returns the iCalendar document (RFC 5545) of a feed, as its account may see it now: the lessons from four weeks back on, in the school's time zone, canceled ones with `STATUS:CANCELLED`. The token is the proof; no sign-in is needed. An unknown or revoked token, or the feed of a disabled account, is a 404. With the `ETag` in `If-None-Match` an unchanged feed is a 304. `download=true` asks for an attachment with a file name. Rate-limited per client, generously since calendar services poll from shared addresses, and per feed.
          */
         get: operations["getCalendarFeed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/manifest.webmanifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Web app manifest
+         * @description Returns the web app manifest that makes the app installable: the school's name, its accent as the theme color, the language and the icons.
+         */
+        get: operations["getWebManifest"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3856,6 +3920,10 @@ export interface components {
             /** @description The account's password. */
             password: string;
         };
+        DeletePushSubscriptionInputBody: {
+            /** @description The endpoint of the device's subscription. */
+            endpoint: string;
+        };
         DemoLogin: {
             /** @description Email address (login name). */
             email: string;
@@ -4202,6 +4270,25 @@ export interface components {
              * @description Person ID.
              */
             id: string;
+        };
+        ExportPushDevice: {
+            /**
+             * Format: date-time
+             * @description When notifications were turned on.
+             */
+            createdAt: string;
+            /** @description The device's name, if the browser gave one. */
+            deviceLabel?: string;
+            /**
+             * Format: uuid
+             * @description Subscription ID.
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When the device last saved its subscription or a notification last went to it.
+             */
+            lastUsedAt: string;
         };
         ExportReceipt: {
             /** @description Whether a sale was canceled. */
@@ -6038,6 +6125,8 @@ export interface components {
             /** @description The passes the person owns. */
             passes: components["schemas"]["ExportPass"][];
             person: components["schemas"]["ExportPersonData"];
+            /** @description The devices the account turned notifications on for (web push), without their endpoints and keys. */
+            pushDevices: components["schemas"]["ExportPushDevice"][];
             /** @description The receipts the person paid, newest first (no PDFs). */
             receipts: components["schemas"]["ExportReceipt"][];
             /**
@@ -6112,6 +6201,18 @@ export interface components {
             schoolName: string;
             /** @description IANA time zone of the school, e.g. Europe/Berlin. */
             timezone: string;
+        };
+        PushKeys: {
+            /** @description The authentication secret, base64url. */
+            auth: string;
+            /** @description The browser's ECDH public key, base64url. */
+            p256dh: string;
+        };
+        PushStatus: {
+            /** @description Whether the installation sends web push notifications. */
+            enabled: boolean;
+            /** @description The VAPID public key (base64url), the applicationServerKey to subscribe with; absent while push is off, and in the web demo, which shows its notifications itself. */
+            publicKey?: string;
         };
         Receipt: {
             /** @description Whether the office can cancel it now: a sale, not canceled, whose pass paid for no visit. */
@@ -6543,6 +6644,13 @@ export interface components {
              * @description Waiting-list entries, ended ones included: the demand for full lessons.
              */
             waitlistEntries: number;
+        };
+        SavePushSubscriptionInputBody: {
+            /** @description A name of the device for its holder, e.g. "Firefox on Linux". */
+            deviceLabel?: string;
+            /** @description The push service's https URL of the subscription. */
+            endpoint: string;
+            keys: components["schemas"]["PushKeys"];
         };
         Schedule: {
             /**
@@ -12004,6 +12112,115 @@ export interface operations {
             };
         };
     };
+    getPushStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    savePushSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavePushSubscriptionInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Invalid"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deletePushSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeletePushSubscriptionInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listMyReceipts: {
         parameters: {
             query?: never;
@@ -13028,6 +13245,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getWebManifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The manifest. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/manifest+json": Record<string, never>;
+                };
             };
             /** @description Error */
             default: {

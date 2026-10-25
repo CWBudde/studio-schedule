@@ -74,3 +74,31 @@ func TestEmbeddedPlaceholder(t *testing.T) {
 		t.Fatalf("embedded index: status %d, body %q", rec.Code, rec.Body.String())
 	}
 }
+
+// TestPWAFiles: the service worker is revalidated on every load and served
+// as JavaScript; a manifest file has its type (ADR 0017).
+func TestPWAFiles(t *testing.T) {
+	t.Parallel()
+
+	h := webui.NewHandler(fstest.MapFS{
+		"index.html":           {Data: []byte("<html>index</html>")},
+		"sw.js":                {Data: []byte("self.addEventListener('fetch', () => {})")},
+		"manifest.webmanifest": {Data: []byte(`{"name":"Studio Schedule (demo)"}`)},
+		"icons/icon-192.png":   {Data: []byte("\x89PNG\r\n\x1a\n")},
+	})
+
+	for path, want := range map[string][2]string{
+		"/sw.js":                {"text/javascript; charset=utf-8", "no-cache"},
+		"/manifest.webmanifest": {"application/manifest+json", ""},
+		"/icons/icon-192.png":   {"image/png", ""},
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+
+		if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != want[0] ||
+			rec.Header().Get("Cache-Control") != want[1] {
+			t.Errorf("%s: %d, Content-Type %q, Cache-Control %q; want %q, %q", path, rec.Code,
+				rec.Header().Get("Content-Type"), rec.Header().Get("Cache-Control"), want[0], want[1])
+		}
+	}
+}

@@ -210,6 +210,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 			func() { deps.Wake.Wake(announcementsJob) }),
 		MailLog: service.NewMailLogService(deps.Store, deps.Clock, deps.IDs),
 		Imports: service.NewImportService(deps.Store, deps.Clock, deps.IDs),
+		Push:    service.NewPushService(deps.Store, deps.Clock, deps.IDs, deps.Pusher),
 	})
 
 	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
@@ -240,6 +241,8 @@ func New(deps Deps) (http.Handler, huma.API) {
 
 // contentSecurityPolicy allows only the app's own scripts, styles, images and
 // API calls (the WASM demo is served by GitHub Pages, without these headers).
+// The service worker and the manifest (ADR 0017) are named explicitly: both
+// come from the app's origin only.
 // Scripts must stay without 'unsafe-inline' and 'unsafe-eval': the theme
 // script is a file (web/public/theme.js) for that reason.
 //
@@ -254,6 +257,8 @@ func New(deps Deps) (http.Handler, huma.API) {
 // a policy of its own for it, which replaces this one there.
 const contentSecurityPolicy = "default-src 'self'; " +
 	"img-src 'self' data:; " +
+	"worker-src 'self'; " +
+	"manifest-src 'self'; " +
 	"style-src 'self' 'unsafe-inline'; " +
 	"frame-ancestors 'none'; " +
 	"base-uri 'self'; " +

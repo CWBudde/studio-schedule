@@ -323,6 +323,7 @@ type PersonExport struct {
 	MergedPersons []ExportPersonRef     `doc:"Persons merged into this one (duplicates); their receipts are listed here." json:"mergedPersons" nullable:"false"`
 	Account       *ExportAccount        `doc:"The person's account; absent without one, or for a dependent's own account exported by a guardian." json:"account,omitempty"`
 	CalendarFeeds []ExportCalendarFeed  `doc:"The account's active calendar feeds, without their secret links." json:"calendarFeeds" nullable:"false"`
+	PushDevices   []ExportPushDevice    `doc:"The devices the account turned notifications on for (web push), without their endpoints and keys." json:"pushDevices" nullable:"false"`
 	Dismissed     []ExportAnnouncement  `doc:"Announcements the account dismissed." json:"dismissedAnnouncements" nullable:"false"`
 	Classes       []PersonClass         `doc:"Class memberships." json:"classMemberships" nullable:"false"`
 	Bookings      []ExportBooking       `doc:"Every booking, canceled ones included, by lesson start." json:"bookings" nullable:"false"`
@@ -376,6 +377,15 @@ type ExportCalendarFeed struct {
 	LocationID domain.LocationID     `doc:"The location a schedule feed is narrowed to, if any." json:"locationId,omitzero"`
 	CreatedAt  time.Time             `doc:"When the feed was created." json:"createdAt"`
 	LastUsedAt time.Time             `doc:"When a calendar last fetched it, if ever (updated daily)." json:"lastUsedAt,omitzero"`
+}
+
+// ExportPushDevice is a device with web push notifications on (ADR 0017),
+// without its endpoint and keys.
+type ExportPushDevice struct {
+	ID          domain.PushSubscriptionID `doc:"Subscription ID." json:"id"`
+	DeviceLabel string                    `doc:"The device's name, if the browser gave one." json:"deviceLabel,omitempty"`
+	CreatedAt   time.Time                 `doc:"When notifications were turned on." json:"createdAt"`
+	LastUsedAt  time.Time                 `doc:"When the device last saved its subscription or a notification last went to it." json:"lastUsedAt"`
 }
 
 // ExportAnnouncement names a dismissed announcement.
@@ -462,6 +472,7 @@ func personExport(x service.PersonExport) PersonExport {
 		},
 		Guardians: personRefs(x.Guardians), Dependents: personRefs(x.Dependents), MergedPersons: personRefs(x.Merged),
 		CalendarFeeds: make([]ExportCalendarFeed, 0, len(x.CalendarFeeds)),
+		PushDevices:   make([]ExportPushDevice, 0, len(x.PushSubscriptions)),
 		Dismissed:     make([]ExportAnnouncement, 0, len(x.Dismissed)),
 		Classes:       make([]PersonClass, 0, len(x.Classes)),
 		Bookings:      make([]ExportBooking, 0, len(x.Bookings)),
@@ -481,6 +492,12 @@ func personExport(x service.PersonExport) PersonExport {
 		out.CalendarFeeds = append(out.CalendarFeeds, ExportCalendarFeed{
 			ID: f.ID, Scope: string(f.Scope), LocationID: f.LocationID, CreatedAt: f.CreatedAt.UTC(),
 			LastUsedAt: f.LastUsedAt.UTC(),
+		})
+	}
+
+	for _, d := range x.PushSubscriptions {
+		out.PushDevices = append(out.PushDevices, ExportPushDevice{
+			ID: d.ID, DeviceLabel: d.DeviceLabel, CreatedAt: d.CreatedAt.UTC(), LastUsedAt: d.LastUsedAt.UTC(),
 		})
 	}
 

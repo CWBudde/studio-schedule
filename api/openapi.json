@@ -2386,6 +2386,21 @@
         ],
         "type": "object"
       },
+      "DeletePushSubscriptionInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "endpoint": {
+            "description": "The endpoint of the device's subscription.",
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint"
+        ],
+        "type": "object"
+      },
       "DemoLogin": {
         "additionalProperties": false,
         "properties": {
@@ -3038,6 +3053,36 @@
           "id",
           "givenName",
           "familyName"
+        ],
+        "type": "object"
+      },
+      "ExportPushDevice": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "description": "When notifications were turned on.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "deviceLabel": {
+            "description": "The device's name, if the browser gave one.",
+            "type": "string"
+          },
+          "id": {
+            "description": "Subscription ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "description": "When the device last saved its subscription or a notification last went to it.",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "lastUsedAt"
         ],
         "type": "object"
       },
@@ -6723,6 +6768,13 @@
           "person": {
             "$ref": "#/components/schemas/ExportPersonData"
           },
+          "pushDevices": {
+            "description": "The devices the account turned notifications on for (web push), without their endpoints and keys.",
+            "items": {
+              "$ref": "#/components/schemas/ExportPushDevice"
+            },
+            "type": "array"
+          },
           "receipts": {
             "description": "The receipts the person paid, newest first (no PDFs).",
             "items": {
@@ -6752,6 +6804,7 @@
           "dependents",
           "mergedPersons",
           "calendarFeeds",
+          "pushDevices",
           "dismissedAnnouncements",
           "classMemberships",
           "bookings",
@@ -6917,6 +6970,45 @@
           "timezone",
           "defaultLocale",
           "currency"
+        ],
+        "type": "object"
+      },
+      "PushKeys": {
+        "additionalProperties": false,
+        "properties": {
+          "auth": {
+            "description": "The authentication secret, base64url.",
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          },
+          "p256dh": {
+            "description": "The browser's ECDH public key, base64url.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "p256dh",
+          "auth"
+        ],
+        "type": "object"
+      },
+      "PushStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "description": "Whether the installation sends web push notifications.",
+            "type": "boolean"
+          },
+          "publicKey": {
+            "description": "The VAPID public key (base64url), the applicationServerKey to subscribe with; absent while push is off, and in the web demo, which shows its notifications itself.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled"
         ],
         "type": "object"
       },
@@ -7784,6 +7876,30 @@
           "trials",
           "guests",
           "waitlistEntries"
+        ],
+        "type": "object"
+      },
+      "SavePushSubscriptionInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "deviceLabel": {
+            "description": "A name of the device for its holder, e.g. \"Firefox on Linux\".",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "endpoint": {
+            "description": "The push service's https URL of the subscription.",
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "keys": {
+            "$ref": "#/components/schemas/PushKeys"
+          }
+        },
+        "required": [
+          "endpoint",
+          "keys"
         ],
         "type": "object"
       },
@@ -15439,6 +15555,129 @@
         "x-access": "signedIn"
       }
     },
+    "/api/v1/my/push": {
+      "get": {
+        "description": "Tells whether this installation sends web push notifications (for waiting-list invites, besides the mail), and the VAPID key a browser subscribes with.",
+        "operationId": "getPushStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Web push status",
+        "tags": [
+          "push"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/my/push/subscriptions": {
+      "delete": {
+        "description": "Deletes the signed-in account's subscription of the endpoint in the body, if it has one; the answer is the same either way. The web app calls it before it signs out.",
+        "operationId": "deletePushSubscription",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletePushSubscriptionInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Turn off notifications on a device",
+        "tags": [
+          "push"
+        ],
+        "x-access": "signedIn"
+      },
+      "post": {
+        "description": "Saves the browser's push subscription (`PushSubscription.toJSON()`) for the signed-in account: the device gets the account's notifications from now on. Saving the same endpoint again updates it; an endpoint another account saved before (a shared device) is the caller's now. A 404 while push is off, a 403 while an admin is signed in as the account, a 422 on a field that is no https URL or key.",
+        "operationId": "savePushSubscription",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavePushSubscriptionInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Invalid"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Turn on notifications on a device",
+        "tags": [
+          "push"
+        ],
+        "x-access": "signedIn"
+      }
+    },
     "/api/v1/my/receipts": {
       "get": {
         "description": "Returns the receipts of the passes the signed-in person paid for, newest first.",
@@ -16930,6 +17169,51 @@
         "summary": "Fetch a calendar feed",
         "tags": [
           "calendar feeds"
+        ],
+        "x-access": "public"
+      }
+    },
+    "/manifest.webmanifest": {
+      "get": {
+        "description": "Returns the web app manifest that makes the app installable: the school's name, its accent as the theme color, the language and the icons.",
+        "operationId": "getWebManifest",
+        "responses": {
+          "200": {
+            "content": {
+              "application/manifest+json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The manifest.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Web app manifest",
+        "tags": [
+          "settings"
         ],
         "x-access": "public"
       }

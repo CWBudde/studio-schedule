@@ -82,6 +82,8 @@ type Deps struct {
 	MailLog *service.MailLogService
 	// Imports is the member import (ADR 0015).
 	Imports *service.ImportService
+	// Push are the web push subscriptions of accounts (ADR 0017).
+	Push *service.PushService
 }
 
 // NewConfig returns the Huma configuration for the API: OpenAPI document at
@@ -140,6 +142,8 @@ func Register(api huma.API, deps Deps) {
 	registerImports(api, h)
 	registerDuplicates(api, h)
 	registerPrivacy(api, h)
+	registerPush(api, h)
+	registerManifest(api, h)
 }
 
 type handlers struct {

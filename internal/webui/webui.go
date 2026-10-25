@@ -36,7 +36,8 @@ func Handler() http.Handler {
 // NewHandler serves the single-page app in files:
 //
 //   - existing files are served as-is; files under assets/ are cached
-//     immutably (their names contain content hashes);
+//     immutably (their names contain content hashes), the service worker
+//     is revalidated on every load (setFileHeaders);
 //   - paths below /api/ and missing files under /assets/ get 404;
 //   - every other GET/HEAD request gets index.html, so client-side routes
 //     survive a reload.
@@ -58,9 +59,7 @@ func NewHandler(files fs.FS) http.Handler {
 
 		name := strings.TrimPrefix(urlPath, "/")
 		if name != "" && name != "index.html" && isFile(files, name) {
-			if strings.HasPrefix(name, "assets/") {
-				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-			}
+			setFileHeaders(w.Header(), name)
 
 			// name is cleaned above and fs.FS paths cannot leave files.
 			http.ServeFileFS(w, r, files, name) //nolint:gosec // G703: see above
@@ -76,6 +75,25 @@ func NewHandler(files fs.FS) http.Handler {
 
 		serveIndex(w, r, files)
 	})
+}
+
+// ServiceWorker is the file of the service worker (ADR 0017, web/src/sw.ts).
+const ServiceWorker = "sw.js"
+
+// setFileHeaders sets the caching and the types Go does not know: hashed
+// assets are immutable; the service worker is checked on every load, so an
+// update is found at once (browsers cap its HTTP cache at a day anyway);
+// a .webmanifest is a manifest.
+func setFileHeaders(h http.Header, name string) {
+	switch {
+	case strings.HasPrefix(name, "assets/"):
+		h.Set("Cache-Control", "public, max-age=31536000, immutable")
+	case name == ServiceWorker:
+		h.Set("Cache-Control", "no-cache")
+		h.Set("Content-Type", "text/javascript; charset=utf-8")
+	case path.Ext(name) == ".webmanifest":
+		h.Set("Content-Type", "application/manifest+json")
+	}
 }
 
 func isFile(files fs.FS, name string) bool {
