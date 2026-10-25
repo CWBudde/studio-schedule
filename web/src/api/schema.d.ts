@@ -172,6 +172,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List possible duplicates
+         * @description Returns pairs of persons that may be the same, at most 200: strong ones (the same email, a person's or its account's, ignoring case; or the same name and birth date) first, then weak ones (the same name, a birth date unknown). Names compare ignoring case, accents and hyphens, with umlauts spelled out. A guardian and its dependent, or two dependents of one guardian, do not match by the email alone. Dismissed pairs and merged persons are left out.
+         */
+        get: operations["listDuplicates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/duplicates/dismissals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a pair
+         * @description Records that two persons are not the same, so the pair is no longer listed. Dismissing a pair again changes nothing; an unknown person is a 404.
+         */
+        post: operations["dismissDuplicate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List import runs
+         * @description Returns the latest 50 applied imports, newest first, with who ran them, their counts and the rows they could not take.
+         */
+        get: operations["listImportRuns"];
+        put?: never;
+        /**
+         * Import members
+         * @description Imports the members of a CSV file with a mapping of its columns. Each row is a member found by its member number, and up to two guardians found by their email (an account's or a person's, ignoring case) or else by their name; what is not found is created. An update writes only the mapped fields the row fills; guardian links are added, never removed; no accounts are created. Rows with problems are left out and reported. Without `apply` it is a dry run that writes nothing; with it, the import is recorded in the run history. A mapping that does not fit the file is a 422 on `body.mapping`, an unreadable file one on `body.content`.
+         */
+        post: operations["runImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/imports/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read a member file
+         * @description Reads a CSV file (UTF-8 or Windows-1252; separated by semicolons, commas or tabs; at most 1024 KiB and 5000 rows) and returns its headers, its first rows and a mapping of the headers it recognizes by their English or German names. A file it cannot read is a 422 on `body.content`. Nothing is stored.
+         */
+        post: operations["inspectImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/lessons/clone": {
         parameters: {
             query?: never;
@@ -369,7 +453,7 @@ export interface paths {
         };
         /**
          * Search persons
-         * @description Returns the persons whose given name, family name or email contains every word of `q`, ignoring case, ordered by family and given name; at most 50. For the office's pickers, e.g. linking a staff member to a person.
+         * @description Returns the persons whose given name, family name, email or member number contains every word of `q`, ignoring case, ordered by family and given name; at most 50; merged persons are left out. For the office's pickers, e.g. linking a staff member to a person.
          */
         get: operations["listPersons"];
         put?: never;
@@ -378,6 +462,26 @@ export interface paths {
          * @description Adds a person without an account, e.g. a second parent or a staff member's record.
          */
         post: operations["createPerson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/persons/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge two persons
+         * @description Merges a duplicate person into the survivor: its bookings, waiting-list entries, class memberships, passes (owned and paid for), guardian links, staff links and account move to the survivor. Where both have a booking of the same lesson that has not started, the duplicate's is canceled (a visit it cost comes back); of a lesson that has started, both stay as history. Where both are members of a class, the survivor's membership stays, and the duplicate's automatic bookings of the class follow it. The survivor takes the fields `take` names from the duplicate and keeps both notes, or the `notes` given (at most 2000 characters, else a 422); the duplicate stays as a hidden record for its receipts, which are listed under the survivor. Without `apply` it only tells what would happen. Both with an account is a 409 `two-accounts` (disable one first: a disabled account of the duplicate stays with it); a merge after which a guardian would also be a dependent of the survivor a 409 `guardian-cycle`. Recorded in the audit log.
+         */
+        post: operations["mergePersons"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2434,6 +2538,8 @@ export interface components {
              * @description Person ID.
              */
             id: string;
+            /** @description The school's member number, if any; unique (a number another person has is a 409 duplicate). The member import finds a person by it. */
+            memberNo?: string;
             /** @description The office's internal notes, if any. */
             notes?: string;
             /** @description Phone number, if any. */
@@ -2696,13 +2802,20 @@ export interface components {
              * @description The mail of mail-requeued.
              */
             mailId?: string;
+            /** @description Its name at the time. */
+            mergedName?: string;
+            /**
+             * Format: uuid
+             * @description The person of person-merged that was merged into the target, now a tombstone.
+             */
+            mergedPersonId?: string;
             /** @description Its recipient. */
             recipient?: string;
             /** @description Its template. */
             template?: string;
         };
         AuditEventEntry: {
-            /** @description What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail); later versions may add actions. */
+            /** @description What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one); later versions may add actions. */
             action: string;
             /** @description The account that acted. */
             actor: components["schemas"]["AuditAccount"];
@@ -3362,10 +3475,10 @@ export interface components {
             /** @description The lesson that uses the room; only with reason room-taken. */
             lesson?: components["schemas"]["ConflictLesson"];
             /**
-             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead.
+             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead; two-accounts: both persons of a merge have an account, so one is disabled first; guardian-cycle: after the merge a guardian of the survivor would also be its dependent.
              * @enum {string}
              */
-            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation" | "timezone-locked" | "currency-locked" | "mail-limit" | "expired" | "not-failed" | "secret-link";
+            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation" | "timezone-locked" | "currency-locked" | "mail-limit" | "expired" | "not-failed" | "secret-link" | "two-accounts" | "guardian-cycle";
             /**
              * Format: int64
              * @description HTTP status code
@@ -3533,6 +3646,59 @@ export interface components {
             /** @description Mails, newest first. */
             mails: components["schemas"]["MailboxMail"][];
         };
+        DismissDuplicateInputBody: {
+            /**
+             * Format: uuid
+             * @description One person of the pair.
+             */
+            personA: string;
+            /**
+             * Format: uuid
+             * @description The other person; it differs.
+             */
+            personB: string;
+        };
+        DuplicateCandidate: {
+            /** @description The email of the person's account; absent without one. */
+            accountEmail?: string;
+            /**
+             * Format: date
+             * @description Date of birth, if known; not in the future.
+             */
+            birthDate?: string;
+            /** @description Contact email, if any; not the login name. */
+            email?: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /**
+             * Format: uuid
+             * @description Person ID.
+             */
+            id: string;
+            /** @description The school's member number, if any; unique (a number another person has is a 409 duplicate). The member import finds a person by it. */
+            memberNo?: string;
+            /** @description The office's internal notes, if any. */
+            notes?: string;
+            /** @description Phone number, if any. */
+            phone?: string;
+        };
+        DuplicateList: {
+            /** @description The pairs, strong ones first. */
+            items: components["schemas"]["DuplicatePair"][];
+        };
+        DuplicatePair: {
+            a: components["schemas"]["DuplicateCandidate"];
+            b: components["schemas"]["DuplicateCandidate"];
+            /** @description What matched. */
+            reasons: ("email" | "name-birth-date" | "name")[];
+            /**
+             * @description strong: the same email, or the same name and birth date; weak: the same name, a birth date unknown.
+             * @enum {string}
+             */
+            strength: "strong" | "weak";
+        };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
             location?: string;
@@ -3674,6 +3840,257 @@ export interface components {
             familyName: string;
             /** @description Given name of the admin. */
             givenName: string;
+        };
+        ImportColumns: {
+            /** @description Birth date, DD.MM.YYYY or YYYY-MM-DD. */
+            birthDate?: string;
+            /** @description Email address. */
+            email?: string;
+            /** @description Family name; required. */
+            familyName?: string;
+            /** @description Given name; required. */
+            givenName?: string;
+            /** @description First guardian's email address. */
+            guardian1Email?: string;
+            /** @description First guardian's family name; required with any of its columns. */
+            guardian1FamilyName?: string;
+            /** @description First guardian's given name; required with any of its columns. */
+            guardian1GivenName?: string;
+            /** @description First guardian's phone number. */
+            guardian1Phone?: string;
+            /** @description Second guardian's email address. */
+            guardian2Email?: string;
+            /** @description Second guardian's family name; required with any of its columns. */
+            guardian2FamilyName?: string;
+            /** @description Second guardian's given name; required with any of its columns. */
+            guardian2GivenName?: string;
+            /** @description Second guardian's phone number. */
+            guardian2Phone?: string;
+            /** @description The member number, by which a member is found again; required. */
+            memberNo?: string;
+            /** @description Notes. */
+            notes?: string;
+            /** @description Phone number. */
+            phone?: string;
+        };
+        ImportCounts: {
+            /**
+             * Format: int64
+             * @description Members created.
+             */
+            created: number;
+            /**
+             * Format: int64
+             * @description Rows left out for their problems.
+             */
+            failed: number;
+            /**
+             * Format: int64
+             * @description Guardians created.
+             */
+            guardiansCreated: number;
+            /**
+             * Format: int64
+             * @description Guardians updated.
+             */
+            guardiansUpdated: number;
+            /**
+             * Format: int64
+             * @description Guardian links added.
+             */
+            linksAdded: number;
+            /**
+             * Format: int64
+             * @description Data rows of the file.
+             */
+            rows: number;
+            /**
+             * Format: int64
+             * @description Members unchanged.
+             */
+            unchanged: number;
+            /**
+             * Format: int64
+             * @description Members updated.
+             */
+            updated: number;
+        };
+        ImportDuplicate: {
+            /** @description Email address, if known. */
+            email?: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /**
+             * Format: uuid
+             * @description The person; absent for one an earlier row of the dry run would create.
+             */
+            id?: string;
+            /** @description Member number, if any. */
+            memberNo?: string;
+        };
+        ImportFileBody: {
+            /** @description The file, base64 encoded; at most 1 MiB. */
+            content: string;
+            /** @description The file's name, for the run history. */
+            fileName: string;
+        };
+        ImportGuardian: {
+            /**
+             * @description What happens to the guardian.
+             * @enum {string}
+             */
+            action: "create" | "update" | "unchanged" | "error";
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /** @description The row links the guardian to the member. */
+            linked: boolean;
+            /**
+             * @description How an existing guardian was found.
+             * @enum {string}
+             */
+            matchedBy?: "email" | "name";
+            /**
+             * Format: uuid
+             * @description The person; absent if the dry run would create it.
+             */
+            personId?: string;
+            /**
+             * Format: int64
+             * @description 1 or 2.
+             */
+            slot: number;
+        };
+        ImportInspection: {
+            /**
+             * @description What separates the cells.
+             * @enum {string}
+             */
+            delimiter: "semicolon" | "comma" | "tab";
+            /**
+             * @description How the file was decoded.
+             * @enum {string}
+             */
+            encoding: "utf-8" | "windows-1252";
+            /** @description The column names, in file order. */
+            headers: string[];
+            /**
+             * Format: int64
+             * @description How many data rows the file has.
+             */
+            rows: number;
+            /** @description The first data rows, a cell per header. */
+            sample: (string[] | null)[];
+            /** @description The headers recognized by their English or German names. */
+            suggested: components["schemas"]["ImportMapping"];
+        };
+        ImportIssue: {
+            /**
+             * @description required: the field is empty; invalid: not an email address, not a date as DD.MM.YYYY or YYYY-MM-DD, or too long; future: a birth date after today; member-no-repeated: an earlier row has the member number; guardian-ambiguous: several persons match the guardian; guardian-is-member: the guardian is the member; guardian-cycle: the guardian is a dependent of the member.
+             * @enum {string}
+             */
+            code: "required" | "invalid" | "future" | "member-no-repeated" | "guardian-ambiguous" | "guardian-is-member" | "guardian-cycle";
+            /** @description The field it is about. */
+            field: string;
+        };
+        ImportMapping: {
+            columns: components["schemas"]["ImportColumns"];
+            /** @description Further columns whose values go into the member's notes, each as a line "Header: value". */
+            notes?: string[] | null;
+        };
+        ImportRequest: {
+            /** @description Import; without it, a dry run that writes nothing. */
+            apply?: boolean;
+            /** @description The file, base64 encoded; at most 1 MiB. */
+            content: string;
+            /** @description The file's name, for the run history. */
+            fileName: string;
+            mapping: components["schemas"]["ImportMapping"];
+        };
+        ImportResult: {
+            /** @description Whether the import was applied; false for a dry run. */
+            applied: boolean;
+            counts: components["schemas"]["ImportCounts"];
+            /** @description Every data row, in file order. */
+            rows: components["schemas"]["ImportRow"][];
+            /**
+             * Format: uuid
+             * @description The recorded run; absent for a dry run.
+             */
+            runId?: string;
+        };
+        ImportRow: {
+            /**
+             * @description What happens to the member.
+             * @enum {string}
+             */
+            action: "create" | "update" | "unchanged" | "error";
+            /** @description The fields a create or update writes. */
+            changes: string[];
+            /** @description Persons a new member may be the same as (the same email, or name and birth date); a family's shared email does not count. */
+            duplicates: components["schemas"]["ImportDuplicate"][];
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /** @description The row's guardians. */
+            guardians: components["schemas"]["ImportGuardian"][];
+            /** @description The row's problems; a row with any is left out. */
+            issues: components["schemas"]["ImportIssue"][];
+            /**
+             * Format: int64
+             * @description The row's line in the file; the header is line 1.
+             */
+            line: number;
+            /** @description The member number. */
+            memberNo: string;
+            /**
+             * Format: uuid
+             * @description The member; absent for an error, and for a member the dry run would create.
+             */
+            personId?: string;
+        };
+        ImportRowError: {
+            /** @description The problem, as in ImportIssue. */
+            code: string;
+            /** @description The field it is about. */
+            field?: string;
+            /**
+             * Format: int64
+             * @description The row's line in the file.
+             */
+            line: number;
+        };
+        ImportRunEntry: {
+            /** @description Who ran it; absent for the command line. */
+            by?: components["schemas"]["AuditAccount"];
+            counts: components["schemas"]["ImportCounts"];
+            /** @description The rows it could not take (at most 200). */
+            errors: components["schemas"]["ImportRowError"][];
+            /** @description The file's name. */
+            fileName: string;
+            /**
+             * Format: date-time
+             * @description When it finished.
+             */
+            finishedAt: string;
+            /**
+             * Format: uuid
+             * @description Run ID.
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When it started.
+             */
+            startedAt: string;
+        };
+        ImportRunList: {
+            /** @description The latest runs, newest first. */
+            items: components["schemas"]["ImportRunEntry"][];
         };
         InstructorStatistics: {
             /**
@@ -4459,6 +4876,143 @@ export interface components {
             /** @description Whether the account teaches: it is staff with an active staff record linked to its person, so it may create a teaching calendar feed (createCalendarFeed). */
             teaches: boolean;
         };
+        MergeCanceled: {
+            /** @description Its course type's name. */
+            courseTypeName: string;
+            /**
+             * Format: uuid
+             * @description The lesson.
+             */
+            lessonId: string;
+            /**
+             * @description booked: the survivor has a booking of the lesson; membership: an automatic class booking the survivor's membership of the class does not have (a pause, a later start, a date it gave up).
+             * @enum {string}
+             */
+            reason: "booked" | "membership";
+            /**
+             * Format: date-time
+             * @description Its start instant (UTC).
+             */
+            startsAt: string;
+        };
+        MergeClass: {
+            /**
+             * Format: uuid
+             * @description The class.
+             */
+            classId: string;
+            /** @description Its course type's name. */
+            courseTypeName: string;
+            /**
+             * @description Start time (HH:MM) in the school time zone.
+             * @example 18:00
+             */
+            startTime: string;
+            /** @description Its term's name. */
+            termName: string;
+            /**
+             * Format: int64
+             * @description Day of the week, 0 = Sunday to 6 = Saturday.
+             */
+            weekday: number;
+        };
+        MergeInputBody: {
+            /** @description Merge; without it, only tell what would happen. */
+            apply?: boolean;
+            /**
+             * Format: uuid
+             * @description The duplicate merged into it; it differs.
+             */
+            mergedId: string;
+            /** @description The survivor's notes after the merge, as the office edited them; absent: the notes of both. Longer than 2000 characters is a 422 on notes. */
+            notes?: string;
+            /**
+             * Format: uuid
+             * @description The person that stays.
+             */
+            survivorId: string;
+            /** @description The fields the survivor takes from the duplicate; the others keep the survivor's value. */
+            take: components["schemas"]["MergeTake"];
+        };
+        MergeSummary: {
+            /** @description The duplicate's account moves to the survivor. */
+            accountMoved: boolean;
+            /** @description Whether the merge was done; false for a preview. */
+            applied: boolean;
+            /**
+             * Format: int64
+             * @description Bookings that move, canceled ones included.
+             */
+            bookingsMoved: number;
+            /** @description Bookings of the duplicate of lessons that have not started which the merge cancels, by start. */
+            canceled: components["schemas"]["MergeCanceled"][];
+            /**
+             * Format: int64
+             * @description Bookings of the duplicate of lessons that have started which the survivor has a booking of too; both stay, as they were.
+             */
+            history: number;
+            /**
+             * Format: int64
+             * @description Guardian links the survivor has already, or between the two.
+             */
+            linksDropped: number;
+            /**
+             * Format: int64
+             * @description Guardian links that move.
+             */
+            linksMoved: number;
+            /** @description Memberships of classes the survivor is a member of already; they end. */
+            membershipsDropped: components["schemas"]["MergeClass"][];
+            /**
+             * Format: int64
+             * @description Class memberships that move.
+             */
+            membershipsMoved: number;
+            /**
+             * Format: int64
+             * @description Passes the duplicate paid for.
+             */
+            paidPassesMoved: number;
+            /**
+             * Format: int64
+             * @description Passes the duplicate owns.
+             */
+            passesMoved: number;
+            /**
+             * Format: int64
+             * @description Receipts the duplicate paid; they stay with it and are listed under the survivor.
+             */
+            receipts: number;
+            /**
+             * Format: int64
+             * @description Staff members linked to the duplicate.
+             */
+            staffMoved: number;
+            /** @description The survivor as the merge leaves it. */
+            survivor: components["schemas"]["AdminPerson"];
+            /**
+             * Format: int64
+             * @description Waiting-list entries that move.
+             */
+            waitlistMoved: number;
+            /**
+             * Format: int64
+             * @description Waiting-list entries withdrawn because the survivor waits for, or is booked into, the lesson.
+             */
+            waitlistWithdrawn: number;
+        };
+        MergeTake: {
+            /** @description The birth date. */
+            birthDate?: boolean;
+            /** @description The email. */
+            email?: boolean;
+            /** @description The member number. */
+            memberNo?: boolean;
+            /** @description The given and family name. */
+            name?: boolean;
+            /** @description The phone. */
+            phone?: boolean;
+        };
         MyLessonBooking: {
             booking: components["schemas"]["Booking"];
             /** @description Whether the booking may be canceled now (cancelBooking): it is active and its lesson has not started. */
@@ -4884,6 +5438,12 @@ export interface components {
              * @description Person ID.
              */
             id: string;
+            /** @description The school's member number, if any; unique (a number another person has is a 409 duplicate). The member import finds a person by it. */
+            memberNo?: string;
+            /** @description Persons merged into this one; their receipts are listed as this person's. */
+            merged: components["schemas"]["PersonMatch"][];
+            /** @description The person this one was merged into; present only for such a hidden record, which cannot be changed. */
+            mergedInto?: components["schemas"]["PersonMatch"];
             /** @description The office's internal notes, if any. */
             notes?: string;
             /** @description Phone number, if any. */
@@ -4903,6 +5463,8 @@ export interface components {
              * @description Person ID.
              */
             id: string;
+            /** @description Member number, if any. */
+            memberNo?: string;
         };
         PersonMatchList: {
             /** @description Matching persons ordered by family and given name. */
@@ -4920,6 +5482,8 @@ export interface components {
             familyName: string;
             /** @description Given name. */
             givenName: string;
+            /** @description The school's member number, if any; unique (a number another person has is a 409 duplicate). The member import finds a person by it. */
+            memberNo?: string;
             /** @description The office's internal notes, if any. */
             notes?: string;
             /** @description Phone number, if any. */
@@ -6480,6 +7044,161 @@ export interface operations {
             };
         };
     };
+    listDuplicates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    dismissDuplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DismissDuplicateInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listImportRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportRunList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    runImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    inspectImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportFileBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportInspection"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     cloneLessons: {
         parameters: {
             query?: never;
@@ -6937,6 +7656,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminPerson"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    mergePersons: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeSummary"];
                 };
             };
             /** @description Conflict */

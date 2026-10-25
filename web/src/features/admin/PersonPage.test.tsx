@@ -181,6 +181,81 @@ describe('PersonPage', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
+  it('edits the member number and says when another person has it', async () => {
+    mockApiGet(fixtures());
+    const put = mockApiPut({ '/api/v1/admin/persons/{personId}': conflict('duplicate') });
+    const user = userEvent.setup();
+
+    renderPage(ids.personMia);
+    await user.click(
+      (await region('Details')).getByRole('button', { name: 'Edit the details of Mia Sample' }),
+    );
+    const sheet = within(await screen.findByRole('dialog', { name: 'Edit Mia Sample' }));
+    await user.type(sheet.getByLabelText('Member number (optional)'), ' M-0042 ');
+    await user.click(sheet.getByRole('button', { name: 'Save changes' }));
+
+    expect(await sheet.findByText('Another person has this member number.')).toBeInTheDocument();
+    expect(put.mock.calls[0]?.[1]).toMatchObject({ body: { memberNo: 'M-0042' } });
+  });
+
+  it('shows a merged person as a record kept for its receipts, and the persons merged into one', async () => {
+    const mia = personDetails[ids.personMia]!;
+    const tombstone = '0190a000-0000-7000-8000-000000000699';
+    mockApiGet({
+      ...fixtures(),
+      '/api/v1/admin/persons/{personId}': (init: MockRequest) =>
+        init.params?.path?.personId === tombstone
+          ? {
+              body: {
+                ...mia,
+                id: tombstone,
+                memberNo: undefined,
+                account: undefined,
+                dependents: [],
+                mergedInto: { id: ids.personMia, givenName: 'Mia', familyName: 'Sample' },
+              },
+            }
+          : {
+              body: {
+                ...mia,
+                memberNo: 'M-0042',
+                merged: [{ id: tombstone, givenName: 'Mia', familyName: 'Sampel' }],
+              },
+            },
+    });
+
+    renderPage(tombstone);
+
+    expect(await screen.findByText('Merged into another person')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Mia Sample' })).toHaveAttribute(
+      'href',
+      `/admin/persons/${ids.personMia}`,
+    );
+    expect(screen.queryByRole('button', { name: /Delete|Edit/ })).not.toBeInTheDocument();
+  });
+
+  it('lists the duplicates merged into a person and its member number', async () => {
+    const mia = personDetails[ids.personMia]!;
+    mockApiGet({
+      ...fixtures(),
+      '/api/v1/admin/persons/{personId}': {
+        body: {
+          ...mia,
+          memberNo: 'M-0042',
+          merged: [
+            { id: '0190a000-0000-7000-8000-000000000699', givenName: 'Mia', familyName: 'Sampel' },
+          ],
+        },
+      },
+    });
+
+    renderPage(ids.personMia);
+
+    const details = await region('Details');
+    expect(details.getByText('M-0042')).toBeInTheDocument();
+    expect(details.getByRole('link', { name: 'Mia Sampel' })).toBeInTheDocument();
+  });
+
   describe('guardians', () => {
     /** Picks a person in the guardian field of the add form. */
     async function pick(user: ReturnType<typeof userEvent.setup>, search: string, name: RegExp) {

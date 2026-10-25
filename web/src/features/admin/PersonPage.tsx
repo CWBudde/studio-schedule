@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
-import { ArrowLeft, KeyRound, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, KeyRound, Merge, Pencil, Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, deletePersonMutation, type PersonDetail, personQuery } from '@/api/queries';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -81,6 +82,39 @@ export function PersonPage({ personId }: { personId: string }) {
 
   const p = person.data;
   const name = personName(p);
+  if (p.mergedInto) {
+    // A merged person is a record kept for its receipts (ADR 0015).
+    return (
+      <div className="space-y-6">
+        <div className="space-y-3">
+          {back}
+          <h1 className="min-w-0 font-heading text-3xl font-semibold tracking-tight break-words">
+            {name}
+          </h1>
+        </div>
+        <Alert>
+          <Merge aria-hidden="true" />
+          <AlertTitle>{t('persons.mergedInto.title')}</AlertTitle>
+          <AlertDescription>
+            <p>
+              {t('persons.mergedInto.description')}{' '}
+              <Link
+                to="/admin/persons/$personId"
+                params={{ personId: p.mergedInto.id }}
+                className={linkClass}
+              >
+                {t('persons.mergedInto.open', { name: personName(p.mergedInto) })}
+              </Link>
+            </p>
+          </AlertDescription>
+        </Alert>
+        <div className="grid items-start gap-6 lg:grid-cols-2">
+          <Details person={p} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="space-y-3">
@@ -152,22 +186,25 @@ function Facts({ rows }: { rows: [string, ReactNode][] }) {
   );
 }
 
-function Details({ person, onEdit }: { person: PersonDetail; onEdit: () => void }) {
+/** The person's fields; editable with `onEdit` (a merged person is not). */
+function Details({ person, onEdit }: { person: PersonDetail; onEdit?: () => void }) {
   const { t, i18n } = useTranslation('admin');
   const lang = i18n.resolvedLanguage ?? 'en';
   return (
     <Section
       title={t('persons.detail.details')}
       action={
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label={t('persons.detail.editLabel', { name: personName(person) })}
-          onClick={onEdit}
-        >
-          <Pencil aria-hidden="true" />
-          {t('persons.detail.edit')}
-        </Button>
+        onEdit && (
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={t('persons.detail.editLabel', { name: personName(person) })}
+            onClick={onEdit}
+          >
+            <Pencil aria-hidden="true" />
+            {t('persons.detail.edit')}
+          </Button>
+        )
       }
     >
       <Facts
@@ -185,7 +222,25 @@ function Details({ person, onEdit }: { person: PersonDetail; onEdit: () => void 
                 year: 'numeric',
               }),
           ],
+          [t('persons.fields.memberNo'), person.memberNo],
           [t('persons.fields.notes'), person.notes],
+          ...(person.merged.length > 0
+            ? [
+                [
+                  t('persons.detail.merged'),
+                  person.merged.map((m) => (
+                    <Link
+                      key={m.id}
+                      to="/admin/persons/$personId"
+                      params={{ personId: m.id }}
+                      className={`${linkClass} block`}
+                    >
+                      {personName(m)}
+                    </Link>
+                  )),
+                ] satisfies [string, ReactNode],
+              ]
+            : []),
         ]}
       />
     </Section>

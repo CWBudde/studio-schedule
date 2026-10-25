@@ -1,0 +1,7 @@
+Mitgliedsnummer;Vorname;Nachname;Geburtsdatum;E-Mail;Telefon;Vorname Elternteil 1;Nachname Elternteil 1;E-Mail Elternteil 1;Telefon Elternteil 1;Vorname Elternteil 2;Nachname Elternteil 2;E-Mail Elternteil 2;Kurs
+M-1042;Lena;Quillfeather;;lena.quillfeather@example.com;+49 000 0000211;;;;;;;;Ballett Erwachsene
+M-2001;Paula;Amberly;14.03.2018;;;Clara;Amberly;clara.amberly@example.org;;Tom;Amberly;;Kreativer Kindertanz
+M-2002;Theo;Windmere;02.11.2015;;;Greta;Windmere;greta.windmere@example.com;+49 000 0000212;;;;Hip-Hop Kids
+M-2003;Mila;Windmere;27.06.2017;;;Greta;Windmere;greta.windmere@example.com;;Henrik;Windmere;henrik.windmere@example.com;Kreativer Kindertanz
+M-2004;Oskar;Brookfield;1987-09-30;oskar.brookfield@example.org;+49 000 0000213;;;;;;;;Jazz Dance
+M-2005;Ina;Fallowmere;31.02.2016;;;Rita;Fallowmere;;;;;;Ballett Kinder

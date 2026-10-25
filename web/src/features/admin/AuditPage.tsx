@@ -22,9 +22,11 @@ const actionKeys: ReadonlyMap<string, `audit.actions.${KnownAction}`> = new Map(
   ['impersonation-started', 'audit.actions.impersonation-started'],
   ['impersonation-ended', 'audit.actions.impersonation-ended'],
   ['mail-requeued', 'audit.actions.mail-requeued'],
+  ['person-merged', 'audit.actions.person-merged'],
 ]);
 
-type KnownAction = 'impersonation-started' | 'impersonation-ended' | 'mail-requeued';
+type KnownAction =
+  'impersonation-started' | 'impersonation-ended' | 'mail-requeued' | 'person-merged';
 
 type AuditAccount = AuditEventEntry['actor'];
 type AuditPerson = NonNullable<AuditEventEntry['targetPerson']>;
@@ -139,7 +141,9 @@ const accountText = (a: AuditAccount) =>
  */
 function targetText(e: AuditEventEntry, mail: string) {
   if (e.target) return accountText(e.target);
-  if (e.targetPerson) return `${personText(e.targetPerson)} ${e.targetPerson.id}`.trimStart();
+  if (e.targetPerson) {
+    return `${personText(e.targetPerson)} ${e.details?.mergedName ?? ''} ${e.targetPerson.id}`.trimStart();
+  }
   if (e.details?.mailId) return `${mail} ${e.details.template ?? ''}`.trimEnd();
   return '';
 }
@@ -161,15 +165,25 @@ function Target({ event }: { event: AuditEventEntry }) {
   if (event.target) return <Account account={event.target} />;
   if (event.targetPerson) {
     const name = personText(event.targetPerson);
-    return name === '' ? (
+    const mergedName = event.details?.mergedName;
+    return (
       <>
-        <span className="block font-medium">{t('audit.unknownPerson')}</span>
-        <span className="block text-xs break-all text-muted-foreground">
-          {event.targetPerson.id}
-        </span>
+        {name === '' ? (
+          <>
+            <span className="block font-medium">{t('audit.unknownPerson')}</span>
+            <span className="block text-xs break-all text-muted-foreground">
+              {event.targetPerson.id}
+            </span>
+          </>
+        ) : (
+          <span className="block font-medium">{name}</span>
+        )}
+        {mergedName && (
+          <span className="block text-xs text-muted-foreground">
+            {t('audit.merged', { name: mergedName })}
+          </span>
+        )}
       </>
-    ) : (
-      <span className="block font-medium">{name}</span>
     );
   }
   const details = event.details;

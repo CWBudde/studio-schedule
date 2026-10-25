@@ -703,6 +703,105 @@ export const requeueMailMutation = (queryClient: QueryClient) =>
       ]),
   });
 
+// ------------------------------------- import, duplicates, merge (ADR 0015)
+
+/** A file for the import: its name and its bytes, base64 encoded. */
+export type ImportFileBody = components['schemas']['ImportFileBody'];
+/** Which column fills which field, and the columns that go into the notes. */
+export type ImportMapping = components['schemas']['ImportMapping'];
+/** The target fields of the import. */
+export type ImportField = keyof ImportMapping['columns'];
+/** What the import makes of a file before the mapping. */
+export type ImportInspection = components['schemas']['ImportInspection'];
+/** What an import does, or would do, with every row. */
+export type ImportResult = components['schemas']['ImportResult'];
+export type ImportRow = components['schemas']['ImportRow'];
+export type ImportRunEntry = components['schemas']['ImportRunEntry'];
+
+/** Reads a file's headers and first rows, and the mapping the headers suggest (office). */
+export const inspectImportMutation = () =>
+  mutationOptions({
+    mutationFn: (body: ImportFileBody) =>
+      unwrap(api.POST('/api/v1/admin/imports/inspect', { body })),
+  });
+
+/**
+ * Imports the members of a file (office): a dry run that writes nothing, or
+ * with `apply` the import, which the run history records.
+ */
+export const runImportMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: PostBody<'/api/v1/admin/imports'>) =>
+      unwrap(api.POST('/api/v1/admin/imports', { body })),
+    onSuccess: (result: ImportResult) => (result.applied ? refreshPersons(queryClient) : undefined),
+    onError: signedOutOn401(queryClient),
+  });
+
+/** The latest applied imports, newest first (office). */
+export const importRunsQuery = queryOptions({
+  queryKey: [...adminQueryKey, 'imports'],
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/admin/imports', { signal }))).items,
+});
+
+/** A pair of persons that may be the same. */
+export type DuplicatePair = components['schemas']['DuplicatePair'];
+/** A person of a pair. */
+export type DuplicateCandidate = components['schemas']['DuplicateCandidate'];
+/** The fields the survivor of a merge takes from the duplicate. */
+export type MergeTake = components['schemas']['MergeTake'];
+/** What a merge does, or would do. */
+export type MergeSummary = components['schemas']['MergeSummary'];
+
+/** The pairs of persons that may be duplicates, strong ones first (office). Always stale. */
+export const duplicatesQuery = queryOptions({
+  queryKey: [...adminQueryKey, 'duplicates'],
+  staleTime: 0,
+  queryFn: async ({ signal }) =>
+    (await unwrap(api.GET('/api/v1/admin/duplicates', { signal }))).items,
+});
+
+/** Records that two persons are not the same, so the pair is no longer listed (office). */
+export const dismissDuplicateMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: { personA: string; personB: string }) =>
+      expectOk(api.POST('/api/v1/admin/duplicates/dismissals', { body })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: duplicatesQuery.queryKey }),
+    onError: signedOutOn401(queryClient),
+  });
+
+/** The persons and fields of a merge. */
+export type MergeRequest = Omit<PostBody<'/api/v1/admin/persons/merge'>, 'apply'>;
+
+/**
+ * What a merge would do, asked anew for every choice of the survivor and
+ * the fields (office); it changes nothing. Never cached.
+ */
+export const mergePreviewQuery = (body: MergeRequest) =>
+  queryOptions({
+    // Apart from the admin key: a merge refreshes that, and the preview of
+    // the merged pair is not to be asked again.
+    queryKey: ['merge-preview', body],
+    gcTime: 0,
+    staleTime: 0,
+    retry: false,
+    queryFn: ({ signal }) =>
+      unwrap(api.POST('/api/v1/admin/persons/merge', { body: { ...body, apply: false }, signal })),
+  });
+
+/**
+ * Merges a duplicate into the survivor (office); without `apply` it only
+ * tells what would happen. Both with an account is a 409 `two-accounts`, a
+ * guardian cycle a 409 `guardian-cycle`.
+ */
+export const mergePersonsMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: PostBody<'/api/v1/admin/persons/merge'>) =>
+      unwrap(api.POST('/api/v1/admin/persons/merge', { body })),
+    onSuccess: (summary: MergeSummary) =>
+      summary.applied ? refreshPersons(queryClient) : undefined,
+    onError: onPersonError(queryClient),
+  });
+
 /**
  * Signs the admin in as another account ("login as"); that account, with
  * the admin as its impersonator, becomes the `me` query's data.

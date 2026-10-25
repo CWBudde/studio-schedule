@@ -14,7 +14,9 @@ import type { components } from './schema';
  * pass is voided already; or a receipt cannot be issued (the receipt
  * settings are incomplete) or canceled (its pass paid for visits, it is
  * canceled already, or it is a cancellation itself); or the time zone or
- * currency is fixed by lessons or prices and receipts (ADR 0013).
+ * currency is fixed by lessons or prices and receipts (ADR 0013); or a merge
+ * of two persons is refused (both have an account, or a guardian would
+ * become a dependent).
  */
 export type ConflictReason = components['schemas']['Conflict']['reason'];
 
@@ -46,6 +48,8 @@ const conflictReasons: readonly ConflictReason[] = [
   'expired',
   'not-failed',
   'secret-link',
+  'two-accounts',
+  'guardian-cycle',
 ];
 
 /** The lesson that uses the room, named by a 409 `room-taken`. */

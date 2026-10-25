@@ -333,12 +333,19 @@
   },
   "persons": {
     "title": "Personen",
-    "description": "Alle Personen, die die Schule kennt: Mitglieder, Kinder, Eltern und Personal. Suche nach Name oder E-Mail und öffne eine Person, um ihre Daten, Familie, ihr Konto und ihre Kurse zu sehen und zu ändern.",
+    "description": "Alle Personen, die die Schule kennt: Mitglieder, Kinder, Eltern und Personal. Suche nach Name, E-Mail oder Mitgliedsnummer und öffne eine Person, um ihre Daten, Familie, ihr Konto und ihre Kurse zu sehen und zu ändern.",
     "search": "Personen suchen",
-    "searchPlaceholder": "Name oder E-Mail",
+    "searchPlaceholder": "Name, E-Mail oder Mitgliedsnummer",
     "table": "Personen",
     "name": "Name",
     "email": "E-Mail",
+    "memberNo": "Mitgl.-Nr.",
+    "memberNoTaken": "Eine andere Person hat diese Mitgliedsnummer.",
+    "mergedInto": {
+      "title": "Mit einer anderen Person zusammengeführt",
+      "description": "Dieser Datensatz wurde als Dublette zusammengeführt und bleibt nur für seine Belege bestehen, die bei der anderen Person aufgeführt sind.",
+      "open": "{{name}} öffnen"
+    },
     "empty": "Es gibt noch keine Personen.",
     "noMatches": "Niemand passt zu „{{query}}“.",
     "more": "Es werden die ersten {{count}} Personen angezeigt. Gib mehr ein, um die Liste einzugrenzen.",
@@ -366,9 +373,11 @@
       "phone": "Telefon",
       "birthDate": "Geburtsdatum",
       "notes": "Notizen",
-      "notesHint": "Nur das Büro sieht diese Notizen."
+      "notesHint": "Nur das Büro sieht diese Notizen.",
+      "memberNo": "Mitgliedsnummer"
     },
     "detail": {
+      "merged": "Zusammengeführte Dubletten",
       "all": "Alle Personen",
       "loadError": "Diese Person konnte nicht geladen werden.",
       "noPerson": "Diese Person gibt es nicht.",
@@ -446,7 +455,7 @@
   },
   "audit": {
     "title": "Protokoll",
-    "description": "Die letzten {{count}} protokollierten Aktionen, die neuesten zuerst: wann sich jemand aus der Administration als eine andere Person angemeldet hat und wann das endete, und welche fehlgeschlagenen Mails erneut eingereiht wurden. Die Zeiten gelten in der Zeitzone der Schule.",
+    "description": "Die letzten {{count}} protokollierten Aktionen, die neuesten zuerst: wann sich jemand aus der Administration als eine andere Person angemeldet hat und wann das endete, welche fehlgeschlagenen Mails erneut eingereiht und welche doppelten Personen zusammengeführt wurden. Die Zeiten gelten in der Zeitzone der Schule.",
     "table": "Protokoll",
     "search": "Protokoll durchsuchen",
     "empty": "Bisher wurde nichts protokolliert.",
@@ -457,8 +466,10 @@
     "actions": {
       "impersonation-started": "Anmelden als begonnen",
       "impersonation-ended": "Anmelden als beendet",
-      "mail-requeued": "Mail erneut eingereiht"
+      "mail-requeued": "Mail erneut eingereiht",
+      "person-merged": "Dublette zusammengeführt"
     },
+    "merged": "zusammengeführt: {{name}}",
     "unknownAccount": "Unbekanntes Konto",
     "unknownPerson": "Unbekannte Person",
     "mail": "Mail an {{to}}",

@@ -333,12 +333,19 @@
   },
   "persons": {
     "title": "Persons",
-    "description": "Everyone the school knows: members, children, parents and staff. Search by name or email, then open a person to see and change their details, family, account and classes.",
+    "description": "Everyone the school knows: members, children, parents and staff. Search by name, email or member number, then open a person to see and change their details, family, account and classes.",
     "search": "Search persons",
-    "searchPlaceholder": "Name or email",
+    "searchPlaceholder": "Name, email or member number",
     "table": "Persons",
     "name": "Name",
     "email": "Email",
+    "memberNo": "Member no.",
+    "memberNoTaken": "Another person has this member number.",
+    "mergedInto": {
+      "title": "Merged into another person",
+      "description": "This record was merged as a duplicate and stays only for its receipts, which are listed under the other person.",
+      "open": "Open {{name}}"
+    },
     "empty": "There are no persons yet.",
     "noMatches": "Nobody matches “{{query}}”.",
     "more": "Showing the first {{count}} persons. Type more to narrow the list.",
@@ -366,9 +373,11 @@
       "phone": "Phone",
       "birthDate": "Birth date",
       "notes": "Notes",
-      "notesHint": "Only the office sees these notes."
+      "notesHint": "Only the office sees these notes.",
+      "memberNo": "Member number"
     },
     "detail": {
+      "merged": "Merged duplicates",
       "all": "All persons",
       "loadError": "Could not load this person.",
       "noPerson": "This person does not exist.",
@@ -446,7 +455,7 @@
   },
   "audit": {
     "title": "Audit log",
-    "description": "The latest {{count}} recorded actions, newest first: when an administrator signed in as someone else and when that ended, and which failed mails were queued again. Times are in the school’s time zone.",
+    "description": "The latest {{count}} recorded actions, newest first: when an administrator signed in as someone else and when that ended, which failed mails were queued again, and which duplicate persons were merged. Times are in the school’s time zone.",
     "table": "Audit log",
     "search": "Search the audit log",
     "empty": "Nothing has been recorded yet.",
@@ -457,8 +466,10 @@
     "actions": {
       "impersonation-started": "Sign-in as started",
       "impersonation-ended": "Sign-in as ended",
-      "mail-requeued": "Mail queued again"
+      "mail-requeued": "Mail queued again",
+      "person-merged": "Duplicate merged"
     },
+    "merged": "merged: {{name}}",
     "unknownAccount": "Unknown account",
     "unknownPerson": "Unknown person",
     "mail": "Mail to {{to}}",

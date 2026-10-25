@@ -437,6 +437,7 @@ export const personDetails: Record<string, PersonDetail> = {
     },
     staff: [],
     classes: [],
+    merged: [],
   },
   [ids.personNoah]: {
     id: ids.personNoah,
@@ -457,6 +458,7 @@ export const personDetails: Record<string, PersonDetail> = {
         retired: false,
       },
     ],
+    merged: [],
   },
   [ids.personAlex]: {
     id: ids.personAlex,
@@ -484,6 +486,7 @@ export const personDetails: Record<string, PersonDetail> = {
         since: '2026-08-31',
       },
     ],
+    merged: [],
   },
 };
 

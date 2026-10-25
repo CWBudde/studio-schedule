@@ -58,6 +58,8 @@ function renderAdmin(at: string, { accounts }: { accounts?: () => ReactElement }
         section('/staff', 'Staff section'),
         section('/terms', 'Terms section'),
         section('/persons', 'Persons section'),
+        section('/duplicates', 'Duplicates section'),
+        section('/import', 'Import section'),
         section('/receipts', 'Receipts section'),
         section('/statistics', 'Statistics section'),
         section('/announcements', 'Announcements section'),
@@ -130,6 +132,12 @@ describe('AdminLayout', () => {
       '/admin/announcements',
     );
     expect(nav.queryByRole('link', { name: 'Mail log' })).not.toBeInTheDocument();
+    // The office imports members and merges duplicates (ADR 0015).
+    expect(nav.getByRole('link', { name: 'Import' })).toHaveAttribute('href', '/admin/import');
+    expect(nav.getByRole('link', { name: 'Duplicates' })).toHaveAttribute(
+      'href',
+      '/admin/duplicates',
+    );
     expect(screen.getByText('Locations section')).toBeInTheDocument();
   });
 
@@ -162,6 +170,8 @@ describe('AdminLayout', () => {
       'Staff',
       'Timetable',
       'Persons',
+      'Duplicates',
+      'Import',
       'Receipts',
       'Statistics',
       'Announcements',

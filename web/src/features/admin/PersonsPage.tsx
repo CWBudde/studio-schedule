@@ -82,6 +82,11 @@ export function PersonsPage() {
             <span className="break-all text-muted-foreground">{info.getValue()}</span>
           ),
         }),
+        columns.accessor('memberNo', {
+          header: t('persons.memberNo'),
+          enableSorting: false,
+          cell: (info) => <span className="text-muted-foreground">{info.getValue()}</span>,
+        }),
       ]),
     [t],
   );

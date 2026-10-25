@@ -25,6 +25,7 @@ export const personSchema = (today: SchoolDate | undefined) =>
     phone: z.string().trim().max(50, 'tooLong'),
     birthDate: z.string().refine((d) => !today || d === '' || d <= today, 'birthDateFuture'),
     notes: z.string().trim().max(2000, 'tooLong'),
+    memberNo: z.string().trim().max(40, 'tooLong'),
   });
 
 export type PersonValues = z.infer<ReturnType<typeof personSchema>>;
@@ -36,6 +37,7 @@ export const personFields = [
   'phone',
   'birthDate',
   'notes',
+  'memberNo',
 ] as const satisfies (keyof PersonValues)[];
 
 /** The form values of a person, or of a new one. */
@@ -46,6 +48,7 @@ export const personValues = (person?: AdminPerson): PersonValues => ({
   phone: person?.phone ?? '',
   birthDate: person?.birthDate ?? '',
   notes: person?.notes ?? '',
+  memberNo: person?.memberNo ?? '',
 });
 
 /** The request body of the form values: empty optional fields are left out. */
@@ -56,6 +59,7 @@ export const personRecord = ({
   phone,
   birthDate,
   notes,
+  memberNo,
 }: PersonValues): PersonRecord => ({
   givenName,
   familyName,
@@ -63,6 +67,7 @@ export const personRecord = ({
   ...(phone ? { phone } : {}),
   ...(birthDate ? { birthDate } : {}),
   ...(notes ? { notes } : {}),
+  ...(memberNo ? { memberNo } : {}),
 });
 
 /** The roles an account can get; admin only from an admin (the API refuses the office). */

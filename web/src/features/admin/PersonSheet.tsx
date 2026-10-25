@@ -132,6 +132,7 @@ function PersonForm({ target, onDone }: { target: PersonTarget; onDone: () => vo
         <ProblemAlert
           error={save.error}
           messages={{ 404: t('persons.notFound'), 422: tAuth('form.checkEntries') }}
+          conflicts={{ duplicate: t('persons.memberNoTaken') }}
         />
         <TextField
           label={t('persons.fields.givenName')}
@@ -166,6 +167,12 @@ function PersonForm({ target, onDone }: { target: PersonTarget; onDone: () => vo
           autoComplete="off"
           error={errorText(errors.birthDate)}
           {...form.register('birthDate')}
+        />
+        <TextField
+          label={optional(t('persons.fields.memberNo'))}
+          autoComplete="off"
+          error={errorText(errors.memberNo)}
+          {...form.register('memberNo')}
         />
         <TextareaField
           label={optional(t('persons.fields.notes'))}

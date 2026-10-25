@@ -1,0 +1,122 @@
+{
+  "nav": "Import",
+  "title": "Mitglieder importieren",
+  "description": "Übernimm Mitglieder und ihre Eltern aus einer Tabelle. Ein Mitglied wird an seiner Mitgliedsnummer wiedererkannt, ein Elternteil an seiner E-Mail-Adresse oder seinem Namen; wer nicht gefunden wird, wird angelegt. Gefüllte Zellen ändern eine Person, leere lassen sie, wie sie ist, und Konten werden nicht angelegt. Probiere eine Datei zuerst aus: der Probelauf ändert nichts.",
+  "file": {
+    "title": "Datei",
+    "description": "Eine CSV-Datei, wie Tabellenprogramme sie speichern: UTF-8 oder Windows-1252, getrennt durch Semikolon, Komma oder Tabulator, mit einer Kopfzeile. Datumsangaben als TT.MM.JJJJ oder JJJJ-MM-TT.",
+    "label": "CSV-Datei",
+    "hint": "Höchstens 1 MiB und 5.000 Zeilen.",
+    "reading": "Die Datei wird gelesen …",
+    "tooLarge": "Diese Datei ist größer als 1 MiB. Teile sie in kleinere Dateien auf.",
+    "unreadable": "Diese Datei lässt sich nicht als Tabelle lesen. Prüfe, ob es eine CSV-Datei mit Kopfzeile ist.",
+    "summary_one": "{{name}}: {{count}} Zeile, {{encoding}}, getrennt durch {{delimiter}}.",
+    "summary_other": "{{name}}: {{count}} Zeilen, {{encoding}}, getrennt durch {{delimiter}}.",
+    "delimiters": {
+      "semicolon": "Semikolons",
+      "comma": "Kommas",
+      "tab": "Tabulatoren"
+    },
+    "sample": "Beispieldatei herunterladen",
+    "sampleHint": "Eine erfundene Datei, die das Format zeigt, mit deutschen Spaltennamen."
+  },
+  "mapping": {
+    "title": "Spalten",
+    "description": "Welche Spalte welches Feld füllt. Spalten mit bekannten deutschen oder englischen Namen sind schon zugeordnet; dieser Browser merkt sich deine Auswahl für die nächste Datei.",
+    "none": "Nicht importieren",
+    "member": "Mitglied",
+    "guardian": "Elternteil oder Erziehungsberechtigte*r {{slot}}",
+    "notesTitle": "Weitere Spalten in die Notizen",
+    "notesDescription": "Jede gewählte Spalte kommt als Zeile „Spalte: Wert“ in die Notizen des Mitglieds.",
+    "noFreeColumns": "Jede Spalte ist einem Feld zugeordnet.",
+    "preview": "Erste Zeilen der Datei",
+    "required": "Ordne mindestens die Mitgliedsnummer, den Vor- und den Nachnamen zu, und beide Namen eines Elternteils, dessen übrige Spalten du zuordnest.",
+    "mismatch": "Die Spalten passen nicht zur Datei. Wähle die Datei noch einmal."
+  },
+  "fields": {
+    "memberNo": "Mitgliedsnummer",
+    "givenName": "Vorname",
+    "familyName": "Nachname",
+    "email": "E-Mail",
+    "phone": "Telefon",
+    "birthDate": "Geburtsdatum",
+    "notes": "Notizen"
+  },
+  "guardianField": "Elternteil {{slot}}: {{field}}",
+  "try": "Ausprobieren",
+  "trying": "Wird ausprobiert …",
+  "tryHint": "Ein Probelauf zeigt, was der Import tun würde, und ändert nichts. Importiere danach die Zeilen ohne Probleme.",
+  "import_one": "{{count}} Zeile importieren",
+  "import_other": "{{count}} Zeilen importieren",
+  "importing": "Wird importiert …",
+  "applied": "Importiert: {{created}} angelegt, {{updated}} geändert, {{failed}} nicht importiert.",
+  "result": {
+    "dryTitle": "Probelauf",
+    "dryDescription": "Was der Import tun würde. Noch wurde nichts geändert.",
+    "appliedTitle": "Importiert",
+    "appliedDescription": "Was der Import getan hat. Er steht unter Importläufe.",
+    "counts": "Übersicht",
+    "count": {
+      "created_one": "{{count}} neu",
+      "created_other": "{{count}} neu",
+      "updated_one": "{{count}} geändert",
+      "updated_other": "{{count}} geändert",
+      "unchanged_one": "{{count}} unverändert",
+      "unchanged_other": "{{count}} unverändert",
+      "failed_one": "{{count}} nicht importiert",
+      "failed_other": "{{count}} nicht importiert",
+      "guardiansCreated_one": "{{count}} neues Elternteil",
+      "guardiansCreated_other": "{{count}} neue Elternteile",
+      "linksAdded_one": "{{count}} Elternverknüpfung",
+      "linksAdded_other": "{{count}} Elternverknüpfungen"
+    },
+    "line": "Zeile",
+    "memberNo": "Mitgl.-Nr.",
+    "name": "Name",
+    "action": "Ergebnis",
+    "details": "Details",
+    "actions": {
+      "create": "Neu",
+      "update": "Änderung",
+      "unchanged": "Unverändert",
+      "error": "Nicht importiert"
+    },
+    "changes": "Setzt {{fields}}",
+    "guardian": {
+      "line": "{{name}}: {{what}}",
+      "new": "neu",
+      "matched": {
+        "email": "an der E-Mail-Adresse erkannt",
+        "name": "am Namen erkannt"
+      },
+      "updated": "geändert",
+      "linked": "als Elternteil verknüpft"
+    },
+    "duplicates": "Ist vielleicht dieselbe Person wie {{names}}"
+  },
+  "issues": {
+    "required": "{{field}} fehlt.",
+    "invalid": "{{field}} ist ungültig.",
+    "future": "{{field}} liegt in der Zukunft.",
+    "member-no-repeated": "Eine frühere Zeile hat dieselbe Mitgliedsnummer.",
+    "guardian-ambiguous": "Mehrere Personen passen zu {{field}}; gib ihre E-Mail-Adresse an.",
+    "guardian-is-member": "{{field}}: Das Elternteil ist das Mitglied selbst.",
+    "guardian-cycle": "{{field}}: Das Elternteil ist ein Kind des Mitglieds."
+  },
+  "history": {
+    "title": "Importläufe",
+    "description": "Jeder Import, der neueste zuerst. Ein Import lässt sich nicht rückgängig machen; dieselbe Datei noch einmal zu importieren ändert nur, was sich geändert hat.",
+    "empty": "Bisher wurde nichts importiert.",
+    "loadError": "Die Importläufe konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "at": "Zeitpunkt",
+    "file": "Datei",
+    "by": "Von",
+    "outcome": "Ergebnis",
+    "commandLine": "Kommandozeile",
+    "counts": "{{created}} angelegt, {{updated}} geändert, {{unchanged}} unverändert, {{failed}} nicht importiert",
+    "errors_one": "{{count}} Zeile nicht importiert",
+    "errors_other": "{{count}} Zeilen nicht importiert",
+    "errorLine": "Zeile {{line}}: {{text}}"
+  }
+}

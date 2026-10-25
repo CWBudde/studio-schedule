@@ -1,0 +1,122 @@
+{
+  "nav": "Import",
+  "title": "Import members",
+  "description": "Bring members and their parents in from a spreadsheet. A member is found again by their member number, a parent by their email or name; what is not found is added. Filled cells update a person, empty ones leave them as they are, and no accounts are created. Try a file first: the trial changes nothing.",
+  "file": {
+    "title": "File",
+    "description": "A CSV file as spreadsheets save it: UTF-8 or Windows-1252, separated by semicolons, commas or tabs, with a header row. Dates as DD.MM.YYYY or YYYY-MM-DD.",
+    "label": "CSV file",
+    "hint": "At most 1 MiB and 5,000 rows.",
+    "reading": "Reading the file…",
+    "tooLarge": "This file is larger than 1 MiB. Split it into smaller files.",
+    "unreadable": "This file cannot be read as a table. Check that it is a CSV file with a header row.",
+    "summary_one": "{{name}}: {{count}} row, {{encoding}}, separated by {{delimiter}}.",
+    "summary_other": "{{name}}: {{count}} rows, {{encoding}}, separated by {{delimiter}}.",
+    "delimiters": {
+      "semicolon": "semicolons",
+      "comma": "commas",
+      "tab": "tabs"
+    },
+    "sample": "Download the sample file",
+    "sampleHint": "A fictional file that shows the format, with German headers."
+  },
+  "mapping": {
+    "title": "Columns",
+    "description": "Which column fills which field. Columns with known English or German names are matched already; this browser remembers your choices for the next file.",
+    "none": "Not imported",
+    "member": "Member",
+    "guardian": "Parent or guardian {{slot}}",
+    "notesTitle": "Further columns into the notes",
+    "notesDescription": "Each chosen column is added to the member’s notes as a line “Column: value”.",
+    "noFreeColumns": "Every column is mapped to a field.",
+    "preview": "First rows of the file",
+    "required": "Map at least the member number, the first and the last name, and both names of a parent whose other columns you map.",
+    "mismatch": "The columns do not fit the file. Choose the file again."
+  },
+  "fields": {
+    "memberNo": "Member number",
+    "givenName": "First name",
+    "familyName": "Last name",
+    "email": "Email",
+    "phone": "Phone",
+    "birthDate": "Birth date",
+    "notes": "Notes"
+  },
+  "guardianField": "Parent {{slot}}: {{field}}",
+  "try": "Try it",
+  "trying": "Trying…",
+  "tryHint": "A trial shows what the import would do and changes nothing. Then import the rows without problems.",
+  "import_one": "Import {{count}} row",
+  "import_other": "Import {{count}} rows",
+  "importing": "Importing…",
+  "applied": "Imported: {{created}} added, {{updated}} updated, {{failed}} not imported.",
+  "result": {
+    "dryTitle": "Trial",
+    "dryDescription": "What the import would do. Nothing has been changed yet.",
+    "appliedTitle": "Imported",
+    "appliedDescription": "What the import did. It is listed under Import runs.",
+    "counts": "Summary",
+    "count": {
+      "created_one": "{{count}} new",
+      "created_other": "{{count}} new",
+      "updated_one": "{{count}} updated",
+      "updated_other": "{{count}} updated",
+      "unchanged_one": "{{count}} unchanged",
+      "unchanged_other": "{{count}} unchanged",
+      "failed_one": "{{count}} not imported",
+      "failed_other": "{{count}} not imported",
+      "guardiansCreated_one": "{{count}} new parent",
+      "guardiansCreated_other": "{{count}} new parents",
+      "linksAdded_one": "{{count}} parent link",
+      "linksAdded_other": "{{count}} parent links"
+    },
+    "line": "Line",
+    "memberNo": "Member no.",
+    "name": "Name",
+    "action": "Result",
+    "details": "Details",
+    "actions": {
+      "create": "New",
+      "update": "Update",
+      "unchanged": "Unchanged",
+      "error": "Not imported"
+    },
+    "changes": "Sets {{fields}}",
+    "guardian": {
+      "line": "{{name}}: {{what}}",
+      "new": "new",
+      "matched": {
+        "email": "found by email",
+        "name": "found by name"
+      },
+      "updated": "updated",
+      "linked": "linked as parent"
+    },
+    "duplicates": "May be the same person as {{names}}"
+  },
+  "issues": {
+    "required": "{{field}} is missing.",
+    "invalid": "{{field}} is not valid.",
+    "future": "{{field}} lies in the future.",
+    "member-no-repeated": "An earlier row has this member number.",
+    "guardian-ambiguous": "Several persons match {{field}}; add their email.",
+    "guardian-is-member": "{{field}}: the parent is the member.",
+    "guardian-cycle": "{{field}}: the parent is a child of the member."
+  },
+  "history": {
+    "title": "Import runs",
+    "description": "Every import, newest first. An import cannot be undone; importing a file again changes only what changed.",
+    "empty": "Nothing has been imported yet.",
+    "loadError": "Could not load the import runs.",
+    "retry": "Try again",
+    "at": "Time",
+    "file": "File",
+    "by": "By",
+    "outcome": "Outcome",
+    "commandLine": "Command line",
+    "counts": "{{created}} added, {{updated}} updated, {{unchanged}} unchanged, {{failed}} not imported",
+    "errors_one": "{{count}} row not imported",
+    "errors_other": "{{count}} rows not imported",
+    "errorLine": "Line {{line}}: {{text}}"
+  }
+}

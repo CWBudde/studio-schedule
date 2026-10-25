@@ -25,6 +25,8 @@ function Administration({ role }: { role: Role }) {
   const { t } = useTranslation('admin');
   const { t: tAnnouncements } = useTranslation('announcements');
   const { t: tMailLog } = useTranslation('mailLog');
+  const { t: tImports } = useTranslation('imports');
+  const { t: tDuplicates } = useTranslation('duplicates');
   return (
     <div className="space-y-6">
       <nav
@@ -48,6 +50,12 @@ function Administration({ role }: { role: Role }) {
         </Link>
         <Link to="/admin/persons" className={sectionLink}>
           {t('nav.persons')}
+        </Link>
+        <Link to="/admin/duplicates" className={sectionLink}>
+          {tDuplicates('nav')}
+        </Link>
+        <Link to="/admin/import" className={sectionLink}>
+          {tImports('nav')}
         </Link>
         <Link to="/admin/receipts" className={sectionLink}>
           {t('nav.receipts')}

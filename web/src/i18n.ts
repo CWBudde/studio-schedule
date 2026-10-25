@@ -5,7 +5,9 @@ import deAccount from './locales/de/account.json';
 import deAdmin from './locales/de/admin.json';
 import deAnnouncements from './locales/de/announcements.json';
 import deAuth from './locales/de/auth.json';
+import deDuplicates from './locales/de/duplicates.json';
 import deFeeds from './locales/de/feeds.json';
+import deImports from './locales/de/imports.json';
 import deMailLog from './locales/de/mailLog.json';
 import deMyLessons from './locales/de/myLessons.json';
 import dePasses from './locales/de/passes.json';
@@ -20,7 +22,9 @@ import enAccount from './locales/en/account.json';
 import enAdmin from './locales/en/admin.json';
 import enAnnouncements from './locales/en/announcements.json';
 import enAuth from './locales/en/auth.json';
+import enDuplicates from './locales/en/duplicates.json';
 import enFeeds from './locales/en/feeds.json';
+import enImports from './locales/en/imports.json';
 import enMailLog from './locales/en/mailLog.json';
 import enMyLessons from './locales/en/myLessons.json';
 import enPasses from './locales/en/passes.json';
@@ -53,6 +57,8 @@ export const resources = {
     statistics: enStatistics,
     announcements: enAnnouncements,
     mailLog: enMailLog,
+    imports: enImports,
+    duplicates: enDuplicates,
   },
   de: {
     common: de,
@@ -70,6 +76,8 @@ export const resources = {
     statistics: deStatistics,
     announcements: deAnnouncements,
     mailLog: deMailLog,
+    imports: deImports,
+    duplicates: deDuplicates,
   },
 } as const;
 
@@ -133,6 +141,8 @@ void i18n
       'statistics',
       'announcements',
       'mailLog',
+      'imports',
+      'duplicates',
     ],
     fallbackLng: 'en',
     supportedLngs: supportedLanguages,

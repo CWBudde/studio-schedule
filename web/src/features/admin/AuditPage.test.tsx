@@ -153,6 +153,10 @@ describe('AuditPage', () => {
         givenName: 'Mia',
         familyName: 'Example',
       },
+      details: {
+        mergedPersonId: '0190a000-0000-7000-8000-000000000393',
+        mergedName: 'Mia Exampel',
+      },
     };
     mockApiGet({
       ...asAdmin,
@@ -164,7 +168,7 @@ describe('AuditPage', () => {
 
     expect((await rows()).map((cells) => [cells[1], cells[3]])).toEqual([
       ['Mail queued again', 'Mail to nora.example@example.orgreceipt'],
-      ['person-merged', 'Mia Example'],
+      ['Duplicate merged', 'Mia Examplemerged: Mia Exampel'],
     ]);
 
     await user.type(screen.getByRole('searchbox', { name: 'Search the audit log' }), 'receipt');

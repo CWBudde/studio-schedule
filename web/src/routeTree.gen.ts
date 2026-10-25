@@ -27,6 +27,8 @@ import { Route as AdminAccountsRouteImport } from './routes/admin.accounts'
 import { Route as AdminAnnouncementsRouteImport } from './routes/admin.announcements'
 import { Route as AdminAuditRouteImport } from './routes/admin.audit'
 import { Route as AdminCourseTypesRouteImport } from './routes/admin.course-types'
+import { Route as AdminDuplicatesRouteImport } from './routes/admin.duplicates'
+import { Route as AdminImportRouteImport } from './routes/admin.import'
 import { Route as AdminLocationsRouteImport } from './routes/admin.locations'
 import { Route as AdminMailsRouteImport } from './routes/admin.mails'
 import { Route as AdminPassTypesRouteImport } from './routes/admin.pass-types'
@@ -130,6 +132,16 @@ const AdminCourseTypesRoute = AdminCourseTypesRouteImport.update({
   path: '/course-types',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminDuplicatesRoute = AdminDuplicatesRouteImport.update({
+  id: '/duplicates',
+  path: '/duplicates',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminImportRoute = AdminImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminLocationsRoute = AdminLocationsRouteImport.update({
   id: '/locations',
   path: '/locations',
@@ -209,6 +221,8 @@ export interface FileRoutesByFullPath {
   '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/course-types': typeof AdminCourseTypesRoute
+  '/admin/duplicates': typeof AdminDuplicatesRoute
+  '/admin/import': typeof AdminImportRoute
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/mails': typeof AdminMailsRoute
   '/admin/pass-types': typeof AdminPassTypesRoute
@@ -240,6 +254,8 @@ export interface FileRoutesByTo {
   '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/course-types': typeof AdminCourseTypesRoute
+  '/admin/duplicates': typeof AdminDuplicatesRoute
+  '/admin/import': typeof AdminImportRoute
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/mails': typeof AdminMailsRoute
   '/admin/pass-types': typeof AdminPassTypesRoute
@@ -273,6 +289,8 @@ export interface FileRoutesById {
   '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/course-types': typeof AdminCourseTypesRoute
+  '/admin/duplicates': typeof AdminDuplicatesRoute
+  '/admin/import': typeof AdminImportRoute
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/mails': typeof AdminMailsRoute
   '/admin/pass-types': typeof AdminPassTypesRoute
@@ -307,6 +325,8 @@ export interface FileRouteTypes {
     | '/admin/announcements'
     | '/admin/audit'
     | '/admin/course-types'
+    | '/admin/duplicates'
+    | '/admin/import'
     | '/admin/locations'
     | '/admin/mails'
     | '/admin/pass-types'
@@ -338,6 +358,8 @@ export interface FileRouteTypes {
     | '/admin/announcements'
     | '/admin/audit'
     | '/admin/course-types'
+    | '/admin/duplicates'
+    | '/admin/import'
     | '/admin/locations'
     | '/admin/mails'
     | '/admin/pass-types'
@@ -370,6 +392,8 @@ export interface FileRouteTypes {
     | '/admin/announcements'
     | '/admin/audit'
     | '/admin/course-types'
+    | '/admin/duplicates'
+    | '/admin/import'
     | '/admin/locations'
     | '/admin/mails'
     | '/admin/pass-types'
@@ -530,6 +554,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCourseTypesRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/duplicates': {
+      id: '/admin/duplicates'
+      path: '/duplicates'
+      fullPath: '/admin/duplicates'
+      preLoaderRoute: typeof AdminDuplicatesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/import': {
+      id: '/admin/import'
+      path: '/import'
+      fullPath: '/admin/import'
+      preLoaderRoute: typeof AdminImportRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/locations': {
       id: '/admin/locations'
       path: '/locations'
@@ -622,6 +660,8 @@ interface AdminRouteChildren {
   AdminAnnouncementsRoute: typeof AdminAnnouncementsRoute
   AdminAuditRoute: typeof AdminAuditRoute
   AdminCourseTypesRoute: typeof AdminCourseTypesRoute
+  AdminDuplicatesRoute: typeof AdminDuplicatesRoute
+  AdminImportRoute: typeof AdminImportRoute
   AdminLocationsRoute: typeof AdminLocationsRoute
   AdminMailsRoute: typeof AdminMailsRoute
   AdminPassTypesRoute: typeof AdminPassTypesRoute
@@ -641,6 +681,8 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAnnouncementsRoute: AdminAnnouncementsRoute,
   AdminAuditRoute: AdminAuditRoute,
   AdminCourseTypesRoute: AdminCourseTypesRoute,
+  AdminDuplicatesRoute: AdminDuplicatesRoute,
+  AdminImportRoute: AdminImportRoute,
   AdminLocationsRoute: AdminLocationsRoute,
   AdminMailsRoute: AdminMailsRoute,
   AdminPassTypesRoute: AdminPassTypesRoute,
