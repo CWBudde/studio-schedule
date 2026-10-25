@@ -691,12 +691,19 @@ Goal: prepaid passes and legally sound receipts.
       (2026-10-25) — request IDs from trusted proxies or generated, in logs and problem bodies;
       access log at Info with secret path parameters redacted; `/readyz` checks the schema
       (cached 2 s); metrics only on `METRICS_ADDR`
-- [ ] Backup/restore documentation (pg_dump), migration strategy, upgrade notes
-- [ ] GDPR: data export per person, deletion/anonymisation (receipts retained), guest-data retention
-      job, privacy notes in docs
-- [ ] Playwright smoke suite against `serve` + Postgres in CI (real cookies, CSRF, Postgres semantics)
+- [x] Backup/restore documentation (pg_dump), migration strategy, upgrade notes (2026-10-25) —
+      docs/operations.md; forward-only migrations in production; `just restore-drill` (dump,
+      restore, `migrate status`, `/readyz`, sign-in) runs in `just ci` and CI
+- [x] GDPR: data export per person, deletion/anonymisation (receipts retained), guest-data retention
+      job, privacy notes in docs (2026-10-25) — ADR 0016: JSON export by the office and for one's
+      own family, anonymised person kept as "Deleted person", guest data cleared after 12 months,
+      audit 3 years, imports 1 year; account administration and self-delete; docs/privacy.md
+- [x] Playwright smoke suite against `serve` + Postgres in CI (real cookies, CSRF, Postgres semantics)
+      (2026-10-25) — web/e2e-server with Mailpit (health, request IDs, CSRF, headers, booking,
+      receipt PDF, password reset); demo data seeded around today (`seed --anchor today`)
 - [ ] Security review (OWASP ASVS L1 checklist), dependency scanning (Renovate, govulncheck)
-- [ ] Operator documentation: configuration reference, deployment guide
+- [x] Operator documentation: configuration reference, deployment guide (2026-10-25) —
+      docs/operations.md, its configuration reference checked against the code by a test
 
 ## Phase 9 — Optional modules
 
