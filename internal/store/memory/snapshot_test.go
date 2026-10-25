@@ -146,6 +146,10 @@ func fullStore(t *testing.T) *Store {
 			tx.Notices().Create(ctx, domain.LessonNotice{
 				ID: ids.New[domain.LessonNoticeID](src), LessonID: lesson, SenderID: account, SentAt: at, Recipients: 1,
 			}),
+			tx.CalendarFeeds().Create(ctx, domain.CalendarFeed{
+				ID: ids.New[domain.CalendarFeedID](src), AccountID: account, Scope: domain.FeedBookings,
+				TokenHash: [32]byte{7, 8, 9}, CreatedAt: at, LastUsedAt: at,
+			}),
 			tx.Outbox().Create(ctx, domain.OutboxMail{
 				ID: ids.New[domain.OutboxMailID](src), To: "someone@example.org", Subject: "Hello",
 				Text: "Hello", CreatedAt: at, NextAttemptAt: at, ReplyTo: "staff@example.org",

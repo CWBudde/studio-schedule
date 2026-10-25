@@ -106,6 +106,7 @@ type Tx interface {
 	Bookings() BookingRepo
 	Waitlist() WaitlistRepo
 	Notices() LessonNoticeRepo
+	CalendarFeeds() CalendarFeedRepo
 	Outbox() OutboxRepo
 	Audit() AuditRepo
 }
@@ -242,7 +243,7 @@ type LocationRepo interface {
 	Create(ctx context.Context, l domain.Location) error
 	Update(ctx context.Context, l domain.Location) error
 	// Delete fails with domain.ErrConflict while rooms belong to the
-	// location.
+	// location. The calendar feeds of the location are deleted with it.
 	Delete(ctx context.Context, id domain.LocationID) error
 	// List returns all locations ordered by name and ID.
 	List(ctx context.Context) ([]domain.Location, error)
@@ -520,6 +521,36 @@ type LessonNoticeRepo interface {
 	// ListByLesson returns the notices sent about the lesson at or after
 	// since, ordered by SentAt and ID.
 	ListByLesson(ctx context.Context, lesson domain.LessonID, since time.Time) ([]domain.LessonNotice, error)
+}
+
+// CalendarFeedRepo stores the calendar feeds of accounts (ADR 0011). An
+// account has at most one active (not revoked) feed per scope and location,
+// and a token hash belongs to one feed. Feeds go with their account and their
+// location.
+type CalendarFeedRepo interface {
+	Get(ctx context.Context, id domain.CalendarFeedID) (domain.CalendarFeed, error)
+	// GetByTokenHash finds the feed of a token, whether it is revoked or not.
+	GetByTokenHash(ctx context.Context, hash [32]byte) (domain.CalendarFeed, error)
+	// Create fails with domain.ErrDuplicate if the account has an active
+	// feed of the same scope and location (none counting as one), and with
+	// domain.ErrConflict (but not ErrDuplicate) if the ID or the token hash
+	// is taken or the account or the location does not exist.
+	Create(ctx context.Context, f domain.CalendarFeed) error
+	// ListByAccount returns the active feeds of an account ordered by
+	// CreatedAt and ID.
+	ListByAccount(ctx context.Context, account domain.AccountID) ([]domain.CalendarFeed, error)
+	// Revoke revokes the active feed id at the instant; a feed that does not
+	// exist or is revoked already is domain.ErrNotFound.
+	Revoke(ctx context.Context, id domain.CalendarFeedID, at time.Time) error
+	// RevokeActive revokes the account's active feed of the scope and the
+	// location (zero for none) at the instant, if it has one, and returns
+	// how many it revoked (0 or 1).
+	RevokeActive(
+		ctx context.Context, account domain.AccountID, scope domain.FeedScope, location domain.LocationID, at time.Time,
+	) (int, error)
+	// TouchLastUsed sets the LastUsedAt of feed id, revoked or not, to the
+	// instant; a feed that does not exist is domain.ErrNotFound.
+	TouchLastUsed(ctx context.Context, id domain.CalendarFeedID, at time.Time) error
 }
 
 // OutboxRepo stores outgoing mails.

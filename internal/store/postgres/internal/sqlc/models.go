@@ -70,6 +70,17 @@ type BookingEvent struct {
 	Override       bool
 }
 
+type CalendarFeed struct {
+	ID         pgtype.UUID
+	AccountID  pgtype.UUID
+	Scope      string
+	LocationID pgtype.UUID
+	TokenHash  []byte
+	CreatedAt  pgtype.Timestamptz
+	LastUsedAt pgtype.Timestamptz
+	RevokedAt  pgtype.Timestamptz
+}
+
 type Class struct {
 	ID            pgtype.UUID
 	TermID        pgtype.UUID

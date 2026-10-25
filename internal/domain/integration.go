@@ -5,14 +5,14 @@ import (
 	"time"
 )
 
-// FeedScope selects which lessons a calendar feed contains.
+// FeedScope selects which lessons a calendar feed contains (ADR 0011).
 type FeedScope string
 
 // Known feed scopes.
 const (
-	FeedBookings FeedScope = "bookings" // the account's own bookings
-	FeedTeaching FeedScope = "teaching" // lessons the account's staff member teaches
-	FeedSchedule FeedScope = "schedule" // the public schedule
+	FeedBookings FeedScope = "bookings" // the lessons the account's family is booked for
+	FeedTeaching FeedScope = "teaching" // the lessons the account's staff records teach or accompany
+	FeedSchedule FeedScope = "schedule" // the schedule as the account sees it, or one location of it
 )
 
 // FeedScopes returns all feed scopes.
@@ -21,25 +21,38 @@ func FeedScopes() []FeedScope { return []FeedScope{FeedBookings, FeedTeaching, F
 // Valid reports whether s is a known feed scope.
 func (s FeedScope) Valid() bool { return slices.Contains(FeedScopes(), s) }
 
-// CalendarFeed is an iCal subscription URL secured by a random token. Only
-// the SHA-256 of the token is stored.
+// CalendarFeed is an iCalendar subscription URL of an account, secured by a
+// random token (ADR 0011). Only the SHA-256 of the token is stored. An
+// account has at most one active (not revoked) feed per subject: scope and
+// location.
 type CalendarFeed struct {
 	ID        CalendarFeedID
 	AccountID AccountID
 	Scope     FeedScope
-	TokenHash [32]byte
-	CreatedAt time.Time
-	RevokedAt time.Time // optional
+	// LocationID narrows a schedule feed to one location; optional, and only
+	// for FeedSchedule.
+	LocationID LocationID
+	TokenHash  [32]byte
+	CreatedAt  time.Time
+	// LastUsedAt is when a calendar last fetched the feed, updated at most
+	// once a day; optional.
+	LastUsedAt time.Time
+	RevokedAt  time.Time // optional
 }
+
+// Active reports whether the feed is not revoked.
+func (f CalendarFeed) Active() bool { return f.RevokedAt.IsZero() }
 
 // Validate checks the feed for consistency. All errors wrap ErrValidation.
 func (f CalendarFeed) Validate() error {
 	return validate(
 		rule{!f.ID.IsZero(), "calendar feed id must be set"},
 		rule{!f.AccountID.IsZero(), "calendar feed account must be set"},
-		rule{f.Scope.Valid(), "invalid calendar feed scope"},
+		on("scope", f.Scope.Valid(), "invalid calendar feed scope"),
+		on("locationId", f.LocationID.IsZero() || f.Scope == FeedSchedule, "only a schedule feed has a location"),
 		rule{f.TokenHash != [32]byte{}, "calendar feed token hash must be set"},
 		rule{!f.CreatedAt.IsZero(), "calendar feed creation time must be set"},
+		rule{notBefore(f.LastUsedAt, f.CreatedAt), "calendar feed cannot be used before it was created"},
 		rule{notBefore(f.RevokedAt, f.CreatedAt), "calendar feed cannot be revoked before it was created"},
 	)
 }

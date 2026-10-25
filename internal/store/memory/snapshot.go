@@ -252,6 +252,8 @@ var codecs = []codec{
 		func(v domain.WaitlistEntry) domain.WaitlistEntryID { return v.ID }),
 	rows("notices", func(s *state) *table[domain.LessonNoticeID, domain.LessonNotice] { return &s.notices },
 		func(v domain.LessonNotice) domain.LessonNoticeID { return v.ID }),
+	rows("calendarFeeds", func(s *state) *table[domain.CalendarFeedID, domain.CalendarFeed] { return &s.calendarFeeds },
+		func(v domain.CalendarFeed) domain.CalendarFeedID { return v.ID }),
 	rows("outbox", func(s *state) *table[domain.OutboxMailID, domain.OutboxMail] { return &s.outbox },
 		func(v domain.OutboxMail) domain.OutboxMailID { return v.ID }),
 	rows("audit", func(s *state) *table[domain.AuditEventID, domain.AuditEvent] { return &s.audit },

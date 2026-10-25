@@ -15,7 +15,8 @@ import (
 )
 
 // Constraints and unique indexes whose violation has a domain meaning beyond
-// "duplicate key" (see migrations/00001_core.sql, 00006, 00007, 00008 and 00012).
+// "duplicate key" (see migrations/00001_core.sql, 00006, 00007, 00008, 00012 and
+// 00015).
 const (
 	constraintAccountEmail    = "accounts_email_key"
 	constraintAccountPerson   = "accounts_person_id_key"
@@ -27,12 +28,14 @@ const (
 	constraintRoomName        = "rooms_location_name_key"
 	constraintCourseTypeName  = "course_types_name_key"
 	constraintOpenWaitlist    = "waitlist_entries_one_open_key"
+	constraintActiveFeed      = "calendar_feeds_one_active_key"
 )
 
 // conflicts describes the unique constraints above: the message, and the
 // error it wraps (domain.ErrDuplicate for the unique names of ADR 0007 and
 // for what exists only once per person: an account, a guardian link, a
-// class membership, an active booking of a lesson).
+// class membership, an active booking of a lesson, an active calendar feed
+// of a subject).
 // Other unique and foreign key violations get a generic message naming the
 // constraint.
 var conflicts = map[string]struct {
@@ -49,6 +52,7 @@ var conflicts = map[string]struct {
 	constraintRoomName:        {"room name is taken at the location", domain.ErrDuplicate},
 	constraintCourseTypeName:  {"course type name is taken", domain.ErrDuplicate},
 	constraintOpenWaitlist:    {"person is on the waiting list of the lesson already", domain.ErrDuplicate},
+	constraintActiveFeed:      {"the account has an active calendar feed of this subject", domain.ErrDuplicate},
 }
 
 // retryableError reports a serialization failure or deadlock. InTx retries

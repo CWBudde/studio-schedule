@@ -53,6 +53,7 @@ type state struct {
 	bookingEvents table[domain.BookingEventID, domain.BookingEvent]
 	waitlist      table[domain.WaitlistEntryID, domain.WaitlistEntry]
 	notices       table[domain.LessonNoticeID, domain.LessonNotice]
+	calendarFeeds table[domain.CalendarFeedID, domain.CalendarFeed]
 	outbox        table[domain.OutboxMailID, domain.OutboxMail]
 	audit         table[domain.AuditEventID, domain.AuditEvent]
 }
@@ -208,8 +209,11 @@ func (t *tx) Lessons() store.LessonRepo         { return lessonRepo{t} }
 func (t *tx) Bookings() store.BookingRepo       { return bookingRepo{t} }
 func (t *tx) Waitlist() store.WaitlistRepo      { return waitlistRepo{t} }
 func (t *tx) Notices() store.LessonNoticeRepo   { return noticeRepo{t} }
-func (t *tx) Outbox() store.OutboxRepo          { return outboxRepo{t} }
-func (t *tx) Audit() store.AuditRepo            { return auditRepo{t} }
+func (t *tx) CalendarFeeds() store.CalendarFeedRepo {
+	return calendarFeedRepo{t}
+}
+func (t *tx) Outbox() store.OutboxRepo { return outboxRepo{t} }
+func (t *tx) Audit() store.AuditRepo   { return auditRepo{t} }
 
 func (t *tx) checkWritable() error {
 	if t.mode != store.ReadWrite {

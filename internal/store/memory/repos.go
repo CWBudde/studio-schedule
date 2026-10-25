@@ -423,6 +423,10 @@ func (r locationRepo) Delete(_ context.Context, id domain.LocationID) error {
 		return conflict("location %s is referenced", id)
 	}
 
+	for _, f := range s.calendarFeeds.filter(func(f domain.CalendarFeed) bool { return f.LocationID == id }) {
+		s.calendarFeeds.delete(r.tx.gen, f.ID)
+	}
+
 	s.locations.delete(r.tx.gen, id)
 
 	return nil

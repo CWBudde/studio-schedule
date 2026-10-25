@@ -204,5 +204,8 @@ func (t *tx) Lessons() store.LessonRepo         { return lessonRepo{t.q} }
 func (t *tx) Bookings() store.BookingRepo       { return bookingRepo{t.q} }
 func (t *tx) Waitlist() store.WaitlistRepo      { return waitlistRepo{t.q} }
 func (t *tx) Notices() store.LessonNoticeRepo   { return noticeRepo{t.q} }
-func (t *tx) Outbox() store.OutboxRepo          { return outboxRepo{t.q} }
-func (t *tx) Audit() store.AuditRepo            { return auditRepo{t.q} }
+func (t *tx) CalendarFeeds() store.CalendarFeedRepo {
+	return calendarFeedRepo{t.q}
+}
+func (t *tx) Outbox() store.OutboxRepo { return outboxRepo{t.q} }
+func (t *tx) Audit() store.AuditRepo   { return auditRepo{t.q} }

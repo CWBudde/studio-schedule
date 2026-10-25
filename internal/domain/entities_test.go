@@ -611,7 +611,8 @@ func TestIntegrationValidate(t *testing.T) {
 		checkValidate(t, func() domain.CalendarFeed {
 			f := domain.CalendarFeed{
 				ID: newID[domain.CalendarFeedID](), AccountID: newID[domain.AccountID](),
-				Scope: domain.FeedBookings, CreatedAt: t0, RevokedAt: t0,
+				Scope: domain.FeedSchedule, LocationID: newID[domain.LocationID](), CreatedAt: t0,
+				LastUsedAt: t0, RevokedAt: t0,
 			}
 			f.TokenHash[0] = 1
 
@@ -623,6 +624,10 @@ func TestIntegrationValidate(t *testing.T) {
 			"no token":       func(f *domain.CalendarFeed) { f.TokenHash = [32]byte{} },
 			"no created at":  func(f *domain.CalendarFeed) { f.CreatedAt = time.Time{} },
 			"revoked before": func(f *domain.CalendarFeed) { f.RevokedAt = t0.Add(-time.Second) },
+			"used before":    func(f *domain.CalendarFeed) { f.LastUsedAt = t0.Add(-time.Second) },
+			"location of a bookings feed": func(f *domain.CalendarFeed) {
+				f.Scope = domain.FeedBookings
+			},
 		})
 	})
 
