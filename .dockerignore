@@ -1,0 +1,29 @@
+# The image is built from an allowlist: the Go module, cmd/, internal/ and web/.
+# internal/pdf/typstwasm/receipt.wasm must be the real file (`git lfs pull`),
+# the Dockerfile fails early on an LFS pointer.
+*
+!go.mod
+!go.sum
+!cmd/
+!internal/
+!web/
+
+# Built or installed locally; the image builds its own.
+web/node_modules/
+web/dist/
+web/playwright-report/
+web/test-results/
+web/**/*.tsbuildinfo
+# Vite env files (web/.env, .env.local, .env.production, ...): local values
+# must not reach the image's build. The production build needs none of them;
+# the committed web/.env.demo is for the demo build only.
+web/.env*
+# WASM demo artifacts (scripts/build-wasm.sh); the production UI must not
+# ship them.
+web/public/app.wasm
+web/public/wasm_exec.js
+web/public/receipt.wasm
+# Leftovers of an interrupted scripts/build-server.sh: only the placeholder
+# belongs to the embed directory.
+internal/webui/dist/*
+!internal/webui/dist/index.html

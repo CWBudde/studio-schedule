@@ -1,0 +1,95 @@
+# Studio Schedule with PostgreSQL and Mailpit (a mail catcher), for trying the
+# image locally or as a starting point for a single-server deployment. See
+# docs/operations.md.
+#
+#   cp .env.example .env              # then adjust the compose section
+#   docker compose up -d --build
+#   docker compose run --rm app migrate up
+#   docker compose run --rm app init  # or `seed` for the fictional demo data
+#
+# Migrations never run on start: `serve` refuses to start until the schema
+# matches, so run `migrate up` after every image update.
+#
+# The app is built from this checkout (run `git lfs pull` first). To run a
+# published image instead, set STUDIO_SCHEDULE_IMAGE in .env, e.g.
+# ghcr.io/cwbudde/studio-schedule:edge, and start with `docker compose up -d
+# --no-build` after `docker compose pull app`.
+
+name: studio-schedule
+
+services:
+  app:
+    image: ${STUDIO_SCHEDULE_IMAGE:-studio-schedule:local}
+    build:
+      context: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Without SMTP_HOST, mail goes to the bundled Mailpit: plain SMTP on its
+    # port 1025, from a fictional sender unless SMTP_FROM is set. With
+    # SMTP_HOST set, the SMTP_* values pass through as given, so an empty
+    # SMTP_PORT or SMTP_TLS keeps the app's default (STARTTLS on port 587).
+    # Compose cannot express "only when SMTP_HOST is empty", so a shell sets
+    # the fallback before it starts the command (`serve`, or what `docker
+    # compose run app …` names).
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -z "$${SMTP_HOST}" ]; then
+          export SMTP_HOST=mailpit SMTP_PORT=1025 SMTP_TLS=none
+          export SMTP_FROM="$${SMTP_FROM:-Studio Schedule <schedule@example.test>}"
+        fi
+        exec studio-schedule "$$@"
+      - studio-schedule
+    command: ["serve"]
+    environment:
+      # A key=value DSN, so the password may contain URL characters (not
+      # spaces, quotes or backslashes).
+      DATABASE_URL: host=postgres port=5432 user=${POSTGRES_USER:-studio} password=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env} dbname=${POSTGRES_DB:-studio} sslmode=disable
+      BASE_URL: ${BASE_URL:-http://localhost:${APP_PORT:-8080}}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_TLS: ${SMTP_TLS:-}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      # wazero's compilation cache of the receipt renderer (XDG_CACHE_HOME),
+      # kept across container updates.
+      - cache:/var/cache/studio-schedule
+
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-studio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-studio}
+    volumes:
+      # PostgreSQL 18 images keep the data in a versioned directory below
+      # /var/lib/postgresql.
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      test:
+        ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:v1.31
+    restart: unless-stopped
+    ports:
+      # The web UI with every mail the app sent; SMTP (1025) stays internal.
+      - "${MAILPIT_PORT:-8025}:8025"
+
+volumes:
+  postgres:
+  cache:
