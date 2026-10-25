@@ -124,8 +124,8 @@ e2e-server *args: build
 restore-drill:
     ./scripts/restore-drill.sh
 
-# Everything CI runs (the e2e tests need `just e2e-install` once)
-ci: check-tidy check-formatted check-sqlc lint test check-wasm-deps typst-wasm-check web-check e2e
+# Everything CI runs but `just vuln` (needs Docker; the e2e tests need `just e2e-install` once)
+ci: check-tidy check-formatted check-sqlc lint test check-wasm-deps typst-wasm-check web-check e2e e2e-server restore-drill
 
 # ---------------------------------------------------------------- build & run
 
