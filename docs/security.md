@@ -243,8 +243,10 @@ MIT License; source, checksum and license next to it in `internal/auth/password`
 refused, ignoring case, wherever a password is set, as a 422 on that field (`IsCommon`,
 `checkPassword`). The set is built on first use, so sign-ins never pay for it, and keeps only the
 entries of at least 8 characters (about 2,100): a shorter one fails the length rule first. The
-check works offline, in the web demo too. The web app shows a strength meter (length and kinds of characters,
-no list in the client) under new passwords, and the "too common" message on a refused one.
+check works offline, in the web demo too. The web app shows a strength meter (length and kinds
+of characters, no list in the client) under new passwords. Its forms count a password's
+characters (code points) as the API does, and a 422 on the password shows the rule it names (too
+short, too long, too common: `passwordProblem`, `web/src/features/auth/form.ts`).
 
 ### O3 Show password
 

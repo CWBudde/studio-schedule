@@ -20,7 +20,7 @@ import {
 import { DemoMailboxHint } from '@/features/demo/DemoMailboxHint';
 import { currentLanguage } from '@/i18n';
 import { FormError } from './FormError';
-import { invalidFields, registerSchema, useFieldErrorText } from './form';
+import { invalidFields, passwordProblem, registerSchema, useFieldErrorText } from './form';
 import { TextField } from './TextField';
 
 type Registration = z.infer<typeof registerSchema>;
@@ -44,11 +44,10 @@ export function RegisterPage() {
       {
         onError: (error) => {
           for (const field of invalidFields(error, fields)) {
-            // The form checks the password's length, so the server refuses
-            // it for being too common.
             form.setError(field, {
               type: 'server',
-              message: field === 'password' ? 'passwordCommon' : 'invalid',
+              message:
+                field === 'password' ? (passwordProblem(error, field) ?? 'invalid') : 'invalid',
             });
           }
         },

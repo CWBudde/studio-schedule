@@ -67,11 +67,40 @@ describe('ResetPasswordPage', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it('says when the API refuses the password as too common', async () => {
+  it('counts the characters of a password, not its UTF-16 units', async () => {
+    mockApiGet({});
+    const post = mockApiPost({ '/api/v1/auth/password-reset/confirm': { status: 204 } });
+
+    renderReset();
+    // Four emoji are eight UTF-16 units but four characters: too short.
+    await setPassword('🩰🩰🩰🩰');
+
+    expect(
+      await screen.findByText('The password must have at least 8 characters.'),
+    ).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'the password is one of the most common ones; choose another',
+      'This password is too common. Please choose another one.',
+    ],
+    [
+      'the password must have at least 8 characters',
+      'The password must have at least 8 characters.',
+    ],
+    [
+      'the password must have at most 256 characters',
+      'The password must have at most 256 characters.',
+    ],
+    ['expected length <= 256', 'The password must have at most 256 characters.'],
+    ['something else', 'Please check this entry.'],
+  ])('says which rule the API finds broken: %s', async (message, shown) => {
     mockApiGet({});
     mockApiPost({
       '/api/v1/auth/password-reset/confirm': problem(422, 'validation failed', [
-        { location: 'body.password' },
+        { location: 'body.password', message },
       ]),
     });
 
@@ -79,9 +108,7 @@ describe('ResetPasswordPage', () => {
     await setPassword('new-secret-password');
 
     expect(await screen.findByText('Please check your entries.')).toBeInTheDocument();
-    expect(
-      screen.getByText('This password is too common. Please choose another one.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText(shown)).toBeInTheDocument();
     expect(screen.getByLabelText('New password')).toHaveAttribute('aria-invalid', 'true');
   });
 

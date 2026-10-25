@@ -18,7 +18,13 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { FormError } from './FormError';
-import { invalidFields, resetPasswordSchema, statusOf, useFieldErrorText } from './form';
+import {
+  invalidFields,
+  passwordProblem,
+  resetPasswordSchema,
+  statusOf,
+  useFieldErrorText,
+} from './form';
 import { TextField } from './TextField';
 
 type NewPassword = z.infer<typeof resetPasswordSchema>;
@@ -50,9 +56,10 @@ export function ResetPasswordPage() {
       {
         onError: (error) => {
           for (const field of invalidFields(error, ['password'] as const)) {
-            // The form checks the length, so the server refuses the
-            // password for being too common.
-            form.setError(field, { type: 'server', message: 'passwordCommon' });
+            form.setError(field, {
+              type: 'server',
+              message: passwordProblem(error, field) ?? 'invalid',
+            });
           }
         },
       },

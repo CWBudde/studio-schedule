@@ -187,7 +187,10 @@ describe('AccountPage', () => {
       mockApiGet(signedInMember);
       mockApiPost({
         '/api/v1/auth/password': problem(422, 'validation failed', [
-          { location: 'body.newPassword' },
+          {
+            location: 'body.newPassword',
+            message: 'the password is one of the most common ones; choose another',
+          },
         ]),
       });
 

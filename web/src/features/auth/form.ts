@@ -15,6 +15,7 @@ const fieldErrors = [
   'required',
   'email',
   'passwordMin',
+  'passwordMax',
   'passwordCommon',
   'tooLong',
   'invalid',
@@ -27,11 +28,20 @@ type FieldErrorKey = (typeof fieldErrors)[number];
 const isFieldErrorKey = (key: unknown): key is FieldErrorKey =>
   fieldErrors.includes(key as FieldErrorKey);
 
+/**
+ * The characters (code points) of s, as the API counts a password's length;
+ * `s.length` counts UTF-16 units, two for an emoji.
+ */
+export const characters = (s: string): number => [...s].length;
+
 // Limits as in the API (RegisterInput, LoginInput, ConfirmEmailInput).
 const name = z.string().trim().min(1, 'required').max(200, 'tooLong');
 const email = z.string().trim().min(1, 'required').max(254, 'tooLong').pipe(z.email('email'));
-const password = z.string().min(1, 'required').max(256, 'tooLong');
-const newPassword = password.min(8, 'passwordMin');
+const password = z
+  .string()
+  .min(1, 'required')
+  .refine((s) => characters(s) <= 256, 'passwordMax');
+const newPassword = password.refine((s) => characters(s) >= 8, 'passwordMin');
 const repeat = z.string().min(1, 'required');
 
 export const loginSchema = z.object({ email, password }) satisfies z.ZodType<LoginBody>;
@@ -98,6 +108,25 @@ export function invalidFields<F extends string>(error: unknown, fields: readonly
   const body = error.body as { errors?: { location?: string }[] | null } | undefined;
   const named = (body?.errors ?? []).map((e) => e.location?.replace(/^body\./, ''));
   return fields.filter((f) => named.includes(f));
+}
+
+/**
+ * Which rule the API's 422 on the new password `field` names, by the message
+ * of its error detail: the service's "at least", "at most" and "most common"
+ * (checkPassword, internal/service/auth.go) or Huma's "expected length >=/<=".
+ * Undefined unless the answer names the field; 'invalid' for another message.
+ */
+export function passwordProblem(error: unknown, field: string): FieldErrorKey | undefined {
+  if (!(error instanceof ApiError) || error.status !== 422) return undefined;
+  const body = error.body as
+    { errors?: { location?: string; message?: string }[] | null } | undefined;
+  const detail = (body?.errors ?? []).find((e) => e.location === `body.${field}`);
+  if (!detail) return undefined;
+  const message = detail.message ?? '';
+  if (/most common/i.test(message)) return 'passwordCommon';
+  if (/at least|>=/i.test(message)) return 'passwordMin';
+  if (/at most|<=/i.test(message)) return 'passwordMax';
+  return 'invalid';
 }
 
 /**

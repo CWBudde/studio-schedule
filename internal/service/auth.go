@@ -757,7 +757,9 @@ func mayActAs(acc domain.Account) bool {
 
 // checkPassword enforces the rules for a new password (ADR 0004): its length
 // and that it is none of the most common passwords (ASVS 2.1.7). A broken
-// rule is a field error on field, the JSON name of the new password.
+// rule is a field error on field, the JSON name of the new password; the
+// web app tells the rules apart by the phrases "at least", "at most" and
+// "most common" (passwordProblem, web/src/features/auth/form.ts).
 func checkPassword(field, pw string) error {
 	switch n := utf8.RuneCountInString(pw); {
 	case n < MinPasswordLength:

@@ -120,7 +120,12 @@ describe('RegisterPage', () => {
   it('rates the password while it is typed and says when the API finds it too common', async () => {
     mockApiGet(notDemo);
     mockApiPost({
-      '/api/v1/auth/register': problem(422, 'validation failed', [{ location: 'body.password' }]),
+      '/api/v1/auth/register': problem(422, 'validation failed', [
+        {
+          location: 'body.password',
+          message: 'the password is one of the most common ones; choose another',
+        },
+      ]),
     });
 
     renderInRouter(<RegisterPage />, { at: '/register' });

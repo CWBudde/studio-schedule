@@ -104,11 +104,15 @@ func TestPasswordReset(t *testing.T) {
 
 	// The length counts characters, as the API does: 257 three-byte
 	// characters are too many, 100 of them are fine. A broken rule names
-	// the field.
-	for _, pw := range []string{"short", strings.Repeat("€", 257), "Sunshine"} {
+	// the field, and its message the rule: the web app tells them apart by
+	// these phrases (passwordProblem, web/src/features/auth/form.ts).
+	for pw, rule := range map[string]string{
+		"short": "at least 8 characters", strings.Repeat("€", 257): "at most 256 characters", "Sunshine": "most common",
+	} {
 		var fe *domain.FieldError
-		if err := f.svc.ResetPassword(t.Context(), token, pw); !errors.As(err, &fe) || fe.Field != "password" {
-			t.Errorf("ResetPassword(%d characters): %v, want a field error on password", len([]rune(pw)), err)
+		if err := f.svc.ResetPassword(t.Context(), token, pw); !errors.As(err, &fe) || fe.Field != "password" ||
+			!strings.Contains(fe.Msg, rule) {
+			t.Errorf("ResetPassword(%d characters): %v, want a field error on password saying %q", len([]rune(pw)), err, rule)
 		}
 	}
 

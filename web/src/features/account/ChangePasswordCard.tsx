@@ -11,7 +11,12 @@ import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormError } from '@/features/auth/FormError';
-import { changePasswordSchema, invalidFields, useFieldErrorText } from '@/features/auth/form';
+import {
+  changePasswordSchema,
+  invalidFields,
+  passwordProblem,
+  useFieldErrorText,
+} from '@/features/auth/form';
 import { TextField } from '@/features/auth/TextField';
 
 type PasswordChange = z.infer<typeof changePasswordSchema>;
@@ -43,9 +48,10 @@ export function ChangePasswordCard() {
           for (const field of invalidFields(error, ['currentPassword', 'newPassword'] as const)) {
             form.setError(field, {
               type: 'server',
-              // The form checks the new password's length, so the server
-              // refuses it for being too common.
-              message: field === 'currentPassword' ? 'wrongPassword' : 'passwordCommon',
+              message:
+                field === 'currentPassword'
+                  ? 'wrongPassword'
+                  : (passwordProblem(error, field) ?? 'invalid'),
             });
           }
         },
