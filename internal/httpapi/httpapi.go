@@ -178,13 +178,14 @@ func (h *handlers) toHTTPError(ctx context.Context, err error) error {
 	}
 }
 
-// logFailure logs err as an error of the request ctx, unless the request
-// was canceled meanwhile (the client went away, or the server is shutting
-// down): then its work failed for that reason, nothing is wrong with the
-// app, and it is logged at Debug only, so it never alerts an operator.
+// logFailure logs err as an error of the request ctx, unless err is the
+// cancellation of the request (the client went away, or the server is
+// shutting down): then nothing is wrong with the app, and it is logged at
+// Debug only, so it never alerts an operator. Any other error stays an
+// error, even when the request was canceled meanwhile.
 func (h *handlers) logFailure(ctx context.Context, msg string, err error) {
 	level := slog.LevelError
-	if ctx.Err() != nil {
+	if ctx.Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
 		level, msg = slog.LevelDebug, msg+" (request canceled)"
 	}
 
