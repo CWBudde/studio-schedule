@@ -43,6 +43,11 @@ const (
 	// client (environment only).
 	EnvTrustedProxies = "TRUSTED_PROXIES"
 
+	// EnvHSTSIncludeSubdomains (true or false, default true) extends the
+	// Strict-Transport-Security header of an https:// BASE_URL to every
+	// subdomain of the host (environment only).
+	EnvHSTSIncludeSubdomains = "HSTS_INCLUDE_SUBDOMAINS"
+
 	// EnvMetricsAddr is the host:port of the Prometheus metrics server;
 	// empty means no metrics.
 	EnvMetricsAddr = "METRICS_ADDR"
@@ -93,6 +98,9 @@ type Config struct {
 	// TrustedProxies are the reverse proxies in front of the app; empty
 	// means the connection's address is the client's.
 	TrustedProxies []netip.Prefix
+	// HSTSIncludeSubdomains extends HSTS to the subdomains of the host
+	// (includeSubDomains); the default is true.
+	HSTSIncludeSubdomains bool
 	// MetricsAddr is the host:port of the separate server of the
 	// Prometheus metrics (/metrics). Empty means no metrics.
 	MetricsAddr string
@@ -224,6 +232,16 @@ func load(lookup LookupFunc, flags Flags, withLog bool) (Config, error) {
 	}
 
 	cfg.TrustedProxies = trusted
+
+	cfg.HSTSIncludeSubdomains = true
+	if v := env(EnvHSTSIncludeSubdomains); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %q is not a boolean (true or false)", EnvHSTSIncludeSubdomains, v))
+		}
+
+		cfg.HSTSIncludeSubdomains = b
+	}
 
 	if withLog {
 		logCfg, logErrs := loadLog(pick(flags.LogFormat, FlagLogFormat, EnvLogFormat, DefaultLogFormat),
@@ -461,6 +479,7 @@ func (c Config) LogValue() slog.Value {
 			slog.String("tls", r.SMTP.TLS),
 		),
 		slog.String("metricsAddr", r.MetricsAddr),
+		slog.Bool("hstsIncludeSubdomains", r.HSTSIncludeSubdomains),
 		slog.Group("log",
 			slog.Bool("json", r.Log.JSON),
 			slog.String("level", r.Log.Level.String()),

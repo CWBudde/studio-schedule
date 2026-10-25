@@ -24,9 +24,9 @@ import (
 // logged, never sent to the client.
 const secretDetail = "secret internal detail"
 
-// newSecurityApp is the demo app with the UI and two test operations: one
-// that fails with an unmapped error and one that panics.
-func newSecurityApp(t *testing.T, hsts bool) http.Handler {
+// newSecurityApp is the demo app of deps with the UI and two test
+// operations: one that fails with an unmapped error and one that panics.
+func newSecurityApp(t *testing.T, deps app.Deps) http.Handler {
 	t.Helper()
 
 	st := memory.New()
@@ -34,7 +34,8 @@ func newSecurityApp(t *testing.T, hsts bool) http.Handler {
 		t.Fatal(err)
 	}
 
-	h, api := app.New(app.Deps{Store: st, UI: webui.Handler(), HSTS: hsts})
+	deps.Store, deps.UI = st, webui.Handler()
+	h, api := app.New(deps)
 
 	huma.Register(api, httpapi.Declare(huma.Operation{
 		OperationID: "testFail", Method: http.MethodGet, Path: "/api/v1/test-fail",
@@ -71,8 +72,18 @@ func TestSecurityHeaders(t *testing.T) {
 		{"panic", http.MethodGet, "/api/v1/test-panic", http.StatusInternalServerError},
 	}
 
-	for _, hsts := range []bool{false, true} {
-		h := newSecurityApp(t, hsts)
+	hsts := []struct {
+		deps app.Deps
+		want string
+	}{
+		{app.Deps{}, ""},
+		{app.Deps{HSTSIncludeSubdomains: true}, ""}, // no HSTS at all without it
+		{app.Deps{HSTS: true}, "max-age=31536000"},
+		{app.Deps{HSTS: true, HSTSIncludeSubdomains: true}, "max-age=31536000; includeSubDomains"},
+	}
+
+	for _, mode := range hsts {
+		h := newSecurityApp(t, mode.deps)
 
 		for _, c := range cases {
 			res, body := do(t, h, httptest.NewRequest(c.method, c.target, nil))
@@ -82,13 +93,12 @@ func TestSecurityHeaders(t *testing.T) {
 
 			for name, want := range always {
 				if got := res.Header.Get(name); !strings.HasPrefix(got, want) {
-					t.Errorf("%s (hsts=%v): %s = %q, want prefix %q", c.name, hsts, name, got, want)
+					t.Errorf("%s (%+v): %s = %q, want prefix %q", c.name, mode.deps, name, got, want)
 				}
 			}
 
-			got := res.Header.Get("Strict-Transport-Security")
-			if want := map[bool]string{true: "max-age=31536000; includeSubDomains"}[hsts]; got != want {
-				t.Errorf("%s (hsts=%v): Strict-Transport-Security = %q, want %q", c.name, hsts, got, want)
+			if got := res.Header.Get("Strict-Transport-Security"); got != mode.want {
+				t.Errorf("%s (%+v): Strict-Transport-Security = %q, want %q", c.name, mode.deps, got, mode.want)
 			}
 		}
 	}
@@ -100,7 +110,7 @@ func TestSecurityHeaders(t *testing.T) {
 func TestAPIAnswersAreNotCached(t *testing.T) {
 	t.Parallel()
 
-	h := newSecurityApp(t, true)
+	h := newSecurityApp(t, app.Deps{HSTS: true})
 
 	cases := []struct {
 		target      string
@@ -111,6 +121,9 @@ func TestAPIAnswersAreNotCached(t *testing.T) {
 		{"/api/v1/health", true, http.StatusOK, "application/json"},
 		{"/api/v1/does-not-exist", true, http.StatusNotFound, "application/problem+json"},
 		{"/api/v1/test-panic", true, http.StatusInternalServerError, "application/problem+json"},
+		{"/api", true, http.StatusNotFound, "application/problem+json"},
+		{"/api/v1/settings/logo", true, http.StatusNotFound, "application/problem+json"}, // no logo yet
+		{"/ical/unknown-token.ics", false, http.StatusNotFound, "application/problem+json"},
 		{"/api/v1/openapi.json", false, http.StatusOK, "application/"},
 		{"/api/v1/docs", false, http.StatusOK, "text/html"},
 		{"/schedule/week", false, http.StatusOK, ""},
@@ -141,7 +154,7 @@ func TestAPIAnswersAreNotCached(t *testing.T) {
 func TestContentSecurityPolicy(t *testing.T) {
 	t.Parallel()
 
-	res, _ := do(t, newSecurityApp(t, false), httptest.NewRequest(http.MethodGet, "/", nil))
+	res, _ := do(t, newSecurityApp(t, app.Deps{}), httptest.NewRequest(http.MethodGet, "/", nil))
 	csp := res.Header.Get("Content-Security-Policy")
 
 	directives := map[string]string{}
@@ -173,7 +186,7 @@ func TestContentSecurityPolicy(t *testing.T) {
 	}
 
 	// The API docs page keeps the policy Huma sets for its CDN renderer.
-	res, _ = do(t, newSecurityApp(t, false), httptest.NewRequest(http.MethodGet, "/api/v1/docs", nil))
+	res, _ = do(t, newSecurityApp(t, app.Deps{}), httptest.NewRequest(http.MethodGet, "/api/v1/docs", nil))
 	if docs := res.Header.Get("Content-Security-Policy"); docs == csp || !strings.Contains(docs, "https://unpkg.com/") {
 		t.Errorf("docs CSP = %q", docs)
 	}
@@ -182,7 +195,7 @@ func TestContentSecurityPolicy(t *testing.T) {
 func TestProblemJSON(t *testing.T) {
 	t.Parallel()
 
-	h := newSecurityApp(t, false)
+	h := newSecurityApp(t, app.Deps{})
 	sched := newScheduleApp(t)
 	member := sched.login(t, domain.RoleMember)
 

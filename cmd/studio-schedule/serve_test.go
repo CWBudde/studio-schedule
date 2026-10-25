@@ -101,13 +101,15 @@ func TestSetTransportSecurity(t *testing.T) {
 		"http://localhost:8080":       false,
 		"https://school.example.test": true,
 	} {
-		var deps app.Deps
+		for _, subdomains := range []bool{false, true} {
+			var deps app.Deps
 
-		setTransportSecurity(&deps, baseURL)
+			setTransportSecurity(&deps, baseURL, subdomains)
 
-		if deps.InsecureCookies == https || deps.HSTS != https {
-			t.Errorf("BASE_URL %q: InsecureCookies = %v, HSTS = %v; want %v, %v",
-				baseURL, deps.InsecureCookies, deps.HSTS, !https, https)
+			if deps.InsecureCookies == https || deps.HSTS != https || deps.HSTSIncludeSubdomains != subdomains {
+				t.Errorf("BASE_URL %q, subdomains %v: InsecureCookies = %v, HSTS = %v, HSTSIncludeSubdomains = %v",
+					baseURL, subdomains, deps.InsecureCookies, deps.HSTS, deps.HSTSIncludeSubdomains)
+			}
 		}
 	}
 }

@@ -71,6 +71,11 @@ type Deps struct {
 	// browsers to use only HTTPS for a year. Set it only when the app is
 	// served over HTTPS (BASE_URL is https://).
 	HSTS bool
+	// HSTSIncludeSubdomains extends HSTS to every subdomain of the app's
+	// host (includeSubDomains). The server sets it from
+	// HSTS_INCLUDE_SUBDOMAINS, on by default; it is off where other
+	// subdomains of the host are still served over plain HTTP.
+	HSTSIncludeSubdomains bool
 	// TrustedProxies are the reverse proxies whose X-Forwarded-For entries
 	// name the client, for the rate limits; empty: the connection's address.
 	TrustedProxies []netip.Prefix
@@ -217,7 +222,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 	h = recoverer(h, deps.Logger, paths)
 	h = accessLog(h, deps.Logger, deps.Clock, deps.Metrics, paths)
 	h = requestIDs(h, deps.RequestIDs, deps.TrustedProxies)
-	h = securityHeaders(h, deps.HSTS)
+	h = securityHeaders(h, hstsHeader(deps.HSTS, deps.HSTSIncludeSubdomains))
 
 	return h, api
 }
@@ -247,9 +252,9 @@ const contentSecurityPolicy = "default-src 'self'; " +
 // securityHeaders sets the browser security headers on every response:
 // the CSP, no MIME sniffing, no framing (X-Frame-Options for browsers
 // without frame-ancestors), no URL in the Referer of cross-origin requests
-// (reset and confirmation tokens are in URLs), HSTS when hsts is set, and
-// no caching on the API's answers.
-func securityHeaders(next http.Handler, hsts bool) http.Handler {
+// (reset and confirmation tokens are in URLs), Strict-Transport-Security
+// when hsts is not empty, and no caching on the API's answers.
+func securityHeaders(next http.Handler, hsts string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Content-Security-Policy", contentSecurityPolicy)
@@ -257,15 +262,16 @@ func securityHeaders(next http.Handler, hsts bool) http.Handler {
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "same-origin")
 
-		if hsts {
-			h.Set("Strict-Transport-Security", hstsValue)
+		if hsts != "" {
+			h.Set("Strict-Transport-Security", hsts)
 		}
 
 		if isAPIAnswer(r.URL.Path) {
 			// Personal data must not stay in a browser's or proxy's cache, and
 			// a JSON answer opened as a page is a file to save, never content
 			// to render (reflected file download). Operations that serve a
-			// file (receipt PDFs, the logo, calendar feeds) set their own.
+			// file (receipt PDFs, the logos) set their own; the calendar
+			// feeds are not API answers.
 			h.Set("Cache-Control", "no-store")
 			h.Set("Content-Disposition", `attachment; filename="api.json"`)
 		}
@@ -274,15 +280,26 @@ func securityHeaders(next http.Handler, hsts bool) http.Handler {
 	})
 }
 
-// hstsValue tells browsers to use only HTTPS for the app's host and its
-// subdomains for a year.
-const hstsValue = "max-age=31536000; includeSubDomains"
+// hstsHeader is the Strict-Transport-Security value: use only HTTPS for a
+// year, for the app's host and, with subdomains, every subdomain of it;
+// empty without hsts.
+func hstsHeader(hsts, subdomains bool) string {
+	switch {
+	case !hsts:
+		return ""
+	case subdomains:
+		return "max-age=31536000; includeSubDomains"
+	default:
+		return "max-age=31536000"
+	}
+}
 
 // isAPIAnswer reports whether p is a path of the API's answers: the API
-// namespace without its documentation (the OpenAPI document and the docs
-// page), which describes the API and is meant to be read in a browser.
+// namespace (isAPIPath) without the calendar feeds, which calendars fetch
+// as files, and without the API's documentation (the OpenAPI document and
+// the docs page), which is meant to be read in a browser.
 func isAPIAnswer(p string) bool {
-	return strings.HasPrefix(p, "/api/") &&
+	return isAPIPath(p) && !strings.HasPrefix(p, httpapi.FeedPathPrefix) &&
 		p != httpapi.BasePath+"/docs" && !strings.HasPrefix(p, httpapi.BasePath+"/openapi")
 }
 

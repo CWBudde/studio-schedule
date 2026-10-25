@@ -15921,6 +15921,11 @@
                   "type": "string"
                 }
               },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
               "Content-Type": {
                 "schema": {
                   "type": "string"

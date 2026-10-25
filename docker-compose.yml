@@ -50,6 +50,7 @@ services:
       DATABASE_URL: host=postgres port=5432 user=${POSTGRES_USER:-studio} password=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env} dbname=${POSTGRES_DB:-studio} sslmode=disable
       BASE_URL: ${BASE_URL:-http://localhost:${APP_PORT:-8080}}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      HSTS_INCLUDE_SUBDOMAINS: ${HSTS_INCLUDE_SUBDOMAINS:-}
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SMTP_HOST: ${SMTP_HOST:-}

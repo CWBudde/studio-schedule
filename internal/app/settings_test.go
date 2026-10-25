@@ -184,12 +184,14 @@ func TestSchoolLogo(t *testing.T) {
 	etag := res.Header().Get("ETag")
 
 	if res.Code != http.StatusOK || res.Body.String() != png || res.Header().Get("Content-Type") != "image/png" ||
-		etag == "" || res.Header().Get("Cache-Control") != "public, no-cache" {
+		etag == "" || res.Header().Get("Cache-Control") != "public, no-cache" ||
+		res.Header().Get("Content-Disposition") != "inline" { // shown in the header, not saved as api.json
 		t.Fatalf("logo: %d %v", res.Code, res.Header())
 	}
 
-	if res = get(etag); res.Code != http.StatusNotModified || res.Body.Len() != 0 {
-		t.Fatalf("revalidation: %d, %d bytes", res.Code, res.Body.Len())
+	if res = get(etag); res.Code != http.StatusNotModified || res.Body.Len() != 0 ||
+		res.Header().Get("Content-Disposition") != "inline" {
+		t.Fatalf("revalidation: %d, %d bytes, %v", res.Code, res.Body.Len(), res.Header())
 	}
 
 	if res = get(`"other"`); res.Code != http.StatusOK {

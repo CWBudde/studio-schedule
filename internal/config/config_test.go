@@ -121,6 +121,8 @@ func TestLoadPrecedence(t *testing.T) {
 				t.Fatalf("Load: %v", err)
 			}
 
+			tt.want.HSTSIncludeSubdomains = true // the default (TestLoadHSTSIncludeSubdomains)
+
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("Load = %+v, want %+v", got.Redacted(), tt.want.Redacted())
 			}
@@ -190,6 +192,7 @@ func TestLoadInvalid(t *testing.T) {
 		{"base url query", map[string]string{"BASE_URL": "https://schedule.example.test/?a=b"}, "BASE_URL"},
 		{"base url fragment", map[string]string{"BASE_URL": "https://schedule.example.test/#top"}, "BASE_URL"},
 		{"base url userinfo", map[string]string{"BASE_URL": "https://admin:change-me@schedule.example.test"}, "BASE_URL"},
+		{"hsts subdomains not a boolean", map[string]string{"HSTS_INCLUDE_SUBDOMAINS": "sometimes"}, "HSTS_INCLUDE_SUBDOMAINS"},
 	}
 
 	for _, tt := range tests {
@@ -391,6 +394,28 @@ func TestLoadTrustedProxies(t *testing.T) {
 
 	if _, err := config.Load(env(map[string]string{"TRUSTED_PROXIES": "proxy.example.test"}), config.Flags{}); !errors.Is(err, config.ErrInvalid) {
 		t.Errorf("a host name: want ErrInvalid, got %v", err)
+	}
+}
+
+// TestLoadHSTSIncludeSubdomains: HSTS covers the subdomains unless
+// HSTS_INCLUDE_SUBDOMAINS turns it off.
+func TestLoadHSTSIncludeSubdomains(t *testing.T) {
+	t.Parallel()
+
+	for value, want := range map[string]bool{"": true, "true": true, "1": true, "false": false, "0": false, " FALSE ": false} {
+		vars := map[string]string{}
+		if value != "" {
+			vars["HSTS_INCLUDE_SUBDOMAINS"] = value
+		}
+
+		cfg, err := config.Load(env(vars), config.Flags{})
+		if err != nil {
+			t.Fatalf("%q: %v", value, err)
+		}
+
+		if cfg.HSTSIncludeSubdomains != want {
+			t.Errorf("HSTS_INCLUDE_SUBDOMAINS=%q: HSTSIncludeSubdomains = %v, want %v", value, cfg.HSTSIncludeSubdomains, want)
+		}
 	}
 }
 

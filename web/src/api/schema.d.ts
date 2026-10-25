@@ -12242,6 +12242,7 @@ export interface operations {
             200: {
                 headers: {
                     "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
                     "Content-Type"?: string;
                     ETag?: string;
                     [name: string]: unknown;

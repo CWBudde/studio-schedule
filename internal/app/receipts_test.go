@@ -185,7 +185,8 @@ func TestReceipts(t *testing.T) {
 	a.expect(http.StatusNoContent, http.MethodPut, "/api/v1/admin/settings/receipts/logo", logo, arno)
 
 	res, got := a.call(http.MethodGet, "/api/v1/admin/settings/receipts/logo", "", olga)
-	if res.StatusCode != http.StatusOK || res.Header.Get("Content-Type") != "image/png" || string(got) != png {
+	if res.StatusCode != http.StatusOK || res.Header.Get("Content-Type") != "image/png" || string(got) != png ||
+		res.Header.Get("Content-Disposition") != "inline" || res.Header.Get("Cache-Control") != "no-cache" {
 		t.Fatalf("logo: %d %v", res.StatusCode, res.Header)
 	}
 

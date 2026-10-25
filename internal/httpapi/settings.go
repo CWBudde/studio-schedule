@@ -197,11 +197,12 @@ type SchoolLogoInput struct {
 // SchoolLogoOutput is the response of getSchoolLogo: the logo, or nothing
 // with status 304.
 type SchoolLogoOutput struct {
-	Status       int
-	ContentType  string `header:"Content-Type"`
-	ETag         string `header:"ETag"`
-	CacheControl string `header:"Cache-Control"`
-	Body         []byte
+	Status             int
+	ContentType        string `header:"Content-Type"`
+	ETag               string `header:"ETag"`
+	CacheControl       string `header:"Cache-Control"`
+	ContentDisposition string `header:"Content-Disposition"`
+	Body               []byte
 }
 
 func (h *handlers) getSchoolLogo(ctx context.Context, in *SchoolLogoInput) (*SchoolLogoOutput, error) {
@@ -218,7 +219,9 @@ func (h *handlers) getSchoolLogo(ctx context.Context, in *SchoolLogoInput) (*Sch
 		return nil, huma.Error404NotFound("no logo")
 	}
 
-	out := &SchoolLogoOutput{ETag: logoETag(l.Digest), CacheControl: LogoCacheControl}
+	// Inline: the header shows the image (the API's answers default to an
+	// attachment).
+	out := &SchoolLogoOutput{ETag: logoETag(l.Digest), CacheControl: LogoCacheControl, ContentDisposition: "inline"}
 
 	if l.Logo.IsZero() {
 		out.Status = http.StatusNotModified
