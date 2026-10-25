@@ -1,0 +1,80 @@
+{
+  "subscribe": "Subscribe",
+  "title": {
+    "bookings": "Your lessons in your calendar",
+    "teaching": "Your teaching in your calendar",
+    "schedule": "The schedule in your calendar",
+    "location": "{{location}} in your calendar"
+  },
+  "content": {
+    "bookings": "Subscribe to a link in your calendar app (Google, Apple, Outlook, …) to see the lessons you and your family are booked for. Each lesson names who is booked; waiting lists are not included.",
+    "teaching": "Subscribe to a link in your calendar app (Google, Apple, Outlook, …) to see the lessons you teach or accompany, with your part.",
+    "schedule": "Subscribe to a link in your calendar app (Google, Apple, Outlook, …) to see the schedule of every location, as you see it here.",
+    "location": "Subscribe to a link in your calendar app (Google, Apple, Outlook, …) to see the schedule of {{location}}, as you see it here."
+  },
+  "window": {
+    "bookings": "It covers your bookings from four weeks back on. Lessons the school cancels stay in, marked as canceled.",
+    "other": "It covers four weeks back and as far ahead as you may see the schedule. Lessons the school cancels stay in, marked as canceled."
+  },
+  "refresh": "Your calendar app fetches changes on its own, which can take a few hours.",
+  "secret": "The link is secret: anyone who has it sees what it shows. Keep it to yourself; you can revoke it at any time.",
+  "loading": "Loading your calendar links…",
+  "loadFailed": "Your calendar links could not be loaded.",
+  "none": "You have no link for this calendar yet.",
+  "existing": "You have a link for this calendar, created on {{created}}.",
+  "lastUsed": "A calendar last fetched it on {{date}}.",
+  "neverUsed": "No calendar has fetched it yet.",
+  "lostLink": "Its address cannot be shown again. If you need it, create a new link.",
+  "create": "Create link",
+  "regenerate": "Create a new link",
+  "creating": "Creating…",
+  "regenerateWarning": "The current link then stops working: calendars subscribed to it must subscribe to the new one.",
+  "created": {
+    "title": "Your new link",
+    "once": "Copy it now: it is shown only this once. If you lose it, create a new one.",
+    "url": "Calendar link",
+    "copy": "Copy link",
+    "copied": "The link has been copied.",
+    "copyFailed": "The link could not be copied. Select it and copy it yourself.",
+    "open": "Open in calendar app",
+    "download": "Download .ics",
+    "downloadFailed": "The calendar could not be downloaded.",
+    "demo": "The demo runs in your browser, so calendar apps cannot reach this link. Download the calendar as a file instead and import it into your calendar app."
+  },
+  "revoke": {
+    "button": "Revoke link",
+    "named": "Revoke the link of {{label}}",
+    "question": "Revoke this link?",
+    "explain": "Calendars subscribed to it stop receiving updates. You can create a new link at any time.",
+    "submit": "Revoke",
+    "submitting": "Revoking…",
+    "cancel": "Keep",
+    "done": "The link has been revoked.",
+    "notFound": "This link had already been revoked or replaced."
+  },
+  "errors": {
+    "noStaff": "There is no teaching of yours to subscribe to: your account is not linked to a staff record. Subscribe to the schedule instead.",
+    "impersonating": "While you are signed in as someone else, you cannot create calendar links: they would outlast the session.",
+    "location": "This location no longer exists."
+  },
+  "visitor": {
+    "title": "Sign in to subscribe",
+    "text": "Calendar links belong to an account, which keeps them secret and lets you revoke them. Sign in or create an account to see the schedule in your calendar app.",
+    "signIn": "Sign in",
+    "register": "Create account"
+  },
+  "label": {
+    "bookings": "Your lessons",
+    "teaching": "Your teaching",
+    "schedule": "Schedule, all locations",
+    "location": "Schedule, {{location}}"
+  },
+  "card": {
+    "title": "Calendar feeds",
+    "description": "Links that show your lessons in your calendar app. Their addresses cannot be shown again: to subscribe somewhere else, create a new link from the schedule, My lessons or Teaching.",
+    "empty": "You have no calendar links. Subscribe from the schedule, My lessons or Teaching.",
+    "created": "Created on {{date}}",
+    "lastUsed": "last fetched on {{date}}",
+    "neverUsed": "not fetched yet"
+  }
+}

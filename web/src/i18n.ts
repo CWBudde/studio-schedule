@@ -4,6 +4,7 @@ import { initReactI18next } from 'react-i18next';
 import deAccount from './locales/de/account.json';
 import deAdmin from './locales/de/admin.json';
 import deAuth from './locales/de/auth.json';
+import deFeeds from './locales/de/feeds.json';
 import deMyLessons from './locales/de/myLessons.json';
 import de from './locales/de/common.json';
 import deSchedule from './locales/de/schedule.json';
@@ -12,6 +13,7 @@ import deTimetable from './locales/de/timetable.json';
 import enAccount from './locales/en/account.json';
 import enAdmin from './locales/en/admin.json';
 import enAuth from './locales/en/auth.json';
+import enFeeds from './locales/en/feeds.json';
 import enMyLessons from './locales/en/myLessons.json';
 import en from './locales/en/common.json';
 import enSchedule from './locales/en/schedule.json';
@@ -32,6 +34,7 @@ export const resources = {
     admin: enAdmin,
     teach: enTeach,
     myLessons: enMyLessons,
+    feeds: enFeeds,
   },
   de: {
     common: de,
@@ -42,6 +45,7 @@ export const resources = {
     admin: deAdmin,
     teach: deTeach,
     myLessons: deMyLessons,
+    feeds: deFeeds,
   },
 } as const;
 
@@ -51,7 +55,17 @@ void i18n
   .init({
     resources,
     defaultNS,
-    ns: [defaultNS, 'schedule', 'auth', 'account', 'timetable', 'admin', 'teach', 'myLessons'],
+    ns: [
+      defaultNS,
+      'schedule',
+      'auth',
+      'account',
+      'timetable',
+      'admin',
+      'teach',
+      'myLessons',
+      'feeds',
+    ],
     fallbackLng: 'en',
     supportedLngs: supportedLanguages,
     nonExplicitSupportedLngs: true,

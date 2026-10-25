@@ -24,6 +24,7 @@ const signedInMember = {
   ...notDemo,
   '/api/v1/auth/me': { body: meMember },
   '/api/v1/family': { body: family },
+  '/api/v1/my/calendar-feeds': { body: { items: [] } },
 };
 
 function renderAccount() {
@@ -86,7 +87,7 @@ describe('AccountPage', () => {
     expect(children.getByRole('button', { name: 'Add child' })).toBeEnabled();
   });
 
-  it('shows the cards in order: details, children, password, email', async () => {
+  it('shows the cards in order: details, children, calendar feeds, password, email', async () => {
     mockApiGet(signedInMember);
 
     renderAccount();
@@ -98,6 +99,7 @@ describe('AccountPage', () => {
     expect(titles).toEqual([
       'Your details',
       'Your children',
+      'Calendar feeds',
       'Change password',
       'Change email address',
     ]);

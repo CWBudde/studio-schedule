@@ -1,0 +1,80 @@
+{
+  "subscribe": "Abonnieren",
+  "title": {
+    "bookings": "Deine Stunden in deinem Kalender",
+    "teaching": "Dein Unterricht in deinem Kalender",
+    "schedule": "Der Stundenplan in deinem Kalender",
+    "location": "{{location}} in deinem Kalender"
+  },
+  "content": {
+    "bookings": "Abonniere einen Link in deiner Kalender-App (Google, Apple, Outlook, …), um die Stunden zu sehen, für die du und deine Familie gebucht seid. Jede Stunde nennt, wer gebucht ist; Wartelisten sind nicht enthalten.",
+    "teaching": "Abonniere einen Link in deiner Kalender-App (Google, Apple, Outlook, …), um die Stunden zu sehen, die du unterrichtest oder begleitest, mit deiner Rolle.",
+    "schedule": "Abonniere einen Link in deiner Kalender-App (Google, Apple, Outlook, …), um den Stundenplan aller Standorte zu sehen, so wie du ihn hier siehst.",
+    "location": "Abonniere einen Link in deiner Kalender-App (Google, Apple, Outlook, …), um den Stundenplan von {{location}} zu sehen, so wie du ihn hier siehst."
+  },
+  "window": {
+    "bookings": "Er enthält deine Buchungen ab vier Wochen zurück. Stunden, die die Schule absagt, bleiben als abgesagt enthalten.",
+    "other": "Er reicht vier Wochen zurück und so weit voraus, wie du den Stundenplan sehen darfst. Stunden, die die Schule absagt, bleiben als abgesagt enthalten."
+  },
+  "refresh": "Deine Kalender-App holt Änderungen selbst ab, was einige Stunden dauern kann.",
+  "secret": "Der Link ist geheim: Wer ihn hat, sieht, was er zeigt. Behalte ihn für dich; du kannst ihn jederzeit widerrufen.",
+  "loading": "Deine Kalender-Links werden geladen…",
+  "loadFailed": "Deine Kalender-Links konnten nicht geladen werden.",
+  "none": "Du hast noch keinen Link für diesen Kalender.",
+  "existing": "Du hast einen Link für diesen Kalender, erstellt am {{created}}.",
+  "lastUsed": "Zuletzt abgerufen hat ihn ein Kalender am {{date}}.",
+  "neverUsed": "Noch kein Kalender hat ihn abgerufen.",
+  "lostLink": "Seine Adresse kann nicht noch einmal angezeigt werden. Wenn du sie brauchst, erstelle einen neuen Link.",
+  "create": "Link erstellen",
+  "regenerate": "Neuen Link erstellen",
+  "creating": "Wird erstellt…",
+  "regenerateWarning": "Der bisherige Link funktioniert dann nicht mehr: Kalender, die ihn abonniert haben, müssen den neuen abonnieren.",
+  "created": {
+    "title": "Dein neuer Link",
+    "once": "Kopiere ihn jetzt: Er wird nur dieses eine Mal angezeigt. Wenn du ihn verlierst, erstelle einen neuen.",
+    "url": "Kalender-Link",
+    "copy": "Link kopieren",
+    "copied": "Der Link wurde kopiert.",
+    "copyFailed": "Der Link konnte nicht kopiert werden. Markiere ihn und kopiere ihn selbst.",
+    "open": "In Kalender-App öffnen",
+    "download": ".ics herunterladen",
+    "downloadFailed": "Der Kalender konnte nicht heruntergeladen werden.",
+    "demo": "Die Demo läuft in deinem Browser, deshalb können Kalender-Apps diesen Link nicht erreichen. Lade den Kalender stattdessen als Datei herunter und importiere ihn in deine Kalender-App."
+  },
+  "revoke": {
+    "button": "Link widerrufen",
+    "named": "Den Link für {{label}} widerrufen",
+    "question": "Diesen Link widerrufen?",
+    "explain": "Kalender, die ihn abonniert haben, bekommen keine Änderungen mehr. Du kannst jederzeit einen neuen Link erstellen.",
+    "submit": "Widerrufen",
+    "submitting": "Wird widerrufen…",
+    "cancel": "Behalten",
+    "done": "Der Link wurde widerrufen.",
+    "notFound": "Dieser Link war schon widerrufen oder ersetzt."
+  },
+  "errors": {
+    "noStaff": "Es gibt keinen Unterricht von dir, den du abonnieren könntest: Dein Konto ist mit keinem Eintrag im Personal verknüpft. Abonniere stattdessen den Stundenplan.",
+    "impersonating": "Solange du als jemand anderes angemeldet bist, kannst du keine Kalender-Links erstellen: Sie würden die Sitzung überdauern.",
+    "location": "Diesen Standort gibt es nicht mehr."
+  },
+  "visitor": {
+    "title": "Zum Abonnieren anmelden",
+    "text": "Kalender-Links gehören zu einem Konto: So bleiben sie geheim und du kannst sie widerrufen. Melde dich an oder erstelle ein Konto, um den Stundenplan in deiner Kalender-App zu sehen.",
+    "signIn": "Anmelden",
+    "register": "Konto erstellen"
+  },
+  "label": {
+    "bookings": "Deine Stunden",
+    "teaching": "Dein Unterricht",
+    "schedule": "Stundenplan, alle Standorte",
+    "location": "Stundenplan, {{location}}"
+  },
+  "card": {
+    "title": "Kalender-Abos",
+    "description": "Links, die deine Stunden in deiner Kalender-App zeigen. Ihre Adressen können nicht noch einmal angezeigt werden: Um woanders zu abonnieren, erstelle einen neuen Link im Stundenplan, unter Meine Stunden oder Unterricht.",
+    "empty": "Du hast keine Kalender-Links. Abonniere im Stundenplan, unter Meine Stunden oder Unterricht.",
+    "created": "Erstellt am {{date}}",
+    "lastUsed": "zuletzt abgerufen am {{date}}",
+    "neverUsed": "noch nicht abgerufen"
+  }
+}

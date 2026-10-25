@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { canAdminister } from '@/features/admin/access';
 import { LoadError } from '@/features/admin/crud/LoadError';
 import { RoleGate } from '@/features/admin/RoleGate';
+import { SubscribeButton } from '@/features/calendar-feeds/SubscribeDialog';
 import { LessonDetailSheet } from '@/features/schedule/detail/LessonSheet';
 import { addDays, formatDate } from '@/lib/schoolTime';
 import { NotifyDialog, type NotifyTarget } from './NotifyDialog';
@@ -32,7 +33,8 @@ export const teachStep = 14;
  * The instructor view (/teach): the lessons a staff member teaches, from a
  * week back to a week ahead, by school day, with their counts and where
  * attendance stands; a lesson opens in the lesson sheet (participants,
- * attendance), and its participants can be sent a message. The office sees
+ * attendance), and its participants can be sent a message; "Subscribe" puts
+ * the own teaching in a calendar app. The office sees
  * every lesson and can narrow them to one staff member. Members and
  * visitors see that the page is not for them; the API refuses them as well.
  */
@@ -40,19 +42,23 @@ export function TeachPage() {
   const { t } = useTranslation('teach');
   return (
     <RoleGate allow={canTeach} noAccess={t('noAccess')}>
-      {(me) => <Teach office={canAdminister(me.role)} />}
+      {(me) => <Teach office={canAdminister(me.role)} teaches={me.teaches} />}
     </RoleGate>
   );
 }
 
 /** The page for staff; `office` for the office and admins, who see every lesson. */
-function Teach({ office }: { office: boolean }) {
+function Teach({ office, teaches }: { office: boolean; teaches: boolean }) {
   const { t } = useTranslation('teach');
   const { search, update } = useTeachSearch();
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <h1 className="font-heading text-4xl font-medium tracking-tight">{t('title')}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="font-heading text-4xl font-medium tracking-tight">{t('title')}</h1>
+          {/* A teaching feed shows the lessons of the own staff records: none, no feed. */}
+          {teaches && <SubscribeButton subject={{ scope: 'teaching' }} />}
+        </div>
         <p className="max-w-prose text-muted-foreground">
           {office ? t('introOffice') : t('intro')}
         </p>

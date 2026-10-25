@@ -494,6 +494,7 @@ export const meMember: Me = {
   role: 'member',
   givenName: 'Nora',
   familyName: 'Example',
+  teaches: false,
 };
 
 /** A fictional admin, as GET /auth/me returns them. */
@@ -504,6 +505,7 @@ export const meAdmin: Me = {
   role: 'admin',
   givenName: 'Ada',
   familyName: 'Admin',
+  teaches: false,
 };
 
 /** A fictional office worker, as GET /auth/me returns them. */
@@ -514,6 +516,7 @@ export const meOffice: Me = {
   role: 'office',
   givenName: 'Otto',
   familyName: 'Office',
+  teaches: false,
 };
 
 /** The member as the admin sees them while signed in as them ("login as"). */

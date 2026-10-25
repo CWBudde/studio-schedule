@@ -2,9 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { CalendarDays, ChevronLeft, ChevronRight, List } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Schedule } from '@/api/client';
-import { publicSettingsQuery, scheduleQuery } from '@/api/queries';
+import { locationsQuery, publicSettingsQuery, scheduleQuery } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { SubscribeButton } from '@/features/calendar-feeds/SubscribeDialog';
 import {
   addDays,
   formatDate,
@@ -139,7 +140,10 @@ function ScheduleView({ timeZone }: { timeZone: string }) {
           </nav>
         )}
 
-        <OfficeActions shown={start} view={view} today={today} timeZone={timeZone} />
+        <div className="flex flex-wrap gap-2">
+          <ScheduleSubscribe location={search.location} />
+          <OfficeActions shown={start} view={view} today={today} timeZone={timeZone} />
+        </div>
       </div>
 
       {schedule.data ? (
@@ -162,6 +166,27 @@ function ScheduleView({ timeZone }: { timeZone: string }) {
         <ScheduleLoading />
       )}
     </>
+  );
+}
+
+/**
+ * "Subscribe" to the schedule: of the location the filter selects, else of
+ * every location (the other filters do not narrow a feed). A location the
+ * catalogue does not know (any more), or a catalogue that failed to load,
+ * gets the feed of every location.
+ */
+function ScheduleSubscribe({ location }: { location: string | undefined }) {
+  const locations = useQuery(locationsQuery);
+  const selected = location ? locations.data?.find((l) => l.id === location) : undefined;
+  // While the filter's location is being looked up, the button would offer the wrong feed.
+  if (location && locations.isPending) return null;
+  return (
+    <SubscribeButton
+      subject={{
+        scope: 'schedule',
+        location: selected && { id: selected.id, name: selected.name },
+      }}
+    />
   );
 }
 

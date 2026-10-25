@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormError } from '@/features/auth/FormError';
+import { CalendarFeedsCard } from '@/features/calendar-feeds/CalendarFeedsCard';
 import { ChangeEmailCard } from './ChangeEmailCard';
 import { ChangePasswordCard } from './ChangePasswordCard';
 import { DependentsCard } from './DependentsCard';
@@ -15,7 +16,8 @@ import { ProfileCard } from './ProfileCard';
 
 /**
  * The signed-in person's account settings (/account): their person data and
- * mail language, their children, the password and the email address.
+ * mail language, their children, their calendar feeds, the password and the
+ * email address.
  * Signed out, the page asks to sign in. While an admin is signed in as
  * someone else, the person data and children stay editable (for support),
  * but the API refuses credential changes, which the page explains instead.
@@ -40,6 +42,7 @@ export function AccountPage() {
         <>
           <ProfileCard me={me.data} />
           <DependentsCard />
+          <CalendarFeedsCard />
           {me.data.impersonator ? (
             <Impersonating me={me.data} />
           ) : (

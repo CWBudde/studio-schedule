@@ -1936,3 +1936,50 @@ export const demoLoginsQuery = queryOptions({
     (await unwrapOrNull(404, api.GET('/api/v1/demo/logins', { signal })))?.logins ?? null,
   staleTime: Infinity,
 });
+
+/** An active calendar feed of the signed-in account (never its token). */
+export type CalendarFeed = components['schemas']['CalendarFeed'];
+/** What a calendar feed shows: the family's bookings, the own teaching or the schedule. */
+export type CalendarFeedScope = CalendarFeed['scope'];
+/** A feed just created, with its secret token and link (shown only once). */
+export type NewCalendarFeed = components['schemas']['NewCalendarFeed'];
+/** What a new feed shows: its scope and, for the schedule of one location, the location. */
+export type CalendarFeedSubject = PostBody<'/api/v1/my/calendar-feeds'>;
+
+/** The active calendar feeds of the signed-in account, oldest first (listCalendarFeeds). */
+export const calendarFeedsQuery = queryOptions({
+  queryKey: ['calendar-feeds'],
+  queryFn: async ({ signal }) =>
+    (await unwrap(api.GET('/api/v1/my/calendar-feeds', { signal }))).items,
+});
+
+const refreshCalendarFeeds = (queryClient: QueryClient) =>
+  queryClient.invalidateQueries({ queryKey: calendarFeedsQuery.queryKey });
+
+/**
+ * Creates the link of a calendar feed (createCalendarFeed), which revokes
+ * the account's active link of the same subject. The answer carries the
+ * token and the link, which cannot be shown again. A 403 for a teaching
+ * feed of an account without a staff record of its own, and for any feed
+ * while an admin is signed in as the account.
+ */
+export const createCalendarFeedMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: CalendarFeedSubject) =>
+      unwrap(api.POST('/api/v1/my/calendar-feeds', { body })),
+    onSuccess: () => refreshCalendarFeeds(queryClient),
+    onError: signedOutOn401(queryClient),
+  });
+
+/**
+ * Revokes an active calendar feed of the signed-in account
+ * (revokeCalendarFeed): its link stops working. A 404 means it was revoked
+ * or replaced meanwhile; either way the list is asked again.
+ */
+export const revokeCalendarFeedMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (feedId: string) =>
+      expectOk(api.DELETE('/api/v1/my/calendar-feeds/{feedId}', { params: { path: { feedId } } })),
+    onError: signedOutOn401(queryClient),
+    onSettled: () => refreshCalendarFeeds(queryClient),
+  });

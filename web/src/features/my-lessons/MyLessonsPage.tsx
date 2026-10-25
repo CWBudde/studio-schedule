@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { meQuery } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { LoadError } from '@/features/admin/crud/LoadError';
+import { SubscribeButton } from '@/features/calendar-feeds/SubscribeDialog';
 import { LessonDetailSheet } from '@/features/schedule/detail/LessonSheet';
 import { HistorySection } from './HistorySection';
 import { Loading } from './Loading';
@@ -14,8 +15,8 @@ import { useNamesPersons } from './useNamesPersons';
 /**
  * "My lessons" (/my-lessons): the coming lessons of the signed-in family,
  * its waiting-list entries and the lessons that are over, a page of three
- * months at a time. A lesson opens in the lesson sheet. Visitors are asked
- * to sign in.
+ * months at a time. A lesson opens in the lesson sheet; "Subscribe" puts
+ * the family's bookings in a calendar app. Visitors are asked to sign in.
  */
 export function MyLessonsPage() {
   const { t } = useTranslation('myLessons');
@@ -28,7 +29,10 @@ export function MyLessonsPage() {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-8">
       <div className="space-y-2">
-        <h1 className="font-heading text-4xl font-medium tracking-tight">{t('title')}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="font-heading text-4xl font-medium tracking-tight">{t('title')}</h1>
+          {me.data && <SubscribeButton subject={{ scope: 'bookings' }} />}
+        </div>
         {me.data && <Intro />}
       </div>
       {me.isPending ? (

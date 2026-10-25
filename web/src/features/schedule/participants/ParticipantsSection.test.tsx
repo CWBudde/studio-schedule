@@ -54,6 +54,7 @@ const meInstructor: Me = {
   role: 'instructor',
   givenName: 'Alex',
   familyName: 'Example',
+  teaches: true,
 };
 
 const booking = (

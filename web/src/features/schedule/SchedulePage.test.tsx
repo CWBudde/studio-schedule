@@ -45,6 +45,7 @@ function mockSchedule(answer: Schedule = schedule, me?: Me) {
       return { body: answer };
     },
     '/api/v1/lessons/{lessonId}': { body: lessonBalletDetail },
+    '/api/v1/my/calendar-feeds': { body: { items: [] } },
   });
   return requests;
 }
@@ -203,5 +204,53 @@ describe('SchedulePage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Monday, October 26' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'New lesson' })).not.toBeInTheDocument();
+  });
+
+  it('subscribes to the whole schedule when the filter names an unknown location', async () => {
+    mockSchedule(schedule, meMember);
+    const user = userEvent.setup();
+
+    renderAtSchedule(<SchedulePage />, {
+      from: '2026-10-26',
+      location: '0190a000-0000-7000-8000-000000000999',
+    });
+    await user.click(await screen.findByRole('button', { name: 'Subscribe' }));
+
+    expect(
+      await screen.findByRole('dialog', { name: 'The schedule in your calendar' }),
+    ).toBeInTheDocument();
+  });
+
+  it('subscribes to the schedule of the location the filter selects', async () => {
+    mockSchedule(schedule, meMember);
+    const post = mockApiPost({
+      '/api/v1/my/calendar-feeds': {
+        status: 201,
+        body: {
+          feed: {
+            id: '0190a000-0000-7000-8000-000000000603',
+            scope: 'schedule',
+            locationId: ids.locationNorth,
+            locationName: 'North Studio',
+            createdAt: '2026-10-23T10:00:00Z',
+          },
+          token: 'tok',
+          path: '/ical/tok.ics',
+        },
+      },
+    });
+    const user = userEvent.setup();
+
+    renderAtSchedule(<SchedulePage />, { from: '2026-10-26', location: ids.locationNorth });
+    await user.click(await screen.findByRole('button', { name: 'Subscribe' }));
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'North Studio in your calendar' }),
+    );
+    await user.click(await dialog.findByRole('button', { name: 'Create link' }));
+
+    expect(post).toHaveBeenCalledWith('/api/v1/my/calendar-feeds', {
+      body: { scope: 'schedule', locationId: ids.locationNorth },
+    });
+    expect(await dialog.findByRole('region', { name: 'Your new link' })).toBeInTheDocument();
   });
 });

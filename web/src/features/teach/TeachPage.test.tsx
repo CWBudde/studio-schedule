@@ -48,6 +48,7 @@ const meInstructor: Me = {
   role: 'instructor',
   givenName: 'Alex',
   familyName: 'Example',
+  teaches: true,
 };
 
 const lesson = (n: number, extra: Partial<TeachLesson>): TeachLesson => ({
@@ -361,6 +362,20 @@ describe('TeachPage', () => {
     expect(
       screen.getByRole('heading', { level: 2, name: 'Tomorrow, Thursday, October 29' }),
     ).toBeInTheDocument();
+  });
+
+  it('offers the teaching feed only to those who teach', async () => {
+    mockTeach(meInstructor);
+    const first = renderAtTeach(<TeachPage />);
+    await screen.findByRole('heading', { level: 2, name: /^Today/ });
+    expect(screen.getByRole('button', { name: 'Subscribe' })).toBeInTheDocument();
+    first.unmount();
+
+    vi.restoreAllMocks();
+    mockTeach(meOffice);
+    renderAtTeach(<TeachPage />);
+    await screen.findByRole('heading', { level: 2, name: /^Today/ });
+    expect(screen.queryByRole('button', { name: 'Subscribe' })).not.toBeInTheDocument();
   });
 
   it('has no staff filter for instructors', async () => {
