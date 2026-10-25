@@ -7,7 +7,9 @@ operator; it is not a privacy policy and no legal advice. The decisions behind i
 
 Everything lives in the PostgreSQL database. The app sets one cookie (the session, after sign-in),
 loads nothing from other sites (fonts and scripts are part of the app), has no analytics or
-tracking, and stores no IP addresses or browser details.
+tracking, and stores no IP addresses or browser details beyond the device label of a push
+subscription (below). The browser keeps a copy of the last schedule and the family's coming lessons
+for offline use (below).
 
 ## What the app stores
 
@@ -26,6 +28,8 @@ tracking, and stores no IP addresses or browser details.
 | Mails              | recipients                                | address, subject, text and HTML body, delivery state and errors                                                                                            | sending, and the office's mail log                  | bodies 30 days after sending, the mail 180 days after it was written                |
 | Announcements      | account holders                           | which announcements an account dismissed                                                                                                                   | showing each one once                               | until the account is deleted                                                        |
 | Calendar feeds     | account holders                           | scope, location, created, last used, the token's hash                                                                                                      | the lessons in the member's calendar app            | until revoked or the account is deleted                                             |
+| Push subscriptions | account holders who turned them on        | the browser's push endpoint and its keys, a device label (browser and system), created, last used                                                          | notifying the device of waiting-list invites        | until turned off, signed out, gone at the push service, or 6 months unused          |
+| Push messages      | account holders with a subscription       | the notification (lesson, time, the reservation, the accept link), delivery state and errors                                                               | sending the notification                            | 7 days                                                                              |
 | Audit log          | staff and the persons concerned           | who did what to whom and when (impersonation, account administration, anonymization, merges, mail requeues), without personal details beyond the reference | accountability of staff actions                     | 3 years                                                                             |
 | Import runs        | the office                                | file name, who, when, counts, and the messages of the rows that could not be imported                                                                      | the history of member imports                       | 1 year                                                                              |
 | Staff              | instructors and accompanists              | display name, link to the person                                                                                                                           | the timetable                                       | as long as the school keeps the staff record                                        |
@@ -34,6 +38,19 @@ The retention periods run automatically: the hourly `purge-sessions` job and the
 and `purge-personal-data` jobs. The application log (stderr) records requests without query strings
 and without client addresses; its retention is the operator's (below).
 
+**Web push** ([ADR 0017](decisions/0017-pwa-and-web-push.md)) is optional: the school turns it on
+with VAPID keys, and each person per device on the account page. A push endpoint is an address at
+the browser vendor's push service (Google, Mozilla, Apple or Microsoft, by browser): the server
+sends the notification there, encrypted for the device, so the push service sees only that a
+message goes to that device, when, and how large it is, plus the school's `VAPID_SUBJECT` contact.
+The notification names the lesson and its time and links to the invite, never a person, because it
+shows on a lock screen. Signing out turns notifications off on that device.
+
+**In the browser.** For use offline, the app keeps the last public schedule, the lessons opened from
+it, the family's coming lessons and who is signed in, in the browser's IndexedDB, for at most 7
+days; signing out and an ended session delete the copy. The service worker caches the app's own
+files only, never the API's answers.
+
 Children's data is entered and managed by their guardians and the office. A child signs in only
 with an account of its own (a managed dependent, e.g. a teenager), which the school creates.
 
@@ -41,7 +58,8 @@ with an account of its own (a managed dependent, e.g. a teenager), which the sch
 
 Both export one JSON file (`studio-schedule.person-export`, version 1) with everything the app holds
 about a person: the person with every field (the office's notes included), guardians, dependents
-and merged persons (names only), the account, its calendar feeds and dismissed announcements,
+and merged persons (names only), the account, its calendar feeds, push devices (by label, without
+endpoint and keys) and dismissed announcements,
 class memberships, every booking and waiting-list entry, the passes with their visits, and the
 receipts the person paid (as data, not the PDFs). It never contains password hashes, session or
 link tokens, or calendar feed tokens.

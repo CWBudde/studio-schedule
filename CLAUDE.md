@@ -173,6 +173,15 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   migration 00023: what keeps an account is a 409 `in-use`), and the daily `purge-personal-data`
   job (`service/retention.go`, `app/jobs_privacy.go`). Scenarios on both stores:
   `servicetest.Privacy`.
+- **PWA & web push:** ADR 0017. The service worker is `web/src/sw.ts` (vite-plugin-pwa
+  `injectManifest`; precaches the shell, never `*.wasm`, never the API), registered with the update
+  toast in `web/src/pwa.ts`; offline the allow-listed query cache comes from IndexedDB
+  (`web/src/lib/offlineCache.ts`, wiped by `changeIdentity`), and `transportFetch` refuses writes.
+  The server's manifest is `httpapi/manifest.go`. Push: `internal/webpush` (RFC 8291/8292, server
+  only, `VAPID_*` env, `vapid-keys` command), `service/push.go` (`PushService`, `pushTo` queues in
+  the causing transaction, e.g. `waitlister.invite`; the `deliver-push` job), the repos
+  `PushSubscriptions()`/`PushOutbox()`, the demo's sender `wasmbridge.PushSender` (worker → page →
+  `showNotification`), and the account page's `web/src/features/push`.
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),

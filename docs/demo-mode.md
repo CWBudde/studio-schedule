@@ -174,6 +174,17 @@ The demo is a _demo installation_ (`app.Deps.Demo`, also set for `serve` without
 Real installations answer both endpoints with 404
 ([ADR 0004](decisions/0004-accounts-sessions-and-mail.md)).
 
+## The PWA in the demo
+
+The demo is installable too, with a static manifest "Studio Schedule (demo)" that the build
+generates, and its service worker is scoped to the Pages path (`VITE_BASE`). It precaches the app
+shell but not `app.wasm`, `receipt.wasm` or `wasm_exec.js`: offline after a reload the backend may
+not start, and the pages show the last schedule and My lessons from the offline cache, read-only
+([ADR 0017](decisions/0017-pwa-and-web-push.md)). Web push has no push service to reach here: the
+demo's "subscription" is made up, its push sender hands each notification to the page, and the page
+shows it through the service worker, so turning notifications on and getting a waiting-list invite
+shows a real notification (after the browser's permission).
+
 ## Calendar feeds in the demo
 
 Calendar feeds ([ADR 0011](decisions/0011-calendar-feeds.md)) are created with the same code: the

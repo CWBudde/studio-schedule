@@ -136,7 +136,9 @@ announcements whose publication has come, once, at most 100 mails a run;
 `purge-personal-data` (daily, anonymizes the guests of lessons that ended 12 months ago and deletes
 audit events older than 3 years and import runs older than 1 year;
 [ADR 0016](decisions/0016-privacy-and-account-administration.md)) and,
-when a mailer is configured, `deliver-mail` (every minute). The server and the WASM build run every job
+when a mailer is configured, `deliver-mail` (every minute), and with a push sender, `deliver-push`
+(every minute, and woken when a request queues a notification;
+[ADR 0017](decisions/0017-pwa-and-web-push.md)). The server and the WASM build run every job
 once at startup (the demo before it answers its first request), then on its interval; Go timers
 work in `js/wasm`, so both targets use the same code. A request that leaves work for a job now
 wakes it through `Deps.Wake` (a `jobs.Waker` both binaries pass to `app.New` and `app.Jobs`): an
@@ -245,7 +247,8 @@ What the school stores about a person, and how it goes
   the account's, clears it where records only name it, re-points the audit events about it to its
   person, and fails (409 `in-use`) while receipts, the audit log, announcements or duplicate
   dismissals name it.
-- **Retention**: `service.RetentionService` behind the `purge-personal-data` job.
+- **Retention**: `service.RetentionService` behind the `purge-personal-data` job, push
+  subscriptions and messages included (ADR 0017).
 
 ## API contract
 
@@ -274,6 +277,12 @@ What the school stores about a person, and how it goes
 - TanStack Router for routing (browser history in production, hash history in the demo), TanStack
   Query for server state, react-hook-form + zod for forms, react-i18next (`en` default, `de`).
 - `web/src/api/client.ts` is the only place that knows the transport (`VITE_TRANSPORT=http|wasm`).
+- PWA ([ADR 0017](decisions/0017-pwa-and-web-push.md)): the service worker `web/src/sw.ts`
+  (vite-plugin-pwa, `injectManifest`) precaches the app shell and shows push notifications;
+  `web/src/pwa.ts` registers it and offers updates. Offline, `PersistQueryClientProvider` restores
+  an allow-listed copy of the query cache from IndexedDB (`web/src/lib/offlineCache.ts`), queries
+  pause (`watchOnline`, `useOnline`), and `transportFetch` refuses writes. The account page's
+  `PushCard` subscribes the device (`web/src/features/push`).
 
 ## Decision records
 

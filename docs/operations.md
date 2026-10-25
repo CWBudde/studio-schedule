@@ -88,7 +88,11 @@ private network such as the one of Docker Compose.
 | `healthcheck`            | `--addr`              | as `HTTP_ADDR`: the port to request `/healthz` at                                                                                                                                                                       |
 
 `openapi` prints the OpenAPI document, `version` the build version and `vapid-keys` a new VAPID key
-pair for web push; none takes a flag.
+pair for web push; none takes a flag. To turn web push on
+([ADR 0017](decisions/0017-pwa-and-web-push.md)), run `studio-schedule vapid-keys` once, put both
+lines and a `VAPID_SUBJECT` into the environment and restart; keep the keys like a password. The
+server then sends notifications to the browser vendors' push services over HTTPS (outbound port
+443 to public addresses).
 `init` asks for every value no flag gives; without a terminal, give them all as flags. Every
 command explains itself with `--help`. A test (`cmd/studio-schedule/docs_test.go`) fails when a
 variable or flag of the code is missing from these tables, or a table names one the code doesn't
