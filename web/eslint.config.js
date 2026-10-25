@@ -46,12 +46,12 @@ export default defineConfig([
     rules: { 'react-refresh/only-export-components': 'off' },
   },
   {
-    files: ['*.config.{js,ts}', 'e2e/**/*.ts'],
+    files: ['*.config.{js,ts}', 'e2e/**/*.ts', 'e2e-server/**/*.ts'],
     languageOptions: { globals: globals.node },
   },
   {
     // Playwright fixtures call `use()`, which is not a React hook.
-    files: ['e2e/**/*.ts'],
+    files: ['e2e/**/*.ts', 'e2e-server/**/*.ts'],
     rules: { 'react-hooks/rules-of-hooks': 'off' },
   },
   prettier,

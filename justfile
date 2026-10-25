@@ -114,6 +114,16 @@ e2e-install:
 e2e *args: demo-build
     {{ if os() == "macos" { "caffeinate -i " } else { "" } }}pnpm -C web e2e {{args}}
 
+# Build the server and run the smoke tests (web/e2e-server) against `serve` on PostgreSQL, with
+# Mailpit catching the mails; both run in Docker and are removed afterwards (args go to playwright test)
+e2e-server *args: build
+    {{ if os() == "macos" { "caffeinate -i " } else { "" } }}./scripts/e2e-server.sh {{args}}
+
+# Back up a seeded database with pg_dump, restore it into a new one and check that the copy serves
+# (PostgreSQL in Docker; see docs/operations.md, "Backups and restore")
+restore-drill:
+    ./scripts/restore-drill.sh
+
 # Everything CI runs (the e2e tests need `just e2e-install` once)
 ci: check-tidy check-formatted check-sqlc lint test check-wasm-deps typst-wasm-check web-check e2e
 
