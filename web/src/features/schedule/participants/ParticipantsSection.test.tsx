@@ -9,6 +9,7 @@ import type {
   StaffBooking,
 } from '@/api/queries';
 import { Toaster } from '@/components/ui/sonner';
+import i18n from '@/i18n';
 import {
   conflict,
   family,
@@ -255,6 +256,34 @@ describe('ParticipantsSection', () => {
     // Before the start, there is no attendance to take.
     expect(section.queryByRole('button', { name: 'Mia Sample attended' })).toBeNull();
     expect(section.queryByRole('button', { name: 'All attended' })).toBeNull();
+  });
+
+  it('names an anonymized participant in the current language', async () => {
+    const deleted = booking(5, 'Deleted person', {
+      personId: id(348),
+      status: 'attended',
+      anonymized: true,
+    });
+    mockStaff({
+      me: meOffice,
+      list: {
+        body: {
+          ...participants,
+          bookings: [mia, deleted],
+          waitlist: [{ ...participants.waitlist[0]!, name: 'Deleted person', anonymized: true }],
+        },
+      },
+    });
+
+    await i18n.changeLanguage('de');
+    render(<Toaster />);
+    renderAtSchedule(<LessonSheet />, { lesson: ids.lessonBallet });
+    const dialog = await screen.findByRole('dialog', { name: 'Ballet' });
+    const section = within(await within(dialog).findByRole('region', { name: 'Teilnehmende' }));
+
+    // In the booked list and on the waiting list.
+    expect(await section.findAllByText('Gelöschte Person')).toHaveLength(2);
+    expect(section.queryByText('Deleted person')).toBeNull();
   });
 
   it('shows how each booking is paid', async () => {

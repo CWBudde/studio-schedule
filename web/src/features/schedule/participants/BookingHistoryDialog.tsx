@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { shownName } from '@/lib/personName';
 import { formatTimestamp } from '@/lib/schoolTime';
 
 /**
@@ -40,7 +41,9 @@ export function BookingHistoryDialog({
         <DialogHeader>
           <DialogTitle>{t('participants.history.title')}</DialogTitle>
           <DialogDescription>
-            {t('participants.history.description', { name: participant?.name ?? '' })}
+            {t('participants.history.description', {
+              name: participant ? shownName(participant) : '',
+            })}
           </DialogDescription>
         </DialogHeader>
         {participant && <Events bookingId={participant.bookingId} timeZone={timeZone} />}

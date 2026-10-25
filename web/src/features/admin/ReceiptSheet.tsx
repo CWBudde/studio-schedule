@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatMoney, formatRate } from '@/lib/money';
+import { shownName } from '@/lib/personName';
 import { formatDate } from '@/lib/schoolTime';
 import { TextareaField } from './crud/fields';
 import { LoadError } from './crud/LoadError';
@@ -231,8 +232,8 @@ function ReceiptFacts({ receipt: r, onOpen }: { receipt: Receipt; onOpen: (id: s
       t('detail.recipient'),
       [r.recipientName, r.recipientAddress, r.recipientEmail].filter(Boolean).join('\n'),
     ],
-    ...(r.payer && r.payer.name !== r.recipientName
-      ? [[t('detail.payer'), r.payer.name] as [string, ReactNode]]
+    ...(r.payer && shownName(r.payer) !== r.recipientName
+      ? [[t('detail.payer'), shownName(r.payer)] as [string, ReactNode]]
       : []),
     [t('method.label'), t(`method.${r.paymentMethod}`)],
     [t('detail.taxMode'), t(`settings.taxModes.${r.taxMode}`)],

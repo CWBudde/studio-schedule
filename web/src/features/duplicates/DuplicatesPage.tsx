@@ -15,7 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { personName } from '@/features/admin/crud/person';
+import { personName } from '@/lib/personName';
 import { formatDate } from '@/lib/schoolTime';
 import { MergeDialog } from './MergeDialog';
 

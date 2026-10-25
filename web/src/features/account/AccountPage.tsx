@@ -11,13 +11,15 @@ import { FormError } from '@/features/auth/FormError';
 import { CalendarFeedsCard } from '@/features/calendar-feeds/CalendarFeedsCard';
 import { ChangeEmailCard } from './ChangeEmailCard';
 import { ChangePasswordCard } from './ChangePasswordCard';
+import { DeleteAccountCard } from './DeleteAccountCard';
 import { DependentsCard } from './DependentsCard';
+import { MyDataCard } from './MyDataCard';
 import { ProfileCard } from './ProfileCard';
 
 /**
  * The signed-in person's account settings (/account): their person data and
- * mail language, their children, their calendar feeds, the password and the
- * email address.
+ * mail language, their children, their calendar feeds, the download of
+ * their data, the password, the email address, and deleting the account.
  * Signed out, the page asks to sign in. While an admin is signed in as
  * someone else, the person data and children stay editable (for support),
  * but the API refuses credential changes, which the page explains instead.
@@ -43,12 +45,14 @@ export function AccountPage() {
           <ProfileCard me={me.data} />
           <DependentsCard />
           <CalendarFeedsCard />
+          <MyDataCard />
           {me.data.impersonator ? (
             <Impersonating me={me.data} />
           ) : (
             <>
               <ChangePasswordCard />
               <ChangeEmailCard me={me.data} />
+              <DeleteAccountCard />
             </>
           )}
         </>

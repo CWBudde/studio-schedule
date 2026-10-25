@@ -108,5 +108,6 @@
     "title": "Seite nicht gefunden",
     "description": "Die gesuchte Seite existiert nicht.",
     "backHome": "Zur Startseite"
-  }
+  },
+  "deletedPerson": "Gelöschte Person"
 }

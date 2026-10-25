@@ -42,6 +42,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { canAdminister } from '@/features/admin/access';
 import { PaymentBadge } from '@/features/passes/PassBits';
+import { shownName } from '@/lib/personName';
 import { formatDateTime } from '@/lib/schoolTime';
 import { useServerClock } from '../useServerClock';
 import { AddParticipantDialog } from './AddParticipantDialog';
@@ -376,7 +377,7 @@ function ParticipantRow({
   const queryClient = useQueryClient();
   const errorText = useParticipantErrorText();
   const attendance = useMutation(setAttendanceMutation(queryClient));
-  const name = p.name;
+  const name = shownName(p);
 
   const mark = (status: AttendanceStatus) =>
     attendance.mutate(
@@ -543,7 +544,7 @@ function WaitlistRow({ entry, timeZone }: { entry: LessonWaitlistEntry; timeZone
   return (
     <li className="flex flex-wrap items-center gap-1.5 text-sm">
       <span className={ended ? 'min-w-0 break-words text-muted-foreground' : 'min-w-0 break-words'}>
-        {entry.name}
+        {shownName(entry)}
       </span>
       <Badge variant={entry.status === 'invited' ? 'default' : 'outline'}>{badge}</Badge>
     </li>
@@ -574,7 +575,7 @@ function RemoveDialog({
   const queryClient = useQueryClient();
   const errorText = useParticipantErrorText();
   const remove = useMutation(removeLessonParticipantMutation(queryClient));
-  const name = participant?.name ?? '';
+  const name = participant ? shownName(participant) : '';
 
   const onConfirm = () => {
     if (!participant) return;

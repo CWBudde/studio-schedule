@@ -87,7 +87,7 @@ describe('AccountPage', () => {
     expect(children.getByRole('button', { name: 'Add child' })).toBeEnabled();
   });
 
-  it('shows the cards in order: details, children, calendar feeds, password, email', async () => {
+  it('shows the cards in order: details, children, calendar feeds, data, password, email, delete', async () => {
     mockApiGet(signedInMember);
 
     renderAccount();
@@ -100,8 +100,10 @@ describe('AccountPage', () => {
       'Your details',
       'Your children',
       'Calendar feeds',
+      'Your data',
       'Change password',
       'Change email address',
+      'Delete account',
     ]);
   });
 

@@ -5,7 +5,7 @@ import type { AuditEventEntry } from '@/api/client';
 import { listAuditEventsQuery, meQuery, publicSettingsQuery } from '@/api/queries';
 import { formatTimestamp } from '@/lib/schoolTime';
 import { DataTable, DataTableLoading } from './crud/DataTable';
-import { personName } from './crud/person';
+import { personName } from '@/lib/personName';
 import { columnHelper } from './crud/table';
 import { NoAccess } from './NoAccess';
 
@@ -23,12 +23,25 @@ const actionKeys: ReadonlyMap<string, `audit.actions.${KnownAction}`> = new Map(
   ['impersonation-ended', 'audit.actions.impersonation-ended'],
   ['mail-requeued', 'audit.actions.mail-requeued'],
   ['person-merged', 'audit.actions.person-merged'],
+  ['person-anonymized', 'audit.actions.person-anonymized'],
+  ['account-disabled', 'audit.actions.account-disabled'],
+  ['account-enabled', 'audit.actions.account-enabled'],
+  ['account-role-changed', 'audit.actions.account-role-changed'],
+  ['account-deleted', 'audit.actions.account-deleted'],
 ]);
 
 type KnownAction =
-  'impersonation-started' | 'impersonation-ended' | 'mail-requeued' | 'person-merged';
+  | 'impersonation-started'
+  | 'impersonation-ended'
+  | 'mail-requeued'
+  | 'person-merged'
+  | 'person-anonymized'
+  | 'account-disabled'
+  | 'account-enabled'
+  | 'account-role-changed'
+  | 'account-deleted';
 
-type AuditAccount = AuditEventEntry['actor'];
+type AuditAccount = NonNullable<AuditEventEntry['actor']>;
 type AuditPerson = NonNullable<AuditEventEntry['targetPerson']>;
 
 /**
@@ -93,10 +106,18 @@ function AuditTable() {
               },
               { id: 'action', header: t('audit.action') },
             ),
-            columns.accessor((e) => accountText(e.actor), {
+            // No actor: the account's holder deleted it themself.
+            columns.accessor((e) => (e.actor ? accountText(e.actor) : t('audit.holder')), {
               id: 'actor',
               header: t('audit.actor'),
-              cell: (info) => <Account account={info.row.original.actor} />,
+              cell: (info) => {
+                const actor = info.row.original.actor;
+                return actor ? (
+                  <Account account={actor} />
+                ) : (
+                  <span className="block font-medium">{t('audit.holder')}</span>
+                );
+              },
             }),
             columns.accessor(
               (e) => targetText(e, t('audit.mail', { to: e.details?.recipient ?? '' })),
@@ -151,7 +172,11 @@ function targetText(e: AuditEventEntry, mail: string) {
 const personText = (p: AuditPerson) =>
   p.givenName === undefined && p.familyName === undefined
     ? ''
-    : personName({ givenName: p.givenName ?? '', familyName: p.familyName ?? '' });
+    : personName({
+        givenName: p.givenName ?? '',
+        familyName: p.familyName ?? '',
+        anonymized: p.anonymized,
+      });
 
 /** The person's name, or '' for an account whose person can no longer be found. */
 const accountName = (a: AuditAccount) =>
@@ -162,7 +187,23 @@ const accountName = (a: AuditAccount) =>
 /** What an event concerns: its account, its person, its mail, or nothing. */
 function Target({ event }: { event: AuditEventEntry }) {
   const { t } = useTranslation('admin');
-  if (event.target) return <Account account={event.target} />;
+  const { t: tAuth } = useTranslation('auth');
+  if (event.target) {
+    const { previousRole, role } = event.details ?? {};
+    return (
+      <>
+        <Account account={event.target} />
+        {previousRole && role && (
+          <span className="block text-xs text-muted-foreground">
+            {t('audit.roleChange', {
+              from: tAuth(`roles.${previousRole}`),
+              to: tAuth(`roles.${role}`),
+            })}
+          </span>
+        )}
+      </>
+    );
+  }
   if (event.targetPerson) {
     const name = personText(event.targetPerson);
     const mergedName = event.details?.mergedName;

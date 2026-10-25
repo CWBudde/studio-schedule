@@ -10,7 +10,7 @@ import { SelectField } from './crud/fields';
 import { conflictReason } from '@/api/conflict';
 import { showServerErrors, useAdminErrorText } from './crud/form';
 import { FormSheet, FormSheetActions, FormSheetHeader } from './crud/FormSheet';
-import { personName } from './crud/person';
+import { personName } from '@/lib/personName';
 import { ProblemAlert } from '@/components/ProblemAlert';
 import { accountRoles, accountSchema, type AccountValues } from './personForms';
 

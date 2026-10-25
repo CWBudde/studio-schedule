@@ -35,7 +35,7 @@ import { currencyDigits } from '@/lib/money';
 import { SelectField, TextareaField } from './crud/fields';
 import { LoadError } from './crud/LoadError';
 import { useAdminErrorText } from './crud/form';
-import { personName } from './crud/person';
+import { personName } from '@/lib/personName';
 import { PersonField } from './crud/PersonField';
 import {
   assignPassFields,

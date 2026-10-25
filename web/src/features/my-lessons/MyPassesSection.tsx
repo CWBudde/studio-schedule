@@ -7,6 +7,7 @@ import { LoadError } from '@/features/admin/crud/LoadError';
 import { PassStateBadge } from '@/features/passes/PassBits';
 import { usePassText } from '@/features/passes/passText';
 import { passState } from '@/features/passes/passes';
+import { shownName } from '@/lib/personName';
 import {
   formatDate,
   formatTime,
@@ -76,7 +77,9 @@ function PassCard({
   return (
     <li
       aria-label={
-        named ? t('mine.cardLabel', { pass: pass.passType.name, name: pass.owner.name }) : undefined
+        named
+          ? t('mine.cardLabel', { pass: pass.passType.name, name: shownName(pass.owner) })
+          : undefined
       }
       aria-labelledby={named ? undefined : titleId}
       data-state={state}
@@ -87,7 +90,7 @@ function PassCard({
           {pass.passType.name}
           {named && (
             <span className="block text-sm font-normal text-muted-foreground">
-              {pass.owner.name}
+              {shownName(pass.owner)}
             </span>
           )}
         </h3>
@@ -104,7 +107,7 @@ function PassCard({
             <dd>
               {pass.origin === 'assignment'
                 ? t('mine.given')
-                : t('mine.paidBy', { name: payer?.name ?? '' })}
+                : t('mine.paidBy', { name: payer ? shownName(payer) : '' })}
             </dd>
           </>
         )}

@@ -1,19 +1,29 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
-import { ArrowLeft, KeyRound, Merge, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, KeyRound, Merge, Pencil, Trash2, UserRoundX } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ApiError, deletePersonMutation, type PersonDetail, personQuery } from '@/api/queries';
+import {
+  ApiError,
+  deletePersonMutation,
+  exportPersonMutation,
+  type PersonDetail,
+  personQuery,
+  publicSettingsQuery,
+} from '@/api/queries';
+import { FormError } from '@/features/auth/FormError';
+import { useExportDownload } from '@/features/privacy/download';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TimetableEmpty } from '@/features/timetable/TimetableStates';
 import { weekdayName } from '@/features/timetable/timetable';
-import { formatDate } from '@/lib/schoolTime';
+import { formatDate, formatTimestamp } from '@/lib/schoolTime';
+import { AnonymizeDialog } from './AnonymizeDialog';
 import { DeleteDialog } from './crud/DeleteDialog';
 import { LoadError } from './crud/LoadError';
-import { personName } from './crud/person';
+import { personName } from '@/lib/personName';
 import { PersonAccountSheet } from './PersonAccountSheet';
 import { PersonGuardians } from './PersonGuardians';
 import { PersonPasses } from './PersonPasses';
@@ -34,7 +44,9 @@ const linkClass =
  * in a sheet), guardians (linked and unlinked here), children, account
  * (created here with an invitation), passes (sold, given and voided here),
  * staff links and class memberships. A person nothing refers to any more
- * can be deleted; the list follows.
+ * can be deleted; the list follows. Any person's data can be exported, and
+ * a person anonymized (ADR 0016): it then stays as "Deleted person" with
+ * its history, read-only.
  */
 export function PersonPage({ personId }: { personId: string }) {
   const { t } = useTranslation('admin');
@@ -44,6 +56,8 @@ export function PersonPage({ personId }: { personId: string }) {
   const [editing, setEditing] = useState<PersonTarget | null>(null);
   const [creatingAccount, setCreatingAccount] = useState<PersonDetail | null>(null);
   const [deleting, setDeleting] = useState<PersonDetail | null>(null);
+  const [anonymizing, setAnonymizing] = useState(false);
+  const exportData = useExportDownload(exportPersonMutation);
 
   const back = (
     <Link
@@ -81,17 +95,57 @@ export function PersonPage({ personId }: { personId: string }) {
   }
 
   const p = person.data;
+  // An anonymized person's stored name is fixed; it shows translated (ADR 0016).
   const name = personName(p);
+  const exportButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      aria-label={t('persons.export.label', { name })}
+      disabled={exportData.pendingFor !== undefined}
+      onClick={() => exportData.download(p.id)}
+    >
+      <Download aria-hidden="true" />
+      {exportData.pendingFor ? t('persons.export.pending') : t('persons.export.button')}
+    </Button>
+  );
+  const exportError = (
+    <FormError error={exportData.error} messages={{ 404: t('persons.notFound') }} />
+  );
+
+  if (p.anonymizedAt) {
+    // An anonymized person stays for its history (ADR 0016).
+    return (
+      <div className="space-y-6">
+        <div className="space-y-3">
+          {back}
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <h1 className="min-w-0 font-heading text-3xl font-semibold tracking-tight break-words">
+              {name}
+            </h1>
+            {exportButton}
+          </div>
+        </div>
+        {exportError}
+        <Anonymized at={p.anonymizedAt} />
+      </div>
+    );
+  }
+
   if (p.mergedInto) {
     // A merged person is a record kept for its receipts (ADR 0015).
     return (
       <div className="space-y-6">
         <div className="space-y-3">
           {back}
-          <h1 className="min-w-0 font-heading text-3xl font-semibold tracking-tight break-words">
-            {name}
-          </h1>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <h1 className="min-w-0 font-heading text-3xl font-semibold tracking-tight break-words">
+              {name}
+            </h1>
+            {exportButton}
+          </div>
         </div>
+        {exportError}
         <Alert>
           <Merge aria-hidden="true" />
           <AlertTitle>{t('persons.mergedInto.title')}</AlertTitle>
@@ -123,17 +177,30 @@ export function PersonPage({ personId }: { personId: string }) {
           <h1 className="min-w-0 font-heading text-3xl font-semibold tracking-tight break-words">
             {name}
           </h1>
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label={t('persons.delete.label', { name })}
-            onClick={() => setDeleting(p)}
-          >
-            <Trash2 aria-hidden="true" />
-            {t('persons.delete.button')}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {exportButton}
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label={t('persons.anonymize.label', { name })}
+              onClick={() => setAnonymizing(true)}
+            >
+              <UserRoundX aria-hidden="true" />
+              {t('persons.anonymize.button')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label={t('persons.delete.label', { name })}
+              onClick={() => setDeleting(p)}
+            >
+              <Trash2 aria-hidden="true" />
+              {t('persons.delete.button')}
+            </Button>
+          </div>
         </div>
       </div>
+      {exportError}
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <Details person={p} onEdit={() => setEditing({ mode: 'edit', person: p })} />
         <AccountSection person={p} onCreate={() => setCreatingAccount(p)} />
@@ -145,6 +212,7 @@ export function PersonPage({ personId }: { personId: string }) {
       </div>
       <PersonSheet target={editing} onClose={() => setEditing(null)} />
       <PersonAccountSheet target={creatingAccount} onClose={() => setCreatingAccount(null)} />
+      <AnonymizeDialog person={p} open={anonymizing} onClose={() => setAnonymizing(false)} />
       <DeleteDialog
         target={deleting}
         id={(d) => d.id}
@@ -167,6 +235,26 @@ export function PersonPage({ personId }: { personId: string }) {
         onClose={() => setDeleting(null)}
       />
     </div>
+  );
+}
+
+/** What became of an anonymized person, and since when. */
+function Anonymized({ at }: { at: string }) {
+  const { t, i18n } = useTranslation('admin');
+  const settings = useQuery(publicSettingsQuery);
+  const timeZone = settings.data?.timezone;
+  return (
+    <Alert>
+      <UserRoundX aria-hidden="true" />
+      <AlertTitle>{t('persons.anonymized.title')}</AlertTitle>
+      <AlertDescription>
+        <p>
+          {t('persons.anonymized.description', {
+            date: timeZone ? formatTimestamp(at, timeZone, i18n.resolvedLanguage ?? 'en') : '',
+          })}
+        </p>
+      </AlertDescription>
+    </Alert>
   );
 }
 

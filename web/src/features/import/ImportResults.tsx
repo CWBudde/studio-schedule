@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { personName } from '@/features/admin/crud/person';
+import { personName } from '@/lib/personName';
 import { useFieldLabel } from './useFieldLabel';
 
 const actionVariant = {

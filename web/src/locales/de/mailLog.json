@@ -43,7 +43,8 @@
     "waitlist-expired": "Einladung abgelaufen",
     "lesson-notice": "Nachricht zu einer Stunde",
     "receipt": "Beleg",
-    "announcement": "Mitteilung"
+    "announcement": "Mitteilung",
+    "account-deleted": "Konto gelöscht"
   },
   "attempts_one": "{{count}} Versuch",
   "attempts_other": "{{count}} Versuche",

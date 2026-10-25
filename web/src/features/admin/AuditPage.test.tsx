@@ -175,6 +175,28 @@ describe('AuditPage', () => {
     expect((await rows()).map((cells) => cells[1])).toEqual(['Mail queued again']);
   });
 
+  it('names an anonymized person in the current language', async () => {
+    const anonymized: AuditEventEntry = {
+      ...lostEvent,
+      action: 'person-anonymized',
+      target: undefined,
+      targetPerson: {
+        id: '0190a000-0000-7000-8000-000000000392',
+        givenName: 'Deleted',
+        familyName: 'person',
+        anonymized: true,
+      },
+    };
+    mockApiGet({ ...asAdmin, '/api/v1/admin/audit': { body: { items: [anonymized] } } });
+    await i18n.changeLanguage('de');
+
+    renderWithQuery(<AuditPage />);
+
+    const table = within(await screen.findByRole('table', { name: 'Protokoll' }));
+    expect(table.getByText('Gelöschte Person')).toBeInTheDocument();
+    expect(table.queryByText('Deleted person')).toBeNull();
+  });
+
   it('says how many of the latest events it lists', async () => {
     mockApiGet(asAdmin);
 

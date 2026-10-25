@@ -1016,6 +1016,139 @@ export const createPersonAccountMutation = (queryClient: QueryClient) =>
     onError: onPersonError(queryClient),
   });
 
+// ------------------------------- privacy and account administration (ADR 0016)
+
+/** Everything the school stores about one person, as the export downloads it. */
+export type PersonExport = components['schemas']['PersonExport'];
+/** What anonymizing a person did. */
+export type AnonymizeResult = components['schemas']['AnonymizeResult'];
+/** A role an account can have. */
+export type AccountRole = components['schemas']['AccountEntry']['role'];
+
+/** Fetches the data export of any person (office); a merged or anonymized one too. */
+export const exportPersonMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (personId: string) =>
+      unwrap(
+        api.GET('/api/v1/admin/persons/{personId}/export', { params: { path: { personId } } }),
+      ),
+    onError: signedOutOn401(queryClient),
+  });
+
+/**
+ * Fetches the data export of the signed-in person or one of their
+ * dependents; anyone else is a 404.
+ */
+export const exportMyDataMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (personId: string) =>
+      unwrap(api.GET('/api/v1/my/export', { params: { query: { person: personId } } })),
+    onError: signedOutOn401(queryClient),
+  });
+
+/**
+ * Anonymizes a person (office): the personal data goes, the history stays.
+ * The only guardian of a dependent is a 409 `sole-guardian`, an anonymized
+ * person a 409 `anonymized`, one whose account must be kept a 409 `in-use`.
+ * Its future bookings are canceled, so the lessons are asked again too.
+ */
+export const anonymizePersonMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (personId: string) =>
+      unwrap(
+        api.POST('/api/v1/admin/persons/{personId}/anonymize', { params: { path: { personId } } }),
+      ),
+    onSuccess: () => {
+      void refreshLessons(queryClient);
+      return refreshPersons(queryClient);
+    },
+    onError: onPersonError(queryClient),
+  });
+
+/** After a change of an account: the accounts, the audit log and the persons are asked again. */
+const refreshAdmin = (queryClient: QueryClient) =>
+  queryClient.invalidateQueries({ queryKey: adminQueryKey });
+
+/** The errors of the account administration: a 404 or 409 asks for the accounts again. */
+function onAccountError(queryClient: QueryClient) {
+  const signedOut = signedOutOn401(queryClient);
+  return (error: Error) => {
+    signedOut(error);
+    if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
+      void refreshAdmin(queryClient);
+    }
+  };
+}
+
+/**
+ * Disables or enables an account (admin). Disabling ends its sessions. The
+ * admin's own account is a 409 `own-account`, the last admin who can sign in a 409
+ * `last-admin`.
+ */
+export const setAccountDisabledMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ accountId, disabled }: { accountId: string; disabled: boolean }) =>
+      unwrap(
+        disabled
+          ? api.POST('/api/v1/admin/accounts/{accountId}/disable', {
+              params: { path: { accountId } },
+            })
+          : api.POST('/api/v1/admin/accounts/{accountId}/enable', {
+              params: { path: { accountId } },
+            }),
+      ),
+    onSuccess: () => refreshAdmin(queryClient),
+    onError: onAccountError(queryClient),
+  });
+
+/** Gives an account another role (admin); the guards are those of disabling. */
+export const setAccountRoleMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ accountId, role }: { accountId: string; role: AccountRole }) =>
+      unwrap(
+        api.PUT('/api/v1/admin/accounts/{accountId}/role', {
+          params: { path: { accountId } },
+          body: { role },
+        }),
+      ),
+    onSuccess: () => refreshAdmin(queryClient),
+    onError: onAccountError(queryClient),
+  });
+
+/**
+ * Deletes an account (admin); its person stays. One that receipts, the audit
+ * log, announcements or duplicate dismissals name is a 409 `in-use`.
+ */
+export const deleteAccountMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (accountId: string) =>
+      expectOk(
+        api.DELETE('/api/v1/admin/accounts/{accountId}', { params: { path: { accountId } } }),
+      ),
+    onSuccess: () => refreshAdmin(queryClient),
+    onError: onAccountError(queryClient),
+  });
+
+/** The request of deleting the signed-in account. */
+export type DeleteMyAccountBody = NonNullable<
+  paths['/api/v1/my/account']['delete']['requestBody']
+>['content']['application/json'];
+
+/**
+ * Deletes the signed-in account after checking its password (a wrong one is
+ * a 422 on `body.password`) and signs out; a confirmation goes to its
+ * address (shown in the demo mailbox).
+ */
+export const deleteMyAccountMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: DeleteMyAccountBody) => expectOk(api.DELETE('/api/v1/my/account', { body })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey });
+      changeIdentity(queryClient, null);
+    },
+    onError: signedOutOn401(queryClient),
+  });
+
 /**
  * After a write to the catalogue: the lists are asked again (the public ones
  * feed the schedule's filters), and so is what shows catalogue names (the

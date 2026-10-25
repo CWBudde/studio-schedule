@@ -451,11 +451,38 @@
       "openLabel": "{{label}} ({{term}})",
       "since": "Mitglied seit {{date}}",
       "retired": "Stillgelegt"
+    },
+    "export": {
+      "button": "Daten exportieren",
+      "label": "Daten von {{name}} exportieren",
+      "pending": "Wird vorbereitet …"
+    },
+    "anonymize": {
+      "button": "Anonymisieren",
+      "label": "{{name}} anonymisieren",
+      "title": "{{name}} anonymisieren?",
+      "description": "Nutze das, wenn eine Person die Löschung ihrer Daten verlangt. Es lässt sich nicht rückgängig machen.",
+      "erases": "Der Name wird zu „Gelöschte Person“; E-Mail, Telefon, Geburtsdatum, Notizen und Mitgliedsnummer werden gelöscht.",
+      "removes": "Verknüpfungen zu Erziehungsberechtigten, Kursmitgliedschaften, Wartelisten und Personal-Verknüpfungen werden entfernt, künftige Buchungen storniert (ein dafür abgebuchter Besuch kommt zurück) und das Konto gelöscht.",
+      "keeps": "Vergangene Buchungen, Karten und Quittungen bleiben als Unterlagen der Schule erhalten.",
+      "soleGuardian": "{{name}} ist die einzige erziehungsberechtigte Person eines Kindes. Verknüpfe zuerst eine weitere Person mit dem Kind oder entferne die Verknüpfung.",
+      "accountKept": "Quittungen, das Protokoll, Mitteilungen oder Dubletten-Entscheidungen nennen das Konto von {{name}}, deshalb kann es nicht gelöscht werden. Sperre das Konto stattdessen.",
+      "already": "{{name}} ist bereits anonymisiert.",
+      "confirm": "Anonymisieren",
+      "pending": "Wird anonymisiert …",
+      "done": "{{name}} wurde anonymisiert.",
+      "own": "Dich selbst kannst du nicht anonymisieren. Bitte eine andere Person im Büro.",
+      "lastAdmin": "{{name}} hat das letzte Konto der Administration, mit dem man sich anmelden kann. Mach zuerst ein anderes Konto zur Administration; es zählt, sobald es bestätigt ist.",
+      "adminOnly": "{{name}} hat ein Konto der Administration; nur die Administration kann diese Person anonymisieren."
+    },
+    "anonymized": {
+      "title": "Anonymisiert",
+      "description": "Die Daten dieser Person wurden am {{date}} gelöscht. Der Datensatz bleibt nur für den Verlauf der Schule: vergangene Buchungen, Karten und Quittungen."
     }
   },
   "audit": {
     "title": "Protokoll",
-    "description": "Die letzten {{count}} protokollierten Aktionen, die neuesten zuerst: wann sich jemand aus der Administration als eine andere Person angemeldet hat und wann das endete, welche fehlgeschlagenen Mails erneut eingereiht und welche doppelten Personen zusammengeführt wurden. Die Zeiten gelten in der Zeitzone der Schule.",
+    "description": "Die letzten {{count}} protokollierten Aktionen, die neuesten zuerst: Anmeldungen als andere Person, erneut eingereihte Mails, zusammengeführte Dubletten, anonymisierte Personen sowie gesperrte, entsperrte, in der Rolle geänderte und gelöschte Konten. Einträge werden drei Jahre aufbewahrt. Die Zeiten gelten in der Zeitzone der Schule.",
     "table": "Protokoll",
     "search": "Protokoll durchsuchen",
     "empty": "Bisher wurde nichts protokolliert.",
@@ -467,14 +494,21 @@
       "impersonation-started": "Anmelden als begonnen",
       "impersonation-ended": "Anmelden als beendet",
       "mail-requeued": "Mail erneut eingereiht",
-      "person-merged": "Dublette zusammengeführt"
+      "person-merged": "Dublette zusammengeführt",
+      "person-anonymized": "Person anonymisiert",
+      "account-disabled": "Konto gesperrt",
+      "account-enabled": "Konto entsperrt",
+      "account-role-changed": "Rolle geändert",
+      "account-deleted": "Konto gelöscht"
     },
     "merged": "zusammengeführt: {{name}}",
     "unknownAccount": "Unbekanntes Konto",
     "unknownPerson": "Unbekannte Person",
     "mail": "Mail an {{to}}",
     "nothing": "Nichts",
-    "noAccess": "Nur die Administration kann diese Seite sehen."
+    "noAccess": "Nur die Administration kann diese Seite sehen.",
+    "holder": "Die Kontoinhaberin oder der Kontoinhaber",
+    "roleChange": "{{from}} → {{to}}"
   },
   "lessons": {
     "manage": "Stunde verwalten",

@@ -30,7 +30,7 @@ import { useMoney } from '@/features/passes/useMoney';
 import { useServerClock } from '@/features/schedule/useServerClock';
 import { type SchoolDate, schoolDateOf, todayIn } from '@/lib/schoolTime';
 import { LoadError } from './crud/LoadError';
-import { personName } from './crud/person';
+import { personName, shownName } from '@/lib/personName';
 import { PassSaleDialog, type PassSaleMode } from './PassSaleDialog';
 import { Section } from './PersonSection';
 
@@ -165,7 +165,7 @@ function PassItem({
         {pass.origin === 'sale'
           ? t('person.sold', { date: sold, price: money.format(pass.pricePaid) })
           : t('person.given', { date: sold })}
-        {payer && ` · ${t('person.paidBy', { name: payer.name })}`}
+        {payer && ` · ${t('person.paidBy', { name: shownName(payer) })}`}
       </p>
       <p className="flex flex-wrap items-center gap-x-3 text-muted-foreground">
         {t('person.uses', { count: pass.useCount })}

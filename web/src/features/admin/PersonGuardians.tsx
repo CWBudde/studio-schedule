@@ -18,7 +18,7 @@ import { invalidFields } from '@/features/auth/form';
 import { FormError } from '@/features/auth/FormError';
 import { conflictReason } from '@/api/conflict';
 import { useAdminErrorText } from './crud/form';
-import { personName } from './crud/person';
+import { personName } from '@/lib/personName';
 import { PersonField } from './crud/PersonField';
 import { ProblemAlert } from '@/components/ProblemAlert';
 import { Section } from './PersonSection';

@@ -451,11 +451,38 @@
       "openLabel": "{{label}} ({{term}})",
       "since": "Member since {{date}}",
       "retired": "Retired"
+    },
+    "export": {
+      "button": "Export data",
+      "label": "Export the data of {{name}}",
+      "pending": "Preparing…"
+    },
+    "anonymize": {
+      "button": "Anonymize",
+      "label": "Anonymize {{name}}",
+      "title": "Anonymize {{name}}?",
+      "description": "Use this when a person asks to have their data erased. It cannot be undone.",
+      "erases": "The name becomes “Deleted person”; email, phone, birth date, notes and member number are erased.",
+      "removes": "Guardian links, class memberships, waiting lists and staff links are removed, bookings that lie ahead are canceled (a visit they cost comes back), and the account is deleted.",
+      "keeps": "Past bookings, passes and receipts stay as the school’s records.",
+      "soleGuardian": "{{name}} is the only guardian of a child. Link another guardian to the child, or remove the link, first.",
+      "accountKept": "Receipts, the audit log, announcements or duplicate decisions name the account of {{name}}, so it cannot be deleted. Disable the account instead.",
+      "already": "{{name}} has been anonymized already.",
+      "confirm": "Anonymize",
+      "pending": "Anonymizing…",
+      "done": "{{name}} has been anonymized.",
+      "own": "You cannot anonymize yourself. Ask someone else in the office.",
+      "lastAdmin": "{{name}} has the school’s last administrator account that can sign in. Make another account an administrator first; it counts once it is confirmed.",
+      "adminOnly": "{{name}} has an administrator account; only an administrator can anonymize them."
+    },
+    "anonymized": {
+      "title": "Anonymized",
+      "description": "This person’s data was erased on {{date}}. The record stays only for the school’s history: past bookings, passes and receipts."
     }
   },
   "audit": {
     "title": "Audit log",
-    "description": "The latest {{count}} recorded actions, newest first: when an administrator signed in as someone else and when that ended, which failed mails were queued again, and which duplicate persons were merged. Times are in the school’s time zone.",
+    "description": "The latest {{count}} recorded actions, newest first: sign-ins as someone else, mails queued again, merged duplicates, anonymized persons, and accounts disabled, enabled, given another role or deleted. Events are kept for three years. Times are in the school’s time zone.",
     "table": "Audit log",
     "search": "Search the audit log",
     "empty": "Nothing has been recorded yet.",
@@ -467,14 +494,21 @@
       "impersonation-started": "Sign-in as started",
       "impersonation-ended": "Sign-in as ended",
       "mail-requeued": "Mail queued again",
-      "person-merged": "Duplicate merged"
+      "person-merged": "Duplicate merged",
+      "person-anonymized": "Person anonymized",
+      "account-disabled": "Account disabled",
+      "account-enabled": "Account enabled",
+      "account-role-changed": "Role changed",
+      "account-deleted": "Account deleted"
     },
     "merged": "merged: {{name}}",
     "unknownAccount": "Unknown account",
     "unknownPerson": "Unknown person",
     "mail": "Mail to {{to}}",
     "nothing": "Nothing",
-    "noAccess": "Only administrators can see this page."
+    "noAccess": "Only administrators can see this page.",
+    "holder": "The account holder",
+    "roleChange": "{{from}} → {{to}}"
   },
   "lessons": {
     "manage": "Manage this lesson",

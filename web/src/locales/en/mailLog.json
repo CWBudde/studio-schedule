@@ -43,7 +43,8 @@
     "waitlist-expired": "Waiting-list invite expired",
     "lesson-notice": "Message about a lesson",
     "receipt": "Receipt",
-    "announcement": "Announcement"
+    "announcement": "Announcement",
+    "account-deleted": "Account deleted"
   },
   "attempts_one": "{{count}} attempt",
   "attempts_other": "{{count}} attempts",

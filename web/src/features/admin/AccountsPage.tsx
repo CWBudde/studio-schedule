@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { AccountActions } from './AccountActions';
 import { NoAccess } from './NoAccess';
 
 const fullName = (a: { givenName: string; familyName: string }) => `${a.givenName} ${a.familyName}`;
@@ -25,9 +26,10 @@ const fullName = (a: { givenName: string; familyName: string }) => `${a.givenNam
 const canImpersonate = (a: AccountEntry) => a.role !== 'admin' && a.confirmed && !a.disabled;
 
 /**
- * The accounts (/admin/accounts), for admins only: who can sign in, and a
- * way to sign in as one of them ("login as"). Everyone else sees that the
- * page is not for them; the API refuses them the list as well.
+ * The accounts (/admin/accounts), for admins only: who can sign in, a way
+ * to sign in as one of them ("login as"), and the account administration of
+ * ADR 0016 (disable, enable, change the role, delete). Everyone else sees
+ * that the page is not for them; the API refuses them the list as well.
  */
 export function AccountsPage() {
   const { t } = useTranslation('auth');
@@ -70,6 +72,7 @@ export function AccountsPage() {
       ) : accounts.data ? (
         <AccountsTable
           accounts={accounts.data}
+          ownId={me.data?.accountId ?? ''}
           onSignInAs={(account) => void signInAs(account)}
           pending={impersonate.isPending}
           failed={
@@ -89,11 +92,14 @@ export function AccountsPage() {
 
 function AccountsTable({
   accounts,
+  ownId,
   onSignInAs,
   pending,
   failed,
 }: {
   accounts: AccountEntry[];
+  /** The signed-in admin's own account, which the admin does not change here. */
+  ownId: string;
   onSignInAs: (account: AccountEntry) => void;
   /** Whether a sign-in as an account is under way. */
   pending: boolean;
@@ -139,16 +145,19 @@ function AccountsTable({
                   <AccountStatus account={account} />
                 </TableCell>
                 <TableCell className="pr-4 text-right">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    aria-label={t('accounts.signInAsLabel', { name: fullName(account) })}
-                    disabled={!canImpersonate(account) || pending}
-                    onClick={() => onSignInAs(account)}
-                  >
-                    <LogIn aria-hidden="true" />
-                    <span className="hidden sm:inline">{t('accounts.signInAs')}</span>
-                  </Button>
+                  <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      aria-label={t('accounts.signInAsLabel', { name: fullName(account) })}
+                      disabled={!canImpersonate(account) || pending}
+                      onClick={() => onSignInAs(account)}
+                    >
+                      <LogIn aria-hidden="true" />
+                      <span className="hidden sm:inline">{t('accounts.signInAs')}</span>
+                    </Button>
+                    <AccountActions account={account} own={account.id === ownId} />
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

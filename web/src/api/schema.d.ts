@@ -24,6 +24,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/accounts/{accountId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an account
+         * @description Deletes an account with its password, sessions, links, calendar feeds and announcement dismissals; its person stays. Records that only name it as who did something (booking events, lesson cancellations, pass sales, …) forget it. An account that receipts, the audit log, announcements or duplicate dismissals name is a 409 `in-use`: disable it instead. Recorded in the audit log. Refused: the admin's own account (409 `own-account`) and the last admin who can sign in (409 `last-admin`).
+         */
+        delete: operations["deleteAccount"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/accounts/{accountId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable an account
+         * @description Disables an account: it may no longer sign in, and its sessions and the impersonations it started end. A disabled account stays disabled. Recorded in the audit log. Refused: the admin's own account (409 `own-account`) and the last admin who can sign in (409 `last-admin`).
+         */
+        post: operations["disableAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/accounts/{accountId}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable an account
+         * @description Enables a disabled account again. Recorded in the audit log. The admin's own account is a 409 `own-account`.
+         */
+        post: operations["enableAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/accounts/{accountId}/impersonate": {
         parameters: {
             query?: never;
@@ -38,6 +98,26 @@ export interface paths {
          * @description Signs the admin in as another account ("login as") for at most one hour and sets the session cookie; the admin's own session ends. Recorded in the audit log. Admins cannot be impersonated (403); a disabled or unconfirmed account is a 409.
          */
         post: operations["impersonateAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/accounts/{accountId}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change the role of an account
+         * @description Gives an account another role; it takes effect with the account's next request. Recorded in the audit log. Refused: the admin's own account (409 `own-account`) and the last admin who can sign in (409 `last-admin`).
+         */
+        put: operations["setAccountRole"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -530,6 +610,46 @@ export interface paths {
          * @description Creates an unconfirmed account without a password for an existing person and mails it an invitation, whose link (valid for 72 hours) sets the password and confirms the account. A person with an account is a 409 `has-account`, an email another account has a 409 `duplicate`. Only an admin may create an admin account; for the office that is a 403.
          */
         post: operations["createPersonAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/persons/{personId}/anonymize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anonymize a person
+         * @description Erases a person's personal data: the name becomes "Deleted person", and email, phone, birth date, notes and member number are cleared. Guardian links in both directions, class memberships, open waiting-list entries and staff links are removed, bookings of lessons that have not started are canceled on time (a visit they cost comes back), and the account is deleted with its sessions, links and calendar feeds. Past bookings, passes and receipts stay. Recorded in the audit log. Refused: an unknown or merged person (404), an anonymized one (409 `anonymized`), the only guardian of a dependent (409 `sole-guardian`), a person whose account receipts, the audit log, announcements or duplicate dismissals name (409 `in-use`), the caller's own person (409 `own-account`), the person of an admin account unless an admin asks (403), and that of the last admin who can sign in (409 `last-admin`).
+         */
+        post: operations["anonymizePerson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/persons/{personId}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export a person's data
+         * @description Returns everything the school stores about a person as one document (GDPR): the person, its family links (names only), account, bookings, waiting-list entries, passes with their redemptions, receipts (no PDFs), calendar feeds, dismissed announcements and class memberships. No secrets: no password hash, no session, link or feed token. A merged or anonymized person is exported too.
+         */
+        get: operations["exportPerson"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1872,6 +1992,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/my/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete my account
+         * @description Deletes the signed-in account after checking its password (a wrong one is a 422 on body.password, rate-limited like a password change), signs out and mails a confirmation to its address. The person and its bookings stay with the school. Refused: while an admin is signed in as the account (403), for the last admin who can sign in (409 `last-admin`), and for an account that receipts, the audit log, announcements or duplicate dismissals name (409 `in-use`).
+         */
+        delete: operations["deleteMyAccount"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/my/calendar-feeds": {
         parameters: {
             query?: never;
@@ -1911,6 +2051,26 @@ export interface paths {
          * @description Revokes an active feed of the signed-in account: its link answers 404 from now on.
          */
         delete: operations["revokeCalendarFeed"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export my data
+         * @description Returns the data of the signed-in person, or of one of their dependents, like exportPerson. A dependent with an account of its own is exported without what belongs to that account (its holder exports it). Anyone else is a 404.
+         */
+        get: operations["exportMyData"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2424,6 +2584,13 @@ export interface components {
             /** @description Given and family name of the account's person. */
             name: string;
         };
+        AccountRoleInputBody: {
+            /**
+             * @description The new role.
+             * @enum {string}
+             */
+            role: "member" | "instructor" | "office" | "admin";
+        };
         AddParticipantData: {
             /** @description Book even if the lesson is full (skips the 409 full); the booking event records the override. */
             confirmOverCapacity?: boolean;
@@ -2762,6 +2929,36 @@ export interface components {
             /** @description All announcements, newest publication first. */
             items: components["schemas"]["Announcement"][];
         };
+        AnonymizeResult: {
+            /** @description Whether the person's account was deleted. */
+            accountDeleted: boolean;
+            /**
+             * Format: int64
+             * @description Bookings of lessons that had not started, canceled on time.
+             */
+            bookingsCanceled: number;
+            /**
+             * Format: int64
+             * @description Guardian links removed, in both directions.
+             */
+            linksRemoved: number;
+            /**
+             * Format: int64
+             * @description Class memberships ended.
+             */
+            membershipsEnded: number;
+            person: components["schemas"]["AdminPerson"];
+            /**
+             * Format: int64
+             * @description Staff records no longer linked to the person.
+             */
+            staffUnlinked: number;
+            /**
+             * Format: int64
+             * @description Open waiting-list entries withdrawn.
+             */
+            waitlistWithdrawn: number;
+        };
         AssignPassData: {
             /** @description Why it is given away. */
             note?: string;
@@ -2809,16 +3006,26 @@ export interface components {
              * @description The person of person-merged that was merged into the target, now a tombstone.
              */
             mergedPersonId?: string;
+            /**
+             * @description The role before account-role-changed.
+             * @enum {string}
+             */
+            previousRole?: "member" | "instructor" | "office" | "admin";
             /** @description Its recipient. */
             recipient?: string;
+            /**
+             * @description The role after account-role-changed.
+             * @enum {string}
+             */
+            role?: "member" | "instructor" | "office" | "admin";
             /** @description Its template. */
             template?: string;
         };
         AuditEventEntry: {
-            /** @description What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one); later versions may add actions. */
+            /** @description What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one), person-anonymized (target: the person), account-disabled, account-enabled and account-role-changed (target: the account; details of a role change: both roles), account-deleted (target: the account's person, which stays; without an actor its holder deleted it); later versions may add actions. An event that targeted an account deleted since targets its person. */
             action: string;
-            /** @description The account that acted. */
-            actor: components["schemas"]["AuditAccount"];
+            /** @description The account that acted; absent only for account-deleted when the account's holder deleted it. */
+            actor?: components["schemas"]["AuditAccount"];
             /**
              * Format: date-time
              * @description When it happened.
@@ -2841,6 +3048,8 @@ export interface components {
             items: components["schemas"]["AuditEventEntry"][];
         };
         AuditPerson: {
+            /** @description Whether the office anonymized the person (ADR 0016); its name is then the fixed one (Deleted person), which clients show translated. */
+            anonymized?: boolean;
             /** @description Family name. Absent if the person can no longer be found. */
             familyName?: string;
             /** @description Given name. Absent if the person can no longer be found. */
@@ -3475,10 +3684,10 @@ export interface components {
             /** @description The lesson that uses the room; only with reason room-taken. */
             lesson?: components["schemas"]["ConflictLesson"];
             /**
-             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead; two-accounts: both persons of a merge have an account, so one is disabled first; guardian-cycle: after the merge a guardian of the survivor would also be its dependent.
+             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead; two-accounts: both persons of a merge have an account, so one is disabled first; guardian-cycle: after the merge a guardian of the survivor would also be its dependent; anonymized: the person is anonymized already; sole-guardian: the person is the only guardian of a dependent, so another guardian is linked or the link removed first; last-admin: the account is the last admin who can sign in (enabled and confirmed), which is not disabled, demoted or deleted; own-account: an admin does not disable, demote or delete their own account (another admin does).
              * @enum {string}
              */
-            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation" | "timezone-locked" | "currency-locked" | "mail-limit" | "expired" | "not-failed" | "secret-link" | "two-accounts" | "guardian-cycle";
+            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation" | "timezone-locked" | "currency-locked" | "mail-limit" | "expired" | "not-failed" | "secret-link" | "two-accounts" | "guardian-cycle" | "anonymized" | "sole-guardian" | "last-admin" | "own-account";
             /** @description The ID of the request (the X-Request-Id response header), for finding it in the server's logs. */
             requestId?: string;
             /**
@@ -3625,6 +3834,12 @@ export interface components {
              */
             scope: "bookings" | "teaching" | "schedule";
         };
+        DeleteMyAccountInputBody: {
+            /** @description Language of the confirmation mail (BCP 47), e.g. de; defaults to the account's, then the school's. */
+            locale?: string;
+            /** @description The account's password. */
+            password: string;
+        };
         DemoLogin: {
             /** @description Email address (login name). */
             email: string;
@@ -3743,6 +3958,299 @@ export interface components {
              * @example https://example.com/errors/example
              */
             type: string;
+        };
+        ExportAccount: {
+            /**
+             * Format: date-time
+             * @description When the email address was confirmed, if it was.
+             */
+            confirmedAt?: string;
+            /**
+             * Format: date-time
+             * @description When the account was disabled, if it is.
+             */
+            disabledAt?: string;
+            /** @description Email address (login name). */
+            email: string;
+            /**
+             * Format: uuid
+             * @description Account ID.
+             */
+            id: string;
+            /** @description Language of the account's mails, if chosen. */
+            locale?: string;
+            /**
+             * @description Role of the account.
+             * @enum {string}
+             */
+            role: "member" | "instructor" | "office" | "admin";
+            /**
+             * Format: int64
+             * @description Days ahead the account sees the schedule, if it has an override.
+             */
+            visibleDays?: number;
+        };
+        ExportAnnouncement: {
+            /**
+             * Format: uuid
+             * @description Announcement ID.
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When it was published.
+             */
+            publishAt: string;
+            /** @description Title. */
+            title: string;
+        };
+        ExportBooking: {
+            /**
+             * Format: date-time
+             * @description When it was booked.
+             */
+            bookedAt: string;
+            /**
+             * Format: date-time
+             * @description When it was canceled, if it was.
+             */
+            canceledAt?: string;
+            /**
+             * Format: uuid
+             * @description Booking ID.
+             */
+            id: string;
+            /** @description Whether it was canceled late. */
+            late: boolean;
+            lesson: components["schemas"]["ExportLesson"];
+            /**
+             * @description How it came about.
+             * @enum {string}
+             */
+            source: "self" | "member" | "staff";
+            /**
+             * @description Status.
+             * @enum {string}
+             */
+            status: "booked" | "canceled" | "attended" | "no_show";
+            /** @description Whether it is a trial lesson. */
+            trial: boolean;
+            /** @description The note on a trial lesson, if any. */
+            trialNote?: string;
+        };
+        ExportCalendarFeed: {
+            /**
+             * Format: date-time
+             * @description When the feed was created.
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Feed ID.
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When a calendar last fetched it, if ever (updated daily).
+             */
+            lastUsedAt?: string;
+            /**
+             * Format: uuid
+             * @description The location a schedule feed is narrowed to, if any.
+             */
+            locationId?: string;
+            /**
+             * @description What the feed lists.
+             * @enum {string}
+             */
+            scope: "bookings" | "teaching" | "schedule";
+        };
+        ExportLesson: {
+            /** @description Course type name. */
+            courseType: string;
+            /**
+             * Format: date-time
+             * @description End instant.
+             */
+            endsAt: string;
+            /**
+             * Format: uuid
+             * @description Lesson ID.
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description Start instant.
+             */
+            startsAt: string;
+        };
+        ExportPass: {
+            /**
+             * Format: uuid
+             * @description Pass ID.
+             */
+            id: string;
+            /**
+             * @description Kind of pass.
+             * @enum {string}
+             */
+            kind: "visits" | "time";
+            /** @description The school's note, if any. */
+            note?: string;
+            /**
+             * Format: int64
+             * @description Price paid in minor units of the school currency; 0 for an assignment.
+             */
+            pricePaid: number;
+            /** @description The bookings the pass paid for. */
+            redemptions: components["schemas"]["ExportRedemption"][];
+            /**
+             * Format: date-time
+             * @description When it was sold or assigned.
+             */
+            soldAt: string;
+            /**
+             * @description Status.
+             * @enum {string}
+             */
+            status: "active" | "voided";
+            /** @description Name of the pass type. */
+            type: string;
+            /**
+             * Format: date
+             * @description First school date the pass pays for.
+             */
+            validFrom: string;
+            /**
+             * Format: date
+             * @description Last school date, if it expires.
+             */
+            validUntil?: string;
+            /**
+             * Format: int64
+             * @description Visits left.
+             */
+            visitsRemaining: number;
+            /**
+             * Format: int64
+             * @description Visits of a visit pass; 0 for a time pass.
+             */
+            visitsTotal: number;
+            /**
+             * Format: date-time
+             * @description When it was voided, if it was.
+             */
+            voidedAt?: string;
+        };
+        ExportPersonData: {
+            /**
+             * Format: date-time
+             * @description When the person was anonymized, if it was.
+             */
+            anonymizedAt?: string;
+            /**
+             * Format: date
+             * @description Date of birth, if known.
+             */
+            birthDate?: string;
+            /** @description Contact email, if any. */
+            email?: string;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /**
+             * Format: uuid
+             * @description Person ID.
+             */
+            id: string;
+            /** @description The school's member number, if any. */
+            memberNo?: string;
+            /**
+             * Format: uuid
+             * @description The person this one was merged into, if it was.
+             */
+            mergedIntoId?: string;
+            /** @description The school's notes about the person, if any. */
+            notes?: string;
+            /** @description Phone number, if any. */
+            phone?: string;
+        };
+        ExportPersonRef: {
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /**
+             * Format: uuid
+             * @description Person ID.
+             */
+            id: string;
+        };
+        ExportReceipt: {
+            /** @description Whether a sale was canceled. */
+            canceled: boolean;
+            /** @description Currency (ISO 4217). */
+            currency: string;
+            /**
+             * Format: int64
+             * @description Total in minor units; negative for a cancellation.
+             */
+            gross: number;
+            /**
+             * Format: uuid
+             * @description Receipt ID.
+             */
+            id: string;
+            /**
+             * Format: date
+             * @description Date of issue.
+             */
+            issueDate: string;
+            /**
+             * @description sale or cancellation.
+             * @enum {string}
+             */
+            kind: "sale" | "cancellation";
+            /** @description Receipt number. */
+            number: string;
+            /** @description The recipient as printed. */
+            recipientName: string;
+        };
+        ExportRedemption: {
+            /**
+             * Format: date-time
+             * @description When it was paid.
+             */
+            at: string;
+            /**
+             * Format: uuid
+             * @description The booking.
+             */
+            bookingId: string;
+        };
+        ExportWaitlistEntry: {
+            /**
+             * Format: uuid
+             * @description Entry ID.
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When the person was invited, if they were.
+             */
+            invitedAt?: string;
+            /**
+             * Format: date-time
+             * @description When the person joined the list.
+             */
+            joinedAt: string;
+            lesson: components["schemas"]["ExportLesson"];
+            /**
+             * @description Status.
+             * @enum {string}
+             */
+            status: "waiting" | "invited" | "accepted" | "expired" | "withdrawn";
         };
         Family: {
             /** @description Dependents ordered by family and given name. */
@@ -4480,6 +4988,8 @@ export interface components {
             waitlist?: components["schemas"]["WaitlistFor"][];
         };
         LessonParticipant: {
+            /** @description Whether the office anonymized the person (ADR 0016); its name is then the fixed one (Deleted person), which clients show translated. */
+            anonymized?: boolean;
             /**
              * Format: date-time
              * @description When the booking was made.
@@ -4626,6 +5136,8 @@ export interface components {
             visibility: "public" | "members" | "hidden";
         };
         LessonWaitlistEntry: {
+            /** @description Whether the office anonymized the person (ADR 0016); its name is then the fixed one (Deleted person), which clients show translated. */
+            anonymized?: boolean;
             /**
              * Format: uuid
              * @description The entry.
@@ -4743,7 +5255,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted";
             /** @description Plain text body; only with body shown. */
             text?: string;
             /** @description Recipient address. */
@@ -4797,7 +5309,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted";
             /** @description Recipient address. */
             to: string;
         };
@@ -4844,7 +5356,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted";
             /** @description Plain text body. */
             text: string;
             /** @description Recipient address. */
@@ -5196,6 +5708,8 @@ export interface components {
             voidedAt?: string;
         };
         PassPerson: {
+            /** @description Whether the office anonymized the person (ADR 0016); its name is then the fixed one (Deleted person), which clients show translated. */
+            anonymized?: boolean;
             /**
              * Format: uuid
              * @description Person ID.
@@ -5423,6 +5937,11 @@ export interface components {
             /** @description The person's account, if any. */
             account?: components["schemas"]["PersonAccount"];
             /**
+             * Format: date-time
+             * @description When the office anonymized the person; present only for such a hidden record, which cannot be changed.
+             */
+            anonymizedAt?: string;
+            /**
              * Format: date
              * @description Date of birth, if known; not in the future.
              */
@@ -5457,7 +5976,49 @@ export interface components {
             /** @description Staff members linked to the person, by display name. */
             staff: components["schemas"]["StaffEntry"][];
         };
+        PersonExport: {
+            /** @description The person's account; absent without one, or for a dependent's own account exported by a guardian. */
+            account?: components["schemas"]["ExportAccount"];
+            /** @description Every booking, canceled ones included, by lesson start. */
+            bookings: components["schemas"]["ExportBooking"][];
+            /** @description The account's active calendar feeds, without their secret links. */
+            calendarFeeds: components["schemas"]["ExportCalendarFeed"][];
+            /** @description Class memberships. */
+            classMemberships: components["schemas"]["PersonClass"][];
+            /** @description The person's dependents, names only. */
+            dependents: components["schemas"]["ExportPersonRef"][];
+            /** @description Announcements the account dismissed. */
+            dismissedAnnouncements: components["schemas"]["ExportAnnouncement"][];
+            /**
+             * Format: date-time
+             * @description When the document was made.
+             */
+            exportedAt: string;
+            /**
+             * @description The format of this document.
+             * @enum {string}
+             */
+            format: "studio-schedule.person-export";
+            /** @description The person's guardians, names only. */
+            guardians: components["schemas"]["ExportPersonRef"][];
+            /** @description Persons merged into this one (duplicates); their receipts are listed here. */
+            mergedPersons: components["schemas"]["ExportPersonRef"][];
+            /** @description The passes the person owns. */
+            passes: components["schemas"]["ExportPass"][];
+            person: components["schemas"]["ExportPersonData"];
+            /** @description The receipts the person paid, newest first (no PDFs). */
+            receipts: components["schemas"]["ExportReceipt"][];
+            /**
+             * Format: int64
+             * @description The version of the format; it changes when a field changes its meaning or goes.
+             */
+            version: number;
+            /** @description Every waiting-list entry, ended ones included. */
+            waitlistEntries: components["schemas"]["ExportWaitlistEntry"][];
+        };
         PersonMatch: {
+            /** @description Whether the office anonymized the person (ADR 0016); its name is then the fixed one (Deleted person), which clients show translated. */
+            anonymized?: boolean;
             /** @description Email address, if known. */
             email?: string;
             /** @description Family name. */
@@ -6736,6 +7297,127 @@ export interface operations {
             };
         };
     };
+    deleteAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The account. */
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    disableAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The account. */
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountEntry"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    enableAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The account. */
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountEntry"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     impersonateAccount: {
         parameters: {
             query?: never;
@@ -6756,6 +7438,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setAccountRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The account. */
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountRoleInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountEntry"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
                 };
             };
             /** @description Error */
@@ -7277,7 +8004,7 @@ export interface operations {
                 /** @description Only mails in this state. */
                 status?: "pending" | "sent" | "failed";
                 /** @description Only mails of this template. */
-                template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement";
+                template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted";
                 /** @description Only mails whose recipient contains this, ignoring ASCII case. */
                 recipient?: string;
                 /** @description Where the page starts: the nextCursor of the previous page. */
@@ -7874,6 +8601,79 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    anonymizePerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The person. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnonymizeResult"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    exportPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The person. */
+                personId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonExport"];
                 };
             };
             /** @description Error */
@@ -10889,6 +11689,47 @@ export interface operations {
             };
         };
     };
+    deleteMyAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteMyAccountInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listCalendarFeeds: {
         parameters: {
             query?: never;
@@ -10987,6 +11828,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    exportMyData: {
+        parameters: {
+            query: {
+                /** @description The person to export: the signed-in person or one of their dependents. */
+                person: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonExport"];
+                };
             };
             /** @description Error */
             default: {

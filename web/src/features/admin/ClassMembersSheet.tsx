@@ -33,7 +33,7 @@ import { conflictReason } from '@/api/conflict';
 import { showServerErrors, useAdminErrorText } from './crud/form';
 import { FormSheet, FormSheetHeader } from './crud/FormSheet';
 import { LoadError } from './crud/LoadError';
-import { personName } from './crud/person';
+import { personName } from '@/lib/personName';
 import { PersonField } from './crud/PersonField';
 import { ProblemAlert } from '@/components/ProblemAlert';
 

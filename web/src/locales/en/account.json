@@ -91,5 +91,28 @@
     "submitting": "Sending…",
     "successTitle": "Check your inbox",
     "success": "We have sent a link to {{email}}. Your address changes once you open it."
+  },
+  "myData": {
+    "title": "Your data",
+    "description": "Download everything the school stores about you or one of your children as a file (JSON): person data, family, account, bookings, waiting lists, passes, receipts and calendar links (without their secret addresses).",
+    "me": "{{name}} (you)",
+    "download": "Download",
+    "downloading": "Preparing…",
+    "downloadLabel": "Download the data of {{name}}",
+    "notFound": "This person is no longer part of your family."
+  },
+  "deleteAccount": {
+    "title": "Delete account",
+    "description": "Deletes your login: you can no longer sign in, and your calendar links stop working. The school keeps your person record with your bookings, passes and receipts; to have those erased too, ask the school. You get a confirmation by email.",
+    "password": "Current password",
+    "submit": "Delete my account",
+    "confirmTitle": "Delete your account?",
+    "confirmDescription": "This cannot be undone. You are signed out right away.",
+    "cancel": "Cancel",
+    "confirm": "Delete account",
+    "deleting": "Deleting…",
+    "deleted": "Your account has been deleted.",
+    "lastAdmin": "You are the school’s only administrator. Make someone else an administrator first.",
+    "inUse": "Receipts or the audit log name your account, so it cannot be deleted. Ask an administrator to disable it."
   }
 }

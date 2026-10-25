@@ -91,5 +91,28 @@
     "submitting": "Senden…",
     "successTitle": "Bitte prüfe dein Postfach",
     "success": "Wir haben einen Link an {{email}} geschickt. Deine Adresse ändert sich, sobald du ihn öffnest."
+  },
+  "myData": {
+    "title": "Datenexport",
+    "description": "Lade alles, was die Schule über dich oder eines deiner Kinder speichert, als Datei (JSON) herunter: Personendaten, Familie, Konto, Buchungen, Wartelisten, Karten, Quittungen und Kalender-Links (ohne ihre geheimen Adressen).",
+    "me": "{{name}} (du)",
+    "download": "Herunterladen",
+    "downloading": "Wird vorbereitet …",
+    "downloadLabel": "Daten von {{name}} herunterladen",
+    "notFound": "Diese Person gehört nicht mehr zu deiner Familie."
+  },
+  "deleteAccount": {
+    "title": "Konto löschen",
+    "description": "Löscht deinen Zugang: Du kannst dich nicht mehr anmelden, und deine Kalender-Links funktionieren nicht mehr. Die Schule behält deinen Personendatensatz mit Buchungen, Karten und Quittungen; wenn auch diese gelöscht werden sollen, wende dich an die Schule. Du bekommst eine Bestätigung per E-Mail.",
+    "password": "Aktuelles Passwort",
+    "submit": "Mein Konto löschen",
+    "confirmTitle": "Konto wirklich löschen?",
+    "confirmDescription": "Das lässt sich nicht rückgängig machen. Du wirst sofort abgemeldet.",
+    "cancel": "Abbrechen",
+    "confirm": "Konto löschen",
+    "deleting": "Wird gelöscht …",
+    "deleted": "Dein Konto wurde gelöscht.",
+    "lastAdmin": "Du bist die einzige Person in der Administration. Mach zuerst jemand anderen zur Administration.",
+    "inUse": "Quittungen oder das Protokoll nennen dein Konto, deshalb kann es nicht gelöscht werden. Bitte die Administration, es zu sperren."
   }
 }

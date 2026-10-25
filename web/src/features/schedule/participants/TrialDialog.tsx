@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { SwitchField, TextareaField } from '@/features/admin/crud/fields';
 import { useAdminErrorText } from '@/features/admin/crud/form';
+import { shownName } from '@/lib/personName';
 import { useParticipantErrorText } from './participantErrors';
 import { trialData, trialSchema, type TrialValues } from './participantForms';
 
@@ -43,7 +44,7 @@ export function TrialDialog({
     defaultValues: { trial: participant?.trial ?? false, trialNote: participant?.trialNote ?? '' },
   });
   const trial = useWatch({ control: form.control, name: 'trial' });
-  const name = participant?.name ?? '';
+  const name = participant ? shownName(participant) : '';
 
   const onSubmit = (values: TrialValues) => {
     if (!participant) return;

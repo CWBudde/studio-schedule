@@ -1077,3 +1077,53 @@ export const receiptSettings = {
   logoMaxBytes: 524288,
   addressRequiredAbove: 25000,
 };
+
+type PersonExport = components['schemas']['PersonExport'];
+
+/**
+ * The data export of a person (ADR 0016) as GET /my/export and GET
+ * /admin/persons/{personId}/export return it: the member with an account,
+ * two children and one booking.
+ */
+export const personExport = (
+  person: { id: string; givenName: string; familyName: string } = {
+    id: meMember.personId,
+    givenName: 'Nora',
+    familyName: 'Example',
+  },
+): PersonExport => ({
+  format: 'studio-schedule.person-export',
+  version: 1,
+  exportedAt: '2026-10-25T10:00:00Z',
+  person: { ...person, email: 'nora@example.org' },
+  guardians: [],
+  dependents: family.dependents.map((d) => ({
+    id: d.id,
+    givenName: d.givenName,
+    familyName: d.familyName,
+  })),
+  mergedPersons: [],
+  account: { id: meMember.accountId, email: meMember.email, role: 'member' },
+  calendarFeeds: [],
+  dismissedAnnouncements: [],
+  classMemberships: [],
+  bookings: [
+    {
+      id: id(351),
+      lesson: {
+        id: ids.lessonBallet,
+        startsAt: '2026-10-26T16:00:00Z',
+        endsAt: '2026-10-26T17:00:00Z',
+        courseType: 'Ballet',
+      },
+      status: 'booked',
+      source: 'self',
+      trial: false,
+      bookedAt: '2026-10-20T09:00:00Z',
+      late: false,
+    },
+  ],
+  waitlistEntries: [],
+  passes: [],
+  receipts: [],
+});

@@ -22,6 +22,7 @@ const templateSet = {
   'lesson-notice': true,
   receipt: true,
   announcement: true,
+  'account-deleted': true,
 } as const satisfies Record<MailTemplate, true>;
 /** The templates, in the order of the filter. */
 export const mailTemplates = Object.keys(templateSet) as MailTemplate[];

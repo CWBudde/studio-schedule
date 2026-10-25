@@ -5,6 +5,7 @@ import type { ConfirmEmailBody, LoginBody, RegisterBody } from '@/api/client';
 import {
   ApiError,
   type ChangePasswordBody,
+  type DeleteMyAccountBody,
   type RequestEmailChangeBody,
   type RequestPasswordResetBody,
 } from '@/api/queries';
@@ -68,6 +69,11 @@ export const changeEmailSchema = (current: string) =>
     newEmail: email.refine((e) => e.toLowerCase() !== current.trim().toLowerCase(), 'sameEmail'),
     password,
   }) satisfies z.ZodType<Omit<RequestEmailChangeBody, 'locale'>>;
+
+/** The password that confirms deleting the account (ADR 0016). */
+export const deleteAccountSchema = z.object({ password }) satisfies z.ZodType<
+  Omit<DeleteMyAccountBody, 'locale'>
+>;
 
 /** Translates a react-hook-form field error whose message is a FieldErrorKey. */
 export function useFieldErrorText() {

@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { personName } from '@/features/admin/crud/person';
+import { personName } from '@/lib/personName';
 import { formatTimestamp } from '@/lib/schoolTime';
 import { useFieldLabel } from './useFieldLabel';
 

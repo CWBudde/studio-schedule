@@ -16,7 +16,9 @@ import type { components } from './schema';
  * canceled already, or it is a cancellation itself); or the time zone or
  * currency is fixed by lessons or prices and receipts (ADR 0013); or a merge
  * of two persons is refused (both have an account, or a guardian would
- * become a dependent).
+ * become a dependent); or a person is anonymized already or is the only
+ * guardian of a dependent, or an account change would leave the school
+ * without an enabled admin or concerns the admin's own account (ADR 0016).
  */
 export type ConflictReason = components['schemas']['Conflict']['reason'];
 
@@ -50,6 +52,10 @@ const conflictReasons: readonly ConflictReason[] = [
   'secret-link',
   'two-accounts',
   'guardian-cycle',
+  'anonymized',
+  'sole-guardian',
+  'last-admin',
+  'own-account',
 ];
 
 /** The lesson that uses the room, named by a 409 `room-taken`. */

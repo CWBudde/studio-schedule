@@ -5,7 +5,8 @@ import { type PersonMatch, personsQuery } from '@/api/queries';
 import { PersonCombobox } from '@/components/PersonCombobox';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { maxPersonMatches, personName } from './person';
+import { personName } from '@/lib/personName';
+import { maxPersonMatches } from './person';
 import { useDescription } from './useDescription';
 
 /**

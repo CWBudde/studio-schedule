@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TextareaField } from '@/features/admin/crud/fields';
-import { personName } from '@/features/admin/crud/person';
+import { personName } from '@/lib/personName';
 import { useDebouncedValue } from '@/features/admin/crud/useDebouncedValue';
 import { invalidFields } from '@/features/auth/form';
 import { weekdayName } from '@/features/timetable/timetable';

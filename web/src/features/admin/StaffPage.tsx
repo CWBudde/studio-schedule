@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { DeleteDialog } from './crud/DeleteDialog';
 import { DataTable } from './crud/DataTable';
-import { personName } from './crud/person';
+import { personName } from '@/lib/personName';
 import { RowActions } from './crud/RowActions';
 import { columnHelper } from './crud/table';
 import { StaffSheet, type StaffTarget } from './StaffSheet';
