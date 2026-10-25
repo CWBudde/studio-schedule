@@ -115,7 +115,8 @@ because the prefix needs Secure. The session middleware reads and writes the coo
 configured name (`httpapi.Deps.HostCookie`) and hands its token to sign-in and sign-out through
 the request context; no operation names the cookie in its signature any more, so the OpenAPI
 document pins no cookie name. A cookie of the other name is ignored: the upgrade that turns the
-prefix on signs everyone out once ([operations.md](../operations.md#upgrades)).
+prefix on signs everyone out once ([operations.md](../operations.md#upgrades)), and with the prefix on,
+the middleware expires a `studio_session` cookie on any request that still carries one.
 
 **Password rules (ASVS 2.1.1, 2.1.2, 2.1.7).** The minimum stays at **8 characters**, as above
 (NIST SP 800-63B; ASVS asks for 12, an accepted deviation: the common-password check below keeps

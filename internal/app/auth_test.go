@@ -108,11 +108,14 @@ func (a *authApp) call(method, path, body string, cookies ...*http.Cookie) (auth
 	return authResponse{StatusCode: rec.Code, Header: rec.Header()}, rec.Body.Bytes()
 }
 
+// sessionCookie returns the last session cookie res sets: the operation's
+// own, after any the session middleware set.
 func sessionCookie(t *testing.T, res authResponse) *http.Cookie {
 	t.Helper()
 
-	for _, c := range res.Cookies() {
-		if c.Name == httpapi.SessionCookie || c.Name == httpapi.HostSessionCookie {
+	cookies := res.Cookies()
+	for i := len(cookies) - 1; i >= 0; i-- {
+		if c := cookies[i]; c.Name == httpapi.SessionCookie || c.Name == httpapi.HostSessionCookie {
 			return c
 		}
 	}
@@ -380,5 +383,81 @@ func TestSessionCookieName(t *testing.T) {
 
 			a.want(http.MethodGet, "/api/v1/auth/me", "", http.StatusUnauthorized, next)
 		})
+	}
+}
+
+// TestLegacySessionCookieCleared: with the __Host- cookie, a studio_session
+// cookie left from before the upgrade is expired on every request that
+// carries it, sign-in and sign-out included, and the response's own session
+// cookie still wins.
+func TestLegacySessionCookieCleared(t *testing.T) {
+	t.Parallel()
+
+	m := demoMember(t)
+	a := newAuthApp(t, app.Deps{HostCookie: true, Demo: true, DemoLogins: seed.DemoLogins()})
+	legacy := &http.Cookie{Name: httpapi.SessionCookie, Value: "old-session-token"}
+
+	cookies := func(res authResponse) (old, host *http.Cookie) {
+		for _, c := range res.Cookies() {
+			switch c.Name {
+			case httpapi.SessionCookie:
+				old = c
+			case httpapi.HostSessionCookie:
+				host = c
+			}
+		}
+
+		return old, host
+	}
+
+	expired := func(what string, c *http.Cookie) {
+		t.Helper()
+
+		if c == nil || c.MaxAge >= 0 || c.Path != "/" || !c.Secure || !c.HttpOnly || c.Value != "" {
+			t.Errorf("%s: legacy cookie %+v, want it expired (Path=/, Secure, HttpOnly)", what, c)
+		}
+	}
+
+	// Any request: the legacy cookie is expired, nothing else is set.
+	res, _ := a.call(http.MethodGet, "/api/v1/settings/public", "", legacy)
+	old, host := cookies(res)
+	expired("public read", old)
+
+	if host != nil {
+		t.Errorf("public read sets %+v", host)
+	}
+
+	// Without it, nothing is cleared.
+	res, _ = a.call(http.MethodGet, "/api/v1/settings/public", "")
+	if old, _ := cookies(res); old != nil {
+		t.Errorf("a request without the legacy cookie clears it: %+v", old)
+	}
+
+	// Sign-in: the legacy cookie is expired and the new __Host- cookie set.
+	res, body := a.call(http.MethodPost, "/api/v1/auth/login", loginBody(m.Email, m.Password), legacy)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("login: %d %s", res.StatusCode, body)
+	}
+
+	old, host = cookies(res)
+	expired("login", old)
+
+	if host == nil || host.Value == "" {
+		t.Fatalf("login sets no session cookie: %v", res.Header["Set-Cookie"])
+	}
+
+	a.want(http.MethodGet, "/api/v1/auth/me", "", http.StatusOK, host)
+
+	// Sign-out: both are expired.
+	res, body = a.call(http.MethodPost, "/api/v1/auth/logout", "", legacy, host)
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("logout: %d %s", res.StatusCode, body)
+	}
+
+	old, cleared := cookies(res)
+	expired("logout", old)
+
+	if cleared == nil || cleared.MaxAge >= 0 {
+		t.Errorf("logout: session cookie %+v, want it expired", cleared)
 	}
 }

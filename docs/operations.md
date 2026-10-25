@@ -464,8 +464,8 @@ restart once the schema is newer, which is why the update replaces it right afte
 **Signing in again after the session-cookie upgrade.** From the release that adds the
 `__Host-` prefix, an installation whose `BASE_URL` is `https://` names its session cookie
 `__Host-studio_session` instead of `studio_session` ([ADR 0004](decisions/0004-accounts-sessions-and-mail.md),
-amendment). The old cookie is ignored, so everyone signs in again once after that upgrade; nothing
-else changes. The same release ends sessions 30 days after the sign-in (was 90).
+amendment). The old cookie is ignored, so everyone signs in again once after that upgrade, and the
+browser is told to delete it on its next request; nothing else changes. The same release ends sessions 30 days after the sign-in (was 90).
 
 **Migration policy.** In production, migrations only go forward. Each release's migrations are
 written so that `migrate up` works on the data of the release before. `migrate down` rolls back

@@ -276,7 +276,8 @@ ASVS 3.4.4. **Done.** With an `https://` `BASE_URL` the session cookie is `__Hos
 otherwise `studio_session` (the prefix needs Secure, which local development over plain HTTP
 lacks). The session middleware reads the cookie by the configured name and hands its token to
 sign-in and sign-out; no operation names the cookie any more. The upgrade that turns the prefix on
-signs everyone out once ([operations.md](operations.md#upgrades)).
+signs everyone out once ([operations.md](operations.md#upgrades)); a `studio_session` cookie left
+from before is expired on the next request that carries it.
 
 ### O8 Search terms in query strings
 

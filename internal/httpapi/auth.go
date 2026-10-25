@@ -132,9 +132,19 @@ func (h *handlers) cookieName() string {
 
 // sessionMiddleware resolves the session cookie to the request's principal
 // and renews the cookie when the session was extended. An invalid cookie is
-// cleared; the request continues without a principal.
+// cleared; the request continues without a principal. With the __Host-
+// cookie, a SessionCookie left from before the upgrade is cleared too (on
+// any request that carries it, sign-in and sign-out included): it is
+// ignored, but it would otherwise stay until it expires.
 func (h *handlers) sessionMiddleware(api huma.API) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
+		if h.cookieName() == HostSessionCookie {
+			if _, err := huma.ReadCookie(ctx, SessionCookie); err == nil {
+				legacy := h.expiredCookie(SessionCookie)
+				ctx.AppendHeader("Set-Cookie", legacy.String())
+			}
+		}
+
 		c, err := huma.ReadCookie(ctx, h.cookieName())
 		if err != nil || c.Value == "" {
 			next(ctx)
@@ -185,10 +195,16 @@ func (h *handlers) sessionCookie(s service.SignedIn) http.Cookie {
 	}
 }
 
+// clearSessionCookie expires the session cookie.
 func (h *handlers) clearSessionCookie() http.Cookie {
+	return h.expiredCookie(h.cookieName())
+}
+
+// expiredCookie makes the browser delete the cookie name.
+func (h *handlers) expiredCookie(name string) http.Cookie {
 	//nolint:gosec // G124: Secure is off only with InsecureCookies, for local development over HTTP.
 	return http.Cookie{
-		Name:     h.cookieName(),
+		Name:     name,
 		Path:     "/",
 		Expires:  time.Unix(0, 0).UTC(),
 		MaxAge:   -1,
@@ -272,15 +288,16 @@ type MeOutput struct {
 }
 
 // SignedInOutput is the response of login and confirmEmail: the account
-// and the new session cookie.
+// and the new session cookie. A slice, so that Huma appends it to the
+// cookies sessionMiddleware set instead of replacing them.
 type SignedInOutput struct {
-	SetCookie http.Cookie `header:"Set-Cookie"`
+	SetCookie []http.Cookie `header:"Set-Cookie"`
 	Body      Me
 }
 
 // LogoutOutput is the response of logout.
 type LogoutOutput struct {
-	SetCookie http.Cookie `header:"Set-Cookie"`
+	SetCookie []http.Cookie `header:"Set-Cookie"`
 }
 
 func (h *handlers) confirmEmail(ctx context.Context, in *ConfirmEmailInput) (*SignedInOutput, error) {
@@ -327,7 +344,7 @@ func (h *handlers) signedIn(ctx context.Context, s service.SignedIn) (*SignedInO
 		return nil, err
 	}
 
-	return &SignedInOutput{SetCookie: h.sessionCookie(s), Body: me}, nil
+	return &SignedInOutput{SetCookie: []http.Cookie{h.sessionCookie(s)}, Body: me}, nil
 }
 
 // endPrevious ends the session the client signed in over, so that it does
@@ -374,7 +391,7 @@ func (h *handlers) logout(ctx context.Context, _ *struct{}) (*LogoutOutput, erro
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	return &LogoutOutput{SetCookie: h.clearSessionCookie()}, nil
+	return &LogoutOutput{SetCookie: []http.Cookie{h.clearSessionCookie()}}, nil
 }
 
 func (h *handlers) getMe(ctx context.Context, _ *struct{}) (*MeOutput, error) {

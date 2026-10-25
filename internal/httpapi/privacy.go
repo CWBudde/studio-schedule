@@ -153,7 +153,7 @@ type DeleteMyAccountInput struct {
 
 // DeleteMyAccountOutput clears the session cookie.
 type DeleteMyAccountOutput struct {
-	SetCookie http.Cookie `header:"Set-Cookie"`
+	SetCookie []http.Cookie `header:"Set-Cookie"`
 }
 
 // ExportMyDataInput is the request of exportMyData.
@@ -273,7 +273,7 @@ func (h *handlers) deleteMyAccount(ctx context.Context, in *DeleteMyAccountInput
 		return nil, h.privacyError(ctx, err)
 	}
 
-	return &DeleteMyAccountOutput{SetCookie: h.clearSessionCookie()}, nil
+	return &DeleteMyAccountOutput{SetCookie: []http.Cookie{h.clearSessionCookie()}}, nil
 }
 
 // privacyError maps the errors of anonymizing and the account
