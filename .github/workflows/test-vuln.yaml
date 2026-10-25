@@ -1,0 +1,43 @@
+name: test-vuln
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test-vuln:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Setup just
+        uses: extractions/setup-just@v3
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      # govulncheck (reachable vulnerabilities in Go code and the standard
+      # library) and pnpm audit (high or critical in production dependencies).
+      - name: Check for known vulnerabilities
+        run: just vuln
+
+      # Development tools (the shadcn CLI, jsdom, ...) never ship; their
+      # findings are reported here and fixed by Renovate's updates.
+      - name: Audit development dependencies (report only)
+        continue-on-error: true
+        run: pnpm -C web audit --audit-level high

@@ -10,7 +10,7 @@ default:
 
 # Install pinned formatting/lint tools (CI and fresh machines)
 setup-deps:
-    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
     go install mvdan.cc/sh/v3/cmd/shfmt@v3.12.0
     go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
     npm install -g prettier@3.7.4
@@ -57,6 +57,13 @@ check-sqlc:
 # Fail if the WASM build pulls in server-only dependencies
 check-wasm-deps:
     ./scripts/check-wasm-deps.sh
+
+# Fail on known vulnerabilities: reachable ones in Go code and the standard
+# library, high or critical ones in the web app's production dependencies.
+# Needs network (vulnerability databases), so `just ci` leaves it out; CI runs it.
+vuln:
+    go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+    pnpm -C web audit --prod --audit-level high
 
 # Fail unless receipt.wasm is reproducible from tools/receipt-pdf (needs Docker)
 typst-wasm-check:

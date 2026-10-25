@@ -1,0 +1,68 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":timezone(Europe/Berlin)"
+  ],
+  "schedule": ["before 6am on monday"],
+  "postUpdateOptions": ["gomodTidy"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"]
+  },
+  "packageRules": [
+    {
+      "description": "pnpm installs nothing younger than 14 days (web/pnpm-workspace.yaml), so neither may Renovate",
+      "matchManagers": ["npm"],
+      "minimumReleaseAge": "14 days"
+    },
+    {
+      "description": "Go modules in one PR",
+      "matchManagers": ["gomod"],
+      "groupName": "Go modules"
+    },
+    {
+      "description": "npm dependencies: minor and patch updates in one PR, majors one by one",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "npm dependencies"
+    },
+    {
+      "description": "npm dev dependencies: minor and patch updates in one PR, merged automatically once CI is green",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "npm dev dependencies",
+      "automerge": true
+    },
+    {
+      "description": "GitHub Actions in one PR",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions"
+    },
+    {
+      "description": "Docker base images (Dockerfile, docker-compose.yml): minor and patch updates in one PR",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "groupName": "Docker images"
+    },
+    {
+      "description": "The Go toolchain moves together: go.mod's go and toolchain lines and the golang build image",
+      "matchDepNames": ["go", "golang"],
+      "groupName": "Go toolchain"
+    },
+    {
+      "description": "A new PostgreSQL major needs a dump and restore of existing data (docs/operations.md); upgrade it by hand",
+      "matchManagers": ["docker-compose"],
+      "matchPackageNames": ["postgres"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "The receipt renderer (tools/receipt-pdf) is built reproducibly with pinned Rust and typst versions and its sha256 is checked in CI (ADR 0012); update it by hand with `just typst-wasm`",
+      "matchFileNames": ["tools/receipt-pdf/**"],
+      "enabled": false
+    }
+  ]
+}

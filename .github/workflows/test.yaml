@@ -30,3 +30,24 @@ jobs:
 
   test-typst:
     uses: ./.github/workflows/test-typst.yaml
+
+  test-vuln:
+    uses: ./.github/workflows/test-vuln.yaml
+
+  # The edge image, built once every test passed on main (image.yaml).
+  image:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - test-lint
+      - test-format
+      - test-unit
+      - test-web
+      - test-e2e
+      - test-typst
+      - test-vuln
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      security-events: write
+    uses: ./.github/workflows/image.yaml
