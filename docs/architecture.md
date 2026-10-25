@@ -120,6 +120,10 @@ the class lock, after moving or deleting the future lessons the edit affects
   logins and mail-sending requests are rate-limited (429 with `Retry-After`); every response
   carries a Content Security Policy, `nosniff` and `Referrer-Policy`, plus HSTS when `BASE_URL` is
   https ([ADR 0006](decisions/0006-credentials-rate-limits-and-headers.md)).
+- Calendar feeds: the one route outside `/api/v1` is `GET /ical/{token}.ics`, an iCalendar document
+  (`text/calendar`, written by `internal/ical`) that calendar apps poll with a secret token, built
+  from what the token's account may see at the time
+  ([ADR 0011](decisions/0011-calendar-feeds.md)).
 
 ## Frontend
 

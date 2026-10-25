@@ -607,12 +607,20 @@ no repository yet.
 
 ## Phase 5 — Calendar feeds
 
-- [ ] Per-subject feed tokens (location, instructor, personal bookings); random secret, revocable;
-      only the token hash is stored
-- [ ] `GET /ical/{token}.ics` (RFC 5545, VTIMEZONE, stable UIDs, cancelled lessons as
-      `STATUS:CANCELLED`)
-- [ ] UI: "Subscribe" dialog with copy-URL; demo: download via the bridge as a Blob
-- [ ] Tests: golden files, timezone/DST correctness
+- [x] Per-subject feed tokens (location, instructor, personal bookings); random secret, revocable;
+      only the token hash is stored (2026-10-25) — ADR 0011; migration 00015 `calendar_feeds`;
+      feeds for the family's bookings, the own teaching and the schedule of the school or one
+      location; one active link per subject, a new one revokes the old; `/api/v1/my/calendar-feeds`
+- [x] `GET /ical/{token}.ics` (RFC 5545, VTIMEZONE, stable UIDs, cancelled lessons as
+      `STATUS:CANCELLED`) (2026-10-25) — `internal/ical` (no dependencies); visibility of the
+      owner at poll time, four weeks back; ETag and 304; rate limits per IP and per feed; tokens
+      redacted in logs
+- [x] UI: "Subscribe" dialog with copy-URL; demo: download via the bridge as a Blob (2026-10-25)
+      — on the schedule, My lessons and /teach; the feed list in the account settings; e2e
+      `calendar-feeds.spec.ts`
+- [x] Tests: golden files, timezone/DST correctness (2026-10-25) — golden `.ics` per scope across
+      the March and October changes and in New York; VTIMEZONE for Berlin, New York, Tokyo and
+      Sydney
 
 ## Phase 6 — Passes & receipts
 

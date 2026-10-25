@@ -148,6 +148,15 @@ The demo is a _demo installation_ (`app.Deps.Demo`, also set for `serve` without
 Real installations answer both endpoints with 404
 ([ADR 0004](decisions/0004-accounts-sessions-and-mail.md)).
 
+## Calendar feeds in the demo
+
+Calendar feeds ([ADR 0011](decisions/0011-calendar-feeds.md)) are created with the same code: the
+demo stores the token's hash. No calendar app can reach a link of the demo, since there is no
+server, so a demo installation (`Deps.Demo`) answers `createCalendarFeed` without a `url`, only with
+the `path`. The UI offers the feed as a download instead: `openDownload` fetches
+`/ical/{token}.ics?download=true` through the bridge (any path reaches the Go router, `/ical/`
+included) and saves the attachment as a Blob, with the file name from `Content-Disposition`.
+
 ## Building it locally
 
 ```sh

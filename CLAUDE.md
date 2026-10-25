@@ -88,6 +88,10 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   book and cancel for the caller's family under `Lessons().Lock` with member rules for everyone,
   late cancellations flagged, "cancel following weeks" under the class lock. The schedule's
   availability (`freePlaces`, `bookedFor`, the cutoff instants) is filled in `service/schedule.go`.
+- **Calendar feeds:** `service.CalendarFeedService` (`service/calendar_feeds.go`; ADR 0011) manages
+  an account's links under `/api/v1/my/calendar-feeds` and renders `GET /ical/{token}.ics`, the
+  one route outside `/api/v1`, with `internal/ical` (RFC 5545 writer, VTIMEZONE from Go's zone data);
+  golden files in `internal/service/testdata/feeds` (`go test ./internal/service -update`).
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),
