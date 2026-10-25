@@ -714,3 +714,44 @@ func TestCalendarFeedZone(t *testing.T) {
 	wantFeedLessons(t, doc, summer, winter)
 	goldenFeed(t, "schedule-new-york", doc)
 }
+
+// TestTeaches decides who may have a teaching feed (and getMe's teaches):
+// staff with an active staff record linked to their person.
+func TestTeaches(t *testing.T) {
+	t.Parallel()
+
+	f := newFeedFixture(t)
+
+	check := func(name string, p domain.Person, role domain.Role, want bool) {
+		t.Helper()
+
+		var got bool
+
+		err := f.st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+			var err error
+			got, err = teaches(ctx, tx, role, p.ID)
+
+			return err
+		})
+		if err != nil || got != want {
+			t.Errorf("%s: %v, %v; want %v", name, got, err, want)
+		}
+	}
+
+	check("instructor with a staff record", f.ivy, domain.RoleInstructor, true)
+	check("member with a staff record", f.ivy, domain.RoleMember, false)
+	check("office without a staff record", f.olga, domain.RoleOffice, false)
+	check("member", f.anna, domain.RoleMember, false)
+
+	f.write(t, func(ctx context.Context, tx store.Tx) error {
+		st, err := tx.Staff().Get(ctx, f.instructor)
+		if err != nil {
+			return err
+		}
+
+		st.Active = false
+
+		return tx.Staff().Update(ctx, st)
+	})
+	check("instructor with an inactive staff record", f.ivy, domain.RoleInstructor, false)
+}

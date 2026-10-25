@@ -227,6 +227,7 @@ type Me struct {
 	GivenName  string           `doc:"Given name."                 json:"givenName"`
 	FamilyName string           `doc:"Family name."                json:"familyName"`
 	Locale     string           `doc:"Language of the mails the account receives; absent: the school's default." enum:"en,de" json:"locale,omitempty"`
+	Teaches    bool             `doc:"Whether the account teaches: it is staff with an active staff record linked to its person, so it may create a teaching calendar feed (createCalendarFeed)." json:"teaches"`
 	// Impersonator is set while an admin is signed in as this account.
 	Impersonator *Impersonator `doc:"The admin signed in as this account (\"login as\"); absent otherwise." json:"impersonator,omitempty"`
 }
@@ -372,7 +373,7 @@ func (h *handlers) me(ctx context.Context, p service.Principal) (Me, error) {
 
 	out := Me{
 		AccountID: m.Account.ID, PersonID: m.Person.ID, Email: m.Account.Email, Role: string(m.Account.Role),
-		GivenName: m.Person.GivenName, FamilyName: m.Person.FamilyName, Locale: m.Account.Locale,
+		GivenName: m.Person.GivenName, FamilyName: m.Person.FamilyName, Locale: m.Account.Locale, Teaches: m.Teaches,
 	}
 
 	if i := m.Impersonator; i != nil {

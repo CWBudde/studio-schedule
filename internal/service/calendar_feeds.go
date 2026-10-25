@@ -222,23 +222,34 @@ func (s *CalendarFeedService) Create(
 	return out, nil
 }
 
-// mayTeach checks that p is staff with an active staff record linked to
-// its person (ErrNoTeaching otherwise).
+// mayTeach checks that p teaches (ErrNoTeaching otherwise).
 func mayTeach(ctx context.Context, tx store.Tx, p Principal) error {
-	if !p.Role.Staff() {
-		return ErrNoTeaching
-	}
-
-	own, err := ownStaff(ctx, tx, p.PersonID)
+	ok, err := teaches(ctx, tx, p.Role, p.PersonID)
 	if err != nil {
-		return fmt.Errorf("staff records: %w", err)
+		return err
 	}
 
-	if len(own) == 0 {
+	if !ok {
 		return ErrNoTeaching
 	}
 
 	return nil
+}
+
+// teaches reports whether an account of role whose person is person
+// teaches lessons: it is staff with an active staff record linked to the
+// person. Only such an account has a teaching calendar feed.
+func teaches(ctx context.Context, tx store.Tx, role domain.Role, person domain.PersonID) (bool, error) {
+	if !role.Staff() {
+		return false, nil
+	}
+
+	own, err := ownStaff(ctx, tx, person)
+	if err != nil {
+		return false, fmt.Errorf("staff records: %w", err)
+	}
+
+	return len(own) > 0, nil
 }
 
 // feedURL returns the absolute URL of the feed with the token: the path

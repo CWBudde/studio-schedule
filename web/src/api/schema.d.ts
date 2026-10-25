@@ -2954,6 +2954,8 @@ export interface components {
              * @enum {string}
              */
             role: "member" | "instructor" | "office" | "admin";
+            /** @description Whether the account teaches: it is staff with an active staff record linked to its person, so it may create a teaching calendar feed (createCalendarFeed). */
+            teaches: boolean;
         };
         MyLessonBooking: {
             booking: components["schemas"]["Booking"];

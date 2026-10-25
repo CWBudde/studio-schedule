@@ -2701,6 +2701,10 @@
               "admin"
             ],
             "type": "string"
+          },
+          "teaches": {
+            "description": "Whether the account teaches: it is staff with an active staff record linked to its person, so it may create a teaching calendar feed (createCalendarFeed).",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2709,7 +2713,8 @@
           "email",
           "role",
           "givenName",
-          "familyName"
+          "familyName",
+          "teaches"
         ],
         "type": "object"
       },

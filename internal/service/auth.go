@@ -659,8 +659,11 @@ func (s *AuthService) PurgeExpired(ctx context.Context) (int, error) {
 // Me is the signed-in account together with its person. Impersonator is
 // the admin who signed in as it, if any (with its own Impersonator nil).
 type Me struct {
-	Account      domain.Account
-	Person       domain.Person
+	Account domain.Account
+	Person  domain.Person
+	// Teaches tells that the account teaches lessons: it may have a
+	// teaching calendar feed (see teaches); not set for the Impersonator.
+	Teaches      bool
 	Impersonator *Me
 }
 
@@ -671,8 +674,11 @@ func (s *AuthService) Me(ctx context.Context, p Principal) (Me, error) {
 	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 		var err error
 
-		me, err = accountWithPerson(ctx, tx, p.AccountID)
-		if err != nil || p.ImpersonatorID.IsZero() {
+		if me, err = accountWithPerson(ctx, tx, p.AccountID); err != nil {
+			return err
+		}
+
+		if me.Teaches, err = teaches(ctx, tx, me.Account.Role, me.Person.ID); err != nil || p.ImpersonatorID.IsZero() {
 			return err
 		}
 

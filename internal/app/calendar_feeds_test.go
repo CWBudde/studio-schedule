@@ -123,6 +123,24 @@ func TestCalendarFeeds(t *testing.T) {
 	}
 }
 
+// TestMeTeaches tells the app whether an account may have a teaching feed.
+func TestMeTeaches(t *testing.T) {
+	t.Parallel()
+
+	a := newAuthApp(t, app.Deps{})
+
+	for email, want := range map[string]bool{
+		"alina.starling@example.net": true,  // instructor with a staff record
+		"olga.ledgerby@example.net":  false, // office without one
+		"clara.amberly@example.org":  false, // member
+	} {
+		me := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/auth/me", "", a.login(email)))
+		if me["teaches"] != want {
+			t.Errorf("%s: teaches %v, want %v", email, me["teaches"], want)
+		}
+	}
+}
+
 // TestCalendarFeedDemo leaves the URL out in a demo installation: no
 // calendar reaches the web demo, which downloads the path instead.
 func TestCalendarFeedDemo(t *testing.T) {
