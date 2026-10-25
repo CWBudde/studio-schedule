@@ -59,6 +59,16 @@ type ErrorModel struct {
 
 func (e *ErrorModel) setRequestID(id string) { e.RequestID = id }
 
+// dropValues removes the value of every error detail: a problem document
+// never echoes what the client sent, a password least of all.
+func (e *ErrorModel) dropValues() {
+	for _, d := range e.Errors {
+		if d != nil {
+			d.Value = nil
+		}
+	}
+}
+
 // NewProblem is the problem document for status with detail msg and the
 // details of errs, as huma.NewError builds it.
 func NewProblem(status int, msg string, errs ...error) *ErrorModel {
@@ -84,21 +94,30 @@ func NewProblem(status int, msg string, errs ...error) *ErrorModel {
 // Every error Huma creates, from the handlers' huma.Error404NotFound to its
 // own validation errors, is an ErrorModel, and the generated responses
 // document it (Huma takes the error schema from NewError). The request ID
-// is stamped on by stampRequestID.
+// is stamped on, and the details' values dropped, by finishProblem.
 func init() { //nolint:gochecknoinits // Huma's documented way to replace its error type
 	huma.NewError = func(status int, msg string, errs ...error) huma.StatusError {
 		return NewProblem(status, msg, errs...)
 	}
 }
 
-// stampRequestID is a Huma transformer that puts the ID of the request
-// (internal/requestid) into every problem document.
-func stampRequestID(ctx huma.Context, _ string, v any) (any, error) {
-	if p, ok := v.(interface{ setRequestID(id string) }); ok {
-		if id := requestid.From(ctx.Context()); id != "" {
-			p.setRequestID(id)
-		}
+// finishProblem is a Huma transformer that puts the ID of the request
+// (internal/requestid) into every problem document and drops the values of
+// its error details (Huma's validation echoes the offending input there).
+func finishProblem(ctx huma.Context, _ string, v any) (any, error) {
+	p, ok := v.(interface {
+		setRequestID(id string)
+		dropValues()
+	})
+	if !ok {
+		return v, nil
 	}
+
+	if id := requestid.From(ctx.Context()); id != "" {
+		p.setRequestID(id)
+	}
+
+	p.dropValues()
 
 	return v, nil
 }

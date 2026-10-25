@@ -505,7 +505,7 @@ func (h *handlers) previewReleaseWindow(
 	at, err := domain.ParseTimeOfDay(in.ReleaseTime)
 	if err != nil {
 		return nil, huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
-			Message: "invalid time of day", Location: "query.releaseTime", Value: in.ReleaseTime,
+			Message: "invalid time of day", Location: "query.releaseTime",
 		})
 	}
 

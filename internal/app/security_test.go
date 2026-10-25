@@ -192,6 +192,10 @@ func TestContentSecurityPolicy(t *testing.T) {
 	}
 }
 
+// echoedSecret is a password longer than any allowed (256 characters): its
+// 422 must not echo it.
+var echoedSecret = strings.Repeat("secret-", 40)
+
 func TestProblemJSON(t *testing.T) {
 	t.Parallel()
 
@@ -233,6 +237,14 @@ func TestProblemJSON(t *testing.T) {
 		{"422 invalid body", h, func() *http.Request {
 			return jsonPost("/api/v1/auth/register", `{"email":42}`)
 		}, http.StatusUnprocessableEntity},
+		// Huma's validation would echo the password as the detail's value.
+		{"422 too long a password", h, func() *http.Request {
+			return jsonPost("/api/v1/auth/register", `{"givenName":"Rae","familyName":"Example",`+
+				`"email":"rae@example.org","password":"`+echoedSecret+`"}`)
+		}, http.StatusUnprocessableEntity},
+		{"422 too short a password", h, func() *http.Request {
+			return jsonPost("/api/v1/auth/password-reset/confirm", `{"token":"tok","password":"pw-echo"}`)
+		}, http.StatusUnprocessableEntity},
 		{"500 unmapped handler error", h, func() *http.Request {
 			return httptest.NewRequest(http.MethodGet, "/api/v1/test-fail", nil)
 		}, http.StatusInternalServerError},
@@ -273,7 +285,11 @@ func TestProblemJSON(t *testing.T) {
 			t.Errorf("%s: problem %s lacks the request ID %q of the header", c.name, body, id)
 		}
 
-		for _, leak := range []string{secretDetail, "goroutine", ".go:", "runtime."} {
+		if strings.Contains(string(body), `"value"`) {
+			t.Errorf("%s: problem %s echoes a value", c.name, body)
+		}
+
+		for _, leak := range []string{secretDetail, echoedSecret, "pw-echo", "goroutine", ".go:", "runtime."} {
 			if strings.Contains(string(body), leak) {
 				t.Errorf("%s: body leaks %q: %s", c.name, leak, body)
 			}
