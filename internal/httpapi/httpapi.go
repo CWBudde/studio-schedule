@@ -172,8 +172,21 @@ func (h *handlers) toHTTPError(ctx context.Context, err error) error {
 	case errors.Is(err, domain.ErrForbidden):
 		return huma.Error403Forbidden("forbidden")
 	default:
-		h.deps.Logger.ErrorContext(ctx, "internal error", slog.Any("err", err))
+		h.logFailure(ctx, "internal error", err)
 
 		return huma.Error500InternalServerError("internal server error")
 	}
+}
+
+// logFailure logs err as an error of the request ctx, unless the request
+// was canceled meanwhile (the client went away, or the server is shutting
+// down): then its work failed for that reason, nothing is wrong with the
+// app, and it is logged at Debug only, so it never alerts an operator.
+func (h *handlers) logFailure(ctx context.Context, msg string, err error) {
+	level := slog.LevelError
+	if ctx.Err() != nil {
+		level, msg = slog.LevelDebug, msg+" (request canceled)"
+	}
+
+	h.deps.Logger.Log(ctx, level, msg, slog.Any("err", err))
 }

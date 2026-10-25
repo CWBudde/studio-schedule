@@ -124,7 +124,7 @@ func (h *handlers) sessionMiddleware(api huma.API) func(huma.Context, func(huma.
 
 			return
 		case err != nil:
-			h.deps.Logger.ErrorContext(ctx.Context(), "authenticate", slog.Any("err", err))
+			h.logFailure(ctx.Context(), "authenticate", err)
 			_ = huma.WriteErr(api, ctx, http.StatusInternalServerError, "internal server error")
 
 			return
