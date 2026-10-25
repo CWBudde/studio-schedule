@@ -70,10 +70,15 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   order is term → class → lesson → the passes of the persons concerned
   ([ADR 0012](decisions/0012-passes-and-receipts.md)); what checks a person's links, or writes
   something that refers to a person, locks the persons first (`Persons().Lock`, through
-  `lockLivePersons`, which refuses a merged person), so the full order is persons → term → class →
+  `lockLivePersons`, which refuses a merged or anonymized person), so the full order is persons → term → class →
   lesson → passes. A merge of two persons locks both, then the terms, classes and lessons of what
   it moves; the member import locks every person its rows may find in one call (in ID order)
-  before the first row ([ADR 0015](decisions/0015-import-duplicates-and-merge.md)).
+  before the first row ([ADR 0015](decisions/0015-import-duplicates-and-merge.md)). Anonymizing a
+  person locks it, its guardians and dependents (and every admin's person when its account is an
+  admin's) in one call through `lockPersonSet`, then the terms, classes and lessons of what it
+  cancels; the account administration locks the account's person, and every admin's with it when
+  the account is an admin's, so the last-admin guard sees concurrent changes
+  ([ADR 0016](decisions/0016-privacy-and-account-administration.md)).
   Serialization and deadlock failures are retried. Constraints are backstops: a partial unique index for active bookings
   (a booking a merge kept as history, `merged_from`, is left out of it),
   `visits_remaining >= 0`, and a unique redemption per booking.
@@ -90,7 +95,8 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
 - `storetest` runs the same contract cases against both stores. The PostgreSQL tests use the
   server in `STUDIO_TEST_DATABASE_URL` or start `postgres:18-alpine` via testcontainers; each test
   gets its own database cloned from a migrated template. Service scenarios that must hold under
-  both stores' locks and constraints (the member import, merging persons) live in
+  both stores' locks and constraints (the member import, merging persons, anonymizing, the account
+  administration and the retention of personal data) live in
   `internal/service/servicetest` and run from the tests of `service` and of the PostgreSQL store.
 - A **dry run** (the member import, a merge's preview) is the write's own code in a read-write
   transaction that returns a sentinel error, so the store rolls it back.
@@ -125,7 +131,10 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
 sessions and email links), `waitlist-expiry` (every minute), `announcements` (every minute, mails the
 announcements whose publication has come, once, at most 100 mails a run;
 [ADR 0014](decisions/0014-announcements-and-mail-log.md)),
-`purge-mail` (daily, removes the bodies of mails sent 30 days ago and the mails of 180 days ago) and,
+`purge-mail` (daily, removes the bodies of mails sent 30 days ago and the mails of 180 days ago),
+`purge-personal-data` (daily, anonymizes the guests of lessons that ended 12 months ago and deletes
+audit events older than 3 years and import runs older than 1 year;
+[ADR 0016](decisions/0016-privacy-and-account-administration.md)) and,
 when a mailer is configured, `deliver-mail` (every minute). The server and the WASM build run every job
 once at startup (the demo before it answers its first request), then on its interval; Go timers
 work in `js/wasm`, so both targets use the same code. A request that leaves work for a job now
@@ -215,6 +224,27 @@ panicking request is logged and counted as the 500 it answers (one that aborts t
   pending and failed mails, counted at scrape time (`app.UnsentMails`, one query per scrape that
   reads the partial indexes `outbox_mails_due_idx` and `outbox_mails_failed_idx` only), the build
   version, and Go's runtime and process collectors.
+
+## Privacy
+
+What the school stores about a person, and how it goes
+([ADR 0016](decisions/0016-privacy-and-account-administration.md)):
+
+- **Export**: `service.PersonService.Export` (office) and `service.FamilyService.Export` (a member,
+  for their family) collect one document in one read-only transaction (`service/export.go`); the
+  web app saves the API's JSON answer as a file, so the demo needs no download route.
+- **Anonymization**: `service.PersonService.Anonymize` (`service/anonymize.go`) erases the person's
+  data (`domain.Person.Anonymize`), removes its links, memberships, entries, staff links and
+  account, cancels its future bookings through the ledger, and keeps its history; receipts are
+  never touched. `PersonRepo.List` leaves anonymized persons out, `lockLivePersons` refuses them.
+- **Accounts**: `service/accounts_admin.go` (disable, enable, role, delete; deleting one's own
+  account). The last-admin guard counts the admins who can sign in (`mayActAs`); ending an
+  account's sessions (`endSessions`: disabling, deleting, a new password) audits each running
+  impersonation as ended. `AccountRepo.Delete` follows the foreign keys of migration 00023: it deletes what is
+  the account's, clears it where records only name it, re-points the audit events about it to its
+  person, and fails (409 `in-use`) while receipts, the audit log, announcements or duplicate
+  dismissals name it.
+- **Retention**: `service.RetentionService` behind the `purge-personal-data` job.
 
 ## API contract
 

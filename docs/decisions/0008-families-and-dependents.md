@@ -134,3 +134,11 @@ which the office edits and searches, and by which the member import finds member
 links guardians it finds or creates to the members, and never removes a link. Every write of the
 office's persons view refuses a tombstone as unknown (404), and a person something was merged into
 cannot be deleted.
+
+## Amendment (2026-10-25): export and anonymization
+
+[ADR 0016](0016-privacy-and-account-administration.md): a member exports the data of their own
+person and of their dependents (`familyMember`), and the office exports and anonymizes any person.
+Deleting a person stays for records created by mistake; a person with history is anonymized
+instead, which also removes the guardian links. The only guardian of a dependent is not anonymized
+(409 `sole-guardian`).

@@ -152,6 +152,18 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `person-merged`. Every write that names a person looks it up with `lockLivePersons`
   (`service/live_persons.go`), which refuses a tombstone. Scenarios on both stores live in
   `internal/service/servicetest`.
+- **Privacy & accounts:** ADR 0016. The data export (`service/export.go`, office
+  `exportPerson`, member `exportMyData` for their family; the web saves the JSON answer as a file),
+  anonymizing a person (`service/anonymize.go`, `PersonService.Anonymize`: the person stays as
+  "Deleted person", hidden like a tombstone, refused by `lockLivePersons`; receipts untouched; the
+  API marks it `anonymized` where it names it, and the web shows names through
+  `web/src/lib/personName.ts`, which translates it), the
+  admin's account administration and deleting one's own account (`service/accounts_admin.go`,
+  `httpapi/privacy.go`; guards `own-account`, `last-admin` counting admins who can sign in;
+  `endSessions` audits the impersonations it ends), `AccountRepo.Delete` (its FK rules in
+  migration 00023: what keeps an account is a 409 `in-use`), and the daily `purge-personal-data`
+  job (`service/retention.go`, `app/jobs_privacy.go`). Scenarios on both stores:
+  `servicetest.Privacy`.
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),

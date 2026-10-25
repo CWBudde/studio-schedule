@@ -132,3 +132,12 @@ event concerns: the account, the person or the mail.
 - After 30 days a sent mail's text is gone from the log; after 180 days the mail is. Phase 8's data
   export and erasure build on this.
 - Admins cannot read password-reset or invitation mails, even in the log.
+
+## Amendment (2026-10-25): audit retention, account deletion and new actions
+
+[ADR 0016](0016-privacy-and-account-administration.md): the daily `purge-personal-data` job deletes
+audit events older than three years, and deleting an account re-points the events that target it
+to its person (so events are no longer only ever added). New actions: `person-anonymized`,
+`account-disabled`, `account-enabled`, `account-role-changed` (details: both roles) and
+`account-deleted` (target: the person; without an actor when the holder deleted it, the one case
+of a NULL `actor_id`). The new `account-deleted` mail has no link and is no secret-link mail.

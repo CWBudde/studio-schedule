@@ -177,3 +177,10 @@ passes):
   history booking); counts of active bookings count both, counts of persons once.
 - The memory store indexes member numbers (`memberNos`, rebuilt on a snapshot's restore), so the
   uniqueness check of an import's rows does not scan every person in the single-threaded demo.
+
+## Amendment (2026-10-25): account administration and anonymized persons
+
+[ADR 0016](0016-privacy-and-account-administration.md) adds the account administration: an admin
+disables one of two accounts before a merge, without the database. An anonymized person is left
+out of lists, searches, the duplicate detection and the import like a tombstone, and is refused by
+every write (`lockLivePersons`); the retention job deletes import runs older than one year.

@@ -55,7 +55,8 @@ bookings".
   only the hash of the old token was stored, so the old cookie cannot be restored.
 - The start, the return, and signing out of an impersonation are written to `audit_events` (actor,
   action, target, time). An impersonation that simply expires has no end event; the start event and
-  the one-hour limit bound it.
+  the one-hour limit bound it. (Since ADR 0016, an impersonation ended because its account, or the
+  admin's, was disabled or deleted or got a new password is recorded as ended too, by the admin.)
 
 ## Consequences
 
@@ -63,3 +64,13 @@ bookings".
 - Services may still check roles where the rule is business logic (e.g. `Impersonate` checks for an
   admin itself), so that they stay safe when called from elsewhere.
 - The admin area lists the latest audit events at `/admin/audit`.
+
+## Amendment (2026-10-25): account administration
+
+[ADR 0016](0016-privacy-and-account-administration.md) adds the admin's account administration
+(disable, enable, change the role, delete; `admin`), each recorded in the audit log, and lets a
+member delete their own account. An admin never changes their own account there (409
+`own-account`), and the last admin who can sign in is never disabled, demoted or deleted (409
+`last-admin`). An impersonation also ends once its account becomes an admin. An account that acted
+in the audit log is kept (the audit actor refuses its deletion), so an admin cannot erase their
+trail.

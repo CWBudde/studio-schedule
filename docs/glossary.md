@@ -50,6 +50,9 @@ where it differs.
 | Duplicate pair     | Duplicates          | Dubletten              | Two persons that may be the same: likely (strong) or possible (weak)     |
 | Merge              | Merge               | Zusammenführen         | Moves a duplicate's data to the survivor; the rest is a tombstone (0015) |
 | Tombstone          | Merged person       | Zusammengeführt        | `persons.merged_into`; hidden, kept for its receipts (ADR 0015)          |
+| Anonymize          | Anonymize           | Anonymisieren          | Erase a person's data, keep its history as "Deleted person" (ADR 0016)   |
+| Data export        | Your data           | Datenexport            | One JSON file of everything stored about a person (GDPR; ADR 0016)       |
+| Disable an account | Disable / Enable    | Sperren / Entsperren   | `accounts.disabled_at`: it signs in no more; set by an admin (0016)      |
 | Calendar feed      | Calendar feed       | Kalender-Abo           | iCal URL with a secret token                                             |
 | In use             | In use              | In Verwendung          | Still referenced, so it cannot be deleted (409 `in-use`; ADR 0007)       |
 | Retire             | Retire / deactivate | Stilllegen             | Hide from future use instead of deleting what is referenced (ADR 0007)   |

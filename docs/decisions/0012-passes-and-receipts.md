@@ -269,3 +269,10 @@ it.
   receipt.
 - Changing the template or typst means `just typst-wasm` and new golden checksums; receipts issued
   before keep their stored PDFs.
+
+## Amendment (2026-10-25): erasure leaves receipts alone
+
+Anonymizing a person ([ADR 0016](0016-privacy-and-account-administration.md)) does not touch its
+receipts: they stay immutable with their snapshot of the recipient, for the retention duty of
+receipts; its passes and redemptions stay as well. An account that created receipts is not deleted
+(`receipts.created_by` refuses it) and is disabled instead.
