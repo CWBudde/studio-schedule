@@ -3,6 +3,9 @@ import tailwindcss from '@tailwindcss/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import { vendorChunks } from './vite.chunks.ts';
+
+const chunks = vendorChunks();
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -13,6 +16,7 @@ export default defineConfig({
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
     react(),
     tailwindcss(),
+    chunks.guard,
   ],
   resolve: {
     alias: {
@@ -29,17 +33,9 @@ export default defineConfig({
   build: {
     rolldownOptions: {
       output: {
-        // Split rarely-changing vendor code from app code for better caching.
-        codeSplitting: {
-          groups: [
-            {
-              name: 'react',
-              test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/,
-              priority: 20,
-            },
-            { name: 'vendor', test: /node_modules[\\/]/, priority: 10 },
-          ],
-        },
+        // Split rarely-changing vendor code from app code for better caching,
+        // and the chart library from what the entry loads (vite.chunks.ts).
+        codeSplitting: { groups: chunks.groups },
       },
     },
   },

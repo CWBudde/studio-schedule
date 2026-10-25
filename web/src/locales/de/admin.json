@@ -10,7 +10,8 @@
     "audit": "Protokoll",
     "passes": "Karten",
     "settings": "Einstellungen",
-    "receipts": "Belege"
+    "receipts": "Belege",
+    "statistics": "Statistik"
   },
   "noAccess": {
     "title": "Kein Zugriff",

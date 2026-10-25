@@ -10,6 +10,7 @@ import dePasses from './locales/de/passes.json';
 import deReceipts from './locales/de/receipts.json';
 import de from './locales/de/common.json';
 import deSchedule from './locales/de/schedule.json';
+import deStatistics from './locales/de/statistics.json';
 import deTeach from './locales/de/teach.json';
 import deTimetable from './locales/de/timetable.json';
 import enAccount from './locales/en/account.json';
@@ -21,6 +22,7 @@ import enPasses from './locales/en/passes.json';
 import enReceipts from './locales/en/receipts.json';
 import en from './locales/en/common.json';
 import enSchedule from './locales/en/schedule.json';
+import enStatistics from './locales/en/statistics.json';
 import enTeach from './locales/en/teach.json';
 import enTimetable from './locales/en/timetable.json';
 
@@ -41,6 +43,7 @@ export const resources = {
     feeds: enFeeds,
     passes: enPasses,
     receipts: enReceipts,
+    statistics: enStatistics,
   },
   de: {
     common: de,
@@ -54,6 +57,7 @@ export const resources = {
     feeds: deFeeds,
     passes: dePasses,
     receipts: deReceipts,
+    statistics: deStatistics,
   },
 } as const;
 
@@ -75,6 +79,7 @@ void i18n
       'feeds',
       'passes',
       'receipts',
+      'statistics',
     ],
     fallbackLng: 'en',
     supportedLngs: supportedLanguages,

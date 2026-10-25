@@ -31,6 +31,7 @@ import { Route as AdminPassTypesRouteImport } from './routes/admin.pass-types'
 import { Route as AdminReceiptsRouteImport } from './routes/admin.receipts'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
+import { Route as AdminStatisticsRouteImport } from './routes/admin.statistics'
 import { Route as WaitlistAcceptRouteImport } from './routes/waitlist.accept'
 import { Route as AdminPersonsIndexRouteImport } from './routes/admin.persons.index'
 import { Route as AdminPersonsPersonIdRouteImport } from './routes/admin.persons.$personId'
@@ -147,6 +148,11 @@ const AdminStaffRoute = AdminStaffRouteImport.update({
   path: '/staff',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminStatisticsRoute = AdminStatisticsRouteImport.update({
+  id: '/statistics',
+  path: '/statistics',
+  getParentRoute: () => AdminRoute,
+} as any)
 const WaitlistAcceptRoute = WaitlistAcceptRouteImport.update({
   id: '/waitlist/accept',
   path: '/waitlist/accept',
@@ -195,6 +201,7 @@ export interface FileRoutesByFullPath {
   '/admin/receipts': typeof AdminReceiptsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
+  '/admin/statistics': typeof AdminStatisticsRoute
   '/waitlist/accept': typeof WaitlistAcceptRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/persons/$personId': typeof AdminPersonsPersonIdRoute
@@ -223,6 +230,7 @@ export interface FileRoutesByTo {
   '/admin/receipts': typeof AdminReceiptsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
+  '/admin/statistics': typeof AdminStatisticsRoute
   '/waitlist/accept': typeof WaitlistAcceptRoute
   '/admin': typeof AdminIndexRoute
   '/admin/persons/$personId': typeof AdminPersonsPersonIdRoute
@@ -253,6 +261,7 @@ export interface FileRoutesById {
   '/admin/receipts': typeof AdminReceiptsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
+  '/admin/statistics': typeof AdminStatisticsRoute
   '/waitlist/accept': typeof WaitlistAcceptRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/persons/$personId': typeof AdminPersonsPersonIdRoute
@@ -284,6 +293,7 @@ export interface FileRouteTypes {
     | '/admin/receipts'
     | '/admin/settings'
     | '/admin/staff'
+    | '/admin/statistics'
     | '/waitlist/accept'
     | '/admin/'
     | '/admin/persons/$personId'
@@ -312,6 +322,7 @@ export interface FileRouteTypes {
     | '/admin/receipts'
     | '/admin/settings'
     | '/admin/staff'
+    | '/admin/statistics'
     | '/waitlist/accept'
     | '/admin'
     | '/admin/persons/$personId'
@@ -341,6 +352,7 @@ export interface FileRouteTypes {
     | '/admin/receipts'
     | '/admin/settings'
     | '/admin/staff'
+    | '/admin/statistics'
     | '/waitlist/accept'
     | '/admin/'
     | '/admin/persons/$personId'
@@ -522,6 +534,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminStaffRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/statistics': {
+      id: '/admin/statistics'
+      path: '/statistics'
+      fullPath: '/admin/statistics'
+      preLoaderRoute: typeof AdminStatisticsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/waitlist/accept': {
       id: '/waitlist/accept'
       path: '/waitlist/accept'
@@ -569,6 +588,7 @@ interface AdminRouteChildren {
   AdminReceiptsRoute: typeof AdminReceiptsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminStaffRoute: typeof AdminStaffRoute
+  AdminStatisticsRoute: typeof AdminStatisticsRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminPersonsPersonIdRoute: typeof AdminPersonsPersonIdRoute
   AdminPersonsIndexRoute: typeof AdminPersonsIndexRoute
@@ -585,6 +605,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminReceiptsRoute: AdminReceiptsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminStaffRoute: AdminStaffRoute,
+  AdminStatisticsRoute: AdminStatisticsRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminPersonsPersonIdRoute: AdminPersonsPersonIdRoute,
   AdminPersonsIndexRoute: AdminPersonsIndexRoute,

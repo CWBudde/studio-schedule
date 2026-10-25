@@ -28,6 +28,27 @@ export function formatMoney(minor: number, currency: string, locale: string): st
   return currencyFormat(locale, currency).format(minor / 10 ** currencyDigits(currency));
 }
 
+const compactFormatters = new Map<string, Intl.NumberFormat>();
+
+/**
+ * An amount in minor units as a short label, e.g. for a chart axis:
+ * 1234500 EUR → '€12.3K' (en) or '12.345 €' (de), 1500000 JPY → '¥1.5M'.
+ */
+export function formatCompactMoney(minor: number, currency: string, locale: string): string {
+  const key = `${locale}|${currency}`;
+  let f = compactFormatters.get(key);
+  if (!f) {
+    f = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      notation: 'compact',
+      maximumFractionDigits: 1,
+    });
+    compactFormatters.set(key, f);
+  }
+  return f.format(minor / 10 ** currencyDigits(currency));
+}
+
 /**
  * An amount in minor units as a form field holds it, without the currency
  * and without grouping, in the UI language's decimal separator: 15000 EUR →

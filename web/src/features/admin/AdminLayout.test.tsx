@@ -59,6 +59,7 @@ function renderAdmin(at: string, { accounts }: { accounts?: () => ReactElement }
         section('/terms', 'Terms section'),
         section('/persons', 'Persons section'),
         section('/receipts', 'Receipts section'),
+        section('/statistics', 'Statistics section'),
         section('/accounts', 'Accounts section', accounts),
         section('/audit', 'Audit log section'),
         section('/settings', 'Settings section'),
@@ -115,6 +116,10 @@ describe('AdminLayout', () => {
     expect(nav.getByRole('link', { name: 'Persons' })).toHaveAttribute('href', '/admin/persons');
     expect(nav.getByRole('link', { name: 'Passes' })).toHaveAttribute('href', '/admin/pass-types');
     expect(nav.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/admin/settings');
+    expect(nav.getByRole('link', { name: 'Statistics' })).toHaveAttribute(
+      'href',
+      '/admin/statistics',
+    );
     expect(nav.queryByRole('link', { name: 'Accounts' })).not.toBeInTheDocument();
     expect(nav.queryByRole('link', { name: 'Audit log' })).not.toBeInTheDocument();
     expect(screen.getByText('Locations section')).toBeInTheDocument();
@@ -150,6 +155,7 @@ describe('AdminLayout', () => {
       'Timetable',
       'Persons',
       'Receipts',
+      'Statistics',
       'Accounts',
       'Audit log',
       'Settings',

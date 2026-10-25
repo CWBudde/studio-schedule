@@ -580,6 +580,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the statistics
+         * @description Returns the school's figures of a range of school dates, in the school time zone: bookings, attendance, late cancellations, trials and guests, waiting lists and utilization by week (by month beyond 26 weeks) and by class, room, course type and instructor, the active members, and the pass sales from the receipts, cancellations netted. Aggregates only: no person is named. Canceled lessons count only as such. The presets end today; a custom range has at most 366 days (else a 422). The term range without a term that includes today is a 404.
+         */
+        get: operations["getStatistics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/terms/{termId}/classes": {
         parameters: {
             query?: never;
@@ -2554,6 +2574,92 @@ export interface components {
              */
             since?: string;
         };
+        ClassStatistics: {
+            /**
+             * Format: int64
+             * @description Bookings marked as attended.
+             */
+            attended: number;
+            /**
+             * Format: int64
+             * @description Their active (not canceled) bookings, trials and guests included.
+             */
+            bookings: number;
+            /**
+             * Format: int64
+             * @description Their places.
+             */
+            capacity: number;
+            /**
+             * Format: uuid
+             * @description The class; absent for a one-off lesson.
+             */
+            classId?: string;
+            /** @description Name of the course type. */
+            courseTypeName: string;
+            /**
+             * Format: int64
+             * @description Active guest bookings (without a person).
+             */
+            guests: number;
+            /**
+             * Format: int64
+             * @description Bookings canceled after the cancellation cutoff.
+             */
+            lateCancellations: number;
+            /**
+             * Format: uuid
+             * @description The one-off lesson; absent for a class.
+             */
+            lessonId?: string;
+            /**
+             * Format: int64
+             * @description Lessons held or scheduled (canceled ones left out).
+             */
+            lessons: number;
+            /**
+             * @description Level of the class; absent for a one-off lesson.
+             * @enum {string}
+             */
+            level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            /**
+             * Format: double
+             * @description No-shows per booking whose attendance was taken; absent if none was.
+             */
+            noShowRate?: number;
+            /**
+             * Format: int64
+             * @description Bookings marked as not attended.
+             */
+            noShows: number;
+            /** @description Start time (HH:MM) of the class in the school time zone; absent for a one-off lesson. */
+            startTime?: string;
+            /**
+             * Format: date-time
+             * @description Start of the one-off lesson (UTC); absent for a class.
+             */
+            startsAt?: string;
+            /**
+             * Format: int64
+             * @description Active trial bookings.
+             */
+            trials: number;
+            /**
+             * Format: double
+             * @description Bookings per place (0 without places); above 1 if overbooked.
+             */
+            utilization: number;
+            /**
+             * Format: int64
+             * @description Waiting-list entries, ended ones included: the demand for full lessons.
+             */
+            waitlistEntries: number;
+            /**
+             * Format: int64
+             * @description Day of the week of the class, 0 = Sunday to 6 = Saturday; absent for a one-off lesson.
+             */
+            weekday?: number;
+        };
         CloneConflictLesson: {
             /**
              * Format: uuid
@@ -2682,6 +2788,70 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+        };
+        CourseTypeStatistics: {
+            /**
+             * Format: int64
+             * @description Bookings marked as attended.
+             */
+            attended: number;
+            /**
+             * Format: int64
+             * @description Their active (not canceled) bookings, trials and guests included.
+             */
+            bookings: number;
+            /**
+             * Format: int64
+             * @description Their places.
+             */
+            capacity: number;
+            /**
+             * Format: uuid
+             * @description The course type.
+             */
+            courseTypeId: string;
+            /**
+             * Format: int64
+             * @description Active guest bookings (without a person).
+             */
+            guests: number;
+            /**
+             * Format: int64
+             * @description Bookings canceled after the cancellation cutoff.
+             */
+            lateCancellations: number;
+            /**
+             * Format: int64
+             * @description Lessons held or scheduled (canceled ones left out).
+             */
+            lessons: number;
+            /** @description Name of the course type. */
+            name: string;
+            /**
+             * Format: double
+             * @description No-shows per booking whose attendance was taken; absent if none was.
+             */
+            noShowRate?: number;
+            /**
+             * Format: int64
+             * @description Bookings marked as not attended.
+             */
+            noShows: number;
+            /**
+             * Format: int64
+             * @description Active trial bookings.
+             */
+            trials: number;
+            /**
+             * Format: double
+             * @description Bookings per place (0 without places); above 1 if overbooked.
+             */
+            utilization: number;
+            /**
+             * Format: int64
+             * @description Waiting-list entries, ended ones included: the demand for full lessons.
+             */
+            waitlistEntries: number;
         };
         CreateCalendarFeedInputBody: {
             /**
@@ -2859,6 +3029,70 @@ export interface components {
             familyName: string;
             /** @description Given name of the admin. */
             givenName: string;
+        };
+        InstructorStatistics: {
+            /**
+             * Format: int64
+             * @description Bookings marked as attended.
+             */
+            attended: number;
+            /**
+             * Format: int64
+             * @description Their active (not canceled) bookings, trials and guests included.
+             */
+            bookings: number;
+            /**
+             * Format: int64
+             * @description Their places.
+             */
+            capacity: number;
+            /**
+             * Format: int64
+             * @description Active guest bookings (without a person).
+             */
+            guests: number;
+            /**
+             * Format: int64
+             * @description Bookings canceled after the cancellation cutoff.
+             */
+            lateCancellations: number;
+            /**
+             * Format: int64
+             * @description Lessons held or scheduled (canceled ones left out).
+             */
+            lessons: number;
+            /** @description Display name of the staff member. */
+            name: string;
+            /**
+             * Format: double
+             * @description No-shows per booking whose attendance was taken; absent if none was.
+             */
+            noShowRate?: number;
+            /**
+             * Format: int64
+             * @description Bookings marked as not attended.
+             */
+            noShows: number;
+            /**
+             * Format: uuid
+             * @description The staff member.
+             */
+            staffId: string;
+            /**
+             * Format: int64
+             * @description Active trial bookings.
+             */
+            trials: number;
+            /**
+             * Format: double
+             * @description Bookings per place (0 without places); above 1 if overbooked.
+             */
+            utilization: number;
+            /**
+             * Format: int64
+             * @description Waiting-list entries, ended ones included: the demand for full lessons.
+             */
+            waitlistEntries: number;
         };
         Invalid: {
             /**
@@ -4249,6 +4483,72 @@ export interface components {
             id: string;
             name: string;
         };
+        RoomStatistics: {
+            /**
+             * Format: int64
+             * @description Bookings marked as attended.
+             */
+            attended: number;
+            /**
+             * Format: int64
+             * @description Their active (not canceled) bookings, trials and guests included.
+             */
+            bookings: number;
+            /**
+             * Format: int64
+             * @description Their places.
+             */
+            capacity: number;
+            /**
+             * Format: int64
+             * @description Active guest bookings (without a person).
+             */
+            guests: number;
+            /**
+             * Format: int64
+             * @description Bookings canceled after the cancellation cutoff.
+             */
+            lateCancellations: number;
+            /**
+             * Format: int64
+             * @description Lessons held or scheduled (canceled ones left out).
+             */
+            lessons: number;
+            /** @description Name of its location. */
+            locationName: string;
+            /** @description Name of the room. */
+            name: string;
+            /**
+             * Format: double
+             * @description No-shows per booking whose attendance was taken; absent if none was.
+             */
+            noShowRate?: number;
+            /**
+             * Format: int64
+             * @description Bookings marked as not attended.
+             */
+            noShows: number;
+            /**
+             * Format: uuid
+             * @description The room.
+             */
+            roomId: string;
+            /**
+             * Format: int64
+             * @description Active trial bookings.
+             */
+            trials: number;
+            /**
+             * Format: double
+             * @description Bookings per place (0 without places); above 1 if overbooked.
+             */
+            utilization: number;
+            /**
+             * Format: int64
+             * @description Waiting-list entries, ended ones included: the demand for full lessons.
+             */
+            waitlistEntries: number;
+        };
         Schedule: {
             /**
              * Format: date
@@ -4522,6 +4822,214 @@ export interface components {
             displayName: string;
             /** Format: uuid */
             id: string;
+        };
+        Statistics: {
+            /** @description By class, from Monday by start time; the one-off lessons after them by start. */
+            classes: components["schemas"]["ClassStatistics"][];
+            /** @description By course type, ordered by name. */
+            courseTypes: components["schemas"]["CourseTypeStatistics"][];
+            /** @description ISO 4217 currency of the sales. */
+            currency: string;
+            /**
+             * Format: date
+             * @description First school date of the range.
+             */
+            from: string;
+            /**
+             * @description Length of the periods.
+             * @enum {string}
+             */
+            granularity: "week" | "month";
+            /** @description By instructor, ordered by name. */
+            instructors: components["schemas"]["InstructorStatistics"][];
+            /** @description The weeks (Monday to Sunday) or months of the range, in order. */
+            periods: components["schemas"]["StatisticsPeriod"][];
+            /**
+             * @description The range asked for.
+             * @enum {string}
+             */
+            range: "last4Weeks" | "last12Weeks" | "term" | "custom";
+            /** @description By room, ordered by location and name. */
+            rooms: components["schemas"]["RoomStatistics"][];
+            /** @description The term of the term range; absent otherwise. */
+            term?: components["schemas"]["StatisticsTerm"];
+            /** @description IANA time zone of the school; school dates are local to it. */
+            timezone: string;
+            /**
+             * Format: date
+             * @description Last school date of the range (inclusive).
+             */
+            to: string;
+            /**
+             * Format: date
+             * @description Today's school date, where the presets end.
+             */
+            today: string;
+            /** @description The figures of the whole range. */
+            totals: components["schemas"]["StatisticsTotals"];
+        };
+        StatisticsPeriod: {
+            /**
+             * Format: int64
+             * @description Bookings marked as attended.
+             */
+            attended: number;
+            /**
+             * Format: int64
+             * @description Their active (not canceled) bookings, trials and guests included.
+             */
+            bookings: number;
+            /**
+             * Format: int64
+             * @description Their places.
+             */
+            capacity: number;
+            /**
+             * Format: date
+             * @description Last school date of the period (inclusive, cut to the range).
+             */
+            end: string;
+            /**
+             * Format: int64
+             * @description Active guest bookings (without a person).
+             */
+            guests: number;
+            /**
+             * Format: int64
+             * @description Bookings canceled after the cancellation cutoff.
+             */
+            lateCancellations: number;
+            /**
+             * Format: int64
+             * @description Lessons held or scheduled (canceled ones left out).
+             */
+            lessons: number;
+            /**
+             * Format: double
+             * @description No-shows per booking whose attendance was taken; absent if none was.
+             */
+            noShowRate?: number;
+            /**
+             * Format: int64
+             * @description Bookings marked as not attended.
+             */
+            noShows: number;
+            /**
+             * Format: int64
+             * @description Passes sold less sales canceled (Storno), by the receipts' issue dates.
+             */
+            passesSold: number;
+            /**
+             * Format: int64
+             * @description Gross total of the receipts in minor units, cancellations negative.
+             */
+            salesGross: number;
+            /**
+             * Format: date
+             * @description First school date of the period (cut to the range).
+             */
+            start: string;
+            /**
+             * Format: int64
+             * @description Active trial bookings.
+             */
+            trials: number;
+            /**
+             * Format: double
+             * @description Bookings per place (0 without places); above 1 if overbooked.
+             */
+            utilization: number;
+            /**
+             * Format: int64
+             * @description Waiting-list entries, ended ones included: the demand for full lessons.
+             */
+            waitlistEntries: number;
+        };
+        StatisticsTerm: {
+            /**
+             * Format: uuid
+             * @description The term.
+             */
+            id: string;
+            /** @description Name of the term. */
+            name: string;
+        };
+        StatisticsTotals: {
+            /**
+             * Format: int64
+             * @description Persons with at least one active booking (guests not counted).
+             */
+            activeMembers: number;
+            /**
+             * Format: int64
+             * @description Bookings marked as attended.
+             */
+            attended: number;
+            /**
+             * Format: int64
+             * @description Their active (not canceled) bookings, trials and guests included.
+             */
+            bookings: number;
+            /**
+             * Format: int64
+             * @description Lessons the school canceled; left out of every other figure.
+             */
+            canceledLessons: number;
+            /**
+             * Format: int64
+             * @description Their places.
+             */
+            capacity: number;
+            /**
+             * Format: int64
+             * @description Active guest bookings (without a person).
+             */
+            guests: number;
+            /**
+             * Format: int64
+             * @description Bookings canceled after the cancellation cutoff.
+             */
+            lateCancellations: number;
+            /**
+             * Format: int64
+             * @description Lessons held or scheduled (canceled ones left out).
+             */
+            lessons: number;
+            /**
+             * Format: double
+             * @description No-shows per booking whose attendance was taken; absent if none was.
+             */
+            noShowRate?: number;
+            /**
+             * Format: int64
+             * @description Bookings marked as not attended.
+             */
+            noShows: number;
+            /**
+             * Format: int64
+             * @description Passes sold less sales canceled (Storno), by the receipts' issue dates.
+             */
+            passesSold: number;
+            /**
+             * Format: int64
+             * @description Gross total of the receipts in minor units, cancellations negative.
+             */
+            salesGross: number;
+            /**
+             * Format: int64
+             * @description Active trial bookings.
+             */
+            trials: number;
+            /**
+             * Format: double
+             * @description Bookings per place (0 without places); above 1 if overbooked.
+             */
+            utilization: number;
+            /**
+             * Format: int64
+             * @description Waiting-list entries, ended ones included: the demand for full lessons.
+             */
+            waitlistEntries: number;
         };
         TeachLesson: {
             /** @description Accompanist; absent if the lesson has none. */
@@ -6059,6 +6567,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StaffEntryList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getStatistics: {
+        parameters: {
+            query?: {
+                /** @description The range: the current week and the 3 or 11 before it, the current term up to today, or from–to. */
+                range?: "last4Weeks" | "last12Weeks" | "term" | "custom";
+                /** @description First school date of a custom range. */
+                from?: string;
+                /** @description Last school date (inclusive) of a custom range. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Statistics"];
                 };
             };
             /** @description Error */

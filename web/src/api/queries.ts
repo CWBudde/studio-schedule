@@ -2204,6 +2204,24 @@ export const updatePassSettingsMutation = (queryClient: QueryClient) =>
     onError: signedOutOn401(queryClient),
   });
 
+/** The office's figures of a range of school dates (aggregates only). */
+export type Statistics = components['schemas']['Statistics'];
+/** The range of the statistics: a preset, or a custom from–to. */
+export type StatisticsParams = NonNullable<
+  paths['/api/v1/admin/statistics']['get']['parameters']['query']
+>;
+
+/**
+ * The statistics of `params` (office). A custom range of more than 366
+ * days is a 422, the term range without a current term a 404.
+ */
+export const statisticsQuery = (params: StatisticsParams) =>
+  queryOptions({
+    queryKey: [...adminQueryKey, 'statistics', params],
+    queryFn: ({ signal }) =>
+      unwrap(api.GET('/api/v1/admin/statistics', { params: { query: params }, signal })),
+  });
+
 /** A receipt (a payment confirmation of a pass sale, or its cancellation), as issued. */
 export type Receipt = components['schemas']['Receipt'];
 /** How a pass was paid, printed on its receipt. */

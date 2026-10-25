@@ -13,6 +13,7 @@ import { type ScheduleSearch, validateScheduleSearch } from '@/features/schedule
 import { type MyLessonsSearch, validateMyLessonsSearch } from '@/features/my-lessons/search';
 import { type TeachSearch, validateTeachSearch } from '@/features/teach/search';
 import { validateReceiptsSearch } from '@/features/admin/receiptsSearch';
+import { validateStatisticsSearch } from '@/features/admin/statisticsSearch';
 
 function testQueryClient() {
   return new QueryClient({
@@ -44,6 +45,7 @@ export type TestPath =
   | '/account'
   | '/admin/accounts'
   | '/admin/receipts'
+  | '/admin/statistics'
   | '/admin/settings'
   | '/admin/persons'
   | '/admin/persons/$personId'
@@ -64,7 +66,10 @@ export function renderInRouter(
   const rootRoute = createRootRoute({ component: Outlet });
   const page = (path: TestPath) => () => (at === path ? ui : null);
   const route = (
-    path: Exclude<TestPath, '/schedule' | '/teach' | '/my-lessons' | '/admin/receipts'>,
+    path: Exclude<
+      TestPath,
+      '/schedule' | '/teach' | '/my-lessons' | '/admin/receipts' | '/admin/statistics'
+    >,
   ) => createRoute({ getParentRoute: () => rootRoute, path, component: page(path) });
   const scheduleRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -90,6 +95,12 @@ export function renderInRouter(
     validateSearch: validateReceiptsSearch,
     component: page('/admin/receipts'),
   });
+  const statisticsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/admin/statistics',
+    validateSearch: validateStatisticsSearch,
+    component: page('/admin/statistics'),
+  });
   const query = new URLSearchParams(
     Object.entries(search).filter((e): e is [string, string] => e[1] !== undefined),
   ).toString();
@@ -109,6 +120,7 @@ export function renderInRouter(
       route('/account'),
       route('/admin/accounts'),
       receiptsRoute,
+      statisticsRoute,
       route('/admin/settings'),
       route('/admin/persons'),
       route('/admin/persons/$personId'),

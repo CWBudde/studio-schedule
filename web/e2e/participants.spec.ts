@@ -5,7 +5,8 @@ import { expect, gotoDemo, lessons, type Page, signIn, test } from './fixtures';
 // instructor login) 24 days ahead, 13:30–15:30, to which she added a guest
 // with an email (Mara Gastfield), a walk-in guest without one (Pia Walkby)
 // and Ute Tallowfield on a trial with a note (ADR 0009, amendment). The
-// weekly classes of the past week have the bookings of their members.
+// weekly classes' lessons since the term start (three weeks ago) have the
+// bookings of their members; nobody took the attendance of the ballet ones.
 
 type Role = 'Instructor' | 'Office';
 
@@ -113,7 +114,7 @@ test('the office takes attendance of a past lesson', async ({ page }) => {
   await page.getByRole('button', { name: 'Previous 14 days' }).click();
   await expect(lessons(page.getByRole('main')).first()).toBeVisible();
 
-  // Every ballet class of the seed has members, booked into last week's lessons.
+  // Every ballet class of the seed has members, booked into its past lessons.
   await page
     .getByRole('main')
     .getByRole('button', { name: /^Classical Ballet, / })

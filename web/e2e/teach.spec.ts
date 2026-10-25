@@ -4,7 +4,7 @@ import { expect, gotoDemo, lessons, type Page, signIn, signOut, test } from './f
 // instructor login) 24 days ahead, 13:30–15:30, with a guest with an email
 // (Mara Gastfield), a walk-in guest without one (Pia Walkby) and Ute
 // Tallowfield on a trial. Alina's weekly ballet classes run every week; the
-// past week's have the bookings of their members, whose attendance nobody
+// past weeks' have the bookings of their members, whose attendance nobody
 // took. Nina Tapworth teaches jazz, barre fitness, tap and hip-hop.
 
 type Role = 'Instructor' | 'Office';
@@ -33,7 +33,7 @@ test('the instructor sees her lessons and messages the participants of one', asy
   const name = await openTeachAs(page, 'Instructor');
   const main = page.getByRole('main');
 
-  // Today's range: her classes, today marked; the past week folded away,
+  // Today's range: her classes, today marked; the past days folded away,
   // with the attendance nobody took.
   await expect(lessons(main).first()).toBeVisible();
   await expect(main.getByText('Instructor', { exact: true }).first()).toBeVisible();

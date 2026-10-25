@@ -50,6 +50,9 @@ function Administration({ role }: { role: Role }) {
         <Link to="/admin/receipts" className={sectionLink}>
           {t('nav.receipts')}
         </Link>
+        <Link to="/admin/statistics" className={sectionLink}>
+          {t('nav.statistics')}
+        </Link>
         {role === 'admin' && (
           <>
             <Link to="/admin/accounts" className={sectionLink}>

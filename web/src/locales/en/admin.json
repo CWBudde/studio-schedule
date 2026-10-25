@@ -10,7 +10,8 @@
     "audit": "Audit log",
     "passes": "Passes",
     "settings": "Settings",
-    "receipts": "Receipts"
+    "receipts": "Receipts",
+    "statistics": "Statistics"
   },
   "noAccess": {
     "title": "No access",

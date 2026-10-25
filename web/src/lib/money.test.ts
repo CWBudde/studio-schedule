@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   currencyDigits,
+  formatCompactMoney,
   formatMoney,
   formatRate,
   moneyInput,
@@ -19,6 +20,15 @@ describe('money', () => {
     expect(formatMoney(15000, 'EUR', 'en')).toBe('€150.00');
     expect(formatMoney(15050, 'EUR', 'de')).toMatch(/^150,50\s€$/);
     expect(formatMoney(1500, 'JPY', 'en')).toBe('¥1,500');
+  });
+
+  it('shortens minor units by the digits of the currency', () => {
+    expect(formatCompactMoney(1234500, 'EUR', 'en')).toBe('€12.3K');
+    expect(formatCompactMoney(15000, 'EUR', 'en')).toBe('€150');
+    // No minor units: 1,500,000 yen.
+    expect(formatCompactMoney(1500000, 'JPY', 'en')).toBe('¥1.5M');
+    // Three digits: 1,234.500 dinars.
+    expect(formatCompactMoney(1234500, 'KWD', 'en')).toMatch(/^KWD\s1\.2K$/);
   });
 
   it('writes an amount as a form field holds it', () => {
