@@ -91,8 +91,8 @@ await check(
     if (!header(res, "content-type")?.includes("json"))
       return "missing JSON content type";
     const body = JSON.parse(text);
-    if (body.status !== "ok" || body.version !== api.version)
-      return "unexpected body";
+    // The public health answer names no version (ASVS 14.3.3).
+    if (body.status !== "ok" || "version" in body) return "unexpected body";
   },
 );
 
@@ -242,10 +242,13 @@ if (globalThis.__studioScheduleRenderPDF) {
   });
   const cookie = (header(login, "set-cookie") ?? "").split(";")[0];
   const receipts = await api.fetch({
-    method: "GET",
-    url: "/api/v1/admin/receipts?limit=1",
-    headers: [["Cookie", cookie]],
-    body: null,
+    method: "POST",
+    url: "/api/v1/admin/receipts/search",
+    headers: [
+      ["Cookie", cookie],
+      ["Content-Type", "application/json"],
+    ],
+    body: new TextEncoder().encode(JSON.stringify({ limit: 1 })),
   });
   const first =
     receipts.status === 200
