@@ -1,0 +1,43 @@
+{
+  "title": "Quittung SD-2026-0001",
+  "date": { "year": 2026, "month": 10, "day": 24 },
+  "lang": "de",
+  "heading": "Quittung",
+  "issuer": {
+    "name": "Tanzstudio Beispiel",
+    "lines": ["Übungsweg 12", "12345 Musterstadt"]
+  },
+  "logo": "",
+  "recipientLabel": "Zahlung erhalten von",
+  "recipient": ["Jürgen Öztürk", "Musterstraße 3", "12345 Musterstadt"],
+  "meta": [
+    ["Nummer", "SD-2026-0001"],
+    ["Datum", "24.10.2026"],
+    ["Zahlungsart", "Bar"]
+  ],
+  "intro": "Wir bestätigen den Erhalt folgender Zahlung:",
+  "showVat": true,
+  "columns": ["Pos.", "Beschreibung", "Menge", "Einzelpreis", "USt.", "Betrag"],
+  "lines": [
+    {
+      "pos": "1",
+      "description": "10er-Karte für Lea Öztürk (gültig 24.10.2026–21.04.2027)",
+      "quantity": "1",
+      "unit": "150,00 €",
+      "vat": "19 %",
+      "total": "150,00 €"
+    }
+  ],
+  "summary": [
+    ["Nettobetrag (19 %)", "126,05 €"],
+    ["Umsatzsteuer 19 %", "23,95 €"]
+  ],
+  "total": ["Gesamtbetrag", "150,00 €"],
+  "notes": ["Betrag bar erhalten. Vielen Dank!"],
+  "footer": [
+    "Tanzstudio Beispiel",
+    "Übungsweg 12, 12345 Musterstadt",
+    "Steuernummer 12/345/67890",
+    "info@example.org"
+  ]
+}

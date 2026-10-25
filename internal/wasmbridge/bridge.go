@@ -53,6 +53,11 @@ const SnapshotGlobal = "__studioScheduleSnapshot"
 // saves the data again soon after.
 const ChangedGlobal = "__studioScheduleChanged"
 
+// RenderPDFGlobal is the name of the worker's function that renders a
+// receipt PDF with the typst module in the browser:
+// (input: Uint8Array) → Promise<Uint8Array>, input as built by pdf.Input.
+const RenderPDFGlobal = "__studioScheduleRenderPDF"
+
 // Persistence lets the worker keep the demo's data across page loads (see
 // docs/demo-mode.md): it saves Snapshot after changes (NotifyChanged) and
 // passes it back through SnapshotGlobal on the next start.

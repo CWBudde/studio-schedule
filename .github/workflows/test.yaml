@@ -27,3 +27,6 @@ jobs:
 
   test-e2e:
     uses: ./.github/workflows/test-e2e.yaml
+
+  test-typst:
+    uses: ./.github/workflows/test-typst.yaml

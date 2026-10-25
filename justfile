@@ -58,11 +58,19 @@ check-sqlc:
 check-wasm-deps:
     ./scripts/check-wasm-deps.sh
 
+# Fail unless receipt.wasm is reproducible from tools/receipt-pdf (needs Docker)
+typst-wasm-check:
+    ./scripts/build-typst-wasm.sh --check
+
 # ---------------------------------------------------------------- codegen
 
 # Regenerate the PostgreSQL query code (internal/store/postgres/internal/sqlc) after changing queries or migrations
 sqlc:
     cd internal/store/postgres && sqlc generate
+
+# Rebuild the receipt renderer (tools/receipt-pdf, typst) to internal/pdf/typstwasm/receipt.wasm, reproducibly in Docker
+typst-wasm:
+    ./scripts/build-typst-wasm.sh
 
 # Regenerate api/openapi.json from the Go code and the TypeScript types from it
 gen-api:
@@ -92,12 +100,15 @@ web-check:
 e2e-install:
     pnpm -C web e2e:install
 
-# Build the demo and run the Playwright e2e tests against it (args go to playwright test)
+# Build the demo and run the Playwright e2e tests against it (args go to playwright test).
+# On macOS, caffeinate keeps the Mac from idle-sleeping mid-run: a sleep freezes
+# the browsers, and every test running at that moment then fails on its 30 s
+# timeout after the wake-up, minutes later.
 e2e *args: demo-build
-    pnpm -C web e2e {{args}}
+    {{ if os() == "macos" { "caffeinate -i " } else { "" } }}pnpm -C web e2e {{args}}
 
 # Everything CI runs (the e2e tests need `just e2e-install` once)
-ci: check-tidy check-formatted check-sqlc lint test check-wasm-deps web-check e2e
+ci: check-tidy check-formatted check-sqlc lint test check-wasm-deps typst-wasm-check web-check e2e
 
 # ---------------------------------------------------------------- build & run
 

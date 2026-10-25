@@ -7,7 +7,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-forbidden='^(github\.com/spf13/cobra|github\.com/jackc/pgx|github\.com/pressly/goose|net/smtp|net/http/httptest|os/exec)(/|$)'
+# wazero and the typst module (internal/pdf/typstwasm, 25 MB) are the
+# server's PDF renderer; the demo renders with the browser's WebAssembly.
+forbidden='^(github\.com/spf13/cobra|github\.com/jackc/pgx|github\.com/pressly/goose|github\.com/tetratelabs/wazero|github\.com/cwbudde/studio-schedule/internal/pdf/typstwasm|net/smtp|net/http/httptest|os/exec)(/|$)'
 
 deps=$(GOOS=js GOARCH=wasm go list -deps ./cmd/wasm)
 if bad=$(grep -E "$forbidden" <<<"$deps"); then

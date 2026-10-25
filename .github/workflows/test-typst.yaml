@@ -1,0 +1,25 @@
+name: test-typst
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test-typst:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Pull Git LFS files
+        uses: ./.github/actions/lfs-pull
+
+      - name: Setup just
+        uses: extractions/setup-just@v3
+
+      # Rebuilds tools/receipt-pdf in the pinned container image and fails
+      # unless the committed receipt.wasm and its pinned sha256 match.
+      - name: Check that receipt.wasm is reproducible
+        run: just typst-wasm-check

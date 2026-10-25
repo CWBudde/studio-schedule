@@ -4,6 +4,7 @@
 //
 // Usage: node scripts/wasm-smoke.mjs path/to/app.wasm path/to/wasm_exec.js
 //   (wasm_exec.js lives in "$(go env GOROOT)/lib/wasm/")
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -17,6 +18,23 @@ if (!wasmPath || !execPath) {
 }
 
 createRequire(import.meta.url)(path.resolve(execPath)); // defines globalThis.Go
+
+// Receipt PDFs render with the typst module next to app.wasm (copied there by
+// scripts/build-wasm.sh), through the worker's shim, as in the browser. Node
+// runs the TypeScript shim directly from 23.6 on (type stripping); older
+// versions skip this check.
+const receiptWasm = path.join(path.dirname(wasmPath), "receipt.wasm");
+const shim = existsSync(receiptWasm)
+  ? await import("../web/src/api/wasm/receiptPdf.ts").catch((err) => {
+      console.log(`skip receipt PDF: cannot load the shim (${err.message})`);
+      return undefined;
+    })
+  : undefined;
+if (shim) {
+  globalThis.__studioScheduleRenderPDF = shim.lazyReceiptPdf(async () =>
+    WebAssembly.compile(await readFile(receiptWasm)),
+  );
+}
 
 const ready = new Promise((resolve) => {
   globalThis.__studioScheduleReady = resolve;
@@ -208,6 +226,51 @@ await check(
       return "expected problem+json";
   },
 );
+
+// A receipt PDF: the office downloads a seeded receipt, rendered on this
+// first read by Go through the bridge and the typst module.
+if (globalThis.__studioScheduleRenderPDF) {
+  const logins = (await getJSON("/api/v1/demo/logins"))?.logins ?? [];
+  const office = logins.find((l) => l.role === "office");
+  const login = await api.fetch({
+    method: "POST",
+    url: "/api/v1/auth/login",
+    headers: [["Content-Type", "application/json"]],
+    body: new TextEncoder().encode(
+      JSON.stringify({ email: office?.email, password: office?.password }),
+    ),
+  });
+  const cookie = (header(login, "set-cookie") ?? "").split(";")[0];
+  const receipts = await api.fetch({
+    method: "GET",
+    url: "/api/v1/admin/receipts?limit=1",
+    headers: [["Cookie", cookie]],
+    body: null,
+  });
+  const first =
+    receipts.status === 200
+      ? JSON.parse(decoder.decode(receipts.body)).items[0]
+      : undefined;
+
+  await check(
+    `GET /api/v1/admin/receipts/${first?.number}/pdf renders with typst`,
+    {
+      method: "GET",
+      url: `/api/v1/admin/receipts/${first?.id}/pdf`,
+      headers: [["Cookie", cookie]],
+      body: null,
+    },
+    (res, text) => {
+      if (res.status !== 200) return "unexpected status";
+      if (header(res, "content-type") !== "application/pdf")
+        return "not a PDF";
+      if (!text.startsWith("%PDF-")) return "no PDF header";
+    },
+    (text) => `${text.length} bytes`,
+  );
+} else if (!existsSync(receiptWasm)) {
+  console.log(`skip receipt PDF: no ${receiptWasm}`);
+}
 
 try {
   await api.fetch({

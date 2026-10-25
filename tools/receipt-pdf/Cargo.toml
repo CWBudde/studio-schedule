@@ -1,0 +1,27 @@
+[package]
+name = "receipt-pdf"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT"
+description = "Renders the receipt PDFs of studio-schedule with typst, as a WebAssembly reactor module"
+
+[dependencies]
+typst = "=0.15.1"
+typst-pdf = "=0.15.1"
+typst-layout = "=0.15.1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[lib]
+name = "receipt_pdf"
+crate-type = ["rlib", "cdylib"]
+
+[[bin]]
+name = "receipt-pdf"
+path = "src/main.rs"

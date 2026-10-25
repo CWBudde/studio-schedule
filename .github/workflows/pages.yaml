@@ -25,6 +25,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Pull Git LFS files
+        uses: ./.github/actions/lfs-pull
+
       - name: Setup Go
         uses: actions/setup-go@v6
         with:

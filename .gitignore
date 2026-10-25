@@ -9,6 +9,7 @@ coverage.*
 # WASM demo artifacts (built by scripts/build-wasm.sh)
 web/public/app.wasm
 web/public/wasm_exec.js
+web/public/receipt.wasm
 
 # Web
 node_modules/
@@ -28,3 +29,6 @@ test-results/
 .idea/
 .vscode/
 .claude/settings.local.json
+
+# Build output of the receipt renderer (tools/receipt-pdf)
+/tools/receipt-pdf/target/

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Builds the Go application for GOOS=js GOARCH=wasm and places it, together
-# with the matching wasm_exec.js from the active Go toolchain, into web/public
-# so that Vite picks both up for the demo build.
+# with the matching wasm_exec.js from the active Go toolchain and the receipt
+# renderer (receipt.wasm), into web/public so that Vite picks them up for the
+# demo build.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,6 +31,18 @@ GOOS=js GOARCH=wasm go build \
 	-o "$OUT_DIR/app.wasm" \
 	./cmd/wasm
 
+# The receipt renderer (ADR 0012): the worker loads the same typst module as
+# the server when it renders the first receipt.
+RECEIPT_WASM="$ROOT_DIR/internal/pdf/typstwasm/receipt.wasm"
+if [[ "$(head -c 4 "$RECEIPT_WASM" | od -An -c | tr -d ' ')" != '\0asm' ]]; then
+	echo "$RECEIPT_WASM is not a WebAssembly module (a Git LFS pointer? run git lfs pull)" >&2
+	exit 1
+fi
+cp "$RECEIPT_WASM" "$OUT_DIR/receipt.wasm"
+
 raw=$(wc -c <"$OUT_DIR/app.wasm" | tr -d ' ')
 gz=$(gzip -9 -c "$OUT_DIR/app.wasm" | wc -c | tr -d ' ')
 echo "app.wasm: $raw bytes raw, $gz bytes gzip ($VERSION)"
+receipt_raw=$(wc -c <"$OUT_DIR/receipt.wasm" | tr -d ' ')
+receipt_gz=$(gzip -9 -c "$OUT_DIR/receipt.wasm" | wc -c | tr -d ' ')
+echo "receipt.wasm: $receipt_raw bytes raw, $receipt_gz bytes gzip (loaded on the first receipt)"

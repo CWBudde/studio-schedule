@@ -1,0 +1,6 @@
+# The toolchain of the reproducible build (just typst-wasm): the CI check
+# rebuilds receipt.wasm with it and compares the checksum.
+[toolchain]
+channel = "1.99.1"
+targets = ["wasm32-wasip1"]
+profile = "minimal"

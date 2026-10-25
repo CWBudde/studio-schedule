@@ -32,6 +32,7 @@ import {
   type Claim,
 } from './persistence';
 import type { GoBridgeAPI, MainToWorkerMessage, WorkerToMainMessage } from './protocol';
+import { lazyReceiptPdf } from './receiptPdf';
 
 /** Subset of the `Go` class defined by wasm_exec.js that we rely on. */
 interface GoRuntime {
@@ -51,6 +52,8 @@ interface WasmGlobals {
   __studioScheduleSnapshot?: Uint8Array;
   /** Called by Go after each committed change (internal/wasmbridge.ChangedGlobal). */
   __studioScheduleChanged?: () => void;
+  /** Called by Go to render a receipt PDF (internal/wasmbridge.RenderPDFGlobal). */
+  __studioScheduleRenderPDF?: (input: Uint8Array) => Promise<Uint8Array>;
 }
 
 const g = globalThis as unknown as WasmGlobals;
@@ -96,6 +99,22 @@ async function fetchOk(url: string): Promise<Response> {
   if (!res.ok) throw new Error(`Failed to load ${url} (HTTP ${res.status})`);
   return res;
 }
+
+/**
+ * Receipt PDFs: the typst module (about 25 MB) is fetched and compiled when the
+ * first receipt is rendered, not at startup.
+ */
+g.__studioScheduleRenderPDF = lazyReceiptPdf(async () => {
+  const url = assetUrl('receipt.wasm');
+  if (typeof WebAssembly.compileStreaming === 'function') {
+    try {
+      return await WebAssembly.compileStreaming(fetchOk(url));
+    } catch (err) {
+      console.warn('[studio-schedule] compileStreaming failed, falling back', err);
+    }
+  }
+  return WebAssembly.compile(await (await fetchOk(url)).arrayBuffer());
+});
 
 /**
  * wasm_exec.js is a classic (non-module) script that defines `globalThis.Go`.

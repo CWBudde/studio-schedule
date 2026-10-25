@@ -73,7 +73,9 @@ func main() {
 		Logger:  logger,
 		// The worker passes the app's URL (with the hash route prefix) for
 		// links in mails, which the demo mailbox shows.
-		AppURL:     os.Getenv("APP_URL"),
+		AppURL: os.Getenv("APP_URL"),
+		// Receipts render with the typst module in the worker.
+		PDF:        wasmbridge.PDFRenderer{},
 		Demo:       true,
 		DemoLogins: seed.DemoLogins(),
 	}
