@@ -662,15 +662,22 @@ Goal: prepaid passes and legally sound receipts.
       `service/statistics.go` from a constant number of store reads; plus late cancellations,
       trials and guests, waitlist demand and figures per instructor; recharts in a lazily loaded
       chunk; e2e `statistics.spec.ts`
-- [ ] Member CSV import with column mapping, dry-run preview, idempotent re-import (`member_no`),
-      import run history
-- [ ] Duplicate detection and merge for persons (email, name + birth date)
+- [x] Member CSV import with column mapping, dry-run preview, idempotent re-import (`member_no`),
+      import run history (2026-10-25) — ADR 0015; persons and guardians, UTF-8 or Windows-1252,
+      `;`/`,`/tab, German or ISO dates; the dry run is the same code rolled back; CLI
+      `studio-schedule import`; a fictional sample file in the demo; e2e `import.spec.ts`
+- [x] Duplicate detection and merge for persons (email, name + birth date) (2026-10-25) — live
+      strong and weak matches, family emails excluded, "not a duplicate" dismissals; the merge
+      moves everything to the survivor through the ledger and keeps the duplicate as a hidden
+      tombstone for its receipts; audited; e2e `duplicates.spec.ts`
 - [x] Settings UI: school profile, branding (name, accent colour, logo), timezone, locale, release
       rule, cutoffs, receipt data (2026-10-25) — ADR 0013; one card per area, admin edits and the
       office reads; accent checked for contrast with a derived dark variant; logo and name in the
       header; timezone and currency only during first setup (`studio-schedule init`); the UI
       follows the school's language unless the visitor chose one; e2e `settings.spec.ts`
-- [ ] Tests: import fixtures, merge correctness, statistics against seeded data
+- [x] Tests: import fixtures, merge correctness, statistics against seeded data (2026-10-25) —
+      `internal/csvimport` fixtures; merge and import scenarios on both stores
+      (`internal/service/servicetest`); statistics of the demo seed in both stores
 
 ## Phase 8 — Production readiness
 

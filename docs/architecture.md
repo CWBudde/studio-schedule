@@ -55,6 +55,9 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   each operation's declared access level ([ADR 0005](decisions/0005-rbac-and-impersonation.md)).
 - `internal/ratelimit`: in-memory fixed-window limiters for logins and mail-sending requests
   ([ADR 0006](decisions/0006-credentials-rate-limits-and-headers.md)).
+- `internal/csvimport`: reads the CSV files of the member import (UTF-8 or Windows-1252 through
+  `golang.org/x/text/encoding/charmap`, `;`/`,`/tab detected, DD.MM.YYYY or ISO dates); the
+  service maps the columns ([ADR 0015](decisions/0015-import-duplicates-and-merge.md)).
 
 ## Transactions and concurrency
 
@@ -64,12 +67,20 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   capacity, a person's passes, the receipt counter of a year) are locked explicitly through repo
   methods (`Lessons().Lock`, `Passes().LockByPersons`), which use `SELECT … FOR UPDATE`. The lock
   order is term → class → lesson → the passes of the persons concerned
-  ([ADR 0012](decisions/0012-passes-and-receipts.md)). Serialization and deadlock failures
-  are retried. Constraints are backstops: a partial unique index for active bookings,
+  ([ADR 0012](decisions/0012-passes-and-receipts.md)); what checks a person's links, or writes
+  something that refers to a person, locks the persons first (`Persons().Lock`, through
+  `lockLivePersons`, which refuses a merged person), so the full order is persons → term → class →
+  lesson → passes. A merge of two persons locks both, then the terms, classes and lessons of what
+  it moves; the member import locks every person its rows may find in one call (in ID order)
+  before the first row ([ADR 0015](decisions/0015-import-duplicates-and-merge.md)).
+  Serialization and deadlock failures are retried. Constraints are backstops: a partial unique index for active bookings
+  (a booking a merge kept as history, `merged_from`, is left out of it),
   `visits_remaining >= 0`, and a unique redemption per booking.
 - **Memory:** one mutex for all transactions (so they are serialised). Tables are copied on their
   first write in a transaction; commit swaps the copies in, rollback drops them. The memory store
-  checks the same keys, references and delete restrictions as the PostgreSQL schema.
+  checks the same keys, references and delete restrictions as the PostgreSQL schema; a unique key
+  it checks on every write has an index table of its own (member numbers: `memberNos`, derived from
+  the persons and rebuilt on a snapshot's restore), so a large import stays linear in the demo.
 - `InTx` is never nested; a nested call fails with `store.ErrNestedTx`. Helpers receive a
   `store.Tx`. After a failed write the callback must return an error, because PostgreSQL aborts the
   transaction.
@@ -77,7 +88,11 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   `C`), so `storetest` can compare results with `==`.
 - `storetest` runs the same contract cases against both stores. The PostgreSQL tests use the
   server in `STUDIO_TEST_DATABASE_URL` or start `postgres:18-alpine` via testcontainers; each test
-  gets its own database cloned from a migrated template.
+  gets its own database cloned from a migrated template. Service scenarios that must hold under
+  both stores' locks and constraints (the member import, merging persons) live in
+  `internal/service/servicetest` and run from the tests of `service` and of the PostgreSQL store.
+- A **dry run** (the member import, a merge's preview) is the write's own code in a read-write
+  transaction that returns a sentinel error, so the store rolls it back.
 - **Schema:** goose migrations in `internal/store/postgres/migrations` are embedded in the binary
   and are the schema of record; sqlc generates the query code from them (`just sqlc`, checked by
   `just check-sqlc`). `serve` uses PostgreSQL when `DATABASE_URL` is set and refuses to start unless

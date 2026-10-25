@@ -155,6 +155,13 @@ The demo is a _demo installation_ (`app.Deps.Demo`, also set for `serve` without
   one for the members of the Creative Dance classes, which the demo member sees through her son.
   An announcement the office emails in the demo lands in the mailbox: publishing it wakes the
   `announcements` job, which runs in the Worker too (every minute for scheduled ones).
+- **Import and duplicates** (ADR 0015): the office's Import page offers a fictional sample file as
+  a download, a Blob made in the browser from the page's own copy
+  (`web/src/features/import/members-sample.csv`, kept equal to the tests' file by
+  `servicetest.TestSampleCopy`); importing it into the demo creates and updates persons like on a
+  server, in the in-memory store. The seed has two pairs of duplicates for the Duplicates page:
+  Lena Quillfeather twice with the same email (one with the member number M-1042, which the sample
+  updates) and Jonas Brightwater twice with the same name, none with an account.
 - **What each role sees:** the demo data has one workshop for members only and one hidden workshop
   (staff only), a few days after the visit date. Signing in as the demo member, instructor or admin
   shows the difference. The admin can open Accounts and "sign in as" another account; a banner

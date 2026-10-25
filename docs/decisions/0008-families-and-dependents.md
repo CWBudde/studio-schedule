@@ -124,3 +124,13 @@ confirms with its own link.
 **Booking for managed dependents** (decided in ADR 0009, 2026-10-24). A guardian books and cancels
 for every dependent, managed ones included, e.g. a teenager with their own login, who can also
 book for themself. `dependentOf` stays the only family check.
+
+## Amendment (2026-10-25): member numbers, the import and merging
+
+[ADR 0015](0015-import-duplicates-and-merge.md) replaces "merging duplicate persons is not planned":
+the office merges a duplicate into another person, which moves everything but the receipts, and
+keeps the duplicate as a hidden tombstone. A person also gets an optional, unique member number,
+which the office edits and searches, and by which the member import finds members again; the import
+links guardians it finds or creates to the members, and never removes a link. Every write of the
+office's persons view refuses a tombstone as unknown (404), and a person something was merged into
+cannot be deleted.

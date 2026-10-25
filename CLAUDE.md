@@ -53,7 +53,7 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
 - **Wiring:** `internal/app.New(Deps)` builds services, calls `httpapi.Register`, and adds the
   middleware (security headers → recovery → access log → cross-origin protection → router). Unknown non-`/api` paths
   fall through to `Deps.UI` (the embedded SPA in `internal/webui`). `cmd/studio-schedule` (cobra:
-  `serve`, `migrate`, `seed`, `openapi`, `version`) and `cmd/wasm` both call it. `serve` uses
+  `serve`, `migrate`, `seed`, `import`, `openapi`, `version`) and `cmd/wasm` both call it. `serve` uses
   PostgreSQL when `DATABASE_URL` is set (refusing to start unless the schema matches), otherwise the
   memory store with `seed.LoadDemo`.
 - **Auth & mail:** `service.AuthService` (register → confirm with password → sessions; ADR 0004;
@@ -132,6 +132,17 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   failed mail (audited as `mail-requeued`), and the daily `purge-mail` job. `audit_events` targets
   an account, a person or nothing and has typed `domain.AuditDetails`; a new audit action is a row
   in `audit_actions` (migration) plus the domain constant.
+- **Import & merge:** `service.ImportService` (`service/imports.go`, rows in `service/importer.go`;
+  ADR 0015) reads CSV files through `internal/csvimport`, locks every person the rows may find up
+  front (ID order), finds members by `persons.member_no` and guardians by email (with the name) or
+  name, and runs a dry run as the same code in a transaction that returns `errDryRun`; applied runs
+  go to `import_runs`; `studio-schedule import` uses it too (exit 1 when a row failed). Duplicates
+  and the merge are `PersonService` methods (`service/duplicates.go`, `service/merge.go`): bookings
+  move through the ledger (of a started lesson both stay, `bookings.merged_from`), the merged person
+  becomes a tombstone (`persons.merged_into`, left out of `Persons().List`), audited as
+  `person-merged`. Every write that names a person looks it up with `lockLivePersons`
+  (`service/live_persons.go`), which refuses a tombstone. Scenarios on both stores live in
+  `internal/service/servicetest`.
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),
