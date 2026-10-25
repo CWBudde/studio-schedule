@@ -262,7 +262,7 @@ func TestDemoWorkshops(t *testing.T) {
 }
 
 // TestDemoHistory checks the lessons of the weekly classes: exactly one per
-// class slot from a week before the anchor up to and including it, as the
+// class slot from the term start up to and including the anchor, as the
 // generator creates them.
 func TestDemoHistory(t *testing.T) {
 	t.Parallel()
@@ -275,6 +275,7 @@ func TestDemoHistory(t *testing.T) {
 	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
 		d := seed.DemoAt(anchor)
 		classes := index(d.Classes, func(c domain.Class) domain.ClassID { return c.ID })
+		termStart := d.Terms[0].StartsOn
 
 		type slot struct {
 			class domain.ClassID
@@ -294,8 +295,8 @@ func TestDemoHistory(t *testing.T) {
 			switch {
 			case got[slot{c.ID, l.SlotDate}]:
 				t.Errorf("%v: two lessons of class %v on %v", anchor, c.ID, l.SlotDate)
-			case l.SlotDate.Compare(anchor.AddDays(-7)) < 0 || l.SlotDate.Compare(anchor) > 0:
-				t.Errorf("%v: lesson on %v outside the week before the anchor", anchor, l.SlotDate)
+			case l.SlotDate.Compare(termStart) < 0 || l.SlotDate.Compare(anchor) > 0:
+				t.Errorf("%v: lesson on %v outside the term start to the anchor", anchor, l.SlotDate)
 			case l.SlotDate.Weekday() != c.Weekday || !l.StartsAt.Equal(start) || !l.EndsAt.Equal(start.Add(c.Duration)) ||
 				l.RoomID != c.RoomID || l.InstructorID != c.InstructorID || l.Capacity != c.Capacity:
 				t.Errorf("%v: lesson %+v does not follow class %+v", anchor, l, c)
@@ -304,10 +305,11 @@ func TestDemoHistory(t *testing.T) {
 			got[slot{c.ID, l.SlotDate}] = true
 		}
 
-		// Eight days hold every weekday once, the anchor's weekday twice.
+		// The term starts three weeks before the anchor: 22 days hold every
+		// weekday three times, the anchor's four times.
 		want := 0
 		for _, c := range d.Classes {
-			want++
+			want += 3
 			if c.Weekday == anchor.Weekday() {
 				want++
 			}
@@ -363,15 +365,17 @@ func TestDemoMemberBookings(t *testing.T) {
 		return b.LessonID == full.ID || b.Source == domain.BookingSourceStaff ||
 			slices.ContainsFunc(d.Redemptions, func(r domain.PassRedemption) bool { return r.BookingID == b.ID })
 	})
+	// The attendance taken since: TestDemoAttendance.
 	d.BookingEvents = slices.DeleteFunc(d.BookingEvents, func(e domain.BookingEvent) bool {
-		return !slices.ContainsFunc(d.Bookings, func(b domain.Booking) bool { return b.ID == e.BookingID })
+		return !slices.ContainsFunc(d.Bookings, func(b domain.Booking) bool { return b.ID == e.BookingID }) ||
+			e.Status != domain.BookingBooked
 	})
 
 	booked := map[domain.LessonID][]domain.PersonID{}
 
 	for _, b := range d.Bookings {
-		if b.Source != domain.BookingSourceMember || b.Status != domain.BookingBooked {
-			t.Errorf("booking %+v, want a booked member booking", b)
+		if b.Source != domain.BookingSourceMember {
+			t.Errorf("booking %+v, want a member booking", b)
 		}
 
 		booked[b.LessonID] = append(booked[b.LessonID], b.PersonID)
@@ -406,6 +410,137 @@ func TestDemoMemberBookings(t *testing.T) {
 		}
 
 		sameSet(t, "members booked into lesson "+l.ID.String(), booked[l.ID], want)
+	}
+}
+
+// TestDemoAttendance checks the attendance of the demo's past member
+// bookings: taken for the lessons before the anchor but Classical
+// Ballet's, with no-shows and late cancellations among it, each recorded
+// by one event after the booking; the later lessons' and the ballet
+// lessons' bookings stay booked.
+func TestDemoAttendance(t *testing.T) {
+	t.Parallel()
+
+	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
+		d := seed.DemoAt(anchor)
+		validAll(t, d.Bookings)
+		validAll(t, d.BookingEvents)
+
+		ballet := d.CourseTypes[slices.IndexFunc(d.CourseTypes, func(c domain.CourseType) bool {
+			return c.Name == "Classical Ballet"
+		})].ID
+		lessons := map[domain.LessonID]domain.Lesson{}
+
+		for _, l := range d.Lessons {
+			lessons[l.ID] = l
+		}
+
+		events := map[domain.BookingID][]domain.BookingEvent{}
+		for _, e := range d.BookingEvents {
+			events[e.BookingID] = append(events[e.BookingID], e)
+		}
+
+		statuses := map[domain.BookingStatus]int{}
+
+		for _, b := range d.Bookings {
+			l := lessons[b.LessonID]
+			if b.Source != domain.BookingSourceMember {
+				continue
+			}
+
+			taken := l.SlotDate.Compare(anchor) < 0 && l.CourseTypeID != ballet
+			es := events[b.ID]
+
+			switch {
+			case !taken && (b.Status != domain.BookingBooked || len(es) != 1):
+				t.Errorf("%v: booking %+v of lesson on %v, want it booked", anchor, b, l.SlotDate)
+			case taken && (b.Status == domain.BookingBooked || len(es) != 2 || es[1].Status != b.Status):
+				t.Errorf("%v: booking %+v with events %+v, want its attendance", anchor, b, es)
+			case b.Status == domain.BookingCanceled && (!b.Late || !b.CanceledAt.Before(l.StartsAt) || !es[1].Late):
+				t.Errorf("%v: canceled booking %+v, want a late cancellation", anchor, b)
+			}
+
+			statuses[b.Status]++
+		}
+
+		for _, s := range domain.BookingStatuses() {
+			if statuses[s] == 0 {
+				t.Errorf("%v: no member booking %s, got %v", anchor, s, statuses)
+			}
+		}
+	}
+}
+
+// TestDemoVisitors checks the guests and trials of the weekly classes'
+// past lessons: only before the anchor and never in Classical Ballet's,
+// added by the lesson's instructor (or the office) before the start, a
+// trial only for a person who is no member of the class and nobody of the
+// member login's family, each with its attendance at the end; some guests
+// did not show.
+func TestDemoVisitors(t *testing.T) {
+	t.Parallel()
+
+	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
+		d := seed.DemoAt(anchor)
+		validAll(t, d.Bookings)
+		validAll(t, d.BookingEvents)
+
+		lessons := index(d.Lessons, func(l domain.Lesson) domain.LessonID { return l.ID })
+		staff := index(d.Staff, func(s domain.Staff) domain.StaffID { return s.ID })
+		accounts := index(d.Accounts, func(a domain.Account) domain.AccountID { return a.ID })
+		persons := index(d.Persons, func(p domain.Person) domain.PersonID { return p.ID })
+		ballet := d.CourseTypes[slices.IndexFunc(d.CourseTypes, func(c domain.CourseType) bool {
+			return c.Name == "Classical Ballet"
+		})].ID
+		events := map[domain.BookingID][]domain.BookingEvent{}
+
+		for _, e := range d.BookingEvents {
+			events[e.BookingID] = append(events[e.BookingID], e)
+		}
+
+		var guests, noShows, trials int
+
+		for _, b := range d.Bookings {
+			l := lessons[b.LessonID]
+			if b.Source != domain.BookingSourceStaff || l.ClassID.IsZero() {
+				continue
+			}
+
+			es := events[b.ID]
+			actor := accounts[es[0].ActorAccountID]
+
+			switch {
+			case l.SlotDate.Compare(anchor) >= 0 || l.CourseTypeID == ballet:
+				t.Errorf("%v: visitor %+v in lesson %+v", anchor, b, l)
+			case !b.BookedAt.Before(l.StartsAt) || len(es) != 2 || es[0].Status != domain.BookingBooked ||
+				es[1].Status != b.Status || !es[1].At.Equal(l.EndsAt) || es[1].ActorAccountID != actor.ID:
+				t.Errorf("%v: visitor %+v with events %+v", anchor, b, es)
+			case actor.Role != domain.RoleOffice && actor.PersonID != staff[l.InstructorID].PersonID:
+				t.Errorf("%v: visitor %+v added by %+v, want the instructor or the office", anchor, b, actor)
+			case b.Status != domain.BookingAttended && (b.Trial || b.Status != domain.BookingNoShow):
+				t.Errorf("%v: visitor %+v, want attended or a guest's no-show", anchor, b)
+			case b.Trial && (b.PersonID.IsZero() || persons[b.PersonID].FamilyName == "Amberly" ||
+				slices.ContainsFunc(d.ClassMembers, func(m domain.ClassMember) bool {
+					return m.ClassID == l.ClassID && m.PersonID == b.PersonID
+				})):
+				t.Errorf("%v: trial %+v, want a person who is no member of the class", anchor, b)
+			case !b.Trial && (!b.PersonID.IsZero() || b.GuestName == ""):
+				t.Errorf("%v: visitor %+v, want a guest", anchor, b)
+			}
+
+			switch {
+			case b.Trial:
+				trials++
+			case b.Status == domain.BookingNoShow:
+				noShows++
+			default:
+				guests++
+			}
+		}
+
+		if guests == 0 || noShows == 0 || trials == 0 {
+			t.Errorf("%v: %d guests, %d guests' no-shows, %d trials; want some of each", anchor, guests, noShows, trials)
+		}
 	}
 }
 
@@ -551,7 +686,8 @@ func TestDemoCounts(t *testing.T) {
 // ballet workshop, accompanied by Felix, in every demo (ADR 0009,
 // amendment): a guest with an email, one without, and a trial with a note,
 // by her account; and that both have instructor accounts linked to their
-// staff records, Alina being the demo's instructor login.
+// staff records, Alina being the demo's instructor login. The visitors of
+// the past weekly lessons: TestDemoVisitors.
 func TestDemoStaffBookings(t *testing.T) {
 	t.Parallel()
 
@@ -564,11 +700,11 @@ func TestDemoStaffBookings(t *testing.T) {
 		var guests, guestsWithEmail, trials int
 
 		for _, b := range d.Bookings {
-			if b.Source != domain.BookingSourceStaff {
+			l := lessons[b.LessonID]
+			if b.Source != domain.BookingSourceStaff || !l.ClassID.IsZero() {
 				continue
 			}
 
-			l := lessons[b.LessonID]
 			instructor, accompanist := staff[l.InstructorID], staff[l.AccompanistID]
 
 			if l.Kind != domain.LessonWorkshop || instructor.DisplayName != "Alina Starling" ||

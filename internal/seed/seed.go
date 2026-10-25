@@ -63,7 +63,11 @@ type Dataset struct {
 	// Bookings are the automatic bookings of the class members in the
 	// lessons of their classes, the members' own bookings of the full
 	// workshop and the participants an instructor added to her workshop,
-	// each with its event in BookingEvents.
+	// each with its event in BookingEvents. The member bookings of the
+	// lessons before the anchor (but Classical Ballet's) have their
+	// attendance, a no-show or a late cancellation as a second event, and
+	// those lessons have guests and trials whom their instructor added,
+	// with their attendance.
 	Bookings      []domain.Booking
 	BookingEvents []domain.BookingEvent
 	// WaitlistEntries are the waiting list of the full workshop.

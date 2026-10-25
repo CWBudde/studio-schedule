@@ -39,11 +39,13 @@ func Demo() Dataset { return DemoAt(FixedDemoAnchor) }
 // and a few one-off workshops in the weeks after anchor, one of them full
 // with a waiting list (ADR 0010), and one with guests and a trial that its
 // instructor added (ADR 0009, amendment). Of the weekly
-// classes it has the lessons of the week up to and including anchor
-// (history), with the automatic bookings of the class members, as the
-// lesson generator would have created them; the generator creates the
-// later ones, but never the past (ADR 0009). IDs come from a fresh
-// ids.Sequence, so every call with the same anchor returns identical data.
+// classes it has the lessons from the term start up to and including
+// anchor (history), with the automatic bookings of the class members, as
+// the lesson generator would have created them, their attendance and a few
+// guests and trials, so the statistics have weeks to count; the generator
+// creates the later ones, but never the past (ADR 0009). IDs come from a
+// fresh ids.Sequence, so every call with the same anchor returns identical
+// data.
 //
 // DemoAt panics if the demo time zone cannot be loaded (no zoneinfo
 // database); LoadDemoAt reports that as an error instead.
@@ -116,6 +118,8 @@ func demoAt(anchor domain.Date) (Dataset, error) {
 	b.fullWorkshop(anchor, demoFullWorkshop)
 	b.staffBookings(anchor, demoStaffBookings)
 	b.passes(anchor)
+	b.attendance(anchor)
+	b.visitors(anchor)
 
 	return b.d, nil
 }
@@ -620,12 +624,11 @@ func (b *builder) class(term domain.TermID, spec classSpec) {
 	}
 }
 
-// history adds the lessons of the weekly classes from a week before anchor
-// up to and including anchor, as the lesson generator would have created
-// them, so the demo has a recent past. The term starts three weeks before
-// anchor, so the whole week lies in it.
+// history adds the lessons of the weekly classes from the term start up to
+// and including anchor, as the lesson generator would have created them,
+// so the demo has a past: three weeks and a day.
 func (b *builder) history(anchor domain.Date) {
-	for d := anchor.AddDays(-7); d.Compare(anchor) <= 0; d = d.AddDays(1) {
+	for d := b.termStart; d.Compare(anchor) <= 0; d = d.AddDays(1) {
 		for _, c := range b.d.Classes {
 			if c.Weekday != d.Weekday() {
 				continue
@@ -678,6 +681,158 @@ func (b *builder) memberBookings() {
 			})
 		}
 	}
+}
+
+// attendanceSkipped is the course type whose past lessons have no
+// attendance in the demo: their instructors are behind with it, so the
+// instructor and office views show lessons to take attendance of.
+const attendanceSkipped = "Classical Ballet"
+
+// attendance takes the attendance of the automatic member bookings of the
+// weekly classes before anchor, as their instructors (or the office, for
+// an instructor without a login) would have, except attendanceSkipped's:
+// most attended, every seventh did not show, and every eleventh canceled
+// late, which the office recorded. So the statistics have attendance,
+// no-shows and late cancellations to count.
+func (b *builder) attendance(anchor domain.Date) {
+	office := b.accountOf(lookup(b.persons, "Olga Ledgerby"))
+	skipped := lookup(b.courseTypes, attendanceSkipped)
+	lessons := map[domain.LessonID]domain.Lesson{}
+
+	for _, l := range b.d.Lessons {
+		if !l.ClassID.IsZero() && l.SlotDate.Compare(anchor) < 0 && l.CourseTypeID != skipped {
+			lessons[l.ID] = l
+		}
+	}
+
+	n := 0
+
+	for i := range b.d.Bookings {
+		booking := &b.d.Bookings[i]
+
+		l, ok := lessons[booking.LessonID]
+		if !ok || booking.Source != domain.BookingSourceMember || booking.Status != domain.BookingBooked {
+			continue
+		}
+
+		event := domain.BookingEvent{ID: ids.New[domain.BookingEventID](b.seq), BookingID: booking.ID}
+
+		switch {
+		case n%11 == 5:
+			booking.Status, booking.CanceledAt, booking.Late = domain.BookingCanceled, l.StartsAt.Add(-2*time.Hour), true
+			event.At, event.Status, event.Late, event.ActorAccountID = booking.CanceledAt, domain.BookingCanceled, true, office
+		case n%7 == 3:
+			booking.Status = domain.BookingNoShow
+			event.At, event.Status, event.ActorAccountID = l.EndsAt, domain.BookingNoShow, b.staffAccount(l.InstructorID, office)
+		default:
+			booking.Status = domain.BookingAttended
+			event.At, event.Status, event.ActorAccountID = l.EndsAt, domain.BookingAttended, b.staffAccount(l.InstructorID, office)
+		}
+
+		b.d.BookingEvents = append(b.d.BookingEvents, event)
+		n++
+	}
+}
+
+// staffAccount returns the account of a staff member's person, or
+// fallback for a staff member without a login.
+func (b *builder) staffAccount(id domain.StaffID, fallback domain.AccountID) domain.AccountID {
+	i := slices.IndexFunc(b.d.Staff, func(s domain.Staff) bool { return s.ID == id })
+	if i < 0 || b.d.Staff[i].PersonID.IsZero() {
+		return fallback
+	}
+
+	for _, a := range b.d.Accounts {
+		if a.PersonID == b.d.Staff[i].PersonID {
+			return a.ID
+		}
+	}
+
+	return fallback
+}
+
+// demoGuests are the walk-in guests the instructors added to past lessons,
+// in turn; demoTrialists the persons who tried a class they are no member
+// of (nobody of the member login's family).
+var (
+	demoGuests     = []string{"Theo Dropwell", "Lena Visby", "Jonte Comewell", "Ivy Passmore"}
+	demoTrialists  = []string{"Nora Ivorycombe", "Yara Gildenmoor", "Hanna Birchmoor", "Oskar Nettlebury", "Petra Elderwick"}
+	demoTrialNotes = []string{"Thinking about joining after the holidays.", "", "Wants to try a second style."}
+)
+
+// visitors adds guests and trials to the weekly classes' lessons before
+// anchor, but attendanceSkipped's: in every fourth a guest, in every fifth
+// a person on a trial, whom the instructor (or the office, for an
+// instructor without a login) added just before the start (source staff,
+// ADR 0009, amendment) and marked attended at its end, every third guest
+// as a no-show. Trials are free; the guests paid at the desk.
+func (b *builder) visitors(anchor domain.Date) {
+	office := b.accountOf(lookup(b.persons, "Olga Ledgerby"))
+	skipped := lookup(b.courseTypes, attendanceSkipped)
+	guests, trials := 0, 0
+	i := 0
+
+	for _, l := range b.d.Lessons {
+		if l.ClassID.IsZero() || l.SlotDate.Compare(anchor) >= 0 || l.CourseTypeID == skipped {
+			continue
+		}
+
+		actor := b.staffAccount(l.InstructorID, office)
+
+		if i%4 == 1 {
+			status := domain.BookingAttended
+			if guests%3 == 2 {
+				status = domain.BookingNoShow
+			}
+
+			b.visit(l, domain.Booking{GuestName: demoGuests[guests%len(demoGuests)], Status: status}, actor)
+			guests++
+		}
+
+		if i%5 == 3 {
+			for k := range demoTrialists {
+				person := lookup(b.persons, demoTrialists[(trials+k)%len(demoTrialists)])
+				if b.memberOf(l.ClassID, person) {
+					continue
+				}
+
+				b.visit(l, domain.Booking{
+					PersonID: person, Status: domain.BookingAttended, Trial: true,
+					TrialNote: demoTrialNotes[trials%len(demoTrialNotes)],
+				}, actor)
+				trials++
+
+				break
+			}
+		}
+
+		i++
+	}
+}
+
+// visit adds booking v to the past lesson l, booked by actor ten minutes
+// before the start, with its attendance at the end.
+func (b *builder) visit(l domain.Lesson, v domain.Booking, actor domain.AccountID) {
+	v.ID, v.LessonID, v.Source, v.BookedAt = ids.New[domain.BookingID](b.seq), l.ID, domain.BookingSourceStaff,
+		l.StartsAt.Add(-10*time.Minute)
+	b.d.Bookings = append(b.d.Bookings, v)
+	b.d.BookingEvents = append(b.d.BookingEvents,
+		domain.BookingEvent{
+			ID: ids.New[domain.BookingEventID](b.seq), BookingID: v.ID, At: v.BookedAt,
+			Status: domain.BookingBooked, ActorAccountID: actor,
+		},
+		domain.BookingEvent{
+			ID: ids.New[domain.BookingEventID](b.seq), BookingID: v.ID, At: l.EndsAt,
+			Status: v.Status, ActorAccountID: actor,
+		},
+	)
+}
+
+// memberOf reports whether person is a member of the class.
+func (b *builder) memberOf(class domain.ClassID, person domain.PersonID) bool {
+	return slices.ContainsFunc(b.d.ClassMembers, func(m domain.ClassMember) bool {
+		return m.ClassID == class && m.PersonID == person
+	})
 }
 
 func (b *builder) workshop(anchor domain.Date, spec workshopSpec) {
@@ -983,7 +1138,8 @@ func (b *builder) name(id domain.PersonID) string {
 // its end and lets p pay for it then.
 func (b *builder) dropIn(anchor domain.Date, p *domain.Pass, slot classSlot, office domain.AccountID) {
 	i := slices.IndexFunc(b.d.Lessons, func(l domain.Lesson) bool {
-		if l.ClassID.IsZero() || l.SlotDate.Compare(anchor) >= 0 || l.SlotDate.Weekday() != slot.day {
+		if l.ClassID.IsZero() || l.SlotDate.Compare(anchor.AddDays(-7)) < 0 || l.SlotDate.Compare(anchor) >= 0 ||
+			l.SlotDate.Weekday() != slot.day {
 			return false
 		}
 
@@ -992,7 +1148,7 @@ func (b *builder) dropIn(anchor domain.Date, p *domain.Pass, slot classSlot, off
 		return c.StartTime == slot.start
 	})
 	if i < 0 {
-		panic(fmt.Sprintf("seed: no lesson of the class on %v at %v before the anchor", slot.day, slot.start))
+		panic(fmt.Sprintf("seed: no lesson of the class on %v at %v in the week before the anchor", slot.day, slot.start))
 	}
 
 	l := b.d.Lessons[i]
