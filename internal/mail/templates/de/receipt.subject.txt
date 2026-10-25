@@ -1,0 +1,1 @@
+{{.SchoolName}}: {{if .Cancellation}}Stornobeleg {{.Number}}{{else}}deine Quittung {{.Number}}{{end}}

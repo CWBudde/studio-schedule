@@ -54,6 +54,10 @@ type Deps struct {
 	// Mailer delivers the mails of the outbox. Without one, mails stay in
 	// the outbox and the outbox job does not run.
 	Mailer mail.Mailer
+	// PDF renders receipt PDFs (ADR 0012): the typst module run by wazero
+	// on the server (internal/pdf/typstwasm), by the browser in the web demo
+	// (internal/wasmbridge). Without one, receipts and so pass sales fail.
+	PDF service.ReceiptRenderer
 	// Demo marks an installation that serves the fictional demo data (the
 	// web demo, or `serve` without a database). It makes the outbox public
 	// as a mailbox and lists DemoLogins, so visitors can sign in.
@@ -119,6 +123,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 
 	renderer := newRenderer()
 	mails := service.Mails{Renderer: renderer, AppURL: deps.AppURL}
+	receipts := service.NewReceiptService(deps.Store, deps.Clock, deps.IDs, mails, deps.PDF)
 
 	httpapi.Register(api, httpapi.Deps{
 		Settings:     service.NewSettingsService(deps.Store),
@@ -134,11 +139,12 @@ func New(deps Deps) (http.Handler, huma.API) {
 		// A demo installation's feeds have no URL: calendars cannot reach the
 		// web demo, and the demo server is for trying the app out.
 		Feeds:          service.NewCalendarFeedService(deps.Store, deps.Clock, deps.IDs, deps.AppURL, !deps.Demo),
-		Passes:         service.NewPassService(deps.Store, deps.Clock, deps.IDs),
+		Passes:         service.NewPassService(deps.Store, deps.Clock, deps.IDs, receipts),
+		Receipts:       receipts,
 		Auth:           newAuthService(deps, renderer),
 		Family:         service.NewFamilyService(deps.Store, deps.Clock, deps.IDs, mails),
 		Persons:        service.NewPersonService(deps.Store, deps.Clock, deps.IDs, mails),
-		Outbox:         service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer),
+		Outbox:         service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer, receipts),
 		Version:        deps.Version,
 		Logger:         deps.Logger,
 		SecureCookies:  !deps.InsecureCookies,

@@ -55,6 +55,9 @@ const (
 	// accompanist or the office to those booked for it (ADR 0009,
 	// amendment); replies go to the sender. Data: LessonNoticeData.
 	TemplateLessonNotice = "lesson-notice"
+	// TemplateReceipt sends the PDF of a receipt, or of its cancellation, to
+	// whoever paid (ADR 0012); the PDF is attached. Data: ReceiptData.
+	TemplateReceipt = "receipt"
 )
 
 // TemplateNames returns all template names.
@@ -63,6 +66,7 @@ func TemplateNames() []string {
 		TemplateConfirmEmail, TemplateResetPassword, TemplateChangeEmail, TemplateEmailChanged, TemplateInvite,
 		TemplateLessonCanceled, TemplateLessonRestored, TemplateLessonChanged, TemplateBookingConfirmed,
 		TemplateBookingCanceled, TemplateWaitlistInvite, TemplateWaitlistExpired, TemplateLessonNotice,
+		TemplateReceipt,
 	}
 }
 
@@ -350,4 +354,22 @@ func absoluteHTTPURL(s string) bool {
 	u, err := url.Parse(s)
 
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
+
+// ReceiptData is the data of TemplateReceipt.
+type ReceiptData struct {
+	SchoolName string
+	// GivenName greets the recipient; empty means a greeting without name.
+	GivenName string
+	// Number is the receipt's number, e.g. "SD-2026-0001".
+	Number string
+	// Cancellation tells a cancellation receipt; Cancels is then the number
+	// of the receipt it cancels.
+	Cancellation bool
+	Cancels      string
+	// Amount is the amount paid or refunded, formatted with its currency.
+	Amount string
+	// Item describes what was paid, e.g. "10-visit pass for Lea Example,
+	// valid …".
+	Item string
 }

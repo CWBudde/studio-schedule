@@ -35,14 +35,16 @@ var (
 // PassService is the office's pass administration and the members' view of
 // their passes (ADR 0012).
 type PassService struct {
-	store store.Store
-	clock clock.Clock
-	ids   ids.Source
+	store    store.Store
+	clock    clock.Clock
+	ids      ids.Source
+	receipts *ReceiptService
 }
 
-// NewPassService returns a PassService backed by st.
-func NewPassService(st store.Store, clk clock.Clock, src ids.Source) *PassService {
-	return &PassService{store: st, clock: clk, ids: src}
+// NewPassService returns a PassService backed by st that issues the receipts
+// of its sales with receipts.
+func NewPassService(st store.Store, clk clock.Clock, src ids.Source, receipts *ReceiptService) *PassService {
+	return &PassService{store: st, clock: clk, ids: src, receipts: receipts}
 }
 
 // PassTypeData are the fields the office edits on a pass type.
@@ -126,6 +128,28 @@ func (s *PassService) UpdatePassType(ctx context.Context, id domain.PassTypeID, 
 	return t, nil
 }
 
+// RetirePassType stops the sale of a pass type (domain.ErrNotFound for an
+// unknown one) and changes nothing else; a retired type stays retired.
+func (s *PassService) RetirePassType(ctx context.Context, id domain.PassTypeID) (domain.PassType, error) {
+	var t domain.PassType
+
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		if t, err = tx.PassTypes().Get(ctx, id); err != nil || !t.Active {
+			return err
+		}
+
+		t.Active = false
+
+		return tx.PassTypes().Update(ctx, t)
+	})
+	if err != nil {
+		return domain.PassType{}, fmt.Errorf("retire pass type %v: %w", id, err)
+	}
+
+	return t, nil
+}
+
 // DeletePassType deletes a pass type no pass is of; a sold one is
 // domain.ErrInUse and is retired instead.
 func (s *PassService) DeletePassType(ctx context.Context, id domain.PassTypeID) error {
@@ -145,12 +169,15 @@ func (s *PassService) DeletePassType(ctx context.Context, id domain.PassTypeID) 
 
 // PassSale is what Sell records. A zero ValidFrom is today; a nil Price is
 // the type's price; a zero PayerID, or the owner, means the owner paid.
+// PaymentMethod (cash if zero) and Recipient go on the receipt.
 type PassSale struct {
-	PassTypeID domain.PassTypeID
-	PayerID    domain.PersonID
-	ValidFrom  domain.Date
-	Price      *domain.Money
-	Note       string
+	PassTypeID    domain.PassTypeID
+	PayerID       domain.PersonID
+	ValidFrom     domain.Date
+	Price         *domain.Money
+	Note          string
+	PaymentMethod domain.PaymentMethod
+	Recipient     ReceiptRecipient
 }
 
 // PassAssignment is what Assign records: a pass given without payment.
@@ -166,6 +193,11 @@ type PassAssignment struct {
 // payer. An unknown or retired type is a validation error on passTypeId,
 // an unknown payer on payerId. A new pass pays for nothing booked before;
 // the office settles those at the desk.
+//
+// The sale issues its receipt in the same transaction (ADR 0012): numbered,
+// rendered and mailed to the payer, with the payment method and recipient
+// of d. Incomplete receipt settings refuse the sale
+// (ErrReceiptSettingsIncomplete): every sale has a receipt.
 func (s *PassService) Sell(ctx context.Context, p Principal, person domain.PersonID, d PassSale) (PassView, error) {
 	var out PassView
 
@@ -175,7 +207,25 @@ func (s *PassService) Sell(ctx context.Context, p Principal, person domain.Perso
 			return err
 		}
 
-		pass, t, err := s.newPass(ctx, tx, loc, p, person, d.PassTypeID, d.ValidFrom, d.Note)
+		// The payer is checked first: newPass reports any missing person as
+		// the owner.
+		var payer domain.Person
+
+		paidByOther := !d.PayerID.IsZero() && d.PayerID != person
+		if paidByOther {
+			if payer, err = tx.Persons().Get(ctx, d.PayerID); errors.Is(err, domain.ErrNotFound) {
+				return errUnknownPayer
+			} else if err != nil {
+				return err
+			}
+		}
+
+		var also []domain.PersonID
+		if paidByOther {
+			also = append(also, payer.ID)
+		}
+
+		pass, t, err := s.newPass(ctx, tx, loc, p, person, d.PassTypeID, d.ValidFrom, d.Note, also...)
 		if err != nil {
 			return err
 		}
@@ -185,22 +235,39 @@ func (s *PassService) Sell(ctx context.Context, p Principal, person domain.Perso
 			pass.PricePaid = *d.Price
 		}
 
-		if !d.PayerID.IsZero() && d.PayerID != person {
-			if _, err := tx.Persons().Get(ctx, d.PayerID); errors.Is(err, domain.ErrNotFound) {
-				return errUnknownPayer
-			} else if err != nil {
-				return err
-			}
-
-			pass.PayerID = d.PayerID
+		owner, err := tx.Persons().Get(ctx, person)
+		if err != nil {
+			return err
 		}
+
+		if paidByOther {
+			pass.PayerID = payer.ID
+		} else {
+			payer = owner
+		}
+
+		// The pass is checked before a number is taken; the receipt comes
+		// first, as the pass refers to it.
+		if err := pass.Validate(); err != nil {
+			return err
+		}
+
+		if s.receipts == nil {
+			return ErrNoPDFRenderer
+		}
+
+		method := cmp.Or(d.PaymentMethod, domain.PaymentCash)
+
+		receipt, err := s.receipts.issueSale(ctx, tx, settings, loc, p, pass, t, owner, payer, method, d.Recipient)
+		if err != nil {
+			return err
+		}
+
+		pass.ReceiptID = receipt.ID
 
 		if err := s.create(ctx, tx, pass); err != nil {
 			return err
 		}
-
-		// Phase 6 B issues the receipt of the sale here, in this
-		// transaction (ADR 0012), and sets pass.ReceiptID.
 
 		out, err = s.view(ctx, tx, settings, loc, pass)
 
@@ -251,13 +318,15 @@ func (s *PassService) Assign(
 
 // newPass returns an active pass of person of the active type typeID from
 // from (today in the school's time zone loc if zero), sold now by p,
-// without its origin and price, and its type.
+// without its origin and price, and its type. It locks person and the
+// persons in also (the payer), so that none is deleted before the pass
+// refers to them: a missing one is domain.ErrNotFound.
 func (s *PassService) newPass(
 	ctx context.Context, tx store.Tx, loc *time.Location, p Principal, person domain.PersonID,
-	typeID domain.PassTypeID, from domain.Date, note string,
+	typeID domain.PassTypeID, from domain.Date, note string, also ...domain.PersonID,
 ) (domain.Pass, domain.PassType, error) {
-	if _, err := tx.Persons().Get(ctx, person); err != nil {
-		return domain.Pass{}, domain.PassType{}, err
+	if err := tx.Persons().Lock(ctx, append([]domain.PersonID{person}, also...)...); err != nil {
+		return domain.Pass{}, domain.PassType{}, fmt.Errorf("person: %w", err)
 	}
 
 	t, err := tx.PassTypes().Get(ctx, typeID)
@@ -291,21 +360,15 @@ func (s *PassService) newPass(
 	return pass, t, nil
 }
 
-// create validates and stores a new pass. A person or payer deleted
-// meanwhile is a conflict of the store; the person is reported as not
-// found.
+// create validates and stores a new pass. Its persons are locked
+// (newPass), so a conflict of the store is about something else, e.g. its
+// receipt, and is returned as is.
 func (s *PassService) create(ctx context.Context, tx store.Tx, pass domain.Pass) error {
 	if err := pass.Validate(); err != nil {
 		return err
 	}
 
-	if err := tx.Passes().Create(ctx, pass); errors.Is(err, domain.ErrConflict) {
-		return fmt.Errorf("person %v: %w", pass.PersonID, domain.ErrNotFound)
-	} else if err != nil {
-		return err
-	}
-
-	return nil
+	return tx.Passes().Create(ctx, pass)
 }
 
 // Void voids a pass (domain.ErrNotFound for an unknown one): it pays for
@@ -472,6 +535,8 @@ type MyPasses struct {
 	// date.
 	Timezone string
 	Today    domain.Date
+	// RedemptionMode is when bookings use a pass (ADR 0012).
+	RedemptionMode domain.RedemptionMode
 	// Passes are the family's passes: the usable ones first, then the
 	// others, each newest sale first.
 	Passes []PassView
@@ -514,7 +579,9 @@ func (s *PassService) Mine(ctx context.Context, p Principal) (MyPasses, error) {
 			return err
 		}
 
-		out = MyPasses{Timezone: settings.Timezone, Today: domain.DateOf(s.clock.Now(), loc)}
+		out = MyPasses{
+			Timezone: settings.Timezone, Today: domain.DateOf(s.clock.Now(), loc), RedemptionMode: settings.RedemptionMode,
+		}
 
 		fam, err := familyOf(ctx, tx, p)
 		if err != nil || len(fam.persons) == 0 {

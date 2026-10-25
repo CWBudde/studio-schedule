@@ -1,0 +1,9 @@
+{{define "content" -}}
+<p>Hello{{with .GivenName}} {{.}}{{end}},</p>
+{{if .Cancellation -}}
+<p>attached is the cancellation <strong>{{.Number}}</strong> of receipt {{.Cancels}}: {{.Amount}} are refunded.</p>
+{{- else -}}
+<p>thank you for your payment of {{.Amount}}. Attached is your receipt <strong>{{.Number}}</strong>{{with .Item}} for {{.}}{{end}}.</p>
+{{- end}}
+<p>Kind regards,<br>{{.SchoolName}}</p>
+{{- end}}

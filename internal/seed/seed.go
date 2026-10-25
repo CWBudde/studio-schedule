@@ -31,6 +31,16 @@ func DemoSettings() domain.Settings {
 		// Like the previous system: a visit is used when attendance is
 		// taken (ADR 0012).
 		RedemptionMode: domain.RedeemOnAttendance,
+		// A fictional issuer: the name, address and tax number exist
+		// nowhere.
+		Receipts: domain.ReceiptSettings{
+			Issuer: domain.ReceiptIssuer{
+				Name: "Studio Demo Dance School", Address: "Pirouette Lane 7\n10999 Exampletown",
+				TaxID: "99/999/99999", Email: "office@studio-demo.example", Phone: "+49 000 0000000",
+			},
+			TaxMode: domain.TaxStandard,
+			Footer:  "Bank: Example Bank · IBAN XX00 0000 0000 0000 0000 00",
+		},
 	}
 }
 
@@ -64,6 +74,10 @@ type Dataset struct {
 	PassTypes   []domain.PassType
 	Passes      []domain.Pass
 	Redemptions []domain.PassRedemption
+	// Receipts are the receipts of the sold passes and the cancellation of
+	// the pass sold by mistake, in the order they were issued; their PDFs
+	// are rendered when first read (ADR 0012).
+	Receipts []domain.Receipt
 }
 
 // LoadDemo writes the complete demo data set for FixedDemoAnchor (Demo)
@@ -196,6 +210,23 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 	for _, pt := range d.PassTypes {
 		if err := tx.PassTypes().Create(ctx, pt); err != nil {
 			return fmt.Errorf("pass type %v: %w", pt.ID, err)
+		}
+	}
+
+	// Receipts before the passes, which refer to them, in the order they
+	// were issued, each with the next number of its year.
+	for _, r := range d.Receipts {
+		seq, err := tx.ReceiptCounters().Next(ctx, r.Year)
+		if err != nil {
+			return fmt.Errorf("receipt number: %w", err)
+		}
+
+		if seq != r.Sequence {
+			return fmt.Errorf("receipt %s: the counter is at %d: %w", r.Number, seq, domain.ErrConflict)
+		}
+
+		if err := tx.Receipts().Create(ctx, r); err != nil {
+			return fmt.Errorf("receipt %s: %w", r.Number, err)
 		}
 	}
 

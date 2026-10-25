@@ -2,6 +2,7 @@ package mail_test
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -31,6 +32,13 @@ func TestMessageValidate(t *testing.T) {
 		t.Fatalf("Validate() without HTML = %v, want nil", err)
 	}
 
+	withPDF := valid
+	withPDF.Attachments = []mail.Attachment{pdf("SD-2026-0001.pdf")}
+
+	if err := withPDF.Validate(); err != nil {
+		t.Fatalf("Validate() with an attachment = %v, want nil", err)
+	}
+
 	tests := []struct {
 		name   string
 		modify func(m *mail.Message)
@@ -47,6 +55,25 @@ func TestMessageValidate(t *testing.T) {
 		{"no text", func(m *mail.Message) { m.Text = "\n" }},
 		{"reply-to with display name", func(m *mail.Message) { m.ReplyTo = "Ivy <ivy@example.org>" }},
 		{"reply-to with newline", func(m *mail.Message) { m.ReplyTo = "ivy@example.org\r\nBcc: eve@example.org" }},
+		{"attachment without name", func(m *mail.Message) { m.Attachments = []mail.Attachment{pdf("")} }},
+		{"attachment name with quote", func(m *mail.Message) { m.Attachments = []mail.Attachment{pdf(`a".pdf`)} }},
+		{"attachment name with newline", func(m *mail.Message) { m.Attachments = []mail.Attachment{pdf("a\r\nb.pdf")} }},
+		{"attachment name with slash", func(m *mail.Message) { m.Attachments = []mail.Attachment{pdf("../a.pdf")} }},
+		{"attachment type with params", func(m *mail.Message) {
+			a := pdf("a.pdf")
+			a.ContentType = "application/pdf; name=x"
+			m.Attachments = []mail.Attachment{a}
+		}},
+		{"empty attachment", func(m *mail.Message) {
+			a := pdf("a.pdf")
+			a.Content = nil
+			m.Attachments = []mail.Attachment{a}
+		}},
+		{"attachments too large", func(m *mail.Message) {
+			a := pdf("a.pdf")
+			a.Content = make([]byte, mail.MaxAttachmentsSize+1)
+			m.Attachments = []mail.Attachment{a}
+		}},
 	}
 
 	for _, tt := range tests {
@@ -72,7 +99,11 @@ func TestRenderedMessage(t *testing.T) {
 	got := r.Message("anna@example.org")
 	want := mail.Message{To: "anna@example.org", Subject: "S", Text: "T", HTML: "H"}
 
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Message() = %+v, want %+v", got, want)
 	}
+}
+
+func pdf(name string) mail.Attachment {
+	return mail.Attachment{Filename: name, ContentType: "application/pdf", Content: []byte("%PDF-1.7")}
 }

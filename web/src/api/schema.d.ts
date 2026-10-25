@@ -192,6 +192,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/pass-types/{passTypeId}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retire a pass type
+         * @description Stops the sale of a pass type (`active: false`) and changes nothing else; retiring a retired type changes nothing. Passes sold keep what they were sold with. An unknown type is a 404.
+         */
+        post: operations["retirePassType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/passes/{passId}/void": {
         parameters: {
             query?: never;
@@ -375,9 +395,89 @@ export interface paths {
         put?: never;
         /**
          * Sell a pass
-         * @description Sells a pass of an active type to the person: it copies the type's visits and days from `validFrom` (default: today in the school's time zone) and records the price paid (default: the type's price) and who paid (`payerId`, default: the person). An unknown person is a 404; an unknown or retired type a 422 on `body.passTypeId`, an unknown payer on `body.payerId`. A new pass pays for nothing booked before.
+         * @description Sells a pass of an active type to the person: it copies the type's visits and days from `validFrom` (default: today in the school's time zone) and records the price paid (default: the type's price) and who paid (`payerId`, default: the person). An unknown person is a 404; an unknown or retired type a 422 on `body.passTypeId`, an unknown payer on `body.payerId`. A new pass pays for nothing booked before. The sale issues its receipt (ADR 0012): numbered, with the payment method and the recipient, rendered as a PDF and mailed to the payer's account (else to `recipientEmail`, else nowhere). Incomplete receipt settings are a 409 `receipt-settings-incomplete`: every sale has a receipt.
          */
         post: operations["sellPass"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List receipts
+         * @description Returns the receipts that match the filter, newest first (by number), and how many match in all.
+         */
+        get: operations["listReceipts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/receipts/{receiptId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a receipt
+         * @description Returns a receipt with its lines, the cancellation that canceled it or the receipt it cancels, and whether it can be canceled. An unknown receipt is a 404.
+         */
+        get: operations["getReceipt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/receipts/{receiptId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a receipt
+         * @description Issues the cancellation receipt (Storno) of a sale: the next number, every line negated, the same payer, recipient and payment method, mailed to the payer like the receipt. It voids the pass the receipt confirms. A pass that paid for visits is a 409 `pass-used` (void the pass instead); a receipt canceled before a 409 `already-canceled`, a cancellation a 409 `cancellation`, incomplete receipt settings a 409 `receipt-settings-incomplete`. An unknown receipt is a 404.
+         */
+        post: operations["cancelReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/receipts/{receiptId}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a receipt
+         * @description Returns the PDF of a receipt as it was issued (an attachment named after its number). An unknown receipt is a 404.
+         */
+        get: operations["getReceiptPdf"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -403,6 +503,58 @@ export interface paths {
         put: operations["updatePassSettings"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Receipt settings
+         * @description Returns the issuer, the tax mode and the texts printed on receipts, and whether they are complete: passes are sold only when they are.
+         */
+        get: operations["getReceiptSettings"];
+        /**
+         * Update the receipt settings
+         * @description Replaces the receipt settings and the number prefix. Receipts issued before keep what they were issued with. Invalid fields are a 422 on them; incomplete settings are allowed, but block sales.
+         */
+        put: operations["updateReceiptSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/receipts/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Receipt logo
+         * @description Returns the logo printed on receipts; a 404 without one.
+         */
+        get: operations["getReceiptLogo"];
+        /**
+         * Set the receipt logo
+         * @description Sets the logo printed on receipts from now on: a PNG or JPEG of at most 512 KiB, base64 encoded. A larger image, or data that does not match the type, is a 422 on `body.data`.
+         */
+        put: operations["updateReceiptLogo"];
+        post?: never;
+        /**
+         * Remove the receipt logo
+         * @description Removes the logo; later receipts have none.
+         */
+        delete: operations["deleteReceiptLogo"];
         options?: never;
         head?: never;
         patch?: never;
@@ -948,6 +1100,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/demo/mailbox/{mailId}/attachment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Demo mail attachment
+         * @description Returns the file a mail of the demo mailbox attaches (a receipt's PDF). A mail without one is a 404. Only in a demo installation; otherwise a 404.
+         */
+        get: operations["getDemoMailAttachment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/family": {
         parameters: {
             query?: never;
@@ -1396,6 +1568,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/my/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List my receipts
+         * @description Returns the receipts of the passes the signed-in person paid for, newest first.
+         */
+        get: operations["listMyReceipts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/receipts/{receiptId}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download my receipt
+         * @description Returns the PDF of a receipt the signed-in person paid; any other is a 404.
+         */
+        get: operations["getMyReceiptPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms": {
         parameters: {
             query?: never;
@@ -1828,6 +2040,11 @@ export interface components {
              */
             pricePaid: number;
             /**
+             * Format: uuid
+             * @description The receipt of the sale; absent for an assignment.
+             */
+            receiptId?: string;
+            /**
              * Format: date-time
              * @description When it was sold or given.
              */
@@ -2099,6 +2316,10 @@ export interface components {
              * @description Last slot date to cancel; default: the last day of the class's term.
              */
             until?: string;
+        };
+        CancelReceiptInputBody: {
+            /** @description Why; printed on the cancellation. */
+            reason?: string;
         };
         CanceledBooking: {
             /**
@@ -2390,10 +2611,10 @@ export interface components {
             /** @description The lesson that uses the room; only with reason room-taken. */
             lesson?: components["schemas"]["ConflictLesson"];
             /**
-             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already.
+             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled.
              * @enum {string}
              */
-            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided";
+            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation";
             /**
              * Format: int64
              * @description HTTP status code
@@ -3170,7 +3391,18 @@ export interface components {
             /** @description Password. */
             password: string;
         };
+        MailboxAttachment: {
+            /**
+             * @description Media type.
+             * @enum {string}
+             */
+            contentType: "application/pdf";
+            /** @description File name. */
+            filename: string;
+        };
         MailboxMail: {
+            /** @description The attached file; absent if none. */
+            attachment?: components["schemas"]["MailboxAttachment"];
             /**
              * Format: date-time
              * @description When the mail was written.
@@ -3285,6 +3517,11 @@ export interface components {
         MyPasses: {
             /** @description The family's passes: usable first, then the others, each newest sale first. */
             items: components["schemas"]["Pass"][];
+            /**
+             * @description When bookings use a pass. booking: when booked; a timely cancellation gives the visit back, a late one keeps it. attendance: when marked attended or no-show, or canceled late.
+             * @enum {string}
+             */
+            redemptionMode: "booking" | "attendance";
             /** @description IANA time zone of the school; school dates are local to it. */
             timezone: string;
             /**
@@ -3292,6 +3529,10 @@ export interface components {
              * @description Today's school date, which usable refers to.
              */
             today: string;
+        };
+        MyReceiptList: {
+            /** @description The receipts of what the signed-in person paid, newest first. */
+            items: components["schemas"]["Receipt"][];
         };
         MyWaitlistEntry: {
             /**
@@ -3348,6 +3589,11 @@ export interface components {
              * @description Price paid in minor units of the school currency; 0 for an assignment.
              */
             pricePaid: number;
+            /**
+             * Format: uuid
+             * @description The receipt of the sale; absent for an assignment.
+             */
+            receiptId?: string;
             /**
              * Format: date-time
              * @description When it was sold or given.
@@ -3693,6 +3939,236 @@ export interface components {
             /** @description IANA time zone of the school, e.g. Europe/Berlin. */
             timezone: string;
         };
+        Receipt: {
+            /** @description Whether the office can cancel it now: a sale, not canceled, whose pass paid for no visit. */
+            cancelable: boolean;
+            /** @description The cancellation of a receipt, if canceled. */
+            canceledBy?: components["schemas"]["ReceiptRef"];
+            /** @description The receipt a cancellation cancels. */
+            cancels?: components["schemas"]["ReceiptRef"];
+            /** @description ISO 4217 currency of the amounts. */
+            currency: string;
+            /**
+             * Format: int64
+             * @description Total in minor units.
+             */
+            gross: number;
+            /**
+             * Format: uuid
+             * @description Receipt ID.
+             */
+            id: string;
+            /**
+             * Format: date
+             * @description School date it was issued.
+             */
+            issueDate: string;
+            /**
+             * Format: date-time
+             * @description When it was issued.
+             */
+            issuedAt: string;
+            issuer: components["schemas"]["ReceiptIssuer"];
+            /**
+             * @description sale: confirms the payment of a pass; cancellation: cancels a sale receipt (Storno), every amount negated.
+             * @enum {string}
+             */
+            kind: "sale" | "cancellation";
+            /** @description The lines. */
+            lines: components["schemas"]["ReceiptLine"][];
+            /**
+             * Format: int64
+             * @description Net total in minor units.
+             */
+            net: number;
+            /** @description Printed number, e.g. SD-2026-0001: the prefix, the year and a gapless sequence per year. */
+            number: string;
+            /**
+             * Format: uuid
+             * @description The pass a sale receipt confirms.
+             */
+            passId?: string;
+            /** @description Who paid. */
+            payer?: components["schemas"]["PassPerson"];
+            /**
+             * @description How it was paid (or refunded).
+             * @enum {string}
+             */
+            paymentMethod: "cash" | "transfer" | "card";
+            /** @description Why a cancellation was issued; absent if not given. */
+            reason?: string;
+            /** @description The address printed; absent if none. */
+            recipientAddress?: string;
+            /** @description The address typed at the sale that the receipt was mailed to, because the payer has no account; absent otherwise (a payer with an account gets it there). */
+            recipientEmail?: string;
+            /** @description The name printed as the payer. */
+            recipientName: string;
+            /**
+             * @description The school's tax mode at issuance.
+             * @enum {string}
+             */
+            taxMode: "small_business" | "exempt" | "standard";
+            /** @description The tax note printed; absent if none. */
+            taxNote?: string;
+            /**
+             * Format: int64
+             * @description VAT total in minor units.
+             */
+            vat: number;
+        };
+        ReceiptIssuer: {
+            /** @description Address, one line per printed line. */
+            address: string;
+            /** @description Contact email; absent if none. */
+            email?: string;
+            /** @description Legal name. */
+            name: string;
+            /** @description Contact phone; absent if none. */
+            phone?: string;
+            /** @description Tax number or VAT ID. */
+            taxNumber: string;
+        };
+        ReceiptLine: {
+            /** @description What was paid. */
+            description: string;
+            /**
+             * Format: int64
+             * @description Gross amount (quantity × unit price) in minor units.
+             */
+            gross: number;
+            /**
+             * Format: int64
+             * @description Net amount in minor units.
+             */
+            net: number;
+            /**
+             * Format: int64
+             * @description Position, from 1.
+             */
+            position: number;
+            /**
+             * Format: int64
+             * @description Quantity.
+             */
+            quantity: number;
+            /**
+             * Format: int64
+             * @description Gross price of one unit in minor units (negative on a cancellation).
+             */
+            unitPrice: number;
+            /**
+             * Format: int64
+             * @description VAT in minor units.
+             */
+            vat: number;
+            /**
+             * Format: int64
+             * @description VAT rate charged, in basis points (0 unless the tax mode is standard).
+             */
+            vatRate: number;
+        };
+        ReceiptList: {
+            /** @description The receipts, newest first. */
+            items: components["schemas"]["Receipt"][];
+            /**
+             * Format: int64
+             * @description How many receipts match in all.
+             */
+            total: number;
+            /** @description The years with receipts, the latest first, whatever the filter: the choices of the year filter. */
+            years: number[];
+        };
+        ReceiptLogoInputBody: {
+            /**
+             * @description The image type.
+             * @enum {string}
+             */
+            contentType: "image/png" | "image/jpeg";
+            /** @description The image, base64 encoded; at most 512 KiB. */
+            data: string;
+        };
+        ReceiptRef: {
+            /**
+             * Format: uuid
+             * @description Receipt ID.
+             */
+            id: string;
+            /**
+             * Format: date
+             * @description School date it was issued.
+             */
+            issueDate: string;
+            /** @description Receipt number. */
+            number: string;
+        };
+        ReceiptSettingsBody: {
+            /**
+             * Format: int64
+             * @description The gross amount in minor units above which a receipt should name the recipient's address; absent if no such limit applies. Set in the standard tax mode in euros: the German small-amount invoice limit, 250 € (§ 33 UStDV). A hint for the sale form; sales above it are not refused.
+             */
+            addressRequiredAbove?: number;
+            /** @description Whether receipts, and so pass sales, can be issued. */
+            complete: boolean;
+            /** @description Contact email printed on receipts. */
+            email?: string;
+            /** @description Printed at the bottom, e.g. bank details. */
+            footer?: string;
+            /** @description The issuer's address, one line per printed line. */
+            issuerAddress?: string;
+            /** @description The issuer's legal name. */
+            issuerName?: string;
+            /**
+             * Format: int64
+             * @description The largest logo updateReceiptLogo takes, in bytes (before base64).
+             */
+            logoMaxBytes: number;
+            /**
+             * @description The content type of the logo; absent without one.
+             * @enum {string}
+             */
+            logoType?: "image/png" | "image/jpeg";
+            /**
+             * @description The first setting receipts need that is missing; absent when complete.
+             * @enum {string}
+             */
+            missing?: "issuerName" | "issuerAddress" | "taxNumber" | "taxMode" | "taxNote";
+            /** @description Contact phone printed on receipts. */
+            phone?: string;
+            /** @description Starts every receipt number, 1–16 of A–Z and 0–9. */
+            receiptPrefix: string;
+            /**
+             * @description small_business: no VAT, with the § 19 UStG note (or taxNote); exempt: no VAT, with taxNote naming the legal basis; standard: the VAT rate of each pass type is included in its price, and net and VAT are printed. Absent until chosen.
+             * @enum {string}
+             */
+            taxMode?: "small_business" | "exempt" | "standard";
+            /** @description Printed on every receipt; required in the exempt mode. */
+            taxNote?: string;
+            /** @description Tax number or VAT ID. */
+            taxNumber?: string;
+        };
+        ReceiptSettingsData: {
+            /** @description Contact email printed on receipts. */
+            email?: string;
+            /** @description Printed at the bottom, e.g. bank details. */
+            footer?: string;
+            /** @description The issuer's address, one line per printed line. */
+            issuerAddress?: string;
+            /** @description The issuer's legal name. */
+            issuerName?: string;
+            /** @description Contact phone printed on receipts. */
+            phone?: string;
+            /** @description Starts every receipt number, 1–16 of A–Z and 0–9. */
+            receiptPrefix: string;
+            /**
+             * @description small_business: no VAT, with the § 19 UStG note (or taxNote); exempt: no VAT, with taxNote naming the legal basis; standard: the VAT rate of each pass type is included in its price, and net and VAT are printed. Absent until chosen.
+             * @enum {string}
+             */
+            taxMode?: "small_business" | "exempt" | "standard";
+            /** @description Printed on every receipt; required in the exempt mode. */
+            taxNote?: string;
+            /** @description Tax number or VAT ID. */
+            taxNumber?: string;
+        };
         RegisterInputBody: {
             /**
              * Format: email
@@ -3895,10 +4371,22 @@ export interface components {
              */
             payerId?: string;
             /**
+             * @description How it was paid; printed on the receipt.
+             * @default cash
+             * @enum {string}
+             */
+            paymentMethod: "cash" | "transfer" | "card";
+            /**
              * Format: int64
              * @description Price paid in minor units; default: the type's price.
              */
             price?: number;
+            /** @description The payer's address printed on the receipt, one line per printed line; none by default. */
+            recipientAddress?: string;
+            /** @description Where the receipt is mailed if the payer has no account; ignored (not stored) if the payer has one, which gets the receipt. */
+            recipientEmail?: string;
+            /** @description The name the receipt prints as the payer; default: the payer's name. */
+            recipientName?: string;
             /**
              * Format: date
              * @description First school date of the pass; default: today.
@@ -4683,6 +5171,38 @@ export interface operations {
             };
         };
     };
+    retirePassType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The pass type. */
+                passTypeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassType"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     voidPass: {
         parameters: {
             query?: never;
@@ -5158,6 +5678,156 @@ export interface operations {
             };
         };
     };
+    listReceipts: {
+        parameters: {
+            query?: {
+                /** @description Only the receipts of this year; 0 or absent: all. */
+                year?: number;
+                /** @description Matches the number or the recipient's name (ignoring ASCII case); empty matches all. */
+                q?: string;
+                /** @description Receipts to skip. */
+                offset?: number;
+                /** @description Most receipts to return. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receipt. */
+                receiptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Receipt"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    cancelReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receipt to cancel. */
+                receiptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelReceiptInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Receipt"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getReceiptPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receipt. */
+                receiptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The receipt's PDF. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     getPassSettings: {
         parameters: {
             query?: never;
@@ -5208,6 +5878,159 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PassSettings"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getReceiptSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptSettingsBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateReceiptSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiptSettingsData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptSettingsBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getReceiptLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The logo. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateReceiptLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiptLogoInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteReceiptLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -6362,6 +7185,41 @@ export interface operations {
             };
         };
     };
+    getDemoMailAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The mail. */
+                mailId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The attached file. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     getMyFamily: {
         parameters: {
             query?: never;
@@ -7422,6 +8280,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MyPasses"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMyReceipts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyReceiptList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getMyReceiptPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The receipt. */
+                receiptId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The receipt's PDF. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
                 };
             };
             /** @description Error */

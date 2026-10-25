@@ -9,6 +9,7 @@ import (
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/ids"
+	"github.com/cwbudde/studio-schedule/internal/receiptfmt"
 )
 
 // FixedDemoAnchor is the visit date that Demo and LoadDemo build the demo
@@ -804,6 +805,8 @@ type passSpec struct {
 	note     string
 	voided   bool
 	dropIns  []classSlot
+	// method is how a sale was paid, printed on its receipt.
+	method domain.PaymentMethod
 }
 
 // classSlot names a weekly class by its weekday and start.
@@ -819,22 +822,25 @@ type classSlot struct {
 // office took their attendance.
 var demoPasses = []passSpec{
 	{
-		person: "Clara Amberly", passType: "10-visit pass", soldDays: -14,
+		person: "Clara Amberly", passType: "10-visit pass", soldDays: -14, method: domain.PaymentCard,
 		dropIns: []classSlot{{time.Tuesday, at(18, 30)}, {time.Thursday, at(17, 0)}},
 	},
 	{
 		person: "Ella Amberly", passType: "10-visit pass", soldDays: -10, payer: "Clara Amberly",
-		dropIns: []classSlot{{time.Thursday, at(16, 0)}},
+		method: domain.PaymentTransfer, dropIns: []classSlot{{time.Thursday, at(16, 0)}},
 	},
 	{
-		person: "Kai Lanternby", passType: "30-day pass", soldDays: -7,
+		person: "Kai Lanternby", passType: "30-day pass", soldDays: -7, method: domain.PaymentCash,
 		dropIns: []classSlot{{time.Friday, at(17, 45)}},
 	},
 	{
 		person: "Irene Inkwell", passType: "Single visit", soldDays: -3, assigned: true,
 		note: "Goodwill: her workshop was canceled.",
 	},
-	{person: "Vera Rushwick", passType: "Single visit", soldDays: -20, voided: true, note: "Sold to the wrong person."},
+	{
+		person: "Vera Rushwick", passType: "Single visit", soldDays: -20, voided: true, method: domain.PaymentCash,
+		note: "Sold to the wrong person.",
+	},
 }
 
 // passes adds the pass catalog, created when the term starts, and the
@@ -851,6 +857,8 @@ func (b *builder) passes(anchor domain.Date) {
 	}
 
 	office := b.accountOf(lookup(b.persons, "Olga Ledgerby"))
+
+	var issued []issue
 
 	for _, spec := range demoPasses {
 		pt, ok := types[spec.passType]
@@ -878,6 +886,7 @@ func (b *builder) passes(anchor domain.Date) {
 		}
 
 		if spec.voided {
+			// Its sale is canceled the next day, which voids it.
 			p.Status, p.VoidedAt = domain.PassVoided, p.SoldAt.Add(24*time.Hour)
 		}
 
@@ -886,7 +895,86 @@ func (b *builder) passes(anchor domain.Date) {
 		}
 
 		b.d.Passes = append(b.d.Passes, p)
+
+		if !spec.assigned {
+			issued = append(issued, issue{at: p.SoldAt, pass: len(b.d.Passes) - 1, typ: pt, method: spec.method})
+			if spec.voided {
+				issued = append(issued, issue{
+					at: p.VoidedAt, pass: len(b.d.Passes) - 1, cancel: true, reason: strings.TrimSuffix(spec.note, "."),
+				})
+			}
+		}
 	}
+
+	b.receipts(issued, office)
+}
+
+// issue is a receipt the seed issues: the sale of a pass, or its
+// cancellation.
+type issue struct {
+	at     time.Time
+	pass   int // index in b.d.Passes
+	typ    domain.PassType
+	method domain.PaymentMethod
+	cancel bool
+	reason string
+}
+
+// receipts issues the receipts of the sales, and the cancellations, in the
+// order they happened, numbered gaplessly per year like ReceiptService:
+// mailed to nobody, and without PDFs, which are rendered when first read
+// (rendering needs the typst module, which the web demo loads only then).
+func (b *builder) receipts(issued []issue, office domain.AccountID) {
+	slices.SortStableFunc(issued, func(a, b issue) int { return a.at.Compare(b.at) })
+
+	settings := b.d.Settings
+	byPass := map[int]domain.Receipt{}
+
+	for _, is := range issued {
+		p := &b.d.Passes[is.pass]
+		day := domain.DateOf(is.at, b.loc)
+		seq := 1
+
+		for _, r := range b.d.Receipts {
+			if r.Year == day.Year {
+				seq++
+			}
+		}
+
+		payer := cmp.Or(p.PayerID, p.PersonID)
+		r := domain.Receipt{
+			ID: ids.New[domain.ReceiptID](b.seq), Number: domain.ReceiptNumber(settings.ReceiptPrefix, day.Year, seq),
+			Year: day.Year, Sequence: seq, Kind: domain.ReceiptSale, IssuedAt: is.at, IssueDate: day,
+			Locale: settings.DefaultLocale, Issuer: settings.Receipts.Issuer, TaxMode: settings.Receipts.TaxMode,
+			TaxNote: settings.Receipts.TaxNote, Footer: settings.Receipts.Footer, PayerID: payer,
+			RecipientName: b.name(payer), PaymentMethod: is.method, Currency: settings.Currency, CreatedBy: office,
+		}
+
+		if is.cancel {
+			orig := byPass[is.pass]
+			r.Kind, r.CancelsReceiptID, r.Reason, r.PaymentMethod = domain.ReceiptCancellation, orig.ID, is.reason, orig.PaymentMethod
+			r.Lines = []domain.ReceiptLine{orig.Lines[0].Negated()}
+		} else {
+			desc := receiptfmt.PassLine(r.Locale, is.typ.Name, b.name(p.PersonID), p.ValidFrom, p.ValidUntil)
+			r.Lines = []domain.ReceiptLine{domain.NewReceiptLine(1, desc, 1, p.PricePaid, is.typ.VATRate, r.TaxMode)}
+			p.ReceiptID = r.ID
+			byPass[is.pass] = r
+		}
+
+		r.Net, r.VAT, r.Gross = r.Lines[0].Net, r.Lines[0].VAT, r.Lines[0].Gross
+		b.d.Receipts = append(b.d.Receipts, r)
+	}
+}
+
+// name returns the full name of a person of the data set.
+func (b *builder) name(id domain.PersonID) string {
+	for _, p := range b.d.Persons {
+		if p.ID == id {
+			return p.GivenName + " " + p.FamilyName
+		}
+	}
+
+	panic("seed: unknown person " + id.String())
 }
 
 // dropIn books the owner of pass p into the lesson of the class at slot in

@@ -48,13 +48,15 @@ type Deps struct {
 	Feeds *service.CalendarFeedService
 	// Passes are the pass catalog, the passes of persons and their
 	// redemption mode.
-	Passes  *service.PassService
-	Auth    *service.AuthService
-	Family  *service.FamilyService
-	Persons *service.PersonService
-	Outbox  *service.OutboxService
-	Version string
-	Logger  *slog.Logger
+	Passes *service.PassService
+	// Receipts are the receipts of pass sales and their settings.
+	Receipts *service.ReceiptService
+	Auth     *service.AuthService
+	Family   *service.FamilyService
+	Persons  *service.PersonService
+	Outbox   *service.OutboxService
+	Version  string
+	Logger   *slog.Logger
 	// SecureCookies sets the Secure attribute on the session cookie; off
 	// only for local development over plain HTTP.
 	SecureCookies bool
@@ -110,6 +112,7 @@ func Register(api huma.API, deps Deps) {
 	registerMyLessons(api, h)
 	registerCalendarFeeds(api, h)
 	registerPasses(api, h)
+	registerReceipts(api, h)
 	registerAuth(api, h)
 	registerCredentials(api, h)
 	registerFamily(api, h)

@@ -42,6 +42,8 @@ type mailOpts struct {
 	// replyTo is the address replies go to, e.g. the staff member who sent
 	// a lesson notice; empty for the sender's.
 	replyTo string
+	// receipt is the receipt whose PDF the mail attaches (optional).
+	receipt domain.ReceiptID
 }
 
 // enqueueMail writes a rendered mail to the outbox in tx; the outbox job
@@ -52,7 +54,7 @@ func enqueueMail(
 ) error {
 	m := domain.OutboxMail{
 		ID: ids.New[domain.OutboxMailID](src), To: to, Subject: r.Subject, Text: r.Text, HTML: r.HTML,
-		Template: template, CreatedAt: now, NextAttemptAt: now, ReplyTo: opts.replyTo,
+		Template: template, CreatedAt: now, NextAttemptAt: now, ReplyTo: opts.replyTo, ReceiptID: opts.receipt,
 	}
 	if err := m.Validate(); err != nil {
 		return fmt.Errorf("outbox mail: %w", err)
@@ -93,15 +95,17 @@ func sendMails(
 
 // OutboxService sends the mails of the outbox and lists them.
 type OutboxService struct {
-	store  store.Store
-	clock  clock.Clock
-	mailer mail.Mailer
+	store    store.Store
+	clock    clock.Clock
+	mailer   mail.Mailer
+	receipts *ReceiptService
 }
 
-// NewOutboxService returns an OutboxService that delivers through mailer.
-// Without a mailer (the demo, local development) mails stay in the outbox.
-func NewOutboxService(st store.Store, clk clock.Clock, mailer mail.Mailer) *OutboxService {
-	return &OutboxService{store: st, clock: clk, mailer: mailer}
+// NewOutboxService returns an OutboxService that delivers through mailer,
+// attaching the receipt PDFs that receipts keep. Without a mailer (the demo,
+// local development) mails stay in the outbox.
+func NewOutboxService(st store.Store, clk clock.Clock, mailer mail.Mailer, receipts *ReceiptService) *OutboxService {
+	return &OutboxService{store: st, clock: clk, mailer: mailer, receipts: receipts}
 }
 
 // Deliver makes one delivery attempt for every due mail, up to a batch, and
@@ -120,9 +124,12 @@ func (s *OutboxService) Deliver(ctx context.Context) (int, error) {
 			return sent, err
 		}
 
-		sendErr := s.mailer.Send(ctx, mail.Message{
-			To: m.To, Subject: m.Subject, Text: m.Text, HTML: m.HTML, ReplyTo: m.ReplyTo,
-		})
+		msg := mail.Message{To: m.To, Subject: m.Subject, Text: m.Text, HTML: m.HTML, ReplyTo: m.ReplyTo}
+
+		sendErr := s.attach(ctx, m, &msg)
+		if sendErr == nil {
+			sendErr = s.mailer.Send(ctx, msg)
+		}
 		if sendErr != nil && ctx.Err() != nil {
 			// Shutting down: the claim expires and the mail is retried.
 			return sent, ctx.Err()
@@ -140,6 +147,52 @@ func (s *OutboxService) Deliver(ctx context.Context) (int, error) {
 	}
 
 	return sent, nil
+}
+
+// attach adds the PDF of the mail's receipt to msg. Failing to read it fails
+// the attempt, which is retried like a failed delivery.
+func (s *OutboxService) attach(ctx context.Context, m domain.OutboxMail, msg *mail.Message) error {
+	if m.ReceiptID.IsZero() {
+		return nil
+	}
+
+	if s.receipts == nil {
+		return errors.New("no receipts to attach")
+	}
+
+	file, err := s.receipts.PDF(ctx, m.ReceiptID)
+	if err != nil {
+		return fmt.Errorf("attach receipt: %w", err)
+	}
+
+	msg.Attachments = []mail.Attachment{{Filename: file.Filename, ContentType: PDFContentType, Content: file.PDF}}
+
+	return nil
+}
+
+// PDFContentType is the media type of PDF files.
+const PDFContentType = "application/pdf"
+
+// Attachment returns the file a mail attaches (domain.ErrNotFound for an
+// unknown mail, or one without an attachment).
+func (s *OutboxService) Attachment(ctx context.Context, id domain.OutboxMailID) (ReceiptFile, error) {
+	var m domain.OutboxMail
+
+	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		m, err = tx.Outbox().Get(ctx, id)
+
+		return err
+	})
+
+	switch {
+	case err != nil:
+		return ReceiptFile{}, fmt.Errorf("mail %v: %w", id, err)
+	case m.ReceiptID.IsZero() || s.receipts == nil:
+		return ReceiptFile{}, fmt.Errorf("attachment of mail %v: %w", id, domain.ErrNotFound)
+	}
+
+	return s.receipts.PDF(ctx, m.ReceiptID)
 }
 
 // claim takes the next due mail for one attempt; ok is false if none is due.
@@ -198,21 +251,47 @@ func (s *OutboxService) record(ctx context.Context, id domain.OutboxMailID, send
 	return nil
 }
 
-// List returns the newest mails of the outbox, at most limit.
-func (s *OutboxService) List(ctx context.Context, limit int) ([]domain.OutboxMail, error) {
-	var mails []domain.OutboxMail
+// MailboxEntry is a mail of the outbox with the name of its attachment.
+type MailboxEntry struct {
+	Mail domain.OutboxMail
+	// Attachment is the file name of the attached PDF, empty without one.
+	Attachment string
+}
+
+// List returns the newest mails of the outbox, at most limit, with the
+// names of their attachments.
+func (s *OutboxService) List(ctx context.Context, limit int) ([]MailboxEntry, error) {
+	var out []MailboxEntry
 
 	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
-		var err error
-		mails, err = tx.Outbox().List(ctx, limit)
+		mails, err := tx.Outbox().List(ctx, limit)
+		if err != nil {
+			return err
+		}
 
-		return err
+		out = make([]MailboxEntry, len(mails))
+
+		for i, m := range mails {
+			out[i].Mail = m
+			if m.ReceiptID.IsZero() {
+				continue
+			}
+
+			r, err := tx.Receipts().Get(ctx, m.ReceiptID)
+			if err != nil {
+				return fmt.Errorf("receipt of mail %v: %w", m.ID, err)
+			}
+
+			out[i].Attachment = r.Number + ".pdf"
+		}
+
+		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list outbox mails: %w", err)
 	}
 
-	return mails, nil
+	return out, nil
 }
 
 // truncate shortens s to at most n bytes without splitting a UTF-8 rune.

@@ -83,7 +83,10 @@ func Jobs(deps Deps) *jobs.Runner {
 	}}
 
 	if deps.Mailer != nil {
-		outbox := service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer)
+		// Mails attach receipt PDFs, which a seeded receipt gets rendered
+		// on first use; the receipts mail nothing themselves here.
+		receipts := service.NewReceiptService(deps.Store, deps.Clock, deps.IDs, service.Mails{}, deps.PDF)
+		outbox := service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer, receipts)
 		all = append(all, jobs.Job{
 			Name:  "deliver-mail",
 			Every: time.Minute,

@@ -3,11 +3,13 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/service"
 )
 
 // mailboxLimit is how many mails the mailbox lists.
@@ -35,19 +37,43 @@ func registerDemo(api huma.API, h *handlers) {
 			"installation; otherwise a 404.",
 		Tags: []string{"demo"},
 	}, h.listDemoLogins)
+
+	register(api, AccessPublic, huma.Operation{
+		OperationID: "getDemoMailAttachment",
+		Method:      http.MethodGet,
+		Path:        BasePath + "/demo/mailbox/{mailId}/attachment",
+		Summary:     "Demo mail attachment",
+		Description: "Returns the file a mail of the demo mailbox attaches (a receipt's PDF). A mail without one is " +
+			"a 404. Only in a demo installation; otherwise a 404.",
+		Tags: []string{"demo"},
+		Responses: map[string]*huma.Response{
+			"200": {
+				Description: "The attached file.",
+				Content:     map[string]*huma.MediaType{"application/pdf": {Schema: &huma.Schema{Type: "string", Format: "binary"}}},
+			},
+			"default": problem(api, reflect.TypeFor[huma.ErrorModel](), "Error"),
+		},
+	}, h.getDemoMailAttachment)
 }
 
 // MailboxMail is a mail in the demo mailbox.
 type MailboxMail struct {
-	ID        domain.OutboxMailID `doc:"Mail ID."                               json:"id"`
-	To        string              `doc:"Recipient address."                     json:"to"`
-	Subject   string              `doc:"Subject."                               json:"subject"`
-	Text      string              `doc:"Plain text body."                       json:"text"`
-	HTML      string              `doc:"HTML body; absent for text-only mails." json:"html,omitempty"`
-	Template  string              `doc:"Template the mail was rendered from."   json:"template,omitempty"`
-	ReplyTo   string              `doc:"Address replies go to; absent if the sender's." json:"replyTo,omitempty"`
-	CreatedAt time.Time           `doc:"When the mail was written."             json:"createdAt"`
-	Status    string              `doc:"Delivery state." enum:"pending,sent,failed" json:"status"`
+	ID         domain.OutboxMailID `doc:"Mail ID."                               json:"id"`
+	To         string              `doc:"Recipient address."                     json:"to"`
+	Subject    string              `doc:"Subject."                               json:"subject"`
+	Text       string              `doc:"Plain text body."                       json:"text"`
+	HTML       string              `doc:"HTML body; absent for text-only mails." json:"html,omitempty"`
+	Template   string              `doc:"Template the mail was rendered from."   json:"template,omitempty"`
+	ReplyTo    string              `doc:"Address replies go to; absent if the sender's." json:"replyTo,omitempty"`
+	CreatedAt  time.Time           `doc:"When the mail was written."             json:"createdAt"`
+	Status     string              `doc:"Delivery state." enum:"pending,sent,failed" json:"status"`
+	Attachment *MailboxAttachment  `doc:"The attached file; absent if none." json:"attachment,omitempty"`
+}
+
+// MailboxAttachment is a file attached to a mail of the demo mailbox.
+type MailboxAttachment struct {
+	Filename    string `doc:"File name."                                  json:"filename"`
+	ContentType string `doc:"Media type." enum:"application/pdf"           json:"contentType"`
 }
 
 // DemoMailboxOutput is the response of listDemoMailbox.
@@ -70,14 +96,31 @@ func (h *handlers) listDemoMailbox(ctx context.Context, _ *struct{}) (*DemoMailb
 	out := &DemoMailboxOutput{}
 	out.Body.Mails = make([]MailboxMail, len(mails))
 
-	for i, m := range mails {
+	for i, e := range mails {
+		m := e.Mail
 		out.Body.Mails[i] = MailboxMail{
 			ID: m.ID, To: m.To, Subject: m.Subject, Text: m.Text, HTML: m.HTML, Template: m.Template,
 			ReplyTo: m.ReplyTo, CreatedAt: m.CreatedAt, Status: string(m.Status()),
 		}
+		if e.Attachment != "" {
+			out.Body.Mails[i].Attachment = &MailboxAttachment{Filename: e.Attachment, ContentType: service.PDFContentType}
+		}
 	}
 
 	return out, nil
+}
+
+// DemoMailInput names a mail of the demo mailbox.
+type DemoMailInput struct {
+	MailID domain.OutboxMailID `doc:"The mail." path:"mailId"`
+}
+
+func (h *handlers) getDemoMailAttachment(ctx context.Context, in *DemoMailInput) (*FileOutput, error) {
+	if !h.deps.Demo {
+		return nil, huma.Error404NotFound("resource not found")
+	}
+
+	return h.fileOutput(ctx)(h.deps.Outbox.Attachment(ctx, in.MailID))
 }
 
 // DemoLogin is a fictional demo account.

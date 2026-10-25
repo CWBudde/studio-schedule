@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;">
+<div style="max-width:560px;margin:0 auto;padding:24px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;color:#18181b;background-color:#ffffff;">
+<p>Hello Clara,</p>
+<p>thank you for your payment of 150,00 €. Attached is your receipt <strong>SD-2026-0007</strong> for 10-visit pass for Ella &lt;Example&gt;, valid 1 Oct 2026 – 29 Mar 2027.</p>
+<p>Kind regards,<br>Studio Example</p>
+</div>
+</body>
+</html>

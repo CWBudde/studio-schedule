@@ -1,0 +1,11 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+{{if .Cancellation}}
+im Anhang findest du den Stornobeleg {{.Number}} zur Quittung {{.Cancels}}:
+{{.Amount}} werden erstattet.
+{{- else}}
+vielen Dank für deine Zahlung von {{.Amount}}. Im Anhang findest du deine
+Quittung {{.Number}}{{with .Item}} über {{.}}{{end}}.
+{{- end}}
+
+Viele Grüße
+{{.SchoolName}}

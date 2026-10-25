@@ -1,0 +1,11 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+{{if .Cancellation}}
+attached is the cancellation {{.Number}} of receipt {{.Cancels}}: {{.Amount}}
+are refunded.
+{{- else}}
+thank you for your payment of {{.Amount}}. Attached is your receipt
+{{.Number}}{{with .Item}} for {{.}}{{end}}.
+{{- end}}
+
+Kind regards,
+{{.SchoolName}}

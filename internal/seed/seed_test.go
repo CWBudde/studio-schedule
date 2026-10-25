@@ -1,8 +1,10 @@
 package seed_test
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -343,6 +345,7 @@ func TestDemoValid(t *testing.T) {
 	validAll(t, d.PassTypes)
 	validAll(t, d.Passes)
 	validAll(t, d.Redemptions)
+	validAll(t, d.Receipts)
 }
 
 // TestDemoMemberBookings checks that the class lessons of the demo have
@@ -1092,6 +1095,22 @@ func TestLoadDemoRoundTrip(t *testing.T) {
 
 		sameSet(t, "redemptions", redemptions, want.Redemptions)
 
+		receipts, total, err := tx.Receipts().List(ctx, store.ReceiptFilter{Limit: 100})
+		if err != nil {
+			return err
+		}
+
+		if total != len(want.Receipts) {
+			t.Errorf("%d receipts stored, want %d", total, len(want.Receipts))
+		}
+
+		for _, r := range receipts {
+			if i := slices.IndexFunc(want.Receipts, func(w domain.Receipt) bool { return w.ID == r.ID }); i < 0 ||
+				!reflect.DeepEqual(r, want.Receipts[i]) {
+				t.Errorf("stored receipt %+v is not the seed's", r)
+			}
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -1432,5 +1451,59 @@ func TestDemoPasses(t *testing.T) {
 			t.Errorf("%v: %d time passes, %d assigned, %d voided, %d paid by others; want one each", anchor, kinds,
 				origins, voided, paidByOthers)
 		}
+
+		checkReceipts(t, anchor, d, loc)
+	}
+}
+
+// checkReceipts: every sold pass has its receipt for the price paid, by
+// the payer, the voided one a cancellation, numbered gaplessly per year in
+// the order of issue in the school's time zone.
+func checkReceipts(t *testing.T, anchor domain.Date, d seed.Dataset, loc *time.Location) {
+	t.Helper()
+
+	byID := index(d.Receipts, func(r domain.Receipt) domain.ReceiptID { return r.ID })
+	next := map[int]int{}
+
+	for i, r := range d.Receipts {
+		next[r.Year]++
+
+		if r.Sequence != next[r.Year] || r.Year != domain.DateOf(r.IssuedAt, loc).Year ||
+			r.Number != domain.ReceiptNumber("SD", r.Year, r.Sequence) ||
+			(i > 0 && r.IssuedAt.Before(d.Receipts[i-1].IssuedAt)) {
+			t.Errorf("%v: receipt %s (%d of %d) out of order", anchor, r.Number, r.Sequence, r.Year)
+		}
+	}
+
+	cancellations := 0
+
+	for _, r := range d.Receipts {
+		if r.Kind != domain.ReceiptCancellation {
+			continue
+		}
+
+		cancellations++
+
+		if orig, ok := byID[r.CancelsReceiptID]; !ok || r.Gross != -orig.Gross || !orig.IssuedAt.Before(r.IssuedAt) {
+			t.Errorf("%v: cancellation %+v of %+v", anchor, r, orig)
+		}
+	}
+
+	for _, p := range d.Passes {
+		r, ok := byID[p.ReceiptID]
+
+		switch {
+		case p.Origin == domain.PassAssigned:
+			if !p.ReceiptID.IsZero() {
+				t.Errorf("%v: assigned pass %+v has a receipt", anchor, p)
+			}
+		case !ok || r.Gross != p.PricePaid || r.PayerID != cmp.Or(p.PayerID, p.PersonID) || r.Kind != domain.ReceiptSale ||
+			!r.IssuedAt.Equal(p.SoldAt):
+			t.Errorf("%v: pass %+v, receipt %+v", anchor, p, r)
+		}
+	}
+
+	if cancellations != 1 {
+		t.Errorf("%v: %d cancellations, want 1", anchor, cancellations)
 	}
 }

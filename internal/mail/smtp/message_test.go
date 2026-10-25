@@ -2,6 +2,7 @@ package smtp
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"io"
 	"mime"
@@ -238,5 +239,93 @@ func TestBuildMessageRejectsInvalid(t *testing.T) {
 
 	if _, err := s.buildMessage(m); err == nil {
 		t.Fatal("buildMessage accepted a subject with CRLF")
+	}
+}
+
+// TestBuildMessageAttachment sends a receipt PDF along: multipart/mixed with
+// the body first, then the attachment in base64.
+func TestBuildMessageAttachment(t *testing.T) {
+	t.Parallel()
+
+	pdf := bytes.Repeat([]byte("%PDF-1.7 receipt \x00\xff"), 40)
+
+	for name, html := range map[string]string{"with HTML": "<p>Hallo</p>", "text only": ""} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			s := newTestSender(t, Config{})
+			m := testMessage()
+			m.HTML = html
+			m.Attachments = []mail.Attachment{{Filename: "SD-2026-0001.pdf", ContentType: "application/pdf", Content: pdf}}
+
+			raw, err := s.buildMessage(m)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			msg := parse(t, raw)
+
+			mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+			if err != nil || mediaType != "multipart/mixed" {
+				t.Fatalf("Content-Type = %q (%v)", msg.Header.Get("Content-Type"), err)
+			}
+
+			mr := multipart.NewReader(msg.Body, params["boundary"])
+
+			body, err := mr.NextRawPart()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			bodyType, bodyParams, _ := mime.ParseMediaType(body.Header.Get("Content-Type"))
+
+			switch html {
+			case "":
+				if bodyType != "text/plain" {
+					t.Fatalf("body Content-Type = %q", body.Header.Get("Content-Type"))
+				}
+
+				if got := strings.ReplaceAll(decodePart(t, body), "\r\n", "\n"); got != m.Text {
+					t.Errorf("body = %q, want %q", got, m.Text)
+				}
+			default:
+				if bodyType != "multipart/alternative" {
+					t.Fatalf("body Content-Type = %q", body.Header.Get("Content-Type"))
+				}
+
+				alt := multipart.NewReader(body, bodyParams["boundary"])
+				for i := range 2 {
+					if _, err := alt.NextRawPart(); err != nil {
+						t.Fatalf("alternative %d: %v", i, err)
+					}
+				}
+			}
+
+			att, err := mr.NextRawPart()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if got := att.Header.Get("Content-Transfer-Encoding"); got != "base64" {
+				t.Errorf("attachment encoding = %q", got)
+			}
+
+			if _, p, _ := mime.ParseMediaType(att.Header.Get("Content-Disposition")); p["filename"] != "SD-2026-0001.pdf" {
+				t.Errorf("Content-Disposition = %q", att.Header.Get("Content-Disposition"))
+			}
+
+			if mt, _, _ := mime.ParseMediaType(att.Header.Get("Content-Type")); mt != "application/pdf" {
+				t.Errorf("attachment Content-Type = %q", att.Header.Get("Content-Type"))
+			}
+
+			got, err := io.ReadAll(base64.NewDecoder(base64.StdEncoding, att))
+			if err != nil || !bytes.Equal(got, pdf) {
+				t.Errorf("attachment = %q (%v), want the PDF", got, err)
+			}
+
+			if _, err := mr.NextRawPart(); !errors.Is(err, io.EOF) {
+				t.Errorf("want exactly two parts, NextPart = %v", err)
+			}
+		})
 	}
 }

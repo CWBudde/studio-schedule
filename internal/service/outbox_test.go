@@ -56,7 +56,7 @@ func outboxFixture(t *testing.T) (*authFixture, *fakeMailer, *service.OutboxServ
 
 	mailer := &fakeMailer{}
 
-	return f, mailer, service.NewOutboxService(f.st, f.clock, mailer)
+	return f, mailer, service.NewOutboxService(f.st, f.clock, mailer, nil)
 }
 
 func (f *authFixture) onlyMail() domain.OutboxMail {
@@ -202,14 +202,14 @@ func TestOutboxWithoutMailer(t *testing.T) {
 
 	f := newAuthFixture(t)
 	f.register("ada@example.org", "correct horse")
-	o := service.NewOutboxService(f.st, f.clock, nil)
+	o := service.NewOutboxService(f.st, f.clock, nil, nil)
 
 	if n := deliver(t, o); n != 0 {
 		t.Fatalf("sent %d without a mailer", n)
 	}
 
 	mails, err := o.List(t.Context(), 10)
-	if err != nil || len(mails) != 1 || mails[0].Status() != domain.MailPending {
+	if err != nil || len(mails) != 1 || mails[0].Mail.Status() != domain.MailPending {
 		t.Fatalf("List = %+v, %v; want the pending mail", mails, err)
 	}
 }

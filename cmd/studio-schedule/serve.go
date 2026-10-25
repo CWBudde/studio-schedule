@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/mail"
 	"github.com/cwbudde/studio-schedule/internal/mail/smtp"
+	"github.com/cwbudde/studio-schedule/internal/pdf/typstwasm"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/memory"
@@ -118,6 +120,9 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	// Without a database the server runs on the demo data, like the web demo.
 	demo := cfg.DatabaseURL == ""
 
+	pdf := newPDFRenderer(ctx, clk, logger)
+	defer func() { _ = pdf.Close(context.WithoutCancel(ctx)) }()
+
 	deps := app.Deps{
 		Store:   st,
 		Clock:   clk,
@@ -126,6 +131,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		UI:      webui.Handler(),
 		AppURL:  appURL(cfg),
 		Mailer:  mailer,
+		PDF:     pdf,
 		Demo:    demo,
 
 		TrustedProxies: cfg.TrustedProxies,
@@ -314,4 +320,30 @@ func warnWithoutSettings(ctx context.Context, st store.Store, logger *slog.Logge
 	}
 
 	return nil
+}
+
+// newPDFRenderer starts compiling the receipt renderer (typst run by wazero)
+// in the background, with the compiled code cached in the user's cache
+// directory if there is one, so a restart is quick. Renders wait for the
+// compilation; a failure is logged at once and fails every receipt.
+func newPDFRenderer(ctx context.Context, clk clock.Clock, logger *slog.Logger) *typstwasm.Renderer {
+	opts := typstwasm.Options{}
+	if dir, err := os.UserCacheDir(); err == nil {
+		opts.CacheDir = filepath.Join(dir, "studio-schedule", "wazero")
+	}
+
+	r := typstwasm.New(opts)
+
+	go func() {
+		start := clk.Now()
+		if err := r.Ready(ctx); err != nil && ctx.Err() == nil {
+			logger.Error("the receipt renderer is unavailable: receipts and pass sales fail", slog.Any("err", err))
+
+			return
+		}
+
+		logger.Debug("receipt renderer ready", slog.Duration("took", clk.Now().Sub(start)))
+	}()
+
+	return r
 }

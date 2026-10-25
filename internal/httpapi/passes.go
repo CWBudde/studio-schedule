@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/http"
@@ -50,6 +51,16 @@ func registerPasses(api huma.API, h *handlers) {
 			"`duplicate`.",
 	}), h.updatePassType)
 
+	register(api, AccessOffice, huma.Operation{
+		OperationID: "retirePassType",
+		Method:      http.MethodPost,
+		Path:        BasePath + "/admin/pass-types/{passTypeId}/retire",
+		Summary:     "Retire a pass type",
+		Description: "Stops the sale of a pass type (`active: false`) and changes nothing else; retiring a retired " +
+			"type changes nothing. Passes sold keep what they were sold with. An unknown type is a 404.",
+		Tags: []string{"passes"},
+	}, h.retirePassType)
+
 	register(api, AccessOffice, write(huma.Operation{
 		OperationID:   "deletePassType",
 		Method:        http.MethodDelete,
@@ -78,7 +89,10 @@ func registerPasses(api huma.API, h *handlers) {
 			"`validFrom` (default: today in the school's time zone) and records the price paid (default: the " +
 			"type's price) and who paid (`payerId`, default: the person). An unknown person is a 404; an " +
 			"unknown or retired type a 422 on `body.passTypeId`, an unknown payer on `body.payerId`. A new " +
-			"pass pays for nothing booked before.",
+			"pass pays for nothing booked before. The sale issues its receipt (ADR 0012): numbered, with the " +
+			"payment method and the recipient, rendered as a PDF and mailed to the payer's account (else to " +
+			"`recipientEmail`, else nowhere). Incomplete receipt settings are a 409 " +
+			"`receipt-settings-incomplete`: every sale has a receipt.",
 		DefaultStatus: http.StatusCreated,
 	}), h.sellPass)
 
@@ -164,23 +178,24 @@ type PassPerson struct {
 
 // Pass is a pass of a person.
 type Pass struct {
-	ID              domain.PassID `doc:"Pass ID." json:"id"`
-	PassType        PassTypeRef   `json:"passType"`
-	Owner           PassPerson    `doc:"Whom the pass belongs to." json:"owner"`
-	Kind            string        `doc:"visits: a number of visits; time: any number of visits within its days." enum:"visits,time" json:"kind"`
-	VisitsTotal     int           `doc:"Visits of a visit pass; 0 for a time pass." json:"visitsTotal"`
-	VisitsRemaining int           `doc:"Visits left of a visit pass; 0 for a time pass." json:"visitsRemaining"`
-	ValidFrom       domain.Date   `doc:"First school date the pass pays for." format:"date" json:"validFrom"`
-	ValidUntil      domain.Date   `doc:"Last school date the pass pays for; absent for a visit pass without expiry." format:"date" json:"validUntil,omitzero"`
-	Status          string        `doc:"active, or voided by the office." enum:"active,voided" json:"status"`
-	Usable          bool          `doc:"Whether the pass pays for a visit today: active, valid today, and a visit pass has visits left." json:"usable"`
-	Origin          string        `doc:"sale: sold; assignment: given without payment." enum:"sale,assignment" json:"origin"`
-	SoldAt          time.Time     `doc:"When it was sold or given." json:"soldAt"`
-	Payer           *PassPerson   `doc:"Who paid, if not the owner." json:"payer,omitempty"`
-	PricePaid       int64         `doc:"Price paid in minor units of the school currency; 0 for an assignment." json:"pricePaid"`
-	VoidedAt        time.Time     `doc:"When it was voided, if so." json:"voidedAt,omitzero"`
-	Uses            []PassUse     `doc:"The latest bookings it paid for (at most 10, by when it paid), the latest lesson first." json:"uses" nullable:"false"`
-	UseCount        int           `doc:"How many bookings it paid for in all." json:"useCount"`
+	ID              domain.PassID    `doc:"Pass ID." json:"id"`
+	PassType        PassTypeRef      `json:"passType"`
+	Owner           PassPerson       `doc:"Whom the pass belongs to." json:"owner"`
+	Kind            string           `doc:"visits: a number of visits; time: any number of visits within its days." enum:"visits,time" json:"kind"`
+	VisitsTotal     int              `doc:"Visits of a visit pass; 0 for a time pass." json:"visitsTotal"`
+	VisitsRemaining int              `doc:"Visits left of a visit pass; 0 for a time pass." json:"visitsRemaining"`
+	ValidFrom       domain.Date      `doc:"First school date the pass pays for." format:"date" json:"validFrom"`
+	ValidUntil      domain.Date      `doc:"Last school date the pass pays for; absent for a visit pass without expiry." format:"date" json:"validUntil,omitzero"`
+	Status          string           `doc:"active, or voided by the office." enum:"active,voided" json:"status"`
+	Usable          bool             `doc:"Whether the pass pays for a visit today: active, valid today, and a visit pass has visits left." json:"usable"`
+	Origin          string           `doc:"sale: sold; assignment: given without payment." enum:"sale,assignment" json:"origin"`
+	SoldAt          time.Time        `doc:"When it was sold or given." json:"soldAt"`
+	Payer           *PassPerson      `doc:"Who paid, if not the owner." json:"payer,omitempty"`
+	PricePaid       int64            `doc:"Price paid in minor units of the school currency; 0 for an assignment." json:"pricePaid"`
+	VoidedAt        time.Time        `doc:"When it was voided, if so." json:"voidedAt,omitzero"`
+	ReceiptID       domain.ReceiptID `doc:"The receipt of the sale; absent for an assignment." json:"receiptId,omitzero"`
+	Uses            []PassUse        `doc:"The latest bookings it paid for (at most 10, by when it paid), the latest lesson first." json:"uses" nullable:"false"`
+	UseCount        int              `doc:"How many bookings it paid for in all." json:"useCount"`
 }
 
 // AdminPass is a pass as the office sees it: with its note.
@@ -236,7 +251,7 @@ type PassTypeUpdateInput struct {
 	Body       PassTypeData
 }
 
-// PassTypeRefInput is the request of deletePassType.
+// PassTypeRefInput is the request of retirePassType and deletePassType.
 type PassTypeRefInput struct {
 	PassTypeID domain.PassTypeID `doc:"The pass type." path:"passTypeId"`
 }
@@ -268,6 +283,11 @@ type SellPassData struct {
 	ValidFrom  domain.Date       `doc:"First school date of the pass; default: today." format:"date" json:"validFrom,omitzero" required:"false"`
 	Price      *int64            `doc:"Price paid in minor units; default: the type's price." json:"price,omitempty" maximum:"100000000" minimum:"0" required:"false"`
 	Note       string            `doc:"A note for the office." json:"note,omitempty" maxLength:"500" required:"false"`
+	// The receipt (ADR 0012).
+	PaymentMethod    string `default:"cash" doc:"How it was paid; printed on the receipt." enum:"cash,transfer,card" json:"paymentMethod,omitempty" required:"false"`
+	RecipientName    string `doc:"The name the receipt prints as the payer; default: the payer's name." json:"recipientName,omitempty" maxLength:"200" required:"false"`
+	RecipientAddress string `doc:"The payer's address printed on the receipt, one line per printed line; none by default." json:"recipientAddress,omitempty" maxLength:"500" required:"false"`
+	RecipientEmail   string `doc:"Where the receipt is mailed if the payer has no account; ignored (not stored) if the payer has one, which gets the receipt." json:"recipientEmail,omitempty" maxLength:"254" required:"false"`
 }
 
 // SellPassInput is the request of sellPass.
@@ -317,9 +337,10 @@ type PassSettingsOutput struct {
 
 // MyPasses is the response body of listMyPasses.
 type MyPasses struct {
-	Timezone string      `doc:"IANA time zone of the school; school dates are local to it." json:"timezone"`
-	Today    domain.Date `doc:"Today's school date, which usable refers to." format:"date" json:"today"`
-	Items    []Pass      `doc:"The family's passes: usable first, then the others, each newest sale first." json:"items" nullable:"false"`
+	Timezone       string      `doc:"IANA time zone of the school; school dates are local to it." json:"timezone"`
+	Today          domain.Date `doc:"Today's school date, which usable refers to." format:"date" json:"today"`
+	RedemptionMode string      `doc:"When bookings use a pass. booking: when booked; a timely cancellation gives the visit back, a late one keeps it. attendance: when marked attended or no-show, or canceled late." enum:"booking,attendance" json:"redemptionMode"`
+	Items          []Pass      `doc:"The family's passes: usable first, then the others, each newest sale first." json:"items" nullable:"false"`
 }
 
 // MyPassesOutput is the response of listMyPasses.
@@ -349,6 +370,10 @@ func (h *handlers) updatePassType(ctx context.Context, in *PassTypeUpdateInput) 
 	return h.passTypeOutput(ctx)(h.deps.Passes.UpdatePassType(ctx, in.PassTypeID, in.Body.service()))
 }
 
+func (h *handlers) retirePassType(ctx context.Context, in *PassTypeRefInput) (*PassTypeOutput, error) {
+	return h.passTypeOutput(ctx)(h.deps.Passes.RetirePassType(ctx, in.PassTypeID))
+}
+
 func (h *handlers) deletePassType(ctx context.Context, in *PassTypeRefInput) (*struct{}, error) {
 	if err := h.deps.Passes.DeletePassType(ctx, in.PassTypeID); err != nil {
 		return nil, h.toHTTPError(ctx, err)
@@ -374,11 +399,14 @@ func (h *handlers) listPersonPasses(ctx context.Context, in *PersonPassesInput) 
 func (h *handlers) sellPass(ctx context.Context, in *SellPassInput) (*AdminPassOutput, error) {
 	p, _ := principalFrom(ctx) // AccessOffice
 
+	b := in.Body
 	sale := service.PassSale{
-		PassTypeID: in.Body.PassTypeID, PayerID: in.Body.PayerID, ValidFrom: in.Body.ValidFrom, Note: in.Body.Note,
+		PassTypeID: b.PassTypeID, PayerID: b.PayerID, ValidFrom: b.ValidFrom, Note: b.Note,
+		PaymentMethod: domain.PaymentMethod(cmp.Or(b.PaymentMethod, string(domain.PaymentCash))),
+		Recipient:     service.ReceiptRecipient{Name: b.RecipientName, Address: b.RecipientAddress, Email: b.RecipientEmail},
 	}
-	if in.Body.Price != nil {
-		price := domain.Money(*in.Body.Price)
+	if b.Price != nil {
+		price := domain.Money(*b.Price)
 		sale.Price = &price
 	}
 
@@ -427,7 +455,9 @@ func (h *handlers) listMyPasses(ctx context.Context, _ *struct{}) (*MyPassesOutp
 		items = append(items, passBody(v))
 	}
 
-	return &MyPassesOutput{Body: MyPasses{Timezone: mine.Timezone, Today: mine.Today, Items: items}}, nil
+	return &MyPassesOutput{Body: MyPasses{
+		Timezone: mine.Timezone, Today: mine.Today, RedemptionMode: string(mine.RedemptionMode), Items: items,
+	}}, nil
 }
 
 func (h *handlers) passTypeOutput(ctx context.Context) func(domain.PassType, error) (*PassTypeOutput, error) {
@@ -445,7 +475,7 @@ func (h *handlers) adminPassOutput(ctx context.Context) func(service.PassView, e
 		if errors.Is(err, service.ErrPassVoided) {
 			return nil, conflict(reasonAlreadyVoided, "the pass is voided already")
 		} else if err != nil {
-			return nil, h.toHTTPError(ctx, err)
+			return nil, h.receiptError(ctx, err)
 		}
 
 		return &AdminPassOutput{Body: adminPassBody(v)}, nil
@@ -476,7 +506,7 @@ func passBody(v service.PassView) Pass {
 		Owner: PassPerson{ID: p.PersonID, Name: v.OwnerName}, Kind: string(p.Kind),
 		VisitsTotal: p.VisitsTotal, VisitsRemaining: p.VisitsRemaining, ValidFrom: p.ValidFrom, ValidUntil: p.ValidUntil,
 		Status: string(p.Status), Usable: v.Usable, Origin: string(p.Origin), SoldAt: p.SoldAt.UTC(),
-		PricePaid: int64(p.PricePaid), VoidedAt: p.VoidedAt.UTC(), Uses: make([]PassUse, 0, len(v.Uses)),
+		PricePaid: int64(p.PricePaid), VoidedAt: p.VoidedAt.UTC(), ReceiptID: p.ReceiptID, Uses: make([]PassUse, 0, len(v.Uses)),
 		UseCount: v.UseCount,
 	}
 

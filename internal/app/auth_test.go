@@ -58,6 +58,10 @@ func newAuthApp(t *testing.T, deps app.Deps) *authApp {
 	clk := &stepClock{t: time.Date(2026, time.October, 23, 16, 0, 0, 0, time.UTC)}
 	deps.Store, deps.Clock, deps.Hasher = st, clk, hasher
 	deps.AppURL = "https://school.example.org/"
+
+	if deps.PDF == nil {
+		deps.PDF = fakePDF{}
+	}
 	h, _ := app.New(deps)
 
 	return &authApp{t: t, h: h, clock: clk}

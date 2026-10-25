@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -237,8 +238,10 @@ func Permanent(err error) bool {
 }
 
 // buildMessage validates m and renders it as an RFC 5322 message with CRLF
-// line endings: text/plain alone, or multipart/alternative with text/plain
-// and text/html, both quoted-printable UTF-8.
+// line endings. The body is text/plain alone, or multipart/alternative with
+// text/plain and text/html, both quoted-printable UTF-8. With attachments
+// the message is multipart/mixed: the body first, then each attachment,
+// base64-encoded.
 func (s *Sender) buildMessage(m mail.Message) ([]byte, error) {
 	if err := m.Validate(); err != nil {
 		return nil, err
@@ -265,14 +268,20 @@ func (s *Sender) buildMessage(m mail.Message) ([]byte, error) {
 	header("Message-ID", "<"+id+"@"+domainOf(s.from.Address)+">")
 	header("MIME-Version", "1.0")
 
-	if m.HTML == "" {
-		header("Content-Type", "text/plain; charset=utf-8")
-		header("Content-Transfer-Encoding", "quoted-printable")
-		b.WriteString("\r\n")
+	contentType, body, err := s.body(m)
+	if err != nil {
+		return nil, err
+	}
 
-		if err := writeQuotedPrintable(&b, m.Text); err != nil {
-			return nil, err
+	if len(m.Attachments) == 0 {
+		header("Content-Type", contentType)
+
+		if contentType == textPlain {
+			header("Content-Transfer-Encoding", "quoted-printable")
 		}
+
+		b.WriteString("\r\n")
+		b.Write(body)
 
 		return b.Bytes(), nil
 	}
@@ -283,26 +292,38 @@ func (s *Sender) buildMessage(m mail.Message) ([]byte, error) {
 	}
 
 	mw := multipart.NewWriter(&b)
-	if err := mw.SetBoundary("alt-" + boundary); err != nil {
+	if err := mw.SetBoundary("mixed-" + boundary); err != nil {
 		return nil, err
 	}
 
-	header("Content-Type", mime.FormatMediaType("multipart/alternative", map[string]string{"boundary": mw.Boundary()}))
+	header("Content-Type", mime.FormatMediaType("multipart/mixed", map[string]string{"boundary": mw.Boundary()}))
 	b.WriteString("\r\n")
 
-	for _, part := range []struct{ contentType, body string }{
-		{"text/plain; charset=utf-8", m.Text},
-		{"text/html; charset=utf-8", m.HTML},
-	} {
+	part := textproto.MIMEHeader{"Content-Type": {contentType}}
+	if contentType == textPlain {
+		part.Set("Content-Transfer-Encoding", "quoted-printable")
+	}
+
+	w, err := mw.CreatePart(part)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := w.Write(body); err != nil {
+		return nil, err
+	}
+
+	for _, a := range m.Attachments {
 		w, err := mw.CreatePart(textproto.MIMEHeader{
-			"Content-Type":              {part.contentType},
-			"Content-Transfer-Encoding": {"quoted-printable"},
+			"Content-Type":              {mime.FormatMediaType(a.ContentType, map[string]string{"name": a.Filename})},
+			"Content-Disposition":       {mime.FormatMediaType("attachment", map[string]string{"filename": a.Filename})},
+			"Content-Transfer-Encoding": {"base64"},
 		})
 		if err != nil {
 			return nil, err
 		}
 
-		if err := writeQuotedPrintable(w, part.body); err != nil {
+		if err := writeBase64(w, a.Content); err != nil {
 			return nil, err
 		}
 	}
@@ -312,6 +333,71 @@ func (s *Sender) buildMessage(m mail.Message) ([]byte, error) {
 	}
 
 	return b.Bytes(), nil
+}
+
+const textPlain = "text/plain; charset=utf-8"
+
+// body returns the Content-Type and the encoded body of m's text: text/plain
+// alone (quoted-printable), or multipart/alternative with its HTML.
+func (s *Sender) body(m mail.Message) (string, []byte, error) {
+	var b bytes.Buffer
+
+	if m.HTML == "" {
+		if err := writeQuotedPrintable(&b, m.Text); err != nil {
+			return "", nil, err
+		}
+
+		return textPlain, b.Bytes(), nil
+	}
+
+	boundary, err := s.randomHex()
+	if err != nil {
+		return "", nil, err
+	}
+
+	mw := multipart.NewWriter(&b)
+	if err := mw.SetBoundary("alt-" + boundary); err != nil {
+		return "", nil, err
+	}
+
+	for _, part := range []struct{ contentType, body string }{
+		{textPlain, m.Text},
+		{"text/html; charset=utf-8", m.HTML},
+	} {
+		w, err := mw.CreatePart(textproto.MIMEHeader{
+			"Content-Type":              {part.contentType},
+			"Content-Transfer-Encoding": {"quoted-printable"},
+		})
+		if err != nil {
+			return "", nil, err
+		}
+
+		if err := writeQuotedPrintable(w, part.body); err != nil {
+			return "", nil, err
+		}
+	}
+
+	if err := mw.Close(); err != nil {
+		return "", nil, err
+	}
+
+	return mime.FormatMediaType("multipart/alternative", map[string]string{"boundary": mw.Boundary()}), b.Bytes(), nil
+}
+
+// writeBase64 encodes data in lines of 76 characters (RFC 2045).
+func writeBase64(w io.Writer, data []byte) error {
+	enc := base64.StdEncoding.EncodeToString(data)
+
+	for len(enc) > 0 {
+		n := min(len(enc), 76)
+		if _, err := io.WriteString(w, enc[:n]+"\r\n"); err != nil {
+			return err
+		}
+
+		enc = enc[n:]
+	}
+
+	return nil
 }
 
 // writeQuotedPrintable encodes body with CRLF line breaks, whatever line

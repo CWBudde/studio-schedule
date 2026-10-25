@@ -25,12 +25,14 @@ type passFixture struct {
 
 	tenVisits, single, month domain.PassType
 	office                   Principal
+	// pdf renders the receipts of the sales.
+	pdf *fakePDF
 }
 
 func newPassFixture(t *testing.T, mode domain.RedemptionMode) *passFixture {
 	t.Helper()
 
-	f := &passFixture{staffFixture: newStaffFixture(t)}
+	f := &passFixture{staffFixture: newStaffFixture(t), pdf: &fakePDF{}}
 	f.office = f.principal(t, f.olga)
 	f.setMode(t, mode)
 
@@ -63,7 +65,13 @@ func (f *passFixture) setMode(t *testing.T, mode domain.RedemptionMode) {
 func (f *passFixture) passService(t *testing.T, now string) *PassService {
 	t.Helper()
 
-	return NewPassService(f.st, clock.NewFixed(mustInstant(t, now)), f.seq)
+	return NewPassService(f.st, clock.NewFixed(mustInstant(t, now)), f.seq, f.receiptService(t, now))
+}
+
+func (f *passFixture) receiptService(t *testing.T, now string) *ReceiptService {
+	t.Helper()
+
+	return NewReceiptService(f.st, clock.NewFixed(mustInstant(t, now)), f.seq, testMails(newTestRenderer(t)), f.pdf)
 }
 
 // sell sells a pass of pt to p at bookingNow, valid from the school date
@@ -226,9 +234,9 @@ func TestSellAndAssignPass(t *testing.T) {
 		ID: v.Pass.ID, PassTypeID: f.tenVisits.ID, PersonID: f.mia.ID, Kind: domain.PassVisits, VisitsTotal: 10,
 		VisitsRemaining: 10, ValidFrom: mustDate(t, "2026-10-21"), ValidUntil: mustDate(t, "2027-04-18"),
 		Status: domain.PassActive, Origin: domain.PassSold, SoldAt: mustInstant(t, bookingNow), SoldBy: f.office.AccountID,
-		PayerID: f.anna.ID, PricePaid: 12000, Note: "cash",
+		PayerID: f.anna.ID, ReceiptID: v.Pass.ReceiptID, PricePaid: 12000, Note: "cash",
 	}
-	if v.Pass != want || v.OwnerName != "Mia Example" || v.PayerName != "Anna Example" || v.PassType.ID != f.tenVisits.ID ||
+	if v.Pass != want || v.Pass.ReceiptID.IsZero() || v.OwnerName != "Mia Example" || v.PayerName != "Anna Example" || v.PassType.ID != f.tenVisits.ID ||
 		!v.Usable || len(v.Uses) != 0 {
 		t.Fatalf("sold\n%+v\nwant pass %+v", v, want)
 	}

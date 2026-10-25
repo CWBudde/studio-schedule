@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"mime"
 	"net/mail"
 	"strings"
 	"unicode/utf8"
@@ -34,7 +35,22 @@ type Message struct {
 	HTML string
 	// ReplyTo is a bare address replies go to; empty means the sender.
 	ReplyTo string
+	// Attachments are files sent along, e.g. the PDF of a receipt.
+	Attachments []Attachment
 }
+
+// Attachment is a file attached to a message.
+type Attachment struct {
+	// Filename is the name the recipient sees, e.g. "SD-2026-0001.pdf".
+	Filename string
+	// ContentType is the media type, e.g. "application/pdf".
+	ContentType string
+	Content     []byte
+}
+
+// MaxAttachmentsSize bounds the attachments of a message, which mail servers
+// commonly limit to 10 MB or more after encoding.
+const MaxAttachmentsSize = 5 << 20
 
 // Validate checks that the message can be sent as is. All errors wrap
 // domain.ErrValidation.
@@ -54,7 +70,49 @@ func (m Message) Validate() error {
 		return fmt.Errorf("%w: mail text must not be empty", domain.ErrValidation)
 	}
 
+	size := 0
+
+	for _, a := range m.Attachments {
+		size += len(a.Content)
+
+		switch {
+		case !validFilename(a.Filename):
+			return fmt.Errorf("%w: attachment names must be 1 to 100 printable characters without quotes or slashes",
+				domain.ErrValidation)
+		case !validMediaType(a.ContentType):
+			return fmt.Errorf("%w: invalid attachment content type", domain.ErrValidation)
+		case len(a.Content) == 0:
+			return fmt.Errorf("%w: empty attachment", domain.ErrValidation)
+		case size > MaxAttachmentsSize:
+			return fmt.Errorf("%w: attachments too large", domain.ErrValidation)
+		}
+	}
+
 	return nil
+}
+
+// validFilename reports whether s is a file name that needs no quoting
+// tricks in a MIME header.
+func validFilename(s string) bool {
+	if s == "" || utf8.RuneCountInString(s) > 100 || !utf8.ValidString(s) {
+		return false
+	}
+
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f || strings.ContainsRune(`"\/`, r) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// validMediaType reports whether s is a bare media type like
+// "application/pdf".
+func validMediaType(s string) bool {
+	mt, params, err := mime.ParseMediaType(s)
+
+	return err == nil && len(params) == 0 && mt == s && strings.Count(s, "/") == 1
 }
 
 // bareAddress reports whether s is exactly one address without display name

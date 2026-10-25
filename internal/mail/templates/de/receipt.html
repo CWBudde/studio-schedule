@@ -1,0 +1,9 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+{{if .Cancellation -}}
+<p>im Anhang findest du den Stornobeleg <strong>{{.Number}}</strong> zur Quittung {{.Cancels}}: {{.Amount}} werden erstattet.</p>
+{{- else -}}
+<p>vielen Dank für deine Zahlung von {{.Amount}}. Im Anhang findest du deine Quittung <strong>{{.Number}}</strong>{{with .Item}} über {{.}}{{end}}.</p>
+{{- end}}
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

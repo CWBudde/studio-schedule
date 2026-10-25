@@ -157,6 +157,11 @@
             "format": "int64",
             "type": "integer"
           },
+          "receiptId": {
+            "description": "The receipt of the sale; absent for an assignment.",
+            "format": "uuid",
+            "type": "string"
+          },
           "soldAt": {
             "description": "When it was sold or given.",
             "format": "date-time",
@@ -697,6 +702,17 @@
         },
         "type": "object"
       },
+      "CancelReceiptInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "description": "Why; printed on the cancellation.",
+            "maxLength": 200,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "CanceledBooking": {
         "additionalProperties": false,
         "properties": {
@@ -1229,7 +1245,7 @@
             "description": "The lesson that uses the room; only with reason room-taken."
           },
           "reason": {
-            "description": "in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already.",
+            "description": "in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled.",
             "enum": [
               "in-use",
               "duplicate",
@@ -1248,7 +1264,10 @@
               "invite-expired",
               "invite-used",
               "not-waiting",
-              "already-voided"
+              "already-voided",
+              "receipt-settings-incomplete",
+              "pass-used",
+              "cancellation"
             ],
             "type": "string"
           },
@@ -2784,9 +2803,34 @@
         ],
         "type": "object"
       },
+      "MailboxAttachment": {
+        "additionalProperties": false,
+        "properties": {
+          "contentType": {
+            "description": "Media type.",
+            "enum": [
+              "application/pdf"
+            ],
+            "type": "string"
+          },
+          "filename": {
+            "description": "File name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename",
+          "contentType"
+        ],
+        "type": "object"
+      },
       "MailboxMail": {
         "additionalProperties": false,
         "properties": {
+          "attachment": {
+            "$ref": "#/components/schemas/MailboxAttachment",
+            "description": "The attached file; absent if none."
+          },
           "createdAt": {
             "description": "When the mail was written.",
             "format": "date-time",
@@ -3029,6 +3073,14 @@
             },
             "type": "array"
           },
+          "redemptionMode": {
+            "description": "When bookings use a pass. booking: when booked; a timely cancellation gives the visit back, a late one keeps it. attendance: when marked attended or no-show, or canceled late.",
+            "enum": [
+              "booking",
+              "attendance"
+            ],
+            "type": "string"
+          },
           "timezone": {
             "description": "IANA time zone of the school; school dates are local to it.",
             "type": "string"
@@ -3042,6 +3094,23 @@
         "required": [
           "timezone",
           "today",
+          "redemptionMode",
+          "items"
+        ],
+        "type": "object"
+      },
+      "MyReceiptList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "The receipts of what the signed-in person paid, newest first.",
+            "items": {
+              "$ref": "#/components/schemas/Receipt"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
           "items"
         ],
         "type": "object"
@@ -3163,6 +3232,11 @@
             "description": "Price paid in minor units of the school currency; 0 for an assignment.",
             "format": "int64",
             "type": "integer"
+          },
+          "receiptId": {
+            "description": "The receipt of the sale; absent for an assignment.",
+            "format": "uuid",
+            "type": "string"
           },
           "soldAt": {
             "description": "When it was sold or given.",
@@ -3877,6 +3951,463 @@
         ],
         "type": "object"
       },
+      "Receipt": {
+        "additionalProperties": false,
+        "properties": {
+          "cancelable": {
+            "description": "Whether the office can cancel it now: a sale, not canceled, whose pass paid for no visit.",
+            "type": "boolean"
+          },
+          "canceledBy": {
+            "$ref": "#/components/schemas/ReceiptRef",
+            "description": "The cancellation of a receipt, if canceled."
+          },
+          "cancels": {
+            "$ref": "#/components/schemas/ReceiptRef",
+            "description": "The receipt a cancellation cancels."
+          },
+          "currency": {
+            "description": "ISO 4217 currency of the amounts.",
+            "type": "string"
+          },
+          "gross": {
+            "description": "Total in minor units.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "description": "Receipt ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "issueDate": {
+            "description": "School date it was issued.",
+            "format": "date",
+            "type": "string"
+          },
+          "issuedAt": {
+            "description": "When it was issued.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "issuer": {
+            "$ref": "#/components/schemas/ReceiptIssuer"
+          },
+          "kind": {
+            "description": "sale: confirms the payment of a pass; cancellation: cancels a sale receipt (Storno), every amount negated.",
+            "enum": [
+              "sale",
+              "cancellation"
+            ],
+            "type": "string"
+          },
+          "lines": {
+            "description": "The lines.",
+            "items": {
+              "$ref": "#/components/schemas/ReceiptLine"
+            },
+            "type": "array"
+          },
+          "net": {
+            "description": "Net total in minor units.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "number": {
+            "description": "Printed number, e.g. SD-2026-0001: the prefix, the year and a gapless sequence per year.",
+            "type": "string"
+          },
+          "passId": {
+            "description": "The pass a sale receipt confirms.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "payer": {
+            "$ref": "#/components/schemas/PassPerson",
+            "description": "Who paid."
+          },
+          "paymentMethod": {
+            "description": "How it was paid (or refunded).",
+            "enum": [
+              "cash",
+              "transfer",
+              "card"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why a cancellation was issued; absent if not given.",
+            "type": "string"
+          },
+          "recipientAddress": {
+            "description": "The address printed; absent if none.",
+            "type": "string"
+          },
+          "recipientEmail": {
+            "description": "The address typed at the sale that the receipt was mailed to, because the payer has no account; absent otherwise (a payer with an account gets it there).",
+            "type": "string"
+          },
+          "recipientName": {
+            "description": "The name printed as the payer.",
+            "type": "string"
+          },
+          "taxMode": {
+            "description": "The school's tax mode at issuance.",
+            "enum": [
+              "small_business",
+              "exempt",
+              "standard"
+            ],
+            "type": "string"
+          },
+          "taxNote": {
+            "description": "The tax note printed; absent if none.",
+            "type": "string"
+          },
+          "vat": {
+            "description": "VAT total in minor units.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "kind",
+          "issuedAt",
+          "issueDate",
+          "issuer",
+          "taxMode",
+          "recipientName",
+          "paymentMethod",
+          "currency",
+          "net",
+          "vat",
+          "gross",
+          "lines",
+          "cancelable"
+        ],
+        "type": "object"
+      },
+      "ReceiptIssuer": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address, one line per printed line.",
+            "type": "string"
+          },
+          "email": {
+            "description": "Contact email; absent if none.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Legal name.",
+            "type": "string"
+          },
+          "phone": {
+            "description": "Contact phone; absent if none.",
+            "type": "string"
+          },
+          "taxNumber": {
+            "description": "Tax number or VAT ID.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "address",
+          "taxNumber"
+        ],
+        "type": "object"
+      },
+      "ReceiptLine": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "description": "What was paid.",
+            "type": "string"
+          },
+          "gross": {
+            "description": "Gross amount (quantity × unit price) in minor units.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "net": {
+            "description": "Net amount in minor units.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "position": {
+            "description": "Position, from 1.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "quantity": {
+            "description": "Quantity.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "unitPrice": {
+            "description": "Gross price of one unit in minor units (negative on a cancellation).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "vat": {
+            "description": "VAT in minor units.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "vatRate": {
+            "description": "VAT rate charged, in basis points (0 unless the tax mode is standard).",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "position",
+          "description",
+          "quantity",
+          "unitPrice",
+          "vatRate",
+          "net",
+          "vat",
+          "gross"
+        ],
+        "type": "object"
+      },
+      "ReceiptList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "The receipts, newest first.",
+            "items": {
+              "$ref": "#/components/schemas/Receipt"
+            },
+            "type": "array"
+          },
+          "total": {
+            "description": "How many receipts match in all.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "years": {
+            "description": "The years with receipts, the latest first, whatever the filter: the choices of the year filter.",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "years"
+        ],
+        "type": "object"
+      },
+      "ReceiptLogoInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "contentType": {
+            "description": "The image type.",
+            "enum": [
+              "image/png",
+              "image/jpeg"
+            ],
+            "type": "string"
+          },
+          "data": {
+            "contentEncoding": "base64",
+            "description": "The image, base64 encoded; at most 512 KiB.",
+            "maxLength": 699052,
+            "type": "string"
+          }
+        },
+        "required": [
+          "contentType",
+          "data"
+        ],
+        "type": "object"
+      },
+      "ReceiptRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "Receipt ID.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "issueDate": {
+            "description": "School date it was issued.",
+            "format": "date",
+            "type": "string"
+          },
+          "number": {
+            "description": "Receipt number.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "issueDate"
+        ],
+        "type": "object"
+      },
+      "ReceiptSettingsBody": {
+        "additionalProperties": false,
+        "properties": {
+          "addressRequiredAbove": {
+            "description": "The gross amount in minor units above which a receipt should name the recipient's address; absent if no such limit applies. Set in the standard tax mode in euros: the German small-amount invoice limit, 250 € (§ 33 UStDV). A hint for the sale form; sales above it are not refused.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "complete": {
+            "description": "Whether receipts, and so pass sales, can be issued.",
+            "type": "boolean"
+          },
+          "email": {
+            "description": "Contact email printed on receipts.",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "footer": {
+            "description": "Printed at the bottom, e.g. bank details.",
+            "maxLength": 500,
+            "type": "string"
+          },
+          "issuerAddress": {
+            "description": "The issuer's address, one line per printed line.",
+            "maxLength": 500,
+            "type": "string"
+          },
+          "issuerName": {
+            "description": "The issuer's legal name.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "logoMaxBytes": {
+            "description": "The largest logo updateReceiptLogo takes, in bytes (before base64).",
+            "format": "int64",
+            "type": "integer"
+          },
+          "logoType": {
+            "description": "The content type of the logo; absent without one.",
+            "enum": [
+              "image/png",
+              "image/jpeg"
+            ],
+            "type": "string"
+          },
+          "missing": {
+            "description": "The first setting receipts need that is missing; absent when complete.",
+            "enum": [
+              "issuerName",
+              "issuerAddress",
+              "taxNumber",
+              "taxMode",
+              "taxNote"
+            ],
+            "type": "string"
+          },
+          "phone": {
+            "description": "Contact phone printed on receipts.",
+            "maxLength": 50,
+            "type": "string"
+          },
+          "receiptPrefix": {
+            "description": "Starts every receipt number, 1–16 of A–Z and 0–9.",
+            "maxLength": 16,
+            "minLength": 1,
+            "type": "string"
+          },
+          "taxMode": {
+            "description": "small_business: no VAT, with the § 19 UStG note (or taxNote); exempt: no VAT, with taxNote naming the legal basis; standard: the VAT rate of each pass type is included in its price, and net and VAT are printed. Absent until chosen.",
+            "enum": [
+              "small_business",
+              "exempt",
+              "standard"
+            ],
+            "type": "string"
+          },
+          "taxNote": {
+            "description": "Printed on every receipt; required in the exempt mode.",
+            "maxLength": 500,
+            "type": "string"
+          },
+          "taxNumber": {
+            "description": "Tax number or VAT ID.",
+            "maxLength": 50,
+            "type": "string"
+          }
+        },
+        "required": [
+          "complete",
+          "logoMaxBytes",
+          "receiptPrefix"
+        ],
+        "type": "object"
+      },
+      "ReceiptSettingsData": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "Contact email printed on receipts.",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "footer": {
+            "description": "Printed at the bottom, e.g. bank details.",
+            "maxLength": 500,
+            "type": "string"
+          },
+          "issuerAddress": {
+            "description": "The issuer's address, one line per printed line.",
+            "maxLength": 500,
+            "type": "string"
+          },
+          "issuerName": {
+            "description": "The issuer's legal name.",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "phone": {
+            "description": "Contact phone printed on receipts.",
+            "maxLength": 50,
+            "type": "string"
+          },
+          "receiptPrefix": {
+            "description": "Starts every receipt number, 1–16 of A–Z and 0–9.",
+            "maxLength": 16,
+            "minLength": 1,
+            "type": "string"
+          },
+          "taxMode": {
+            "description": "small_business: no VAT, with the § 19 UStG note (or taxNote); exempt: no VAT, with taxNote naming the legal basis; standard: the VAT rate of each pass type is included in its price, and net and VAT are printed. Absent until chosen.",
+            "enum": [
+              "small_business",
+              "exempt",
+              "standard"
+            ],
+            "type": "string"
+          },
+          "taxNote": {
+            "description": "Printed on every receipt; required in the exempt mode.",
+            "maxLength": 500,
+            "type": "string"
+          },
+          "taxNumber": {
+            "description": "Tax number or VAT ID.",
+            "maxLength": 50,
+            "type": "string"
+          }
+        },
+        "required": [
+          "receiptPrefix"
+        ],
+        "type": "object"
+      },
       "RegisterInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -4285,12 +4816,37 @@
             "format": "uuid",
             "type": "string"
           },
+          "paymentMethod": {
+            "default": "cash",
+            "description": "How it was paid; printed on the receipt.",
+            "enum": [
+              "cash",
+              "transfer",
+              "card"
+            ],
+            "type": "string"
+          },
           "price": {
             "description": "Price paid in minor units; default: the type's price.",
             "format": "int64",
             "maximum": 100000000,
             "minimum": 0,
             "type": "integer"
+          },
+          "recipientAddress": {
+            "description": "The payer's address printed on the receipt, one line per printed line; none by default.",
+            "maxLength": 500,
+            "type": "string"
+          },
+          "recipientEmail": {
+            "description": "Where the receipt is mailed if the payer has no account; ignored (not stored) if the payer has one, which gets the receipt.",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "recipientName": {
+            "description": "The name the receipt prints as the payer; default: the payer's name.",
+            "maxLength": 200,
+            "type": "string"
           },
           "validFrom": {
             "description": "First school date of the pass; default: today.",
@@ -5555,6 +6111,52 @@
         "x-access": "office"
       }
     },
+    "/api/v1/admin/pass-types/{passTypeId}/retire": {
+      "post": {
+        "description": "Stops the sale of a pass type (`active: false`) and changes nothing else; retiring a retired type changes nothing. Passes sold keep what they were sold with. An unknown type is a 404.",
+        "operationId": "retirePassType",
+        "parameters": [
+          {
+            "description": "The pass type.",
+            "in": "path",
+            "name": "passTypeId",
+            "required": true,
+            "schema": {
+              "description": "The pass type.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassType"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Retire a pass type",
+        "tags": [
+          "passes"
+        ],
+        "x-access": "office"
+      }
+    },
     "/api/v1/admin/passes/{passId}/void": {
       "post": {
         "description": "Voids a pass: it pays for nothing more, and what it paid for stays paid. A voided pass is a 409 `already-voided`.",
@@ -6161,7 +6763,7 @@
     },
     "/api/v1/admin/persons/{personId}/passes/sell": {
       "post": {
-        "description": "Sells a pass of an active type to the person: it copies the type's visits and days from `validFrom` (default: today in the school's time zone) and records the price paid (default: the type's price) and who paid (`payerId`, default: the person). An unknown person is a 404; an unknown or retired type a 422 on `body.passTypeId`, an unknown payer on `body.payerId`. A new pass pays for nothing booked before.",
+        "description": "Sells a pass of an active type to the person: it copies the type's visits and days from `validFrom` (default: today in the school's time zone) and records the price paid (default: the type's price) and who paid (`payerId`, default: the person). An unknown person is a 404; an unknown or retired type a 422 on `body.passTypeId`, an unknown payer on `body.payerId`. A new pass pays for nothing booked before. The sale issues its receipt (ADR 0012): numbered, with the payment method and the recipient, rendered as a PDF and mailed to the payer's account (else to `recipientEmail`, else nowhere). Incomplete receipt settings are a 409 `receipt-settings-incomplete`: every sale has a receipt.",
         "operationId": "sellPass",
         "parameters": [
           {
@@ -6221,6 +6823,268 @@
         "summary": "Sell a pass",
         "tags": [
           "passes"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/receipts": {
+      "get": {
+        "description": "Returns the receipts that match the filter, newest first (by number), and how many match in all.",
+        "operationId": "listReceipts",
+        "parameters": [
+          {
+            "description": "Only the receipts of this year; 0 or absent: all.",
+            "explode": false,
+            "in": "query",
+            "name": "year",
+            "schema": {
+              "description": "Only the receipts of this year; 0 or absent: all.",
+              "format": "int64",
+              "maximum": 9999,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Matches the number or the recipient's name (ignoring ASCII case); empty matches all.",
+            "explode": false,
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "description": "Matches the number or the recipient's name (ignoring ASCII case); empty matches all.",
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Receipts to skip.",
+            "explode": false,
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "description": "Receipts to skip.",
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Most receipts to return.",
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "description": "Most receipts to return.",
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List receipts",
+        "tags": [
+          "receipts"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/receipts/{receiptId}": {
+      "get": {
+        "description": "Returns a receipt with its lines, the cancellation that canceled it or the receipt it cancels, and whether it can be canceled. An unknown receipt is a 404.",
+        "operationId": "getReceipt",
+        "parameters": [
+          {
+            "description": "The receipt.",
+            "in": "path",
+            "name": "receiptId",
+            "required": true,
+            "schema": {
+              "description": "The receipt.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get a receipt",
+        "tags": [
+          "receipts"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/receipts/{receiptId}/cancel": {
+      "post": {
+        "description": "Issues the cancellation receipt (Storno) of a sale: the next number, every line negated, the same payer, recipient and payment method, mailed to the payer like the receipt. It voids the pass the receipt confirms. A pass that paid for visits is a 409 `pass-used` (void the pass instead); a receipt canceled before a 409 `already-canceled`, a cancellation a 409 `cancellation`, incomplete receipt settings a 409 `receipt-settings-incomplete`. An unknown receipt is a 404.",
+        "operationId": "cancelReceipt",
+        "parameters": [
+          {
+            "description": "The receipt to cancel.",
+            "in": "path",
+            "name": "receiptId",
+            "required": true,
+            "schema": {
+              "description": "The receipt to cancel.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelReceiptInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Cancel a receipt",
+        "tags": [
+          "receipts"
+        ],
+        "x-access": "office"
+      }
+    },
+    "/api/v1/admin/receipts/{receiptId}/pdf": {
+      "get": {
+        "description": "Returns the PDF of a receipt as it was issued (an attachment named after its number). An unknown receipt is a 404.",
+        "operationId": "getReceiptPdf",
+        "parameters": [
+          {
+            "description": "The receipt.",
+            "in": "path",
+            "name": "receiptId",
+            "required": true,
+            "schema": {
+              "description": "The receipt.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The receipt's PDF.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Download a receipt",
+        "tags": [
+          "receipts"
         ],
         "x-access": "office"
       }
@@ -6295,6 +7159,197 @@
         "summary": "Update the pass settings",
         "tags": [
           "passes"
+        ],
+        "x-access": "admin"
+      }
+    },
+    "/api/v1/admin/settings/receipts": {
+      "get": {
+        "description": "Returns the issuer, the tax mode and the texts printed on receipts, and whether they are complete: passes are sold only when they are.",
+        "operationId": "getReceiptSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptSettingsBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Receipt settings",
+        "tags": [
+          "receipts"
+        ],
+        "x-access": "office"
+      },
+      "put": {
+        "description": "Replaces the receipt settings and the number prefix. Receipts issued before keep what they were issued with. Invalid fields are a 422 on them; incomplete settings are allowed, but block sales.",
+        "operationId": "updateReceiptSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiptSettingsData"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptSettingsBody"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update the receipt settings",
+        "tags": [
+          "receipts"
+        ],
+        "x-access": "admin"
+      }
+    },
+    "/api/v1/admin/settings/receipts/logo": {
+      "delete": {
+        "description": "Removes the logo; later receipts have none.",
+        "operationId": "deleteReceiptLogo",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove the receipt logo",
+        "tags": [
+          "receipts"
+        ],
+        "x-access": "admin"
+      },
+      "get": {
+        "description": "Returns the logo printed on receipts; a 404 without one.",
+        "operationId": "getReceiptLogo",
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The logo.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Receipt logo",
+        "tags": [
+          "receipts"
+        ],
+        "x-access": "office"
+      },
+      "put": {
+        "description": "Sets the logo printed on receipts from now on: a PNG or JPEG of at most 512 KiB, base64 encoded. A larger image, or data that does not match the type, is a 422 on `body.data`.",
+        "operationId": "updateReceiptLogo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiptLogoInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Set the receipt logo",
+        "tags": [
+          "receipts"
         ],
         "x-access": "admin"
       }
@@ -7830,6 +8885,71 @@
         "x-access": "public"
       }
     },
+    "/api/v1/demo/mailbox/{mailId}/attachment": {
+      "get": {
+        "description": "Returns the file a mail of the demo mailbox attaches (a receipt's PDF). A mail without one is a 404. Only in a demo installation; otherwise a 404.",
+        "operationId": "getDemoMailAttachment",
+        "parameters": [
+          {
+            "description": "The mail.",
+            "in": "path",
+            "name": "mailId",
+            "required": true,
+            "schema": {
+              "description": "The mail.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The attached file.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Demo mail attachment",
+        "tags": [
+          "demo"
+        ],
+        "x-access": "public"
+      }
+    },
     "/api/v1/family": {
       "get": {
         "description": "Returns the signed-in person and their dependents (usually children without their own login), each with its other guardians. A managed dependent, one with its own account or a staff link, is read-only here.",
@@ -9248,6 +10368,104 @@
         "summary": "List my passes",
         "tags": [
           "passes"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/my/receipts": {
+      "get": {
+        "description": "Returns the receipts of the passes the signed-in person paid for, newest first.",
+        "operationId": "listMyReceipts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyReceiptList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List my receipts",
+        "tags": [
+          "receipts"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/my/receipts/{receiptId}/pdf": {
+      "get": {
+        "description": "Returns the PDF of a receipt the signed-in person paid; any other is a 404.",
+        "operationId": "getMyReceiptPdf",
+        "parameters": [
+          {
+            "description": "The receipt.",
+            "in": "path",
+            "name": "receiptId",
+            "required": true,
+            "schema": {
+              "description": "The receipt.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The receipt's PDF.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Download my receipt",
+        "tags": [
+          "receipts"
         ],
         "x-access": "signedIn"
       }
