@@ -6,7 +6,8 @@
  *    the icons (never the demo's *.wasm or wasm_exec.js), so the app starts
  *    offline;
  *  - answers navigations with index.html, except the API, the calendar
- *    feeds and the manifest, which always go to the server;
+ *    feeds, the manifest and the probes and metrics (lib/swRoutes.ts),
+ *    which always go to the server;
  *  - never caches the API: its answers are `no-store`; the last schedule
  *    and My lessons come from the page's persisted query cache instead;
  *  - waits for the page to say "reload" (the update toast) before it
@@ -20,6 +21,7 @@ import {
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { type NotificationData, notificationOptions, parsePushPayload } from './lib/pushPayload';
+import { navigationDenylist } from './lib/swRoutes';
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -29,15 +31,9 @@ cleanupOutdatedCaches();
 /** The app's path, e.g. `/` or `/studio-schedule/`. */
 const base = new URL(self.registration.scope).pathname;
 
-const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL('index.html'), {
-    denylist: [
-      new RegExp(`^${escape(base)}api(/|$)`),
-      new RegExp(`^${escape(base)}ical/`),
-      new RegExp(`^${escape(base)}manifest\\.webmanifest$`),
-    ],
+    denylist: navigationDenylist(base),
   }),
 );
 
