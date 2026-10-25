@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { meQuery } from '@/api/queries';
+import i18n from '@/i18n';
 import {
   demoLogins,
   meMember,
@@ -50,6 +51,19 @@ describe('LoginPage', () => {
       body: { email: 'nora.example@example.org', password: 'secret-password' },
     });
     expect(queryClient.getQueryData(meQuery.queryKey)).toEqual(meMember);
+  });
+
+  it("switches the UI to the account's language and keeps it as the choice", async () => {
+    mockApiGet({ ...signedOut, ...notDemo });
+    mockApiPost({ '/api/v1/auth/login': { body: { ...meMember, locale: 'de' } } });
+
+    const { router } = renderLogin();
+    await fillAndSubmit('nora.example@example.org', 'secret-password');
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+    expect(i18n.resolvedLanguage).toBe('de');
+    // A choice of the visitor's own: the school's default language does not override it.
+    expect(localStorage.getItem('studio-schedule.lang')).toBe('de');
   });
 
   it('checks the fields before sending', async () => {

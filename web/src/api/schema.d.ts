@@ -484,6 +484,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/booking-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Booking rules
+         * @description Returns the weekly release rule, the cutoffs, the hold of waiting-list invites and the members' early access, with the release window now.
+         */
+        get: operations["getBookingRules"];
+        /**
+         * Update the booking rules
+         * @description Replaces the booking rules from now on. A wider window (more weeks ahead, more days of early access) generates the lessons it reaches at once (`generatedLessons`). Invalid fields are a 422 on them.
+         */
+        put: operations["updateBookingRules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/booking-rules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview a release rule
+         * @description Returns the release window that a release rule would have now, without changing anything.
+         */
+        get: operations["previewReleaseWindow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Branding
+         * @description Returns the accent color, its dark-mode variant and whether a logo exists.
+         */
+        get: operations["getBrandingSettings"];
+        /**
+         * Update the branding
+         * @description Sets the accent color, or the app's own without one. It must reach a WCAG contrast of 4.5:1 against the text on it and the page; else a 422 on `body.accentColor`. The dark mode shows a variant derived from it. The logo is the receipts' logo (updateReceiptLogo).
+         */
+        put: operations["updateBrandingSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/passes": {
         parameters: {
             query?: never;
@@ -555,6 +623,54 @@ export interface paths {
          * @description Removes the logo; later receipts have none.
          */
         delete: operations["deleteReceiptLogo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/regional": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Time and language
+         * @description Returns the time zone, the default language and the currency, and which of them are fixed by the data.
+         */
+        get: operations["getRegionalSettings"];
+        /**
+         * Update time and language
+         * @description Replaces the time zone, the default language and the currency. The language may always change. A new time zone once lessons exist is a 409 `timezone-locked`, a new currency once a price or a receipt exists a 409 `currency-locked`: they are chosen at the first setup. Invalid fields are a 422 on them.
+         */
+        put: operations["updateRegionalSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/school": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * School profile
+         * @description Returns the school's name and legal notice.
+         */
+        get: operations["getSchoolSettings"];
+        /**
+         * Update the school profile
+         * @description Replaces the school's name (shown in the header, the page title and mails) and its legal notice (shown in the footer). Invalid fields are a 422 on them.
+         */
+        put: operations["updateSchoolSettings"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1696,6 +1812,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * School logo
+         * @description Returns the school's logo (the one printed on receipts) for the app's header; a 404 without one. Cacheable: with the `ETag` in `If-None-Match` an unchanged logo is a 304.
+         */
+        get: operations["getSchoolLogo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/public": {
         parameters: {
             query?: never;
@@ -1705,7 +1841,7 @@ export interface paths {
         };
         /**
          * Public school settings
-         * @description Returns the school settings that are visible without signing in.
+         * @description Returns the school settings that are visible without signing in: the name, legal notice and branding, the time zone, language and currency.
          */
         get: operations["getPublicSettings"];
         put?: never;
@@ -2300,6 +2436,104 @@ export interface components {
              */
             status: "paid" | "unpaid" | "free" | "pending";
         };
+        BookingRules: {
+            /**
+             * Format: int64
+             * @description Booking closes this many minutes before a lesson starts; 0: at the start.
+             */
+            bookingCutoffMinutes: number;
+            /**
+             * Format: int64
+             * @description Canceling without losing the visit closes this many minutes before a lesson starts; 0: at the start.
+             */
+            cancellationCutoffMinutes: number;
+            /**
+             * Format: int64
+             * @description Early access: members see the lessons they may see this many days ahead, released or not, unless their account says otherwise.
+             */
+            defaultVisibleDays: number;
+            /**
+             * Format: int64
+             * @description How many lessons the change generated at once because the window grew; 0 for a read.
+             */
+            generatedLessons: number;
+            /**
+             * @description The time of the release (HH:MM) in the school time zone.
+             * @example 18:00
+             */
+            releaseTime: string;
+            /**
+             * Format: int64
+             * @description The day of the weekly release, 0 = Sunday to 6 = Saturday.
+             */
+            releaseWeekday: number;
+            /**
+             * Format: int64
+             * @description Each release opens the lessons up to the same weekday this many weeks later.
+             */
+            releaseWeeksAhead: number;
+            /**
+             * Format: int64
+             * @description How long a waiting-list invite holds its place, in minutes (never beyond the booking cutoff).
+             */
+            waitlistInviteExpiryMinutes: number;
+            /** @description The release window of these rules now. */
+            window: components["schemas"]["ReleaseWindowBody"];
+        };
+        BookingRulesData: {
+            /**
+             * Format: int64
+             * @description Booking closes this many minutes before a lesson starts; 0: at the start.
+             */
+            bookingCutoffMinutes: number;
+            /**
+             * Format: int64
+             * @description Canceling without losing the visit closes this many minutes before a lesson starts; 0: at the start.
+             */
+            cancellationCutoffMinutes: number;
+            /**
+             * Format: int64
+             * @description Early access: members see the lessons they may see this many days ahead, released or not, unless their account says otherwise.
+             */
+            defaultVisibleDays: number;
+            /**
+             * @description The time of the release (HH:MM) in the school time zone.
+             * @example 18:00
+             */
+            releaseTime: string;
+            /**
+             * Format: int64
+             * @description The day of the weekly release, 0 = Sunday to 6 = Saturday.
+             */
+            releaseWeekday: number;
+            /**
+             * Format: int64
+             * @description Each release opens the lessons up to the same weekday this many weeks later.
+             */
+            releaseWeeksAhead: number;
+            /**
+             * Format: int64
+             * @description How long a waiting-list invite holds its place, in minutes (never beyond the booking cutoff).
+             */
+            waitlistInviteExpiryMinutes: number;
+        };
+        BrandingSettings: {
+            /** @description The accent color, #rrggbb; empty or absent: the app's own. */
+            accentColor?: string;
+            /** @description The dark theme's variant of the accent color; absent without one. */
+            accentColorDark?: string;
+            /** @description Whether the school has a logo (set with the receipt settings). */
+            hasLogo: boolean;
+            /**
+             * Format: double
+             * @description The WCAG contrast the accent color needs against the text on it and the page: 4.5.
+             */
+            minContrast: number;
+        };
+        BrandingSettingsData: {
+            /** @description The accent color, #rrggbb; empty or absent: the app's own. */
+            accentColor?: string;
+        };
         CalendarFeed: {
             /**
              * Format: date-time
@@ -2717,10 +2951,10 @@ export interface components {
             /** @description The lesson that uses the room; only with reason room-taken. */
             lesson?: components["schemas"]["ConflictLesson"];
             /**
-             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled.
+             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change.
              * @enum {string}
              */
-            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation";
+            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation" | "timezone-locked" | "currency-locked";
             /**
              * Format: int64
              * @description HTTP status code
@@ -4164,10 +4398,21 @@ export interface components {
             phone?: string;
         };
         PublicSettings: {
+            /** @description The school's accent color (#rrggbb) for the light theme; absent: the app's own. */
+            accentColor?: string;
+            /** @description Its variant for the dark theme; absent without an accent. */
+            accentColorDark?: string;
             /** @description ISO 4217 code of every amount, e.g. EUR; amounts are in its minor units. */
             currency: string;
-            /** @description Default UI locale (BCP 47 tag), e.g. en. */
-            defaultLocale: string;
+            /**
+             * @description The school's language for visitors who chose none: en or de.
+             * @enum {string}
+             */
+            defaultLocale: "en" | "de";
+            /** @description Whether getSchoolLogo has a logo. */
+            hasLogo: boolean;
+            /** @description The legal notice (imprint) for the footer, plain text with line breaks; absent if none. */
+            legalNotice?: string;
             /** @description Display name of the school. */
             schoolName: string;
             /** @description IANA time zone of the school, e.g. Europe/Berlin. */
@@ -4403,6 +4648,32 @@ export interface components {
             /** @description Tax number or VAT ID. */
             taxNumber?: string;
         };
+        RegionalSettings: {
+            /** @description ISO 4217 code of every amount, e.g. EUR; fixed once a price or a receipt exists. */
+            currency: string;
+            /** @description Whether the currency is fixed: a pass type has a price, a pass was paid or a receipt issued. */
+            currencyLocked: boolean;
+            /**
+             * @description The language of visitors, and of mails to accounts without one of their own.
+             * @enum {string}
+             */
+            defaultLocale: "en" | "de";
+            /** @description IANA time zone of the school, e.g. Europe/Berlin; fixed once lessons exist. */
+            timezone: string;
+            /** @description Whether the time zone is fixed: lessons exist. */
+            timezoneLocked: boolean;
+        };
+        RegionalSettingsData: {
+            /** @description ISO 4217 code of every amount, e.g. EUR; fixed once a price or a receipt exists. */
+            currency: string;
+            /**
+             * @description The language of visitors, and of mails to accounts without one of their own.
+             * @enum {string}
+             */
+            defaultLocale: "en" | "de";
+            /** @description IANA time zone of the school, e.g. Europe/Berlin; fixed once lessons exist. */
+            timezone: string;
+        };
         RegisterInputBody: {
             /**
              * Format: email
@@ -4417,6 +4688,28 @@ export interface components {
             locale?: string;
             /** @description Password, at least 8 characters. */
             password: string;
+        };
+        ReleaseWindowBody: {
+            /**
+             * Format: date-time
+             * @description The latest release at or before now.
+             */
+            lastReleaseAt: string;
+            /**
+             * Format: date-time
+             * @description The next release.
+             */
+            nextReleaseAt: string;
+            /**
+             * Format: date-time
+             * @description The instant the window is computed at.
+             */
+            now: string;
+            /**
+             * Format: date-time
+             * @description Regular lessons that start before this instant are released.
+             */
+            releasedUntil: string;
         };
         RequestEmailChangeInputBody: {
             /** @description Language of the mail (BCP 47), e.g. de; defaults to the school's. */
@@ -4656,6 +4949,12 @@ export interface components {
             visibility: "public" | "members" | "hidden";
             /** @description The signed-in person and their dependents on the lesson's waiting list, the signed-in person first, with their place or invite; absent if there is none or the caller is not signed in (and in the responses of the lesson writes). */
             waitlist?: components["schemas"]["WaitlistFor"][];
+        };
+        SchoolSettings: {
+            /** @description The legal notice (imprint) shown in the footer, plain text with line breaks; empty or absent: none. */
+            legalNotice?: string;
+            /** @description Display name of the school. */
+            schoolName: string;
         };
         SellPassData: {
             /** @description A note for the office. */
@@ -6336,6 +6635,166 @@ export interface operations {
             };
         };
     };
+    getBookingRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingRules"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateBookingRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookingRulesData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookingRules"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    previewReleaseWindow: {
+        parameters: {
+            query: {
+                /** @description The day of the weekly release, 0 = Sunday to 6 = Saturday. */
+                releaseWeekday: number;
+                /** @description The time of the release (HH:MM) in the school time zone. */
+                releaseTime: string;
+                /** @description How many weeks each release opens. */
+                releaseWeeksAhead: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseWindowBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getBrandingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandingSettings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateBrandingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandingSettingsData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandingSettings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     getPassSettings: {
         parameters: {
             query?: never;
@@ -6539,6 +6998,139 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getRegionalSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionalSettings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateRegionalSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegionalSettingsData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionalSettings"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSchoolSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolSettings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateSchoolSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchoolSettings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchoolSettings"];
+                };
             };
             /** @description Error */
             default: {
@@ -9089,6 +9681,49 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Schedule"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSchoolLogo: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag of the logo the client has; unchanged: a 304. */
+                "If-None-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The logo. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Type"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                };
+            };
+            /** @description The logo did not change since the ETag in If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

@@ -15,6 +15,9 @@ afterEach(async () => {
   // CustomEvent from Node's global, which jsdom rejects as an unhandled error.
   // Node runs timers of the same delay in order, so this one comes after it.
   await new Promise((resolve) => realSetTimeout(resolve, 0));
+  // No language choice, and no school language, outlives its test.
+  localStorage.removeItem('studio-schedule.lang');
+  localStorage.removeItem('studio-schedule.school-lang');
   await i18n.changeLanguage('en');
 });
 

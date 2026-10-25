@@ -5,7 +5,7 @@ import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { HomePage } from '@/features/home/HomePage';
 import { healthOk, mockApiGet, publicSettings, schedule } from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
-import i18n from './i18n';
+import i18n, { supportedLanguage } from './i18n';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -39,6 +39,15 @@ describe('i18n', () => {
     expect(screen.getByRole('heading', { name: 'Systemstatus' })).toBeInTheDocument();
     expect(i18n.resolvedLanguage).toBe('de');
     expect(document.documentElement.lang).toBe('de');
+    // A choice of the visitor's own: it outranks the school's language.
+    expect(localStorage.getItem('studio-schedule.lang')).toBe('de');
+  });
+
+  it('matches language tags to the supported languages', () => {
+    expect(supportedLanguage('de-AT')).toBe('de');
+    expect(supportedLanguage('en_GB')).toBe('en');
+    expect(supportedLanguage('fr')).toBeUndefined();
+    expect(supportedLanguage(undefined)).toBeUndefined();
   });
 
   it.each([
@@ -53,6 +62,7 @@ describe('i18n', () => {
     'feeds',
     'passes',
     'receipts',
+    'settings',
   ])('has the same %s keys in all locales', async (ns) => {
     const [en, de] = await Promise.all([
       import(`./locales/en/${ns}.json`) as Promise<{ default: object }>,

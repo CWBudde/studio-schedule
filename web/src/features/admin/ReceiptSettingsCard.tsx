@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ImageUp, Save, Trash2 } from 'lucide-react';
-import { type ChangeEvent, useEffect, useId, useState } from 'react';
+import { type ChangeEvent, useId, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -19,13 +19,13 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/features/auth/TextField';
 import { FormError } from '@/features/auth/FormError';
+import { useDataUrl } from '@/lib/useDataUrl';
 import { SelectField, TextareaField } from './crud/fields';
 import { showServerErrors, useAdminErrorText } from './crud/form';
 import { LoadError } from './crud/LoadError';
 import { Section } from './PersonSection';
 import {
   fileBase64,
-  fileDataUrl,
   receiptSettingsFields,
   receiptSettingsSchema,
   type ReceiptSettingsValues,
@@ -319,24 +319,4 @@ function Logo({ settings, admin }: { settings: ReceiptSettings; admin: boolean }
       )}
     </div>
   );
-}
-
-/**
- * `blob` as a data URL, once it is read; nothing to revoke, so it is safe
- * however often effects run.
- */
-function useDataUrl(blob: Blob | null | undefined): string | undefined {
-  const [read, setRead] = useState<{ blob: Blob; url: string }>();
-  useEffect(() => {
-    if (!blob) return;
-    let current = true;
-    fileDataUrl(blob).then(
-      (url) => current && setRead({ blob, url }),
-      () => undefined,
-    );
-    return () => {
-      current = false;
-    };
-  }, [blob]);
-  return blob && read?.blob === blob ? read.url : undefined;
 }

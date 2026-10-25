@@ -5,6 +5,7 @@ import { DemoMailbox } from '@/features/demo/DemoMailbox';
 import { canTeach } from '@/features/teach/access';
 import { AccountMenu } from './AccountMenu';
 import { BrandMark } from './BrandMark';
+import { useApplyBranding, usePublicSettings, useSchoolLogoUrl } from './branding';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ResetDemo } from './ResetDemo';
 
@@ -14,7 +15,12 @@ const navLink =
 
 export function AppHeader() {
   const { t } = useTranslation();
+  const { t: tSettings } = useTranslation('settings');
   const me = useMe();
+  const settings = usePublicSettings().data;
+  useApplyBranding(settings);
+  const logoUrl = useSchoolLogoUrl(settings?.hasLogo);
+  const name = settings?.schoolName;
 
   // Two hairlines at the bottom, like the rule under a programme's masthead.
   return (
@@ -23,11 +29,15 @@ export function AppHeader() {
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-1 px-4">
         <Link
           to="/"
-          aria-label={t('app.home')}
+          aria-label={name ? tSettings('header.home', { school: name }) : t('app.home')}
           className="mr-auto flex h-16 items-center gap-2.5 rounded-md font-heading text-xl font-semibold tracking-tight focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
         >
-          <BrandMark className="size-9" />
-          <span className="hidden sm:inline">{t('app.name')}</span>
+          {logoUrl ? (
+            <img src={logoUrl} alt="" className="h-9 w-auto max-w-32 object-contain" />
+          ) : (
+            <BrandMark className="size-9" />
+          )}
+          <span className="hidden sm:inline">{name ?? t('app.name')}</span>
         </Link>
         <nav
           aria-label={t('nav.label')}

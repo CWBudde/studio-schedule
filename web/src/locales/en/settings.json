@@ -1,0 +1,110 @@
+{
+  "adminOnly": "Only administrators can change this.",
+  "loadError": "The settings could not be loaded.",
+  "loading": "Loading the settings…",
+  "saved": "The settings have been saved.",
+  "none": "None",
+  "errors": {
+    "hexColor": "Enter a color such as #7a1f3d.",
+    "contrast": "This color is too light for the text on it; choose a darker one.",
+    "timezone": "Enter a time zone such as Europe/Berlin.",
+    "currency": "Enter three capital letters such as EUR.",
+    "weeksAhead": "Enter a whole number from 1 to 52.",
+    "visibleDays": "Enter a whole number from 1 to 366.",
+    "cutoff": "Enter a whole number, at most 30 days.",
+    "inviteExpiry": "Enter a whole number, at least 1 minute and at most 30 days."
+  },
+  "school": {
+    "title": "School",
+    "description": "The school's name shows in the header, the browser tab and mails; the legal notice at the bottom of every page.",
+    "name": "School name",
+    "legalNotice": "Legal notice",
+    "legalNoticeHint": "For example the imprint: who runs the school and how to reach them. Line breaks are kept."
+  },
+  "branding": {
+    "title": "Branding",
+    "description": "The accent color of buttons, links and highlights, and the logo in the header.",
+    "accent": "Accent color",
+    "accentHint": "As #rrggbb. Leave it empty for the app's own color.",
+    "pick": "Pick the accent color",
+    "useOwn": "Use the app's own color",
+    "own": "The app's own color",
+    "contrast": "Contrast {{ratio}}:1 with the text on it",
+    "contrastOk": "meets WCAG AA",
+    "contrastLow": "below WCAG AA (4.5:1)",
+    "preview": "Preview",
+    "previewLight": "Light",
+    "previewDark": "Dark",
+    "sample": "Book",
+    "logo": "Logo",
+    "logoAlt": "The school's logo",
+    "logoHint": "The header shows the logo of the receipts. Change it in the receipt settings below.",
+    "noLogo": "No logo: the header shows the app's mark."
+  },
+  "regional": {
+    "title": "Time and language",
+    "description": "The school's time zone for every date and time, the language for visitors and mails, and the currency of every price.",
+    "timezone": "Time zone",
+    "timezoneHint": "An IANA name such as Europe/Berlin.",
+    "timezoneLocked": "Fixed: lessons exist, whose times are in this time zone. It is chosen when the school is set up.",
+    "locale": "Default language",
+    "localeHint": "For visitors, and for mails to accounts without a language of their own.",
+    "locales": {
+      "en": "English",
+      "de": "Deutsch"
+    },
+    "currency": "Currency",
+    "currencyHint": "An ISO 4217 code such as EUR.",
+    "currencyLocked": "Fixed: prices or receipts exist in this currency. It is chosen when the school is set up.",
+    "conflicts": {
+      "timezone-locked": "Lessons exist meanwhile, so the time zone can no longer change.",
+      "currency-locked": "Prices or receipts exist meanwhile, so the currency can no longer change."
+    }
+  },
+  "rules": {
+    "title": "Booking rules",
+    "description": "When the schedule is released, until when members book and cancel, and how far ahead they see.",
+    "releaseWeekday": "Release day",
+    "releaseTime": "Release time",
+    "releaseWeeksAhead": "Weeks released ahead",
+    "releaseWeeksAheadHint": "Each release opens the lessons up to the same day this many weeks later.",
+    "bookingCutoff": "Booking closes before the start",
+    "bookingCutoffHint": "0: booking stays open until the lesson starts.",
+    "cancellationCutoff": "Canceling closes before the start",
+    "cancellationCutoffHint": "A later cancellation still uses the visit of a pass.",
+    "waitlistInviteExpiry": "A waiting-list invitation holds the place for",
+    "waitlistInviteExpiryHint": "Never beyond the booking cutoff.",
+    "defaultVisibleDays": "Members see lessons ahead (days)",
+    "defaultVisibleDaysHint": "Early access: signed-in members see the lessons this many days ahead, released or not.",
+    "unit": "Unit of {{field}}",
+    "units": {
+      "minutes": "minutes",
+      "hours": "hours",
+      "days": "days"
+    },
+    "duration": {
+      "minutes_one": "{{count}} minute",
+      "minutes_other": "{{count}} minutes",
+      "hours_one": "{{count}} hour",
+      "hours_other": "{{count}} hours",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days"
+    },
+    "window": "Release window",
+    "lastRelease": "Last release",
+    "nextRelease": "Next release",
+    "releasedThrough": "Released through",
+    "previewHint": "With these rules, from now on.",
+    "previewLoading": "Computing the release window…",
+    "previewIncomplete": "Rule incomplete: enter a release time and 1 to 52 weeks to see what it releases.",
+    "previewFailed": "The release window could not be computed.",
+    "generated_one": "The settings have been saved. {{count}} lesson of the wider window was created.",
+    "generated_other": "The settings have been saved. {{count}} lessons of the wider window were created."
+  },
+  "header": {
+    "home": "{{school}} – home"
+  },
+  "footer": {
+    "legalNotice": "Legal notice"
+  }
+}

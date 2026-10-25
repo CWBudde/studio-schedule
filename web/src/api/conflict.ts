@@ -13,7 +13,8 @@ import type { components } from './schema';
  * invite, its invite ran out or was used, or it left the list; or the
  * pass is voided already; or a receipt cannot be issued (the receipt
  * settings are incomplete) or canceled (its pass paid for visits, it is
- * canceled already, or it is a cancellation itself).
+ * canceled already, or it is a cancellation itself); or the time zone or
+ * currency is fixed by lessons or prices and receipts (ADR 0013).
  */
 export type ConflictReason = components['schemas']['Conflict']['reason'];
 
@@ -39,6 +40,8 @@ const conflictReasons: readonly ConflictReason[] = [
   'receipt-settings-incomplete',
   'pass-used',
   'cancellation',
+  'timezone-locked',
+  'currency-locked',
 ];
 
 /** The lesson that uses the room, named by a 409 `room-taken`. */

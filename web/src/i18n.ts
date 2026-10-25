@@ -10,6 +10,7 @@ import dePasses from './locales/de/passes.json';
 import deReceipts from './locales/de/receipts.json';
 import de from './locales/de/common.json';
 import deSchedule from './locales/de/schedule.json';
+import deSettings from './locales/de/settings.json';
 import deStatistics from './locales/de/statistics.json';
 import deTeach from './locales/de/teach.json';
 import deTimetable from './locales/de/timetable.json';
@@ -22,6 +23,7 @@ import enPasses from './locales/en/passes.json';
 import enReceipts from './locales/en/receipts.json';
 import en from './locales/en/common.json';
 import enSchedule from './locales/en/schedule.json';
+import enSettings from './locales/en/settings.json';
 import enStatistics from './locales/en/statistics.json';
 import enTeach from './locales/en/teach.json';
 import enTimetable from './locales/en/timetable.json';
@@ -43,6 +45,7 @@ export const resources = {
     feeds: enFeeds,
     passes: enPasses,
     receipts: enReceipts,
+    settings: enSettings,
     statistics: enStatistics,
   },
   de: {
@@ -57,12 +60,51 @@ export const resources = {
     feeds: deFeeds,
     passes: dePasses,
     receipts: deReceipts,
+    settings: deSettings,
     statistics: deStatistics,
   },
 } as const;
 
+/** Where the language a visitor chose in the header's switcher is kept. */
+const chosenLanguageKey = 'studio-schedule.lang';
+/** Where the school's default language is remembered for the next page load. */
+const schoolLanguageKey = 'studio-schedule.school-lang';
+
+// Storage can be unavailable (private windows, blocked site data).
+function readStorage(key: string): string | undefined {
+  try {
+    return localStorage.getItem(key) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeStorage(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // The choice then lasts for this page only.
+  }
+}
+
+/** The supported language a language tag asks for ('de-AT' is 'de'), or undefined. */
+export function supportedLanguage(tag: string | undefined): SupportedLanguage | undefined {
+  const base = tag?.trim().toLowerCase().replace('_', '-').split('-')[0];
+  return supportedLanguages.find((lng) => lng === base);
+}
+
+// The UI language is the visitor's own choice, else the school's default
+// language (ADR 0013), remembered from the last page load until the public
+// settings arrive, else the browser's. Only the switcher stores a choice: a
+// detected language is not cached, so it never hides the school's default.
+const languageDetector = new LanguageDetector();
+languageDetector.addDetector({
+  name: 'schoolDefault',
+  lookup: () => readStorage(schoolLanguageKey),
+});
+
 void i18n
-  .use(LanguageDetector)
+  .use(languageDetector)
   .use(initReactI18next)
   .init({
     resources,
@@ -79,6 +121,7 @@ void i18n
       'feeds',
       'passes',
       'receipts',
+      'settings',
       'statistics',
     ],
     fallbackLng: 'en',
@@ -89,9 +132,9 @@ void i18n
     initAsync: false,
     interpolation: { escapeValue: false }, // React escapes already
     detection: {
-      order: ['localStorage', 'navigator', 'htmlTag'],
-      caches: ['localStorage'],
-      lookupLocalStorage: 'studio-schedule.lang',
+      order: ['localStorage', 'schoolDefault', 'navigator', 'htmlTag'],
+      caches: [],
+      lookupLocalStorage: chosenLanguageKey,
     },
     react: { useSuspense: false },
   });
@@ -106,6 +149,26 @@ i18n.on('languageChanged', () => syncHtmlLang(i18n.resolvedLanguage));
 export function currentLanguage(): SupportedLanguage {
   const lng = i18n.resolvedLanguage;
   return lng === 'de' ? 'de' : 'en';
+}
+
+/** Switches the UI to the language the visitor chose; it stays their choice. */
+export function chooseLanguage(lng: SupportedLanguage) {
+  writeStorage(chosenLanguageKey, lng);
+  return i18n.changeLanguage(lng);
+}
+
+/**
+ * Follows the school's default language (the public settings), unless the
+ * visitor chose a language of their own (in the switcher, or by signing in
+ * to an account with a language of its own).
+ */
+export function applySchoolLanguage(defaultLocale: string | undefined) {
+  const lng = supportedLanguage(defaultLocale);
+  if (!lng) return;
+  writeStorage(schoolLanguageKey, lng);
+  if (!supportedLanguage(readStorage(chosenLanguageKey)) && currentLanguage() !== lng) {
+    void i18n.changeLanguage(lng);
+  }
 }
 
 export default i18n;

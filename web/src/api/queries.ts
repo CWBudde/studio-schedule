@@ -5,7 +5,7 @@ import {
   type QueryClient,
   queryOptions,
 } from '@tanstack/react-query';
-import i18n from '@/i18n';
+import { chooseLanguage, supportedLanguage } from '@/i18n';
 import {
   api,
   type ConfirmEmailBody,
@@ -85,6 +85,17 @@ export const healthQuery = queryOptions({
 export const publicSettingsQuery = queryOptions({
   queryKey: ['settings', 'public'],
   queryFn: ({ signal }) => unwrap(api.GET('/api/v1/settings/public', { signal })),
+  staleTime: 5 * 60_000,
+});
+
+/** The school's logo for the header, or null without one (public, revalidated with its ETag). */
+export const schoolLogoQuery = queryOptions({
+  queryKey: ['settings', 'logo'],
+  queryFn: ({ signal }) =>
+    unwrapOrNull(
+      404,
+      api.GET('/api/v1/settings/logo', { parseAs: 'blob', signal }),
+    ) as Promise<Blob | null>,
   staleTime: 5 * 60_000,
 });
 
@@ -256,12 +267,15 @@ function changeIdentity(queryClient: QueryClient, me: Me | null) {
 
 /**
  * A sign-in: `me` becomes the signed-in account, and the UI switches to the
- * account's language if it has one. Only a sign-in does that; refetching
- * `me` or signing in as someone else keeps the language the person chose.
+ * account's language if it has one, as the visitor's choice: it outranks
+ * the school's default language from then on (ADR 0013). Only a sign-in
+ * does that; refetching `me` or signing in as someone else keeps the
+ * language the person chose.
  */
 function signIn(queryClient: QueryClient, me: Me) {
   changeIdentity(queryClient, me);
-  if (me.locale && me.locale !== i18n.resolvedLanguage) void i18n.changeLanguage(me.locale);
+  const lng = supportedLanguage(me.locale);
+  if (lng) void chooseLanguage(lng);
 }
 
 /** Signs in; the account becomes the `me` query's data and its language the UI's. */
@@ -2296,9 +2310,16 @@ export const updateReceiptSettingsMutation = (queryClient: QueryClient) =>
     onError: signedOutOn401(queryClient),
   });
 
-/** After the logo changes: the settings (their logo type) and the logo. */
+/** After the logo changes: the settings (their logo type), the logo, and the header's. */
 const refreshLogo = (queryClient: QueryClient) =>
-  queryClient.invalidateQueries({ queryKey: receiptSettingsQuery.queryKey });
+  Promise.all(
+    [
+      receiptSettingsQuery.queryKey,
+      brandingSettingsQuery.queryKey,
+      publicSettingsQuery.queryKey,
+      schoolLogoQuery.queryKey,
+    ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+  );
 
 /**
  * Sets the logo of later receipts (admin): a PNG or JPEG of at most 512
@@ -2318,6 +2339,128 @@ export const deleteReceiptLogoMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: () => expectOk(api.DELETE('/api/v1/admin/settings/receipts/logo')),
     onSuccess: () => refreshLogo(queryClient),
+    onError: signedOutOn401(queryClient),
+  });
+
+/** The school's name and legal notice (office reads, an admin writes; ADR 0013). */
+export type SchoolSettings = components['schemas']['SchoolSettings'];
+/** The accent color, its dark variant and whether a logo exists. */
+export type BrandingSettings = components['schemas']['BrandingSettings'];
+/** The accent color an admin writes. */
+export type BrandingSettingsData = components['schemas']['BrandingSettingsData'];
+/** The time zone, language and currency, and which of them the data fixes. */
+export type RegionalSettings = components['schemas']['RegionalSettings'];
+/** The time zone, language and currency an admin writes. */
+export type RegionalSettingsData = components['schemas']['RegionalSettingsData'];
+/** The release rule, cutoffs, invite hold and early access, with the window now. */
+export type BookingRules = components['schemas']['BookingRules'];
+/** The booking rules an admin writes. */
+export type BookingRulesData = components['schemas']['BookingRulesData'];
+/** The release window of a rule at an instant. */
+export type ReleaseWindow = components['schemas']['ReleaseWindowBody'];
+
+const settingsKey = [...adminQueryKey, 'settings'] as const;
+
+/** After a settings write: the settings everyone sees (name, branding, zone, language). */
+const refreshPublicSettings = (queryClient: QueryClient) =>
+  queryClient.invalidateQueries({ queryKey: publicSettingsQuery.queryKey });
+
+export const schoolSettingsQuery = queryOptions({
+  queryKey: [...settingsKey, 'school'],
+  queryFn: ({ signal }) => unwrap(api.GET('/api/v1/admin/settings/school', { signal })),
+});
+
+/** Replaces the school's name and legal notice (admin). */
+export const updateSchoolSettingsMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: SchoolSettings) =>
+      unwrap(api.PUT('/api/v1/admin/settings/school', { body })),
+    onSuccess: (settings) => {
+      queryClient.setQueryData(schoolSettingsQuery.queryKey, settings);
+      return refreshPublicSettings(queryClient);
+    },
+    onError: signedOutOn401(queryClient),
+  });
+
+export const brandingSettingsQuery = queryOptions({
+  queryKey: [...settingsKey, 'branding'],
+  queryFn: ({ signal }) => unwrap(api.GET('/api/v1/admin/settings/branding', { signal })),
+});
+
+/** Sets the accent color, or the app's own (admin); too little contrast is a 422. */
+export const updateBrandingSettingsMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: BrandingSettingsData) =>
+      unwrap(api.PUT('/api/v1/admin/settings/branding', { body })),
+    onSuccess: (settings) => {
+      queryClient.setQueryData(brandingSettingsQuery.queryKey, settings);
+      return refreshPublicSettings(queryClient);
+    },
+    onError: signedOutOn401(queryClient),
+  });
+
+export const regionalSettingsQuery = queryOptions({
+  queryKey: [...settingsKey, 'regional'],
+  queryFn: ({ signal }) => unwrap(api.GET('/api/v1/admin/settings/regional', { signal })),
+});
+
+/**
+ * Replaces the time zone, language and currency (admin). A new time zone
+ * once lessons exist is a 409 `timezone-locked`, a new currency once prices
+ * or receipts exist a 409 `currency-locked`; the card is asked again, as
+ * what locks it appeared meanwhile.
+ */
+export const updateRegionalSettingsMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: RegionalSettingsData) =>
+      unwrap(api.PUT('/api/v1/admin/settings/regional', { body })),
+    onSuccess: (settings) => {
+      queryClient.setQueryData(regionalSettingsQuery.queryKey, settings);
+      return refreshPublicSettings(queryClient);
+    },
+    onError: (error: Error) => {
+      signedOutOn401(queryClient)(error);
+      if (conflictReason(error)) {
+        void queryClient.invalidateQueries({ queryKey: regionalSettingsQuery.queryKey });
+      }
+    },
+  });
+
+export const bookingRulesQuery = queryOptions({
+  queryKey: [...settingsKey, 'booking-rules'],
+  queryFn: ({ signal }) => unwrap(api.GET('/api/v1/admin/settings/booking-rules', { signal })),
+});
+
+export type ReleasePreviewParams = NonNullable<
+  paths['/api/v1/admin/settings/booking-rules/preview']['get']['parameters']['query']
+>;
+
+/** The release window a release rule would have now (office); nothing changes. */
+export const releasePreviewQuery = (params: ReleasePreviewParams) =>
+  queryOptions({
+    queryKey: [...settingsKey, 'booking-rules', 'preview', params],
+    queryFn: ({ signal }) =>
+      unwrap(
+        api.GET('/api/v1/admin/settings/booking-rules/preview', {
+          params: { query: params },
+          signal,
+        }),
+      ),
+  });
+
+/**
+ * Replaces the booking rules from now on (admin); a wider window generates
+ * its lessons at once. What is released and bookable changes, so the lesson
+ * views are asked again.
+ */
+export const updateBookingRulesMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: BookingRulesData) =>
+      unwrap(api.PUT('/api/v1/admin/settings/booking-rules', { body })),
+    onSuccess: (rules) => {
+      queryClient.setQueryData(bookingRulesQuery.queryKey, rules);
+      return refreshLessons(queryClient);
+    },
     onError: signedOutOn401(queryClient),
   });
 

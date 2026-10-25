@@ -10,7 +10,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { supportedLanguages, type SupportedLanguage } from '@/i18n';
+import {
+  chooseLanguage,
+  supportedLanguage,
+  supportedLanguages,
+  type SupportedLanguage,
+} from '@/i18n';
 
 export function LanguageSwitcher() {
   const { t, i18n } = useTranslation();
@@ -29,7 +34,10 @@ export function LanguageSwitcher() {
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup
           value={current}
-          onValueChange={(value) => void i18n.changeLanguage(value)}
+          onValueChange={(value) => {
+            const lng = supportedLanguage(value);
+            if (lng) void chooseLanguage(lng);
+          }}
         >
           {supportedLanguages.map((lng) => (
             <DropdownMenuRadioItem key={lng} value={lng} lang={lng}>

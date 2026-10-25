@@ -1,0 +1,110 @@
+{
+  "adminOnly": "Nur Administratoren können das ändern.",
+  "loadError": "Die Einstellungen konnten nicht geladen werden.",
+  "loading": "Die Einstellungen werden geladen …",
+  "saved": "Die Einstellungen wurden gespeichert.",
+  "none": "Keine",
+  "errors": {
+    "hexColor": "Gib eine Farbe wie #7a1f3d ein.",
+    "contrast": "Diese Farbe ist zu hell für die Schrift darauf; wähle eine dunklere.",
+    "timezone": "Gib eine Zeitzone wie Europe/Berlin ein.",
+    "currency": "Gib drei Großbuchstaben wie EUR ein.",
+    "weeksAhead": "Gib eine ganze Zahl von 1 bis 52 ein.",
+    "visibleDays": "Gib eine ganze Zahl von 1 bis 366 ein.",
+    "cutoff": "Gib eine ganze Zahl ein, höchstens 30 Tage.",
+    "inviteExpiry": "Gib eine ganze Zahl ein, mindestens 1 Minute und höchstens 30 Tage."
+  },
+  "school": {
+    "title": "Schule",
+    "description": "Der Name der Schule steht in der Kopfzeile, im Browser-Tab und in E-Mails, das Impressum unten auf jeder Seite.",
+    "name": "Name der Schule",
+    "legalNotice": "Impressum",
+    "legalNoticeHint": "Wer die Schule betreibt und wie man sie erreicht. Zeilenumbrüche bleiben erhalten."
+  },
+  "branding": {
+    "title": "Erscheinungsbild",
+    "description": "Die Akzentfarbe von Schaltflächen, Links und Hervorhebungen und das Logo in der Kopfzeile.",
+    "accent": "Akzentfarbe",
+    "accentHint": "Als #rrggbb. Leer lassen für die Farbe der App.",
+    "pick": "Akzentfarbe auswählen",
+    "useOwn": "Farbe der App verwenden",
+    "own": "Die Farbe der App",
+    "contrast": "Kontrast {{ratio}}:1 zur Schrift darauf",
+    "contrastOk": "erfüllt WCAG AA",
+    "contrastLow": "unter WCAG AA (4,5:1)",
+    "preview": "Vorschau",
+    "previewLight": "Hell",
+    "previewDark": "Dunkel",
+    "sample": "Buchen",
+    "logo": "Logo",
+    "logoAlt": "Das Logo der Schule",
+    "logoHint": "Die Kopfzeile zeigt das Logo der Belege. Es wird unten in den Beleg-Einstellungen geändert.",
+    "noLogo": "Kein Logo: Die Kopfzeile zeigt das Zeichen der App."
+  },
+  "regional": {
+    "title": "Zeit und Sprache",
+    "description": "Die Zeitzone der Schule für alle Daten und Uhrzeiten, die Sprache für Besucher und E-Mails und die Währung aller Preise.",
+    "timezone": "Zeitzone",
+    "timezoneHint": "Ein IANA-Name wie Europe/Berlin.",
+    "timezoneLocked": "Festgelegt: Es gibt Stunden, deren Zeiten in dieser Zeitzone liegen. Sie wird beim Einrichten der Schule gewählt.",
+    "locale": "Standardsprache",
+    "localeHint": "Für Besucher und für E-Mails an Konten ohne eigene Sprache.",
+    "locales": {
+      "en": "English",
+      "de": "Deutsch"
+    },
+    "currency": "Währung",
+    "currencyHint": "Ein ISO-4217-Code wie EUR.",
+    "currencyLocked": "Festgelegt: Es gibt Preise oder Belege in dieser Währung. Sie wird beim Einrichten der Schule gewählt.",
+    "conflicts": {
+      "timezone-locked": "Inzwischen gibt es Stunden, daher kann sich die Zeitzone nicht mehr ändern.",
+      "currency-locked": "Inzwischen gibt es Preise oder Belege, daher kann sich die Währung nicht mehr ändern."
+    }
+  },
+  "rules": {
+    "title": "Buchungsregeln",
+    "description": "Wann der Stundenplan freigegeben wird, bis wann Mitglieder buchen und stornieren und wie weit sie vorausschauen.",
+    "releaseWeekday": "Tag der Freigabe",
+    "releaseTime": "Uhrzeit der Freigabe",
+    "releaseWeeksAhead": "Wochen im Voraus freigegeben",
+    "releaseWeeksAheadHint": "Jede Freigabe öffnet die Stunden bis zum selben Tag so viele Wochen später.",
+    "bookingCutoff": "Buchung schließt vor Beginn",
+    "bookingCutoffHint": "0: Buchen ist bis zum Beginn der Stunde möglich.",
+    "cancellationCutoff": "Stornieren schließt vor Beginn",
+    "cancellationCutoffHint": "Eine spätere Stornierung nutzt den Besuch einer Karte trotzdem.",
+    "waitlistInviteExpiry": "Eine Einladung von der Warteliste hält den Platz",
+    "waitlistInviteExpiryHint": "Nie über den Buchungsschluss hinaus.",
+    "defaultVisibleDays": "Mitglieder sehen Stunden voraus (Tage)",
+    "defaultVisibleDaysHint": "Frühzugang: Angemeldete Mitglieder sehen die Stunden so viele Tage im Voraus, ob freigegeben oder nicht.",
+    "unit": "Einheit: {{field}}",
+    "units": {
+      "minutes": "Minuten",
+      "hours": "Stunden",
+      "days": "Tage"
+    },
+    "duration": {
+      "minutes_one": "{{count}} Minute",
+      "minutes_other": "{{count}} Minuten",
+      "hours_one": "{{count}} Stunde",
+      "hours_other": "{{count}} Stunden",
+      "days_one": "{{count}} Tag",
+      "days_other": "{{count}} Tage"
+    },
+    "window": "Freigabe",
+    "lastRelease": "Letzte Freigabe",
+    "nextRelease": "Nächste Freigabe",
+    "releasedThrough": "Freigegeben bis einschließlich",
+    "previewHint": "Mit diesen Regeln, ab jetzt.",
+    "previewLoading": "Die Freigabe wird berechnet …",
+    "previewIncomplete": "Regel unvollständig: Gib eine Uhrzeit und 1 bis 52 Wochen an, um zu sehen, was sie freigibt.",
+    "previewFailed": "Die Freigabe konnte nicht berechnet werden.",
+    "generated_one": "Die Einstellungen wurden gespeichert. {{count}} Stunde des größeren Zeitraums wurde angelegt.",
+    "generated_other": "Die Einstellungen wurden gespeichert. {{count}} Stunden des größeren Zeitraums wurden angelegt."
+  },
+  "header": {
+    "home": "{{school}} – Startseite"
+  },
+  "footer": {
+    "legalNotice": "Impressum"
+  }
+}

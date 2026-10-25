@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ReceiptSettings, ReceiptSettingsData } from '@/api/queries';
+import { fileDataUrl } from '@/lib/useDataUrl';
 
 // Limits as in the API (ReceiptSettingsData). Messages are keys of
 // `auth:form.errors` or `admin:form.errors` (see useAdminErrorText).
@@ -60,16 +61,6 @@ export const receiptSettingsValues = (s: ReceiptSettings): ReceiptSettingsValues
   footer: s.footer ?? '',
   receiptPrefix: s.receiptPrefix,
 });
-
-/** A file as a data URL ('data:image/png;base64,…'). */
-export function fileDataUrl(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error('could not read the file'));
-    reader.readAsDataURL(file);
-  });
-}
 
 /** The base64 data of a file, without the data URL's prefix. */
 export async function fileBase64(file: Blob): Promise<string> {
