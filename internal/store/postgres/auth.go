@@ -1,7 +1,9 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
+	"slices"
 	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
@@ -95,13 +97,18 @@ func (r sessionRepo) Delete(ctx context.Context, id domain.SessionID) error {
 	return affected("session", n, err)
 }
 
-func (r sessionRepo) DeleteByAccount(ctx context.Context, account domain.AccountID, except domain.SessionID) (int, error) {
-	n, err := r.q.DeleteSessionsByAccount(ctx, sqlc.DeleteSessionsByAccountParams{
+func (r sessionRepo) DeleteByAccount(
+	ctx context.Context, account domain.AccountID, except domain.SessionID,
+) ([]domain.Session, error) {
+	rows, err := r.q.DeleteSessionsByAccount(ctx, sqlc.DeleteSessionsByAccountParams{
 		AccountID: pgID(account),
 		ExceptID:  pgID(except),
 	})
 
-	return int(n), mapErr(err)
+	sessions, err := convertRows(rows, err, toSession)
+	slices.SortFunc(sessions, func(a, b domain.Session) int { return bytes.Compare(a.ID[:], b.ID[:]) })
+
+	return sessions, err
 }
 
 func (r sessionRepo) DeleteExpired(ctx context.Context, now time.Time) (int, error) {

@@ -155,7 +155,8 @@ type SettingsUsage struct {
 
 // PersonRepo stores persons and the guardian links between them. Member
 // numbers are unique (exactly, not ignoring case). A merged person (a
-// tombstone, ADR 0015) is found by Get, ListByIDs and ListMerged only.
+// tombstone, ADR 0015) is found by Get, ListByIDs and ListMerged only, an
+// anonymized one (ADR 0016) by those and its links.
 type PersonRepo interface {
 	Get(ctx context.Context, id domain.PersonID) (domain.Person, error)
 	// Create fails with domain.ErrDuplicate if another person has the
@@ -172,8 +173,8 @@ type PersonRepo interface {
 	Delete(ctx context.Context, id domain.PersonID) error
 	// GetByMemberNo finds the person with the member number.
 	GetByMemberNo(ctx context.Context, memberNo string) (domain.Person, error)
-	// List returns all persons that are not merged, ordered by family name,
-	// given name and ID.
+	// List returns all persons that are neither merged nor anonymized,
+	// ordered by family name, given name and ID.
 	List(ctx context.Context) ([]domain.Person, error)
 	// ListMerged returns the persons merged into the person, ordered like
 	// List.
@@ -229,9 +230,24 @@ type AccountRepo interface {
 	// ListByPersons returns the accounts of the given persons, each once and
 	// ordered like List. Persons without an account are left out.
 	ListByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.Account, error)
+	// ListByRole returns the accounts with the role, enabled or not, ordered
+	// like List.
+	ListByRole(ctx context.Context, role domain.Role) ([]domain.Account, error)
 	// MaxVisibleDays returns the largest VisibleDays override of any
 	// account, or 0 if none has one.
 	MaxVisibleDays(ctx context.Context) (int, error)
+	// Delete deletes an account; its person stays (ADR 0016). What is the
+	// account's own goes with it: its password, its sessions and the
+	// impersonation sessions it started, its email tokens, calendar feeds
+	// and announcement dismissals. Records that only name it as who did
+	// something forget it (zero): booking events, waiting-list entries it
+	// added, lessons it canceled, passes it sold, import runs and lesson
+	// notices it sent. Audit events that target it target its person
+	// instead. While receipts it created, audit events it acted in,
+	// announcements it wrote or mailed, or duplicate dismissals it recorded
+	// name it, the deletion fails with domain.ErrConflict and changes
+	// nothing. An unknown account is domain.ErrNotFound.
+	Delete(ctx context.Context, id domain.AccountID) error
 }
 
 // CredentialRepo stores the passwords of accounts, at most one per account.
@@ -256,9 +272,10 @@ type SessionRepo interface {
 	Delete(ctx context.Context, id domain.SessionID) error
 	// DeleteByAccount deletes every session that acts for the account, its
 	// own and the impersonation sessions it started, except the session
-	// except (none if zero), and returns how many it deleted. It signs the
-	// account out everywhere else when its password is changed or reset.
-	DeleteByAccount(ctx context.Context, account domain.AccountID, except domain.SessionID) (int, error)
+	// except (none if zero), and returns the deleted sessions ordered by ID.
+	// It signs the account out everywhere else when its password is changed
+	// or reset; the caller records the impersonations it ends.
+	DeleteByAccount(ctx context.Context, account domain.AccountID, except domain.SessionID) ([]domain.Session, error)
 	// DeleteExpired deletes every session that expired at or before now and
 	// returns how many it deleted.
 	DeleteExpired(ctx context.Context, now time.Time) (int, error)
@@ -513,6 +530,12 @@ type BookingRepo interface {
 	// (ADR 0007, ADR 0009). A booking a pass paid for is not deleted: the
 	// call fails with domain.ErrConflict.
 	DeleteByLessonAndSource(ctx context.Context, lesson domain.LessonID, source domain.BookingSource) (int, error)
+	// AnonymizeGuests replaces the name of every guest booking whose lesson
+	// ended before the instant with domain.AnonymousGuestName and clears its
+	// email and trial note (ADR 0016), canceled ones included, and returns
+	// how many bookings it changed; one anonymized already is not changed
+	// again. It needs a ReadWrite transaction.
+	AnonymizeGuests(ctx context.Context, endedBefore time.Time) (int, error)
 
 	// AddEvent appends to the history of a booking. It fails with
 	// domain.ErrConflict if the booking or the actor account does not exist.
@@ -578,6 +601,9 @@ type WaitlistRepo interface {
 	// ListOpenByPersons returns the open (waiting or invited) entries of
 	// the given persons, ordered by JoinedAt and ID.
 	ListOpenByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.WaitlistEntry, error)
+	// ListByPersons returns every entry of the given persons, ended ones
+	// included, ordered by JoinedAt and ID.
+	ListByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.WaitlistEntry, error)
 	// ListDueLessons returns, each once and ordered by ID, the lessons that
 	// have an invited entry whose invite expired at or before now, or that
 	// started at or before now and still have an open entry: the work of the
@@ -834,7 +860,8 @@ type OutboxFilter struct {
 	Limit int
 }
 
-// AuditRepo stores audit events. Events are only ever added.
+// AuditRepo stores audit events. Events are only ever added, and deleted
+// by the retention job (ADR 0016).
 type AuditRepo interface {
 	// Create fails with domain.ErrConflict if the ID is taken or the actor,
 	// the target account or the target person does not exist.
@@ -842,6 +869,9 @@ type AuditRepo interface {
 	// List returns at most limit events, newest first: ordered by time and
 	// ID, both descending.
 	List(ctx context.Context, limit int) ([]domain.AuditEvent, error)
+	// DeleteBefore deletes every event that happened before the instant and
+	// returns how many it deleted. It needs a ReadWrite transaction.
+	DeleteBefore(ctx context.Context, before time.Time) (int, error)
 }
 
 // AnnouncementRepo stores announcements (ADR 0014), the accounts'
@@ -906,7 +936,7 @@ type AnnouncementRepo interface {
 }
 
 // ImportRunRepo stores the history of applied member imports (ADR 0015).
-// Runs are only ever added.
+// Runs are only ever added, and deleted by the retention job (ADR 0016).
 type ImportRunRepo interface {
 	// Create fails with domain.ErrConflict if the ID is taken or the actor
 	// does not exist.
@@ -914,6 +944,9 @@ type ImportRunRepo interface {
 	// List returns at most limit runs, newest first: ordered by StartedAt
 	// and ID, both descending.
 	List(ctx context.Context, limit int) ([]domain.ImportRun, error)
+	// DeleteStartedBefore deletes every run that started before the instant
+	// and returns how many it deleted. It needs a ReadWrite transaction.
+	DeleteStartedBefore(ctx context.Context, before time.Time) (int, error)
 }
 
 // DuplicateDismissalRepo stores the pairs of persons the office found not

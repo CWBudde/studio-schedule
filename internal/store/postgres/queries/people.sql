@@ -2,13 +2,14 @@
 SELECT * FROM persons WHERE id = $1;
 
 -- name: CreatePerson :exec
-INSERT INTO persons (id, given_name, family_name, email, phone, birth_date, notes, member_no, merged_into)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+INSERT INTO persons (id, given_name, family_name, email, phone, birth_date, notes, member_no, merged_into,
+    anonymized_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
 
 -- name: UpdatePerson :execrows
 UPDATE persons
 SET given_name = $2, family_name = $3, email = $4, phone = $5, birth_date = $6, notes = $7, member_no = $8,
-    merged_into = $9
+    merged_into = $9, anonymized_at = $10
 WHERE id = $1;
 
 -- name: GetPersonByMemberNo :one
@@ -26,7 +27,7 @@ DELETE FROM persons WHERE id = $1;
 SELECT id FROM persons WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY id FOR UPDATE;
 
 -- name: ListPersons :many
-SELECT * FROM persons WHERE merged_into IS NULL ORDER BY family_name, given_name, id;
+SELECT * FROM persons WHERE merged_into IS NULL AND anonymized_at IS NULL ORDER BY family_name, given_name, id;
 
 -- name: ListPersonsByIDs :many
 SELECT * FROM persons WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY family_name, given_name, id;
@@ -87,5 +88,13 @@ SELECT * FROM accounts WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY lower(emai
 -- name: ListAccountsByPersons :many
 SELECT * FROM accounts WHERE person_id = ANY(sqlc.arg(persons)::uuid[]) ORDER BY lower(email), id;
 
+-- name: ListAccountsByRole :many
+SELECT * FROM accounts WHERE role = $1 ORDER BY lower(email), id;
+
 -- name: MaxAccountVisibleDays :one
 SELECT coalesce(max(visible_days), 0)::integer FROM accounts;
+
+-- name: DeleteAccount :execrows
+-- The foreign keys delete or clear what refers to the account (migration
+-- 00023); the audit events that target it are re-pointed first.
+DELETE FROM accounts WHERE id = $1;

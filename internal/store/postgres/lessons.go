@@ -367,6 +367,14 @@ func (r bookingRepo) ListByPersons(ctx context.Context, q store.BookingQuery) ([
 	return convertRows(rows, err, toBooking)
 }
 
+func (r bookingRepo) AnonymizeGuests(ctx context.Context, endedBefore time.Time) (int, error) {
+	n, err := r.q.AnonymizeGuestBookings(ctx, sqlc.AnonymizeGuestBookingsParams{
+		GuestName: pgText(domain.AnonymousGuestName), EndedBefore: pgInstant(endedBefore),
+	})
+
+	return int(n), mapErr(err)
+}
+
 func (r bookingRepo) DeleteByLessonAndSource(
 	ctx context.Context, lesson domain.LessonID, source domain.BookingSource,
 ) (int, error) {

@@ -146,6 +146,7 @@ func (r personRepo) put(p domain.Person) error {
 		s.memberNos.put(r.tx.gen, p.MemberNo, p.ID)
 	}
 
+	p.AnonymizedAt = instant(p.AnonymizedAt)
 	s.persons.put(r.tx.gen, p.ID, p)
 
 	return nil
@@ -225,7 +226,9 @@ func (r personRepo) Lock(_ context.Context, ids ...domain.PersonID) error {
 }
 
 func (r personRepo) List(context.Context) ([]domain.Person, error) {
-	return sorted(r.tx.state.persons.filter(func(p domain.Person) bool { return !p.Merged() }), comparePersons), nil
+	listed := r.tx.state.persons.filter(func(p domain.Person) bool { return !p.Merged() && !p.Anonymized() })
+
+	return sorted(listed, comparePersons), nil
 }
 
 func (r personRepo) ListByIDs(_ context.Context, ids []domain.PersonID) ([]domain.Person, error) {
@@ -396,6 +399,101 @@ func (r accountRepo) ListByPersons(_ context.Context, persons []domain.PersonID)
 	return sorted(r.tx.state.accounts.filter(func(a domain.Account) bool {
 		return slices.Contains(persons, a.PersonID)
 	}), compareAccounts), nil
+}
+
+func (r accountRepo) ListByRole(_ context.Context, role domain.Role) ([]domain.Account, error) {
+	return sorted(r.tx.state.accounts.filter(func(a domain.Account) bool { return a.Role == role }), compareAccounts), nil
+}
+
+// Delete follows the foreign keys of PostgreSQL's migration 00023: it fails
+// while records that keep the account refer to it, re-points the audit
+// events that target it to its person, deletes what is its own and clears
+// it where records only name it.
+func (r accountRepo) Delete(_ context.Context, id domain.AccountID) error {
+	s := &r.tx.state
+	if err := r.tx.checkWritable(); err != nil {
+		return err
+	}
+
+	acc, ok := s.accounts.get(id)
+	if !ok {
+		return notFound("account")
+	}
+
+	if s.receipts.exists(func(rc domain.Receipt) bool { return rc.CreatedBy == id }) ||
+		s.audit.exists(func(e domain.AuditEvent) bool { return e.ActorID == id }) ||
+		s.announcements.exists(func(a domain.Announcement) bool { return a.AuthorID == id }) ||
+		s.announcementMailings.exists(func(m domain.AnnouncementMailing) bool { return m.SenderID == id }) ||
+		s.dismissals.exists(func(d domain.DuplicateDismissal) bool { return d.DismissedBy == id }) {
+		return conflict("account %s is referenced", id)
+	}
+
+	gen := r.tx.gen
+
+	for _, e := range s.audit.filter(func(e domain.AuditEvent) bool { return e.TargetID == id }) {
+		s.audit.put(gen, e.ID, e.Retarget(acc.PersonID))
+	}
+
+	s.credentials.delete(gen, id)
+
+	for _, sess := range s.sessions.filter(func(o domain.Session) bool { return o.AccountID == id || o.ImpersonatorID == id }) {
+		s.sessions.delete(gen, sess.ID)
+	}
+
+	for _, t := range s.accountTokens.filter(func(t domain.AccountToken) bool { return t.AccountID == id }) {
+		s.accountTokens.delete(gen, t.Hash)
+	}
+
+	for _, f := range s.calendarFeeds.filter(func(f domain.CalendarFeed) bool { return f.AccountID == id }) {
+		s.calendarFeeds.delete(gen, f.ID)
+	}
+
+	for k := range s.announcementDismissed.rows {
+		if k.account == id {
+			s.announcementDismissed.delete(gen, k)
+		}
+	}
+
+	r.forget(id)
+	s.accounts.delete(gen, id)
+
+	return nil
+}
+
+// forget clears the account id from the records that only name it as who
+// did something.
+func (r accountRepo) forget(id domain.AccountID) {
+	s, gen := &r.tx.state, r.tx.gen
+
+	for _, e := range s.bookingEvents.filter(func(e domain.BookingEvent) bool { return e.ActorAccountID == id }) {
+		e.ActorAccountID = domain.AccountID{}
+		s.bookingEvents.put(gen, e.ID, e)
+	}
+
+	for _, e := range s.waitlist.filter(func(e domain.WaitlistEntry) bool { return e.JoinedBy == id }) {
+		e.JoinedBy = domain.AccountID{}
+		s.waitlist.put(gen, e.ID, e)
+	}
+
+	for _, l := range s.lessons.filter(func(l domain.Lesson) bool { return l.CanceledBy == id }) {
+		l.CanceledBy = domain.AccountID{}
+		s.lessons.put(gen, l.ID, l)
+	}
+
+	for _, p := range s.passes.filter(func(p domain.Pass) bool { return p.SoldBy == id }) {
+		p.SoldBy = domain.AccountID{}
+		s.passes.put(gen, p.ID, p)
+	}
+
+	for _, run := range s.importRuns.filter(func(run domain.ImportRun) bool { return run.ActorID == id }) {
+		run.ActorID = domain.AccountID{}
+		s.importRuns.put(gen, run.ID, run)
+	}
+
+	for _, n := range s.notices.filter(func(n domain.LessonNotice) bool { return n.SenderID == id }) {
+		n.SenderID = domain.AccountID{}
+		s.notices.put(gen, n.ID, n)
+	}
 }
 
 func (r accountRepo) MaxVisibleDays(context.Context) (int, error) {
@@ -1369,6 +1467,32 @@ func (r bookingRepo) ListByPersons(_ context.Context, q store.BookingQuery) ([]d
 	}
 
 	return bookings, nil
+}
+
+func (r bookingRepo) AnonymizeGuests(_ context.Context, endedBefore time.Time) (int, error) {
+	s := &r.tx.state
+	if err := r.tx.checkWritable(); err != nil {
+		return 0, err
+	}
+
+	endedBefore = instant(endedBefore)
+	guests := s.bookings.filter(func(b domain.Booking) bool {
+		if !b.PersonID.IsZero() ||
+			(b.GuestName == domain.AnonymousGuestName && b.GuestEmail == "" && b.TrialNote == "") {
+			return false
+		}
+
+		l, ok := s.lessons.get(b.LessonID)
+
+		return ok && l.EndsAt.Before(endedBefore)
+	})
+
+	for _, b := range guests {
+		b.GuestName, b.GuestEmail, b.TrialNote = domain.AnonymousGuestName, "", ""
+		s.bookings.put(r.tx.gen, b.ID, b)
+	}
+
+	return len(guests), nil
 }
 
 func (r bookingRepo) DeleteByLessonAndSource(

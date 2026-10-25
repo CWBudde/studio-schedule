@@ -58,6 +58,30 @@ func TestPersonValidate(t *testing.T) {
 	})
 }
 
+func TestAnonymizedPersonValidate(t *testing.T) {
+	t.Parallel()
+
+	checkValidate(t, func() domain.Person {
+		return domain.Person{
+			ID: newID[domain.PersonID](), GivenName: "Ada", FamilyName: "Example", Email: "ada@example.org",
+			Phone: "+49 000 0000000", BirthDate: domain.Date{Year: 2015, Month: time.May, Day: 4}, Notes: "Notes.",
+			MemberNo: "M-0001",
+		}.Anonymize(t0)
+	}, map[string]func(*domain.Person){
+		"a name":       func(p *domain.Person) { p.GivenName = "Ada" },
+		"an email":     func(p *domain.Person) { p.Email = "ada@example.org" },
+		"a phone":      func(p *domain.Person) { p.Phone = "+49 000 0000000" },
+		"a birth date": func(p *domain.Person) { p.BirthDate = domain.Date{Year: 2015, Month: time.May, Day: 4} },
+		"notes":        func(p *domain.Person) { p.Notes = "Notes." },
+		"a member no":  func(p *domain.Person) { p.MemberNo = "M-0001" },
+	})
+
+	p := domain.Person{ID: newID[domain.PersonID](), GivenName: "Ada", FamilyName: "Example"}.Anonymize(t0)
+	if !p.Anonymized() || p.GivenName != domain.AnonymizedGivenName || p.FamilyName != domain.AnonymizedFamilyName {
+		t.Errorf("anonymized %+v", p)
+	}
+}
+
 func TestDuplicateDismissalValidate(t *testing.T) {
 	t.Parallel()
 
@@ -1048,6 +1072,96 @@ func TestAuthValidate(t *testing.T) {
 				e.TargetKind, e.TargetPersonID = "", domain.PersonID{}
 			},
 		})
+	})
+
+	t.Run("AuditAccountChanges", func(t *testing.T) {
+		t.Parallel()
+
+		for _, action := range []domain.AuditAction{domain.AuditAccountDisabled, domain.AuditAccountEnabled} {
+			checkValidate(t, func() domain.AuditEvent {
+				return domain.AuditEvent{
+					ID: newID[domain.AuditEventID](), At: t0, ActorID: newID[domain.AccountID](), Action: action,
+					TargetKind: domain.AuditTargetAccount, TargetID: newID[domain.AccountID](),
+				}
+			}, map[string]func(*domain.AuditEvent){
+				"no target": func(e *domain.AuditEvent) { e.TargetKind, e.TargetID = "", domain.AccountID{} },
+				"roles": func(e *domain.AuditEvent) {
+					e.Details.Role, e.Details.PreviousRole = domain.RoleAdmin, domain.RoleMember
+				},
+				"no actor": func(e *domain.AuditEvent) { e.ActorID = domain.AccountID{} },
+			})
+		}
+
+		checkValidate(t, func() domain.AuditEvent {
+			return domain.AuditEvent{
+				ID: newID[domain.AuditEventID](), At: t0, ActorID: newID[domain.AccountID](),
+				Action: domain.AuditAccountRoleChanged, TargetKind: domain.AuditTargetAccount,
+				TargetID: newID[domain.AccountID](),
+				Details:  domain.AuditDetails{PreviousRole: domain.RoleMember, Role: domain.RoleOffice},
+			}
+		}, map[string]func(*domain.AuditEvent){
+			"no role":          func(e *domain.AuditEvent) { e.Details.Role = "" },
+			"no previous role": func(e *domain.AuditEvent) { e.Details.PreviousRole = "" },
+			"bad role":         func(e *domain.AuditEvent) { e.Details.Role = "boss" },
+		})
+
+		for _, action := range []domain.AuditAction{domain.AuditAccountDeleted, domain.AuditPersonAnonymized} {
+			checkValidate(t, func() domain.AuditEvent {
+				return domain.AuditEvent{
+					ID: newID[domain.AuditEventID](), At: t0, ActorID: newID[domain.AccountID](), Action: action,
+					TargetKind: domain.AuditTargetPerson, TargetPersonID: newID[domain.PersonID](),
+				}
+			}, map[string]func(*domain.AuditEvent){
+				"an account": func(e *domain.AuditEvent) {
+					e.TargetKind, e.TargetPersonID, e.TargetID = domain.AuditTargetAccount, domain.PersonID{}, newID[domain.AccountID]()
+				},
+			})
+		}
+
+		// Once its account is deleted, an impersonation or an account change
+		// targets the account's person.
+		for _, action := range []domain.AuditAction{
+			domain.AuditImpersonationStarted, domain.AuditImpersonationEnded, domain.AuditAccountDisabled,
+			domain.AuditAccountEnabled, domain.AuditAccountRoleChanged,
+		} {
+			e := domain.AuditEvent{
+				ID: newID[domain.AuditEventID](), At: t0, ActorID: newID[domain.AccountID](), Action: action,
+				TargetKind: domain.AuditTargetAccount, TargetID: newID[domain.AccountID](),
+			}
+			if action == domain.AuditAccountRoleChanged {
+				e.Details = domain.AuditDetails{PreviousRole: domain.RoleMember, Role: domain.RoleOffice}
+			}
+
+			person := newID[domain.PersonID]()
+			moved := e.Retarget(person)
+
+			if moved.TargetKind != domain.AuditTargetPerson || !moved.TargetID.IsZero() || moved.TargetPersonID != person {
+				t.Errorf("%s: retargeted to %+v", action, moved)
+			}
+
+			if err := moved.Validate(); err != nil {
+				t.Errorf("%s of a deleted account: %v", action, err)
+			}
+
+			moved.TargetKind, moved.TargetPersonID = "", domain.PersonID{}
+			if err := moved.Validate(); err == nil {
+				t.Errorf("%s without a target", action)
+			}
+		}
+
+		// Only an account its holder deleted has no actor.
+		selfDeleted := domain.AuditEvent{
+			ID: newID[domain.AuditEventID](), At: t0, Action: domain.AuditAccountDeleted,
+			TargetKind: domain.AuditTargetPerson, TargetPersonID: newID[domain.PersonID](),
+		}
+		if err := selfDeleted.Validate(); err != nil {
+			t.Errorf("a self-deleted account: %v", err)
+		}
+
+		selfDeleted.Action = domain.AuditPersonAnonymized
+		if err := selfDeleted.Validate(); err == nil {
+			t.Error("an anonymization without an actor")
+		}
 	})
 
 	t.Run("LessonNotice", func(t *testing.T) {

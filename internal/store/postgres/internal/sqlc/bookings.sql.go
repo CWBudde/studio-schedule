@@ -41,6 +41,29 @@ func (q *Queries) AddBookingEvent(ctx context.Context, arg AddBookingEventParams
 	return err
 }
 
+const anonymizeGuestBookings = `-- name: AnonymizeGuestBookings :execrows
+UPDATE bookings b
+SET guest_name = $1, guest_email = NULL, trial_note = NULL
+FROM lessons l
+WHERE l.id = b.lesson_id AND b.person_id IS NULL AND l.ends_at < $2
+    AND (b.guest_name <> $1 OR b.guest_email IS NOT NULL OR b.trial_note IS NOT NULL)
+`
+
+type AnonymizeGuestBookingsParams struct {
+	GuestName   pgtype.Text
+	EndedBefore pgtype.Timestamptz
+}
+
+// The guest bookings of the lessons that ended before the instant, unless
+// anonymized already (ADR 0016).
+func (q *Queries) AnonymizeGuestBookings(ctx context.Context, arg AnonymizeGuestBookingsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, anonymizeGuestBookings, arg.GuestName, arg.EndedBefore)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countActiveBookingPersons = `-- name: CountActiveBookingPersons :one
 SELECT count(DISTINCT person_id) FROM bookings
 WHERE lesson_id = ANY($1::uuid[]) AND status <> 'canceled' AND person_id IS NOT NULL

@@ -93,6 +93,18 @@ func (q *Queries) DeleteDuplicateDismissal(ctx context.Context, arg DeleteDuplic
 	return result.RowsAffected(), nil
 }
 
+const deleteImportRunsStartedBefore = `-- name: DeleteImportRunsStartedBefore :execrows
+DELETE FROM import_runs WHERE started_at < $1
+`
+
+func (q *Queries) DeleteImportRunsStartedBefore(ctx context.Context, startedAt pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteImportRunsStartedBefore, startedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listDuplicateDismissals = `-- name: ListDuplicateDismissals :many
 SELECT person_a, person_b, dismissed_by, dismissed_at FROM person_duplicate_dismissals ORDER BY person_a, person_b
 `

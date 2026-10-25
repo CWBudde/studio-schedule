@@ -261,6 +261,43 @@ func (q *Queries) ListWaitlistEntriesByLesson(ctx context.Context, lessonID pgty
 	return items, nil
 }
 
+const listWaitlistEntriesByPersons = `-- name: ListWaitlistEntriesByPersons :many
+SELECT id, lesson_id, person_id, status, joined_at, stay_on_list, joined_by, invite_token_hash, invited_at, expires_at FROM waitlist_entries
+WHERE person_id = ANY($1::uuid[])
+ORDER BY joined_at, id
+`
+
+func (q *Queries) ListWaitlistEntriesByPersons(ctx context.Context, persons []pgtype.UUID) ([]WaitlistEntry, error) {
+	rows, err := q.db.Query(ctx, listWaitlistEntriesByPersons, persons)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WaitlistEntry
+	for rows.Next() {
+		var i WaitlistEntry
+		if err := rows.Scan(
+			&i.ID,
+			&i.LessonID,
+			&i.PersonID,
+			&i.Status,
+			&i.JoinedAt,
+			&i.StayOnList,
+			&i.JoinedBy,
+			&i.InviteTokenHash,
+			&i.InvitedAt,
+			&i.ExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateWaitlistEntry = `-- name: UpdateWaitlistEntry :execrows
 UPDATE waitlist_entries
 SET lesson_id = $2, person_id = $3, status = $4, joined_at = $5, stay_on_list = $6, joined_by = $7,

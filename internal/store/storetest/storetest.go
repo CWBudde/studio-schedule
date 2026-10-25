@@ -55,6 +55,7 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 	t.Run("Announcements", func(t *testing.T) { testAnnouncements(t, newStore) })
 	t.Run("ImportRuns", func(t *testing.T) { testImportRuns(t, newStore) })
 	t.Run("DuplicateDismissals", func(t *testing.T) { testDuplicateDismissals(t, newStore) })
+	t.Run("Privacy", func(t *testing.T) { testPrivacy(t, newStore) })
 }
 
 // env is one test case's store plus an ID source for its fixtures.

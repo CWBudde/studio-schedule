@@ -256,15 +256,16 @@ type PassType struct {
 }
 
 type Person struct {
-	ID         pgtype.UUID
-	GivenName  string
-	FamilyName string
-	Email      pgtype.Text
-	Phone      pgtype.Text
-	BirthDate  pgtype.Date
-	Notes      pgtype.Text
-	MemberNo   pgtype.Text
-	MergedInto pgtype.UUID
+	ID           pgtype.UUID
+	GivenName    string
+	FamilyName   string
+	Email        pgtype.Text
+	Phone        pgtype.Text
+	BirthDate    pgtype.Date
+	Notes        pgtype.Text
+	MemberNo     pgtype.Text
+	MergedInto   pgtype.UUID
+	AnonymizedAt pgtype.Timestamptz
 }
 
 type PersonDuplicateDismissal struct {

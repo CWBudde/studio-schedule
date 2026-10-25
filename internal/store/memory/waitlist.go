@@ -125,6 +125,16 @@ func (r waitlistRepo) ListOpenByPersons(_ context.Context, persons []domain.Pers
 	}), byJoined), nil
 }
 
+func (r waitlistRepo) ListByPersons(_ context.Context, persons []domain.PersonID) ([]domain.WaitlistEntry, error) {
+	wanted := setOf(persons)
+
+	return sorted(r.tx.state.waitlist.filter(func(e domain.WaitlistEntry) bool {
+		_, ok := wanted[e.PersonID]
+
+		return ok
+	}), byJoined), nil
+}
+
 func (r waitlistRepo) ListDueLessons(_ context.Context, now time.Time) ([]domain.LessonID, error) {
 	now = instant(now)
 	due := map[domain.LessonID]struct{}{}

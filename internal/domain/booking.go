@@ -51,6 +51,11 @@ func BookingSources() []BookingSource {
 // MaxTrialNoteLength is the longest note on a trial booking, in characters.
 const MaxTrialNoteLength = 500
 
+// AnonymousGuestName replaces the name of a guest once the retention period
+// of guest data has passed (ADR 0016); the guest's email and trial note are
+// cleared then.
+const AnonymousGuestName = "Guest"
+
 // Valid reports whether s is a known booking source.
 func (s BookingSource) Valid() bool { return slices.Contains(BookingSources(), s) }
 

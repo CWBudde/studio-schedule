@@ -143,15 +143,16 @@ type personRepo struct{ q *sqlc.Queries }
 
 func toPerson(row sqlc.Person) domain.Person {
 	return domain.Person{
-		ID:         fromPgID[domain.PersonID](row.ID),
-		GivenName:  row.GivenName,
-		FamilyName: row.FamilyName,
-		Email:      row.Email.String,
-		Phone:      row.Phone.String,
-		BirthDate:  fromPgDate(row.BirthDate),
-		Notes:      row.Notes.String,
-		MemberNo:   row.MemberNo.String,
-		MergedInto: fromPgID[domain.PersonID](row.MergedInto),
+		ID:           fromPgID[domain.PersonID](row.ID),
+		GivenName:    row.GivenName,
+		FamilyName:   row.FamilyName,
+		Email:        row.Email.String,
+		Phone:        row.Phone.String,
+		BirthDate:    fromPgDate(row.BirthDate),
+		Notes:        row.Notes.String,
+		MemberNo:     row.MemberNo.String,
+		MergedInto:   fromPgID[domain.PersonID](row.MergedInto),
+		AnonymizedAt: fromPgInstant(row.AnonymizedAt),
 	}
 }
 
@@ -170,29 +171,31 @@ func (r personRepo) Get(ctx context.Context, id domain.PersonID) (domain.Person,
 
 func (r personRepo) Create(ctx context.Context, p domain.Person) error {
 	return mapErr(r.q.CreatePerson(ctx, sqlc.CreatePersonParams{
-		ID:         pgID(p.ID),
-		GivenName:  p.GivenName,
-		FamilyName: p.FamilyName,
-		Email:      pgText(p.Email),
-		Phone:      pgText(p.Phone),
-		BirthDate:  pgDate(p.BirthDate),
-		Notes:      pgText(p.Notes),
-		MemberNo:   pgText(p.MemberNo),
-		MergedInto: pgID(p.MergedInto),
+		ID:           pgID(p.ID),
+		GivenName:    p.GivenName,
+		FamilyName:   p.FamilyName,
+		Email:        pgText(p.Email),
+		Phone:        pgText(p.Phone),
+		BirthDate:    pgDate(p.BirthDate),
+		Notes:        pgText(p.Notes),
+		MemberNo:     pgText(p.MemberNo),
+		MergedInto:   pgID(p.MergedInto),
+		AnonymizedAt: pgInstant(p.AnonymizedAt),
 	}))
 }
 
 func (r personRepo) Update(ctx context.Context, p domain.Person) error {
 	n, err := r.q.UpdatePerson(ctx, sqlc.UpdatePersonParams{
-		ID:         pgID(p.ID),
-		GivenName:  p.GivenName,
-		FamilyName: p.FamilyName,
-		Email:      pgText(p.Email),
-		Phone:      pgText(p.Phone),
-		BirthDate:  pgDate(p.BirthDate),
-		Notes:      pgText(p.Notes),
-		MemberNo:   pgText(p.MemberNo),
-		MergedInto: pgID(p.MergedInto),
+		ID:           pgID(p.ID),
+		GivenName:    p.GivenName,
+		FamilyName:   p.FamilyName,
+		Email:        pgText(p.Email),
+		Phone:        pgText(p.Phone),
+		BirthDate:    pgDate(p.BirthDate),
+		Notes:        pgText(p.Notes),
+		MemberNo:     pgText(p.MemberNo),
+		MergedInto:   pgID(p.MergedInto),
+		AnonymizedAt: pgInstant(p.AnonymizedAt),
 	})
 
 	return affected("person", n, err)
@@ -385,10 +388,38 @@ func (r accountRepo) ListByPersons(ctx context.Context, persons []domain.PersonI
 	return convertRows(rows, err, toAccount)
 }
 
+func (r accountRepo) ListByRole(ctx context.Context, role domain.Role) ([]domain.Account, error) {
+	rows, err := r.q.ListAccountsByRole(ctx, string(role))
+
+	return convertRows(rows, err, toAccount)
+}
+
 func (r accountRepo) MaxVisibleDays(ctx context.Context) (int, error) {
 	n, err := r.q.MaxAccountVisibleDays(ctx)
 
 	return int(n), mapErr(err)
+}
+
+// Delete re-points the audit events that target the account to its person,
+// then deletes the account; the foreign keys of migration 00023 delete or
+// clear what refers to it, and those that keep it (RESTRICT) fail the
+// delete with domain.ErrConflict.
+func (r accountRepo) Delete(ctx context.Context, id domain.AccountID) error {
+	acc, err := r.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	err = r.q.RetargetAuditEventsToPerson(ctx, sqlc.RetargetAuditEventsToPersonParams{
+		PersonID: pgID(acc.PersonID), AccountID: pgID(id),
+	})
+	if err != nil {
+		return mapErr(err)
+	}
+
+	n, err := r.q.DeleteAccount(ctx, pgID(id))
+
+	return affected("account", n, err)
 }
 
 // convertRows maps the rows of a list query, or its error.

@@ -23,10 +23,12 @@ WHERE id = $1;
 -- name: DeleteSession :execrows
 DELETE FROM sessions WHERE id = $1;
 
--- name: DeleteSessionsByAccount :execrows
+-- name: DeleteSessionsByAccount :many
+-- DELETE ... RETURNING has no order; the store sorts the rows by ID.
 DELETE FROM sessions
 WHERE (account_id = sqlc.arg(account_id) OR impersonator_id = sqlc.arg(account_id))
-    AND id IS DISTINCT FROM sqlc.narg(except_id);
+    AND id IS DISTINCT FROM sqlc.narg(except_id)
+RETURNING *;
 
 -- name: DeleteExpiredSessions :execrows
 DELETE FROM sessions WHERE expires_at <= $1;

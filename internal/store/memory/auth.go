@@ -3,6 +3,7 @@ package memory
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -110,9 +111,11 @@ func (r sessionRepo) Delete(_ context.Context, id domain.SessionID) error {
 	return nil
 }
 
-func (r sessionRepo) DeleteByAccount(_ context.Context, account domain.AccountID, except domain.SessionID) (int, error) {
+func (r sessionRepo) DeleteByAccount(
+	_ context.Context, account domain.AccountID, except domain.SessionID,
+) ([]domain.Session, error) {
 	if err := r.tx.checkWritable(); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	actsFor := r.tx.state.sessions.filter(func(s domain.Session) bool {
@@ -122,7 +125,7 @@ func (r sessionRepo) DeleteByAccount(_ context.Context, account domain.AccountID
 		r.tx.state.sessions.delete(r.tx.gen, s.ID)
 	}
 
-	return len(actsFor), nil
+	return sorted(actsFor, func(a, b domain.Session) int { return compareID(a.ID, b.ID) }), nil
 }
 
 func (r sessionRepo) DeleteExpired(_ context.Context, now time.Time) (int, error) {
@@ -356,9 +359,12 @@ func (r auditRepo) Create(_ context.Context, e domain.AuditEvent) error {
 	s := &r.tx.state
 
 	switch {
+	case e.ActorID.IsZero() && e.Action != domain.AuditAccountDeleted:
+		// PostgreSQL's CHECK audit_events_actor (migration 00023).
+		return fmt.Errorf("audit event without an actor: %w", domain.ErrValidation)
 	case s.audit.has(e.ID):
 		return conflict("audit event %s exists", e.ID)
-	case !s.accounts.has(e.ActorID),
+	case !e.ActorID.IsZero() && !s.accounts.has(e.ActorID),
 		!e.TargetID.IsZero() && !s.accounts.has(e.TargetID),
 		!e.TargetPersonID.IsZero() && !s.persons.has(e.TargetPersonID):
 		return conflict("audit event references a missing account or person")
@@ -368,6 +374,21 @@ func (r auditRepo) Create(_ context.Context, e domain.AuditEvent) error {
 	s.audit.put(r.tx.gen, e.ID, e)
 
 	return nil
+}
+
+func (r auditRepo) DeleteBefore(_ context.Context, before time.Time) (int, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return 0, err
+	}
+
+	before = instant(before)
+	events := r.tx.state.audit.filter(func(e domain.AuditEvent) bool { return e.At.Before(before) })
+
+	for _, e := range events {
+		r.tx.state.audit.delete(r.tx.gen, e.ID)
+	}
+
+	return len(events), nil
 }
 
 func (r auditRepo) List(_ context.Context, limit int) ([]domain.AuditEvent, error) {

@@ -52,6 +52,21 @@ func (r importRunRepo) List(_ context.Context, limit int) ([]domain.ImportRun, e
 	return runs, nil
 }
 
+func (r importRunRepo) DeleteStartedBefore(_ context.Context, before time.Time) (int, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return 0, err
+	}
+
+	before = instant(before)
+	runs := r.tx.state.importRuns.filter(func(run domain.ImportRun) bool { return run.StartedAt.Before(before) })
+
+	for _, run := range runs {
+		r.tx.state.importRuns.delete(r.tx.gen, run.ID)
+	}
+
+	return len(runs), nil
+}
+
 // ---------------------------------------------------------------- duplicate dismissals
 
 // pairKey is the key of a duplicate dismissal.

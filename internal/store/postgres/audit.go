@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/store/postgres/internal/sqlc"
@@ -31,6 +32,12 @@ func (r auditRepo) Create(ctx context.Context, e domain.AuditEvent) error {
 		TargetPersonID: pgID(e.TargetPersonID),
 		Details:        details,
 	}))
+}
+
+func (r auditRepo) DeleteBefore(ctx context.Context, before time.Time) (int, error) {
+	n, err := r.q.DeleteAuditEventsBefore(ctx, pgInstant(before))
+
+	return int(n), mapErr(err)
 }
 
 func (r auditRepo) List(ctx context.Context, limit int) ([]domain.AuditEvent, error) {

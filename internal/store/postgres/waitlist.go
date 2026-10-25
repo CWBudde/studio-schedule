@@ -130,6 +130,12 @@ func (r waitlistRepo) ListOpenByPersons(
 	return convertRows(rows, err, toWaitlistEntry)
 }
 
+func (r waitlistRepo) ListByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.WaitlistEntry, error) {
+	rows, err := r.q.ListWaitlistEntriesByPersons(ctx, pgIDs(persons))
+
+	return convertRows(rows, err, toWaitlistEntry)
+}
+
 func (r waitlistRepo) ListDueLessons(ctx context.Context, now time.Time) ([]domain.LessonID, error) {
 	rows, err := r.q.ListDueWaitlistLessons(ctx, pgInstant(now))
 

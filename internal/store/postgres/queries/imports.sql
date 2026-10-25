@@ -6,6 +6,9 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
 -- name: ListImportRuns :many
 SELECT * FROM import_runs ORDER BY started_at DESC, id DESC LIMIT $1;
 
+-- name: DeleteImportRunsStartedBefore :execrows
+DELETE FROM import_runs WHERE started_at < $1;
+
 -- name: CreateDuplicateDismissal :exec
 INSERT INTO person_duplicate_dismissals (person_a, person_b, dismissed_by, dismissed_at) VALUES ($1, $2, $3, $4)
 ON CONFLICT (person_a, person_b) DO NOTHING;

@@ -57,6 +57,12 @@ func (r importRunRepo) Create(ctx context.Context, run domain.ImportRun) error {
 	}))
 }
 
+func (r importRunRepo) DeleteStartedBefore(ctx context.Context, before time.Time) (int, error) {
+	n, err := r.q.DeleteImportRunsStartedBefore(ctx, pgInstant(before))
+
+	return int(n), mapErr(err)
+}
+
 func (r importRunRepo) List(ctx context.Context, limit int) ([]domain.ImportRun, error) {
 	rows, err := r.q.ListImportRuns(ctx, rowLimit(limit))
 	if err != nil {

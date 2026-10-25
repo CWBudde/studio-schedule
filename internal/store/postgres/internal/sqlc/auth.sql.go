@@ -127,10 +127,11 @@ func (q *Queries) DeleteSession(ctx context.Context, id pgtype.UUID) (int64, err
 	return result.RowsAffected(), nil
 }
 
-const deleteSessionsByAccount = `-- name: DeleteSessionsByAccount :execrows
+const deleteSessionsByAccount = `-- name: DeleteSessionsByAccount :many
 DELETE FROM sessions
 WHERE (account_id = $1 OR impersonator_id = $1)
     AND id IS DISTINCT FROM $2
+RETURNING id, account_id, token_hash, created_at, last_seen_at, expires_at, impersonator_id
 `
 
 type DeleteSessionsByAccountParams struct {
@@ -138,12 +139,33 @@ type DeleteSessionsByAccountParams struct {
 	ExceptID  pgtype.UUID
 }
 
-func (q *Queries) DeleteSessionsByAccount(ctx context.Context, arg DeleteSessionsByAccountParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteSessionsByAccount, arg.AccountID, arg.ExceptID)
+// DELETE ... RETURNING has no order; the store sorts the rows by ID.
+func (q *Queries) DeleteSessionsByAccount(ctx context.Context, arg DeleteSessionsByAccountParams) ([]Session, error) {
+	rows, err := q.db.Query(ctx, deleteSessionsByAccount, arg.AccountID, arg.ExceptID)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected(), nil
+	defer rows.Close()
+	var items []Session
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.TokenHash,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.ExpiresAt,
+			&i.ImpersonatorID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getAccountToken = `-- name: GetAccountToken :one

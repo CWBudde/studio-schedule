@@ -70,6 +70,15 @@ WHERE booking_id IN (SELECT id FROM bookings WHERE lesson_id = $1 AND source = $
 -- name: DeleteBookingsByLessonAndSource :execrows
 DELETE FROM bookings WHERE lesson_id = $1 AND source = $2;
 
+-- name: AnonymizeGuestBookings :execrows
+-- The guest bookings of the lessons that ended before the instant, unless
+-- anonymized already (ADR 0016).
+UPDATE bookings b
+SET guest_name = sqlc.arg(guest_name), guest_email = NULL, trial_note = NULL
+FROM lessons l
+WHERE l.id = b.lesson_id AND b.person_id IS NULL AND l.ends_at < sqlc.arg(ended_before)
+    AND (b.guest_name <> sqlc.arg(guest_name) OR b.guest_email IS NOT NULL OR b.trial_note IS NOT NULL);
+
 -- name: ListBookingsByLessonsAndPersons :many
 SELECT * FROM bookings
 WHERE lesson_id = ANY(sqlc.arg(lessons)::uuid[]) AND person_id = ANY(sqlc.arg(persons)::uuid[])

@@ -13,6 +13,13 @@ const MaxMemberNoLength = 40
 // MaxNotesLength is the longest notes of a person, in characters.
 const MaxNotesLength = 2000
 
+// The fixed name of an anonymized person (ADR 0016). The stored values are
+// these; the web app shows a translated label instead.
+const (
+	AnonymizedGivenName  = "Deleted"
+	AnonymizedFamilyName = "person"
+)
+
 // Person is any human the school deals with: a member, a child, a guest or
 // a staff member. Optional fields use the zero value for "absent".
 type Person struct {
@@ -32,10 +39,28 @@ type Person struct {
 	// it any more but its receipts and the audit log, it is left out of
 	// lists and searches, and it has no member number.
 	MergedInto PersonID
+	// AnonymizedAt is when the office anonymized the person (ADR 0016);
+	// zero for one that is not. An anonymized person has the fixed name
+	// AnonymizedGivenName AnonymizedFamilyName and no other personal data;
+	// like a tombstone it stays for its history (past bookings, passes,
+	// receipts) and nothing new refers to it.
+	AnonymizedAt time.Time
 }
 
 // Merged reports whether the person is a tombstone of a merge.
 func (p Person) Merged() bool { return !p.MergedInto.IsZero() }
+
+// Anonymized reports whether the office anonymized the person.
+func (p Person) Anonymized() bool { return !p.AnonymizedAt.IsZero() }
+
+// Anonymize returns p with the fixed name and without any other personal
+// data, anonymized at the instant.
+func (p Person) Anonymize(at time.Time) Person {
+	return Person{
+		ID: p.ID, GivenName: AnonymizedGivenName, FamilyName: AnonymizedFamilyName, MergedInto: p.MergedInto,
+		AnonymizedAt: at,
+	}
+}
 
 // Validate checks the person for consistency. All errors wrap ErrValidation.
 func (p Person) Validate() error {
@@ -50,6 +75,10 @@ func (p Person) Validate() error {
 		on("memberNo", utf8.RuneCountInString(p.MemberNo) <= MaxMemberNoLength, "member number is too long"),
 		rule{p.MergedInto != p.ID, "a person cannot be merged into itself"},
 		rule{!p.Merged() || p.MemberNo == "", "a merged person has no member number"},
+		rule{
+			!p.Anonymized() || p == p.Anonymize(p.AnonymizedAt),
+			"an anonymized person has the fixed name and no other personal data",
+		},
 	)
 }
 

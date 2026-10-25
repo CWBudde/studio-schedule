@@ -41,6 +41,18 @@ func (q *Queries) CreateAuditEvent(ctx context.Context, arg CreateAuditEventPara
 	return err
 }
 
+const deleteAuditEventsBefore = `-- name: DeleteAuditEventsBefore :execrows
+DELETE FROM audit_events WHERE occurred_at < $1
+`
+
+func (q *Queries) DeleteAuditEventsBefore(ctx context.Context, occurredAt pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteAuditEventsBefore, occurredAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listAuditEvents = `-- name: ListAuditEvents :many
 SELECT id, occurred_at, actor_id, action, target_id, target_kind, target_person_id, details FROM audit_events ORDER BY occurred_at DESC, id DESC LIMIT $1
 `
@@ -72,4 +84,22 @@ func (q *Queries) ListAuditEvents(ctx context.Context, maxRows int32) ([]AuditEv
 		return nil, err
 	}
 	return items, nil
+}
+
+const retargetAuditEventsToPerson = `-- name: RetargetAuditEventsToPerson :exec
+UPDATE audit_events
+SET target_kind = 'person', target_id = NULL, target_person_id = $1
+WHERE target_id = $2
+`
+
+type RetargetAuditEventsToPersonParams struct {
+	PersonID  pgtype.UUID
+	AccountID pgtype.UUID
+}
+
+// Before an account is deleted, the events that target it target its person
+// instead (ADR 0016).
+func (q *Queries) RetargetAuditEventsToPerson(ctx context.Context, arg RetargetAuditEventsToPersonParams) error {
+	_, err := q.db.Exec(ctx, retargetAuditEventsToPerson, arg.PersonID, arg.AccountID)
+	return err
 }

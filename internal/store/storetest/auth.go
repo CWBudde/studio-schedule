@@ -1,8 +1,10 @@
 package storetest
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -172,25 +174,27 @@ func testSessions(t *testing.T, newStore func(*testing.T) store.Store) {
 			ben := e.account(e.person("Ben", "Member"), "ben@example.org")
 			cleo := e.account(e.person("Cleo", "Admin"), "cleo@example.org")
 
-			impersonate := func(impersonator, as domain.Account, token string) {
+			impersonate := func(impersonator, as domain.Account, token string) domain.Session {
 				s := domain.Session{
 					ID: newID[domain.SessionID](e), AccountID: as.ID, TokenHash: domain.HashToken(token),
 					CreatedAt: t0, LastSeenAt: t0, ExpiresAt: t0.Add(time.Hour), ImpersonatorID: impersonator.ID,
 				}
 				valid(e.t, s)
 				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Sessions().Create(ctx, s) })
+
+				return s
 			}
-			deleteByAccount := func(account domain.AccountID, except domain.SessionID) int {
-				var n int
+			deleteByAccount := func(account domain.AccountID, except domain.SessionID) []domain.Session {
+				var deleted []domain.Session
 
 				e.mustWrite(func(ctx context.Context, tx store.Tx) error {
 					var err error
-					n, err = tx.Sessions().DeleteByAccount(ctx, account, except)
+					deleted, err = tx.Sessions().DeleteByAccount(ctx, account, except)
 
 					return err
 				})
 
-				return n
+				return deleted
 			}
 			wantGone := func(tokens ...string) {
 				e.t.Helper()
@@ -215,29 +219,36 @@ func testSessions(t *testing.T, newStore func(*testing.T) store.Store) {
 				}
 			}
 
-			e.session(ada, "ada-1", t0.Add(time.Hour))
+			ada1 := e.session(ada, "ada-1", t0.Add(time.Hour))
 			current := e.session(ada, "ada-2", t0.Add(time.Hour))
-			e.session(ada, "ada-expired", t0.Add(-time.Hour))
-			impersonate(ada, ben, "ada-as-ben")   // acts for Ada
-			impersonate(cleo, ada, "cleo-as-ada") // signed in as Ada
+			expired := e.session(ada, "ada-expired", t0.Add(-time.Hour))
+			adaAsBen := impersonate(ada, ben, "ada-as-ben")    // acts for Ada
+			cleoAsAda := impersonate(cleo, ada, "cleo-as-ada") // signed in as Ada
 			ben1 := e.session(ben, "ben-1", t0.Add(time.Hour))
 			cleo1 := e.session(cleo, "cleo-1", t0.Add(time.Hour))
 
-			// Keeps the current session, deletes every other one acting for Ada.
-			wantEqual(e.t, deleteByAccount(ada.ID, current.ID), 4)
+			byID := func(sessions ...domain.Session) []domain.Session {
+				return slices.SortedFunc(slices.Values(sessions), func(a, b domain.Session) int {
+					return bytes.Compare(a.ID[:], b.ID[:])
+				})
+			}
+
+			// Keeps the current session, deletes every other one acting for
+			// Ada and returns them.
+			wantSlice(e.t, deleteByAccount(ada.ID, current.ID), byID(ada1, expired, adaAsBen, cleoAsAda))
 			wantGone("ada-1", "ada-expired", "ada-as-ben", "cleo-as-ada")
 			wantKept(current, ben1, cleo1)
 
 			// A session of another account is no exception for Ada's.
-			wantEqual(e.t, deleteByAccount(ada.ID, ben1.ID), 1)
+			wantSlice(e.t, deleteByAccount(ada.ID, ben1.ID), []domain.Session{current})
 			wantGone("ada-2")
 			wantKept(ben1, cleo1)
 
-			wantEqual(e.t, deleteByAccount(ada.ID, domain.SessionID{}), 0)
+			wantEqual(e.t, len(deleteByAccount(ada.ID, domain.SessionID{})), 0)
 
 			// The zero exception deletes all.
 			e.session(ben, "ben-2", t0.Add(time.Hour))
-			wantEqual(e.t, deleteByAccount(ben.ID, domain.SessionID{}), 2)
+			wantEqual(e.t, len(deleteByAccount(ben.ID, domain.SessionID{})), 2)
 			wantGone("ben-1", "ben-2")
 			wantKept(cleo1)
 		},
