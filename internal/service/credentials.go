@@ -104,14 +104,25 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, password string)
 			return err
 		}
 
+		// An unconfirmed account has no password (mayResetPassword); a
+		// confirmed one usually has.
+		hadPassword := false
+
 		if acc.ConfirmedAt.IsZero() {
 			acc.ConfirmedAt = s.clock.Now()
 			if err := tx.Accounts().Update(ctx, acc); err != nil {
 				return err
 			}
+		} else {
+			_, err := tx.Credentials().Get(ctx, acc.ID)
+			if err != nil && !errors.Is(err, domain.ErrNotFound) {
+				return err
+			}
+
+			hadPassword = err == nil
 		}
 
-		return s.setPassword(ctx, tx, acc.ID, hash, domain.SessionID{})
+		return s.setPassword(ctx, tx, acc.ID, hash, domain.SessionID{}, hadPassword)
 	})
 	if err != nil {
 		return fmt.Errorf("reset password: %w", err)
@@ -169,7 +180,7 @@ func (s *AuthService) ChangePassword(ctx context.Context, p Principal, current, 
 			return ErrWrongPassword // changed in the meantime
 		}
 
-		return s.setPassword(ctx, tx, p.AccountID, hash, p.SessionID)
+		return s.setPassword(ctx, tx, p.AccountID, hash, p.SessionID, true)
 	})
 	if err != nil {
 		return fmt.Errorf("change password: %w", err)
@@ -210,18 +221,12 @@ func (s *AuthService) checkCurrentPassword(ctx context.Context, p Principal, pas
 // account except keep (zero: all of them; endSessions audits the
 // impersonations it ends), and invalidates every open link: whoever
 // requested one may have known the old password. If the account had a
-// password, it is told by mail (ASVS 2.2.3); setting the first one (an
-// invitation, the setup link) is no change to report.
+// password (hadPassword, which the caller knows), it is told by mail (ASVS
+// 2.2.3); setting the first one (an invitation, the setup link) is no change
+// to report.
 func (s *AuthService) setPassword(
-	ctx context.Context, tx store.Tx, account domain.AccountID, hash string, keep domain.SessionID,
+	ctx context.Context, tx store.Tx, account domain.AccountID, hash string, keep domain.SessionID, hadPassword bool,
 ) error {
-	_, err := tx.Credentials().Get(ctx, account)
-	changed := err == nil
-
-	if err != nil && !errors.Is(err, domain.ErrNotFound) {
-		return err
-	}
-
 	cred := domain.Credential{AccountID: account, PasswordHash: hash, ChangedAt: s.clock.Now()}
 	if err := tx.Credentials().Put(ctx, cred); err != nil {
 		return err
@@ -235,7 +240,7 @@ func (s *AuthService) setPassword(
 		return err
 	}
 
-	if !changed {
+	if !hadPassword {
 		return nil
 	}
 
