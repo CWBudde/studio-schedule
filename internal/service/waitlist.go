@@ -535,8 +535,10 @@ func (s *WaitlistService) Invite(ctx context.Context, token string) (InviteView,
 
 // AcceptInvite takes the place the invite with token holds, without a
 // sign-in, and returns the invite's new view. An unknown token is
-// domain.ErrNotFound, the link of an entry that went back to waiting
-// ErrInviteExpired; otherwise it fails like Accept. The booking event has
+// domain.ErrNotFound (so is the link of an earlier invite of the entry), the
+// link of an entry that went back to waiting, or was invited again while
+// this accept waited for the lesson, ErrInviteExpired; otherwise it fails
+// like Accept. The booking event has
 // no actor (nobody signed in), and the confirmation goes to the person's
 // recipients, as the invite did.
 func (s *WaitlistService) AcceptInvite(ctx context.Context, token string) (InviteView, error) {
@@ -564,6 +566,13 @@ func (s *WaitlistService) AcceptInvite(ctx context.Context, token string) (Invit
 		}
 
 		now := s.clock.Now()
+
+		// The re-read must still be the invite the link was sent for: the
+		// entry may have been re-invited with a new token while this accept
+		// waited for the lock, and the old link died with the old invite.
+		if e.InviteTokenHash != domain.HashToken(token) {
+			return ErrInviteExpired
+		}
 
 		// The link of an invite that ended while the person went back to
 		// the list (ADR 0010): a new invite brings a new link.

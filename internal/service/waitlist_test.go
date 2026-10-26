@@ -499,6 +499,79 @@ func TestWaitlistExpiry(t *testing.T) {
 // TestWaitlistInviteCutoff invites close to the booking cutoff: the invite
 // ends with the booking, and then nobody goes back to the list or is
 // invited.
+// reinvitingStore re-invites the waiting-list entry with a new token right
+// after the service locks the entry's lesson: what an accept that waited for
+// the lock reads on PostgreSQL when a re-invite committed meanwhile.
+type reinvitingStore struct {
+	store.Store
+
+	entry domain.WaitlistEntryID
+}
+
+func (s reinvitingStore) InTx(ctx context.Context, mode store.TxMode, fn func(context.Context, store.Tx) error) error {
+	return s.Store.InTx(ctx, mode, func(ctx context.Context, tx store.Tx) error {
+		return fn(ctx, reinvitingTx{Tx: tx, entry: s.entry})
+	})
+}
+
+type reinvitingTx struct {
+	store.Tx
+
+	entry domain.WaitlistEntryID
+}
+
+func (t reinvitingTx) Lessons() store.LessonRepo { return reinvitingLessons{t.Tx.Lessons(), t} }
+
+type reinvitingLessons struct {
+	store.LessonRepo
+
+	tx reinvitingTx
+}
+
+func (r reinvitingLessons) Lock(ctx context.Context, id domain.LessonID) (domain.Lesson, error) {
+	l, err := r.LessonRepo.Lock(ctx, id)
+	if err != nil {
+		return l, err
+	}
+
+	e, err := r.tx.Waitlist().Get(ctx, r.tx.entry)
+	if err != nil {
+		return l, err
+	}
+
+	e.InviteTokenHash = domain.HashToken("the-new-invite")
+
+	return l, r.tx.Waitlist().Update(ctx, e)
+}
+
+// TestWaitlistAcceptInviteReinvited: a link whose entry was invited again
+// while the accept waited for the lesson's lock is expired, and books
+// nothing.
+func TestWaitlistAcceptInviteReinvited(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newBookingFixture(t)
+	l := f.fullLesson(t, 1)
+	mia := f.join(t, bookingNow, f.principal(t, f.anna), l, f.mia, false)
+
+	f.cancelStella(t, "2026-10-21T12:00:00Z", l)
+
+	token := f.token(t, "anna@example.org")
+	svc := NewWaitlistService(reinvitingStore{Store: f.st, entry: mia.Entry.ID},
+		clock.NewFixed(mustInstant(t, "2026-10-21T13:00:00Z")), f.seq, testMails(newTestRenderer(t)))
+
+	if _, err := svc.AcceptInvite(ctx, token); !errors.Is(err, ErrInviteExpired) {
+		t.Fatalf("accept the old link: want ErrInviteExpired, got %v", err)
+	}
+
+	wantStatus(t, f.entry(t, mia.Entry.ID), domain.WaitlistInvited)
+
+	if n := len(f.mailsOf(t, mail.TemplateBookingConfirmed)); n != 0 {
+		t.Errorf("%d booking confirmations, want none", n)
+	}
+}
+
 func TestWaitlistInviteCutoff(t *testing.T) {
 	t.Parallel()
 
