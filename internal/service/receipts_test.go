@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -301,6 +302,49 @@ func TestSellNeedsReceiptSettings(t *testing.T) {
 		NewReceiptService(f.st, clock.NewFixed(mustInstant(t, bookingNow)), f.seq, Mails{}, nil))
 	if _, err := bare.Sell(t.Context(), f.office, f.mia.ID, sale); !errors.Is(err, ErrNoPDFRenderer) {
 		t.Fatalf("without a renderer: %v", err)
+	}
+}
+
+// blockingPDF renders only when its context ends, a hung renderer; Ready
+// counts its calls.
+type blockingPDF struct{ ready *atomic.Int32 }
+
+func (blockingPDF) Render(ctx context.Context, _ []byte) ([]byte, error) {
+	<-ctx.Done()
+
+	return nil, ctx.Err()
+}
+
+func (b blockingPDF) Ready(context.Context) error {
+	b.ready.Add(1)
+
+	return nil
+}
+
+// TestReceiptRenderTimeout: a hung render fails the sale at the render
+// timeout instead of holding the write transaction, and the renderer was
+// awaited before it.
+func TestReceiptRenderTimeout(t *testing.T) {
+	t.Parallel()
+
+	f := newPassFixture(t, domain.RedeemOnAttendance)
+	clk := clock.NewFixed(mustInstant(t, bookingNow))
+
+	pdf := blockingPDF{ready: new(atomic.Int32)}
+	rs := NewReceiptService(f.st, clk, f.seq, Mails{}, pdf)
+	rs.renderTimeout = 50 * time.Millisecond
+
+	_, err := NewPassService(f.st, clk, f.seq, rs).Sell(t.Context(), f.office, f.mia.ID, PassSale{PassTypeID: f.single.ID})
+	if err == nil || !strings.Contains(err.Error(), context.DeadlineExceeded.Error()) {
+		t.Fatalf("Sell error = %v, want the render's deadline", err)
+	}
+
+	if n := f.receiptCount(t); n != 0 {
+		t.Errorf("%d receipts after the failed sale, want none", n)
+	}
+
+	if got := pdf.ready.Load(); got != 1 {
+		t.Errorf("Ready calls = %d, want 1 (before the transaction)", got)
 	}
 }
 

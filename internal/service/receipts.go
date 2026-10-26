@@ -47,6 +47,21 @@ type ReceiptRenderer interface {
 	Render(ctx context.Context, input []byte) ([]byte, error)
 }
 
+// readyRenderer is a ReceiptRenderer that can wait until it is ready to
+// render: the server's once the module is compiled, the demo's once the
+// module is downloaded and compiled.
+type readyRenderer interface {
+	Ready(ctx context.Context) error
+}
+
+// renderTimeout bounds a PDF render inside a write transaction (ADR 0012:
+// the receipt is issued atomically with its sale or cancellation), so a
+// hung renderer cannot hold the transaction, and with it the receipt-counter
+// lock that serializes sales, indefinitely. It starts once the renderer is
+// ready (awaitRenderer, before the transaction): a warm render takes
+// milliseconds.
+const renderTimeout = 30 * time.Second
+
 // ReceiptService issues, cancels and lists receipts and keeps the receipt
 // settings.
 type ReceiptService struct {
@@ -55,6 +70,8 @@ type ReceiptService struct {
 	ids      ids.Source
 	mails    Mails
 	renderer ReceiptRenderer
+	// renderTimeout bounds one render; a field so tests can shrink it.
+	renderTimeout time.Duration
 }
 
 // NewReceiptService returns a ReceiptService; renderer may be nil, and then
@@ -62,7 +79,28 @@ type ReceiptService struct {
 func NewReceiptService(
 	st store.Store, clk clock.Clock, src ids.Source, mails Mails, renderer ReceiptRenderer,
 ) *ReceiptService {
-	return &ReceiptService{store: st, clock: clk, ids: src, mails: mails, renderer: renderer}
+	return &ReceiptService{store: st, clock: clk, ids: src, mails: mails, renderer: renderer, renderTimeout: renderTimeout}
+}
+
+// awaitRenderer waits until the renderer is ready, if it can tell: called
+// before the write transaction that issues a receipt, so renderTimeout
+// bounds the render alone, never the module's compilation or download.
+func (s *ReceiptService) awaitRenderer(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+
+	r, ok := s.renderer.(readyRenderer)
+	if !ok {
+		return nil
+	}
+
+	if err := r.Ready(ctx); err != nil {
+		// Not the caller's input: %v keeps it a 500.
+		return fmt.Errorf("receipt renderer: %v", err) //nolint:errorlint // see above
+	}
+
+	return nil
 }
 
 // ReceiptRecipient is whom the receipt of a sale names and mails. Zero
@@ -183,7 +221,8 @@ func (s *ReceiptService) issue(
 	return s.mail(ctx, tx, r, orig, settings, payer, item)
 }
 
-// render renders the PDF of r with the school's current logo.
+// render renders the PDF of r with the school's current logo, inside tx and
+// so bounded by renderTimeout.
 func (s *ReceiptService) render(
 	ctx context.Context, tx store.Tx, r domain.Receipt, orig *domain.Receipt,
 ) ([]byte, error) {
@@ -191,6 +230,9 @@ func (s *ReceiptService) render(
 	if err != nil {
 		return nil, err
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.renderTimeout)
+	defer cancel()
 
 	return s.renderInput(ctx, r, input)
 }
@@ -285,6 +327,10 @@ func (s *ReceiptService) mail(
 // receipt domain.ErrNotFound.
 func (s *ReceiptService) Cancel(ctx context.Context, p Principal, id domain.ReceiptID, reason string) (ReceiptView, error) {
 	var out ReceiptView
+
+	if err := s.awaitRenderer(ctx); err != nil {
+		return ReceiptView{}, err
+	}
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		settings, loc, err := loadSchool(ctx, tx)

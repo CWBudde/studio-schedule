@@ -31,9 +31,11 @@ const shim = existsSync(receiptWasm)
     })
   : undefined;
 if (shim) {
-  globalThis.__studioScheduleRenderPDF = shim.lazyReceiptPdf(async () =>
+  const receiptPdf = shim.lazyReceiptPdf(async () =>
     WebAssembly.compile(await readFile(receiptWasm)),
   );
+  globalThis.__studioScheduleRenderPDF = receiptPdf;
+  globalThis.__studioScheduleLoadPDF = receiptPdf.ready;
 }
 
 const ready = new Promise((resolve) => {

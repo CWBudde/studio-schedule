@@ -58,6 +58,10 @@ const ChangedGlobal = "__studioScheduleChanged"
 // (input: Uint8Array) → Promise<Uint8Array>, input as built by pdf.Input.
 const RenderPDFGlobal = "__studioScheduleRenderPDF"
 
+// LoadPDFGlobal is the name of the worker's function that fetches and
+// compiles the typst module ahead of a render: () → Promise<void>.
+const LoadPDFGlobal = "__studioScheduleLoadPDF"
+
 // NotifyGlobal is the name of the worker's function that shows a web push
 // notification of the demo (ADR 0017): (payload: string, endpoint: string)
 // → void, the JSON the server queued and the subscription's endpoint; the

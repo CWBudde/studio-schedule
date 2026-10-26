@@ -2,7 +2,8 @@
  * Receipt PDFs in the demo (ADR 0012): the worker runs the same typst
  * WebAssembly module as the server (internal/pdf/typstwasm/receipt.wasm, copied
  * to the demo's assets by scripts/build-wasm.sh) with the browser's own
- * WebAssembly. Go asks for a render through `__studioScheduleRenderPDF`
+ * WebAssembly. Go asks for a render through `__studioScheduleRenderPDF`, and
+ * for the module ahead of one through `__studioScheduleLoadPDF`
  * (internal/wasmbridge/pdf_js.go).
  *
  * The module is a WASI reactor; it needs only a few WASI calls (no files,
@@ -129,23 +130,37 @@ export async function instantiateReceiptPdf(module: WebAssembly.Module): Promise
   };
 }
 
+/** An async render function; `ready` loads the module without rendering. */
+export type LazyRenderPdf = ((input: Uint8Array) => Promise<Uint8Array>) & {
+  ready: () => Promise<void>;
+};
+
 /**
  * Returns an async render function that loads and instantiates the module on
- * its first call (the module is large: the demo loads it only when a receipt
- * is rendered). A failed load is retried on the next call.
+ * its first call, or on `ready()` (the module is large: the demo loads it only
+ * when a receipt is rendered). A failed load is retried on the next call.
  */
-export function lazyReceiptPdf(
-  load: () => Promise<WebAssembly.Module>,
-): (input: Uint8Array) => Promise<Uint8Array> {
+export function lazyReceiptPdf(load: () => Promise<WebAssembly.Module>): LazyRenderPdf {
   let renderer: Promise<RenderPdf> | null = null;
-  return async (input) => {
+  const loaded = async (): Promise<RenderPdf> => {
     renderer ??= load().then(instantiateReceiptPdf);
     try {
-      return (await renderer)(input);
+      return await renderer;
     } catch (err) {
-      // A failed load, or an instance that trapped: start over next time.
+      // A failed load: start over next time.
+      renderer = null;
+      throw err;
+    }
+  };
+  const render = async (input: Uint8Array): Promise<Uint8Array> => {
+    const pdf = await loaded();
+    try {
+      return pdf(input);
+    } catch (err) {
+      // An instance that trapped: start over next time.
       if (!(err instanceof Error && err.name === TEMPLATE_ERROR)) renderer = null;
       throw err;
     }
   };
+  return Object.assign(render, { ready: async () => void (await loaded()) });
 }

@@ -201,6 +201,12 @@ type PassAssignment struct {
 func (s *PassService) Sell(ctx context.Context, p Principal, person domain.PersonID, d PassSale) (PassView, error) {
 	var out PassView
 
+	// The receipt is rendered in the sale's transaction: wait for the
+	// renderer first, so its timeout bounds the render alone.
+	if err := s.receipts.awaitRenderer(ctx); err != nil {
+		return PassView{}, err
+	}
+
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		settings, loc, err := loadSchool(ctx, tx)
 		if err != nil {

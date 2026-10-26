@@ -54,6 +54,8 @@ interface WasmGlobals {
   __studioScheduleChanged?: () => void;
   /** Called by Go to render a receipt PDF (internal/wasmbridge.RenderPDFGlobal). */
   __studioScheduleRenderPDF?: (input: Uint8Array) => Promise<Uint8Array>;
+  /** Called by Go to load the PDF module ahead of a render (internal/wasmbridge.LoadPDFGlobal). */
+  __studioScheduleLoadPDF?: () => Promise<void>;
   /** Called by Go to show a web push notification (internal/wasmbridge.NotifyGlobal). */
   __studioScheduleNotify?: (payload: string, endpoint: string) => void;
 }
@@ -114,7 +116,7 @@ async function fetchOk(url: string): Promise<Response> {
  * Receipt PDFs: the typst module (about 25 MB) is fetched and compiled when the
  * first receipt is rendered, not at startup.
  */
-g.__studioScheduleRenderPDF = lazyReceiptPdf(async () => {
+const receiptPdf = lazyReceiptPdf(async () => {
   const url = assetUrl('receipt.wasm');
   if (typeof WebAssembly.compileStreaming === 'function') {
     try {
@@ -125,6 +127,8 @@ g.__studioScheduleRenderPDF = lazyReceiptPdf(async () => {
   }
   return WebAssembly.compile(await (await fetchOk(url)).arrayBuffer());
 });
+g.__studioScheduleRenderPDF = receiptPdf;
+g.__studioScheduleLoadPDF = receiptPdf.ready;
 
 /**
  * wasm_exec.js is a classic (non-module) script that defines `globalThis.Go`.
