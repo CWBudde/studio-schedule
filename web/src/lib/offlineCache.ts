@@ -1,5 +1,5 @@
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
-import type { Query } from '@tanstack/react-query';
+import type { Query, QueryClient } from '@tanstack/react-query';
 import type { Persister, PersistQueryClientOptions } from '@tanstack/react-query-persist-client';
 import { createStore, del, get, set, type UseStore } from 'idb-keyval';
 
@@ -92,6 +92,16 @@ export function offlineCacheOptions(
     buster,
     dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery },
   };
+}
+
+/**
+ * Marks the restored queries stale once the copy is back (the provider's
+ * onSuccess). The copy is a snapshot of an earlier visit, perhaps from before
+ * a write the throttle had not saved yet, so it must never count as fresh:
+ * the queries on screen are fetched again at once, and offline they wait.
+ */
+export function refreshRestored(client: QueryClient): Promise<void> {
+  return client.invalidateQueries({ predicate: (query) => isPersistedKey(query.queryKey) });
 }
 
 /**

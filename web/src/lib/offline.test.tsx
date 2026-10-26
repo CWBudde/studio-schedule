@@ -21,6 +21,7 @@ import {
   indexedDbStorage,
   isPersistedKey,
   offlineCacheOptions,
+  refreshRestored,
   setOfflinePersister,
 } from './offlineCache';
 import { OfflineError } from './online';
@@ -82,6 +83,18 @@ describe('the offline cache', () => {
     expect(saved.sort()).toEqual(['auth', 'my-lessons', 'schedule', 'settings']);
     expect(options.maxAge).toBe(7 * 24 * 60 * 60 * 1000);
     expect(options.buster).toBe('v1');
+  });
+
+  it('never counts a restored copy as fresh', async () => {
+    const client = new QueryClient();
+    const range = scheduleQuery({ from: '2026-10-26', to: '2026-11-09' }).queryKey;
+    client.setQueryData(range, { lessons: [] } as never);
+    client.setQueryData(myPassesQuery.queryKey, { items: [] } as never);
+
+    await refreshRestored(client);
+
+    expect(client.getQueryState(range)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(myPassesQuery.queryKey)?.isInvalidated).toBe(false);
   });
 
   /** A client with the app's caches (router.ts) and a signed-in member. */

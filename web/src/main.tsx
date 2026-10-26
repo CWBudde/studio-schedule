@@ -4,7 +4,7 @@ import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { startBackend } from '@/api/transport';
-import { indexedDbPersister, offlineCacheOptions } from '@/lib/offlineCache';
+import { indexedDbPersister, offlineCacheOptions, refreshRestored } from '@/lib/offlineCache';
 import { registerServiceWorker } from '@/pwa';
 import { queryClient, router } from '@/router';
 import './i18n';
@@ -27,6 +27,7 @@ createRoot(root).render(
         indexedDbPersister(),
         import.meta.env.VITE_OFFLINE_CACHE_VERSION,
       )}
+      onSuccess={() => refreshRestored(queryClient)}
     >
       <RouterProvider router={router} />
     </PersistQueryClientProvider>
