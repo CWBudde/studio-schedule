@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { createBrowserHistory, createRouter } from '@tanstack/react-router';
 import { ApiError, sessionCaches } from '@/api/queries';
+import { RouteError } from '@/components/layout/RouteError';
 import { routerHistory } from '@/lib/env';
 import { watchOnline } from '@/lib/online';
 import { createAppHashHistory } from '@/lib/hashHistory';
@@ -42,6 +43,9 @@ export const router = createRouter({
   context: { queryClient },
   defaultPreload: 'intent',
   scrollRestoration: true,
+  // A route that throws while rendering gets a retry/reload card instead
+  // of a blank page.
+  defaultErrorComponent: RouteError,
 });
 
 declare module '@tanstack/react-router' {

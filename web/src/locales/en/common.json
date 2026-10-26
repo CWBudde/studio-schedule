@@ -108,6 +108,13 @@
     "description": "The page you are looking for does not exist.",
     "backHome": "Back to home"
   },
+  "routeError": {
+    "title": "Something went wrong",
+    "description": "This page could not be shown. Trying again often helps; if it keeps happening, reload the page.",
+    "outdated": "This part of the app could not be loaded: a newer version is out, or the connection dropped. Reload the page to get the latest version.",
+    "retry": "Try again",
+    "reload": "Reload page"
+  },
   "deletedPerson": "Deleted person",
   "password": {
     "show": "Show password",

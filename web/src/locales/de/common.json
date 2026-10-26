@@ -108,6 +108,13 @@
     "description": "Die gesuchte Seite existiert nicht.",
     "backHome": "Zur Startseite"
   },
+  "routeError": {
+    "title": "Etwas ist schiefgelaufen",
+    "description": "Diese Seite konnte nicht angezeigt werden. Erneut versuchen hilft oft; wenn es wiederholt auftritt, lade die Seite neu.",
+    "outdated": "Dieser Teil der App konnte nicht geladen werden: Es gibt eine neue Version, oder die Verbindung ist abgebrochen. Lade die Seite neu, um die aktuelle Version zu bekommen.",
+    "retry": "Erneut versuchen",
+    "reload": "Seite neu laden"
+  },
   "deletedPerson": "Gelöschte Person",
   "password": {
     "show": "Passwort anzeigen",
