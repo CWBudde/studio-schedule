@@ -49,6 +49,13 @@ const (
 	// subdomain of the host (environment only).
 	EnvHSTSIncludeSubdomains = "HSTS_INCLUDE_SUBDOMAINS"
 
+	// EnvDemoMode (true or false, default false) explicitly allows `serve`
+	// without a database: it then runs on the in-memory store with the
+	// fictional demo data and its published demo logins (environment only).
+	// Without it, a missing DATABASE_URL is a startup error, so a typo in
+	// production cannot silently turn the server into the public demo.
+	EnvDemoMode = "DEMO_MODE"
+
 	// EnvMetricsAddr is the host:port of the Prometheus metrics server;
 	// empty means no metrics.
 	EnvMetricsAddr = "METRICS_ADDR"
@@ -102,6 +109,11 @@ type Config struct {
 	// BaseURL is the public origin of the app (scheme://host[:port], no
 	// trailing slash), used to build absolute links. Empty means unset.
 	BaseURL string
+	// Demo explicitly allows running without a database on the in-memory
+	// store with the demo data (DEMO_MODE). The default is false: without a
+	// database the server refuses to start. With a database it has no
+	// effect.
+	Demo bool
 	// SMTP is the mail server; a zero Host means none.
 	SMTP SMTP
 	// Push is the web push configuration; the zero value means push is
@@ -269,6 +281,15 @@ func load(lookup LookupFunc, flags Flags, withLog bool) (Config, error) {
 	}
 
 	cfg.TrustedProxies = trusted
+
+	if v := env(EnvDemoMode); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %q is not a boolean (true or false)", EnvDemoMode, v))
+		}
+
+		cfg.Demo = b
+	}
 
 	cfg.HSTSIncludeSubdomains = true
 	if v := env(EnvHSTSIncludeSubdomains); v != "" {
@@ -565,6 +586,9 @@ func (c Config) LogValue() slog.Value {
 			slog.String("subject", r.Push.Subject),
 		),
 		slog.String("metricsAddr", r.MetricsAddr),
+		// The effective mode: DEMO_MODE does nothing with a database (`just
+		// serve` always sets it).
+		slog.Bool("demoMode", r.Demo && r.DatabaseURL == ""),
 		slog.Bool("hstsIncludeSubdomains", r.HSTSIncludeSubdomains),
 		slog.Group("log",
 			slog.Bool("json", r.Log.JSON),

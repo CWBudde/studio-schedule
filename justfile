@@ -133,9 +133,9 @@ ci: check-tidy check-formatted check-sqlc lint test check-wasm-deps typst-wasm-c
 build: web-build
     ./scripts/build-server.sh "{{ldflags}}"
 
-# Run the API server (PostgreSQL if DATABASE_URL is set, otherwise in-memory with demo data)
+# Run the API server (PostgreSQL if DATABASE_URL is set; otherwise the recipe opts in to DEMO_MODE: in-memory with demo data)
 serve *args:
-    go run ./cmd/studio-schedule serve {{args}}
+    DEMO_MODE="${DEMO_MODE:-true}" go run ./cmd/studio-schedule serve {{args}}
 
 # Apply, roll back or list database migrations (needs DATABASE_URL), e.g. `just migrate up`
 migrate *args:

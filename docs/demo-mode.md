@@ -54,7 +54,7 @@ Tallowfield on a trial with a note. The demo
 releases one week ahead, so the later workshops always lie beyond the release window; they are visible
 because workshops are published early. `scripts/wasm-smoke.mjs` checks this.
 
-The server (`studio-schedule serve` with the memory store) and `studio-schedule seed` use
+The server (`studio-schedule serve` with `DEMO_MODE=true`, on the memory store) and `studio-schedule seed` use
 `seed.LoadDemo`, which builds the same data for the fixed `seed.FixedDemoAnchor`: the term is the
 school year 2026-09-01 to 2027-07-31 on every run, and its workshops lie in September and
 October 2026. Only the dates differ between the two; names, IDs and the timetable are the same.
@@ -132,12 +132,12 @@ The demo keeps what a visitor does across reloads, in their browser only:
   acceptable because everything in the demo is fictional and the token opens only that browser's
   own in-memory demo; a real installation never stores sessions this way.
 
-A demo server over HTTP (`serve` without a database) keeps nothing in the browser and has no reset
+A demo server over HTTP (`serve` with `DEMO_MODE=true`) keeps nothing in the browser and has no reset
 button.
 
 ## Accounts and mail in the demo
 
-The demo is a _demo installation_ (`app.Deps.Demo`, also set for `serve` without a database):
+The demo is a _demo installation_ (`app.Deps.Demo`, also set for `serve` with `DEMO_MODE=true`):
 
 - **Demo accounts:** every seeded account has the published password `demo-password`, and
   `GET /api/v1/demo/logins` lists one account per role (member, instructor, office, admin) for the

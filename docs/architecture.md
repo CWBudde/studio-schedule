@@ -104,8 +104,8 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
 - **Schema:** goose migrations in `internal/store/postgres/migrations` are embedded in the binary
   and are the schema of record; sqlc generates the query code from them (`just sqlc`, checked by
   `just check-sqlc`). `serve` uses PostgreSQL when `DATABASE_URL` is set and refuses to start unless
-  exactly the embedded migrations are applied (checked read-only; `studio-schedule migrate up`); without it, `serve` runs the memory store
-  with the demo data and logs a warning. `studio-schedule seed` loads the demo data into an empty
+  exactly the embedded migrations are applied (checked read-only; `studio-schedule migrate up`); without it, `serve` refuses to start unless
+  `DEMO_MODE=true`, and then runs the memory store with the demo data and logs a warning. `studio-schedule seed` loads the demo data into an empty
   database only. A real installation starts with `studio-schedule init` instead: the school's
   settings and its first admin, whose password is set through a printed one-time link, so no mail
   server is needed yet ([ADR 0013](decisions/0013-settings-branding-and-init.md)).
@@ -211,7 +211,7 @@ panicking request is logged and counted as the 500 it answers (one that aborts t
   `postgres.Store.Ready`: the same schema check as `serve` at startup (`checkSchema`: every
   embedded migration applied, none unknown, with the versions from goose's provider), on the
   store's pool. The
-  memory store (demo, `serve` without a database) has no check and is always ready. The web demo
+  memory store (demo, `serve` with `DEMO_MODE=true`) has no check and is always ready. The web demo
   serves the probes too but never asks. `/api/v1/health` stays as the API's own version check.
 - **Metrics** (`Deps.Metrics`, no-op by default): the access log reports every request with the
   pattern of the matched chi route (`/api/v1/lessons/{lessonId}`, or `other` for the web app's pages

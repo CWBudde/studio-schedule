@@ -469,6 +469,32 @@ func TestLoadTrustedProxies(t *testing.T) {
 	}
 }
 
+// TestLoadDemoMode: DEMO_MODE opts in to running without a database; it is
+// off by default and must be a boolean.
+func TestLoadDemoMode(t *testing.T) {
+	t.Parallel()
+
+	for value, want := range map[string]bool{"": false, "true": true, "1": true, "false": false, "0": false, " TRUE ": true} {
+		vars := map[string]string{}
+		if value != "" {
+			vars["DEMO_MODE"] = value
+		}
+
+		cfg, err := config.Load(env(vars), config.Flags{})
+		if err != nil {
+			t.Fatalf("%q: %v", value, err)
+		}
+
+		if cfg.Demo != want {
+			t.Errorf("DEMO_MODE=%q: Demo = %v, want %v", value, cfg.Demo, want)
+		}
+	}
+
+	if _, err := config.Load(env(map[string]string{"DEMO_MODE": "sometimes"}), config.Flags{}); !errors.Is(err, config.ErrInvalid) {
+		t.Errorf("Load error = %v, want ErrInvalid", err)
+	}
+}
+
 // TestLoadHSTSIncludeSubdomains: HSTS covers the subdomains unless
 // HSTS_INCLUDE_SUBDOMAINS turns it off.
 func TestLoadHSTSIncludeSubdomains(t *testing.T) {

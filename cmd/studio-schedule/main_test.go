@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -29,6 +30,12 @@ func run(t *testing.T, args ...string) string {
 // execute runs the root command with env as the environment (nil means
 // empty) and returns its combined output.
 func execute(env map[string]string, args ...string) (string, error) {
+	return executeContext(context.Background(), env, args...)
+}
+
+// executeContext is execute with ctx, which a long-running command (serve)
+// stops at.
+func executeContext(ctx context.Context, env map[string]string, args ...string) (string, error) {
 	var out bytes.Buffer
 
 	cmd := newRootCmd(func(key string) (string, bool) {
@@ -40,7 +47,7 @@ func execute(env map[string]string, args ...string) (string, error) {
 	cmd.SetErr(&out)
 	cmd.SetArgs(args)
 
-	err := cmd.Execute()
+	err := cmd.ExecuteContext(ctx)
 
 	return out.String(), err
 }
@@ -181,6 +188,25 @@ func TestDatabaseCommandsHidePassword(t *testing.T) {
 				t.Errorf("output leaks the password: %v\n%s", err, out)
 			}
 		})
+	}
+}
+
+// TestServeNeedsDatabaseOrDemoMode: serve without a database refuses to
+// start instead of silently becoming the public demo. Should the check go,
+// the deadline stops the server instead of the test timeout.
+func TestServeNeedsDatabaseOrDemoMode(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	out, err := executeContext(ctx, nil, "serve", "--addr", "127.0.0.1:0")
+	if err == nil {
+		t.Fatalf("serve without DATABASE_URL succeeded\n%s", out)
+	}
+
+	if !strings.Contains(err.Error(), "DEMO_MODE") {
+		t.Errorf("serve error = %v, want it to name DEMO_MODE\n%s", err, out)
 	}
 }
 

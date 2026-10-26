@@ -21,7 +21,7 @@ Pages demo.
 
 ```sh
 just web-install # once: pnpm install for web/
-just serve       # API server on :8080 (PostgreSQL if DATABASE_URL is set, else memory + demo data)
+just serve       # API server on :8080 (PostgreSQL if DATABASE_URL is set; the recipe else sets DEMO_MODE=true for memory + demo data — the binary alone refuses to start without a database)
 just migrate up  # apply migrations to DATABASE_URL (also: down, status); just seed loads demo data
 go run ./cmd/studio-schedule init  # new school: settings + first admin (prints a setup link)
 just test-pg     # PostgreSQL store tests only (Docker via testcontainers, or STUDIO_TEST_DATABASE_URL)
@@ -60,8 +60,8 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   fall through to `Deps.UI` (the embedded SPA in `internal/webui`). `cmd/studio-schedule` (cobra:
   `serve`, `migrate`, `seed`, `init`, `import`, `healthcheck`, `openapi`, `version`) and `cmd/wasm`
   both call it. `serve` uses
-  PostgreSQL when `DATABASE_URL` is set (refusing to start unless the schema matches), otherwise the
-  memory store with `seed.LoadDemo`.
+  PostgreSQL when `DATABASE_URL` is set (refusing to start unless the schema matches), otherwise, only
+  with `DEMO_MODE=true`, the memory store with `seed.LoadDemo`.
 - **Observability:** request IDs (`internal/requestid`) reach the logs through a `slog` handler and
   problem bodies as `requestId` (`httpapi.ErrorModel` replaces Huma's error type). `Deps.Metrics`
   is a no-op unless `serve` gets `METRICS_ADDR`: then `cmd/studio-schedule/metrics.go` (Prometheus,

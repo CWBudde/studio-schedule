@@ -110,6 +110,14 @@ func (f *serveFlags) explicit(cmd *cobra.Command) config.Flags {
 }
 
 func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
+	// Fail closed: without a database the server would run the public demo
+	// with its published logins, so that needs the explicit DEMO_MODE opt-in.
+	if cfg.DatabaseURL == "" && !cfg.Demo {
+		return fmt.Errorf("no database configured: set %s to use PostgreSQL, or %s=true to run "+
+			"on the in-memory store with the demo data (demo logins included, changes lost on exit)",
+			config.EnvDatabaseURL, config.EnvDemoMode)
+	}
+
 	st, closeStore, err := openStore(ctx, cfg, logger)
 	if err != nil {
 		return err
@@ -129,7 +137,8 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		return err
 	}
 
-	// Without a database the server runs on the demo data, like the web demo.
+	// Without a database (DEMO_MODE only, checked above) the server runs on
+	// the demo data, like the web demo.
 	demo := cfg.DatabaseURL == ""
 
 	pdf := newPDFRenderer(ctx, clk, logger)
