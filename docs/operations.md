@@ -354,6 +354,9 @@ While `SMTP_HOST` is empty, the app sends every mail to Mailpit (port 1025, no T
 `SMTP_FROM` in `.env`. The `SMTP_*` values then apply as given: an empty `SMTP_TLS` or `SMTP_PORT`
 means the app's default, STARTTLS on port 587.
 
+Web push stays off until `.env` holds `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
+`VAPID_SUBJECT` (`docker compose run --rm app vapid-keys` prints a pair).
+
 Compose builds the image from the checkout. To run a published image instead, set
 `STUDIO_SCHEDULE_IMAGE=ghcr.io/cwbudde/studio-schedule:edge` (or a release tag) in `.env`, then:
 
