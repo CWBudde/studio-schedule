@@ -2,8 +2,9 @@ name: image
 
 # Builds the container image for linux/amd64 and linux/arm64 and pushes it to
 # ghcr.io: `edge` from main, `vX.Y.Z`, `X.Y` and `latest` from a published
-# release. Trivy then scans the pushed image, each platform on its own
-# (report only).
+# release. Trivy then scans the pushed image, each platform on its own, and
+# fails the run on fixable CRITICAL/HIGH findings (the image is already
+# pushed by then: the red run is the signal to rebuild, not a publish gate).
 #
 # `edge` is built only once every test passed: the tests workflow (test.yaml)
 # calls this one for a push to main after its jobs succeeded. A push that
@@ -129,9 +130,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Report only: the findings land in the repository's code scanning
-      # alerts, the build does not fail on them. Trivy scans one platform of a
-      # multi-platform image, so each platform gets its own scan and category.
+      # Blocking on fixable CRITICAL/HIGH findings (ignore-unfixed): the run
+      # goes red so a vulnerable base image cannot ship silently. Trivy scans
+      # one platform of a multi-platform image, so each platform gets its own
+      # scan and category. The arm64 scan and the SARIF uploads below still
+      # run when the amd64 scan fails. limit-severities-for-sarif keeps the
+      # severity filter: without it the action drops it for SARIF output, and
+      # any fixable finding, LOW included, would fail the run.
       - name: Scan the linux/amd64 image with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
@@ -142,11 +147,13 @@ jobs:
           image-ref: ${{ steps.vars.outputs.image }}@${{ steps.build.outputs.digest }}
           format: sarif
           output: trivy-amd64.sarif
-          severity: CRITICAL,HIGH,MEDIUM
+          severity: CRITICAL,HIGH
+          limit-severities-for-sarif: true
           ignore-unfixed: true
-          exit-code: "0"
+          exit-code: "1"
 
       - name: Scan the linux/arm64 image with Trivy
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_USERNAME: ${{ github.actor }}
@@ -156,9 +163,10 @@ jobs:
           image-ref: ${{ steps.vars.outputs.image }}@${{ steps.build.outputs.digest }}
           format: sarif
           output: trivy-arm64.sarif
-          severity: CRITICAL,HIGH,MEDIUM
+          severity: CRITICAL,HIGH
+          limit-severities-for-sarif: true
           ignore-unfixed: true
-          exit-code: "0"
+          exit-code: "1"
 
       - name: Upload the linux/amd64 results to code scanning
         if: ${{ !cancelled() && hashFiles('trivy-amd64.sarif') != '' }}

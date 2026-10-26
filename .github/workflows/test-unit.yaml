@@ -24,4 +24,22 @@ jobs:
       # Includes the PostgreSQL contract tests: testcontainers starts
       # postgres:18-alpine on the runner's Docker.
       - name: Run unit tests
-        run: go test -race ./...
+        run: go test -race -coverprofile=coverage.out ./...
+
+      # Coverage is measured and published, not yet gated: a floor only
+      # means something once a baseline from this job exists to ratchet
+      # against. The summary shows the total; the per-function list is in the
+      # go-coverage artifact (`go tool cover -func=coverage.out`).
+      - name: Coverage summary
+        if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
+        run: |
+          total=$(go tool cover -func=coverage.out | tail -n 1 | awk '{print $NF}')
+          echo "## Go coverage: ${total} of statements" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage
+        if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: coverage.out
+          if-no-files-found: ignore
