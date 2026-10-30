@@ -1,5 +1,6 @@
 import createClient from 'openapi-fetch';
 import { describe, expect, it, vi } from 'vitest';
+import type { DemoSchool } from '@/features/demo/school';
 import type { paths } from '../schema';
 import type { BackendStatus } from '../backendStatus';
 import { WasmBridge, type WorkerPort } from './bridge';
@@ -11,12 +12,20 @@ const encoder = new TextEncoder();
 class FakeWorker implements WorkerPort {
   readonly posted: { message: WorkerRequestMessage; transfer: Transferable[] }[] = [];
   readonly flushes: number[] = [];
+  /** The type of every posted message, in order. */
+  readonly sent: MainToWorkerMessage['type'][] = [];
+  readonly inits: DemoSchool[] = [];
   terminated = false;
   private readonly listeners = new Map<string, ((event: never) => void)[]>();
   /** Optional auto-responder, invoked for every posted request. */
   respond?: (message: WorkerRequestMessage) => WorkerToMainMessage | undefined;
 
   postMessage(message: MainToWorkerMessage, transfer: Transferable[]): void {
+    this.sent.push(message.type);
+    if (message.type === 'init') {
+      this.inits.push(message.school);
+      return;
+    }
     if (message.type === 'flush') {
       this.flushes.push(message.id);
       return;
@@ -60,6 +69,25 @@ describe('WasmBridge', () => {
     new WasmBridge(worker, (s) => statuses.push(s));
     worker.emit({ type: 'ready' });
     expect(statuses).toEqual([{ state: 'loading' }, { state: 'ready' }]);
+  });
+
+  it('tells the worker its demo school before anything else', async () => {
+    const worker = new FakeWorker();
+    const bridge = new WasmBridge(worker, undefined, { school: 'werkstatt' });
+    expect(worker.inits).toEqual(['werkstatt']);
+
+    void bridge.flush();
+    worker.emit({ type: 'ready' });
+    void bridge.fetch('http://localhost/api/v1/health');
+    await flush();
+    expect(worker.sent).toEqual(['init', 'flush', 'request']);
+    expect(worker.inits).toEqual(['werkstatt']);
+  });
+
+  it('runs the Programme school when none is given', () => {
+    const worker = new FakeWorker();
+    new WasmBridge(worker);
+    expect(worker.inits).toEqual(['programme']);
   });
 
   it('waits for ready before posting requests', async () => {

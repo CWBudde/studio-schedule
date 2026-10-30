@@ -4,10 +4,13 @@
  * Startup:
  *  1. fetch `${BASE_URL}wasm_exec.js` and evaluate it in the worker's global
  *     scope (see `loadGoRuntime` for why this is not importScripts/import()),
+ *     while waiting for the page's `{type: 'init'}`, which names the demo
+ *     school (the worker cannot read the visitor's choice in localStorage),
  *  2. instantiate `${BASE_URL}app.wasm` (streaming, ArrayBuffer fallback),
- *  3. hand the saved data of an earlier visit (IndexedDB, see persistence.ts)
- *     to Go as `__studioScheduleSnapshot`, which Go restores before it
- *     serves anything,
+ *  3. hand that school's saved data of an earlier visit (IndexedDB, see
+ *     persistence.ts) to Go as `__studioScheduleSnapshot`, which Go restores
+ *     before it serves anything, and the school as `DEMO_SCHOOL`, which Go
+ *     seeds otherwise,
  *  4. start the Go program (`go.run`, not awaited: it resolves on exit),
  *  5. wait until Go signals readiness via `__studioScheduleReady()` or
  *     `StudioScheduleAPI.ready`, then post `{type: 'ready'}`.
@@ -20,6 +23,7 @@
  * worker (tabLock.ts); "Reset demo" stops it and deletes the data from the
  * page (persistence.ts).
  */
+import type { DemoSchool } from '@/features/demo/school';
 import { routerHistory } from '@/lib/env';
 import { CookieJar } from './cookieJar';
 import { createRequestHandler, errorMessage } from './host';
@@ -73,6 +77,10 @@ function goStopped(): void {
   goExited = true;
   saver?.stop();
 }
+
+let resolveSchool!: (school: DemoSchool) => void;
+/** The demo school, from the page's `init` message. */
+const schoolChosen = new Promise<DemoSchool>((resolve) => (resolveSchool = resolve));
 
 const storage = indexedDbStorage();
 let saver: SnapshotSaver | null = null;
@@ -223,15 +231,31 @@ function readinessSignal(): { promise: Promise<GoBridgeAPI>; cancel: (err: Error
   return { promise, cancel: fail };
 }
 
-async function boot(): Promise<{ api: GoBridgeAPI; claimed: Claim | null }> {
-  // Claim the saved data (fencing out any earlier worker); if IndexedDB fails
-  // or hangs, start from the seed and tell the visitor that nothing is saved.
-  const [Go, claimed] = await Promise.all([loadGoRuntime(), claimOrGiveUp(storage)]);
+interface Booted {
+  api: GoBridgeAPI;
+  school: DemoSchool;
+  claimed: Claim | null;
+}
+
+async function boot(): Promise<Booted> {
+  // Claim the school's saved data (fencing out any earlier worker); if
+  // IndexedDB fails or hangs, start from the seed and tell the visitor that
+  // nothing is saved.
+  const claiming = schoolChosen.then(async (school) => ({
+    school,
+    claimed: await claimOrGiveUp(storage, school),
+  }));
+  const [Go, { school, claimed }] = await Promise.all([loadGoRuntime(), claiming]);
   if (!claimed) post({ type: 'save-failed', message: 'IndexedDB is not available' });
   const go = new Go();
   if (claimed?.snapshot) g.__studioScheduleSnapshot = claimed.snapshot.store;
-  // Links in mails (shown in the demo mailbox) point to the app's routes.
-  go.env = { ...go.env, APP_URL: assetUrl(routerHistory === 'hash' ? '#/' : '') };
+  go.env = {
+    ...go.env,
+    // Links in mails (shown in the demo mailbox) point to the app's routes.
+    APP_URL: assetUrl(routerHistory === 'hash' ? '#/' : ''),
+    // The school to seed; Go refuses a snapshot of another school.
+    DEMO_SCHOOL: school,
+  };
 
   let exitCode: number | null = null;
   go.exit = (code: number) => {
@@ -256,21 +280,21 @@ async function boot(): Promise<{ api: GoBridgeAPI; claimed: Claim | null }> {
     },
   );
 
-  return { api: await ready.promise, claimed };
+  return { api: await ready.promise, school, claimed };
 }
 
 /**
  * Picks up the session of the saved visit if Go restored its data, and saves
  * both again after every change.
  */
-async function persist(api: GoBridgeAPI, claimed: Claim | null): Promise<CookieJar> {
+async function persist({ api, school, claimed }: Booted): Promise<CookieJar> {
   const jar = new CookieJar();
   const saved = claimed?.snapshot;
   if (saved && api.restored) {
     jar.load(saved.cookies);
   } else if (saved) {
-    // Go refused the data (another build): forget it, session included.
-    await clearSnapshot(storage).catch((err: unknown) =>
+    // Go refused the data (another build or school): forget it, session included.
+    await clearSnapshot(storage, school).catch((err: unknown) =>
       console.warn('[studio-schedule] could not delete old demo data', err),
     );
   }
@@ -279,6 +303,7 @@ async function persist(api: GoBridgeAPI, claimed: Claim | null): Promise<CookieJ
   if (snapshot && claimed && !goExited) {
     saver = new SnapshotSaver(
       storage,
+      school,
       claimed.epoch,
       async () => ({
         format: SNAPSHOT_FORMAT,
@@ -294,10 +319,10 @@ async function persist(api: GoBridgeAPI, claimed: Claim | null): Promise<CookieJ
 }
 
 const handlerPromise = boot().then(
-  async ({ api, claimed }) => {
-    const jar = await persist(api, claimed);
+  async (booted) => {
+    const jar = await persist(booted);
     post({ type: 'ready' });
-    return createRequestHandler(api, jar, () => saver?.schedule());
+    return createRequestHandler(booted.api, jar, () => saver?.schedule());
   },
   (err: unknown) => {
     fatal(errorMessage(err));
@@ -309,6 +334,10 @@ handlerPromise.catch(() => undefined);
 
 self.addEventListener('message', (event: MessageEvent<MainToWorkerMessage>) => {
   const msg = event.data;
+  if (msg?.type === 'init') {
+    resolveSchool(msg.school);
+    return;
+  }
   if (msg?.type === 'flush') {
     const id = msg.id;
     void (saver?.flush() ?? Promise.resolve()).then(() => post({ type: 'flushed', id }));

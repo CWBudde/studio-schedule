@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DemoSchool } from '@/features/demo/school';
 import {
   claim,
   claimOrGiveUp,
   clearSnapshot,
   resetDemoData,
   SNAPSHOT_FORMAT,
+  snapshotKey,
   SnapshotSaver,
   toSnapshot,
   type DemoSnapshot,
@@ -100,16 +102,23 @@ describe('claim and fenced saves', () => {
     const storage = new MemoryStorage();
     const onError = vi.fn();
 
-    const first = await claim(storage);
+    const first = await claim(storage, 'programme');
     expect(first.snapshot).toBeNull();
     let n = 0;
-    const old = new SnapshotSaver(storage, first.epoch, async () => snapshot(++n), onError, 10);
+    const old = new SnapshotSaver(
+      storage,
+      'programme',
+      first.epoch,
+      async () => snapshot(++n),
+      onError,
+      10,
+    );
     old.schedule();
     await old.flush();
     expect(storage.current).toEqual(snapshot(1));
 
     // Another tab takes over: it claims and reads the latest save.
-    const second = await claim(storage);
+    const second = await claim(storage, 'programme');
     expect(second.epoch).toBeGreaterThan(first.epoch);
     expect(second.snapshot).toEqual(snapshot(1));
 
@@ -122,7 +131,14 @@ describe('claim and fenced saves', () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(n).toBe(2);
 
-    const current = new SnapshotSaver(storage, second.epoch, async () => snapshot(9), onError, 10);
+    const current = new SnapshotSaver(
+      storage,
+      'programme',
+      second.epoch,
+      async () => snapshot(9),
+      onError,
+      10,
+    );
     current.schedule();
     await current.flush();
     expect(storage.current).toEqual(snapshot(9));
@@ -130,10 +146,11 @@ describe('claim and fenced saves', () => {
 
   it('refuses a save that was under way when another tab claimed the data', async () => {
     const storage = new MemoryStorage();
-    const first = await claim(storage);
+    const first = await claim(storage, 'programme');
     let release!: () => void;
     const old = new SnapshotSaver(
       storage,
+      'programme',
       first.epoch,
       async () => {
         await new Promise<void>((resolve) => (release = resolve));
@@ -145,7 +162,7 @@ describe('claim and fenced saves', () => {
     old.schedule();
     await vi.advanceTimersByTimeAsync(10);
 
-    await claim(storage);
+    await claim(storage, 'programme');
     release();
     await old.flush();
     expect(storage.current).toBeUndefined();
@@ -153,21 +170,28 @@ describe('claim and fenced saves', () => {
 
   it('keeps the owner when the snapshot is cleared', async () => {
     const storage = new MemoryStorage();
-    const first = await claim(storage);
-    const saver = new SnapshotSaver(storage, first.epoch, async () => snapshot(1), undefined, 10);
+    const first = await claim(storage, 'programme');
+    const saver = new SnapshotSaver(
+      storage,
+      'programme',
+      first.epoch,
+      async () => snapshot(1),
+      undefined,
+      10,
+    );
     saver.schedule();
     await saver.flush();
 
-    await clearSnapshot(storage);
+    await clearSnapshot(storage, 'programme');
     expect(storage.current).toBeUndefined();
-    expect((await claim(storage)).epoch).toBe(first.epoch + 1);
+    expect((await claim(storage, 'programme')).epoch).toBe(first.epoch + 1);
   });
 
   it('gives up claiming when IndexedDB does not answer', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const hanging: SnapshotStorage = { transact: () => new Promise(() => undefined) };
     let result: unknown = 'pending';
-    const claiming = claimOrGiveUp(hanging, 3_000).then((r) => (result = r));
+    const claiming = claimOrGiveUp(hanging, 'programme', 3_000).then((r) => (result = r));
     await vi.advanceTimersByTimeAsync(2_999);
     expect(result).toBe('pending');
     await vi.advanceTimersByTimeAsync(1);
@@ -175,9 +199,97 @@ describe('claim and fenced saves', () => {
     expect(result).toBeNull();
 
     const failing: SnapshotStorage = { transact: () => Promise.reject(new Error('blocked')) };
-    expect(await claimOrGiveUp(failing)).toBeNull();
+    expect(await claimOrGiveUp(failing, 'programme')).toBeNull();
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe('one record per demo school', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function saveAs(storage: MemoryStorage, school: DemoSchool, n: number) {
+    const { epoch } = await claim(storage, school);
+    const saver = new SnapshotSaver(storage, school, epoch, async () => snapshot(n), undefined, 10);
+    saver.schedule();
+    await saver.flush();
+    return saver;
+  }
+
+  it('keeps Programme in `current` and Werkstatt in `current-werkstatt`', async () => {
+    expect(snapshotKey('programme')).toBe('current');
+    expect(snapshotKey('werkstatt')).toBe('current-werkstatt');
+
+    const storage = new MemoryStorage();
+    await saveAs(storage, 'programme', 1);
+    await saveAs(storage, 'werkstatt', 2);
+    expect(storage.data.get('current')).toEqual(snapshot(1));
+    expect(storage.data.get('current-werkstatt')).toEqual(snapshot(2));
+  });
+
+  it("saves of one school leave the other's record alone", async () => {
+    const storage = new MemoryStorage();
+    await saveAs(storage, 'programme', 1);
+
+    const werkstatt = await claim(storage, 'werkstatt');
+    expect(werkstatt.snapshot).toBeNull();
+    const saver = new SnapshotSaver(
+      storage,
+      'werkstatt',
+      werkstatt.epoch,
+      async () => snapshot(2),
+      undefined,
+      10,
+    );
+    saver.schedule();
+    await saver.flush();
+
+    expect(storage.current).toEqual(snapshot(1));
+    expect((await claim(storage, 'programme')).snapshot).toEqual(snapshot(1));
+    expect((await claim(storage, 'werkstatt')).snapshot).toEqual(snapshot(2));
+  });
+
+  it('shares one owner epoch: a claim for one school fences the saves of the other', async () => {
+    const storage = new MemoryStorage();
+    const programme = await saveAs(storage, 'programme', 1);
+
+    // One worker per origin: the next one (here of the other school) takes over.
+    await claim(storage, 'werkstatt');
+    programme.schedule();
+    await programme.flush();
+    expect(storage.current).toEqual(snapshot(1));
+    expect(storage.data.get('owner')).toBe(2);
+  });
+
+  it("reset deletes only the current school's record", async () => {
+    const storage = new MemoryStorage();
+    await saveAs(storage, 'programme', 1);
+    await saveAs(storage, 'werkstatt', 2);
+
+    await clearSnapshot(storage, 'werkstatt');
+    expect(storage.data.has('current-werkstatt')).toBe(false);
+    expect(storage.current).toEqual(snapshot(1));
+
+    await saveAs(storage, 'werkstatt', 3);
+    await clearSnapshot(storage, 'programme');
+    expect(storage.current).toBeUndefined();
+    expect(storage.data.get('current-werkstatt')).toEqual(snapshot(3));
+  });
+
+  it('restores the record of a visit before the second school as Programme', async () => {
+    // As saved by the demo before it had two schools.
+    const storage = new MemoryStorage();
+    const earlier = { ...snapshot(5), cookies: [cookie] };
+    storage.data.set('owner', 7);
+    storage.data.set('current', earlier);
+
+    expect(await claim(storage, 'werkstatt')).toEqual({ epoch: 8, snapshot: null });
+    expect(await claim(storage, 'programme')).toEqual({ epoch: 9, snapshot: earlier });
   });
 });
 
@@ -191,14 +303,14 @@ describe('SnapshotSaver', () => {
 
   async function owned() {
     const storage = new MemoryStorage();
-    return { storage, epoch: (await claim(storage)).epoch };
+    return { storage, epoch: (await claim(storage, 'programme')).epoch };
   }
 
   it('saves once after a burst of changes', async () => {
     const { storage, epoch } = await owned();
     let n = 0;
     const capture = vi.fn(async () => snapshot(++n));
-    const saver = new SnapshotSaver(storage, epoch, capture, undefined, 100);
+    const saver = new SnapshotSaver(storage, 'programme', epoch, capture, undefined, 100);
 
     saver.schedule();
     await vi.advanceTimersByTimeAsync(50);
@@ -233,7 +345,7 @@ describe('SnapshotSaver', () => {
         order.push('second capture');
         return snapshot(2);
       });
-    const saver = new SnapshotSaver(storage, epoch, capture, undefined, 10);
+    const saver = new SnapshotSaver(storage, 'programme', epoch, capture, undefined, 10);
 
     saver.schedule();
     await vi.advanceTimersByTimeAsync(10);
@@ -256,7 +368,7 @@ describe('SnapshotSaver', () => {
       .mockRejectedValueOnce(new Error('quota'))
       .mockResolvedValue(snapshot(3));
     const onError = vi.fn();
-    const saver = new SnapshotSaver(storage, epoch, capture, onError, 10);
+    const saver = new SnapshotSaver(storage, 'programme', epoch, capture, onError, 10);
 
     for (let i = 0; i < 3; i++) {
       saver.schedule();
@@ -270,7 +382,14 @@ describe('SnapshotSaver', () => {
 
   it('flush saves a scheduled change at once and waits for it', async () => {
     const { storage, epoch } = await owned();
-    const saver = new SnapshotSaver(storage, epoch, async () => snapshot(1), undefined, 10_000);
+    const saver = new SnapshotSaver(
+      storage,
+      'programme',
+      epoch,
+      async () => snapshot(1),
+      undefined,
+      10_000,
+    );
 
     await saver.flush();
     expect(storage.current).toBeUndefined();
@@ -291,7 +410,7 @@ describe('SnapshotSaver', () => {
     let fail!: (err: Error) => void;
     // Go exited while encoding: the snapshot never comes, or fails.
     const capture = vi.fn(() => new Promise<DemoSnapshot>((_, reject) => (fail = reject)));
-    const saver = new SnapshotSaver(storage, epoch, capture, onError, 10);
+    const saver = new SnapshotSaver(storage, 'programme', epoch, capture, onError, 10);
 
     saver.schedule();
     await vi.advanceTimersByTimeAsync(10);

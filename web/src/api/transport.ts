@@ -1,4 +1,5 @@
 import { onlineManager } from '@tanstack/react-query';
+import { demoSchool, type DemoSchool, switchDemoSchool } from '@/features/demo/school';
 import { transport } from '@/lib/env';
 import { isWrite, OfflineError } from '@/lib/online';
 import { setBackendStatus } from './backendStatus';
@@ -19,8 +20,9 @@ export type DemoTab = 'pending' | 'active' | 'elsewhere';
 /** What the web demo offers beyond the API; `demoControls` is null over HTTP. */
 export interface DemoControls {
   /**
-   * Deletes the demo's saved data (store and session) and reloads the page,
-   * which starts the demo again from its seed.
+   * Deletes the saved data (store and session) of the demo school this page
+   * runs, not the other school's, and reloads the page, which starts the
+   * demo again from its seed.
    */
   reset(): Promise<void>;
   /** Makes this tab the one that runs the demo (it reloads). */
@@ -38,6 +40,17 @@ const RESET_FAILED_KEY = 'studio-schedule-demo-reset-failed';
 
 let bridge: WasmBridge | null = null;
 let active: Promise<boolean> | null = null;
+
+let school: DemoSchool | null = null;
+
+/**
+ * The demo school of this page load, read once: another tab that switches
+ * the school stores the new choice, but this page keeps running (and
+ * resetting) the school its worker was started with.
+ */
+function pageSchool(): DemoSchool {
+  return (school ??= demoSchool());
+}
 
 let tab: DemoTab = 'pending';
 const tabListeners = new Set<() => void>();
@@ -80,6 +93,7 @@ function startBridge(): WasmBridge {
     name: 'studio-schedule-backend',
   });
   const started = new WasmBridge(worker, setBackendStatus, {
+    school: pageSchool(),
     onSaveFailed: () => notify('save-failed'),
     onNotify: (payload, endpoint) => void showDemoNotification(payload, endpoint),
   });
@@ -135,6 +149,18 @@ function activate(): Promise<boolean> {
   return active;
 }
 
+/**
+ * Opens the demo with another school (docs/demo-mode.md, "Two demo schools"):
+ * saves this tab's pending changes first, since the reload would drop a save
+ * still waiting for its pause and the save on `pagehide` is best effort, then
+ * stores the choice and reloads. A backend that does not answer delays the
+ * switch by two seconds at most.
+ */
+export async function switchSchool(s: DemoSchool): Promise<void> {
+  await bridge?.flush();
+  switchDemoSchool(s);
+}
+
 /** Starts the in-browser backend in WASM mode; a no-op for HTTP. */
 export function startBackend(): void {
   if (transport === 'wasm') void activate();
@@ -147,7 +173,7 @@ export const demoControls: DemoControls | null =
           resetDemoData({
             // This tab holds the lock, so no other tab saves meanwhile.
             stop: stopBridge,
-            clear: () => clearSnapshot(indexedDbStorage()),
+            clear: () => clearSnapshot(indexedDbStorage(), pageSchool()),
             markFailed: () => setFlag(RESET_FAILED_KEY),
             reload: () => window.location.reload(),
           }),

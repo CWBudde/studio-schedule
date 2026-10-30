@@ -1,3 +1,4 @@
+import type { DemoSchool } from '@/features/demo/school';
 import type { BackendStatus } from '../backendStatus';
 import type {
   HeaderPairs,
@@ -24,6 +25,8 @@ interface Pending {
 }
 
 export interface WasmBridgeOptions {
+  /** The demo school the worker runs (default Programme); posted to it at once as `init`. */
+  school?: DemoSchool;
   /** Saving the demo's data failed; reported once. */
   onSaveFailed?: (message: string) => void;
   /** The backend sends a web push notification (its JSON payload) to the subscription's endpoint. */
@@ -73,6 +76,8 @@ export class WasmBridge {
       const message = event instanceof ErrorEvent && event.message ? event.message : 'Worker error';
       this.fail(message);
     });
+    // First of all, before any request or flush: the worker waits for it.
+    port.postMessage({ type: 'init', school: options.school ?? 'programme' }, []);
   }
 
   /** `fetch`-compatible function. Accepts a `Request` (as openapi-fetch passes) or URL + init. */
