@@ -90,7 +90,26 @@ Tailwind v4, shadcn/ui, TanStack Router/Query, react-i18next, Vitest, Playwright
 
 - [ ] 2.1 `slots` Theme registry, typed slots, ThemeProvider, theme cache script, Programme moved behind the slots without visual change, `useLessonQuickAction` — see "Task 2.1" below.
 
-- [ ] 2.2 `branding-ui` Branding card: theme select and background image upload/remove — see "Task 2.2" below.
+- [x] 2.2 `branding-ui` Branding card: theme select and background image upload/remove — see "Task 2.2" below.
+  - Done: the theme is a select in the Branding form, with the selected theme's line as its hint (the
+    tax mode's pattern). The office sees it as a fact. The background section shows the preview from
+    `getSchoolBackground` (fetched only when `hasBackground`), and for an admin upload/replace/remove
+    like the receipt logo (JPEG/PNG/WebP, ≤ 1 MiB checked before sending; a server 422 on
+    `body.contentType`/`body.data` shows the same message; the error and hint are the file input's
+    description). New in `queries.ts`: `schoolBackgroundQuery` (`['settings', 'background']`,
+    public, for 2.1's `--school-background` too), `updateBrandingBackgroundMutation`, and
+    `deleteBrandingBackgroundMutation`, which invalidate the branding, public-settings and background
+    queries. 15 tests in `BrandingSettingsCard.test.tsx`, one e2e case in `settings.spec.ts` that
+    uploads the seed's real JPEG through the WASM bridge. `just web-check` green (1043 web unit tests).
+  - An unchanged theme is left out of the PUT body, so an accent-only save never overwrites a theme
+    another admin changed meanwhile; the existing Branding tests' bodies stay `{ accentColor }`.
+  - The `branding` fixture in `SettingsCards.test.tsx` lacked `theme`/`hasBackground` (stale since
+    1.1); with the theme in the form's schema it must carry them, so it does now.
+  - de: the select is "Design", not "Erscheinungsbild", because the card already has that title and
+    the form, region and combobox would all share one name. The Werkstatt line describes the look
+    3.1/4.1 build; until then choosing it changes nothing visible.
+  - `maxBackgroundBytes` is a constant in the card: `BrandingSettings` has no `…MaxBytes` field like
+    the receipt settings' `logoMaxBytes`.
 
 - [ ] 2.3 `demo-schools` Two demo schools: `?demo=` param and stored choice, worker seeds the variant, one saved state per school, about page second button, banner switch link, README and docs/demo-mode.md — see "Task 2.3" below.
 
