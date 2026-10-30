@@ -1,20 +1,37 @@
 import { expect, type Locator, type Page, test as base } from '@playwright/test';
 
+/** A demo school (web/src/features/demo/school.ts). */
+export type DemoSchool = 'programme' | 'werkstatt';
+
 /**
- * The Playwright test with two extras: any console error or uncaught
- * exception on the page fails the test, and the demo opens without its about
- * page (as for a returning visitor) unless a test sets `demoEntered: false`.
+ * The Playwright test with three extras: any console error or uncaught
+ * exception on the page fails the test, the demo opens without its about
+ * page (as for a returning visitor) unless a test sets `demoEntered: false`,
+ * and it opens the programme school unless a test sets `demoSchool`.
  */
-export const test = base.extend<{ demoEntered: boolean; failOnPageErrors: void; enterDemo: void }>({
+export const test = base.extend<{
+  demoEntered: boolean;
+  demoSchool: DemoSchool;
+  failOnPageErrors: void;
+  enterDemo: void;
+}>({
   demoEntered: [true, { option: true }],
+  demoSchool: ['programme', { option: true }],
   enterDemo: [
-    async ({ context, demoEntered }, use) => {
+    async ({ context, demoEntered, demoSchool }, use) => {
       // On the context, so a second tab of a test is a returning visitor too.
       if (demoEntered) {
         await context.addInitScript(() =>
           localStorage.setItem('studio-schedule-demo-entered', '1'),
         );
       }
+      // Init scripts run on every load: only the first one sets the school,
+      // so a switch in the banner (which reloads) is not undone.
+      await context.addInitScript((school) => {
+        if (localStorage.getItem('studio-schedule-demo-school') === null) {
+          localStorage.setItem('studio-schedule-demo-school', school);
+        }
+      }, demoSchool);
       await use();
     },
     { auto: true },

@@ -24,6 +24,8 @@
     "label": "Demo mode",
     "banner": "Demo mode: the whole app runs in your browser with a fictional school. Your changes stay in this browser until you reset the demo.",
     "about": "About this demo",
+    "switchToWerkstatt": "Switch to the Werkstatt look",
+    "switchToProgramme": "Switch to the Programme look",
     "mailbox": {
       "open": "Demo mailbox",
       "count_one": "{{count}} mail",

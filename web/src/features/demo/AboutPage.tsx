@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import type { MouseEvent } from 'react';
 import {
   ArrowRight,
   BookOpen,
@@ -11,6 +12,7 @@ import {
   LayoutGrid,
   ListChecks,
   Monitor,
+  Palette,
   RotateCcw,
   Server,
   Smartphone,
@@ -24,8 +26,10 @@ import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { Ornament } from '@/components/layout/Ornament';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { switchSchool } from '@/api/transport';
 import { repositoryUrl } from '@/lib/env';
 import { markDemoEntered } from './entered';
+import { type DemoSchool, demoSchool } from './school';
 
 const features = [
   { key: 'schedule', icon: CalendarDays },
@@ -41,6 +45,7 @@ const howItWorks = [
   { key: 'wasm', icon: Cpu },
   { key: 'data', icon: Database },
   { key: 'saved', icon: RotateCcw },
+  { key: 'schools', icon: Palette },
   { key: 'mail', icon: Inbox },
   { key: 'tab', icon: Monitor },
   { key: 'receipts', icon: FileText },
@@ -99,8 +104,9 @@ export function AboutPage() {
           <p className="mx-auto mt-3 max-w-prose text-pretty text-muted-foreground">
             {t('hero.demo')}
           </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap">
             <OpenDemo />
+            <OpenDemo school="werkstatt" />
             <Button asChild size="lg" variant="outline">
               <Link to="/login">{t('hero.signIn')}</Link>
             </Button>
@@ -210,16 +216,45 @@ export function AboutPage() {
   );
 }
 
-function OpenDemo() {
+/**
+ * Enters the demo with a school (docs/demo-mode.md, "Two demo schools"): the
+ * chosen one in place, another one by reloading the page, so that a backend
+ * already running with the chosen school's data does not keep serving.
+ */
+function OpenDemo({ school = 'programme' }: { school?: DemoSchool }) {
   const { t } = useTranslation('about');
+  const werkstatt = school === 'werkstatt';
+  const open = (event: MouseEvent) => {
+    if (school === demoSchool()) {
+      markDemoEntered();
+    } else {
+      event.preventDefault();
+      void switchSchool(school);
+    }
+  };
   return (
-    <Button asChild size="lg">
+    <Button asChild size="lg" variant={werkstatt ? 'outline' : 'default'}>
       {/* Marked before the home page's redirect back to here is checked; a
           preload on hover would meet that redirect before the click. */}
-      <Link to="/" preload={false} onClick={markDemoEntered}>
-        {t('hero.open')}
+      <Link to="/" preload={false} onClick={open}>
+        {werkstatt && <WerkstattPreview />}
+        {t(werkstatt ? 'hero.openWerkstatt' : 'hero.open')}
         <ArrowRight aria-hidden="true" />
       </Link>
     </Button>
+  );
+}
+
+/** The Werkstatt look's colours, plum and mint: decoration without text. */
+function WerkstattPreview() {
+  return (
+    <span
+      data-slot="theme-preview"
+      aria-hidden="true"
+      className="flex h-4 w-6 shrink-0 overflow-hidden rounded-[3px] ring-1 ring-black/10"
+    >
+      <span className="flex-1 bg-[#9c215b]" />
+      <span className="w-2 bg-[#74b391]" />
+    </span>
   );
 }

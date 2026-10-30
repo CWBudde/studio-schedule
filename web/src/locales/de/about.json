@@ -5,6 +5,7 @@
     "intro": "Open-Source-Software für Stundenplan und Buchungen von Tanz- und Ballettschulen: Wochenpläne, Kursbuchungen, Wartelisten, Familienkonten, Besuchs- und Zeitkarten sowie Belege.",
     "demo": "Diese Demo ist die echte App mit einer erfundenen Schule. Sie läuft vollständig in deinem Browser: Es gibt keinen Server, und nichts, was du eingibst, verlässt deinen Computer.",
     "open": "Demo öffnen",
+    "openWerkstatt": "In der Werkstatt-Optik öffnen",
     "signIn": "Mit einem Demo-Konto anmelden"
   },
   "features": {
@@ -44,6 +45,7 @@
     "wasm": "Das komplette Go-Backend ist nach WebAssembly kompiliert und läuft in deinem Browser in einem Web Worker. Die Oberfläche spricht mit ihm über dieselbe HTTP-API wie mit einem echten Server.",
     "data": "Statt PostgreSQL nutzt sie eine In-Memory-Datenbank mit erfundenen Daten, deren Termine sich nach deinem ersten Besuch richten.",
     "saved": "Deine Änderungen bleiben in diesem Browser, bis du im Kopfbereich „Demo zurücksetzen“ wählst. Dabei rücken auch die Beispieltermine auf heute.",
+    "schools": "Es gibt zwei erfundene Schulen, jede mit eigener Optik: Öffne hier eine davon und wechsle im Demo-Hinweis oben zur anderen. Jede behält ihre eigenen gespeicherten Daten, und „Demo zurücksetzen“ setzt nur die zurück, in der du gerade bist.",
     "mail": "Es werden keine E-Mails verschickt: Das Demo-Postfach im Kopfbereich zeigt jede Mail, die die App senden würde, samt Links.",
     "tab": "Die Demo läuft immer nur in einem Browser-Tab, damit deine Änderungen an einer Stelle gespeichert werden.",
     "receipts": "Der erste Beleg, den du öffnest, lädt den PDF-Renderer (etwa 9 MB).",

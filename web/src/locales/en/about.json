@@ -5,6 +5,7 @@
     "intro": "Open-source schedule and booking software for dance and ballet schools: weekly timetables, class bookings, waiting lists, family accounts, prepaid passes and receipts.",
     "demo": "This demo is the real app with a fictional school. It runs entirely in your browser: there is no server, and nothing you enter leaves your computer.",
     "open": "Open the demo",
+    "openWerkstatt": "Open in the Werkstatt look",
     "signIn": "Sign in with a demo account"
   },
   "features": {
@@ -44,6 +45,7 @@
     "wasm": "The complete Go backend is compiled to WebAssembly and runs in your browser, in a Web Worker. The interface talks to it through the same HTTP API as on a real server.",
     "data": "Instead of PostgreSQL it uses an in-memory database with fictional data, dated around your first visit.",
     "saved": "Your changes are kept in this browser until you choose “Reset demo” in the header, which also moves the sample dates to today.",
+    "schools": "There are two fictional schools, each with a look of its own: open one here and switch to the other in the demo banner. Each keeps its own saved data, and “Reset demo” resets only the one you are in.",
     "mail": "No email is sent: the demo mailbox in the header shows every mail the app would send, links included.",
     "tab": "The demo runs in one browser tab at a time, so your changes are saved in one place.",
     "receipts": "The first receipt you open loads the PDF renderer (about 9 MB).",
