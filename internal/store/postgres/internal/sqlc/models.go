@@ -402,6 +402,10 @@ type Setting struct {
 	LogoType             pgtype.Text
 	AccentColor          pgtype.Text
 	LogoDigest           pgtype.Text
+	Theme                pgtype.Text
+	Background           []byte
+	BackgroundType       pgtype.Text
+	BackgroundDigest     pgtype.Text
 }
 
 type Staff struct {

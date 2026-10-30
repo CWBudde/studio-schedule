@@ -39,6 +39,8 @@ linters:
         - serialised
         - serialises
         - authorisation
+        # The name of a theme (ADR 0018), not the word.
+        - programme
     nolintlint:
       require-explanation: true
       require-specific: true

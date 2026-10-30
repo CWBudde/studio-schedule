@@ -36,6 +36,8 @@ type Store struct {
 type state struct {
 	settings *domain.Settings
 	logo     *storedLogo // nil: none
+	// background is the background image (nil: none) with its digest.
+	background *storedBackground
 
 	persons table[domain.PersonID, domain.Person]
 	// memberNos indexes the persons by member number (derived from
@@ -309,6 +311,23 @@ func newStoredLogo(l domain.Logo) *storedLogo {
 	return &storedLogo{logo: l, digest: l.Digest()}
 }
 
+// storedBackground is the background with its digest, computed when it is
+// written.
+type storedBackground struct {
+	background domain.Background
+	digest     string
+}
+
+// newStoredBackground returns b, which it owns from now on, with its
+// digest; nil for no background.
+func newStoredBackground(b domain.Background) *storedBackground {
+	if b.IsZero() {
+		return nil
+	}
+
+	return &storedBackground{background: b, digest: b.Digest()}
+}
+
 type settingsRepo struct{ tx *tx }
 
 func (r settingsRepo) Get(context.Context) (domain.Settings, error) {
@@ -378,6 +397,48 @@ func (r settingsRepo) PutLogo(_ context.Context, l domain.Logo) error {
 
 	l.Data = slices.Clone(l.Data)
 	r.tx.state.logo = newStoredLogo(l)
+
+	return nil
+}
+
+func (r settingsRepo) Background(context.Context) (domain.Background, error) {
+	switch {
+	case r.tx.state.settings == nil:
+		return domain.Background{}, notFound("settings")
+	case r.tx.state.background == nil:
+		return domain.Background{}, nil
+	}
+
+	b := r.tx.state.background.background
+	b.Data = slices.Clone(b.Data)
+
+	return b, nil
+}
+
+func (r settingsRepo) BackgroundInfo(context.Context) (domain.BackgroundInfo, error) {
+	switch {
+	case r.tx.state.settings == nil:
+		return domain.BackgroundInfo{}, notFound("settings")
+	case r.tx.state.background == nil:
+		return domain.BackgroundInfo{}, nil
+	}
+
+	b := r.tx.state.background
+
+	return domain.BackgroundInfo{ContentType: b.background.ContentType, Digest: b.digest}, nil
+}
+
+func (r settingsRepo) PutBackground(_ context.Context, b domain.Background) error {
+	if err := r.tx.checkWritable(); err != nil {
+		return err
+	}
+
+	if r.tx.state.settings == nil {
+		return notFound("settings")
+	}
+
+	b.Data = slices.Clone(b.Data)
+	r.tx.state.background = newStoredBackground(b)
 
 	return nil
 }

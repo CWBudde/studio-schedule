@@ -267,6 +267,33 @@ var codecs = []codec{
 		// PutLogo stores a new pointer (or nil).
 		changed: func(before, after *state) bool { return before.logo != after.logo },
 	},
+	{
+		field: "background",
+		// The image alone: its digest is derived again on restore.
+		encode: func(enc *jsontext.Encoder, s *state) error {
+			var b *domain.Background
+			if s.background != nil {
+				b = &s.background.background
+			}
+
+			return json.MarshalEncode(enc, b, jsonOptions)
+		},
+		decode: func(dec *jsontext.Decoder, s *state) error {
+			var b *domain.Background
+			if err := json.UnmarshalDecode(dec, &b, jsonOptions); err != nil {
+				return err
+			}
+
+			s.background = nil
+			if b != nil {
+				s.background = newStoredBackground(*b)
+			}
+
+			return nil
+		},
+		// PutBackground stores a new pointer (or nil).
+		changed: func(before, after *state) bool { return before.background != after.background },
+	},
 	rows("persons", func(s *state) *table[domain.PersonID, domain.Person] { return &s.persons },
 		func(v domain.Person) domain.PersonID { return v.ID }),
 	derived("memberNos", func(s *state) *table[string, domain.PersonID] { return &s.memberNos }),

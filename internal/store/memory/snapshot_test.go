@@ -168,6 +168,9 @@ func fullStore(t *testing.T) *Store {
 			tx.Receipts().Create(ctx, receipt),
 			tx.Receipts().PutPDF(ctx, receipt.ID, []byte("%PDF-1.7 snapshot")),
 			tx.Settings().PutLogo(ctx, domain.Logo{ContentType: domain.LogoPNG, Data: []byte("\x89PNG\r\n\x1a\nx")}),
+			tx.Settings().PutBackground(ctx, domain.Background{
+				ContentType: domain.BackgroundJPEG, Data: []byte{0xFF, 0xD8, 0xFF, 0xE0},
+			}),
 			tx.Sessions().Create(ctx, domain.Session{
 				ID: ids.New[domain.SessionID](src), AccountID: account, TokenHash: [32]byte{1, 2, 3},
 				CreatedAt: at, LastSeenAt: at, ExpiresAt: at.Add(time.Hour),

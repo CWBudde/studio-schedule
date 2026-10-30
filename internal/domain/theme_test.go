@@ -32,7 +32,7 @@ func TestThemeOrDefault(t *testing.T) {
 	t.Parallel()
 
 	for in, want := range map[domain.Theme]domain.Theme{
-		"":                     domain.ThemeProgramme,
+		"":                    domain.ThemeProgramme,
 		domain.ThemeProgramme: domain.ThemeProgramme,
 		domain.ThemeWerkstatt: domain.ThemeWerkstatt,
 	} {
