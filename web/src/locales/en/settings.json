@@ -23,7 +23,7 @@
   },
   "branding": {
     "title": "Branding",
-    "description": "The accent color of buttons, links and highlights, and the logo in the header.",
+    "description": "The look of the app: its theme, the accent color of buttons, links and highlights, the logo in the header and a background image.",
     "accent": "Accent color",
     "accentHint": "As #rrggbb. Leave it empty for the app's own color.",
     "pick": "Pick the accent color",
@@ -39,7 +39,32 @@
     "logo": "Logo",
     "logoAlt": "The school's logo",
     "logoHint": "The header shows the logo of the receipts. Change it in the receipt settings below.",
-    "noLogo": "No logo: the header shows the app's mark."
+    "noLogo": "No logo: the header shows the app's mark.",
+    "theme": "Theme",
+    "chooseTheme": "Choose a theme",
+    "themes": {
+      "programme": "Programme",
+      "werkstatt": "Werkstatt"
+    },
+    "themeHints": {
+      "programme": "Clear cards on a calm page, in the accent color.",
+      "werkstatt": "Condensed type, colored day bands and the rooms side by side, on the school's background image."
+    },
+    "background": {
+      "title": "Background image",
+      "alt": "The school's background image",
+      "none": "No background image.",
+      "loading": "Loading the background image…",
+      "invalid": "Choose a JPEG, PNG or WebP image of at most {{size}} MB.",
+      "upload": "Upload a background image",
+      "replace": "Replace the background image",
+      "uploading": "Uploading…",
+      "remove": "Remove the background image",
+      "saved": "The background image has been saved.",
+      "removed": "The background image has been removed.",
+      "hint": "A JPEG, PNG or WebP of at most {{size}} MB. Werkstatt shows it behind the page; Programme does not.",
+      "unreadable": "The file could not be read; choose it again."
+    }
   },
   "regional": {
     "title": "Time and language",

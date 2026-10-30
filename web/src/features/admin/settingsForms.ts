@@ -33,9 +33,11 @@ export const schoolValues = (s: SchoolSettings): SchoolValues => ({
   legalNotice: s.legalNotice ?? '',
 });
 
+export const themes = ['programme', 'werkstatt'] as const satisfies BrandingSettings['theme'][];
+
 /**
  * The accent color: empty for the app's own, else #rrggbb that reaches
- * the contrast the server asks for (lower-cased here).
+ * the contrast the server asks for (lower-cased here); and the theme.
  */
 export const brandingSchema = z
   .object({
@@ -47,15 +49,18 @@ export const brandingSchema = z
         const c = parseColor(v);
         return !c || accentContrast(c) >= minAccentContrast;
       }, 'contrast'),
+    theme: z.enum(themes),
   })
-  .transform(({ accentColor }): BrandingSettingsData =>
-    accentColor ? { accentColor: accentColor.toLowerCase() } : {},
-  );
+  .transform(({ accentColor, theme }): BrandingSettingsData => ({
+    ...(accentColor ? { accentColor: accentColor.toLowerCase() } : {}),
+    theme,
+  }));
 
 export type BrandingValues = z.input<typeof brandingSchema>;
-export const brandingFields = ['accentColor'] as const satisfies (keyof BrandingValues)[];
+export const brandingFields = ['accentColor', 'theme'] as const satisfies (keyof BrandingValues)[];
 export const brandingValues = (s: BrandingSettings): BrandingValues => ({
   accentColor: s.accentColor ?? '',
+  theme: s.theme,
 });
 
 /** Whether the browser knows the IANA time zone. */
