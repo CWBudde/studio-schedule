@@ -41,11 +41,13 @@ func NewSettingsService(st store.Store, clk clock.Clock, src ids.Source) *Settin
 }
 
 // PublicSettings are the settings anonymous visitors may see, with the
-// logo's content type and digest (zero without one).
+// content type and digest of the logo and of the background (each zero
+// without one).
 type PublicSettings struct {
 	domain.Settings
 
-	Logo domain.LogoInfo
+	Logo       domain.LogoInfo
+	Background domain.BackgroundInfo
 }
 
 // Public returns the settings that may be shown to anonymous visitors.
@@ -59,7 +61,11 @@ func (s *SettingsService) Public(ctx context.Context) (PublicSettings, error) {
 		}
 
 		out.DefaultLocale = domain.SchoolLocale(out.DefaultLocale)
-		out.Logo, err = tx.Settings().LogoInfo(ctx)
+		if out.Logo, err = tx.Settings().LogoInfo(ctx); err != nil {
+			return err
+		}
+
+		out.Background, err = tx.Settings().BackgroundInfo(ctx)
 
 		return err
 	})
@@ -111,14 +117,83 @@ func (s *SettingsService) Logo(ctx context.Context, has func(digest string) bool
 	return out, nil
 }
 
+// CachedBackground is the school's background image for a client that may
+// have it already.
+type CachedBackground struct {
+	// Digest identifies the background (domain.Background.Digest); ""
+	// without one.
+	Digest string
+	// Background is the background; the zero Background when the client
+	// has it already.
+	Background domain.Background
+}
+
+// Background returns the school's background image (ADR 0018) as Logo
+// does the logo: the zero CachedBackground without one, only its digest
+// when has reports that the client has that one, and else the background
+// with its digest. A client that has the background costs no read of the
+// image.
+func (s *SettingsService) Background(ctx context.Context, has func(digest string) bool) (CachedBackground, error) {
+	var out CachedBackground
+
+	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		info, err := tx.Settings().BackgroundInfo(ctx)
+		if err != nil || info.IsZero() {
+			return err
+		}
+
+		if has(info.Digest) {
+			out = CachedBackground{Digest: info.Digest}
+
+			return nil
+		}
+
+		// Read apart from the digest, the background may have changed
+		// since: its own digest describes what is sent.
+		b, err := tx.Settings().Background(ctx)
+		out = CachedBackground{Digest: b.Digest(), Background: b}
+
+		return err
+	})
+	if err != nil {
+		return CachedBackground{}, fmt.Errorf("background: %w", err)
+	}
+
+	return out, nil
+}
+
+// PutBackground replaces the school's background image (ADR 0018); the
+// zero Background removes it. One that is not a JPEG, PNG or WebP image of
+// at most domain.MaxBackgroundBytes is a validation error on contentType
+// or data. Like the logo (ReceiptService.SetLogo), the change is not
+// audited.
+func (s *SettingsService) PutBackground(ctx context.Context, b domain.Background) error {
+	if !b.IsZero() {
+		if err := b.Validate(); err != nil {
+			return err
+		}
+	}
+
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return tx.Settings().PutBackground(ctx, b)
+	})
+	if err != nil {
+		return fmt.Errorf("set background: %w", err)
+	}
+
+	return nil
+}
+
 // SettingsView is the settings as the office sees them, with what the card
-// at hand shows besides (viewParts): the logo, what fixes the time zone and
-// the currency, or the release window now.
+// at hand shows besides (viewParts): the logo and the background, what
+// fixes the time zone and the currency, or the release window now.
 type SettingsView struct {
 	domain.Settings
 
 	// Logo is the logo's type and digest (viewLogo).
 	Logo domain.LogoInfo
+	// Background is the background's type and digest (viewBackground).
+	Background domain.BackgroundInfo
 	// Usage is what fixes the time zone and the currency (viewUsage).
 	Usage store.SettingsUsage
 	// Now is the instant the window was computed at (viewWindow).
@@ -139,6 +214,7 @@ type viewParts uint8
 
 const (
 	viewLogo viewParts = 1 << iota
+	viewBackground
 	viewUsage
 	viewWindow
 )
@@ -170,9 +246,10 @@ func (s *SettingsService) School(ctx context.Context) (SettingsView, error) {
 	return s.get(ctx, "school profile", 0)
 }
 
-// Branding returns the settings of the branding card, with the logo.
+// Branding returns the settings of the branding card, with the logo and
+// the background.
 func (s *SettingsService) Branding(ctx context.Context) (SettingsView, error) {
-	return s.get(ctx, "branding", viewLogo)
+	return s.get(ctx, "branding", viewLogo|viewBackground)
 }
 
 // Regional returns the settings of the time and language card, with what
@@ -218,6 +295,12 @@ func (s *SettingsService) view(
 
 	if parts&viewLogo != 0 {
 		if out.Logo, err = tx.Settings().LogoInfo(ctx); err != nil {
+			return SettingsView{}, err
+		}
+	}
+
+	if parts&viewBackground != 0 {
+		if out.Background, err = tx.Settings().BackgroundInfo(ctx); err != nil {
 			return SettingsView{}, err
 		}
 	}
@@ -321,12 +404,26 @@ func (s *SettingsService) SetSchool(ctx context.Context, p SchoolProfile) (Setti
 	})
 }
 
-// SetBranding changes the accent color, "" for the app's own. It is stored
-// in lower case; one that does not stand out against the text on it is a
-// validation error on accentColor.
-func (s *SettingsService) SetBranding(ctx context.Context, accent string) (SettingsView, error) {
-	return s.update(ctx, "branding", viewLogo, func(settings *domain.Settings, _ store.SettingsUsage) error {
-		settings.AccentColor = strings.ToLower(strings.TrimSpace(accent))
+// Branding is what the branding card edits. The logo is the receipts'
+// (ReceiptService.SetLogo), the background is PutBackground's.
+type Branding struct {
+	// AccentColor is the accent color, "" for the app's own.
+	AccentColor string
+	// Theme is the school's theme (ADR 0018); nil keeps the stored one, so
+	// a client that does not know themes cannot reset it.
+	Theme *domain.Theme
+}
+
+// SetBranding changes the accent color and, if b names one, the theme. The
+// accent is stored in lower case; one that does not stand out against the
+// text on it is a validation error on accentColor, an unknown theme one on
+// theme.
+func (s *SettingsService) SetBranding(ctx context.Context, b Branding) (SettingsView, error) {
+	return s.update(ctx, "branding", viewLogo|viewBackground, func(settings *domain.Settings, _ store.SettingsUsage) error {
+		settings.AccentColor = strings.ToLower(strings.TrimSpace(b.AccentColor))
+		if b.Theme != nil {
+			settings.Theme = *b.Theme
+		}
 
 		return nil
 	})

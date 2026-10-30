@@ -905,16 +905,40 @@ export interface paths {
         };
         /**
          * Branding
-         * @description Returns the accent color, its dark-mode variant and whether a logo exists.
+         * @description Returns the accent color, its dark-mode variant, the theme and whether a logo and a background exist.
          */
         get: operations["getBrandingSettings"];
         /**
          * Update the branding
-         * @description Sets the accent color, or the app's own without one. It must reach a WCAG contrast of 4.5:1 against the text on it and the page; else a 422 on `body.accentColor`. The dark mode shows a variant derived from it. The logo is the receipts' logo (updateReceiptLogo).
+         * @description Sets the accent color, or the app's own without one. It must reach a WCAG contrast of 4.5:1 against the text on it and the page; else a 422 on `body.accentColor`. The dark mode shows a variant derived from it. A `theme` changes the school's theme; without one it stays. The logo is the receipts' logo (updateReceiptLogo), the background is updateBrandingBackground's.
          */
         put: operations["updateBrandingSettings"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/branding/background": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the background image
+         * @description Sets the school's background image, which themes that show one put behind the app: a JPEG, PNG or WebP image of at most 1 MiB, base64 encoded. Another type is a 422 on `body.contentType`; an empty or larger image, or data that does not match the type, one on `body.data`.
+         */
+        put: operations["updateBrandingBackground"];
+        post?: never;
+        /**
+         * Remove the background image
+         * @description Removes the school's background image; themes that show one fall back to their own.
+         */
+        delete: operations["deleteBrandingBackground"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2304,6 +2328,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/background": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * School background
+         * @description Returns the school's background image, which themes that show one put behind the app; a 404 without one. Cacheable: with the `ETag` in `If-None-Match` an unchanged image is a 304.
+         */
+        get: operations["getSchoolBackground"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/logo": {
         parameters: {
             query?: never;
@@ -2333,7 +2377,7 @@ export interface paths {
         };
         /**
          * Public school settings
-         * @description Returns the school settings that are visible without signing in: the name, legal notice and branding, the time zone, language and currency.
+         * @description Returns the school settings that are visible without signing in: the name, legal notice and branding (accent, theme, whether a logo and a background exist), the time zone, language and currency.
          */
         get: operations["getPublicSettings"];
         put?: never;
@@ -3330,11 +3374,22 @@ export interface components {
              */
             waitlistInviteExpiryMinutes: number;
         };
+        BrandingBackgroundInputBody: {
+            /**
+             * @description The image type.
+             * @enum {string}
+             */
+            contentType: "image/jpeg" | "image/png" | "image/webp";
+            /** @description The image, base64 encoded; at most 1 MiB. */
+            data: string;
+        };
         BrandingSettings: {
-            /** @description The accent color, #rrggbb; empty or absent: the app's own. */
+            /** @description The accent color, #rrggbb; absent: the app's own. */
             accentColor?: string;
             /** @description The dark theme's variant of the accent color; absent without one. */
             accentColorDark?: string;
+            /** @description Whether the school has a background image (updateBrandingBackground). */
+            hasBackground: boolean;
             /** @description Whether the school has a logo (set with the receipt settings). */
             hasLogo: boolean;
             /**
@@ -3342,10 +3397,20 @@ export interface components {
              * @description The WCAG contrast the accent color needs against the text on it and the page: 4.5.
              */
             minContrast: number;
+            /**
+             * @description The school's theme: its colors, fonts and layouts.
+             * @enum {string}
+             */
+            theme: "programme" | "werkstatt";
         };
         BrandingSettingsData: {
             /** @description The accent color, #rrggbb; empty or absent: the app's own. */
             accentColor?: string;
+            /**
+             * @description The school's theme: its colors, fonts and layouts; absent: the current one stays.
+             * @enum {string}
+             */
+            theme?: "programme" | "werkstatt";
         };
         CalendarFeed: {
             /**
@@ -6193,12 +6258,19 @@ export interface components {
              * @enum {string}
              */
             defaultLocale: "en" | "de";
+            /** @description Whether getSchoolBackground has a background image. */
+            hasBackground: boolean;
             /** @description Whether getSchoolLogo has a logo. */
             hasLogo: boolean;
             /** @description The legal notice (imprint) for the footer, plain text with line breaks; absent if none. */
             legalNotice?: string;
             /** @description Display name of the school. */
             schoolName: string;
+            /**
+             * @description The school's theme: its colors, fonts and layouts.
+             * @enum {string}
+             */
+            theme: "programme" | "werkstatt";
             /** @description IANA time zone of the school, e.g. Europe/Berlin. */
             timezone: string;
         };
@@ -9355,6 +9427,64 @@ export interface operations {
             };
         };
     };
+    updateBrandingBackground: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandingBackgroundInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteBrandingBackground: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     getPassSettings: {
         parameters: {
             query?: never;
@@ -12473,6 +12603,51 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Schedule"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSchoolBackground: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag of the image the client has; unchanged: a 304. */
+                "If-None-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The background image. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
+                };
+            };
+            /** @description The image did not change since the ETag in If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
