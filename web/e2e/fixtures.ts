@@ -1,10 +1,24 @@
 import { expect, type Locator, type Page, test as base } from '@playwright/test';
 
 /**
- * The Playwright test with one extra rule: any console error or uncaught
- * exception on the page fails the test.
+ * The Playwright test with two extras: any console error or uncaught
+ * exception on the page fails the test, and the demo opens without its about
+ * page (as for a returning visitor) unless a test sets `demoEntered: false`.
  */
-export const test = base.extend<{ failOnPageErrors: void }>({
+export const test = base.extend<{ demoEntered: boolean; failOnPageErrors: void; enterDemo: void }>({
+  demoEntered: [true, { option: true }],
+  enterDemo: [
+    async ({ context, demoEntered }, use) => {
+      // On the context, so a second tab of a test is a returning visitor too.
+      if (demoEntered) {
+        await context.addInitScript(() =>
+          localStorage.setItem('studio-schedule-demo-entered', '1'),
+        );
+      }
+      await use();
+    },
+    { auto: true },
+  ],
   failOnPageErrors: [
     async ({ page }, use) => {
       const errors: string[] = [];

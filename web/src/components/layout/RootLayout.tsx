@@ -1,5 +1,7 @@
-import { Link, Outlet } from '@tanstack/react-router';
+import { Link, Outlet, useMatches } from '@tanstack/react-router';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { startBackend } from '@/api/transport';
 import { AppFooter } from '@/components/layout/AppFooter';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { BackendGate } from '@/components/layout/BackendGate';
@@ -10,11 +12,30 @@ import { OfflineBanner } from '@/components/layout/OfflineBanner';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { AnnouncementBanner } from '@/features/announcements/AnnouncementBanner';
+import { markDemoEntered } from '@/features/demo/entered';
 import { usePushKeepAlive } from '@/features/push/usePushKeepAlive';
+import { isDemo } from '@/lib/env';
 
-export function RootLayout() {
+/** The app around every page, or nothing around a bare one (the demo's about page). */
+export function RootShell() {
+  const bare = useMatches({ select: (matches) => matches.some((m) => m.staticData.bare) });
+  return (
+    <>
+      {isDemo && bare ? <Outlet /> : <RootLayout />}
+      <Toaster />
+    </>
+  );
+}
+
+function RootLayout() {
   const { t } = useTranslation();
   usePushKeepAlive();
+  useEffect(() => {
+    // In the demo build this boots the Go/WASM backend in a Web Worker, and
+    // from now on the demo opens without its about page.
+    startBackend();
+    if (isDemo) markDemoEntered();
+  }, []);
   return (
     <div className="flex min-h-svh flex-col">
       <a
@@ -38,7 +59,6 @@ export function RootLayout() {
         </BackendGate>
       </main>
       <AppFooter />
-      <Toaster />
       <DemoNotices />
     </div>
   );

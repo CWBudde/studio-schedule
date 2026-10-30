@@ -1,0 +1,82 @@
+{
+  "source": "Source on GitHub",
+  "hero": {
+    "eyebrow": "Live demo",
+    "intro": "Open-source schedule and booking software for dance and ballet schools: weekly timetables, class bookings, waiting lists, family accounts, prepaid passes and receipts.",
+    "demo": "This demo is the real app with a fictional school. It runs entirely in your browser: there is no server, and nothing you enter leaves your computer.",
+    "open": "Open the demo",
+    "signIn": "Sign in with a demo account"
+  },
+  "features": {
+    "title": "What it does",
+    "schedule": {
+      "title": "Timetable and schedule",
+      "text": "Terms, classes and one-off workshops become a schedule of lessons, released a set time ahead, as a list or a week grid."
+    },
+    "booking": {
+      "title": "Bookings and waiting lists",
+      "text": "Members book and cancel within the school's rules. When a lesson is full, the waiting list invites the next in line."
+    },
+    "family": {
+      "title": "Family accounts",
+      "text": "Guardians book for their children; teenagers can have an account of their own."
+    },
+    "passes": {
+      "title": "Passes and receipts",
+      "text": "Prepaid passes are redeemed as lessons take place, and every sale issues a numbered PDF receipt."
+    },
+    "teaching": {
+      "title": "Teaching",
+      "text": "Instructors see their lessons and participants, take attendance and add guests and trials."
+    },
+    "office": {
+      "title": "Office and administration",
+      "text": "Catalogue, timetable, persons, announcements, statistics, CSV import, duplicates, data export and anonymization."
+    },
+    "devices": {
+      "title": "Calendar and phone",
+      "text": "Calendar feeds for any calendar app; installable as an app, with push notifications."
+    }
+  },
+  "how": {
+    "title": "How the demo works",
+    "intro": "GitHub Pages can only host static files, so the demo brings its own backend.",
+    "wasm": "The complete Go backend is compiled to WebAssembly and runs in your browser, in a Web Worker. The interface talks to it through the same HTTP API as on a real server.",
+    "data": "Instead of PostgreSQL it uses an in-memory database with fictional data, dated around your first visit.",
+    "saved": "Your changes are kept in this browser until you choose “Reset demo” in the header, which also moves the sample dates to today.",
+    "mail": "No email is sent: the demo mailbox in the header shows every mail the app would send, links included.",
+    "tab": "The demo runs in one browser tab at a time, so your changes are saved in one place.",
+    "receipts": "The first receipt you open loads the PDF renderer (about 9 MB).",
+    "same": "Everything else, from validation and permissions to booking rules and receipts, is the same code as in a real installation."
+  },
+  "try": {
+    "title": "Things to try",
+    "intro": "Look around as a visitor, or sign in: the sign-in page lists one demo account per role, all with the password",
+    "visitor": {
+      "title": "Visitor",
+      "text": "Browse the schedule and the classes, then register; the confirmation mail arrives in the demo mailbox."
+    },
+    "member": {
+      "title": "Member",
+      "text": "Book a lesson for one of the children, join the waiting list of a full workshop and subscribe to your lessons in a calendar."
+    },
+    "instructor": {
+      "title": "Instructor",
+      "text": "Open Teaching, take the attendance of a past lesson and add a guest to a workshop."
+    },
+    "office": {
+      "title": "Office",
+      "text": "Sell a pass on a person's page, write an announcement and look at the statistics."
+    },
+    "admin": {
+      "title": "Administrator",
+      "text": "Change the school's name and colors in the settings, or sign in as another account from Accounts."
+    }
+  },
+  "more": {
+    "title": "Learn more",
+    "demoDocs": "How the demo is built",
+    "operations": "Running it for a school",
+    "source": "Source code and documentation"
+  }
+}

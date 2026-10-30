@@ -1,6 +1,7 @@
-import { ExternalLink, FlaskConical } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { FlaskConical } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { demoDocsUrl, isDemo } from '@/lib/env';
+import { isDemo } from '@/lib/env';
 
 /** Persistent notice shown only in the WASM demo build. */
 export function DemoBanner() {
@@ -16,16 +17,12 @@ export function DemoBanner() {
         <FlaskConical className="mt-0.5 size-4 shrink-0 sm:mt-0" aria-hidden="true" />
         <p className="flex-1 leading-snug">
           {t('demo.banner')}{' '}
-          <a
-            href={demoDocsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={t('demo.learnMoreLabel')}
-            className="inline-flex items-center gap-1 font-medium whitespace-nowrap underline underline-offset-4 hover:no-underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
+          <Link
+            to="/about"
+            className="font-medium whitespace-nowrap underline underline-offset-4 hover:no-underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
           >
-            {t('demo.learnMore')}
-            <ExternalLink className="size-3.5" aria-hidden="true" />
-          </a>
+            {t('demo.about')}
+          </Link>
         </p>
       </div>
     </aside>

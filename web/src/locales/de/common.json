@@ -22,9 +22,8 @@
   },
   "demo": {
     "label": "Demo-Modus",
-    "banner": "Demo-Modus: Diese App läuft vollständig in deinem Browser (Go, kompiliert zu WebAssembly) mit einer In-Memory-Datenbank. Nichts wird auf einem Server gespeichert; deine Änderungen bleiben in diesem Browser, bis du die Demo zurücksetzt. Dabei rücken auch die Beispieltermine auf heute.",
-    "learnMore": "Mehr erfahren",
-    "learnMoreLabel": "Mehr über die Live-Demo erfahren (öffnet GitHub in einem neuen Tab)",
+    "banner": "Demo-Modus: Die ganze App läuft in deinem Browser, mit einer erfundenen Schule. Deine Änderungen bleiben in diesem Browser, bis du die Demo zurücksetzt.",
+    "about": "Über diese Demo",
     "mailbox": {
       "open": "Demo-Postfach",
       "count_one": "{{count}} Mail",

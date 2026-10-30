@@ -52,4 +52,8 @@ declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router;
   }
+  interface StaticDataRouteOption {
+    /** The route renders without the app around it (header, banners, backend). */
+    bare?: boolean;
+  }
 }

@@ -1,6 +1,7 @@
 import i18n from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';
+import deAbout from './locales/de/about.json';
 import deAccount from './locales/de/account.json';
 import deAdmin from './locales/de/admin.json';
 import deAnnouncements from './locales/de/announcements.json';
@@ -18,6 +19,7 @@ import deSettings from './locales/de/settings.json';
 import deStatistics from './locales/de/statistics.json';
 import deTeach from './locales/de/teach.json';
 import deTimetable from './locales/de/timetable.json';
+import enAbout from './locales/en/about.json';
 import enAccount from './locales/en/account.json';
 import enAdmin from './locales/en/admin.json';
 import enAnnouncements from './locales/en/announcements.json';
@@ -59,6 +61,7 @@ export const resources = {
     mailLog: enMailLog,
     imports: enImports,
     duplicates: enDuplicates,
+    about: enAbout,
   },
   de: {
     common: de,
@@ -78,6 +81,7 @@ export const resources = {
     mailLog: deMailLog,
     imports: deImports,
     duplicates: deDuplicates,
+    about: deAbout,
   },
 } as const;
 
@@ -143,6 +147,7 @@ void i18n
       'mailLog',
       'imports',
       'duplicates',
+      'about',
     ],
     fallbackLng: 'en',
     supportedLngs: supportedLanguages,

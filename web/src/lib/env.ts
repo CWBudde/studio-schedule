@@ -10,4 +10,3 @@ export const routerHistory: 'hash' | 'browser' =
   import.meta.env.VITE_ROUTER_HISTORY === 'hash' ? 'hash' : 'browser';
 
 export const repositoryUrl = 'https://github.com/CWBudde/studio-schedule';
-export const demoDocsUrl = `${repositoryUrl}#live-demo`;

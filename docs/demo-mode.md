@@ -15,6 +15,25 @@ only serves static files, and we don't host a backend for the demo. Instead:
 5. The Worker saves the whole in-memory store and its cookie jar in IndexedDB after every change, so
    a reload keeps the data and the session until the visitor resets the demo (see below).
 
+## The about page
+
+The demo opens with an about page (`#/about`, `web/src/features/demo/AboutPage.tsx`): what the
+app does, how the demo works, what to try per role, and links to the docs. It is the demo's
+entrance and replaces explanations that used to live in the README and the demo banner.
+
+- **When:** the home route (`#/`) redirects to it until the visitor has opened the demo once in
+  this browser (`web/src/features/demo/entered.ts`, the localStorage key
+  `studio-schedule-demo-entered`). Any page of the app counts as opened, so a deep link or a mail
+  link goes straight in and is not followed by the about page later. The banner's "About this
+  demo" leads back to it. Without storage (blocked site data) the about page shows on every visit
+  to `#/`, and "Open the demo" lets the visitor in for that page load.
+- **Bare:** the route has `staticData: { bare: true }`; `RootShell` (`RootLayout.tsx`) renders it
+  without the header, banners and footer. It calls no API.
+- **No backend yet:** on a first visit the Worker starts when the app's layout first mounts
+  (`startBackend()` in `RootLayout`), so the about page downloads no `app.wasm` and takes no tab
+  lock. A returning visitor's Worker starts at once (`main.tsx`).
+- **Absent elsewhere:** outside the demo build `/about` is a 404 and `/` shows the home page.
+
 ## Differences from a real installation
 
 | Aspect     | Production                  | Demo                                                             |
@@ -207,7 +226,8 @@ Open the printed URL, for example `http://localhost:4173/studio-schedule/`.
 `just e2e` builds the demo and runs the Playwright tests in `web/e2e` against it through
 `vite preview`: the real WASM backend in its Worker, in Chromium at desktop and phone size, with
 the browser in `America/New_York` so school times cannot fall back to the browser's zone. They
-cover the home page, the schedule list and week grid, filters, the lesson sheet, the release
+cover the about page (with `test.use({ demoEntered: false })`; every other test starts as a
+returning visitor), the home page, the schedule list and week grid, filters, the lesson sheet, the release
 countdown, early-published workshops, deep links, German, that an edit, the session and generated
 lessons survive a reload until "Reset demo", and that "Use here" moves the demo between two tabs. Each test runs in a fresh browser context, so saved data never leaks
 from one test to the next. Any console error fails a test. The

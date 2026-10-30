@@ -14,17 +14,9 @@ bookings, waiting lists, family accounts, prepaid passes and receipts.
 
 **https://cwbudde.github.io/studio-schedule/**
 
-GitHub Pages can only host static files, so the demo works differently from a real installation:
-
-- The **complete Go backend is compiled to WebAssembly** and runs **inside your browser** in a Web
-  Worker. The React UI talks to it through the same HTTP API it uses in production.
-- Instead of PostgreSQL the demo uses an **in-memory database** seeded with **fictional** data. Every
-  change you make stays in your browser tab and is **lost when you reload** (later phases may add an
-  optional browser-local snapshot).
-- Emails are not sent; they show up in a demo mailbox instead.
-
-Apart from that the demo runs the same code paths as a real deployment. See
-[docs/demo-mode.md](docs/demo-mode.md) for details.
+The complete Go backend, compiled to WebAssembly, runs in your browser with fictional data, so no
+server is involved. The demo opens with a page that explains how it works and what to try; see
+[docs/demo-mode.md](docs/demo-mode.md) for the details.
 
 ## Quick start (development)
 

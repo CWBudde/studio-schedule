@@ -1,0 +1,82 @@
+{
+  "source": "Quellcode auf GitHub",
+  "hero": {
+    "eyebrow": "Live-Demo",
+    "intro": "Open-Source-Software für Stundenplan und Buchungen von Tanz- und Ballettschulen: Wochenpläne, Kursbuchungen, Wartelisten, Familienkonten, Besuchs- und Zeitkarten sowie Belege.",
+    "demo": "Diese Demo ist die echte App mit einer erfundenen Schule. Sie läuft vollständig in deinem Browser: Es gibt keinen Server, und nichts, was du eingibst, verlässt deinen Computer.",
+    "open": "Demo öffnen",
+    "signIn": "Mit einem Demo-Konto anmelden"
+  },
+  "features": {
+    "title": "Was sie kann",
+    "schedule": {
+      "title": "Stundenplan und Termine",
+      "text": "Aus Kurszeiträumen, Kursen und einzelnen Workshops entsteht ein Terminplan, der eine festgelegte Zeit im Voraus freigegeben wird – als Liste oder Wochenansicht."
+    },
+    "booking": {
+      "title": "Buchungen und Wartelisten",
+      "text": "Mitglieder buchen und stornieren nach den Regeln der Schule. Ist ein Termin voll, lädt die Warteliste die Nächsten ein."
+    },
+    "family": {
+      "title": "Familienkonten",
+      "text": "Erziehungsberechtigte buchen für ihre Kinder; Jugendliche können ein eigenes Konto haben."
+    },
+    "passes": {
+      "title": "Karten und Belege",
+      "text": "Vorab bezahlte Karten werden mit den stattfindenden Terminen eingelöst, und jeder Verkauf erzeugt einen nummerierten Beleg als PDF."
+    },
+    "teaching": {
+      "title": "Unterricht",
+      "text": "Lehrkräfte sehen ihre Termine und Teilnehmenden, erfassen die Anwesenheit und tragen Gäste und Probestunden ein."
+    },
+    "office": {
+      "title": "Büro und Verwaltung",
+      "text": "Kursangebot, Stundenplan, Personen, Mitteilungen, Statistik, CSV-Import, Dubletten, Datenauskunft und Anonymisierung."
+    },
+    "devices": {
+      "title": "Kalender und Smartphone",
+      "text": "Kalender-Abos für jede Kalender-App; als App installierbar, mit Push-Benachrichtigungen."
+    }
+  },
+  "how": {
+    "title": "So funktioniert die Demo",
+    "intro": "GitHub Pages kann nur statische Dateien ausliefern, also bringt die Demo ihr eigenes Backend mit.",
+    "wasm": "Das komplette Go-Backend ist nach WebAssembly kompiliert und läuft in deinem Browser in einem Web Worker. Die Oberfläche spricht mit ihm über dieselbe HTTP-API wie mit einem echten Server.",
+    "data": "Statt PostgreSQL nutzt sie eine In-Memory-Datenbank mit erfundenen Daten, deren Termine sich nach deinem ersten Besuch richten.",
+    "saved": "Deine Änderungen bleiben in diesem Browser, bis du im Kopfbereich „Demo zurücksetzen“ wählst. Dabei rücken auch die Beispieltermine auf heute.",
+    "mail": "Es werden keine E-Mails verschickt: Das Demo-Postfach im Kopfbereich zeigt jede Mail, die die App senden würde, samt Links.",
+    "tab": "Die Demo läuft immer nur in einem Browser-Tab, damit deine Änderungen an einer Stelle gespeichert werden.",
+    "receipts": "Der erste Beleg, den du öffnest, lädt den PDF-Renderer (etwa 9 MB).",
+    "same": "Alles andere, von Prüfungen und Berechtigungen über Buchungsregeln bis zu den Belegen, ist derselbe Code wie in einer echten Installation."
+  },
+  "try": {
+    "title": "Zum Ausprobieren",
+    "intro": "Sieh dich als Gast um oder melde dich an: Die Anmeldeseite zeigt ein Demo-Konto pro Rolle, alle mit dem Passwort",
+    "visitor": {
+      "title": "Gast",
+      "text": "Stöbere im Terminplan und in den Kursen und registriere dich dann; die Bestätigungsmail landet im Demo-Postfach."
+    },
+    "member": {
+      "title": "Mitglied",
+      "text": "Buche einen Termin für eines der Kinder, setz dich auf die Warteliste eines vollen Workshops und abonniere deine Termine im Kalender."
+    },
+    "instructor": {
+      "title": "Lehrkraft",
+      "text": "Öffne „Unterricht“, erfasse die Anwesenheit eines vergangenen Termins und trage einen Gast in einen Workshop ein."
+    },
+    "office": {
+      "title": "Büro",
+      "text": "Verkaufe auf der Seite einer Person eine Karte, schreib eine Mitteilung und sieh dir die Statistik an."
+    },
+    "admin": {
+      "title": "Administration",
+      "text": "Ändere Namen und Farben der Schule in den Einstellungen oder melde dich unter „Konten“ als ein anderes Konto an."
+    }
+  },
+  "more": {
+    "title": "Mehr erfahren",
+    "demoDocs": "Wie die Demo gebaut ist (Englisch)",
+    "operations": "Betrieb für eine Schule (Englisch)",
+    "source": "Quellcode und Dokumentation"
+  }
+}
