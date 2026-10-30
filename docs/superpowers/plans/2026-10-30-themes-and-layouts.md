@@ -42,6 +42,9 @@ Tailwind v4, shadcn/ui, TanStack Router/Query, react-i18next, Vitest, Playwright
 - **Conventional Commits** in English, ending with
   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - **Lint locally** with golangci-lint v2.14.0 (CI's version): `PATH=$HOME/go/bin:$PATH just lint`.
+- **Parallel sessions:** several sessions run in sibling worktrees at once, and Playwright reuses a
+  server already on its port. Run e2e on a port of your own worktree:
+  `E2E_PORT=$((4200 + $(pwd | cksum | cut -d' ' -f1) % 700)) just e2e`.
 
 ## Review focus
 
