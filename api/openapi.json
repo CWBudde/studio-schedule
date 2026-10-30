@@ -1304,17 +1304,45 @@
         ],
         "type": "object"
       },
+      "BrandingBackgroundInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "contentType": {
+            "description": "The image type.",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp"
+            ],
+            "type": "string"
+          },
+          "data": {
+            "contentEncoding": "base64",
+            "description": "The image, base64 encoded; at most 1 MiB.",
+            "maxLength": 1398104,
+            "type": "string"
+          }
+        },
+        "required": [
+          "contentType",
+          "data"
+        ],
+        "type": "object"
+      },
       "BrandingSettings": {
         "additionalProperties": false,
         "properties": {
           "accentColor": {
-            "description": "The accent color, #rrggbb; empty or absent: the app's own.",
-            "pattern": "^(#[0-9a-fA-F]{6})?$",
+            "description": "The accent color, #rrggbb; absent: the app's own.",
             "type": "string"
           },
           "accentColorDark": {
             "description": "The dark theme's variant of the accent color; absent without one.",
             "type": "string"
+          },
+          "hasBackground": {
+            "description": "Whether the school has a background image (updateBrandingBackground).",
+            "type": "boolean"
           },
           "hasLogo": {
             "description": "Whether the school has a logo (set with the receipt settings).",
@@ -1324,11 +1352,21 @@
             "description": "The WCAG contrast the accent color needs against the text on it and the page: 4.5.",
             "format": "double",
             "type": "number"
+          },
+          "theme": {
+            "description": "The school's theme: its colors, fonts and layouts.",
+            "enum": [
+              "programme",
+              "werkstatt"
+            ],
+            "type": "string"
           }
         },
         "required": [
+          "theme",
           "minContrast",
-          "hasLogo"
+          "hasLogo",
+          "hasBackground"
         ],
         "type": "object"
       },
@@ -1338,6 +1376,14 @@
           "accentColor": {
             "description": "The accent color, #rrggbb; empty or absent: the app's own.",
             "pattern": "^(#[0-9a-fA-F]{6})?$",
+            "type": "string"
+          },
+          "theme": {
+            "description": "The school's theme: its colors, fonts and layouts; absent: the current one stays.",
+            "enum": [
+              "programme",
+              "werkstatt"
+            ],
             "type": "string"
           }
         },
@@ -6947,6 +6993,10 @@
             ],
             "type": "string"
           },
+          "hasBackground": {
+            "description": "Whether getSchoolBackground has a background image.",
+            "type": "boolean"
+          },
           "hasLogo": {
             "description": "Whether getSchoolLogo has a logo.",
             "type": "boolean"
@@ -6959,6 +7009,14 @@
             "description": "Display name of the school.",
             "type": "string"
           },
+          "theme": {
+            "description": "The school's theme: its colors, fonts and layouts.",
+            "enum": [
+              "programme",
+              "werkstatt"
+            ],
+            "type": "string"
+          },
           "timezone": {
             "description": "IANA time zone of the school, e.g. Europe/Berlin.",
             "type": "string"
@@ -6966,7 +7024,9 @@
         },
         "required": [
           "schoolName",
+          "theme",
           "hasLogo",
+          "hasBackground",
           "timezone",
           "defaultLocale",
           "currency"
@@ -11829,7 +11889,7 @@
     },
     "/api/v1/admin/settings/branding": {
       "get": {
-        "description": "Returns the accent color, its dark-mode variant and whether a logo exists.",
+        "description": "Returns the accent color, its dark-mode variant, the theme and whether a logo and a background exist.",
         "operationId": "getBrandingSettings",
         "responses": {
           "200": {
@@ -11860,7 +11920,7 @@
         "x-access": "office"
       },
       "put": {
-        "description": "Sets the accent color, or the app's own without one. It must reach a WCAG contrast of 4.5:1 against the text on it and the page; else a 422 on `body.accentColor`. The dark mode shows a variant derived from it. The logo is the receipts' logo (updateReceiptLogo).",
+        "description": "Sets the accent color, or the app's own without one. It must reach a WCAG contrast of 4.5:1 against the text on it and the page; else a 422 on `body.accentColor`. The dark mode shows a variant derived from it. A `theme` changes the school's theme; without one it stays. The logo is the receipts' logo (updateReceiptLogo), the background is updateBrandingBackground's.",
         "operationId": "updateBrandingSettings",
         "requestBody": {
           "content": {
@@ -11895,6 +11955,66 @@
           }
         },
         "summary": "Update the branding",
+        "tags": [
+          "settings"
+        ],
+        "x-access": "admin"
+      }
+    },
+    "/api/v1/admin/settings/branding/background": {
+      "delete": {
+        "description": "Removes the school's background image; themes that show one fall back to their own.",
+        "operationId": "deleteBrandingBackground",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove the background image",
+        "tags": [
+          "settings"
+        ],
+        "x-access": "admin"
+      },
+      "put": {
+        "description": "Sets the school's background image, which themes that show one put behind the app: a JPEG, PNG or WebP image of at most 1 MiB, base64 encoded. Another type is a 422 on `body.contentType`; an empty or larger image, or data that does not match the type, one on `body.data`.",
+        "operationId": "updateBrandingBackground",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrandingBackgroundInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Set the background image",
         "tags": [
           "settings"
         ],
@@ -16095,6 +16215,91 @@
         "x-access": "public"
       }
     },
+    "/api/v1/settings/background": {
+      "get": {
+        "description": "Returns the school's background image, which themes that show one put behind the app; a 404 without one. Cacheable: with the `ETag` in `If-None-Match` an unchanged image is a 304.",
+        "operationId": "getSchoolBackground",
+        "parameters": [
+          {
+            "description": "The ETag of the image the client has; unchanged: a 304.",
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "description": "The ETag of the image the client has; unchanged: a 304.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The background image.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The image did not change since the ETag in If-None-Match."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "School background",
+        "tags": [
+          "settings"
+        ],
+        "x-access": "public"
+      }
+    },
     "/api/v1/settings/logo": {
       "get": {
         "description": "Returns the school's logo (the one printed on receipts) for the app's header; a 404 without one. Cacheable: with the `ETag` in `If-None-Match` an unchanged logo is a 304.",
@@ -16175,7 +16380,7 @@
     },
     "/api/v1/settings/public": {
       "get": {
-        "description": "Returns the school settings that are visible without signing in: the name, legal notice and branding, the time zone, language and currency.",
+        "description": "Returns the school settings that are visible without signing in: the name, legal notice and branding (accent, theme, whether a logo and a background exist), the time zone, language and currency.",
         "operationId": "getPublicSettings",
         "responses": {
           "200": {

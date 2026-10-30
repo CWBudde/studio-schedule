@@ -93,6 +93,8 @@ func TestPublicSettings(t *testing.T) {
 		"currency":      demo.Currency,
 		"legalNotice":   demo.LegalNotice,
 		"hasLogo":       false,
+		"theme":         "programme",
+		"hasBackground": false,
 	}
 
 	if len(got) != len(want) {

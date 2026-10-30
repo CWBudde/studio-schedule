@@ -63,7 +63,27 @@ Tailwind v4, shadcn/ui, TanStack Router/Query, react-i18next, Vitest, Playwright
 
 ## Checklist (one ccbatch session each)
 
-- [ ] 1.1 `backend` Theme setting, background image, demo school seed variant, `seed --school`, ADR 0018 — see "Task 1.1" below.
+- [x] 1.1 `backend` Theme setting, background image, demo school seed variant, `seed --school`, ADR 0018 — see "Task 1.1" below.
+  - Done: the interfaces as listed; 15 new Go test functions plus the storetest cases
+    `Settings/Theme` and `Settings/Background` (memory and PostgreSQL), and the new fields and the
+    three operations in `internal/app` (`TestSettingsCards`, `TestSchoolBackground`, an exactly 1 MiB
+    upload included). `just test`, `just lint`, `just test-pg`, `just check-generated`, `just check-sqlc`,
+    `just check-wasm-deps` and `just web-check` (1028 web unit tests) green.
+  - Deviations: `settings.theme` is nullable (NULL = the zero theme) instead of `NOT NULL DEFAULT ''`,
+    following 00001's "optional values are NULL"; the background constraints are named like the logo's
+    (`settings_background_type`, `settings_background_digest`). The upload is a JSON body
+    `{contentType, data}` with base64 data, because that is what `updateReceiptLogo` really takes (the
+    plan's "raw body" was wrong about it); it sets `MaxBodyBytes` (~1.4 MiB), since Huma's 1 MiB default
+    refuses a base64 1 MiB image with a 413. `Background.Validate` also checks the magic bytes, like the
+    logo's.
+  - For 2.2: `updateBrandingSettings` without `theme` keeps the stored theme (`service.Branding.Theme`
+    is a pointer); `""` is a 422. `getBrandingSettings` always answers `theme` (`OrDefault`).
+  - For 2.3: `seed.School("")` is invalid (the caller maps an empty choice to programme); `cmd/wasm`
+    still seeds programme. The werkstatt school keeps the programme school's legal notice, receipt
+    issuer ("Studio Demo Dance School") and English receipts, because only the listed settings change;
+    the image adds ~130 KB to `app.wasm`. `docs/demo-mode.md` already said `seed` uses `LoadDemo`
+    (it uses `LoadDemoAt`); left for 2.3.
+  - `misspell` (US) flags "programme": added to its `ignore-rules` in `.golangci.yml`.
 
 - [ ] 2.1 `slots` Theme registry, typed slots, ThemeProvider, theme cache script, Programme moved behind the slots without visual change, `useLessonQuickAction` — see "Task 2.1" below.
 

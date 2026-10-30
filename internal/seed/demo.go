@@ -58,6 +58,34 @@ func DemoAt(anchor domain.Date) Dataset {
 	return d
 }
 
+// DemoSchoolAt is DemoAt for the demo school school: the same data, with
+// the school's settings and background (School). An unknown school fails
+// with domain.ErrValidation.
+func DemoSchoolAt(anchor domain.Date, school School) (Dataset, error) {
+	settings, background, err := schoolData(school)
+	if err != nil {
+		return Dataset{}, err
+	}
+
+	if !background.IsZero() {
+		if err := background.Validate(); err != nil {
+			return Dataset{}, fmt.Errorf("seed: background of %s: %w", school, err)
+		}
+	}
+
+	// Built with the programme school's settings, so everything but the
+	// settings and the background stays the same, the receipts' language
+	// and lines included.
+	d, err := demoAt(anchor)
+	if err != nil {
+		return Dataset{}, err
+	}
+
+	d.Settings, d.Background = settings, background
+
+	return d, nil
+}
+
 func demoAt(anchor domain.Date) (Dataset, error) {
 	settings := DemoSettings()
 

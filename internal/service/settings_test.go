@@ -72,8 +72,8 @@ func TestSettingsPublic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got.Settings != want || !got.Logo.IsZero() {
-		t.Fatalf("Public() = %+v, want %+v without a logo", got, want)
+	if got.Settings != want || !got.Logo.IsZero() || !got.Background.IsZero() {
+		t.Fatalf("Public() = %+v, want %+v without a logo and a background", got, want)
 	}
 
 	logo := domain.Logo{ContentType: domain.LogoPNG, Data: []byte("\x89PNG\r\n\x1a\nlogo")}
@@ -88,6 +88,119 @@ func TestSettingsPublic(t *testing.T) {
 	if got, err = svc.Public(t.Context()); err != nil ||
 		got.Logo != (domain.LogoInfo{ContentType: domain.LogoPNG, Digest: logo.Digest()}) {
 		t.Fatalf("Public() with a logo = %+v, %v", got, err)
+	}
+
+	bg := domain.Background{ContentType: domain.BackgroundJPEG, Data: []byte("\xff\xd8\xffbackground")}
+	if err := svc.PutBackground(t.Context(), bg); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err = svc.Public(t.Context()); err != nil ||
+		got.Background != (domain.BackgroundInfo{ContentType: domain.BackgroundJPEG, Digest: bg.Digest()}) {
+		t.Fatalf("Public() with a background = %+v, %v", got, err)
+	}
+}
+
+func TestSettingsBackground(t *testing.T) {
+	t.Parallel()
+
+	_, svc := newSettings(t)
+	asked := ""
+	hasNone := func(digest string) bool { asked = digest; return false }
+
+	if b, err := svc.Background(t.Context(), hasNone); err != nil || b.Digest != "" || !b.Background.IsZero() {
+		t.Fatalf("without a background: %+v, %v", b, err)
+	}
+
+	bg := domain.Background{ContentType: domain.BackgroundPNG, Data: []byte("\x89PNG\r\n\x1a\nbackground")}
+	if err := svc.PutBackground(t.Context(), bg); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := svc.Background(t.Context(), hasNone)
+	if err != nil || b.Digest != bg.Digest() || asked != bg.Digest() ||
+		b.Background.ContentType != domain.BackgroundPNG || string(b.Background.Data) != string(bg.Data) {
+		t.Fatalf("a new client: %+v, %v (asked about %q)", b, err, asked)
+	}
+
+	// A client with this background gets its digest only.
+	b, err = svc.Background(t.Context(), func(digest string) bool { return digest == bg.Digest() })
+	if err != nil || b.Digest != bg.Digest() || !b.Background.IsZero() {
+		t.Fatalf("a client with the background: %+v, %v", b, err)
+	}
+
+	// The branding card shows it.
+	if v, err := svc.Branding(t.Context()); err != nil || v.Background.Digest != bg.Digest() {
+		t.Fatalf("branding with a background: %+v, %v", v.Background, err)
+	}
+
+	// Invalid images are refused, and the stored one stays.
+	for _, c := range []struct {
+		name  string
+		bg    domain.Background
+		field string
+	}{
+		{"gif", domain.Background{ContentType: "image/gif", Data: []byte("GIF89a")}, "contentType"},
+		{"not a jpeg", domain.Background{ContentType: domain.BackgroundJPEG, Data: []byte("not a jpeg")}, "data"},
+		{"too large", domain.Background{
+			ContentType: domain.BackgroundJPEG,
+			Data:        append([]byte("\xff\xd8\xff"), make([]byte, domain.MaxBackgroundBytes-2)...),
+		}, "data"},
+	} {
+		wantField(t, svc.PutBackground(t.Context(), c.bg), c.field)
+	}
+
+	if b, err = svc.Background(t.Context(), hasNone); err != nil || b.Digest != bg.Digest() {
+		t.Fatalf("after refused images: %+v, %v", b, err)
+	}
+
+	// The zero Background removes it.
+	if err := svc.PutBackground(t.Context(), domain.Background{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if b, err = svc.Background(t.Context(), hasNone); err != nil || b.Digest != "" || !b.Background.IsZero() {
+		t.Fatalf("after removing: %+v, %v", b, err)
+	}
+
+	if p, err := svc.Public(t.Context()); err != nil || !p.Background.IsZero() {
+		t.Fatalf("public after removing: %+v, %v", p.Background, err)
+	}
+}
+
+func TestSettingsTheme(t *testing.T) {
+	t.Parallel()
+
+	_, svc := newSettings(t)
+	werkstatt := domain.ThemeWerkstatt
+
+	v, err := svc.SetBranding(t.Context(), service.Branding{AccentColor: "#1d4ed8", Theme: &werkstatt})
+	if err != nil || v.Theme != domain.ThemeWerkstatt {
+		t.Fatalf("set the theme: %q, %v", v.Theme, err)
+	}
+
+	if p, err := svc.Public(t.Context()); err != nil || p.Theme != domain.ThemeWerkstatt {
+		t.Fatalf("public theme %q, %v", p.Theme, err)
+	}
+
+	// Without a theme the stored one stays.
+	if v, err = svc.SetBranding(t.Context(), service.Branding{}); err != nil || v.Theme != domain.ThemeWerkstatt ||
+		v.AccentColor != "" {
+		t.Fatalf("without a theme: %q, %q, %v", v.Theme, v.AccentColor, err)
+	}
+
+	neon := domain.Theme("neon")
+	_, err = svc.SetBranding(t.Context(), service.Branding{Theme: &neon})
+	wantField(t, err, "theme")
+
+	if v, err = svc.Branding(t.Context()); err != nil || v.Theme != domain.ThemeWerkstatt {
+		t.Fatalf("after an unknown theme: %q, %v", v.Theme, err)
+	}
+
+	programme := domain.ThemeProgramme
+	if v, err = svc.SetBranding(t.Context(), service.Branding{Theme: &programme}); err != nil ||
+		v.Theme != domain.ThemeProgramme {
+		t.Fatalf("back to programme: %q, %v", v.Theme, err)
 	}
 }
 
@@ -267,7 +380,7 @@ func TestSettingsSetSchoolAndBranding(t *testing.T) {
 	_, err = svc.SetSchool(t.Context(), service.SchoolProfile{Name: " "})
 	wantField(t, err, "schoolName")
 
-	if v, err = svc.SetBranding(t.Context(), "#1D4ED8"); err != nil {
+	if v, err = svc.SetBranding(t.Context(), service.Branding{AccentColor: "#1D4ED8"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -277,11 +390,11 @@ func TestSettingsSetSchoolAndBranding(t *testing.T) {
 
 	// Too light to carry the light text on it.
 	for _, bad := range []string{"#ff0000", "#808080", "blue", "#fff"} {
-		_, err = svc.SetBranding(t.Context(), bad)
+		_, err = svc.SetBranding(t.Context(), service.Branding{AccentColor: bad})
 		wantField(t, err, "accentColor")
 	}
 
-	if v, err = svc.SetBranding(t.Context(), ""); err != nil || v.AccentColor != "" || v.AccentDark() != "" {
+	if v, err = svc.SetBranding(t.Context(), service.Branding{}); err != nil || v.AccentColor != "" || v.AccentDark() != "" {
 		t.Fatalf("removing the accent: %q, %v", v.AccentColor, err)
 	}
 
@@ -497,7 +610,7 @@ func TestSettingsWithoutSchool(t *testing.T) {
 		t.Fatalf("School: want ErrNoSchool, got %v", err)
 	}
 
-	if _, err := svc.SetBranding(t.Context(), ""); !errors.Is(err, service.ErrNoSchool) {
+	if _, err := svc.SetBranding(t.Context(), service.Branding{}); !errors.Is(err, service.ErrNoSchool) {
 		t.Fatalf("SetBranding: want ErrNoSchool, got %v", err)
 	}
 }

@@ -16,7 +16,7 @@ SELECT
     school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time,
     release_weeks_ahead, booking_cutoff, cancellation_cutoff, default_visible_days, legal_notice,
     waitlist_invite_expiry, redemption_mode, issuer_name, issuer_address, issuer_tax_id, issuer_email,
-    issuer_phone, tax_mode, tax_note, receipt_footer, accent_color
+    issuer_phone, tax_mode, tax_note, receipt_footer, accent_color, theme
 FROM settings
 `
 
@@ -44,9 +44,11 @@ type GetSettingsRow struct {
 	TaxNote              pgtype.Text
 	ReceiptFooter        pgtype.Text
 	AccentColor          pgtype.Text
+	Theme                pgtype.Text
 }
 
-// Everything but the logo, which only receipts read (GetSettingsLogo).
+// Everything but the logo, which only receipts read (GetSettingsLogo), and
+// the background (GetSettingsBackground).
 func (q *Queries) GetSettings(ctx context.Context) (GetSettingsRow, error) {
 	row := q.db.QueryRow(ctx, getSettings)
 	var i GetSettingsRow
@@ -74,7 +76,41 @@ func (q *Queries) GetSettings(ctx context.Context) (GetSettingsRow, error) {
 		&i.TaxNote,
 		&i.ReceiptFooter,
 		&i.AccentColor,
+		&i.Theme,
 	)
+	return i, err
+}
+
+const getSettingsBackground = `-- name: GetSettingsBackground :one
+SELECT background, background_type FROM settings
+`
+
+type GetSettingsBackgroundRow struct {
+	Background     []byte
+	BackgroundType pgtype.Text
+}
+
+func (q *Queries) GetSettingsBackground(ctx context.Context) (GetSettingsBackgroundRow, error) {
+	row := q.db.QueryRow(ctx, getSettingsBackground)
+	var i GetSettingsBackgroundRow
+	err := row.Scan(&i.Background, &i.BackgroundType)
+	return i, err
+}
+
+const getSettingsBackgroundInfo = `-- name: GetSettingsBackgroundInfo :one
+SELECT background_type, background_digest FROM settings
+`
+
+type GetSettingsBackgroundInfoRow struct {
+	BackgroundType   pgtype.Text
+	BackgroundDigest pgtype.Text
+}
+
+// The background's type and digest, without reading the background.
+func (q *Queries) GetSettingsBackgroundInfo(ctx context.Context) (GetSettingsBackgroundInfoRow, error) {
+	row := q.db.QueryRow(ctx, getSettingsBackgroundInfo)
+	var i GetSettingsBackgroundInfoRow
+	err := row.Scan(&i.BackgroundType, &i.BackgroundDigest)
 	return i, err
 }
 
@@ -116,9 +152,9 @@ INSERT INTO settings (
     school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time,
     release_weeks_ahead, booking_cutoff, cancellation_cutoff, default_visible_days, legal_notice,
     waitlist_invite_expiry, redemption_mode, issuer_name, issuer_address, issuer_tax_id, issuer_email,
-    issuer_phone, tax_mode, tax_note, receipt_footer, accent_color
+    issuer_phone, tax_mode, tax_note, receipt_footer, accent_color, theme
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
 )
 ON CONFLICT (id) DO UPDATE SET
     school_name = excluded.school_name,
@@ -143,7 +179,8 @@ ON CONFLICT (id) DO UPDATE SET
     tax_mode = excluded.tax_mode,
     tax_note = excluded.tax_note,
     receipt_footer = excluded.receipt_footer,
-    accent_color = excluded.accent_color
+    accent_color = excluded.accent_color,
+    theme = excluded.theme
 `
 
 type PutSettingsParams struct {
@@ -170,6 +207,7 @@ type PutSettingsParams struct {
 	TaxNote              pgtype.Text
 	ReceiptFooter        pgtype.Text
 	AccentColor          pgtype.Text
+	Theme                pgtype.Text
 }
 
 func (q *Queries) PutSettings(ctx context.Context, arg PutSettingsParams) error {
@@ -197,8 +235,30 @@ func (q *Queries) PutSettings(ctx context.Context, arg PutSettingsParams) error 
 		arg.TaxNote,
 		arg.ReceiptFooter,
 		arg.AccentColor,
+		arg.Theme,
 	)
 	return err
+}
+
+const putSettingsBackground = `-- name: PutSettingsBackground :execrows
+UPDATE settings SET
+    background = $1,
+    background_type = $2,
+    background_digest = $3
+`
+
+type PutSettingsBackgroundParams struct {
+	Background       []byte
+	BackgroundType   pgtype.Text
+	BackgroundDigest pgtype.Text
+}
+
+func (q *Queries) PutSettingsBackground(ctx context.Context, arg PutSettingsBackgroundParams) (int64, error) {
+	result, err := q.db.Exec(ctx, putSettingsBackground, arg.Background, arg.BackgroundType, arg.BackgroundDigest)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const putSettingsLogo = `-- name: PutSettingsLogo :execrows

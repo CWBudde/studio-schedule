@@ -21,8 +21,14 @@ const (
 )
 
 // LogoCacheControl lets browsers and proxies keep the logo, but ask with
-// its ETag before every use: a new logo shows at once.
+// its ETag before every use: a new logo shows at once. The background is
+// cached the same way.
 const LogoCacheControl = "public, no-cache"
+
+// backgroundMaxBody is the largest request of updateBrandingBackground:
+// the image base64 encoded (BrandingBackgroundInput's maxLength), plus the
+// rest of the JSON. Huma's default of 1 MiB would refuse a large image.
+const backgroundMaxBody = (domain.MaxBackgroundBytes+2)/3*4 + 64<<10
 
 // registerSettings registers the school settings (ADR 0013): what visitors
 // see (the public settings and the logo) and the settings page's cards,
@@ -37,7 +43,8 @@ func registerSettings(api huma.API, h *handlers) {
 		Path:        BasePath + "/settings/public",
 		Summary:     "Public school settings",
 		Description: "Returns the school settings that are visible without signing in: the name, legal notice " +
-			"and branding, the time zone, language and currency.",
+			"and branding (accent, theme, whether a logo and a background exist), the time zone, language and " +
+			"currency.",
 		Tags: tags,
 	}, h.getPublicSettings)
 
@@ -61,6 +68,28 @@ func registerSettings(api huma.API, h *handlers) {
 			"default": problem(api, reflect.TypeFor[ErrorModel](), "Error"),
 		},
 	}, h.getSchoolLogo)
+
+	register(api, AccessPublic, huma.Operation{
+		OperationID: "getSchoolBackground",
+		Method:      http.MethodGet,
+		Path:        BasePath + "/settings/background",
+		Summary:     "School background",
+		Description: "Returns the school's background image, which themes that show one put behind the app; a " +
+			"404 without one. Cacheable: with the `ETag` in `If-None-Match` an unchanged image is a 304.",
+		Tags: tags,
+		Responses: map[string]*huma.Response{
+			"200": {
+				Description: "The background image.",
+				Content: map[string]*huma.MediaType{
+					domain.BackgroundJPEG: {Schema: &huma.Schema{Type: "string", Format: "binary"}},
+					domain.BackgroundPNG:  {Schema: &huma.Schema{Type: "string", Format: "binary"}},
+					domain.BackgroundWebP: {Schema: &huma.Schema{Type: "string", Format: "binary"}},
+				},
+			},
+			"304":     {Description: "The image did not change since the ETag in If-None-Match."},
+			"default": problem(api, reflect.TypeFor[ErrorModel](), "Error"),
+		},
+	}, h.getSchoolBackground)
 
 	register(api, AccessOffice, huma.Operation{
 		OperationID: "getSchoolSettings",
@@ -86,8 +115,9 @@ func registerSettings(api huma.API, h *handlers) {
 		Method:      http.MethodGet,
 		Path:        BasePath + "/admin/settings/branding",
 		Summary:     "Branding",
-		Description: "Returns the accent color, its dark-mode variant and whether a logo exists.",
-		Tags:        tags,
+		Description: "Returns the accent color, its dark-mode variant, the theme and whether a logo and a " +
+			"background exist.",
+		Tags: tags,
 	}, h.getBrandingSettings)
 
 	register(api, AccessAdmin, huma.Operation{
@@ -97,9 +127,34 @@ func registerSettings(api huma.API, h *handlers) {
 		Summary:     "Update the branding",
 		Description: "Sets the accent color, or the app's own without one. It must reach a WCAG contrast of " +
 			"4.5:1 against the text on it and the page; else a 422 on `body.accentColor`. The dark mode shows " +
-			"a variant derived from it. The logo is the receipts' logo (updateReceiptLogo).",
+			"a variant derived from it. A `theme` changes the school's theme; without one it stays. The logo " +
+			"is the receipts' logo (updateReceiptLogo), the background is updateBrandingBackground's.",
 		Tags: tags,
 	}, h.updateBrandingSettings)
+
+	register(api, AccessAdmin, huma.Operation{
+		OperationID: "updateBrandingBackground",
+		Method:      http.MethodPut,
+		Path:        BasePath + "/admin/settings/branding/background",
+		Summary:     "Set the background image",
+		Description: "Sets the school's background image, which themes that show one put behind the app: a " +
+			"JPEG, PNG or WebP image of at most 1 MiB, base64 encoded. Another type is a 422 on " +
+			"`body.contentType`; an empty or larger image, or data that does not match the type, one on " +
+			"`body.data`.",
+		Tags:          tags,
+		DefaultStatus: http.StatusNoContent,
+		MaxBodyBytes:  backgroundMaxBody,
+	}, h.updateBrandingBackground)
+
+	register(api, AccessAdmin, huma.Operation{
+		OperationID:   "deleteBrandingBackground",
+		Method:        http.MethodDelete,
+		Path:          BasePath + "/admin/settings/branding/background",
+		Summary:       "Remove the background image",
+		Description:   "Removes the school's background image; themes that show one fall back to their own.",
+		Tags:          tags,
+		DefaultStatus: http.StatusNoContent,
+	}, h.deleteBrandingBackground)
 
 	register(api, AccessOffice, huma.Operation{
 		OperationID: "getRegionalSettings",
@@ -160,7 +215,9 @@ type PublicSettings struct {
 	LegalNotice     string `doc:"The legal notice (imprint) for the footer, plain text with line breaks; absent if none." json:"legalNotice,omitempty"`
 	AccentColor     string `doc:"The school's accent color (#rrggbb) for the light theme; absent: the app's own." json:"accentColor,omitempty"`
 	AccentColorDark string `doc:"Its variant for the dark theme; absent without an accent." json:"accentColorDark,omitempty"`
+	Theme           string `doc:"The school's theme: its colors, fonts and layouts." enum:"programme,werkstatt" json:"theme"`
 	HasLogo         bool   `doc:"Whether getSchoolLogo has a logo."                json:"hasLogo"`
+	HasBackground   bool   `doc:"Whether getSchoolBackground has a background image." json:"hasBackground"`
 	Timezone        string `doc:"IANA time zone of the school, e.g. Europe/Berlin." json:"timezone"`
 	DefaultLocale   string `doc:"The school's language for visitors who chose none: en or de." enum:"en,de" json:"defaultLocale"`
 	Currency        string `doc:"ISO 4217 code of every amount, e.g. EUR; amounts are in its minor units." json:"currency"`
@@ -182,7 +239,9 @@ func (h *handlers) getPublicSettings(ctx context.Context, _ *struct{}) (*PublicS
 		LegalNotice:     s.LegalNotice,
 		AccentColor:     s.AccentColor,
 		AccentColorDark: service.AccentDark(s.AccentColor),
+		Theme:           string(s.Theme.OrDefault()),
 		HasLogo:         !s.Logo.IsZero(),
+		HasBackground:   !s.Background.IsZero(),
 		Timezone:        s.Timezone,
 		DefaultLocale:   s.DefaultLocale,
 		Currency:        s.Currency,
@@ -194,8 +253,8 @@ type SchoolLogoInput struct {
 	IfNoneMatch string `doc:"The ETag of the logo the client has; unchanged: a 304." header:"If-None-Match"`
 }
 
-// SchoolLogoOutput is the response of getSchoolLogo: the logo, or nothing
-// with status 304.
+// SchoolLogoOutput is the response of getSchoolLogo and of
+// getSchoolBackground: the image, or nothing with status 304.
 type SchoolLogoOutput struct {
 	Status             int
 	ContentType        string `header:"Content-Type"`
@@ -234,8 +293,76 @@ func (h *handlers) getSchoolLogo(ctx context.Context, in *SchoolLogoInput) (*Sch
 	return out, nil
 }
 
-// logoETag is the strong ETag of the logo with digest.
+// logoETag is the strong ETag of the logo with digest, and of the
+// background.
 func logoETag(digest string) string { return `"` + digest + `"` }
+
+// SchoolBackgroundInput is the request of getSchoolBackground.
+type SchoolBackgroundInput struct {
+	IfNoneMatch string `doc:"The ETag of the image the client has; unchanged: a 304." header:"If-None-Match"`
+}
+
+func (h *handlers) getSchoolBackground(ctx context.Context, in *SchoolBackgroundInput) (*SchoolLogoOutput, error) {
+	// The ETag is the background's stored digest: an unchanged image is a
+	// 304 without reading it.
+	b, err := h.deps.Settings.Background(ctx, func(digest string) bool {
+		return etagMatches(in.IfNoneMatch, logoETag(digest))
+	})
+	if err != nil {
+		return nil, h.toHTTPError(ctx, err)
+	}
+
+	if b.Digest == "" {
+		return nil, huma.Error404NotFound("no background")
+	}
+
+	// Inline: the page shows the image (the API's answers default to an
+	// attachment).
+	out := &SchoolLogoOutput{ETag: logoETag(b.Digest), CacheControl: LogoCacheControl, ContentDisposition: "inline"}
+
+	if b.Background.IsZero() {
+		out.Status = http.StatusNotModified
+
+		return out, nil
+	}
+
+	out.Status, out.ContentType, out.Body = http.StatusOK, b.Background.ContentType, b.Background.Data
+
+	return out, nil
+}
+
+// BrandingBackgroundInput is the request of updateBrandingBackground. The
+// maxLength is the base64 length of domain.MaxBackgroundBytes.
+type BrandingBackgroundInput struct {
+	Body struct {
+		ContentType string `doc:"The image type." enum:"image/jpeg,image/png,image/webp" json:"contentType"`
+		Data        []byte `doc:"The image, base64 encoded; at most 1 MiB." json:"data" maxLength:"1398104"`
+	}
+}
+
+func (h *handlers) updateBrandingBackground(ctx context.Context, in *BrandingBackgroundInput) (*struct{}, error) {
+	// The zero Background would remove it: that is deleteBrandingBackground.
+	if len(in.Body.Data) == 0 {
+		return nil, huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
+			Message: "the background is empty", Location: "body.data",
+		})
+	}
+
+	err := h.deps.Settings.PutBackground(ctx, domain.Background{ContentType: in.Body.ContentType, Data: in.Body.Data})
+	if err != nil {
+		return nil, h.toHTTPError(ctx, err)
+	}
+
+	return &struct{}{}, nil
+}
+
+func (h *handlers) deleteBrandingBackground(ctx context.Context, _ *struct{}) (*struct{}, error) {
+	if err := h.deps.Settings.PutBackground(ctx, domain.Background{}); err != nil {
+		return nil, h.toHTTPError(ctx, err)
+	}
+
+	return &struct{}{}, nil
+}
 
 // SchoolSettings is the request and response body of the school profile.
 type SchoolSettings struct {
@@ -277,15 +404,19 @@ func (h *handlers) schoolSettingsOutput(ctx context.Context) func(service.Settin
 // BrandingSettingsData is the editable part of the branding.
 type BrandingSettingsData struct {
 	AccentColor string `doc:"The accent color, #rrggbb; empty or absent: the app's own." json:"accentColor,omitempty" pattern:"^(#[0-9a-fA-F]{6})?$" required:"false"`
+	Theme       string `doc:"The school's theme: its colors, fonts and layouts; absent: the current one stays." enum:"programme,werkstatt" json:"theme,omitempty" required:"false"`
 }
 
-// BrandingSettings is the response body of the branding.
+// BrandingSettings is the response body of the branding. It repeats the
+// editable fields rather than embedding BrandingSettingsData: its theme is
+// always set.
 type BrandingSettings struct {
-	BrandingSettingsData
-
+	AccentColor     string  `doc:"The accent color, #rrggbb; absent: the app's own." json:"accentColor,omitempty"`
 	AccentColorDark string  `doc:"The dark theme's variant of the accent color; absent without one." json:"accentColorDark,omitempty"`
+	Theme           string  `doc:"The school's theme: its colors, fonts and layouts." enum:"programme,werkstatt" json:"theme"`
 	MinContrast     float64 `doc:"The WCAG contrast the accent color needs against the text on it and the page: 4.5." json:"minContrast"`
 	HasLogo         bool    `doc:"Whether the school has a logo (set with the receipt settings)." json:"hasLogo"`
+	HasBackground   bool    `doc:"Whether the school has a background image (updateBrandingBackground)." json:"hasBackground"`
 }
 
 // BrandingSettingsInput is the request of updateBrandingSettings.
@@ -305,7 +436,15 @@ func (h *handlers) getBrandingSettings(ctx context.Context, _ *struct{}) (*Brand
 func (h *handlers) updateBrandingSettings(
 	ctx context.Context, in *BrandingSettingsInput,
 ) (*BrandingSettingsOutput, error) {
-	return h.brandingSettingsOutput(ctx)(h.deps.Settings.SetBranding(ctx, in.Body.AccentColor))
+	b := service.Branding{AccentColor: in.Body.AccentColor}
+
+	// The enum refuses an empty theme: "" is an absent one, which stays.
+	if in.Body.Theme != "" {
+		theme := domain.Theme(in.Body.Theme)
+		b.Theme = &theme
+	}
+
+	return h.brandingSettingsOutput(ctx)(h.deps.Settings.SetBranding(ctx, b))
 }
 
 // brandingSettingsOutput answers with the settings of the card, or maps err.
@@ -316,8 +455,8 @@ func (h *handlers) brandingSettingsOutput(ctx context.Context) func(service.Sett
 		}
 
 		return &BrandingSettingsOutput{Body: BrandingSettings{
-			BrandingSettingsData: BrandingSettingsData{AccentColor: v.AccentColor},
-			AccentColorDark:      v.AccentDark(), MinContrast: domain.MinAccentContrast, HasLogo: !v.Logo.IsZero(),
+			AccentColor: v.AccentColor, AccentColorDark: v.AccentDark(), Theme: string(v.Theme.OrDefault()),
+			MinContrast: domain.MinAccentContrast, HasLogo: !v.Logo.IsZero(), HasBackground: !v.Background.IsZero(),
 		}}, nil
 	}
 }

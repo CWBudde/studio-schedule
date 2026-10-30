@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -1651,5 +1652,236 @@ func checkReceipts(t *testing.T, anchor domain.Date, d seed.Dataset, loc *time.L
 
 	if cancellations != 1 {
 		t.Errorf("%v: %d cancellations, want 1", anchor, cancellations)
+	}
+}
+
+func TestSchoolValid(t *testing.T) {
+	t.Parallel()
+
+	for _, s := range []seed.School{seed.SchoolProgramme, seed.SchoolWerkstatt} {
+		if !s.Valid() {
+			t.Errorf("%q is not valid", s)
+		}
+	}
+
+	// The zero School is not a default: the caller names the school.
+	for _, s := range []seed.School{"", "x", "Programme", "werkstatt "} {
+		if s.Valid() {
+			t.Errorf("%q is valid", s)
+		}
+	}
+
+	if got := seed.Schools(); !slices.Equal(got, []seed.School{seed.SchoolProgramme, seed.SchoolWerkstatt}) {
+		t.Errorf("Schools() = %v, want programme first, then werkstatt", got)
+	}
+}
+
+// TestDemoSchoolSameData: the werkstatt school is the programme school with
+// other settings and a background; every other record is the same.
+func TestDemoSchoolSameData(t *testing.T) {
+	t.Parallel()
+
+	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
+		programme, err := seed.DemoSchoolAt(anchor, seed.SchoolProgramme)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !reflect.DeepEqual(programme, seed.DemoAt(anchor)) {
+			t.Fatalf("%v: the programme school differs from DemoAt", anchor)
+		}
+
+		if programme.Settings != seed.DemoSettings() || !programme.Background.IsZero() {
+			t.Fatalf("%v: programme settings %+v, background %d bytes; want DemoSettings, none",
+				anchor, programme.Settings, len(programme.Background.Data))
+		}
+
+		werkstatt, err := seed.DemoSchoolAt(anchor, seed.SchoolWerkstatt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if err := werkstatt.Settings.Validate(); err != nil {
+			t.Fatalf("werkstatt settings: %v", err)
+		}
+
+		if err := werkstatt.Background.Validate(); err != nil {
+			t.Fatalf("werkstatt background: %v", err)
+		}
+
+		werkstatt.Settings, werkstatt.Background = programme.Settings, programme.Background
+		if !reflect.DeepEqual(werkstatt, programme) {
+			t.Fatalf("%v: the werkstatt school differs from the programme school beyond its settings", anchor)
+		}
+	}
+}
+
+// TestLoadDemoWerkstatt loads the werkstatt school: its own name, theme,
+// accent, language and background, the programme school's records.
+func TestLoadDemoWerkstatt(t *testing.T) {
+	t.Parallel()
+
+	image, err := os.ReadFile("assets/werkstatt-background.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := seed.DemoSettings()
+	want.SchoolName = "Tanzhaus am Lindenhof"
+	want.Theme = domain.ThemeWerkstatt
+	want.AccentColor = "#9c215b"
+	want.DefaultLocale = "de"
+
+	st := memory.New()
+	if err := seed.LoadDemoSchoolAt(t.Context(), st, seed.FixedDemoAnchor, seed.SchoolWerkstatt); err != nil {
+		t.Fatal(err)
+	}
+
+	d := seed.Demo()
+
+	err = st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		got, err := tx.Settings().Get(ctx)
+		if err != nil {
+			return err
+		}
+
+		if got != want {
+			t.Errorf("settings = %+v\nwant %+v", got, want)
+		}
+
+		info, err := tx.Settings().BackgroundInfo(ctx)
+		if err != nil {
+			return err
+		}
+
+		if info.IsZero() || info.ContentType != domain.BackgroundJPEG {
+			t.Errorf("background info = %+v, want a JPEG", info)
+		}
+
+		bg, err := tx.Settings().Background(ctx)
+		if err != nil {
+			return err
+		}
+
+		if bg.ContentType != domain.BackgroundJPEG || !slices.Equal(bg.Data, image) {
+			t.Errorf("background: %s, %d bytes; want the embedded JPEG of %d bytes",
+				bg.ContentType, len(bg.Data), len(image))
+		}
+
+		if info.Digest != bg.Digest() {
+			t.Errorf("background digest %q, want %q", info.Digest, bg.Digest())
+		}
+
+		persons, err := tx.Persons().List(ctx)
+		if err != nil {
+			return err
+		}
+
+		sameSet(t, "persons", persons, d.Persons)
+
+		classes, err := tx.Classes().ListByTerm(ctx, d.Terms[0].ID)
+		if err != nil {
+			return err
+		}
+
+		sameSet(t, "classes", classes, d.Classes)
+
+		var rooms []domain.Room
+
+		for _, l := range d.Locations {
+			at, err := tx.Rooms().List(ctx, l.ID)
+			if err != nil {
+				return err
+			}
+
+			rooms = append(rooms, at...)
+		}
+
+		sameSet(t, "rooms", rooms, d.Rooms)
+
+		from, to := allTime()
+
+		lessons, err := tx.Lessons().ListRange(ctx, from, to)
+		if err != nil {
+			return err
+		}
+
+		sameSet(t, "lessons", lessons, d.Lessons)
+
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestLoadDemoProgrammeHasNoBackground: the programme school keeps the app's
+// own look, the zero theme, without a background.
+func TestLoadDemoProgrammeHasNoBackground(t *testing.T) {
+	t.Parallel()
+
+	st := memory.New()
+	if err := seed.LoadDemoSchoolAt(t.Context(), st, seed.FixedDemoAnchor, seed.SchoolProgramme); err != nil {
+		t.Fatal(err)
+	}
+
+	err := st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		got, err := tx.Settings().Get(ctx)
+		if err != nil {
+			return err
+		}
+
+		if got != seed.DemoSettings() || got.Theme != "" {
+			t.Errorf("settings = %+v, want DemoSettings with the zero theme", got)
+		}
+
+		info, err := tx.Settings().BackgroundInfo(ctx)
+		if err != nil {
+			return err
+		}
+
+		if !info.IsZero() {
+			t.Errorf("background info = %+v, want none", info)
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestLoadDemoUnknownSchool: an unknown school is an error, and nothing is
+// written.
+func TestLoadDemoUnknownSchool(t *testing.T) {
+	t.Parallel()
+
+	for _, school := range []seed.School{"", "x"} {
+		st := memory.New()
+
+		err := seed.LoadDemoSchoolAt(t.Context(), st, seed.FixedDemoAnchor, school)
+		if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "programme, werkstatt") {
+			t.Errorf("school %q: error = %v, want a validation error naming the schools", school, err)
+		}
+
+		if _, err := seed.DemoSchoolAt(seed.FixedDemoAnchor, school); !errors.Is(err, domain.ErrValidation) {
+			t.Errorf("DemoSchoolAt(%q): error = %v, want %v", school, err, domain.ErrValidation)
+		}
+
+		err = st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+			if _, err := tx.Settings().Get(ctx); !errors.Is(err, domain.ErrNotFound) {
+				t.Errorf("school %q: settings error = %v, want %v", school, err, domain.ErrNotFound)
+			}
+
+			persons, err := tx.Persons().List(ctx)
+			if len(persons) > 0 {
+				t.Errorf("school %q: %d persons written", school, len(persons))
+			}
+
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }

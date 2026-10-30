@@ -148,6 +148,18 @@ type SettingsRepo interface {
 	// it, the zero LogoInfo without one, or domain.ErrNotFound if no
 	// settings were stored.
 	LogoInfo(ctx context.Context) (domain.LogoInfo, error)
+	// Background returns the school's background image (ADR 0018), the
+	// zero Background if it has none, or domain.ErrNotFound if no settings
+	// were stored. It is apart from Get, like the logo.
+	Background(ctx context.Context) (domain.Background, error)
+	// PutBackground replaces the background; the zero Background removes
+	// it. It fails with domain.ErrNotFound if no settings were stored.
+	PutBackground(ctx context.Context, b domain.Background) error
+	// BackgroundInfo returns the content type and the digest of the
+	// background (domain.Background.Digest, kept when it is written)
+	// without reading it, the zero BackgroundInfo without one, or
+	// domain.ErrNotFound if no settings were stored.
+	BackgroundInfo(ctx context.Context) (domain.BackgroundInfo, error)
 	// Usage reports which data depends on the time zone and the currency
 	// (ADR 0013); it needs no stored settings.
 	Usage(ctx context.Context) (SettingsUsage, error)

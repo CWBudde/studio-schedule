@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,6 +24,7 @@ func newSeedCmd(env config.LookupFunc) *cobra.Command {
 	var (
 		db     databaseFlag
 		anchor string
+		school string
 	)
 
 	cmd := &cobra.Command{
@@ -35,11 +37,19 @@ func newSeedCmd(env config.LookupFunc) *cobra.Command {
 			"with the published password " + seed.DemoPassword + ", so never seed a public installation.\n\n" +
 			"The demo term and workshops lie around the anchor date: by default the fixed date " +
 			seed.FixedDemoAnchor.String() + " (the data of the tests), with --anchor today the current " +
-			"date in the demo school's time zone (like the web demo), or a date YYYY-MM-DD.",
+			"date in the demo school's time zone (like the web demo), or a date YYYY-MM-DD.\n\n" +
+			"--school picks the demo school: " + string(seed.SchoolProgramme) + " (the default, in the app's " +
+			"own look) or " + string(seed.SchoolWerkstatt) + " (the same data as a German school in the " +
+			"Werkstatt look, with a background image).",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// Checked before connecting: a typo never waits for the database.
 			date, err := demoAnchor(anchor, clock.System{})
+			if err != nil {
+				return err
+			}
+
+			sch, err := demoSchool(school)
 			if err != nil {
 				return err
 			}
@@ -59,13 +69,13 @@ func newSeedCmd(env config.LookupFunc) *cobra.Command {
 
 			defer st.Close()
 
-			if err := seed.LoadDemoAt(ctx, st, date); err != nil {
+			if err := seed.LoadDemoSchoolAt(ctx, st, date, sch); err != nil {
 				return err
 			}
 
 			_, err = fmt.Fprintf(cmd.OutOrStdout(),
-				"demo data loaded around %s\nwarning: every demo account, admin included, signs in with the published password %q\n",
-				date, seed.DemoPassword)
+				"demo data (school %s) loaded around %s\nwarning: every demo account, admin included, signs in with the published password %q\n",
+				sch, date, seed.DemoPassword)
 
 			return err
 		},
@@ -74,6 +84,8 @@ func newSeedCmd(env config.LookupFunc) *cobra.Command {
 	db.register(cmd.Flags())
 	cmd.Flags().StringVar(&anchor, "anchor", seed.FixedDemoAnchor.String(),
 		"date the demo term lies around: YYYY-MM-DD, or "+anchorToday+" (in the demo school's time zone)")
+	cmd.Flags().StringVar(&school, "school", string(seed.SchoolProgramme),
+		"demo school: "+schoolNames())
 
 	return cmd
 }
@@ -96,4 +108,23 @@ func demoAnchor(value string, clk clock.Clock) (domain.Date, error) {
 	}
 
 	return date, nil
+}
+
+// demoSchool parses the --school value, one of seed.Schools.
+func demoSchool(value string) (seed.School, error) {
+	if s := seed.School(value); s.Valid() {
+		return s, nil
+	}
+
+	return "", fmt.Errorf("--school: %q is not a demo school: want %s", value, schoolNames())
+}
+
+// schoolNames lists the demo schools for help and errors: "a or b".
+func schoolNames() string {
+	names := make([]string, 0, len(seed.Schools()))
+	for _, s := range seed.Schools() {
+		names = append(names, string(s))
+	}
+
+	return strings.Join(names, " or ")
 }

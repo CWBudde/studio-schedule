@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/cwbudde/studio-schedule/internal/app"
+	"github.com/cwbudde/studio-schedule/internal/domain"
 )
 
 // anonymous sends a GET without a session and fails unless it answers
@@ -61,8 +62,14 @@ func TestSettingsCards(t *testing.T) {
 
 	// Branding: an accent that the light text cannot stand on is refused.
 	branding := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/settings/branding", "", olga))
-	if branding["accentColor"] != nil || branding["hasLogo"] != false || branding["minContrast"] != 4.5 {
+	if branding["accentColor"] != nil || branding["hasLogo"] != false || branding["minContrast"] != 4.5 ||
+		branding["theme"] != "programme" || branding["hasBackground"] != false {
 		t.Fatalf("branding %v", branding)
+	}
+
+	public := decode(t, a.anonymous(http.StatusOK, "/api/v1/settings/public"))
+	if public["theme"] != "programme" || public["hasBackground"] != false {
+		t.Fatalf("fresh public %v", public)
 	}
 
 	bad := a.expect(http.StatusUnprocessableEntity, http.MethodPut, "/api/v1/admin/settings/branding",
@@ -79,10 +86,34 @@ func TestSettingsCards(t *testing.T) {
 		t.Fatalf("branding %v", branding)
 	}
 
-	public := decode(t, a.anonymous(http.StatusOK, "/api/v1/settings/public"))
+	public = decode(t, a.anonymous(http.StatusOK, "/api/v1/settings/public"))
 	if public["schoolName"] != "Fictional Ballet Academy" || public["accentColor"] != "#1d4ed8" ||
 		public["accentColorDark"] != "#97b7f8" || public["legalNotice"] != nil {
 		t.Fatalf("public %v", public)
+	}
+
+	// The theme: an unknown one is refused, one is public, and an update
+	// without one keeps it.
+	bad = a.expect(http.StatusUnprocessableEntity, http.MethodPut, "/api/v1/admin/settings/branding",
+		`{"accentColor":"#1d4ed8","theme":"neon"}`, arno)
+	if loc := errorLocation(t, bad); loc != "body.theme" {
+		t.Errorf("unknown theme: %s", bad)
+	}
+
+	branding = decode(t, a.expect(http.StatusOK, http.MethodPut, "/api/v1/admin/settings/branding",
+		`{"accentColor":"#1d4ed8","theme":"werkstatt"}`, arno))
+	if branding["theme"] != "werkstatt" {
+		t.Fatalf("branding with a theme %v", branding)
+	}
+
+	if public = decode(t, a.anonymous(http.StatusOK, "/api/v1/settings/public")); public["theme"] != "werkstatt" {
+		t.Fatalf("public theme %v", public)
+	}
+
+	branding = decode(t, a.expect(http.StatusOK, http.MethodPut, "/api/v1/admin/settings/branding",
+		`{"accentColor":"#1d4ed8"}`, arno))
+	if branding["theme"] != "werkstatt" {
+		t.Fatalf("branding without a theme %v", branding)
 	}
 
 	// Time and language: the demo has lessons and prices.
@@ -205,4 +236,106 @@ func TestSchoolLogo(t *testing.T) {
 	if res = get(etag); res.Code != http.StatusOK || res.Header().Get("ETag") == etag {
 		t.Fatalf("after a new logo: %d %v", res.Code, res.Header())
 	}
+}
+
+func TestSchoolBackground(t *testing.T) {
+	t.Parallel()
+
+	a := newAuthApp(t, app.Deps{Demo: true})
+	olga := a.login("olga.ledgerby@example.net") // office
+	arno := a.login("arno.keystone@example.net") // admin
+
+	const path = "/api/v1/admin/settings/branding/background"
+
+	upload := func(contentType string, data []byte) string {
+		return `{"contentType":"` + contentType + `","data":"` + base64.StdEncoding.EncodeToString(data) + `"}`
+	}
+
+	a.anonymous(http.StatusNotFound, "/api/v1/settings/background")
+
+	webp := []byte("RIFF\x00\x00\x00\x00WEBPVP8 background")
+
+	// Only an admin changes it.
+	a.expect(http.StatusForbidden, http.MethodPut, path, upload("image/webp", webp), olga)
+	a.expect(http.StatusForbidden, http.MethodDelete, path, "", olga)
+
+	// Invalid images, located on their field.
+	for _, c := range []struct {
+		name, body, location string
+	}{
+		{"gif", upload("image/gif", []byte("GIF89a")), "body.contentType"},
+		{"empty", upload("image/webp", nil), "body.data"},
+		{"not base64", `{"contentType":"image/webp","data":"%%%"}`, "body.data"},
+		{"not a png", upload("image/png", []byte("not a png")), "body.data"},
+		{"too large", upload("image/jpeg",
+			append([]byte("\xff\xd8\xff"), make([]byte, domain.MaxBackgroundBytes-2)...)), "body.data"},
+	} {
+		bad := a.expect(http.StatusUnprocessableEntity, http.MethodPut, path, c.body, arno)
+		if loc := errorLocation(t, bad); loc != c.location {
+			t.Errorf("%s: %s, want an error on %s", c.name, bad, c.location)
+		}
+	}
+
+	// The largest image passes the body limit.
+	large := append([]byte("\xff\xd8\xff"), make([]byte, domain.MaxBackgroundBytes-3)...)
+	a.expect(http.StatusNoContent, http.MethodPut, path, upload("image/jpeg", large), arno)
+
+	get := func(etag string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/settings/background", nil)
+		if etag != "" {
+			req.Header.Set("If-None-Match", etag)
+		}
+
+		rec := httptest.NewRecorder()
+		a.h.ServeHTTP(rec, req)
+
+		return rec
+	}
+
+	if res := get(""); res.Code != http.StatusOK || res.Body.Len() != len(large) ||
+		res.Header().Get("Content-Type") != "image/jpeg" {
+		t.Fatalf("large background: %d, %d bytes, %v", res.Code, res.Body.Len(), res.Header())
+	}
+
+	a.expect(http.StatusNoContent, http.MethodPut, path, upload("image/webp", webp), arno)
+
+	public := decode(t, a.anonymous(http.StatusOK, "/api/v1/settings/public"))
+	if public["hasBackground"] != true {
+		t.Fatalf("public %v", public)
+	}
+
+	branding := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/settings/branding", "", olga))
+	if branding["hasBackground"] != true {
+		t.Fatalf("branding %v", branding)
+	}
+
+	res := get("")
+	etag := res.Header().Get("ETag")
+	want := domain.Background{ContentType: "image/webp", Data: webp}
+
+	if res.Code != http.StatusOK || res.Body.String() != string(webp) || res.Header().Get("Content-Type") != "image/webp" ||
+		etag != `"`+want.Digest()+`"` ||
+		res.Header().Get("Cache-Control") != "public, no-cache" || res.Header().Get("Content-Disposition") != "inline" {
+		t.Fatalf("background: %d %v", res.Code, res.Header())
+	}
+
+	if res = get(etag); res.Code != http.StatusNotModified || res.Body.Len() != 0 ||
+		res.Header().Get("ETag") != etag {
+		t.Fatalf("revalidation: %d, %d bytes, %v", res.Code, res.Body.Len(), res.Header())
+	}
+
+	if res = get(`"other"`); res.Code != http.StatusOK {
+		t.Fatalf("other etag: %d", res.Code)
+	}
+
+	// Removing it: a 404, and no background in the public settings.
+	a.expect(http.StatusNoContent, http.MethodDelete, path, "", arno)
+	a.anonymous(http.StatusNotFound, "/api/v1/settings/background")
+
+	if public = decode(t, a.anonymous(http.StatusOK, "/api/v1/settings/public")); public["hasBackground"] != false {
+		t.Fatalf("public after removing %v", public)
+	}
+
+	// Removing none is fine.
+	a.expect(http.StatusNoContent, http.MethodDelete, path, "", arno)
 }

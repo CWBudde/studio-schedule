@@ -175,6 +175,138 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 				e.t.Fatalf("removed logo: info %+v, %v", li, err)
 			}
 		},
+		"Theme": func(e *env) {
+			// Each named theme and the zero Theme (the default) round-trip.
+			for _, theme := range []domain.Theme{domain.ThemeWerkstatt, domain.ThemeProgramme, ""} {
+				s := want
+				s.Theme = theme
+				valid(e.t, s)
+				put(e, s)
+
+				got, err := get(e)
+				if err != nil {
+					e.t.Fatalf("Get: %v", err)
+				}
+
+				wantEqual(e.t, got, s)
+			}
+		},
+		"Background": func(e *env) {
+			background := func() (domain.Background, error) {
+				return query(e, func(ctx context.Context, tx store.Tx) (domain.Background, error) {
+					return tx.Settings().Background(ctx)
+				})
+			}
+			putBackground := func(b domain.Background) error {
+				return e.write(func(ctx context.Context, tx store.Tx) error { return tx.Settings().PutBackground(ctx, b) })
+			}
+			info := func() (domain.BackgroundInfo, error) {
+				return query(e, func(ctx context.Context, tx store.Tx) (domain.BackgroundInfo, error) {
+					return tx.Settings().BackgroundInfo(ctx)
+				})
+			}
+			jpeg := domain.Background{ContentType: domain.BackgroundJPEG, Data: []byte{0xFF, 0xD8, 0xFF, 'b', 'g'}}
+			png := domain.Background{ContentType: domain.BackgroundPNG, Data: []byte("\x89PNG\r\n\x1a\nbackground")}
+			webp := domain.Background{ContentType: domain.BackgroundWebP, Data: []byte("RIFF\x0c\x00\x00\x00WEBPVP8 ")}
+			logo := domain.Logo{ContentType: domain.LogoPNG, Data: []byte("\x89PNG\r\n\x1a\nlogo")}
+
+			_, err := background()
+			wantErr(e.t, err, domain.ErrNotFound)
+			_, err = info()
+			wantErr(e.t, err, domain.ErrNotFound)
+			wantErr(e.t, putBackground(jpeg), domain.ErrNotFound)
+
+			put(e, want)
+
+			got, err := background()
+			if err != nil || !got.IsZero() {
+				e.t.Fatalf("no background: got %+v, %v", got, err)
+			}
+
+			if bi, err := info(); err != nil || !bi.IsZero() || bi != (domain.BackgroundInfo{}) {
+				e.t.Fatalf("no background: info %+v, %v", bi, err)
+			}
+
+			// Removing none is fine.
+			if err := putBackground(domain.Background{}); err != nil {
+				e.t.Fatalf("remove without a background: %v", err)
+			}
+
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Settings().PutLogo(ctx, logo) })
+
+			// Each content type, and a new one replaces the old with its own
+			// digest.
+			for _, b := range []domain.Background{jpeg, png, webp} {
+				valid(e.t, b)
+
+				if err := putBackground(b); err != nil {
+					e.t.Fatalf("put %s: %v", b.ContentType, err)
+				}
+
+				got, err := background()
+				if err != nil || got.ContentType != b.ContentType || string(got.Data) != string(b.Data) {
+					e.t.Fatalf("put %s: got %+v, %v", b.ContentType, got, err)
+				}
+
+				if bi, err := info(); err != nil || bi != (domain.BackgroundInfo{ContentType: b.ContentType, Digest: b.Digest()}) {
+					e.t.Fatalf("put %s: info %+v, %v", b.ContentType, bi, err)
+				}
+			}
+
+			// The logo is apart from the background.
+			if li, err := query(e, func(ctx context.Context, tx store.Tx) (domain.LogoInfo, error) {
+				return tx.Settings().LogoInfo(ctx)
+			}); err != nil || li != (domain.LogoInfo{ContentType: logo.ContentType, Digest: logo.Digest()}) {
+				e.t.Fatalf("logo after background writes: %+v, %v", li, err)
+			}
+
+			// Settings writes keep the background.
+			put(e, want)
+
+			if bi, err := info(); err != nil || bi.Digest != webp.Digest() {
+				e.t.Fatalf("background after a settings write: info %+v, %v", bi, err)
+			}
+
+			// The largest background Validate accepts is stored.
+			largest := domain.Background{ContentType: domain.BackgroundJPEG, Data: make([]byte, domain.MaxBackgroundBytes)}
+			copy(largest.Data, jpeg.Data)
+
+			if err := largest.Validate(); err != nil {
+				e.t.Fatalf("invalid fixture: %v", err)
+			}
+
+			if err := putBackground(largest); err != nil {
+				e.t.Fatalf("put %d bytes: %v", len(largest.Data), err)
+			}
+
+			if got, err := background(); err != nil || len(got.Data) != domain.MaxBackgroundBytes {
+				e.t.Fatalf("got %d bytes, %v; want %d", len(got.Data), err, domain.MaxBackgroundBytes)
+			}
+
+			err = e.read(func(ctx context.Context, tx store.Tx) error {
+				return tx.Settings().PutBackground(ctx, domain.Background{})
+			})
+			wantErr(e.t, err, store.ErrReadOnly)
+
+			if err := putBackground(domain.Background{}); err != nil {
+				e.t.Fatal(err)
+			}
+
+			if got, _ = background(); !got.IsZero() {
+				e.t.Fatalf("background not removed: %+v", got.ContentType)
+			}
+
+			if bi, err := info(); err != nil || !bi.IsZero() {
+				e.t.Fatalf("removed background: info %+v, %v", bi, err)
+			}
+
+			// Removing the background keeps the logo.
+			if l, err := query(e, func(ctx context.Context, tx store.Tx) (domain.Logo, error) {
+				return tx.Settings().Logo(ctx)
+			}); err != nil || l.IsZero() {
+				e.t.Fatalf("logo after removing the background: %+v, %v", l.ContentType, err)
+			}
+		},
 		"Usage": func(e *env) {
 			usage := func() store.SettingsUsage {
 				e.t.Helper()

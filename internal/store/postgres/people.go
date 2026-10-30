@@ -36,6 +36,7 @@ func (r settingsRepo) Get(ctx context.Context) (domain.Settings, error) {
 		DefaultVisibleDays: int(row.DefaultVisibleDays),
 		LegalNotice:        row.LegalNotice.String,
 		AccentColor:        row.AccentColor.String,
+		Theme:              domain.Theme(row.Theme.String),
 
 		WaitlistInviteExpiry: fromPgInterval(row.WaitlistInviteExpiry),
 		RedemptionMode:       domain.RedemptionMode(row.RedemptionMode),
@@ -71,6 +72,28 @@ func (r settingsRepo) LogoInfo(ctx context.Context) (domain.LogoInfo, error) {
 	return domain.LogoInfo{ContentType: row.LogoType.String, Digest: row.LogoDigest.String}, nil
 }
 
+func (r settingsRepo) Background(ctx context.Context) (domain.Background, error) {
+	row, err := r.q.GetSettingsBackground(ctx)
+	if err != nil {
+		return domain.Background{}, notFound("settings", err)
+	}
+
+	if row.Background == nil {
+		return domain.Background{}, nil
+	}
+
+	return domain.Background{ContentType: row.BackgroundType.String, Data: row.Background}, nil
+}
+
+func (r settingsRepo) BackgroundInfo(ctx context.Context) (domain.BackgroundInfo, error) {
+	row, err := r.q.GetSettingsBackgroundInfo(ctx)
+	if err != nil {
+		return domain.BackgroundInfo{}, notFound("settings", err)
+	}
+
+	return domain.BackgroundInfo{ContentType: row.BackgroundType.String, Digest: row.BackgroundDigest.String}, nil
+}
+
 func (r settingsRepo) Usage(ctx context.Context) (store.SettingsUsage, error) {
 	row, err := r.q.SettingsUsage(ctx)
 	if err != nil {
@@ -89,6 +112,19 @@ func (r settingsRepo) PutLogo(ctx context.Context, l domain.Logo) error {
 	}
 
 	n, err := r.q.PutSettingsLogo(ctx, params)
+
+	return affected("settings", n, err)
+}
+
+func (r settingsRepo) PutBackground(ctx context.Context, b domain.Background) error {
+	params := sqlc.PutSettingsBackgroundParams{}
+	if !b.IsZero() {
+		params = sqlc.PutSettingsBackgroundParams{
+			Background: b.Data, BackgroundType: pgText(b.ContentType), BackgroundDigest: pgText(b.Digest()),
+		}
+	}
+
+	n, err := r.q.PutSettingsBackground(ctx, params)
 
 	return affected("settings", n, err)
 }
@@ -123,6 +159,7 @@ func (r settingsRepo) Put(ctx context.Context, s domain.Settings) error {
 		DefaultVisibleDays: visibleDays,
 		LegalNotice:        pgText(s.LegalNotice),
 		AccentColor:        pgText(s.AccentColor),
+		Theme:              pgText(string(s.Theme)),
 
 		WaitlistInviteExpiry: pgInterval(s.WaitlistInviteExpiry),
 		RedemptionMode:       string(s.RedemptionMode),
