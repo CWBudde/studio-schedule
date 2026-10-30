@@ -181,9 +181,9 @@ HTTP (all camelCase, then `just gen-api`):
 - `getSchoolBackground`: `GET /api/v1/settings/background`, `public`, answers the image with its
   content type, `ETag` = digest, `Cache-Control: public, no-cache`, 304 on `If-None-Match`, 404
   without one. Model it exactly on `getSchoolLogo` in `internal/httpapi/settings.go`.
-- `updateBrandingBackground`: `PUT /api/v1/admin/settings/branding/background`, `admin`, raw body
-  with `Content-Type` (model it on the receipt logo upload `updateReceiptLogo`), 204; errors as 422
-  field errors (`body.contentType`, `body.data`).
+- `updateBrandingBackground`: `PUT /api/v1/admin/settings/branding/background`, `admin`, JSON body
+  `{contentType, data}` with base64 `data` (as built in 1.1, like `updateReceiptLogo`), 204; errors
+  as 422 field errors (`body.contentType`, `body.data`).
 - `deleteBrandingBackground`: `DELETE /api/v1/admin/settings/branding/background`, `admin`, 204.
 
 **Steps:**
@@ -379,7 +379,8 @@ The background: `useApplyBranding` (or a sibling hook) loads `getSchoolBackgroun
 1. Tests first (`BrandingSettingsCard.test.tsx` with `mockApi`): the card shows a theme select with
    "Programme" and "Werkstatt" and one descriptive line each; saving sends `theme`; office sees it
    read-only (as the rest of the card); background upload sends `PUT …/branding/background` with
-   the file's content type; a 422 shows as a field error; "Remove" sends `DELETE`; the preview
+   the JSON body `{contentType, data}` (base64, exactly as the receipt logo upload sends it — see
+   1.1's notes); omitting `theme` keeps the stored one; a 422 shows as a field error; "Remove" sends `DELETE`; the preview
    shows the current background (`getSchoolBackground`) when `hasBackground`; after save/remove the
    public settings query is invalidated.
 2. Implement following the receipt logo upload in `web/src/features/admin/ReceiptSettingsCard.tsx`
@@ -440,10 +441,15 @@ clears only the current school's record. The tab lock name stays `studio-schedul
    opens a school named "Tanzhaus am Lindenhof" (header; `data-theme` comes from 2.1, which runs in
    parallel, so don't assert it here — 5.1 does); the banner switch goes back to Programme; a booking made in Programme is still there after switching
    to Werkstatt and back (separate records).
-5. README "Live demo": both links (`…/studio-schedule/` and `…/studio-schedule/?demo=werkstatt`), one
+5. Seed: the werkstatt school must not keep the programme school's identity. In
+   `internal/seed` give it its own fictional legal notice / imprint and receipt issuer ("Tanzhaus
+   am Lindenhof", a fictional address) and German receipts (`de`), with a seed test asserting that
+   no programme school name ("Studio Demo") appears in the werkstatt school's settings. Also fix
+   docs/demo-mode.md's note that `seed` uses `LoadDemo` (it uses `LoadDemoAt`).
+6. README "Live demo": both links (`…/studio-schedule/` and `…/studio-schedule/?demo=werkstatt`), one
    line each. docs/demo-mode.md: a section "Two demo schools" (param, stored choice, records, reset,
    tab lock).
-6. `just test`, `just web-check`, `just wasm-smoke`, `just e2e`. Commit.
+7. `just test`, `just web-check`, `just wasm-smoke`, `just e2e`. Commit.
 
 ## Task 3.1: werkstatt-shell
 
