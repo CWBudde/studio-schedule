@@ -18,7 +18,8 @@ only serves static files, and we don't host a backend for the demo. Instead:
 ## The about page
 
 The demo opens with an about page (`#/about`, `web/src/features/demo/AboutPage.tsx`): what the
-app does, how the demo works, what to try per role, and links to the docs. It is the demo's
+app does, how the demo works, what to try per role, and links to the docs. It opens either demo
+school ("Two demo schools" below). It is the demo's
 entrance and replaces explanations that used to live in the README and the demo banner.
 
 - **When:** the home route (`#/`) redirects to it until the visitor has opened the demo once in
@@ -56,8 +57,8 @@ the API, is the same code.
 ## Seed data relative to the visit
 
 On a fresh start (the first visit, after "Reset demo", or after a new build) `cmd/wasm` seeds the
-store for the day of the visit (today in the school time zone, from the app's clock):
-`seed.LoadDemoAt(ctx, st, today)`. A later visit restores the saved data instead, with the dates of
+store for the day of the visit (today in the school time zone, from the app's clock) with the
+visitor's demo school (see "Two demo schools"): `seed.LoadDemoSchoolAt(ctx, st, today, school)`. A later visit restores the saved data instead, with the dates of
 the visit that seeded it: the term and workshops do not move along, and after a few weeks the
 workshops lie in the past. "Reset demo" seeds again for today; the banner says so. The demo
 term runs from three weeks before that day to about ten months after it, class members join on the
@@ -73,10 +74,12 @@ Tallowfield on a trial with a note. The demo
 releases one week ahead, so the later workshops always lie beyond the release window; they are visible
 because workshops are published early. `scripts/wasm-smoke.mjs` checks this.
 
-The server (`studio-schedule serve` with `DEMO_MODE=true`, on the memory store) and `studio-schedule seed` use
-`seed.LoadDemo`, which builds the same data for the fixed `seed.FixedDemoAnchor`: the term is the
-school year 2026-09-01 to 2027-07-31 on every run, and its workshops lie in September and
-October 2026. Only the dates differ between the two; names, IDs and the timetable are the same.
+The server (`studio-schedule serve` with `DEMO_MODE=true`, on the memory store) uses `seed.LoadDemo`,
+which builds the same data for the fixed `seed.FixedDemoAnchor`: the term is the school year
+2026-09-01 to 2027-07-31 on every run, and its workshops lie in September and October 2026.
+`studio-schedule seed` uses `seed.LoadDemoSchoolAt` with the same fixed anchor by default
+(`--anchor today` or a date moves it, `--school` picks the school). Only the dates differ between
+them; names, IDs and the timetable are the same.
 
 ## Receipt PDFs
 
@@ -96,8 +99,9 @@ rendered on its first download and then stored, like the original of a receipt s
 The demo keeps what a visitor does across reloads, in their browser only:
 
 - **What is saved:** a snapshot of the complete in-memory store (`memory.Store.Snapshot`, every
-  table) and the Worker's cookie jar (the session), as the record `current` in the IndexedDB
-  database `studio-schedule-demo` (`web/src/api/wasm/persistence.ts`). Cookies that do not have the
+  table) and the Worker's cookie jar (the session), as one record per demo school in the IndexedDB
+  database `studio-schedule-demo` (`web/src/api/wasm/persistence.ts`): `current` for the programme
+  school, `current-werkstatt` for the werkstatt school (see "Two demo schools"). Cookies that do not have the
   expected shape are dropped on restore.
 - **When:** after every committed change. `memory.Store.OnCommit` runs after each read-write
   transaction that wrote something (by a request or a background job, e.g. the lessons the
@@ -116,8 +120,8 @@ The demo keeps what a visitor does across reloads, in their browser only:
   the notice. `cmd/wasm` restores it before anything reads the store
   and before the jobs run, and reports `StudioScheduleAPI.restored`. Only then does the Worker load
   the saved cookies and answer requests.
-- **Versions:** a snapshot fits only the build that wrote it. Its header names the build version
-  (`main.version`) and a fingerprint of the store's Go types (every table and domain struct), plus
+- **Versions:** a snapshot fits only the build and the school that wrote it. Its header names the
+  build version (`main.version`) together with the demo school, and a fingerprint of the store's Go types (every table and domain struct), plus
   the snapshot's own format version. `memory.Store.Restore` refuses any other
   (`memory.ErrSnapshotMismatch`): the demo then starts fresh from the seed, and the Worker deletes
   the old record, saved session included.
@@ -128,8 +132,9 @@ The demo keeps what a visitor does across reloads, in their browser only:
   and `TestSnapshotRoundTrip` restores the full demo data (plus a row in each table the seed leaves
   empty) and compares every table.
 - **Reset demo:** the button in the header (and on the "Demo crashed" card) asks first, then stops
-  the Worker, deletes the record from the page itself (so a crashed or hanging Worker cannot block
-  it), and reloads. The demo starts fresh from the seed, for today, signed out. If the delete fails
+  the Worker, deletes the current school's record from the page itself (so a crashed or hanging
+  Worker cannot block it), and reloads. The demo starts fresh from the seed, for today, signed out;
+  the other school's saved data stays. If the delete fails
   or takes longer than five seconds, the page reloads anyway and says that the reset failed.
   Nothing else expires the saved data.
 - **One tab at a time:** all tabs of the origin share the IndexedDB record, so only one tab runs the
@@ -142,10 +147,10 @@ The demo keeps what a visitor does across reloads, in their browser only:
   does not trip over its own previous page. Only the tab that holds the lock shows "Reset demo".
   Without Web Locks every tab runs its own demo.
 - **Fencing:** in case a tab that lost the lock still saves (it was frozen during the takeover), each
-  Worker claims the data on start: one transaction increments the epoch in the record `owner` and
-  reads `current`. A save checks, in the same transaction as its write, that `owner` is still its
-  epoch; otherwise it is refused and that Worker stops saving. A reset deletes only `current`, so
-  stale saves stay refused.
+  Worker claims the data on start: one transaction increments the epoch in the record `owner` (one
+  for both schools) and reads its school's record. A save checks, in the same transaction as its
+  write, that `owner` is still its epoch; otherwise it is refused and that Worker stops saving. A
+  reset deletes only the school's record, never `owner`, so stale saves stay refused.
 - **The session cookie in IndexedDB:** GitHub Pages serves every project of a user from one origin
   (`cwbudde.github.io`), so other pages there could read the record, cookie included. This is
   acceptable because everything in the demo is fictional and the token opens only that browser's
@@ -153,6 +158,39 @@ The demo keeps what a visitor does across reloads, in their browser only:
 
 A demo server over HTTP (`serve` with `DEMO_MODE=true`) keeps nothing in the browser and has no reset
 button.
+
+## Two demo schools
+
+The demo offers one fictional school per theme (ADR 0018), on the same site: **programme**
+("Studio Demo — Ballet & Dance", the app's own look, English) and **werkstatt** ("Tanzhaus am
+Lindenhof", the Werkstatt look, German, with a background photo). They share every person, class
+and room (`seed.DemoSchoolAt`); only the settings differ: name, theme, accent, language,
+background, imprint and receipt issuer (the seeded receipts are the werkstatt school's own, in
+German).
+
+- **Choosing:** `web/src/features/demo/school.ts`. The page address may name the school outside the
+  hash, `?demo=werkstatt` or `?demo=programme` (the README links both). `main.tsx` reads it before
+  anything else, removes it from the address (`history.replaceState`), stores the choice and enters
+  the demo, so the link skips the about page. The about page has a button per school ("Open the
+  demo", "Open in the Werkstatt look"), and the demo banner switches to the other school.
+- **Stored choice:** localStorage `studio-schedule-demo-school`, guarded like `entered.ts`; the
+  default (and an unknown stored value) is programme. Without storage the choice holds for the page
+  load.
+- **Switching:** `switchSchool` (`web/src/api/transport.ts`) asks the running Worker to save its
+  pending changes (two seconds at most), then stores the new choice and reloads at `#/`: one Worker
+  runs per tab, and it serves one school. The about page's button of the school already running
+  opens it in place; the other one switches. The persisted query cache (ADR 0017) carries the school in its buster, so the other
+  school's copy is discarded rather than shown.
+- **Seeding:** the page tells the Worker the school in its first message (`init`, sent by
+  `WasmBridge`; a page reads the choice once, so another tab's switch does not change what this
+  one resets); the Worker passes it to Go as `DEMO_SCHOOL`, and `cmd/wasm` seeds that school on a fresh start (an unknown value seeds
+  programme and logs a warning).
+- **Records:** one IndexedDB record per school (above), so each school keeps its own data, session
+  included. `current` stayed the programme record, so visitors from before the second school keep
+  their data. The snapshot header names the school, so a record is never restored into the other
+  school. "Reset demo" resets only the current school.
+- **Tab lock:** still one per origin (`studio-schedule-demo`), whichever school a tab shows: both
+  schools share the `owner` epoch, and only one Worker runs at a time.
 
 ## Accounts and mail in the demo
 
@@ -229,7 +267,9 @@ the browser in `America/New_York` so school times cannot fall back to the browse
 cover the about page (with `test.use({ demoEntered: false })`; every other test starts as a
 returning visitor), the home page, the schedule list and week grid, filters, the lesson sheet, the release
 countdown, early-published workshops, deep links, German, that an edit, the session and generated
-lessons survive a reload until "Reset demo", and that "Use here" moves the demo between two tabs. Each test runs in a fresh browser context, so saved data never leaks
+lessons survive a reload until "Reset demo", that "Use here" moves the demo between two tabs, and
+the two demo schools (the about page's Werkstatt button, the banner's switch, a booking that
+survives a visit to the other school; the fixture option `demoSchool` picks a test's school). Each test runs in a fresh browser context, so saved data never leaks
 from one test to the next. Any console error fails a test. The
 `test-e2e` CI job runs them on every push and uploads the Playwright report when they fail. Run
 `just e2e-install` once to download the browser.

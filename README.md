@@ -12,7 +12,9 @@ bookings, waiting lists, family accounts, prepaid passes and receipts.
 
 ## Live demo
 
-**https://cwbudde.github.io/studio-schedule/**
+- **https://cwbudde.github.io/studio-schedule/**: a fictional school in the app's own look.
+- **https://cwbudde.github.io/studio-schedule/?demo=werkstatt**: a fictional German school in the
+  Werkstatt look.
 
 The complete Go backend, compiled to WebAssembly, runs in your browser with fictional data, so no
 server is involved. The demo opens with a page that explains how it works and what to try; see
