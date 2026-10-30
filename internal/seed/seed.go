@@ -4,8 +4,11 @@ package seed
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
@@ -47,10 +50,70 @@ func DemoSettings() domain.Settings {
 	}
 }
 
+// School selects one of the fictional demo schools (ADR 0018). They share
+// every person, class, room and all the history and differ in their
+// settings only: their name, theme, accent color, language and background.
+// The zero School is not valid: a caller names the school it wants.
+type School string
+
+// The demo schools.
+const (
+	// SchoolProgramme is the demo school in the app's own look
+	// (DemoSettings), the default.
+	SchoolProgramme School = "programme"
+	// SchoolWerkstatt is a German demo school in the Werkstatt look, with
+	// a background image.
+	SchoolWerkstatt School = "werkstatt"
+)
+
+// Schools returns all demo schools, the default first.
+func Schools() []School { return []School{SchoolProgramme, SchoolWerkstatt} }
+
+// Valid reports whether s is a known demo school.
+func (s School) Valid() bool { return slices.Contains(Schools(), s) }
+
+// werkstattBackground is the Werkstatt school's background image, a CC0
+// photo (assets/README.md).
+//
+//go:embed assets/werkstatt-background.jpg
+var werkstattBackground string
+
+// schoolData returns the settings and the background of school: the
+// programme school's are DemoSettings and none, the werkstatt school's
+// differ only in name, theme, accent, language and background.
+func schoolData(school School) (domain.Settings, domain.Background, error) {
+	settings := DemoSettings()
+
+	switch school {
+	case SchoolProgramme:
+		return settings, domain.Background{}, nil
+	case SchoolWerkstatt:
+		// A fictional name; the accent passes the 4.5:1 contrast check,
+		// and its dark variant is derived from it (domain.DarkAccent).
+		settings.SchoolName = "Tanzhaus am Lindenhof"
+		settings.Theme = domain.ThemeWerkstatt
+		settings.AccentColor = "#9c215b"
+		settings.DefaultLocale = "de"
+
+		// A fresh copy: the store owns what it is given.
+		return settings, domain.Background{ContentType: domain.BackgroundJPEG, Data: []byte(werkstattBackground)}, nil
+	default:
+		names := make([]string, 0, len(Schools()))
+		for _, s := range Schools() {
+			names = append(names, string(s))
+		}
+
+		return domain.Settings{}, domain.Background{}, fmt.Errorf("seed: unknown demo school %q, want one of %s: %w",
+			school, strings.Join(names, ", "), domain.ErrValidation)
+	}
+}
+
 // Dataset is a complete set of school data. Every entity is valid, and all
 // references point to entities of the same Dataset.
 type Dataset struct {
-	Settings     domain.Settings
+	Settings domain.Settings
+	// Background is the school's background image, zero for none.
+	Background   domain.Background
 	Locations    []domain.Location
 	Rooms        []domain.Room
 	Staff        []domain.Staff
@@ -100,7 +163,13 @@ func LoadDemo(ctx context.Context, st store.Store) error {
 // (DemoAt). The web demo uses it with today's date, so its term and
 // workshops always lie around the day of the visit.
 func LoadDemoAt(ctx context.Context, st store.Store, anchor domain.Date) error {
-	d, err := demoAt(anchor)
+	return LoadDemoSchoolAt(ctx, st, anchor, SchoolProgramme)
+}
+
+// LoadDemoSchoolAt is LoadDemoAt for the demo school school (DemoSchoolAt).
+// An unknown school fails with domain.ErrValidation before st is touched.
+func LoadDemoSchoolAt(ctx context.Context, st store.Store, anchor domain.Date, school School) error {
+	d, err := DemoSchoolAt(anchor, school)
 	if err != nil {
 		return err
 	}
@@ -124,6 +193,12 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 
 	if err := tx.Settings().Put(ctx, d.Settings); err != nil {
 		return fmt.Errorf("settings: %w", err)
+	}
+
+	if !d.Background.IsZero() {
+		if err := tx.Settings().PutBackground(ctx, d.Background); err != nil {
+			return fmt.Errorf("background: %w", err)
+		}
 	}
 
 	for _, p := range d.Persons {

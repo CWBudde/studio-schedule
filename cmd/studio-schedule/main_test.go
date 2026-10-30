@@ -251,6 +251,37 @@ func TestSeedAnchor(t *testing.T) {
 	}
 }
 
+// TestSeedSchool: --school takes a demo school, programme by default;
+// anything else fails before the database is needed, naming the schools.
+func TestSeedSchool(t *testing.T) {
+	t.Parallel()
+
+	for _, value := range []string{"programme", "werkstatt"} {
+		got, err := demoSchool(value)
+		if err != nil || string(got) != value {
+			t.Errorf("demoSchool(%q) = %q, %v; want %s", value, got, err, value)
+		}
+	}
+
+	cmd := newSeedCmd(nil)
+	if def := cmd.Flags().Lookup("school").DefValue; def != string(seed.SchoolProgramme) {
+		t.Errorf("--school defaults to %q, want %q", def, seed.SchoolProgramme)
+	}
+
+	for _, value := range []string{"", "x", "Werkstatt", "programme,werkstatt"} {
+		if got, err := demoSchool(value); err == nil {
+			t.Errorf("demoSchool(%q) = %q, want an error", value, got)
+		}
+
+		// Without a database URL: the school is checked first.
+		out, err := execute(nil, "seed", "--school", value)
+		if err == nil || errors.Is(err, errNoDatabaseURL) ||
+			!strings.Contains(err.Error(), "--school") || !strings.Contains(err.Error(), "programme or werkstatt") {
+			t.Errorf("seed --school %q: error = %v, want one naming --school and the schools\n%s", value, err, out)
+		}
+	}
+}
+
 func TestServeRejectsInvalidConfig(t *testing.T) {
 	t.Parallel()
 
