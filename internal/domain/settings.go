@@ -52,6 +52,10 @@ type Settings struct {
 	// or empty for the app's own. It must stand out against the text on it
 	// (MinAccentContrast); the dark theme shows DarkAccent of it (ADR 0013).
 	AccentColor string
+	// Theme is the school's look; zero is Programme (ADR 0018). The
+	// background image of themes that show one is stored apart
+	// (SettingsRepo.Background).
+	Theme Theme
 
 	// RedemptionMode is when bookings use a pass: when they are booked, or
 	// when attendance is taken (ADR 0012).
@@ -88,6 +92,7 @@ func (s Settings) Validate() error {
 			"default visible days must be between 1 and 366",
 		),
 		on("redemptionMode", s.RedemptionMode.Valid(), "invalid redemption mode"),
+		on("theme", s.Theme.Valid(), "theme must be programme or werkstatt"),
 	)
 	if err != nil {
 		return err
