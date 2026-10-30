@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, type Schedule, type ScheduleLesson } from '@/api/client';
@@ -8,11 +8,15 @@ import {
   lessonBallet,
   lessonContemporary,
   lessonWorkshop,
+  family,
   meMember,
   mockApiGet,
   schedule,
+  signedOut,
 } from '@/test/mockApi';
 import { renderAtSchedule } from '@/test/utils';
+import type { DayHeadingProps, LessonCardProps, Theme } from '@/themes/slots';
+import { ThemeContext } from '@/themes/themeContext';
 import type { ScheduleSearch } from '../search';
 import { ScheduleList } from './ScheduleList';
 
@@ -370,5 +374,54 @@ describe('ScheduleList', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Abgesagt')).toBeInTheDocument();
     expect(screen.getByText('Anfänger')).toBeInTheDocument();
+  });
+
+  it('asks a guest for no family, whose 401 would sign out', async () => {
+    const get = mockApiGet(signedOut);
+    renderList(schedule);
+
+    await screen.findByRole('button', { name: /^Ballet/ });
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/api/v1/auth/me', expect.anything()));
+    expect(get).not.toHaveBeenCalledWith('/api/v1/family', expect.anything());
+  });
+
+  it("renders the theme's day headings and cards, with the quick action", async () => {
+    mockApiGet({
+      '/api/v1/auth/me': { body: meMember },
+      '/api/v1/family': { body: { ...family, dependents: [] } },
+    });
+    const theme: Theme = {
+      id: 'werkstatt',
+      slots: {
+        DayHeading: ({ id, date, prevId, nextId }: DayHeadingProps) => (
+          <h2 id={id} data-prev={prevId} data-next={nextId}>
+            Day {date}
+          </h2>
+        ),
+        LessonCard: ({ lesson, quickAction, onOpen }: LessonCardProps) => (
+          <button type="button" onClick={onOpen}>
+            {lesson.courseType.name}: {quickAction.kind}
+          </button>
+        ),
+      },
+    };
+    renderAtSchedule(
+      <ThemeContext.Provider value={theme}>
+        <ScheduleList schedule={schedule} receivedAt={Date.now()} />
+      </ThemeContext.Provider>,
+    );
+
+    // The region is still named by its (the theme's) heading.
+    const monday = within(await screen.findByRole('region', { name: 'Day 2026-10-26' }));
+    expect(await monday.findByRole('button', { name: 'Ballet: book' })).toBeInTheDocument();
+    expect(
+      day('Day 2026-10-27').getByRole('button', { name: 'Contemporary: none' }),
+    ).toBeInTheDocument();
+    const headings = screen.getAllByRole('heading', { level: 2 });
+    expect(headings.map((h) => [h.dataset.prev, h.dataset.next])).toEqual([
+      [undefined, headings[1]!.id],
+      [headings[0]!.id, headings[2]!.id],
+      [headings[1]!.id, undefined],
+    ]);
   });
 });

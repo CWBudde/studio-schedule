@@ -5,7 +5,6 @@ import type { TeachLesson, TeachLessons } from '@/api/queries';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useLessonLabel } from '@/features/schedule/lessonLabel';
-import { DayHeading } from '@/features/schedule/list/DayHeading';
 import {
   type Day as DayOf,
   type DayTone,
@@ -16,6 +15,7 @@ import { useServerClock } from '@/features/schedule/useServerClock';
 import { VisibilityBadge } from '@/features/schedule/visibility/VisibilityBadge';
 import { addDays, formatTimeRange, todayIn } from '@/lib/schoolTime';
 import { cn } from '@/lib/utils';
+import { useSlot } from '@/themes/useSlot';
 import { type AttendanceState, attendanceState } from './attendance';
 import type { NotifyTarget } from './NotifyDialog';
 
@@ -51,6 +51,7 @@ export function TeachList({
   const [showEarlier, setShowEarlier] = useState(false);
   const earlierId = useId();
   const todayId = useId();
+  const DayHeading = useSlot('DayHeading');
   const days = useMemo(
     () => groupByDay(data.lessons, data.timezone),
     [data.lessons, data.timezone],
@@ -121,6 +122,8 @@ export function TeachList({
       )}
       {foldPast && later[0]?.date !== today && (
         <section aria-labelledby={todayId} className="space-y-3">
+          {/* The slot changes only with the theme, and then remounting what it renders is intended. */}
+          {/* eslint-disable-next-line react-hooks/static-components */}
           <DayHeading id={todayId} date={today} tone="today" />
           <p className="px-4 text-muted-foreground">{t('freeToday')}</p>
         </section>
@@ -151,8 +154,11 @@ function DaySection({
   onNotify: (target: NotifyTarget) => void;
 }) {
   const headingId = useId();
+  const DayHeading = useSlot('DayHeading');
   return (
     <section aria-labelledby={headingId} className="space-y-3">
+      {/* The slot changes only with the theme, and then remounting what it renders is intended. */}
+      {/* eslint-disable-next-line react-hooks/static-components */}
       <DayHeading id={headingId} date={day.date} tone={tone} />
       <ul className="space-y-3">
         {day.lessons.map((lesson) => (

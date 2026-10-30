@@ -1,9 +1,9 @@
 import { Link, Outlet, useMatches } from '@tanstack/react-router';
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { startBackend } from '@/api/transport';
 import { AppFooter } from '@/components/layout/AppFooter';
-import { AppHeader } from '@/components/layout/AppHeader';
+import { useShellHeader } from '@/components/layout/AppHeader';
 import { BackendGate } from '@/components/layout/BackendGate';
 import { DemoBanner } from '@/components/layout/DemoBanner';
 import { DemoNotices } from '@/components/layout/DemoNotices';
@@ -15,20 +15,26 @@ import { AnnouncementBanner } from '@/features/announcements/AnnouncementBanner'
 import { markDemoEntered } from '@/features/demo/entered';
 import { usePushKeepAlive } from '@/features/push/usePushKeepAlive';
 import { isDemo } from '@/lib/env';
+import { ThemeProvider } from '@/themes/ThemeProvider';
+import { useSlot } from '@/themes/useSlot';
 
 /** The app around every page, or nothing around a bare one (the demo's about page). */
 export function RootShell() {
   const bare = useMatches({ select: (matches) => matches.some((m) => m.staticData.bare) });
+  const bareDemo = isDemo && bare;
+  useLayoutEffect(() => {
+    // A bare page keeps its own look: no theme from the cache (web/public/theme.js).
+    if (bareDemo) delete document.documentElement.dataset.theme;
+  }, [bareDemo]);
   return (
     <>
-      {isDemo && bare ? <Outlet /> : <RootLayout />}
+      {bareDemo ? <Outlet /> : <RootLayout />}
       <Toaster />
     </>
   );
 }
 
 function RootLayout() {
-  const { t } = useTranslation();
   usePushKeepAlive();
   useEffect(() => {
     // In the demo build this boots the Go/WASM backend in a Web Worker, and
@@ -37,30 +43,39 @@ function RootLayout() {
     if (isDemo) markDemoEntered();
   }, []);
   return (
-    <div className="flex min-h-svh flex-col">
-      <a
-        href="#main"
-        className="sr-only z-50 rounded-md bg-primary px-3 py-2 text-primary-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2"
-      >
-        {t('a11y.skipToContent')}
-      </a>
-      <DemoBanner />
-      <OfflineBanner />
-      <ImpersonationBanner />
-      <AppHeader />
-      <AnnouncementBanner />
-      <main
-        id="main"
-        tabIndex={-1}
-        className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 outline-none"
-      >
-        <BackendGate>
-          <Outlet />
-        </BackendGate>
-      </main>
-      <AppFooter />
+    <>
+      <ThemeProvider>
+        <ThemedLayout />
+      </ThemeProvider>
+      {/* Outside the theme: it renders nothing, and listens while a theme loads too. */}
       <DemoNotices />
-    </div>
+    </>
+  );
+}
+
+/** The theme's Shell slot around the page. */
+function ThemedLayout() {
+  const Shell = useSlot('Shell');
+  const header = useShellHeader();
+  return (
+    // The slot changes only with the theme, and then remounting what it renders is intended.
+    // eslint-disable-next-line react-hooks/static-components
+    <Shell
+      banners={
+        <>
+          <DemoBanner />
+          <OfflineBanner />
+          <ImpersonationBanner />
+        </>
+      }
+      header={header}
+      announcements={<AnnouncementBanner />}
+      footer={<AppFooter />}
+    >
+      <BackendGate>
+        <Outlet />
+      </BackendGate>
+    </Shell>
   );
 }
 

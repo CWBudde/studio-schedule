@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LessonDetail, Me } from '@/api/client';
+import { api, type LessonDetail, type Me } from '@/api/client';
 import type {
   BookingEvent,
   LessonParticipant,
@@ -602,6 +602,44 @@ describe('ParticipantsSection', () => {
       body: { status: 'attended' },
     });
     expect(await screen.findByText('Mia Sample attended.')).toBeInTheDocument();
+  });
+
+  it('marks one participant while another’s attendance is still being recorded', async () => {
+    vi.setSystemTime(new Date(duringLesson));
+    mockStaff();
+    let answerMia: (value: unknown) => void = () => undefined;
+    const held = new Promise((resolve) => (answerMia = resolve));
+    const recorded = (bookingId: string) => ({
+      data: staffBooking({ id: bookingId, status: 'attended' }),
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    vi.spyOn(api, 'POST').mockImplementation(((_path: string, init?: MockRequest) => {
+      const bookingId = init?.params?.path?.bookingId ?? '';
+      // Mia's answer waits until the test has marked Gina.
+      return bookingId === mia.bookingId
+        ? held.then(() => recorded(bookingId))
+        : Promise.resolve(recorded(bookingId));
+    }) as unknown as typeof api.POST);
+    const user = userEvent.setup();
+
+    const section = await openParticipants();
+    await user.click(section.getByRole('button', { name: 'Mia Sample attended' }));
+
+    // Only Mia's buttons wait for her answer.
+    expect(section.getByRole('button', { name: 'Mia Sample attended' })).toBeDisabled();
+    expect(section.getByRole('button', { name: 'Mia Sample did not come' })).toBeDisabled();
+    expect(section.getByRole('button', { name: 'Gina Guest did not come' })).toBeEnabled();
+    await user.click(section.getByRole('button', { name: 'Gina Guest attended' }));
+    expect(await screen.findByText('Gina Guest attended.')).toBeInTheDocument();
+    expect(section.getByRole('button', { name: 'Mia Sample attended' })).toBeDisabled();
+
+    // Each mark has its own answer and toast.
+    answerMia(undefined);
+    expect(await screen.findByText('Mia Sample attended.')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(section.getByRole('button', { name: 'Mia Sample attended' })).toBeEnabled(),
+    );
   });
 
   it('resets a recorded attendance', async () => {

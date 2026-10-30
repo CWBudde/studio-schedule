@@ -75,6 +75,9 @@
     "reload": "Reload",
     "reset": "Reset demo"
   },
+  "theme": {
+    "loading": "Loading the school's look…"
+  },
   "home": {
     "eyebrow": "Dance & ballet school",
     "title": "Welcome",
