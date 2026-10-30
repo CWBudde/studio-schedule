@@ -50,7 +50,7 @@ func Demo() Dataset { return DemoAt(FixedDemoAnchor) }
 // DemoAt panics if the demo time zone cannot be loaded (no zoneinfo
 // database); LoadDemoAt reports that as an error instead.
 func DemoAt(anchor domain.Date) Dataset {
-	d, err := demoAt(anchor)
+	d, err := demoAt(anchor, DemoSettings())
 	if err != nil {
 		panic(err)
 	}
@@ -59,8 +59,9 @@ func DemoAt(anchor domain.Date) Dataset {
 }
 
 // DemoSchoolAt is DemoAt for the demo school school: the same data, with
-// the school's settings and background (School). An unknown school fails
-// with domain.ErrValidation.
+// the school's settings and background (School), and its receipts issued
+// with those settings (issuer, language, number and line text). An unknown
+// school fails with domain.ErrValidation.
 func DemoSchoolAt(anchor domain.Date, school School) (Dataset, error) {
 	settings, background, err := schoolData(school)
 	if err != nil {
@@ -73,22 +74,22 @@ func DemoSchoolAt(anchor domain.Date, school School) (Dataset, error) {
 		}
 	}
 
-	// Built with the programme school's settings, so everything but the
-	// settings and the background stays the same, the receipts' language
-	// and lines included.
-	d, err := demoAt(anchor)
+	// Built with the school's own settings, so its receipts name its
+	// issuer, in its language.
+	d, err := demoAt(anchor, settings)
 	if err != nil {
 		return Dataset{}, err
 	}
 
-	d.Settings, d.Background = settings, background
+	d.Background = background
 
 	return d, nil
 }
 
-func demoAt(anchor domain.Date) (Dataset, error) {
-	settings := DemoSettings()
-
+// demoAt builds the demo data for anchor with the school's settings, which
+// the receipts are issued with; everything else is the same for every
+// school.
+func demoAt(anchor domain.Date, settings domain.Settings) (Dataset, error) {
 	// The workshops start at wall-clock times of the school.
 	loc, err := time.LoadLocation(settings.Timezone)
 	if err != nil {

@@ -52,7 +52,8 @@ func DemoSettings() domain.Settings {
 
 // School selects one of the fictional demo schools (ADR 0018). They share
 // every person, class, room and all the history and differ in their
-// settings only: their name, theme, accent color, language and background.
+// settings: their name, imprint, receipt issuer, theme, accent color,
+// language and background, and so in the receipts issued with them.
 // The zero School is not valid: a caller names the school it wants.
 type School string
 
@@ -72,6 +73,19 @@ func Schools() []School { return []School{SchoolProgramme, SchoolWerkstatt} }
 // Valid reports whether s is a known demo school.
 func (s School) Valid() bool { return slices.Contains(Schools(), s) }
 
+// ParseSchool returns the demo school named name, for a choice that must
+// not fail, like the web demo's (its worker passes the visitor's choice in
+// DEMO_SCHOOL). An empty or unknown name, matched exactly like Valid,
+// returns SchoolProgramme, the default, with ok false, so the caller can
+// log the fallback.
+func ParseSchool(name string) (school School, ok bool) {
+	if s := School(name); s.Valid() {
+		return s, true
+	}
+
+	return SchoolProgramme, false
+}
+
 // werkstattBackground is the Werkstatt school's background image, a CC0
 // photo (assets/README.md).
 //
@@ -79,8 +93,9 @@ func (s School) Valid() bool { return slices.Contains(Schools(), s) }
 var werkstattBackground string
 
 // schoolData returns the settings and the background of school: the
-// programme school's are DemoSettings and none, the werkstatt school's
-// differ only in name, theme, accent, language and background.
+// programme school's are DemoSettings and none; the werkstatt school has
+// its own identity (name, imprint, receipt issuer and prefix), theme,
+// accent, language and background, and the programme school's rules.
 func schoolData(school School) (domain.Settings, domain.Background, error) {
 	settings := DemoSettings()
 
@@ -94,6 +109,16 @@ func schoolData(school School) (domain.Settings, domain.Background, error) {
 		settings.Theme = domain.ThemeWerkstatt
 		settings.AccentColor = "#9c215b"
 		settings.DefaultLocale = "de"
+		settings.ReceiptPrefix = "TL"
+		// A fictional imprint and issuer, like the programme school's: the
+		// street, the town, the tax number and the bank exist nowhere.
+		settings.LegalNotice = "Tanzhaus am Lindenhof · Lindenhofweg 12 · 10999 Beispielstadt\n" +
+			"Eine erfundene Schule: Alle Namen, Adressen und Nummern in dieser Demo sind ausgedacht."
+		settings.Receipts.Issuer = domain.ReceiptIssuer{
+			Name: "Tanzhaus am Lindenhof", Address: "Lindenhofweg 12\n10999 Beispielstadt",
+			TaxID: "99/999/99999", Email: "buero@tanzhaus-lindenhof.example", Phone: "+49 000 0000000",
+		}
+		settings.Receipts.Footer = "Bankverbindung: Beispielbank · IBAN XX00 0000 0000 0000 0000 00"
 
 		// A fresh copy: the store owns what it is given.
 		return settings, domain.Background{ContentType: domain.BackgroundJPEG, Data: []byte(werkstattBackground)}, nil

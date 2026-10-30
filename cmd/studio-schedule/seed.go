@@ -39,8 +39,8 @@ func newSeedCmd(env config.LookupFunc) *cobra.Command {
 			seed.FixedDemoAnchor.String() + " (the data of the tests), with --anchor today the current " +
 			"date in the demo school's time zone (like the web demo), or a date YYYY-MM-DD.\n\n" +
 			"--school picks the demo school: " + string(seed.SchoolProgramme) + " (the default, in the app's " +
-			"own look) or " + string(seed.SchoolWerkstatt) + " (the same data as a German school in the " +
-			"Werkstatt look, with a background image).",
+			"own look) or " + string(seed.SchoolWerkstatt) + " (the same people and timetable as a German school " +
+			"in the Werkstatt look, with its own imprint, German receipts and a background image).",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// Checked before connecting: a typo never waits for the database.
