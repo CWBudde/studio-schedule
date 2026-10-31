@@ -2,6 +2,10 @@ import { DoorClosed, DoorOpen, Info, ListPlus, Loader2, type LucideIcon, Star } 
 import { type CSSProperties, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
+import {
+  AvailabilityBadges,
+  hasAvailabilityBadges,
+} from '@/features/schedule/booking/AvailabilityBadges';
 import type { QuickAction } from '@/features/schedule/booking/quickAction';
 import { useLessonCardLabel } from '@/features/schedule/list/cardParts';
 import { VisibilityBadge } from '@/features/schedule/visibility/VisibilityBadge';
@@ -22,10 +26,11 @@ const focusRing = 'outline-none focus-visible:ring-[3px] focus-visible:ring-ring
  * The card is a group named like its button, so its quick action can be
  * told apart from the other cards' ones.
  */
-export function LessonCard({ lesson, timeZone, past, quickAction, onOpen }: LessonCardProps) {
+export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }: LessonCardProps) {
   const { t, i18n } = useTranslation('schedule');
   const lang = i18n.resolvedLanguage ?? 'en';
   const detailsId = useId();
+  const availabilityId = useId();
   const label = useLessonCardLabel()(lesson, timeZone);
   const canceled = lesson.status === 'canceled';
   const quiet = canceled || past;
@@ -34,6 +39,10 @@ export function LessonCard({ lesson, timeZone, past, quickAction, onOpen }: Less
   // those count as taken here, as they do for a booking.
   const taken = lesson.capacity - lesson.freePlaces;
   const full = lesson.freePlaces <= 0;
+  // Whom of the family it is booked for, and who waits or holds an invite: the
+  // star says only that it is booked, the count not whose place is held. The
+  // free places are the participants line's, so the badges leave them out.
+  const badges = hasAvailabilityBadges(lesson, false, now);
 
   return (
     <div
@@ -62,7 +71,7 @@ export function LessonCard({ lesson, timeZone, past, quickAction, onOpen }: Less
       <button
         type="button"
         aria-label={label}
-        aria-describedby={detailsId}
+        aria-describedby={badges ? `${detailsId} ${availabilityId}` : detailsId}
         onClick={onOpen}
         className={cn(
           focusRing,
@@ -114,6 +123,7 @@ export function LessonCard({ lesson, timeZone, past, quickAction, onOpen }: Less
               : lesson.instructor.displayName}
           </span>
         </span>
+        <AvailabilityBadges id={availabilityId} lesson={lesson} showFree={false} now={now} />
       </button>
       <QuickButton action={quickAction} onOpen={onOpen} />
     </div>

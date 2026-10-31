@@ -1,9 +1,11 @@
-import { render, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { ScheduleLesson } from '@/api/client';
 import type { QuickAction } from '@/features/schedule/booking/quickAction';
 import i18n from '@/i18n';
+import { meMember, mockApiGet } from '@/test/mockApi';
+import { renderWithQuery } from '@/test/utils';
 import { courseTint } from './courseTint';
 import { LessonCard } from './LessonCard';
 
@@ -64,7 +66,7 @@ function renderCard({
   name?: string | RegExp;
 } = {}) {
   const onOpen = vi.fn();
-  render(
+  renderWithQuery(
     <LessonCard
       lesson={lesson}
       timeZone={timeZone}
@@ -163,6 +165,64 @@ describe('Werkstatt LessonCard', () => {
 
     expect(card.getByRole('img', { name: 'Booked' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: label })).toHaveAttribute('data-booked');
+  });
+
+  it('names whom of the family a full lesson has invited or on its waiting list', async () => {
+    mockApiGet({ '/api/v1/auth/me': { body: meMember } });
+    const nora = { personId: '0190a000-0000-7000-8000-000000000331', name: 'Nora Example' };
+    const lina = { personId: '0190a000-0000-7000-8000-000000000332', name: 'Lina Example' };
+    renderCard({
+      lesson: {
+        ...ballet,
+        freePlaces: 0,
+        waitlist: [
+          {
+            ...nora,
+            entryId: '0190a000-0000-7000-8000-000000000701',
+            status: 'invited',
+            expiresAt: '2026-10-24T10:00:00Z',
+            stayOnList: false,
+          },
+          {
+            ...lina,
+            entryId: '0190a000-0000-7000-8000-000000000702',
+            status: 'waiting',
+            position: 2,
+            stayOnList: false,
+          },
+        ],
+      },
+    });
+
+    const body = screen.getByRole('button', { name: label });
+    expect(await within(body).findByText('Invited: Nora Example')).toBeInTheDocument();
+    expect(within(body).getByText('Waiting list: Lina Example')).toBeInTheDocument();
+    expect(body).toHaveAccessibleDescription(
+      /8 \/ 8.*Invited: Nora Example Waiting list: Lina Example$/,
+    );
+    // The free places are the participants line's alone.
+    expect(within(body).queryByText('Full')).not.toBeInTheDocument();
+  });
+
+  it("drops an invite that has run out by the server's clock", () => {
+    renderCard({
+      lesson: {
+        ...ballet,
+        waitlist: [
+          {
+            personId: '0190a000-0000-7000-8000-000000000331',
+            name: 'Nora Example',
+            entryId: '0190a000-0000-7000-8000-000000000701',
+            status: 'invited',
+            expiresAt: '2026-10-23T09:00:00Z',
+            stayOnList: false,
+          },
+        ],
+      },
+    });
+
+    const body = screen.getByRole('button', { name: label });
+    expect(within(body).queryByText(/Invited/)).not.toBeInTheDocument();
   });
 
   it('has no star when not booked', () => {
