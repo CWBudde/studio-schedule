@@ -39,6 +39,8 @@ func Import(t *testing.T, newStore func(t *testing.T) store.Store) {
 		"FamilyEmail":      importFamilyEmail,
 		"DryRunIDs":        importDryRunIDs,
 		"Concurrent":       importConcurrent,
+		"GuardianProblems": importGuardianProblems,
+		"FileName":         importFileName,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -663,5 +665,114 @@ func importConcurrent(t *testing.T, w *world) {
 				t.Fatalf("round %d: %v", round, err)
 			}
 		}
+	}
+}
+
+// importGuardianProblems: the problems of a row's guardian and the values
+// too long name the guardian's fields; a guardian named by an email two
+// persons share is ambiguous, an unknown one needs its names, and the
+// member is not its own guardian. A new member may be the same as a person
+// with its email as an account's, or with its name and birth date.
+func importGuardianProblems(t *testing.T, w *world) {
+	ctx := t.Context()
+
+	w.person("Ann", "Shared", "shared@example.org")
+	w.person("Bea", "Shared", "shared@example.org")
+	holder := w.person("Hal", "Holder", "")
+	w.account(holder, "holder@example.org")
+	lia := w.person("Lia", "Example", "")
+	lia.BirthDate = domain.Date{Year: 2015, Month: time.January, Day: 2}
+	w.update(lia)
+	uli := w.person("Uli", "Example", "")
+	uli.MemberNo = "U-1"
+	w.update(uli)
+
+	long := strings.Repeat("x", 101)
+	file := service.ImportFile{Name: "guardians.csv", Data: []byte(
+		"no;given;family;mail;born;g1 given;g1 family;g1 mail;g1 phone\n" +
+			"X-1;Xena;Example;;;;;shared@example.org;\n" + // two persons have the email
+			"X-2;Xavi;Example;;;;;nobody@example.org;\n" + // a new guardian without names
+			"U-1;Uli;Example;;;Uli;Example;;\n" + // the member itself
+			"X-3;Xia;Example;;;" + long + ";" + long + ";bad-email;" + strings.Repeat("0", 51) + "\n" +
+			"X-4;Xyla;Example;HOLDER@example.org;;;;;\n" + // an account's email
+			"X-5;Lia;Example;;2015-01-02;;;;\n" + // Lia's name and birth date
+			strings.Repeat("9", domain.MaxMemberNoLength+1) + ";Max;Example;;;;;;\n" +
+			"X-6;" + long + ";Example;;;;;;\n")}
+	mapping := service.ImportMapping{Columns: map[service.ImportField]string{
+		service.FieldMemberNo: "no", service.FieldGivenName: "given", service.FieldFamilyName: "family",
+		service.FieldEmail: "mail", service.FieldBirthDate: "born", service.FieldGuardian1GivenName: "g1 given",
+		service.FieldGuardian1FamilyName: "g1 family", service.FieldGuardian1Email: "g1 mail",
+		service.FieldGuardian1Phone: "g1 phone",
+	}}
+
+	before := w.count()
+
+	res, err := w.imports().Import(ctx, w.office.AccountID, file, mapping, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := [][]service.ImportIssue{
+		{{Code: service.IssueGuardianAmbiguous, Field: service.FieldGuardian1Email}},
+		{
+			{Code: service.IssueRequired, Field: service.FieldGuardian1GivenName},
+			{Code: service.IssueRequired, Field: service.FieldGuardian1FamilyName},
+		},
+		{{Code: service.IssueGuardianIsMember, Field: service.FieldGuardian1GivenName}},
+		{
+			{Code: service.IssueInvalid, Field: service.FieldGuardian1GivenName},
+			{Code: service.IssueInvalid, Field: service.FieldGuardian1FamilyName},
+			{Code: service.IssueInvalid, Field: service.FieldGuardian1Email},
+			{Code: service.IssueInvalid, Field: service.FieldGuardian1Phone},
+		},
+		nil,
+		nil,
+		{{Code: service.IssueInvalid, Field: service.FieldMemberNo}},
+		// The name too long is not set, so the new member has none.
+		{{Code: service.IssueInvalid, Field: service.FieldGivenName}, {Code: service.IssueRequired, Field: service.FieldGivenName}},
+	}
+
+	for i, r := range res.Rows {
+		if !slices.Equal(r.Issues, want[i]) {
+			t.Errorf("line %d: issues %+v, want %+v", r.Line, r.Issues, want[i])
+		}
+	}
+
+	if res.Counts != (domain.ImportCounts{Rows: 8, Created: 2, Failed: 6}) {
+		t.Errorf("counts %+v", res.Counts)
+	}
+
+	for i, dup := range map[int]domain.Person{4: holder, 5: lia} {
+		if d := res.Rows[i].Duplicates; len(d) != 1 || d[0].ID != dup.ID {
+			t.Errorf("line %d: duplicates %+v, want %s", res.Rows[i].Line, d, dup.GivenName)
+		}
+	}
+
+	if got := w.count(); got != w.countAfter(before, 2, 0) {
+		t.Errorf("wrote %+v, before %+v", got, before)
+	}
+}
+
+// importFileName: a file without a name is recorded as import.csv; a file
+// that cannot be read fails the import on its content.
+func importFileName(t *testing.T, w *world) {
+	ctx := t.Context()
+	svc := w.imports()
+	mapping := service.ImportMapping{Columns: map[service.ImportField]string{
+		service.FieldMemberNo: "no", service.FieldGivenName: "given", service.FieldFamilyName: "family",
+	}}
+
+	_, err := svc.Import(ctx, w.office.AccountID, service.ImportFile{Name: "bad.csv", Data: []byte("a;a\n1;2\n")}, mapping, true)
+	wantField(t, err, "content")
+
+	res, err := svc.Import(ctx, w.office.AccountID, service.ImportFile{Name: "  ", Data: []byte(
+		"no\tgiven\tfamily\nT-1\tTeo\tExample\n")}, mapping, true)
+	if err != nil || res.Counts.Created != 1 {
+		t.Fatalf("import: %+v, %v", res.Counts, err)
+	}
+
+	runs, err := svc.ImportRuns(ctx)
+	if err != nil || len(runs) != 1 || runs[0].Run.FileName != "import.csv" || runs[0].Run.ID != res.RunID {
+		t.Errorf("runs %+v, %v; want the run as import.csv", runs, err)
 	}
 }
