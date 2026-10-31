@@ -167,6 +167,30 @@ describe('Theme', () => {
     });
   });
 
+  it("keeps another admin's theme that arrives while the form is open", async () => {
+    mockApiGet(fixtures());
+    const put = mockApiPut({
+      '/api/v1/admin/settings/branding': ({ body }) => ({
+        body: { ...branding, theme: 'werkstatt', ...(body as object) },
+      }),
+    });
+    const user = userEvent.setup();
+
+    const { queryClient } = renderPage();
+    const f = await form();
+    expect(f.getByRole('combobox', { name: 'Theme' })).toHaveTextContent('Programme');
+    // Another admin picks Werkstatt; a refetch (as after a background upload) brings it in.
+    mockApiGet(fixtures(meAdmin, { theme: 'werkstatt' }));
+    await queryClient.refetchQueries({ queryKey: brandingSettingsQuery.queryKey });
+    await user.type(f.getByLabelText('Accent color'), '#1d4ed8');
+    await user.click(f.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByText('The settings have been saved.')).toBeInTheDocument();
+    expect(put).toHaveBeenCalledWith('/api/v1/admin/settings/branding', {
+      body: { accentColor: '#1d4ed8' },
+    });
+  });
+
   it('marks the theme the server refuses', async () => {
     mockApiGet(fixtures());
     mockApiPut({

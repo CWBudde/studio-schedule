@@ -118,9 +118,11 @@ function BrandingForm({ settings }: { settings: BrandingSettings }) {
   const ratio = (n: number) =>
     new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 2 }).format(n);
 
-  // An unchanged theme is left out, so that the stored one stays.
+  // An unchanged theme is left out, so that the stored one stays. "Unchanged" is
+  // against the form's own baseline: a refetch (e.g. after a background upload)
+  // may bring another admin's theme into settings while the form keeps its own.
   const onSubmit = ({ theme, ...body }: BrandingSettingsData) =>
-    update.mutate(theme === settings.theme ? body : { ...body, theme }, {
+    update.mutate(theme === form.formState.defaultValues?.theme ? body : { ...body, theme }, {
       onSuccess: (saved) => {
         form.reset(brandingValues(saved));
         toast.success(t('saved'));
