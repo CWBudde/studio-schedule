@@ -318,6 +318,32 @@ background image is a setting of its own, stored like the receipt logo; only Wer
 - **Demo:** the web demo offers one fictional school per theme ([demo-mode.md](demo-mode.md), "Two
   demo schools"); `web/e2e/werkstatt.spec.ts` drives the Werkstatt one.
 
+## Testing
+
+- **Layers:** each package tests its own code. The stores share the `storetest` contract suite
+  (every repository method, on memory and on PostgreSQL), and service scenarios that need real
+  locks and constraints live in `internal/service/servicetest` (see "Transactions and
+  concurrency"). `internal/app` drives the HTTP API through `app.New` on the memory store, and
+  `cmd/studio-schedule` runs its commands in-process through cobra against a PostgreSQL test
+  database (`testdb_test.go`).
+- **Store failures:** `internal/service/fault_test.go` wraps the memory store in a `FaultStore`
+  that fails a chosen repository call, the start of a transaction or its commit with
+  `ErrInjected`. `SweepFaults` runs an operation once, then once per store call it made with that
+  call failing, and checks that the error comes back and that nothing was written, so no
+  half-written rows and no queued mail or push. The repository wrappers are generated from
+  `internal/store/store.go` (`go generate ./internal/service` after removing an interface method).
+  `internal/app/faultstore_test.go` does the same for the API's generic 500 without internals.
+- **Coverage:** `just test-cover` writes one cross-package profile (`go test -coverpkg=./...`), so a
+  statement counts whichever package's test runs it, and `just coverage` reports it with
+  `tools/coverage`. The report gives the total and then the packages with the most uncovered
+  statements; the shared test suites, generated sqlc code and `tools/` are left out. It is also the
+  gate: below `coverage_min` (total) or `coverage_min_package` (any package) in the justfile, it
+  names each miss and fails. CI prints the report in the log and in the job summary, then runs
+  the gate. The floors go up as coverage grows and go down only by a decision recorded in PLAN.md
+  (Phase 9).
+- **What counts:** a test asserts behaviour. A branch no input can reach is deleted, not excluded
+  or covered artificially. Code is never excluded from coverage.
+
 ## Decision records
 
 Architectural decisions are recorded in [docs/decisions](decisions/).

@@ -721,6 +721,11 @@ in `internal/service` (86.3 %, 1,046 uncovered), `cmd/studio-schedule` (70.3 %, 
 `internal/httpapi` (93.5 %, 106) and `internal/store/postgres` (91.6 %, 91). A per-package count
 gives only 53.8 %, because most code is run by other packages' tests.
 
+Result (2026-11-01): **98.7 %** (15,370 of 15,565), gated at 95 % total and 80 % per package. Three
+bugs found and fixed on the way: a Storno could undo a concurrent merge, a typst instance grown to
+the 4 GiB maximum was kept, and `migrate up` hid the migrations applied before a failing one.
+Behaviour pinned as it is, open for a decision, is in the notes of the items below.
+
 - [x] Coverage after every test run: `just test-cover` writes `coverage.out` and `just coverage`
       reports it. `just ci` ends with the report. CI prints it in the job log and the job summary,
       also when a test failed, and uploads the profile (2026-10-31): `tools/coverage` (merges the
@@ -747,7 +752,7 @@ gives only 53.8 %, because most code is run by other packages' tests.
       status through `runMain`. 70.3 % → 97.7 % (12 uncovered: failing library calls, shutdown
       timeouts, a broken embedded renderer); total 89.3 % → 90.3 %. Found: `migrate up` does not list
       the migrations it applied before a failing one (`postgres.Migrator.Up` drops
-      `goose.PartialError.Applied`; reproducer skipped in `migrate_test.go` until the store fix);
+      `goose.PartialError.Applied`; fixed in the store on 2026-11-01, the reproducer runs);
       `seed`/`serve` call a gap in the goose table "outdated, run migrate up", which `migrate up`
       refuses
 - [x] `internal/httpapi` and `internal/app`: the error mappings (`toHTTPError`, conflicts, field
@@ -793,12 +798,19 @@ gives only 53.8 %, because most code is run by other packages' tests.
       which our inputs cannot fail but whose docs do not promise it. "No AUTH offered" is a
       transient error (retried up to `MaxMailAttempts`); pdftext misses `/Type /Page>>` and
       multi-line `/Font` dicts (pinned, typst does not write them)
-- [ ] Gate: CI fails below 90 % (`tools/coverage -min 90`, also in `just ci`). The floor goes up as
+- [x] Gate: CI fails below 90 % (`tools/coverage -min 90`, also in `just ci`). The floor goes up as
       coverage grows and only goes down by a decision recorded here. Is there also a per-package
       floor (e.g. 80 %), so one well-tested package cannot hide another? To be decided when the
-      gate lands
-- [ ] Docs: CLAUDE.md (new code comes with tests that keep the gate green; how to read
-      `just coverage`), docs/architecture.md "Testing"
+      gate lands (2026-11-01): with all items above on main the total is 98.7 % (15,370 of
+      15,565). Decided: a total floor of **95 %** and a per-package floor of **80 %** (lowest
+      today: `internal/pdf` 83.3 %, 1 of 6 statements uncovered; `internal/webui` 85.7 %).
+      `tools/coverage -min -min-package` names each miss on stderr and exits 1; the floors are
+      `coverage_min` and `coverage_min_package` in the justfile, which `just coverage` (and so
+      `just ci`) and CI's "Coverage gate" step (after green tests, behind the always-run report)
+      use
+- [x] Docs: CLAUDE.md (new code comes with tests that keep the gate green; how to read
+      `just coverage`), docs/architecture.md "Testing" (2026-11-01): the test layers, `FaultStore`
+      and `SweepFaults`, the cross-package measurement and the gate
 
 ## Phase 10 — Events & workshops
 

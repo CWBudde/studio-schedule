@@ -30,6 +30,8 @@ just sqlc        # after changing internal/store/postgres/{migrations,queries}: 
 just web-dev     # Vite on :5173, proxies /api to :8080
 just test        # go test ./...
 just test-race   # go test -race ./...
+just test-cover  # go test -coverpkg=./... -coverprofile=coverage.out ./... (Docker for the PG tests)
+just coverage    # report coverage.out, fail below the floors (coverage_min, coverage_min_package)
 just lint        # golangci-lint + js/wasm vet
 just fix         # golangci-lint --fix, then fmt
 just fmt         # treefmt + prettier
@@ -250,6 +252,13 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   internals. CI fails if `api/openapi.json` or `web/src/api/schema.d.ts` is stale.
 - **Frontend:** shadcn/ui components (`pnpm dlx shadcn@latest add …`), TanStack Query for server
   state, react-hook-form + zod for forms, every user-facing string in `web/src/locales/{en,de}`.
+- **Tests and coverage:** new code comes with tests that assert its behaviour and keep the
+  coverage gate green: 95 % of all statements and 80 % per package, measured across packages
+  (docs/architecture.md, "Testing"). `just coverage` lists the total and then the packages with
+  the most uncovered statements; `go tool cover -html=coverage.out` shows the lines. Store failures
+  come from `FaultStore`/`SweepFaults` (`internal/service/fault_test.go`). A branch no input can
+  reach is deleted, never excluded. The floors in the justfile only go down by a decision recorded
+  in PLAN.md.
 - **Unimplemented means absent.** Don't add stubs that pretend to succeed.
 - Commit messages and PR titles: Conventional Commits, in English (release-please builds releases
   from them).
