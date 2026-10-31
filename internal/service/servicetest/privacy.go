@@ -24,8 +24,10 @@ func Privacy(t *testing.T, newStore func(t *testing.T) store.Store) {
 		"AnonymizeErases":         anonymizeErases,
 		"AnonymizeRefuses":        anonymizeRefuses,
 		"AnonymizedTakesNoWrites": anonymizedTakesNoWrites,
+		"AnonymizeUnlinks":        anonymizeUnlinks,
 		"Export":                  exportPerson,
 		"ExportFamily":            exportFamily,
+		"ExportAccountData":       exportAccountData,
 		"AccountAdmin":            accountAdmin,
 		"AccountAdminGuards":      accountAdminGuards,
 		"LastAdminSignsIn":        lastAdminSignsIn,
@@ -318,6 +320,73 @@ func anonymizedTakesNoWrites(t *testing.T, w *world) {
 	}
 }
 
+// anonymizeUnlinks: anonymizing ends what the privacy fixture leaves out:
+// the person's staff record keeps its display name without the person, a
+// duplicate dismissal of the person goes, the account's push subscriptions
+// go with it, and an admin's running impersonation of the account is
+// audited as ended, pointed at the person once the account is gone.
+func anonymizeUnlinks(t *testing.T, w *world) {
+	ctx := t.Context()
+	f := newPrivacyFixture(w)
+	admin := newAdminFixture(w).admin
+
+	staff := domain.Staff{
+		ID: newID[domain.StaffID](w), PersonID: f.paula.ID, DisplayName: "Paula P.", Kind: domain.StaffInstructor,
+		Active: true,
+	}
+	impersonation := domain.Session{
+		ID: newID[domain.SessionID](w), AccountID: f.account.ID, TokenHash: domain.HashToken("ada as paula"),
+		CreatedAt: now.Add(-time.Minute), LastSeenAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour),
+		ImpersonatorID: admin.AccountID,
+	}
+	w.write(func(ctx context.Context, tx store.Tx) error {
+		return errors.Join(
+			tx.Staff().Create(ctx, staff),
+			tx.DuplicateDismissals().Create(ctx,
+				domain.NewDuplicateDismissal(f.paula.ID, f.otherParent.ID, w.office.AccountID, now.Add(-time.Hour))),
+			tx.Sessions().Create(ctx, impersonation),
+			tx.PushSubscriptions().Save(ctx, paulasDevice(w, f.account.ID)),
+		)
+	})
+
+	sum, err := w.persons().Anonymize(ctx, w.office, f.paula.ID)
+	if err != nil || sum.StaffUnlinked != 1 || !sum.AccountDeleted {
+		t.Fatalf("anonymize: %+v, %v", sum, err)
+	}
+
+	read(w, func(ctx context.Context, tx store.Tx) (any, error) {
+		if st, err := tx.Staff().Get(ctx, staff.ID); err != nil || !st.PersonID.IsZero() || st.DisplayName != "Paula P." {
+			t.Errorf("staff %+v, %v; want it kept without the person", st, err)
+		}
+
+		if d, err := tx.DuplicateDismissals().ListByPerson(ctx, f.paula.ID); err != nil || len(d) != 0 {
+			t.Errorf("duplicate dismissals %+v, %v", d, err)
+		}
+
+		if subs, err := tx.PushSubscriptions().ListByAccount(ctx, f.account.ID); err != nil || len(subs) != 0 {
+			t.Errorf("push subscriptions %+v, %v", subs, err)
+		}
+
+		return nil, nil
+	})
+
+	ended := slices.DeleteFunc(w.audit(), func(e domain.AuditEvent) bool {
+		return e.Action != domain.AuditImpersonationEnded
+	})
+	if len(ended) != 1 || ended[0].ActorID != admin.AccountID || ended[0].TargetKind != domain.AuditTargetPerson ||
+		ended[0].TargetPersonID != f.paula.ID {
+		t.Errorf("impersonation ended %+v", ended)
+	}
+}
+
+// paulasDevice is a push subscription of the account.
+func paulasDevice(w *world, account domain.AccountID) domain.PushSubscription {
+	return domain.PushSubscription{
+		ID: newID[domain.PushSubscriptionID](w), AccountID: account, Endpoint: "https://push.example.org/paula",
+		P256DH: [65]byte{4}, Auth: [16]byte{1}, CreatedAt: now.Add(-time.Hour), LastUsedAt: now.Add(-time.Hour),
+	}
+}
+
 func exportPerson(t *testing.T, w *world) {
 	ctx := t.Context()
 	f := newPrivacyFixture(w)
@@ -407,6 +476,72 @@ func exportFamily(t *testing.T, w *world) {
 		if _, err := family.Export(ctx, p, id); !errors.Is(err, domain.ErrNotFound) {
 			t.Errorf("export %v: %v", id, err)
 		}
+	}
+}
+
+// exportAccountData: an export with the account lists the announcements the
+// account dismissed and no other, the account's push subscriptions, and
+// marks a receipt that was canceled (the cancellation is the person's too).
+func exportAccountData(t *testing.T, w *world) {
+	ctx := t.Context()
+	f := newPrivacyFixture(w)
+
+	announcement := func(title string) domain.Announcement {
+		a := domain.Announcement{
+			ID: newID[domain.AnnouncementID](w), AuthorID: w.office.AccountID, Title: title, Body: "Details follow.",
+			Audience: domain.AudienceEveryone, PublishAt: now.Add(-time.Hour), CreatedAt: now.Add(-time.Hour),
+			UpdatedAt: now.Add(-time.Hour),
+		}
+		w.write(func(ctx context.Context, tx store.Tx) error { return tx.Announcements().Create(ctx, a) })
+
+		return a
+	}
+	announcement("Studio closed on Friday")
+	dismissed := announcement("New timetable")
+
+	cancellation := f.receipt
+	cancellation.ID, cancellation.Kind, cancellation.CancelsReceiptID = newID[domain.ReceiptID](w),
+		domain.ReceiptCancellation, f.receipt.ID
+	cancellation.Lines = []domain.ReceiptLine{f.receipt.Lines[0].Negated()}
+	cancellation.Net, cancellation.VAT, cancellation.Gross = -f.receipt.Net, -f.receipt.VAT, -f.receipt.Gross
+
+	w.write(func(ctx context.Context, tx store.Tx) error {
+		seq, err := tx.ReceiptCounters().Next(ctx, 2026)
+		if err != nil {
+			return err
+		}
+
+		cancellation.Sequence, cancellation.Number = seq, domain.ReceiptNumber("R", 2026, seq)
+
+		return errors.Join(
+			tx.Receipts().Create(ctx, cancellation),
+			tx.Announcements().Dismiss(ctx, domain.AnnouncementDismissal{
+				AnnouncementID: dismissed.ID, AccountID: f.account.ID, DismissedAt: now.Add(-time.Minute),
+			}),
+			tx.PushSubscriptions().Save(ctx, paulasDevice(w, f.account.ID)),
+		)
+	})
+
+	x, err := w.persons().Export(ctx, f.paula.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(x.Dismissed) != 1 || x.Dismissed[0].ID != dismissed.ID {
+		t.Errorf("dismissed %+v, want %q only", x.Dismissed, dismissed.Title)
+	}
+
+	if len(x.PushSubscriptions) != 1 || x.PushSubscriptions[0].Endpoint != "https://push.example.org/paula" {
+		t.Errorf("push subscriptions %+v", x.PushSubscriptions)
+	}
+
+	canceled := map[domain.ReceiptID]bool{}
+	for _, r := range x.Receipts {
+		canceled[r.Receipt.ID] = r.Canceled
+	}
+
+	if len(canceled) != 2 || !canceled[f.receipt.ID] || canceled[cancellation.ID] {
+		t.Errorf("receipts (canceled) %v; want the sale canceled and its cancellation", canceled)
 	}
 }
 
