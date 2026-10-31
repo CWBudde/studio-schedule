@@ -109,6 +109,20 @@ export const schoolLogoQuery = queryOptions({
   staleTime: 5 * 60_000,
 });
 
+/**
+ * The school's background image, which themes that show one put behind the
+ * app, or null without one (public, revalidated with its ETag).
+ */
+export const schoolBackgroundQuery = queryOptions({
+  queryKey: ['settings', 'background'],
+  queryFn: ({ signal }) =>
+    unwrapOrNull(
+      404,
+      api.GET('/api/v1/settings/background', { parseAs: 'blob', signal }),
+    ) as Promise<Blob | null>,
+  staleTime: 5 * 60_000,
+});
+
 export type ScheduleParams = NonNullable<paths['/api/v1/schedule']['get']['parameters']['query']>;
 
 /** Prefix of every schedule query key, e.g. to refetch all schedules at a release. */
@@ -2912,9 +2926,9 @@ export const deleteReceiptLogoMutation = (queryClient: QueryClient) =>
 
 /** The school's name and legal notice (office reads, an admin writes; ADR 0013). */
 export type SchoolSettings = components['schemas']['SchoolSettings'];
-/** The accent color, its dark variant and whether a logo exists. */
+/** The accent color, its dark variant, the theme and whether a logo and a background exist. */
 export type BrandingSettings = components['schemas']['BrandingSettings'];
-/** The accent color an admin writes. */
+/** The accent color and the theme an admin writes; without a theme the stored one stays. */
 export type BrandingSettingsData = components['schemas']['BrandingSettingsData'];
 /** The time zone, language and currency, and which of them the data fixes. */
 export type RegionalSettings = components['schemas']['RegionalSettings'];
@@ -2954,7 +2968,10 @@ export const brandingSettingsQuery = queryOptions({
   queryFn: ({ signal }) => unwrap(api.GET('/api/v1/admin/settings/branding', { signal })),
 });
 
-/** Sets the accent color, or the app's own (admin); too little contrast is a 422. */
+/**
+ * Sets the accent color, or the app's own, and the theme (admin); too little
+ * contrast or an unknown theme is a 422.
+ */
 export const updateBrandingSettingsMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (body: BrandingSettingsData) =>
@@ -2963,6 +2980,35 @@ export const updateBrandingSettingsMutation = (queryClient: QueryClient) =>
       queryClient.setQueryData(brandingSettingsQuery.queryKey, settings);
       return refreshPublicSettings(queryClient);
     },
+  });
+
+/** After the background changes: the settings (whether there is one) and the image. */
+const refreshBackground = (queryClient: QueryClient) =>
+  Promise.all(
+    [
+      brandingSettingsQuery.queryKey,
+      publicSettingsQuery.queryKey,
+      schoolBackgroundQuery.queryKey,
+    ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+  );
+
+/**
+ * Sets the school's background image (admin): a JPEG, PNG or WebP of at most
+ * 1 MiB, base64 encoded; another type is a 422 on `body.contentType`, a larger
+ * image or data not of the type one on `body.data`.
+ */
+export const updateBrandingBackgroundMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: components['schemas']['BrandingBackgroundInputBody']) =>
+      expectOk(api.PUT('/api/v1/admin/settings/branding/background', { body })),
+    onSuccess: () => refreshBackground(queryClient),
+  });
+
+/** Removes the school's background image (admin). */
+export const deleteBrandingBackgroundMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: () => expectOk(api.DELETE('/api/v1/admin/settings/branding/background')),
+    onSuccess: () => refreshBackground(queryClient),
   });
 
 export const regionalSettingsQuery = queryOptions({

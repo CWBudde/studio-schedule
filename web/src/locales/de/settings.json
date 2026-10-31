@@ -23,7 +23,7 @@
   },
   "branding": {
     "title": "Erscheinungsbild",
-    "description": "Die Akzentfarbe von Schaltflächen, Links und Hervorhebungen und das Logo in der Kopfzeile.",
+    "description": "Das Aussehen der App: ihr Design, die Akzentfarbe von Schaltflächen, Links und Hervorhebungen, das Logo in der Kopfzeile und ein Hintergrundbild.",
     "accent": "Akzentfarbe",
     "accentHint": "Als #rrggbb. Leer lassen für die Farbe der App.",
     "pick": "Akzentfarbe auswählen",
@@ -39,7 +39,32 @@
     "logo": "Logo",
     "logoAlt": "Das Logo der Schule",
     "logoHint": "Die Kopfzeile zeigt das Logo der Belege. Es wird unten in den Beleg-Einstellungen geändert.",
-    "noLogo": "Kein Logo: Die Kopfzeile zeigt das Zeichen der App."
+    "noLogo": "Kein Logo: Die Kopfzeile zeigt das Zeichen der App.",
+    "theme": "Design",
+    "chooseTheme": "Design wählen",
+    "themes": {
+      "programme": "Programm",
+      "werkstatt": "Werkstatt"
+    },
+    "themeHints": {
+      "programme": "Klare Karten auf ruhiger Seite, in der Akzentfarbe.",
+      "werkstatt": "Schmale Schrift, farbige Tagesbänder und die Räume nebeneinander, auf dem Hintergrundbild der Schule."
+    },
+    "background": {
+      "title": "Hintergrundbild",
+      "alt": "Das Hintergrundbild der Schule",
+      "none": "Kein Hintergrundbild.",
+      "loading": "Das Hintergrundbild wird geladen…",
+      "invalid": "Wähle ein JPEG-, PNG- oder WebP-Bild mit höchstens {{size}} MB.",
+      "upload": "Hintergrundbild hochladen",
+      "replace": "Hintergrundbild ersetzen",
+      "uploading": "Wird hochgeladen…",
+      "remove": "Hintergrundbild entfernen",
+      "saved": "Das Hintergrundbild wurde gespeichert.",
+      "removed": "Das Hintergrundbild wurde entfernt.",
+      "hint": "Ein JPEG, PNG oder WebP mit höchstens {{size}} MB. Werkstatt zeigt es hinter der Seite, Programm nicht.",
+      "unreadable": "Die Datei konnte nicht gelesen werden; wähle sie noch einmal."
+    }
   },
   "regional": {
     "title": "Zeit und Sprache",

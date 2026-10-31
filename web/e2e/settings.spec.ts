@@ -59,6 +59,38 @@ test('an admin renames the school and sets its accent color', async ({ page }) =
   ).toHaveAttribute('readonly', '');
 });
 
+// A real JPEG, which the server checks by its first bytes: the werkstatt demo school's.
+const backgroundJpeg = '../internal/seed/assets/werkstatt-background.jpg';
+
+test('an admin chooses the theme and uploads and removes a background image', async ({ page }) => {
+  const name = await signIn(page, 'Administrator');
+  await openSettings(page, name);
+
+  const branding = page.getByRole('form', { name: 'Branding' });
+  const theme = branding.getByRole('combobox', { name: 'Theme' });
+  await expect(theme).toHaveText('Programme');
+  await theme.click();
+  await page.getByRole('option', { name: 'Werkstatt' }).click();
+  await branding.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByText('The settings have been saved.').first()).toBeVisible();
+  // The form shows the server's answer.
+  await expect(theme).toHaveText('Werkstatt');
+  await expect(theme).toHaveAccessibleDescription(/^Condensed type, colored day bands/);
+
+  const card = page.getByRole('region', { name: 'Branding' });
+  await expect(card.getByText('No background image.')).toBeVisible();
+  await card.getByLabel('Upload a background image').setInputFiles(backgroundJpeg);
+  await expect(page.getByText('The background image has been saved.')).toBeVisible();
+  await expect(card.getByRole('img', { name: "The school's background image" })).toHaveAttribute(
+    'src',
+    /^data:image\/jpeg;base64,/,
+  );
+
+  await card.getByRole('button', { name: 'Remove the background image' }).click();
+  await expect(page.getByText('The background image has been removed.')).toBeVisible();
+  await expect(card.getByText('No background image.')).toBeVisible();
+});
+
 test('the office reads the settings without changing them', async ({ page }) => {
   const name = await signIn(page, 'Office');
   await openSettings(page, name);

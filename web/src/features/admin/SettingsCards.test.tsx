@@ -27,7 +27,7 @@ const school = {
   schoolName: 'Example Dance Studio',
   legalNotice: 'Example Dance Studio · 1 Example Street · Sampletown',
 };
-const branding = { minContrast: 4.5, hasLogo: false };
+const branding = { minContrast: 4.5, hasLogo: false, hasBackground: false, theme: 'programme' };
 const regional = {
   timezone: 'Europe/Berlin',
   defaultLocale: 'en',
