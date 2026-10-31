@@ -10,6 +10,7 @@ import (
 
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/mail"
 	"github.com/cwbudde/studio-schedule/internal/store"
 )
@@ -644,5 +645,180 @@ func TestAnnouncementReferences(t *testing.T) {
 	})
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Errorf("delete the course type = %v, want a conflict", err)
+	}
+}
+
+// classIn stores a copy of the fixture's class in the term, of the course
+// type, with the persons as members.
+func (f *announcementFixture) classIn(
+	t *testing.T, term domain.TermID, courseType domain.CourseTypeID, members ...domain.Person,
+) domain.Class {
+	t.Helper()
+
+	c := f.class
+	c.ID, c.TermID, c.CourseTypeID = ids.New[domain.ClassID](f.seq), term, courseType
+
+	f.write(t, func(ctx context.Context, tx store.Tx) error {
+		if err := tx.Classes().Create(ctx, c); err != nil {
+			return err
+		}
+
+		for _, p := range members {
+			if err := tx.Classes().AddMember(ctx, domain.ClassMember{ClassID: c.ID, PersonID: p.ID}); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	return c
+}
+
+// TestAnnouncementCourseTypeAudience: an announcement for a course type is
+// mailed to the members of its classes whose term has not ended, not to
+// the members of an ended term's class of it, nor to those of a current
+// class of another course type.
+func TestAnnouncementCourseTypeAudience(t *testing.T) {
+	t.Parallel()
+
+	f := newAnnouncementFixture(t)
+	past := domain.Term{
+		ID: ids.New[domain.TermID](f.seq), Name: "Fictional Past Year", StartsOn: mustDate(t, "2025-09-01"),
+		EndsOn: mustDate(t, "2026-07-31"),
+	}
+	jazz := domain.CourseType{ID: ids.New[domain.CourseTypeID](f.seq), Name: "Imaginary Jazz"}
+	f.write(t, func(ctx context.Context, tx store.Tx) error {
+		return errors.Join(tx.Terms().Create(ctx, past), tx.CourseTypes().Create(ctx, jazz))
+	})
+
+	f.classIn(t, past.ID, f.courseType, f.person(t, "Pia", "", "pia@example.org", ""))
+	f.classIn(t, f.term.ID, jazz.ID, f.person(t, "Quinn", "", "quinn@example.org", ""))
+
+	svc := f.service(t, bookingNow)
+	f.create(t, svc, AnnouncementInput{
+		AnnouncementAudience: AnnouncementAudience{Audience: domain.AudienceCourseType, CourseTypeID: f.courseType},
+		Title:                "Ballet exam", Body: "Next month.", Email: true,
+	})
+	f.sendDue(t, svc)
+
+	var to []string
+	for _, m := range f.mailsOf(t, mail.TemplateAnnouncement) {
+		to = append(to, m.To)
+	}
+
+	slices.Sort(to)
+
+	// Anna for Mia, a member of the current class; Stella for Sam, booked
+	// for a lesson of the course type.
+	if want := []string{"anna@example.org", "stella@example.org"}; !slices.Equal(to, want) {
+		t.Errorf("mailed to %v, want %v", to, want)
+	}
+}
+
+// TestAnnouncementListResolves: the office's list names the class, its
+// term and course type, the lesson, and the course type of each
+// announcement; two classes of one term share it.
+func TestAnnouncementListResolves(t *testing.T) {
+	t.Parallel()
+
+	f := newAnnouncementFixture(t)
+	other := f.classIn(t, f.term.ID, f.courseType)
+	svc := f.service(t, bookingNow)
+	now := mustInstant(t, bookingNow)
+
+	for i, aud := range []AnnouncementAudience{
+		{Audience: domain.AudienceClass, ClassID: f.class.ID},
+		{Audience: domain.AudienceClass, ClassID: other.ID},
+		{Audience: domain.AudienceLesson, LessonID: f.lesson.ID},
+		{Audience: domain.AudienceCourseType, CourseTypeID: f.courseType},
+		audience(domain.AudienceEveryone),
+	} {
+		f.create(t, svc, AnnouncementInput{
+			AnnouncementAudience: aud, Title: string(aud.Audience), Body: "Hi.",
+			PublishAt: now.Add(-time.Duration(i) * time.Minute),
+		})
+	}
+
+	list, err := svc.List(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type ref struct {
+		class      domain.ClassID
+		term       domain.TermID
+		courseType domain.CourseTypeID
+		lesson     domain.LessonID
+	}
+
+	var got []ref
+	for _, e := range list {
+		got = append(got, ref{e.Class.ID, e.Term.ID, e.CourseType.ID, e.Lesson.ID})
+	}
+
+	want := []ref{
+		{f.class.ID, f.term.ID, f.courseType, domain.LessonID{}},
+		{other.ID, f.term.ID, f.courseType, domain.LessonID{}},
+		{domain.ClassID{}, domain.TermID{}, f.courseType, f.lesson.ID},
+		{domain.ClassID{}, domain.TermID{}, f.courseType, domain.LessonID{}},
+		{},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("list refers to %+v, want %+v", got, want)
+	}
+}
+
+// TestAnnouncementLessonReach: with only announcements for a lesson (and
+// everyone) shown, an account sees the lesson's if its family is booked for
+// it, and only then.
+func TestAnnouncementLessonReach(t *testing.T) {
+	t.Parallel()
+
+	f := newAnnouncementFixture(t)
+	svc := f.service(t, bookingNow)
+	f.create(t, svc, AnnouncementInput{
+		AnnouncementAudience: AnnouncementAudience{Audience: domain.AudienceLesson, LessonID: f.lesson.ID},
+		Title:                "Workshop", Body: "Room changed.",
+	})
+
+	for _, tc := range []struct {
+		person domain.Person
+		want   []string
+	}{{f.stella, []string{"Workshop"}}, {f.anna, nil}} {
+		got, err := svc.ForAccount(t.Context(), f.principal(t, tc.person))
+		if err != nil || !slices.Equal(titles(got), tc.want) {
+			t.Errorf("%s sees %q, %v; want %q", tc.person.GivenName, titles(got), err, tc.want)
+		}
+	}
+}
+
+// TestAnnouncementDismissNotShown: an announcement that is not shown yet,
+// or no longer, cannot be dismissed, and nothing is recorded.
+func TestAnnouncementDismissNotShown(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newAnnouncementFixture(t)
+	now := mustInstant(t, bookingNow)
+	svc := f.serviceAt(t, now)
+	later := f.create(t, svc, AnnouncementInput{
+		AnnouncementAudience: audience(domain.AudienceEveryone), Title: "Later", Body: "Hi.", PublishAt: now.Add(time.Hour),
+	})
+	expired := f.create(t, f.serviceAt(t, now.Add(-2*time.Hour)), AnnouncementInput{
+		AnnouncementAudience: audience(domain.AudienceEveryone), Title: "Over", Body: "Hi.", ExpiresAt: now,
+	})
+	anna := f.principal(t, f.anna)
+
+	for _, id := range []domain.AnnouncementID{later.ID, expired.ID} {
+		if err := svc.Dismiss(ctx, anna, id); !errors.Is(err, domain.ErrNotFound) {
+			t.Errorf("dismiss %v = %v, want not found", id, err)
+		}
+	}
+
+	// Once shown, the later one is not dismissed.
+	got, err := f.serviceAt(t, now.Add(time.Hour)).ForAccount(ctx, anna)
+	if err != nil || !slices.Equal(titles(got), []string{"Later"}) {
+		t.Errorf("Anna sees %q, %v; want the later one, not dismissed", titles(got), err)
 	}
 }
