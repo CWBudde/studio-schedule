@@ -389,6 +389,15 @@
       "failed": "Das hat nicht geklappt. Bitte versuche es erneut.",
       "notNow": "Das geht jetzt nicht: Die Anwesenheit öffnet mit Beginn der Stunde, und Lehrkräfte ändern bis zum Ende ihres Tages."
     },
-    "stale": "Die Teilnehmenden konnten nicht aktualisiert werden; das ist vielleicht nicht der neueste Stand."
+    "stale": "Die Teilnehmenden konnten nicht aktualisiert werden; das ist vielleicht nicht der neueste Stand.",
+    "table": {
+      "present": "Anwesend",
+      "status": "Status",
+      "name": "Name",
+      "email": "E-Mail",
+      "phone": "Telefon",
+      "pass": "Karte",
+      "actions": "Aktionen"
+    }
   }
 }
