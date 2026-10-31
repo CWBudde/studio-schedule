@@ -395,10 +395,7 @@ func (h *handlers) logout(ctx context.Context, _ *struct{}) (*LogoutOutput, erro
 }
 
 func (h *handlers) getMe(ctx context.Context, _ *struct{}) (*MeOutput, error) {
-	p, ok := principalFrom(ctx)
-	if !ok {
-		return nil, huma.Error401Unauthorized("not signed in")
-	}
+	p, _ := principalFrom(ctx) // AccessSignedIn
 
 	me, err := h.me(ctx, p)
 	if err != nil {

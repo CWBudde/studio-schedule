@@ -99,16 +99,14 @@ func (h *handlers) getWebManifest(ctx context.Context, _ *struct{}) (*WebManifes
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	body, err := json.Marshal(WebManifest{
+	// Strings only: encoding the manifest cannot fail.
+	body, _ := json.Marshal(WebManifest{
 		ID: "/", Name: s.SchoolName, ShortName: s.SchoolName,
 		Description: cmp.Or(manifestDescriptions[s.DefaultLocale], manifestDescriptions["en"]),
 		Lang:        s.DefaultLocale, StartURL: "/", Scope: "/", Display: "standalone",
 		ThemeColor: cmp.Or(s.AccentColor, DefaultThemeColor), BackgroundColor: manifestBackground,
 		Icons: ManifestIcons,
 	})
-	if err != nil {
-		return nil, h.toHTTPError(ctx, err)
-	}
 
 	return &WebManifestOutput{ContentType: ManifestContentType, CacheControl: ManifestCacheControl, Body: body}, nil
 }
