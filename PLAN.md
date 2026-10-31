@@ -748,9 +748,20 @@ gives only 53.8 %, because most code is run by other packages' tests.
       second parse of a URL), `bytes.Buffer` writes, and a booking without its lesson. Found: memory's
       `PutPDF` checks read-only before an empty PDF, postgres the other way round; `Restore`
       accepts trailing data after a snapshot
-- [ ] Adapters: `internal/mail/smtp` (a fake SMTP server: rejects, timeouts, TLS), `internal/webpush`
+- [x] Adapters: `internal/mail/smtp` (a fake SMTP server: rejects, timeouts, TLS), `internal/webpush`
       (an `httptest` push service: 404/410 drops the subscription, 429/5xx retries),
       `internal/pdf/pdftext`, `internal/pdf/typstwasm` (malformed input, module errors)
+      (2026-10-31): smtp 87.7 → 100 % (4xx/5xx at every step, permanent vs. transient; hangs, a
+      write cut off in DATA, failing randomness), webpush 83.7 → 90.6 % (every response class,
+      no redirects, refused keys and payloads), pdftext 84.2 → 100 % (hand-built PDFs),
+      typstwasm 77.4 → 100 % (hand-assembled modules: traps, out-of-memory pointers, waiting,
+      cancel, close). Total 89.4 → 89.9 % (14,012 of 15,592). Bug: an instance grown to the
+      4 GiB maximum was kept, as wazero's `Memory.Size` overflows to 0; it now counts pages.
+      Removed: error checks of writes into a `bytes.Buffer` (smtp), the audience re-parse and
+      the salt's `rand.Read` check (webpush). Left: webpush's checks on stdlib crypto calls,
+      which our inputs cannot fail but whose docs do not promise it. "No AUTH offered" is a
+      transient error (retried up to `MaxMailAttempts`); pdftext misses `/Type /Page>>` and
+      multi-line `/Font` dicts (pinned, typst does not write them)
 - [ ] Gate: CI fails below 90 % (`tools/coverage -min 90`, also in `just ci`). The floor goes up as
       coverage grows and only goes down by a decision recorded here. Is there also a per-package
       floor (e.g. 80 %), so one well-tested package cannot hide another? To be decided when the
