@@ -40,9 +40,9 @@ func Encrypt(sub Subscription, payload []byte) ([]byte, error) {
 	}
 
 	salt := make([]byte, saltLen)
-	if _, err := rand.Read(salt); err != nil {
-		return nil, fmt.Errorf("webpush: salt: %w", err)
-	}
+	// crypto/rand.Read never returns an error (it crashes the program
+	// instead, since Go 1.24).
+	rand.Read(salt)
 
 	return encrypt(sub, payload, ephemeral, salt)
 }

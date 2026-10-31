@@ -147,11 +147,7 @@ const maxErrorBody = 512
 // Send encrypts payload for sub and posts it to the subscription's
 // endpoint. A push service's refusal is a *StatusError.
 func (s *Sender) Send(ctx context.Context, sub Subscription, payload []byte, opts Options) error {
-	if err := ValidateEndpoint(sub.Endpoint); err != nil {
-		return err
-	}
-
-	aud, err := audience(sub.Endpoint)
+	endpoint, err := parseEndpoint(sub.Endpoint)
 	if err != nil {
 		return err
 	}
@@ -161,7 +157,7 @@ func (s *Sender) Send(ctx context.Context, sub Subscription, payload []byte, opt
 		return err
 	}
 
-	auth, err := s.keys.authorization(aud, s.subject, s.clock.Now().Add(tokenLifetime))
+	auth, err := s.keys.authorization(audience(endpoint), s.subject, s.clock.Now().Add(tokenLifetime))
 	if err != nil {
 		return err
 	}
@@ -202,15 +198,22 @@ func (s *Sender) Send(ctx context.Context, sub Subscription, payload []byte, opt
 // (a literal, lowercase "https://") with a host name, without
 // credentials, at most 2048 bytes long.
 func ValidateEndpoint(endpoint string) error {
+	_, err := parseEndpoint(endpoint)
+
+	return err
+}
+
+// parseEndpoint is ValidateEndpoint returning the parsed endpoint.
+func parseEndpoint(endpoint string) (*url.URL, error) {
 	const maxLen = 2048
 
 	u, err := url.Parse(endpoint)
 	if err != nil || len(endpoint) > maxLen || !strings.HasPrefix(endpoint, "https://") || u.Hostname() == "" ||
 		u.User != nil {
-		return fmt.Errorf("%w: the endpoint must be an https URL", ErrInvalidEndpoint)
+		return nil, fmt.Errorf("%w: the endpoint must be an https URL", ErrInvalidEndpoint)
 	}
 
-	return nil
+	return u, nil
 }
 
 // ErrInvalidEndpoint is wrapped by the errors of ValidateEndpoint.

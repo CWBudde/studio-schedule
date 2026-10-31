@@ -24,15 +24,9 @@ type vapidClaims struct {
 	Sub string `json:"sub"`
 }
 
-// audience returns the origin of the push endpoint, the "aud" claim.
-func audience(endpoint string) (string, error) {
-	u, err := url.Parse(endpoint)
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return "", fmt.Errorf("webpush: invalid endpoint %q", endpoint)
-	}
-
-	return u.Scheme + "://" + u.Host, nil
-}
+// audience returns the origin of the push endpoint, the "aud" claim. The
+// endpoint is one parseEndpoint accepted: an https URL with a host.
+func audience(endpoint *url.URL) string { return endpoint.Scheme + "://" + endpoint.Host }
 
 // token returns the VAPID JWT for the push service at aud: ES256 over the
 // header and the claims, valid until exp, naming the contact subject.

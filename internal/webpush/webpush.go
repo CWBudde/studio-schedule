@@ -105,10 +105,9 @@ func (k Keys) PublicKey() string { return encodeBase64URL(k.public) }
 // PrivateKey returns the base64url (without padding) of the private
 // scalar. It is a secret.
 func (k Keys) PrivateKey() string {
-	b, err := k.private.Bytes()
-	if err != nil {
-		return "" // unreachable: a P-256 key always encodes
-	}
+	// Bytes fails only for an invalid key or one of an unsupported curve;
+	// Keys holds a valid P-256 key (GenerateKeys, ParseKeys).
+	b, _ := k.private.Bytes()
 
 	return encodeBase64URL(b)
 }
