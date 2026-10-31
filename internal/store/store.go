@@ -521,6 +521,10 @@ type BookingRepo interface {
 	// (not canceled) booking in any of the given lessons; guests do not
 	// count.
 	CountActivePersons(ctx context.Context, lessons []domain.LessonID) (int, error)
+	// CountsByPersons returns, by person, the counts of their bookings in
+	// any of the given lessons, for each person with an active (not
+	// canceled) or a late-canceled booking there; guests do not count.
+	CountsByPersons(ctx context.Context, lessons []domain.LessonID) (map[domain.PersonID]PersonBookingCounts, error)
 	// ListActiveByLessons returns the bookings that are not canceled of any
 	// of the given lessons, ordered by BookedAt and ID.
 	ListActiveByLessons(ctx context.Context, lessons []domain.LessonID) ([]domain.Booking, error)
@@ -594,6 +598,16 @@ type BookingCounts struct {
 	// Attended and NoShow count the active bookings whose attendance was
 	// taken: present or absent.
 	Attended, NoShow int
+}
+
+// PersonBookingCounts counts the bookings of a person in a set of lessons.
+type PersonBookingCounts struct {
+	// Active counts the bookings that are not canceled, trials included.
+	Active int
+	// Attended counts the active bookings marked as attended.
+	Attended int
+	// LateCanceled counts the bookings canceled after the cutoff.
+	LateCanceled int
 }
 
 // WaitlistRepo stores the waiting-list entries of lessons (ADR 0010). A

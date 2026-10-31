@@ -319,6 +319,24 @@ func (r bookingRepo) CountActivePersons(ctx context.Context, lessons []domain.Le
 	return int(n), nil
 }
 
+func (r bookingRepo) CountsByPersons(
+	ctx context.Context, lessons []domain.LessonID,
+) (map[domain.PersonID]store.PersonBookingCounts, error) {
+	rows, err := r.q.CountBookingsByPersons(ctx, pgIDs(lessons))
+	if err != nil {
+		return nil, mapErr(err)
+	}
+
+	out := make(map[domain.PersonID]store.PersonBookingCounts, len(rows))
+	for _, row := range rows {
+		out[fromPgID[domain.PersonID](row.PersonID)] = store.PersonBookingCounts{
+			Active: int(row.Active), Attended: int(row.Attended), LateCanceled: int(row.LateCanceled),
+		}
+	}
+
+	return out, nil
+}
+
 func (r bookingRepo) ListActiveByLessons(ctx context.Context, lessons []domain.LessonID) ([]domain.Booking, error) {
 	rows, err := r.q.ListActiveBookingsByLessons(ctx, pgIDs(lessons))
 

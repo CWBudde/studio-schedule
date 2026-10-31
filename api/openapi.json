@@ -6066,6 +6066,48 @@
         ],
         "type": "object"
       },
+      "ParticipantStatistics": {
+        "additionalProperties": false,
+        "properties": {
+          "attended": {
+            "description": "Of those, the ones marked as attended.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "bookings": {
+            "description": "Active (not canceled) bookings in the range, trials included.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "familyName": {
+            "description": "Family name.",
+            "type": "string"
+          },
+          "givenName": {
+            "description": "Given name.",
+            "type": "string"
+          },
+          "lateCancellations": {
+            "description": "Bookings the person canceled after the cancellation cutoff.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "personId": {
+            "description": "The person.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "personId",
+          "givenName",
+          "familyName",
+          "bookings",
+          "attended",
+          "lateCancellations"
+        ],
+        "type": "object"
+      },
       "Pass": {
         "additionalProperties": false,
         "properties": {
@@ -8643,6 +8685,13 @@
             "format": "date",
             "type": "string"
           },
+          "topParticipants": {
+            "description": "The persons with the most active bookings (at most 20, each with at least one), by bookings (descending), family name and given name. Merged and anonymized persons are left out.",
+            "items": {
+              "$ref": "#/components/schemas/ParticipantStatistics"
+            },
+            "type": "array"
+          },
           "totals": {
             "$ref": "#/components/schemas/StatisticsTotals",
             "description": "The figures of the whole range."
@@ -8661,7 +8710,8 @@
           "classes",
           "rooms",
           "courseTypes",
-          "instructors"
+          "instructors",
+          "topParticipants"
         ],
         "type": "object"
       },
@@ -12479,7 +12529,7 @@
     },
     "/api/v1/admin/statistics": {
       "get": {
-        "description": "Returns the school's figures of a range of school dates, in the school time zone: bookings, attendance, late cancellations, trials and guests, waiting lists and utilization by week (by month beyond 26 weeks) and by class, room, course type and instructor, the active members, and the pass sales from the receipts, cancellations netted. Aggregates only: no person is named. Canceled lessons count only as such. The presets end today; a custom range has at most 366 days (else a 422). The term range without a term that includes today is a 404.",
+        "description": "Returns the school's figures of a range of school dates, in the school time zone: bookings, attendance, late cancellations, trials and guests, waiting lists and utilization by week (by month beyond 26 weeks) and by class, room, course type and instructor, the active members, and the pass sales from the receipts, cancellations netted, and the top 20 participants by active bookings (merged and anonymized persons left out); no other person is named. Canceled lessons count only as such. The presets end today; a custom range has at most 366 days (else a 422). The term range without a term that includes today is a 404.",
         "operationId": "getStatistics",
         "parameters": [
           {

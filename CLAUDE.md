@@ -144,7 +144,8 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
 - **Statistics:** `service.StatisticsService` (`service/statistics.go`, `httpapi/statistics.go`,
   `office`): live aggregates of a range of school dates from a constant number of store reads
   (`CountsByLessons`, `CountLateCanceledByLessons`, `CountActivePersons`,
-  `Waitlist().CountByLessons`, `Receipts().TotalsByDay`); see architecture.md "Statistics". The page
+  `Waitlist().CountByLessons`, `Receipts().TotalsByDay`, and for the top 20 participants
+  `Bookings().CountsByPersons` plus `Persons().ListByIDs`); see architecture.md "Statistics". The page
   is `web/src/features/admin/StatisticsPage.tsx`; recharts and what only it uses stay in the lazily
   loaded `charts` chunk (`web/vite.chunks.ts`, a build guard fails if the entry loads them).
 - **Announcements:** `service.AnnouncementService` (`service/announcements.go`, ADR 0014): the

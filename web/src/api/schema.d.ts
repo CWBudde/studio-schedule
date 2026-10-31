@@ -1097,7 +1097,7 @@ export interface paths {
         };
         /**
          * Get the statistics
-         * @description Returns the school's figures of a range of school dates, in the school time zone: bookings, attendance, late cancellations, trials and guests, waiting lists and utilization by week (by month beyond 26 weeks) and by class, room, course type and instructor, the active members, and the pass sales from the receipts, cancellations netted. Aggregates only: no person is named. Canceled lessons count only as such. The presets end today; a custom range has at most 366 days (else a 422). The term range without a term that includes today is a 404.
+         * @description Returns the school's figures of a range of school dates, in the school time zone: bookings, attendance, late cancellations, trials and guests, waiting lists and utilization by week (by month beyond 26 weeks) and by class, room, course type and instructor, the active members, and the pass sales from the receipts, cancellations netted, and the top 20 participants by active bookings (merged and anonymized persons left out); no other person is named. Canceled lessons count only as such. The presets end today; a custom range has at most 366 days (else a 422). The term range without a term that includes today is a 404.
          */
         get: operations["getStatistics"];
         put?: never;
@@ -5815,6 +5815,32 @@ export interface components {
              */
             recipients: number;
         };
+        ParticipantStatistics: {
+            /**
+             * Format: int64
+             * @description Of those, the ones marked as attended.
+             */
+            attended: number;
+            /**
+             * Format: int64
+             * @description Active (not canceled) bookings in the range, trials included.
+             */
+            bookings: number;
+            /** @description Family name. */
+            familyName: string;
+            /** @description Given name. */
+            givenName: string;
+            /**
+             * Format: int64
+             * @description Bookings the person canceled after the cancellation cutoff.
+             */
+            lateCancellations: number;
+            /**
+             * Format: uuid
+             * @description The person.
+             */
+            personId: string;
+        };
         Pass: {
             /**
              * Format: uuid
@@ -7070,6 +7096,8 @@ export interface components {
              * @description Today's school date, where the presets end.
              */
             today: string;
+            /** @description The persons with the most active bookings (at most 20, each with at least one), by bookings (descending), family name and given name. Merged and anonymized persons are left out. */
+            topParticipants: components["schemas"]["ParticipantStatistics"][];
             /** @description The figures of the whole range. */
             totals: components["schemas"]["StatisticsTotals"];
         };

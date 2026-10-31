@@ -103,6 +103,24 @@ const stats: Statistics = {
   instructors: [
     { staffId: '00000000-0000-7000-8000-000000000005', name: 'Ada Example', ...figures },
   ],
+  topParticipants: [
+    {
+      personId: '00000000-0000-7000-8000-000000000006',
+      givenName: 'Fia',
+      familyName: 'Fictional',
+      bookings: 2,
+      attended: 1,
+      lateCancellations: 0,
+    },
+    {
+      personId: '00000000-0000-7000-8000-000000000007',
+      givenName: 'Noa',
+      familyName: 'Nobody',
+      bookings: 1,
+      attended: 0,
+      lateCancellations: 3,
+    },
+  ],
 };
 
 /** Answers the statistics; returns the query params of each request. */
@@ -180,6 +198,53 @@ describe('StatisticsPage', () => {
       within(screen.getByRole('table', { name: 'By instructor' })).getByRole('rowheader', {
         name: 'Ada Example',
       }),
+    ).toBeInTheDocument();
+  });
+
+  it('ranks the top participants and links each to their page', async () => {
+    mockStatistics(() => ({ body: stats }));
+
+    renderInRouter(<StatisticsPage />, { at: '/admin/statistics' });
+
+    const table = await screen.findByRole('table', { name: 'Top participants' });
+    expect(
+      screen.getByText(
+        'Up to 20 persons with the most bookings in the range; canceled bookings do not count.',
+      ),
+    ).toBeInTheDocument();
+    const rows = within(table).getAllByRole('row');
+    expect(rows).toHaveLength(3);
+    expect(
+      within(rows[0]!)
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent),
+    ).toEqual(['Rank', 'Person', 'Bookings', 'Attended', 'Late cancellations']);
+    expect(
+      within(rows[1]!)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['1', '2', '1', '0']);
+    expect(
+      within(rows[2]!)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['2', '1', '0', '3']);
+    expect(within(rows[1]!).getByRole('link', { name: 'Fia Fictional' })).toHaveAttribute(
+      'href',
+      '/admin/persons/00000000-0000-7000-8000-000000000006',
+    );
+    expect(within(rows[2]!).getByRole('rowheader')).toHaveTextContent('Noa Nobody');
+  });
+
+  it('says so when nobody booked', async () => {
+    mockStatistics(() => ({ body: { ...stats, topParticipants: [] } }));
+
+    renderInRouter(<StatisticsPage />, { at: '/admin/statistics' });
+
+    const heading = await screen.findByRole('heading', { name: 'Top participants' });
+    expect(screen.queryByRole('table', { name: 'Top participants' })).not.toBeInTheDocument();
+    expect(
+      within(heading.closest('section')!).getByText('Nothing in this range.'),
     ).toBeInTheDocument();
   });
 

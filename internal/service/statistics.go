@@ -16,6 +16,10 @@ import (
 // cover: a year, a leap year included.
 const MaxStatisticsDays = 366
 
+// TopParticipantsLimit is the most persons Statistics.TopParticipants
+// lists.
+const TopParticipantsLimit = 20
+
 // weeklyStatisticsDays is the longest range whose periods are weeks; a
 // longer one is split into months.
 const weeklyStatisticsDays = 26 * 7
@@ -183,8 +187,23 @@ type InstructorStatistics struct {
 	LessonCounts
 }
 
+// ParticipantStatistics are the bookings of a person in the lessons of the
+// range that were not canceled.
+type ParticipantStatistics struct {
+	Person domain.Person
+	// Bookings counts the person's active (not canceled) bookings, trials
+	// included.
+	Bookings int
+	// Attended counts those marked as attended.
+	Attended int
+	// LateCancellations counts the bookings the person canceled after the
+	// cutoff.
+	LateCancellations int
+}
+
 // Statistics are the aggregates of the school's lessons, bookings and pass
-// sales in a range of school dates. They count, never name, the persons.
+// sales in a range of school dates. They count the persons and name only
+// the top participants.
 type Statistics struct {
 	Timezone string
 	Currency string
@@ -207,6 +226,11 @@ type Statistics struct {
 	CourseTypes []CourseTypeStatistics
 	// Instructors are ordered by display name and ID.
 	Instructors []InstructorStatistics
+	// TopParticipants are the TopParticipantsLimit persons with the most
+	// active bookings (at least one), ordered by them (descending), family
+	// name, given name and ID. Merged (ADR 0015) and anonymized (ADR 0016)
+	// persons are left out.
+	TopParticipants []ParticipantStatistics
 }
 
 // StatisticsService computes the statistics of the school for the office
@@ -230,8 +254,8 @@ func NewStatisticsService(st store.Store, clk clock.Clock) *StatisticsService {
 //
 // The cost does not grow with the data outside the range: one read each
 // for the lessons, their booking counts, their late cancellations, their
-// waiting-list counts, the active members and the receipts, besides the
-// catalog.
+// waiting-list counts, the active members, the bookings by person and
+// their persons, and the receipts, besides the catalog.
 func (s *StatisticsService) Statistics(ctx context.Context, q StatisticsQuery) (Statistics, error) {
 	var out Statistics
 
@@ -454,7 +478,58 @@ func (st *Statistics) compute(ctx context.Context, tx store.Tx, loc *time.Locati
 
 	groups.fill(st)
 
+	if err := st.addTopParticipants(ctx, tx, ids); err != nil {
+		return err
+	}
+
 	return st.addSales(ctx, tx)
+}
+
+// addTopParticipants sets TopParticipants from the bookings by person in
+// the lessons: one read for the counts, one for the persons who booked.
+func (st *Statistics) addTopParticipants(ctx context.Context, tx store.Tx, lessons []domain.LessonID) error {
+	counts, err := tx.Bookings().CountsByPersons(ctx, lessons)
+	if err != nil {
+		return fmt.Errorf("bookings by person: %w", err)
+	}
+
+	booked := make([]domain.PersonID, 0, len(counts))
+
+	for id, c := range counts {
+		if c.Active > 0 {
+			booked = append(booked, id)
+		}
+	}
+
+	persons, err := tx.Persons().ListByIDs(ctx, booked)
+	if err != nil {
+		return fmt.Errorf("participants: %w", err)
+	}
+
+	rows := make([]ParticipantStatistics, 0, len(persons))
+
+	for _, p := range persons {
+		if p.Merged() || p.Anonymized() {
+			continue
+		}
+
+		c := counts[p.ID]
+		rows = append(rows, ParticipantStatistics{
+			Person: p, Bookings: c.Active, Attended: c.Attended, LateCancellations: c.LateCanceled,
+		})
+	}
+
+	slices.SortFunc(rows, func(a, b ParticipantStatistics) int {
+		return cmp.Or(
+			cmp.Compare(b.Bookings, a.Bookings),
+			cmp.Compare(a.Person.FamilyName, b.Person.FamilyName), cmp.Compare(a.Person.GivenName, b.Person.GivenName),
+			compareIDs(a.Person.ID, b.Person.ID),
+		)
+	})
+
+	st.TopParticipants = rows[:min(len(rows), TopParticipantsLimit)]
+
+	return nil
 }
 
 // addSales adds the pass sales of the receipts issued in the range, in

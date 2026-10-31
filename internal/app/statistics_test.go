@@ -29,7 +29,11 @@ func TestStatistics(t *testing.T) {
 			ClassID, LessonID, CourseTypeName string
 			Weekday                           *int
 		}
-		Instructors []struct{ Name string }
+		Instructors     []struct{ Name string }
+		TopParticipants []struct {
+			PersonID, GivenName, FamilyName       string
+			Bookings, Attended, LateCancellations int
+		}
 	}
 
 	body := a.expect(http.StatusOK, http.MethodGet,
@@ -50,6 +54,31 @@ func TestStatistics(t *testing.T) {
 
 	if len(st.Classes) == 0 || st.Classes[0].ClassID == "" || st.Classes[0].Weekday == nil || len(st.Instructors) == 0 {
 		t.Errorf("classes %s", body)
+	}
+
+	// The top participants, by bookings, with their names.
+	if len(st.TopParticipants) == 0 || len(st.TopParticipants) > 20 {
+		t.Fatalf("top participants %s", body)
+	}
+
+	for i, p := range st.TopParticipants {
+		if p.PersonID == "" || p.GivenName == "" || p.FamilyName == "" || p.Bookings < 1 || p.Attended > p.Bookings ||
+			(i > 0 && p.Bookings > st.TopParticipants[i-1].Bookings) {
+			t.Errorf("top participant %d: %+v", i, p)
+		}
+	}
+
+	var raw struct {
+		TopParticipants []map[string]any `json:"topParticipants"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, k := range []string{"personId", "givenName", "familyName", "bookings", "attended", "lateCancellations"} {
+		if _, ok := raw.TopParticipants[0][k]; !ok {
+			t.Errorf("top participant without %q: %v", k, raw.TopParticipants[0])
+		}
 	}
 
 	// The default range; the current term names its term.

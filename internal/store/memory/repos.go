@@ -1390,6 +1390,35 @@ func (r bookingRepo) CountActivePersons(_ context.Context, lessons []domain.Less
 	return len(persons), nil
 }
 
+func (r bookingRepo) CountsByPersons(
+	_ context.Context, lessons []domain.LessonID,
+) (map[domain.PersonID]store.PersonBookingCounts, error) {
+	out := map[domain.PersonID]store.PersonBookingCounts{}
+	wanted := setOf(lessons)
+
+	for _, b := range r.tx.state.bookings.filter(func(b domain.Booking) bool {
+		_, ok := wanted[b.LessonID]
+
+		return ok && !b.PersonID.IsZero() && (active(b) || b.Late)
+	}) {
+		c := out[b.PersonID]
+
+		switch b.Status {
+		case domain.BookingCanceled:
+			c.LateCanceled++
+		case domain.BookingAttended:
+			c.Active++
+			c.Attended++
+		case domain.BookingBooked, domain.BookingNoShow:
+			c.Active++
+		}
+
+		out[b.PersonID] = c
+	}
+
+	return out, nil
+}
+
 func (r bookingRepo) ListActiveByLessons(_ context.Context, lessons []domain.LessonID) ([]domain.Booking, error) {
 	wanted := setOf(lessons)
 	bookings := r.tx.state.bookings.filter(func(b domain.Booking) bool {

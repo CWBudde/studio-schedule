@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useNavigate, useSearch } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { type FormEvent, type ReactNode, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, type Statistics, type StatisticsParams, statisticsQuery } from '@/api/queries';
@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/table';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { formatCompactMoney, formatMoney } from '@/lib/money';
+import { personName } from '@/lib/personName';
 import { addDays, formatDate, formatDateTime } from '@/lib/schoolTime';
 import { LoadError } from './crud/LoadError';
 import { type ChartDatum, PeriodColumnChart, ShareBarChart } from './StatisticsCharts';
@@ -31,9 +32,13 @@ import {
 /** The longest custom range in days; mirrors `service.MaxStatisticsDays`. */
 export const maxStatisticsDays = 366;
 
+/** The most top participants listed; mirrors `service.TopParticipantsLimit`. */
+const maxTopParticipants = 20;
+
 type Figures = Statistics['totals'];
 type Period = Statistics['periods'][number];
 type ClassRow = Statistics['classes'][number];
+type Participant = Statistics['topParticipants'][number];
 
 /** The days from `from` to `to`, both included. */
 function daysIn(from: string, to: string): number {
@@ -55,10 +60,10 @@ function customRangeProblem(
  * The statistics (/admin/statistics), for the office: totals of a range
  * of school dates as stat tiles, bookings and pass sales by week (or
  * month) and utilization by course type as charts, and every figure in
- * tables by period, class, room, course type and instructor. The range is
- * in the URL: a preset (the last 4 or 12 weeks, the current term) or a
- * custom from–to of at most a year. Aggregates only: nobody is named but
- * the instructors.
+ * tables by period, class, room, course type and instructor, and the top
+ * participants by bookings. The range is in the URL: a preset (the last 4
+ * or 12 weeks, the current term) or a custom from–to of at most a year.
+ * Nobody is named but the instructors and the top participants.
  */
 export function StatisticsPage() {
   const { t } = useTranslation('statistics');
@@ -400,6 +405,7 @@ function StatisticsView({ stats }: { stats: Statistics }) {
         rows={stats.instructors.map((i) => ({ key: i.staffId, name: i.name, figures: i }))}
         f={f}
       />
+      <TopParticipantsTable participants={stats.topParticipants} f={f} />
     </div>
   );
 }
@@ -651,6 +657,62 @@ function FiguresTable({
                 </TableCell>
                 <TableCell className={numeric}>{f.count(r.figures.lateCancellations)}</TableCell>
                 <TableCell className={numeric}>{f.count(r.figures.waitlistEntries)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </section>
+  );
+}
+
+/** The persons with the most bookings, each linked to their page. */
+function TopParticipantsTable({ participants, f }: { participants: Participant[]; f: Formats }) {
+  const { t } = useTranslation('statistics');
+  const caption = t('tables.topParticipants');
+  return (
+    <section className="space-y-2">
+      <h2 className="text-lg font-semibold">{caption}</h2>
+      <p className="text-sm text-muted-foreground">
+        {t('tables.topParticipantsDescription', { limit: maxTopParticipants })}
+      </p>
+      {participants.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t('tables.empty')}</p>
+      ) : (
+        <Table aria-label={caption}>
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col" className={numeric}>
+                {t('tables.rank')}
+              </TableHead>
+              <TableHead scope="col">{t('tables.participant')}</TableHead>
+              <TableHead scope="col" className={numeric}>
+                {t('tables.bookings')}
+              </TableHead>
+              <TableHead scope="col" className={numeric}>
+                {t('tables.attended')}
+              </TableHead>
+              <TableHead scope="col" className={numeric}>
+                {t('tables.lateCancellations')}
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {participants.map((p, i) => (
+              <TableRow key={p.personId}>
+                <TableCell className={numeric}>{f.count(i + 1)}</TableCell>
+                <TableHead scope="row" className="font-normal whitespace-nowrap">
+                  <Link
+                    to="/admin/persons/$personId"
+                    params={{ personId: p.personId }}
+                    className="font-medium underline-offset-4 hover:underline focus-visible:underline"
+                  >
+                    {personName(p)}
+                  </Link>
+                </TableHead>
+                <TableCell className={numeric}>{f.count(p.bookings)}</TableCell>
+                <TableCell className={numeric}>{f.count(p.attended)}</TableCell>
+                <TableCell className={numeric}>{f.count(p.lateCancellations)}</TableCell>
               </TableRow>
             ))}
           </TableBody>

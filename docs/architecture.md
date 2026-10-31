@@ -155,8 +155,9 @@ The office's statistics (`GET /api/v1/admin/statistics`, `service.StatisticsServ
 live from the operational data; there is no snapshot table (ADR 0001). A request reads the lessons
 of the range (`Lessons().ListRange`), then one aggregate each: `Bookings().CountsByLessons`
 (active, trials, guests, attended, no-shows), `Bookings().CountLateCanceledByLessons`,
-`Waitlist().CountByLessons`, `Bookings().CountActivePersons` and `Receipts().TotalsByDay`, besides
-the catalog. So a year
+`Waitlist().CountByLessons`, `Bookings().CountActivePersons`, `Bookings().CountsByPersons` (active,
+attended and late-canceled bookings by person) with one `Persons().ListByIDs` of the persons who
+booked, and `Receipts().TotalsByDay`, besides the catalog. So a year
 (about 1,500 lessons) costs the same handful of queries, which keeps the single-threaded WASM demo
 responsive.
 
@@ -167,7 +168,11 @@ responsive.
 - Canceled lessons are only counted as such. Utilization is active bookings per place; the no-show
   rate counts only bookings whose attendance was taken; an active member is a person with an
   active booking in the range. Pass sales net cancellations (Storno) on the day they were issued.
-- Aggregates only: no person is named; per-instructor rows name the staff member.
+- Aggregates, besides two lists of names: per-instructor rows name the staff member, and the top
+  participants are the 20 persons with the most active bookings in the range (attended and
+  late-canceled bookings beside), ties by family name, given name and ID. Merged persons
+  (tombstones, ADR 0015) and anonymized ones (ADR 0016) are left out, guests have no person. The
+  page links each to the office's person page.
 - Every lesson counts under its own room, course type and instructor, which the office may have
   changed from its class's; a class row names the course type of its latest lesson in the range.
 - The page (`/admin/statistics`) renders recharts through shadcn `chart`; the build puts recharts

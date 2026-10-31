@@ -22,9 +22,11 @@ func registerStatistics(api huma.API, h *handlers) {
 		Description: fmt.Sprintf("Returns the school's figures of a range of school dates, in the school time zone: "+
 			"bookings, attendance, late cancellations, trials and guests, waiting lists and utilization by week "+
 			"(by month beyond 26 weeks) and by class, room, course type and instructor, the active members, and "+
-			"the pass sales from the receipts, cancellations netted. Aggregates only: no person is named. "+
+			"the pass sales from the receipts, cancellations netted, and the top %d participants by active bookings "+
+			"(merged and anonymized persons left out); no other person is named. "+
 			"Canceled lessons count only as such. The presets end today; a custom range has at most %d days "+
-			"(else a 422). The term range without a term that includes today is a 404.", service.MaxStatisticsDays),
+			"(else a 422). The term range without a term that includes today is a 404.",
+			service.TopParticipantsLimit, service.MaxStatisticsDays),
 		Tags: []string{"admin"},
 	}, h.getStatistics)
 }
@@ -127,6 +129,16 @@ type InstructorStatistics struct {
 	LessonFigures
 }
 
+// ParticipantStatistics are the bookings of a person in the range.
+type ParticipantStatistics struct {
+	PersonID          domain.PersonID `doc:"The person."                                                  json:"personId"`
+	GivenName         string          `doc:"Given name."                                                  json:"givenName"`
+	FamilyName        string          `doc:"Family name."                                                 json:"familyName"`
+	Bookings          int             `doc:"Active (not canceled) bookings in the range, trials included." json:"bookings"`
+	Attended          int             `doc:"Of those, the ones marked as attended."                       json:"attended"`
+	LateCancellations int             `doc:"Bookings the person canceled after the cancellation cutoff."  json:"lateCancellations"`
+}
+
 // StatisticsTerm names the term of the term range.
 type StatisticsTerm struct {
 	ID   domain.TermID `doc:"The term."         json:"id"`
@@ -149,6 +161,9 @@ type Statistics struct {
 	Rooms       []RoomStatistics       `doc:"By room, ordered by location and name." json:"rooms" nullable:"false"`
 	CourseTypes []CourseTypeStatistics `doc:"By course type, ordered by name." json:"courseTypes" nullable:"false"`
 	Instructors []InstructorStatistics `doc:"By instructor, ordered by name." json:"instructors" nullable:"false"`
+
+	// The only persons named (ADR 0016: never an anonymized one).
+	TopParticipants []ParticipantStatistics `doc:"The persons with the most active bookings (at most 20, each with at least one), by bookings (descending), family name and given name. Merged and anonymized persons are left out." json:"topParticipants" nullable:"false"`
 }
 
 // StatisticsOutput is the response of getStatistics.
@@ -220,6 +235,14 @@ func (h *handlers) getStatistics(ctx context.Context, in *StatisticsInput) (*Sta
 	for _, i := range st.Instructors {
 		body.Instructors = append(body.Instructors, InstructorStatistics{
 			StaffID: i.Staff.ID, Name: i.Staff.DisplayName, LessonFigures: lessonFigures(i.LessonCounts),
+		})
+	}
+
+	body.TopParticipants = make([]ParticipantStatistics, 0, len(st.TopParticipants))
+	for _, p := range st.TopParticipants {
+		body.TopParticipants = append(body.TopParticipants, ParticipantStatistics{
+			PersonID: p.Person.ID, GivenName: p.Person.GivenName, FamilyName: p.Person.FamilyName,
+			Bookings: p.Bookings, Attended: p.Attended, LateCancellations: p.LateCancellations,
 		})
 	}
 

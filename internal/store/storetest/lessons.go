@@ -707,6 +707,65 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantEqual(e.t, count(l1.ID, l2.ID, l3.ID, newID[domain.LessonID](e)), 2)
 			wantEqual(e.t, count(), 0)
 		},
+		"CountsByPersons": func(e *env) {
+			s := e.setting()
+			l1, l2, l3 := e.lesson(s, t0, 5), e.lesson(s, t0.Add(time.Hour), 5), e.lesson(s, t0.Add(2*time.Hour), 5)
+			ann, ben, cy, di := e.person("Ann", "One"), e.person("Ben", "Two"), e.person("Cy", "Three"), e.person("Di", "Four")
+
+			attended := e.booking(l1, ann, t0.Add(-time.Hour))
+			e.booking(l2, ann, t0.Add(-time.Hour))
+			e.booking(l3, ann, t0.Add(-time.Hour)) // a lesson not asked for
+			noShow := e.booking(l1, ben, t0.Add(-time.Hour))
+			benLate := e.booking(l2, ben, t0.Add(-time.Hour))
+			cyInTime := e.booking(l1, cy, t0.Add(-time.Hour))
+			diLate := e.booking(l2, di, t0.Add(-time.Hour))
+			guest := domain.Booking{
+				ID: newID[domain.BookingID](e), LessonID: l1.ID, GuestName: "Gina Guest",
+				Status: domain.BookingAttended, Source: domain.BookingSourceStaff, BookedAt: t0.Add(-time.Hour),
+			}
+			lateGuest := domain.Booking{
+				ID: newID[domain.BookingID](e), LessonID: l2.ID, GuestName: "Gone Guest",
+				Status: domain.BookingCanceled, Source: domain.BookingSourceStaff, BookedAt: t0.Add(-2 * time.Hour),
+				CanceledAt: t0.Add(-time.Hour), Late: true,
+			}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				attended.Status, noShow.Status = domain.BookingAttended, domain.BookingNoShow
+				cyInTime.Status, cyInTime.CanceledAt = domain.BookingCanceled, t0.Add(-30*time.Minute)
+
+				for _, b := range []*domain.Booking{&benLate, &diLate} {
+					b.Status, b.CanceledAt, b.Late = domain.BookingCanceled, t0.Add(-30*time.Minute), true
+				}
+
+				return errors.Join(
+					tx.Bookings().Update(ctx, attended), tx.Bookings().Update(ctx, noShow),
+					tx.Bookings().Update(ctx, cyInTime), tx.Bookings().Update(ctx, benLate),
+					tx.Bookings().Update(ctx, diLate), tx.Bookings().Create(ctx, guest),
+					tx.Bookings().Create(ctx, lateGuest),
+				)
+			})
+
+			// Active and late-canceled bookings count by person; one canceled
+			// in time does not, guests do not, nor lessons not asked for.
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) (map[domain.PersonID]store.PersonBookingCounts, error) {
+				return tx.Bookings().CountsByPersons(ctx, []domain.LessonID{l1.ID, l2.ID, newID[domain.LessonID](e)})
+			})
+
+			want := map[domain.PersonID]store.PersonBookingCounts{
+				ann.ID: {Active: 2, Attended: 1},
+				ben.ID: {Active: 1, LateCanceled: 1},
+				di.ID:  {LateCanceled: 1},
+			}
+			if !maps.Equal(got, want) {
+				e.t.Fatalf("CountsByPersons = %+v, want %+v", got, want)
+			}
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) (map[domain.PersonID]store.PersonBookingCounts, error) {
+				return tx.Bookings().CountsByPersons(ctx, nil)
+			})
+			if len(got) != 0 {
+				e.t.Fatalf("CountsByPersons(nil) = %+v", got)
+			}
+		},
 		"ListActiveByLessons": func(e *env) {
 			s := e.setting()
 			l1, l2, l3 := e.lesson(s, t0, 5), e.lesson(s, t0.Add(time.Hour), 5), e.lesson(s, t0.Add(2*time.Hour), 5)

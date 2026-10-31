@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -560,5 +561,156 @@ func TestStatisticsClassFollowsItsLessons(t *testing.T) {
 	if len(got.CourseTypes) != 2 || got.CourseTypes[0].CourseType.ID != f.courseType ||
 		got.CourseTypes[0].Lessons != 1 || got.CourseTypes[1].CourseType.ID != jazz.ID || got.CourseTypes[1].Lessons != 1 {
 		t.Errorf("course types %+v, want one lesson each", got.CourseTypes)
+	}
+}
+
+// TestStatisticsTopParticipants checks the ranking of the persons by their
+// active bookings in the range: the cut after TopParticipantsLimit, ties by
+// name and ID, attendance and late cancellations beside, and who is left
+// out (guests, merged and anonymized persons, canceled bookings, canceled
+// lessons and lessons outside the range).
+func TestStatisticsTopParticipants(t *testing.T) {
+	t.Parallel()
+
+	f := newGenFixture(t, seed.DemoSettings())
+	before := f.statLesson(t, "2026-10-18T21:45:00Z", 99, domain.LessonScheduled) // Sun 23:45 CEST, the week before
+	in1 := f.statLesson(t, "2026-10-19T16:00:00Z", 99, domain.LessonScheduled)
+	in2 := f.statLesson(t, "2026-10-21T16:00:00Z", 99, domain.LessonScheduled)
+	in3 := f.statLesson(t, "2026-10-25T22:30:00Z", 99, domain.LessonScheduled)   // Sun 23:30 CET, the last minutes
+	after := f.statLesson(t, "2026-10-25T23:15:00Z", 99, domain.LessonScheduled) // Mon 00:15 CET, the week after
+	canceledLesson := f.statLesson(t, "2026-10-22T16:00:00Z", 99, domain.LessonCanceled)
+
+	var (
+		persons  []domain.Person
+		bookings []domain.Booking
+	)
+
+	person := func(given, family string) domain.Person {
+		p := domain.Person{ID: ids.New[domain.PersonID](f.seq), GivenName: given, FamilyName: family}
+		persons = append(persons, p)
+
+		return p
+	}
+
+	book := func(l domain.Lesson, p domain.PersonID, status domain.BookingStatus, opts ...string) {
+		b := domain.Booking{
+			ID: ids.New[domain.BookingID](f.seq), LessonID: l.ID, PersonID: p, Status: status,
+			Source: domain.BookingSourceSelf, BookedAt: l.StartsAt.Add(-48 * time.Hour),
+		}
+		if status == domain.BookingCanceled {
+			b.CanceledAt = l.StartsAt.Add(-time.Hour)
+		}
+
+		for _, o := range opts {
+			switch o {
+			case "late":
+				b.Late = true
+			case "trial":
+				b.Trial = true
+			}
+		}
+
+		if p.IsZero() {
+			b.GuestName = "Gina Guest"
+		}
+
+		bookings = append(bookings, b)
+	}
+
+	ava := person("Ava", "Alpha")
+	book(in1, ava.ID, domain.BookingAttended)
+	book(in2, ava.ID, domain.BookingAttended)
+	book(in3, ava.ID, domain.BookingBooked)
+
+	bea := person("Bea", "Beta")
+	book(in1, bea.ID, domain.BookingNoShow)
+	book(in2, bea.ID, domain.BookingBooked, "trial")
+	book(in3, bea.ID, domain.BookingCanceled, "late")
+	book(before, bea.ID, domain.BookingAttended)
+	book(after, bea.ID, domain.BookingBooked)
+	book(canceledLesson, bea.ID, domain.BookingBooked)
+
+	gus := person("Gus", "Gamma")
+	book(in1, gus.ID, domain.BookingAttended)
+	book(in3, gus.ID, domain.BookingBooked)
+	book(in2, gus.ID, domain.BookingCanceled) // in time: not counted
+
+	// Twins with the same name: their IDs order them.
+	twin1, twin2 := person("Kim", "Twin"), person("Kim", "Twin")
+	book(in2, twin2.ID, domain.BookingBooked)
+	book(in2, twin1.ID, domain.BookingBooked)
+
+	// Fillers with one booking each, more than the list holds.
+	fillers := make([]domain.Person, 20)
+	for i := range fillers {
+		fillers[i] = person(fmt.Sprintf("Fil %02d", 19-i), "Zulu")
+		book(in1, fillers[i].ID, domain.BookingBooked)
+	}
+
+	// No active booking: not listed; guests neither.
+	book(in1, person("Lou", "Late").ID, domain.BookingCanceled, "late")
+	book(in1, person("Ian", "Intime").ID, domain.BookingCanceled)
+	book(in1, domain.PersonID{}, domain.BookingBooked)
+	book(in2, domain.PersonID{}, domain.BookingBooked)
+
+	// The most bookings, but merged into Ava or anonymized: left out.
+	merged := person("Mo", "Merged")
+	persons[len(persons)-1].MergedInto = ava.ID
+	anonymized := person(domain.AnonymizedGivenName, domain.AnonymizedFamilyName)
+	persons[len(persons)-1].AnonymizedAt = mustInstant(t, "2026-10-26T09:00:00Z")
+
+	for _, p := range []domain.Person{merged, anonymized} {
+		for _, l := range []domain.Lesson{in1, in2, in3} {
+			book(l, p.ID, domain.BookingAttended)
+		}
+	}
+
+	f.write(t, func(ctx context.Context, tx store.Tx) error {
+		for _, p := range persons {
+			if err := tx.Persons().Create(ctx, p); err != nil {
+				return err
+			}
+		}
+
+		for _, b := range bookings {
+			if err := tx.Bookings().Create(ctx, b); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	got := statistics(t, f.st, "2026-10-27T12:00:00Z", StatisticsQuery{
+		Range: StatisticsCustom, From: mustDate(t, "2026-10-19"), To: mustDate(t, "2026-10-25"),
+	})
+
+	row := func(p domain.Person, booked, attended, late int) string {
+		return fmt.Sprintf("%s %s %s %d/%d/%d", p.ID, p.GivenName, p.FamilyName, booked, attended, late)
+	}
+
+	if compareIDs(twin2.ID, twin1.ID) < 0 {
+		twin1, twin2 = twin2, twin1
+	}
+
+	want := []string{row(ava, 3, 2, 0), row(bea, 2, 0, 1), row(gus, 2, 1, 0), row(twin1, 1, 0, 0), row(twin2, 1, 0, 0)}
+	// By given name: the fillers were created from Fil 19 down.
+	for i := range TopParticipantsLimit - len(want) {
+		want = append(want, row(fillers[19-i], 1, 0, 0))
+	}
+
+	gotRows := make([]string, len(got.TopParticipants))
+	for i, p := range got.TopParticipants {
+		gotRows[i] = row(p.Person, p.Bookings, p.Attended, p.LateCancellations)
+	}
+
+	wantStrings(t, gotRows, want)
+
+	// A range without bookings lists nobody.
+	empty := statistics(t, f.st, "2026-10-27T12:00:00Z", StatisticsQuery{
+		Range: StatisticsCustom, From: mustDate(t, "2026-11-02"), To: mustDate(t, "2026-11-08"),
+	})
+	if len(empty.TopParticipants) != 0 {
+		t.Errorf("top participants of an empty range: %+v", empty.TopParticipants)
 	}
 }
