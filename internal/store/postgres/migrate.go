@@ -89,10 +89,18 @@ func (m *Migrator) Close() error {
 }
 
 // Up applies all pending migrations and returns them in order. It returns no
-// results if the schema is up to date.
+// results if the schema is up to date. If a migration fails, it returns the
+// ones applied before it along with the error.
 func (m *Migrator) Up(ctx context.Context) ([]MigrationResult, error) {
 	res, err := m.provider.Up(ctx)
 	if err != nil {
+		// goose returns no results on a failure; the migrations it applied and
+		// committed before the failing one are in the *goose.PartialError.
+		var partial *goose.PartialError
+		if errors.As(err, &partial) {
+			res = partial.Applied
+		}
+
 		return results(res), migrationErr("up", err)
 	}
 

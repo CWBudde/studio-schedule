@@ -360,18 +360,11 @@ func TestMigrateUpFailedMigration(t *testing.T) {
 	migrateCheckStatus(t, migrateStatusRows(t, url), embedded, n-1)
 }
 
-// TestMigrateUpListsMigrationsAppliedBeforeFailure reproduces a bug: when a
-// migration fails, up applied (and committed) the migrations before it, and
-// migrateUp prints the results it gets before returning the error, but
-// postgres.Migrator.Up returns no results then: goose's Provider.Up returns
-// nil results with a *goose.PartialError whose Applied field holds them, and
-// Migrator.Up converts only the nil slice. So the operator never learns that
-// 00026 was applied.
-//
-// The fix (Migrator.Up returning the results of partial.Applied) belongs to
-// internal/store/postgres; delete the skip once it is there.
+// TestMigrateUpListsMigrationsAppliedBeforeFailure pins that when a migration
+// fails, up still lists the migrations it applied (and committed) before it:
+// goose's Provider.Up returns them only in the *goose.PartialError, which
+// postgres.Migrator.Up reads.
 func TestMigrateUpListsMigrationsAppliedBeforeFailure(t *testing.T) {
-	t.Skip("known bug: postgres.Migrator.Up drops goose.PartialError.Applied (PLAN.md Phase 9, 2026-10-31)")
 	t.Parallel()
 
 	_, embedded, out, _ := migrateFailNewest(t)
