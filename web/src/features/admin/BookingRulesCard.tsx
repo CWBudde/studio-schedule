@@ -197,7 +197,7 @@ function usePreview(
     'releaseWeekday' | 'releaseTime' | 'releaseWeeksAhead' | 'releasedThrough'
   >,
   latest: string | undefined,
-): { window?: ReleaseWindow; missing: PreviewMissing } {
+): { window?: ReleaseWindow; missing: PreviewMissing; settled: boolean } {
   const weeks = Number(values.releaseWeeksAhead);
   const through = values.releasedThrough.trim();
   const valid =
@@ -224,10 +224,13 @@ function usePreview(
     enabled: params !== undefined,
     placeholderData: keepPreviousData,
   });
-  if (!valid) return { missing: 'incomplete' };
-  if (!params) return { missing: 'loading' }; // still being typed
-  if (preview.isError) return { missing: 'failed' };
-  return { window: preview.data, missing: 'loading' };
+  // The window answers the typed date only once the debounce and the query
+  // have caught up; until then it may still be the previous date's.
+  const settled = !preview.isPlaceholderData && (params?.releasedThrough ?? '') === through;
+  if (!valid) return { missing: 'incomplete', settled: false };
+  if (!params) return { missing: 'loading', settled: false }; // still being typed
+  if (preview.isError) return { missing: 'failed', settled: false };
+  return { window: preview.data, missing: 'loading', settled };
 }
 
 function RulesForm({ rules }: { rules: BookingRules }) {
@@ -349,7 +352,9 @@ function RulesForm({ rules }: { rules: BookingRules }) {
         label={t('rules.manualReleasedThrough')}
         clearLabel={t('rules.manualReleasedThroughClear')}
         hint={t('rules.manualReleasedThroughHint')}
-        effect={releaseEffect(preview.window, releasedThrough.trim() !== '')}
+        effect={
+          preview.settled ? releaseEffect(preview.window, releasedThrough.trim() !== '') : undefined
+        }
         error={errorText(errors.releasedThrough)}
         max={latest}
         input={form.register('releasedThrough')}

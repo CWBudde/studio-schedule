@@ -499,8 +499,14 @@ func (s *SettingsService) SetBookingRules(ctx context.Context, r BookingRules) (
 			return err
 		}
 
+		// A later released-through date widens the horizon only where it
+		// reaches past what the weekly rule generates anyway (generate.go
+		// horizon); a date the rule covers generates nothing new.
+		today := domain.DateOf(s.clock.Now(), loc)
+		throughWider := r.ReleasedThrough.Compare(settings.ReleasedThrough) > 0 &&
+			today.DaysUntil(r.ReleasedThrough) > 7*(r.ReleaseWeeksAhead+2)
 		widened = r.ReleaseWeeksAhead > settings.ReleaseWeeksAhead || r.DefaultVisibleDays > settings.DefaultVisibleDays ||
-			r.ReleasedThrough.Compare(settings.ReleasedThrough) > 0
+			throughWider
 		settings.ReleaseWeekday, settings.ReleaseTime, settings.ReleaseWeeksAhead = r.ReleaseWeekday, r.ReleaseTime,
 			r.ReleaseWeeksAhead
 		settings.BookingCutoff, settings.CancellationCutoff = r.BookingCutoff, r.CancellationCutoff

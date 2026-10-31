@@ -426,6 +426,16 @@ describe('LessonFormSheet', () => {
     });
   });
 
+  it('offers no room rental for a lesson of a class', async () => {
+    const user = userEvent.setup();
+    renderSheet({ mode: 'edit', lesson: lessonBalletOffice });
+
+    const sheet = within(await screen.findByRole('dialog', { name: 'Edit lesson' }));
+    await user.click(await sheet.findByRole('combobox', { name: 'Kind' }));
+    expect(await screen.findByRole('option', { name: 'Workshop' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Room rental' })).not.toBeInTheDocument();
+  });
+
   it('checks the form before it asks the API', async () => {
     const post = mockApiPost({});
     const user = userEvent.setup();

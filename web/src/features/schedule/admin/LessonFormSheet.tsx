@@ -218,7 +218,10 @@ function LessonForm({
         ...staffOptions(choices.staff, 'accompanist', editing?.accompanist, inactive),
       ],
       visibilities: visibilities.map((v) => ({ value: v, label: tSchedule(`visibility.${v}`) })),
-      kinds: kinds.map((k) => ({ value: k, label: t(`lessons.kinds.${k}`) })),
+      // A lesson of a class cannot be a rental (the server refuses it).
+      kinds: kinds
+        .filter((k) => k !== 'rental' || !editing?.classId)
+        .map((k) => ({ value: k, label: t(`lessons.kinds.${k}`) })),
     };
   }, [choices, editing, lang, t, tSchedule]);
 
