@@ -725,10 +725,20 @@ gives only 53.8 %, because most code is run by other packages' tests.
       reports it. `just ci` ends with the report. CI prints it in the job log and the job summary,
       also when a test failed, and uploads the profile (2026-10-31): `tools/coverage` (merges the
       per-binary blocks, lists the packages with the most uncovered statements)
-- [ ] `internal/service`: the uncovered error paths and edge cases of each service, as service tests
+- [x] `internal/service`: the uncovered error paths and edge cases of each service, as service tests
       or `servicetest` scenarios on both stores. Store errors only a broken database produces come
       from a fault-injecting `store.Store` wrapper in tests. A defensive branch that cannot be
-      reached is removed, not excluded
+      reached is removed, not excluded (2026-10-31): `FaultStore` (`internal/service/fault_test.go`,
+      its repositories generated from `store.go` by `faultgen.go`, `go generate ./internal/service`)
+      fails any store call, `InTx` or `Commit`; `SweepFaults` fails each call of an operation in turn
+      and checks the error comes back and the data is unchanged. Sweeps over every service, focused
+      edge-case tests, new `servicetest` cases (merge, import, privacy, push). `internal/service`
+      86.3 % → 99.3 % (55 uncovered), total 89.4 % → 95.7 % (14,914 of 15,585). Bug fixed: a Storno
+      could write back a pass a concurrent merge had moved (now a conflict). Removed as unreachable:
+      `newToken`'s error (`crypto/rand` cannot fail), four more branches. Left: `Validate()` before
+      writes of entities a service builds itself (ADR 0002 convention) and broken-reference branches
+      the foreign keys prevent. Pinned for a decision: a booking redeemed on booking, canceled in time
+      after a switch to redeem-on-attendance, keeps its visit spent
 - [x] `cmd/studio-schedule`: the commands run in-process through cobra (`init`, `import`,
       `migrate`, `seed`, `healthcheck`, `vapid-keys`, `serve` startup refusals) against the test
       database (2026-10-31): the package has its own lazily started test database
