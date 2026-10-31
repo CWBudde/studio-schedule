@@ -163,10 +163,7 @@ func (s *CalendarFeedService) Create(
 		return NewCalendarFeed{}, ErrImpersonating
 	}
 
-	token, err := newToken()
-	if err != nil {
-		return NewCalendarFeed{}, err
-	}
+	token := newToken()
 
 	f := domain.CalendarFeed{
 		ID: ids.New[domain.CalendarFeedID](s.ids), AccountID: p.AccountID, Scope: scope, LocationID: location,
@@ -178,7 +175,7 @@ func (s *CalendarFeedService) Create(
 
 	out := NewCalendarFeed{Token: token, Path: FeedPath(token), URL: s.feedURL(token)}
 
-	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		out.LocationName = ""
 
 		// One create of the account at a time, so that the new feed always
@@ -210,6 +207,8 @@ func (s *CalendarFeedService) Create(
 		if err := tx.CalendarFeeds().Create(ctx, f); err != nil {
 			return err
 		}
+
+		var err error
 
 		out.Feed, err = tx.CalendarFeeds().Get(ctx, f.ID) // as stored
 

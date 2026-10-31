@@ -247,10 +247,7 @@ func (w waitlister) invite(
 	ctx context.Context, tx store.Tx, settings domain.Settings, loc *time.Location, now time.Time, l domain.Lesson,
 	at lessonPlace, e domain.WaitlistEntry, recipients []recipient,
 ) error {
-	token, err := newToken()
-	if err != nil {
-		return err
-	}
+	token := newToken()
 
 	e.Status, e.InviteTokenHash, e.InvitedAt = domain.WaitlistInvited, domain.HashToken(token), now
 	e.ExpiresAt = minTime(now.Add(settings.WaitlistInviteExpiry), bookingClosesAt(settings, l))

@@ -36,14 +36,11 @@ func (s *AuthService) Impersonate(ctx context.Context, admin Principal, target d
 		return SignedIn{}, ErrNotImpersonable
 	}
 
-	token, err := newToken()
-	if err != nil {
-		return SignedIn{}, err
-	}
+	token := newToken()
 
 	var out SignedIn
 
-	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		acc, err := tx.Accounts().Get(ctx, target)
 
 		switch {
@@ -85,14 +82,11 @@ func (s *AuthService) StopImpersonation(ctx context.Context, p Principal) (Signe
 		return SignedIn{}, ErrNotImpersonating
 	}
 
-	token, err := newToken()
-	if err != nil {
-		return SignedIn{}, err
-	}
+	token := newToken()
 
 	var out SignedIn
 
-	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		admin, err := tx.Accounts().Get(ctx, p.ImpersonatorID)
 		if err != nil {
 			return err

@@ -158,10 +158,7 @@ func (s *AuthService) Register(ctx context.Context, r Registration) error {
 		return fmt.Errorf("hash password: %w", err)
 	}
 
-	token, err := newToken()
-	if err != nil {
-		return err
-	}
+	token := newToken()
 
 	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		now := s.clock.Now()
@@ -468,14 +465,11 @@ func (s *AuthService) signIn(
 		}
 	}
 
-	token, err := newToken()
-	if err != nil {
-		return SignedIn{}, err
-	}
+	token := newToken()
 
 	var sess domain.Session
 
-	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		now := s.clock.Now()
 
 		if extra != nil {
@@ -787,13 +781,12 @@ func tooLong(pw string) bool {
 }
 
 // newToken returns a random URL-safe token with 256 bits of entropy.
-func newToken() (string, error) {
+// crypto/rand.Read never returns an error: it crashes the program instead.
+func newToken() string {
 	b := make([]byte, tokenBytes)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("random token: %w", err)
-	}
+	_, _ = rand.Read(b)
 
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 func minTime(a, b time.Time) time.Time {

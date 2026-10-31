@@ -43,12 +43,9 @@ var (
 // accounts exist. A new link replaces older ones. The mail is in the
 // account's language, else in locale, else in the school's default.
 func (s *AuthService) RequestPasswordReset(ctx context.Context, email, locale string) error {
-	token, err := newToken()
-	if err != nil {
-		return err
-	}
+	token := newToken()
 
-	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		acc, err := tx.Accounts().GetByEmail(ctx, strings.TrimSpace(email))
 
 		switch {
@@ -304,12 +301,9 @@ func (s *AuthService) RequestEmailChange(ctx context.Context, p Principal, passw
 		return err
 	}
 
-	token, err := newToken()
-	if err != nil {
-		return err
-	}
+	token := newToken()
 
-	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		acc, err := tx.Accounts().Get(ctx, p.AccountID)
 		if err != nil {
 			return err

@@ -106,10 +106,7 @@ func (s *SetupService) Init(ctx context.Context, d SetupData) (SetupResult, erro
 		return SetupResult{}, err
 	}
 
-	token, err := newToken()
-	if err != nil {
-		return SetupResult{}, err
-	}
+	token := newToken()
 
 	now := s.clock.Now()
 	t := domain.AccountToken{
@@ -117,7 +114,7 @@ func (s *SetupService) Init(ctx context.Context, d SetupData) (SetupResult, erro
 		CreatedAt: now, ExpiresAt: now.Add(InviteTokenTTL),
 	}
 
-	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		switch _, err := tx.Settings().Get(ctx); {
 		case err == nil:
 			return ErrAlreadySetUp

@@ -54,12 +54,9 @@ func (s *AuthService) CreateAccount(
 		ID: ids.New[domain.AccountID](s.ids), PersonID: person, Email: strings.TrimSpace(a.Email), Role: a.Role,
 	}
 
-	token, err := newToken()
-	if err != nil {
-		return domain.Account{}, err
-	}
+	token := newToken()
 
-	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		// The account makes a dependent managed: under the lock, a
 		// guardian's edit or removal of the person waits for it.
 		if _, err := lockLivePerson(ctx, tx, person); err != nil {
