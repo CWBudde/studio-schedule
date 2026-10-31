@@ -18,7 +18,8 @@ Status legend: `[x]` done · `[ ]` open · `[~]` in progress / partially done
 1. **One application, two targets.** `internal/app.New(...)` returns a single `http.Handler`. It
    runs as a normal server on PostgreSQL in production. For the GitHub Pages demo it is compiled to
    WebAssembly and runs in a Web Worker with an in-memory store. No feature is demo-only and no
-   feature is faked in the demo.
+   feature is faked in the demo. From Phase 13, a PHP backend implements the same API contract on
+   the same schema as a separate implementation, held to the Go app by a conformance suite.
 2. **The API contract is the OpenAPI spec generated from Go (Huma v2).** TypeScript types are
    generated from it (`just gen-api`), and CI fails if they drift.
 3. **Business logic lives in `internal/service` and depends only on interfaces** (Store, Clock, IDs,
@@ -72,6 +73,7 @@ Phase 1 refines this outline. "Legacy" names are listed in [docs/glossary.md](do
 | Waitlist      | `waitlist_entries` (hashed random invite token, expiry)                                                               |
 | Passes        | `pass_types`, `passes` (`visits_remaining >= 0`), `pass_redemptions` (unique booking)                                 |
 | Receipts      | `receipt_counters` (gapless per year), `receipts`, `receipt_lines` (immutable; corrections are cancellation receipts) |
+| Events        | `events` (title, slug, price, sign-up window; sessions are lessons), `event_registrations` (Phase 10)                 |
 | Communication | `announcements`, `announcement_dismissals`, `announcement_mailings`, `outbox_mails`                                   |
 | Integration   | `calendar_feeds` (secret token), `import_runs`                                                                        |
 
@@ -707,11 +709,327 @@ Goal: prepaid passes and legally sound receipts.
 - [x] Operator documentation: configuration reference, deployment guide (2026-10-25) —
       docs/operations.md, its configuration reference checked against the code by a test
 
-## Phase 9 — Optional modules
+## Phase 9 — Backend test coverage
+
+Goal: at least 90 % statement coverage of the Go backend, held there by a CI gate, from tests that
+check behaviour rather than lines. Coverage is measured as `tools/coverage` does it: one
+cross-package profile (`go test -coverpkg=./...`, with the PostgreSQL store tests), leaving out the
+shared test suites (`storetest`, `servicetest`), generated sqlc code and `tools/`.
+
+Baseline (2026-10-31): **89.3 %** (13,948 of 15,611 statements). The most uncovered statements are
+in `internal/service` (86.3 %, 1,046 uncovered), `cmd/studio-schedule` (70.3 %, 152),
+`internal/httpapi` (93.5 %, 106) and `internal/store/postgres` (91.6 %, 91). A per-package count
+gives only 53.8 %, because most code is run by other packages' tests.
+
+- [x] Coverage after every test run: `just test-cover` writes `coverage.out` and `just coverage`
+      reports it. `just ci` ends with the report. CI prints it in the job log and the job summary,
+      also when a test failed, and uploads the profile (2026-10-31): `tools/coverage` (merges the
+      per-binary blocks, lists the packages with the most uncovered statements)
+- [ ] `internal/service`: the uncovered error paths and edge cases of each service, as service tests
+      or `servicetest` scenarios on both stores. Store errors only a broken database produces come
+      from a fault-injecting `store.Store` wrapper in tests. A defensive branch that cannot be
+      reached is removed, not excluded
+- [ ] `cmd/studio-schedule`: the commands run in-process through cobra (`init`, `import`,
+      `migrate`, `seed`, `healthcheck`, `vapid-keys`, `serve` startup refusals) against the test
+      database
+- [ ] `internal/httpapi` and `internal/app`: the error mappings (`toHTTPError`, conflicts, field
+      errors) and middleware branches without a test
+- [ ] Stores: the postgres error paths, and the sqlc queries no test runs. Each gets a contract case
+      in `storetest` or is deleted as unused
+- [ ] Adapters: `internal/mail/smtp` (a fake SMTP server: rejects, timeouts, TLS), `internal/webpush`
+      (an `httptest` push service: 404/410 drops the subscription, 429/5xx retries),
+      `internal/pdf/pdftext`, `internal/pdf/typstwasm` (malformed input, module errors)
+- [ ] Gate: CI fails below 90 % (`tools/coverage -min 90`, also in `just ci`). The floor goes up as
+      coverage grows and only goes down by a decision recorded here. Is there also a per-package
+      floor (e.g. 80 %), so one well-tested package cannot hide another? To be decided when the
+      gate lands
+- [ ] Docs: CLAUDE.md (new code comes with tests that keep the gate green; how to read
+      `just coverage`), docs/architecture.md "Testing"
+
+## Phase 10 — Events & workshops
+
+Goal: a public events page for workshops, intensives and other special dates. Each event has its
+own price, its own sign-up and its own receipt, apart from the weekly timetable and its passes.
+
+Today a workshop is a one-off lesson of kind `workshop` (ADR 0007). Like every lesson, any pass
+pays for it (ADR 0012), and receipts exist for pass sales only. This phase gives events their own
+entity, price and payment path. The schedule keeps showing their sessions.
+
+Order: the ADR first. Then the domain and the store, the office's event administration, the public
+page and registration, and payment with receipts. Statistics, theme slots and the demo seed come
+last.
+
+- [ ] ADR "Events and workshops" (0019) settles the open decisions, each one asked first:
+  - [ ] Model: an event (title, slug, description, image, course type, instructor(s), location)
+        groups one or more sessions, which stay lessons (kind `workshop`) and so keep the schedule,
+        calendar feeds, attendance and room overlap checks. Is a registration for the whole event
+        only, or can a person sign up for single sessions?
+  - [ ] Pricing: one gross price plus VAT rate per event (`domain.Money`, basis points as for pass
+        types), or price tiers (early bird until a date, member/guest, reduced)? Does any pass, or
+        only a named pass type, pay for an event (default: no pass pays for one)?
+  - [ ] Payment: no online payment. A registration starts `unpaid`, and the office marks it paid at
+        the desk. Is that the receipt moment? ADR 0012 then needs an amendment: receipts cover
+        event fees too (lines, VAT snapshot, Storno, the same gapless counter)
+  - [ ] Who registers: members for themselves and their dependents (family rules, ADR 0008). Can
+        guests sign up from the public page with a name and email (confirmed by a mail link, rate
+        limited), or does the office add them only, as for lessons today?
+  - [ ] Capacity and waitlist: one capacity per event, checked under an event lock, and the
+        existing waitlist chain reused (ADR 0010)? The lock order then becomes event → lessons
+  - [ ] Cancellation: an event-specific deadline, refund or credit rules after it, and what an
+        event cancelled by the school does to registrations and receipts
+  - [ ] Visibility and release: publish date, sign-up window (opens/closes), and whether events
+        ignore the timetable's release window as workshops do now (ADR 0003)
+  - [ ] Existing one-off `workshop` lessons: do they stay as plain lessons, or does a migration or
+        the demo seed turn them into events?
+- [ ] Domain and store: `domain.Event`, `EventRegistration` (person or guest, status, paid state,
+      price snapshot), typed IDs, `Validate()`; `Events()`/`EventRegistrations()` repos in memory
+      and postgres (migration, sqlc), contract cases in `storetest`
+- [ ] Office administration (`/api/v1/admin/events`, `office`): create/edit/delete events, add,
+      move and remove sessions (lessons) under the class/lesson rules of ADR 0007, list
+      registrations, add a registration for a person or guest, mark paid, cancel; `withConflict`
+      409s and 422 field errors as elsewhere; audited
+- [ ] Public API: `listEvents` (upcoming, published; free places, price, sessions) and `getEvent`
+      by slug (`public`); `registerForEvent` and `cancelEventRegistration` (`signedIn`, and for
+      guests if the ADR allows it); confirmation and cancellation mails (EN/DE, golden files)
+- [ ] Payment and receipts: marking a registration paid issues a receipt in the same transaction
+      (`ReceiptService`, the PDF template gets an event line), Storno on refund; "My events" with
+      the registrations of the family and their receipts
+- [ ] Web: `/events` list and `/events/$slug` detail page (dates, sessions, instructor, location,
+      price, places left, register/cancel, waitlist), a nav entry, event sessions in the schedule
+      linking to their event; office pages for events, sessions and registrations; every string in
+      `locales/{en,de}`; school dates through `schoolTime.ts`
+- [ ] Themes: `EventList` and `EventDetail` slots (ADR 0018) in Programme, a Werkstatt variant
+- [ ] Integration: announcements can target an event's participants (ADR 0014); event sessions in
+      calendar feeds; event revenue and sign-ups in the statistics; events in the person data
+      export and anonymisation (ADR 0016)
+- [ ] Demo seed: two or three fictional events around today (one free, one nearly full, one with
+      a guest sign-up), relative to the visit day like the existing workshops
+- [ ] Tests: concurrent registration for the last place (both stores), price snapshot and receipt
+      golden files, cancellation edges, visibility of unpublished events; e2e `events.spec.ts`
+      (browse, register, cancel, the office marks paid and the receipt appears) on desktop and
+      phone; docs: architecture.md, glossary (event, registration), CLAUDE.md code map
+
+## Phase 11 — Command line
+
+Goal: the binary administers a school, not only serves it. An operator or admin can do on the
+server's shell what would otherwise need a browser: get back in when locked out, script
+maintenance, answer GDPR requests, export receipts for the tax adviser, check data integrity.
+
+Today the commands cover setup and operations only: `serve`, `migrate up|down|status`, `seed`,
+`init`, `import`, `healthcheck`, `openapi`, `version`, `vapid-keys`. Nothing covers day-to-day
+administration. Job state lives only in the serving process (`internal/jobs`), so no command can
+show it.
+
+Order: the ADR, then the shared command layer (the MCP server of Phase 12 builds on it), then the
+command groups by need: recovery and diagnosis first, then data, then reports.
+
+- [ ] ADR "Command line" (0020) settles the open decisions, each one asked first:
+  - [ ] Local, remote or both. A local command opens the database (`DATABASE_URL`) and calls the
+        services through the `app` wiring, as `import` does. It works while the server is down
+        but needs shell access. A remote command calls the HTTP API with a personal access token
+        (`--server`, `--token`; a new `api_tokens` table with hashed tokens, the account's access
+        level, an expiry, revocable on the account page). It works from a laptop and, unchanged,
+        against the PHP backend (Phase 13). Proposal: operator commands local only, admin commands
+        both, behind one client interface
+  - [ ] Actor: who does a local command act as? A `system` principal with the OS user in the
+        audit details, or `--as <admin email>` with that admin's access level (ADR 0005)?
+  - [ ] Output for scripts: text tables by default, `--output json` with a stable schema (the
+        OpenAPI types where a command mirrors an operation), documented exit codes (0 ok, 1
+        failed, 2 usage, 3 not found, 4 conflict), colour only on a terminal
+  - [ ] Safety: a command that deletes, anonymises, mails or cancels asks for confirmation on a
+        terminal and needs `--yes` otherwise. A `--dry-run` where the service supports one (as
+        `import` does)
+  - [ ] Job state: store the runs (`job_runs`: job, start, end, result, error), so `jobs list` can
+        show them from another process, or keep them in memory and offer `jobs run` only
+- [ ] Command layer: `cmd/studio-schedule/cli` (command → service call → presenter), no SQL in
+      `cmd`. The services' validation and field errors are printed with the field's name. Global
+      flags `--database-url`, `--output`, `--yes` (and `--server`, `--token` if the ADR chooses
+      remote). `completion` for bash, zsh, fish and PowerShell. docs/cli.md is generated from
+      cobra and CI checks it like `api/openapi.json`; `docs_test.go` covers the new flags
+- [ ] Diagnosis: `config check` validates the environment and flags without starting and prints
+      the effective configuration with secrets redacted. `doctor` checks the database, the schema
+      version, time zone and currency, the SMTP login, the VAPID keys, an https `BASE_URL` and the
+      receipt module: one line per check, exit 1 if one fails
+- [ ] Accounts and access: `accounts list|show`, `accounts create --role`, `accounts set-role`,
+      `accounts reset-password` (prints a setup link like `init`, or mails it with `--mail`),
+      `accounts sessions revoke` (one account or all), `accounts delete`. The guards of ADR 0016
+      (`last-admin`, `own-account`) apply. This is the way back in when the last admin has
+      forgotten their password
+- [ ] Settings: `settings get [area]` and `settings set <area> key=value…` through
+      `SettingsService` (same validation; time zone and currency stay locked once used).
+      `settings export|import` as JSON, to set up a second school the same way
+- [ ] Jobs: `jobs list` (name, interval, last run and result) and `jobs run <name>` (one job now,
+      e.g. `generate-lessons`, `purge-personal-data`, `deliver-mail`). A database lock keeps a
+      serving instance and the command from running the same job at once
+- [ ] Mail: `mail test --to` renders a test mail and sends it through the configured SMTP.
+      `mail list --status failed`; `mail requeue <id>|--failed` is audited as `mail-requeued`
+      (ADR 0014)
+- [ ] Persons and privacy: `persons search` reads the search term from a prompt or stdin, never
+      an argument (shell history, `ps`; ASVS 8.3.1). `persons export <id> -o file.json`,
+      `persons anonymize <id>` (ADR 0016), `persons duplicates`,
+      `persons merge <survivor> <duplicate>` (ADR 0015)
+- [ ] Timetable: `lessons list --date|--from --to`, `lessons generate --until`,
+      `lessons cancel <id> --notify` (a sick instructor, from an SSH app on a phone),
+      `terms list`, `classes list`
+- [ ] Passes and receipts: `passes list --person`, `receipts list --from --to`,
+      `receipts pdf <number> -o file`, `receipts export --year --format csv` (for the tax
+      adviser). `receipts verify` checks the numbers are gapless per year, every Storno names its
+      original, and the totals match the lines
+- [ ] Integrity: `db check` compares pass visits with redemptions, bookings with capacity,
+      tombstones with what still references them, and the receipt counters. It is read-only and
+      exits 1 on a finding
+- [ ] Reports: `stats --from --to` (the statistics service as a table or JSON);
+      `events list|registrations <slug>|mark-paid` (Phase 10)
+- [ ] Tests: every command runs in-process (cobra `Execute` with buffers) on the memory store
+      and PostgreSQL. They cover golden text and JSON output, exit codes, and the refusal without
+      `--yes`. The commands count towards the coverage gate (Phase 9)
+- [ ] Docs: docs/cli.md (generated); docs/operations.md (recovery, cron examples for scripted
+      exports); the CLAUDE.md code map
+
+## Phase 12 — MCP server
+
+Goal: an assistant (Claude Desktop, Claude Code or any other MCP client) can work with a school.
+It can answer "who is on the waiting list for Thursday's ballet class?", find a free room, draft an
+announcement, or run the CLI's checks. It follows the same rules as every other caller: the
+account's access level, the services' validation, the audit log.
+
+Order: the ADR, then a read-only server over stdio built on the command layer of Phase 11, then
+resources and prompts, then opt-in writes, then the remote transport if the ADR chooses it.
+
+- [ ] ADR "MCP server" (0021) settles the open decisions, each one asked first:
+  - [ ] Shape: `studio-schedule mcp` over stdio (the client starts the binary; it uses the
+        database directly or the remote mode of Phase 11), a streamable HTTP endpoint `/mcp` in
+        `serve` (for clients that connect to a URL), or both. An endpoint in `serve` becomes part
+        of the API the PHP backend (Phase 13) must serve too. stdio in remote mode works against
+        both backends without porting
+  - [ ] Authentication: stdio acts as the CLI's actor (Phase 11). HTTP needs OAuth 2.1 as the MCP
+        specification asks (the app as authorization server, PKCE, client registration), or the
+        personal access tokens of Phase 11 as bearer tokens
+  - [ ] One definition: are tools generated from the CLI command layer (name, input schema,
+        handler, presenter), so a command and its tool cannot drift? The JSON output of Phase 11
+        would then be the tool result
+  - [ ] Which tools: read-only by default, with writes opted in per group by an admin (a setting
+        or a flag). Never `accounts delete`, `persons anonymize` or `migrate down`. Are the tool
+        annotations (`readOnlyHint`, `destructiveHint`) enough, or does a write need a
+        confirmation round trip?
+  - [ ] Personal data and minors: what may a language model see? Minimise data per tool (names
+        and contact data only where the question needs them), make the office opt in, audit
+        every tool call (`mcp-tool-called`: tool, actor, never the arguments of a search). A
+        docs/privacy.md section explains that the assistant's provider sees what the tools return
+  - [ ] SDK: the official `github.com/modelcontextprotocol/go-sdk` (server side only, kept out of
+        `cmd/wasm` by `check-wasm-deps`)
+- [ ] Read tools: the schedule (date range, location, course type), a lesson with participants
+      and waitlist (staff and office), free places, rooms free at a time, person search, a
+      person's bookings and passes, statistics, receipts, the mail log, `doctor`, `db check`
+- [ ] Resources: the school settings, the current term's timetable, the glossary (so the model
+      uses the school's words), and templates for `lesson://{id}` and `person://{id}` (office)
+- [ ] Prompts in the school's language: "weekly overview", "whom to invite from the waiting
+      list", "draft an announcement for a canceled lesson"
+- [ ] Write tools (opt-in): book or cancel for a person (the booking rules apply), cancel a
+      lesson with notification, create an announcement as a draft (the tool never sends one; the
+      office publishes it), requeue failed mail, run a job
+- [ ] Remote transport (if decided): `/mcp` behind the access middleware, with rate limits,
+      request IDs and the ADR's authentication. The WASM demo has no MCP server (its transport
+      is the browser), and it shows nothing that suggests one
+- [ ] Tests: an in-process MCP client (go-sdk) against the server on both stores. They cover the
+      tool list per access level, valid input schemas, golden results, refused writes and audit
+      rows, and each tool against the CLI command it mirrors; the coverage gate of Phase 9 applies
+- [ ] Docs: docs/mcp.md (setup for Claude Desktop, `claude mcp add` for Claude Code, other
+      clients; the tool list; privacy); the CLAUDE.md code map
+
+## Phase 13 — PHP backend
+
+Goal: a second, equal backend in PHP for schools whose hosting runs PHP, not a Go binary. It
+serves the same `/api/v1` contract and the same embedded web UI on the same PostgreSQL schema. A
+school can switch between the Go and the PHP backend without migrating data. The Go app stays the
+reference implementation: it owns `api/openapi.json` and the migrations, and it alone runs the WASM
+demo.
+
+The previous system had two backends whose role numbers and fields drifted apart (see
+[Lessons](#lessons-from-the-previous-attempt)). So the PHP backend writes no contract of its own.
+A black-box conformance suite runs against both backends in CI, and a PHP feature counts as done
+only when its cases pass there.
+
+Order: the ADR, then the conformance suite (proven against the Go server first), then the PHP
+skeleton, then the API areas in the order of the phases. From then on, every new feature (Phase 14
+included) lands in both backends.
+
+- [ ] ADR "PHP backend" (0022) settles the open decisions, each one asked first:
+  - [ ] Target hosting: shared hosting (Apache/nginx + PHP-FPM, cron, no daemon, often no
+        `exec`), a container, or both. This decides the next three questions
+  - [ ] Database: PostgreSQL only (same schema, data portable between the backends) or also
+        MySQL/MariaDB, which shared hosts offer more often. MySQL means a second dialect: no
+        `timestamptz`, no partial unique indexes, other triggers for the immutable receipts, and a
+        second set of store tests
+  - [ ] PHP version and framework: plain PSR-7/15 with small libraries (Slim or similar,
+        Doctrine DBAL, symfony/mailer, symfony/uid, Twig), Symfony, or Laravel. The layering
+        `http` → `service` → `store` interfaces must carry over
+  - [ ] Receipt PDF: the typst module (`tools/receipt-pdf`) runs on wazero in Go. PHP options: a
+        WebAssembly runtime extension, the typst CLI binary (only where `exec` is allowed, never
+        with user input in the command), or a PHP PDF library with a ported template checked
+        against the same text-extraction golden tests
+  - [ ] Jobs without a daemon: a `bin/studio-schedule jobs:run` called by cron every minute,
+        under a DB advisory lock so runs never overlap; how `Deps.Wake` (mail now, announcement
+        due now) maps to "run this job at the end of the request"
+  - [ ] Process-local state: the rate limits, the `/readyz` cache and the metrics keep state in
+        the Go process. PHP keeps them in the database (or APCu where present). Are Prometheus
+        metrics dropped for PHP?
+  - [ ] Migrations: the PHP command reads the goose SQL files from
+        `internal/store/postgres/migrations` and writes the same `goose_db_version` table, so
+        either backend can migrate and refuse a mismatched schema. A copy or a release artifact
+        keeps them in step
+  - [ ] Repository and release: `php/` in this repository (composer, PHPUnit, PHPStan at max
+        level, PHP-CS-Fixer), and a release zip with `vendor/` and the built web UI
+- [ ] Conformance suite (Go, black-box, against a `BASE_URL`): it ports the scenarios of
+      `internal/app/*_test.go` and `servicetest` to HTTP and checks every response against
+      `api/openapi.json`. It needs a test control API that is off unless the environment enables
+      it, in both backends: set the clock, reset the database, load the demo seed, read the
+      outbox. It runs first against `serve`, then in CI against both (`just conformance`)
+- [ ] PHP skeleton: config from env (the same names as docs/operations.md), PSR-3 logging with
+      request IDs, problem+json in the shape of `httpapi.ErrorModel`, the middleware chain of
+      `internal/app/observe.go` (security headers, request ID, access log with redacted `token`
+      parameters, recovery, cross-origin protection), the access levels of ADR 0005, the session
+      cookie (`__Host-studio_session` / `studio_session`), `/healthz` and `/readyz`, and the SPA
+      fallback serving the built `web/dist`
+- [ ] Shared building blocks: PSR-20 clock and school time zone (never the server zone), UUIDv7
+      IDs, `Money`/`Date`/`TimeOfDay` value objects, argon2id through `password_verify` on the
+      existing PHC hashes (a test with hashes made by Go), the common-password list, the mail
+      templates ported to Twig and checked against the Go golden files in
+      `internal/mail/testdata`, the iCal writer against the golden feeds in
+      `internal/service/testdata/feeds`
+- [ ] API areas, each done when its conformance cases pass on PHP:
+  - [ ] Public settings, schedule and visibility, release window (ADR 0003)
+  - [ ] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006)
+  - [ ] Family, persons, invitations, catalogue and timetable administration (ADR 0007, 0008)
+  - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
+        order (`SELECT … FOR UPDATE`, term → class → lesson → passes)
+  - [ ] Calendar feeds (ADR 0011)
+  - [ ] Passes, redemption ledger, receipts with the gapless counter and PDF (ADR 0012)
+  - [ ] Settings, branding, themes, `init` (ADR 0013, 0018)
+  - [ ] Announcements, mail log, statistics (ADR 0014)
+  - [ ] Import, duplicates and merge (ADR 0015)
+  - [ ] Privacy, export, anonymisation, retention jobs (ADR 0016)
+  - [ ] Web push with VAPID (ADR 0017)
+  - [ ] Events and workshops (Phase 10)
+- [ ] CLI parity: the operator commands (`migrate`, `seed`, `init`, `import`, `jobs:run`,
+      `vapid-keys`, `healthcheck`) as PHP console commands. The admin commands of Phase 11 and the
+      MCP server of Phase 12 work against PHP through their remote mode, if their ADRs choose it.
+      Otherwise they are ported too
+- [ ] Tests: PHPUnit for services and stores (PostgreSQL via Docker, like `just test-pg`),
+      concurrency cases for capacity, redemption and receipt numbers against the real database,
+      the Playwright suite `web/e2e-server` against the PHP backend, `just ci` and CI running all
+      of it; PHP coverage (PHPUnit with PCOV) reported after every run and gated at 90 % like Go
+      (Phase 9)
+- [ ] Docs: deployment on shared hosting and in a container (docs/operations.md), choosing a
+      backend, ADR 0001 amended (the WASM demo stays Go), CLAUDE.md rules for changes in both
+      backends
+
+## Phase 14 — Optional modules
+
+Each module lands in both backends (Phase 13).
 
 - [ ] Media library (video links per course type, members only)
 - [ ] Embeddable public schedule widget (iframe/script) for the school website
-- [ ] Events/workshops page with separate pricing
 - [x] PWA (installable, offline schedule cache, web push for waitlist invites) (2026-10-26) — ADR
       0017; own service worker (vite-plugin-pwa injectManifest), server manifest from the
       settings; offline: allow-listed query cache in IndexedDB, read-only, wiped on sign-out and
@@ -759,10 +1077,11 @@ Issues found in the previous system that this rewrite must avoid:
 
 ## Risks
 
-| Risk                                                                      | Mitigation                                                                                   |
-| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Demo (memory store, worker cookies) drifts from production behaviour      | Shared contract suite; Playwright smoke against server + Postgres (Phase 8)                  |
-| Every query must be implemented twice (memory + Postgres)                 | Narrow per-aggregate repos; aggregation and statistics in Go services                        |
-| WASM binary size / first load on mobile                                   | Size reported in CI; loading screen; dependency guard; lazy start                            |
-| release-please with `GITHUB_TOKEN` doesn't trigger CI on release PRs/tags | Add a PAT/GitHub App secret `RELEASE_PLEASE_TOKEN` when needed (workflow already prefers it) |
-| Personal data of minors                                                   | GDPR features in Phase 8; fictional seed data only; no real data in this repo                |
+| Risk                                                                      | Mitigation                                                                                                          |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Demo (memory store, worker cookies) drifts from production behaviour      | Shared contract suite; Playwright smoke against server + Postgres (Phase 8)                                         |
+| Every query must be implemented twice (memory + Postgres)                 | Narrow per-aggregate repos; aggregation and statistics in Go services                                               |
+| WASM binary size / first load on mobile                                   | Size reported in CI; loading screen; dependency guard; lazy start                                                   |
+| release-please with `GITHUB_TOKEN` doesn't trigger CI on release PRs/tags | Add a PAT/GitHub App secret `RELEASE_PLEASE_TOKEN` when needed (workflow already prefers it)                        |
+| Personal data of minors                                                   | GDPR features in Phase 8; fictional seed data only; no real data in this repo                                       |
+| Go and PHP backends drift apart (as in the previous system)               | One contract from Go; black-box conformance suite against both in CI; shared migrations and golden files (Phase 13) |

@@ -7,7 +7,7 @@
 
 Members check the schedule and their lessons on the phone, often on the way to the studio with a bad
 connection, and a waiting-list invite (ADR 0010) holds a place for hours only: a mail is easily
-missed. Phase 9 makes the app a progressive web app: installable, usable offline for what was last
+missed. Phase 14 makes the app a progressive web app: installable, usable offline for what was last
 seen, and able to notify a device. The API answers `no-store` (ASVS 8.2.1, `securityHeaders`), the
 web demo runs the same app in the browser (ADR 0001), and nothing may be demo-only except the
 transport and the store, mailer and PDF renderer implementations.
