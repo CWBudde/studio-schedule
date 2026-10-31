@@ -1113,6 +1113,32 @@ func TestGuestConfirmation(t *testing.T) {
 	}
 }
 
+// TestLessonParticipantsRunOutInvite: an invite whose expiry has passed
+// shows as expired and holds no place, even before the waitlist-expiry job
+// ends it; it keeps its place in the line until then.
+func TestLessonParticipantsRunOutInvite(t *testing.T) {
+	t.Parallel()
+
+	f := newStaffFixture(t)
+	l := f.lessonWithPianist(t, 2)
+	f.bookAs(t, f.sam, l)
+	e := f.invitedEntry(t, l, f.mia, 1, "2026-10-21T09:59:59Z") // a second before bookingNow
+
+	got, err := f.participants(t, bookingNow).Participants(t.Context(), f.principal(t, f.ivy), l.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got.Waitlist) != 1 || got.Waitlist[0].Entry.ID != e.ID || got.Waitlist[0].Status != domain.WaitlistExpired ||
+		got.Waitlist[0].Entry.Status != domain.WaitlistInvited || got.Waitlist[0].Position != 0 {
+		t.Errorf("waitlist %+v, want Mia's invite shown as expired", got.Waitlist)
+	}
+
+	if got.Held != 0 || got.Waiting != 0 || got.FreePlaces() != 1 {
+		t.Errorf("held %d, waiting %d, free %d; want the place free", got.Held, got.Waiting, got.FreePlaces())
+	}
+}
+
 func TestFindPersonsForStaff(t *testing.T) {
 	t.Parallel()
 

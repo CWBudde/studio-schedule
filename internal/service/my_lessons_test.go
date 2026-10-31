@@ -350,3 +350,65 @@ func TestMyLessonsHistory(t *testing.T) {
 		t.Error("tom: more")
 	}
 }
+
+// TestMyLessonsLessonDeletedMeanwhile: a class edit that deletes a lesson
+// with its member bookings may commit between the read of the bookings and
+// the read of their lessons (PostgreSQL reads each query's committed
+// data). The booking whose lesson is gone is left out; the others stay.
+func TestMyLessonsLessonDeletedMeanwhile(t *testing.T) {
+	t.Parallel()
+
+	f := newStaffFixture(t)
+	s := f.newScene(t)
+	st := lessonsGoneStore{Store: f.st, gone: s.early.ID}
+	svc := NewMyLessonsService(st, clock.NewFixed(mustInstant(t, bookingNow)))
+
+	got, err := svc.Upcoming(t.Context(), f.principal(t, f.anna))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got.Upcoming) != 4 || len(got.Waitlist) != 1 {
+		t.Fatalf("%d bookings, %d entries; want 4 and 1", len(got.Upcoming), len(got.Waitlist))
+	}
+
+	for _, b := range got.Upcoming {
+		if b.Booking.LessonID == s.early.ID || b.Lesson.Lesson.ID != b.Booking.LessonID {
+			t.Errorf("booking %+v of lesson %v", b.Booking, b.Lesson.Lesson.ID)
+		}
+	}
+}
+
+// lessonsGoneStore reads lesson gone as deleted in Lessons().ListByIDs,
+// as if deleted by a transaction that committed just before that read.
+type lessonsGoneStore struct {
+	store.Store
+
+	gone domain.LessonID
+}
+
+func (s lessonsGoneStore) InTx(ctx context.Context, mode store.TxMode, fn func(context.Context, store.Tx) error) error {
+	return s.Store.InTx(ctx, mode, func(ctx context.Context, tx store.Tx) error {
+		return fn(ctx, lessonsGoneTx{Tx: tx, gone: s.gone})
+	})
+}
+
+type lessonsGoneTx struct {
+	store.Tx
+
+	gone domain.LessonID
+}
+
+func (t lessonsGoneTx) Lessons() store.LessonRepo { return lessonsGoneRepo{t.Tx.Lessons(), t.gone} }
+
+type lessonsGoneRepo struct {
+	store.LessonRepo
+
+	gone domain.LessonID
+}
+
+func (r lessonsGoneRepo) ListByIDs(ctx context.Context, ids []domain.LessonID) ([]domain.Lesson, error) {
+	lessons, err := r.LessonRepo.ListByIDs(ctx, ids)
+
+	return slices.DeleteFunc(lessons, func(l domain.Lesson) bool { return l.ID == r.gone }), err
+}
