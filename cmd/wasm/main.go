@@ -2,8 +2,9 @@
 
 // Command wasm builds the complete application as a WebAssembly module for
 // the browser demo: the same app.New handler as the server, backed by an
-// in-memory store with the fictional demo data, which the worker saves in the
-// browser between visits. JavaScript calls it through
+// in-memory store with the fictional demo data of the demo school the worker
+// names in DEMO_SCHOOL (seed.School; programme if empty or unknown), which
+// the worker saves in the browser between visits. JavaScript calls it through
 // globalThis.StudioScheduleAPI.fetch (see internal/wasmbridge).
 //
 //	GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w -X main.version=..." -o app.wasm ./cmd/wasm
@@ -33,6 +34,21 @@ func main() {
 	ctx := context.Background()
 	clk := clock.System{}
 
+	// The worker names the demo school the visitor chose (docs/demo-mode.md).
+	// An empty name (a worker that sets none, like the smoke test) means the
+	// default school silently; an unknown one falls back to it with a warning.
+	name := os.Getenv("DEMO_SCHOOL")
+
+	school, ok := seed.ParseSchool(name)
+	if !ok && name != "" {
+		logger.Warn("unknown demo school, seeding the default",
+			slog.String("school", name), slog.String("default", string(school)))
+	}
+
+	// The snapshot names the version and the school: a snapshot of another
+	// build or another school is refused.
+	build := wasmbridge.SnapshotBuild(version, string(school))
+
 	// The worker keeps the data of earlier visits (docs/demo-mode.md): restore
 	// it before anything reads the store. A snapshot of another build is
 	// refused, and the demo starts from the seed.
@@ -44,7 +60,7 @@ func main() {
 
 	data, err := wasmbridge.TakeSnapshot()
 	if err == nil && data != nil {
-		err = st.Restore(data, version)
+		err = st.Restore(data, build)
 		restored = err == nil
 	}
 
@@ -61,7 +77,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err := seed.LoadDemoAt(ctx, st, domain.DateOf(clk.Now(), loc)); err != nil {
+		if err := seed.LoadDemoSchoolAt(ctx, st, domain.DateOf(clk.Now(), loc), school); err != nil {
 			logger.Error("seeding demo data failed", slog.Any("err", err))
 			os.Exit(1)
 		}
@@ -97,7 +113,7 @@ func main() {
 	go runner.Run(ctx)
 
 	wasmbridge.Register(handler, version, wasmbridge.Persistence{
-		Snapshot: func() ([]byte, error) { return st.Snapshot(version) },
+		Snapshot: func() ([]byte, error) { return st.Snapshot(build) },
 		Restored: restored,
 	})
 

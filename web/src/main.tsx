@@ -1,10 +1,14 @@
 import './zodConfig';
+// Before the router: it reads `?demo=`, which the router's history removes.
+import '@/features/demo/linkedSchool';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { startBackend } from '@/api/transport';
 import { hasEnteredDemo } from '@/features/demo/entered';
+import { demoSchool } from '@/features/demo/school';
+import { isDemo } from '@/lib/env';
 import { indexedDbPersister, offlineCacheOptions, refreshRestored } from '@/lib/offlineCache';
 import { registerServiceWorker } from '@/pwa';
 import { queryClient, router } from '@/router';
@@ -18,6 +22,12 @@ if (hasEnteredDemo()) startBackend();
 // The service worker: the app offline and its updates (ADR 0017).
 registerServiceWorker();
 
+// The saved offline cache holds one school's answers; in the demo, a copy
+// of the other school's is dropped on restore, like one of another API.
+const offlineCacheBuster = isDemo
+  ? `${import.meta.env.VITE_OFFLINE_CACHE_VERSION}:${demoSchool()}`
+  : import.meta.env.VITE_OFFLINE_CACHE_VERSION;
+
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element #root not found');
 
@@ -26,10 +36,7 @@ createRoot(root).render(
     {/* The last schedule and My lessons survive a reload, for offline use (ADR 0017). */}
     <PersistQueryClientProvider
       client={queryClient}
-      persistOptions={offlineCacheOptions(
-        indexedDbPersister(),
-        import.meta.env.VITE_OFFLINE_CACHE_VERSION,
-      )}
+      persistOptions={offlineCacheOptions(indexedDbPersister(), offlineCacheBuster)}
       onSuccess={() => refreshRestored(queryClient)}
     >
       <RouterProvider router={router} />

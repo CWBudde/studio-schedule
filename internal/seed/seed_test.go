@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"slices"
@@ -1676,8 +1677,16 @@ func TestSchoolValid(t *testing.T) {
 	}
 }
 
+// werkstattIssuer is the werkstatt school's fictional receipt issuer.
+var werkstattIssuer = domain.ReceiptIssuer{
+	Name: "Tanzhaus am Lindenhof", Address: "Lindenhofweg 12\n10999 Beispielstadt",
+	TaxID: "99/999/99999", Email: "buero@tanzhaus-lindenhof.example", Phone: "+49 000 0000000",
+}
+
 // TestDemoSchoolSameData: the werkstatt school is the programme school with
-// other settings and a background; every other record is the same.
+// its own settings and a background, and receipts issued with those
+// settings (issuer, language, number, line text); every other record is the
+// same.
 func TestDemoSchoolSameData(t *testing.T) {
 	t.Parallel()
 
@@ -1709,15 +1718,92 @@ func TestDemoSchoolSameData(t *testing.T) {
 			t.Fatalf("werkstatt background: %v", err)
 		}
 
+		if len(werkstatt.Receipts) != len(programme.Receipts) || len(werkstatt.Receipts) == 0 {
+			t.Fatalf("%v: %d werkstatt receipts, %d programme receipts", anchor, len(werkstatt.Receipts), len(programme.Receipts))
+		}
+
+		// The receipts differ in what the school's settings put on them;
+		// copy those fields over, after checking them.
+		for i := range werkstatt.Receipts {
+			w, p := &werkstatt.Receipts[i], programme.Receipts[i]
+			s := werkstatt.Settings
+
+			if w.Locale != "de" || w.Issuer != s.Receipts.Issuer || w.Footer != s.Receipts.Footer ||
+				w.TaxNote != s.Receipts.TaxNote || w.TaxMode != s.Receipts.TaxMode || w.Currency != s.Currency ||
+				w.Number != domain.ReceiptNumber(s.ReceiptPrefix, w.Year, w.Sequence) {
+				t.Fatalf("%v: werkstatt receipt %+v not issued with the werkstatt settings", anchor, *w)
+			}
+
+			if len(w.Lines) != len(p.Lines) {
+				t.Fatalf("%v: receipt %s has %d lines, the programme's %d", anchor, w.Number, len(w.Lines), len(p.Lines))
+			}
+
+			for j := range w.Lines {
+				if w.Lines[j].Description == p.Lines[j].Description {
+					t.Errorf("%v: receipt %s line %q is not translated", anchor, w.Number, w.Lines[j].Description)
+				}
+
+				w.Lines[j].Description = p.Lines[j].Description
+			}
+
+			w.Number, w.Locale, w.Issuer, w.Footer = p.Number, p.Locale, p.Issuer, p.Footer
+		}
+
 		werkstatt.Settings, werkstatt.Background = programme.Settings, programme.Background
 		if !reflect.DeepEqual(werkstatt, programme) {
-			t.Fatalf("%v: the werkstatt school differs from the programme school beyond its settings", anchor)
+			t.Fatalf("%v: the werkstatt school differs from the programme school beyond its settings and receipts", anchor)
+		}
+	}
+}
+
+// TestWerkstattOwnIdentity: nothing of the programme school's identity
+// (its name, imprint, issuer, mail domain, receipt prefix) is left in the
+// werkstatt school's settings or receipts.
+func TestWerkstattOwnIdentity(t *testing.T) {
+	t.Parallel()
+
+	d, err := seed.DemoSchoolAt(seed.FixedDemoAnchor, seed.SchoolWerkstatt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for what, text := range map[string]string{
+		"settings": fmt.Sprintf("%+v", d.Settings),
+		"receipts": fmt.Sprintf("%+v", d.Receipts),
+	} {
+		lower := strings.ToLower(text)
+		for _, programme := range []string{"studio demo", "studio-demo", "pirouette", "exampletown", "example bank"} {
+			if strings.Contains(lower, programme) {
+				t.Errorf("the werkstatt %s contain %q: %s", what, programme, text)
+			}
+		}
+	}
+
+	s := d.Settings
+	if s.Receipts.Issuer != werkstattIssuer || s.ReceiptPrefix != "TL" || s.DefaultLocale != "de" ||
+		!strings.Contains(s.LegalNotice, "Tanzhaus am Lindenhof") || !strings.Contains(s.LegalNotice, "erfunden") ||
+		!strings.Contains(s.Receipts.Footer, "Beispielbank") {
+		t.Errorf("werkstatt settings %+v: want its own issuer, prefix TL, German, its own imprint and footer", s)
+	}
+
+	if err := s.Receipts.Complete(); err != nil {
+		t.Errorf("werkstatt receipt settings incomplete: %v", err)
+	}
+
+	for _, r := range d.Receipts {
+		if r.Locale != "de" || r.Issuer != werkstattIssuer || !strings.HasPrefix(r.Number, "TL-") {
+			t.Errorf("receipt %+v: want German, issued by %s, numbered TL-…", r, werkstattIssuer.Name)
+		}
+
+		if r.Kind == domain.ReceiptSale && !strings.Contains(r.Lines[0].Description, "gültig") {
+			t.Errorf("receipt %s line %q is not German", r.Number, r.Lines[0].Description)
 		}
 	}
 }
 
 // TestLoadDemoWerkstatt loads the werkstatt school: its own name, theme,
-// accent, language and background, the programme school's records.
+// accent, language, imprint, receipt issuer and background, the programme
+// school's records, and receipts in German by its own issuer.
 func TestLoadDemoWerkstatt(t *testing.T) {
 	t.Parallel()
 
@@ -1731,6 +1817,11 @@ func TestLoadDemoWerkstatt(t *testing.T) {
 	want.Theme = domain.ThemeWerkstatt
 	want.AccentColor = "#9c215b"
 	want.DefaultLocale = "de"
+	want.ReceiptPrefix = "TL"
+	want.LegalNotice = "Tanzhaus am Lindenhof · Lindenhofweg 12 · 10999 Beispielstadt\n" +
+		"Eine erfundene Schule: Alle Namen, Adressen und Nummern in dieser Demo sind ausgedacht."
+	want.Receipts.Issuer = werkstattIssuer
+	want.Receipts.Footer = "Bankverbindung: Beispielbank · IBAN XX00 0000 0000 0000 0000 00"
 
 	st := memory.New()
 	if err := seed.LoadDemoSchoolAt(t.Context(), st, seed.FixedDemoAnchor, seed.SchoolWerkstatt); err != nil {
@@ -1808,6 +1899,22 @@ func TestLoadDemoWerkstatt(t *testing.T) {
 
 		sameSet(t, "lessons", lessons, d.Lessons)
 
+		receipts, total, err := tx.Receipts().List(ctx, store.ReceiptFilter{Limit: 100})
+		if err != nil {
+			return err
+		}
+
+		if total != len(d.Receipts) || total == 0 {
+			t.Errorf("%d receipts, want %d", total, len(d.Receipts))
+		}
+
+		for _, r := range receipts {
+			if r.Locale != "de" || r.Issuer != werkstattIssuer || !strings.HasPrefix(r.Number, "TL-") ||
+				r.Footer != want.Receipts.Footer {
+				t.Errorf("receipt %+v: want German, issued by %s, numbered TL-…", r, werkstattIssuer.Name)
+			}
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -1882,6 +1989,30 @@ func TestLoadDemoUnknownSchool(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+// TestParseSchool: the web demo's worker names the school in DEMO_SCHOOL;
+// an empty or unknown name falls back to the programme school, and ok tells
+// the caller it did.
+func TestParseSchool(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		name string
+		want seed.School
+		ok   bool
+	}{
+		{"programme", seed.SchoolProgramme, true},
+		{"werkstatt", seed.SchoolWerkstatt, true},
+		{"", seed.SchoolProgramme, false},
+		{"x", seed.SchoolProgramme, false},
+		{"Werkstatt", seed.SchoolProgramme, false},
+		{" werkstatt", seed.SchoolProgramme, false},
+	} {
+		if got, ok := seed.ParseSchool(c.name); got != c.want || ok != c.ok {
+			t.Errorf("ParseSchool(%q) = %q, %v; want %q, %v", c.name, got, ok, c.want, c.ok)
 		}
 	}
 }

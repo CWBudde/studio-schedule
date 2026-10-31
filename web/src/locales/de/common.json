@@ -24,6 +24,8 @@
     "label": "Demo-Modus",
     "banner": "Demo-Modus: Die ganze App läuft in deinem Browser, mit einer erfundenen Schule. Deine Änderungen bleiben in diesem Browser, bis du die Demo zurücksetzt.",
     "about": "Über diese Demo",
+    "switchToWerkstatt": "Zur Werkstatt-Optik wechseln",
+    "switchToProgramme": "Zur Programme-Optik wechseln",
     "mailbox": {
       "open": "Demo-Postfach",
       "count_one": "{{count}} Mail",

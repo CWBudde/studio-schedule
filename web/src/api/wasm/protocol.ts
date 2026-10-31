@@ -1,5 +1,19 @@
+import type { DemoSchool } from '@/features/demo/school';
+
 /** Header list as ordered name/value pairs (keeps duplicates such as Set-Cookie). */
 export type HeaderPairs = [string, string][];
+
+/**
+ * Main thread -> worker, posted once right after the worker is created: the
+ * demo school to run. The worker cannot read the visitor's choice
+ * (localStorage) itself; it claims the school's saved data and starts Go only
+ * after this message. A message posted before the worker's script has run is
+ * queued by the browser.
+ */
+export interface WorkerInitMessage {
+  type: 'init';
+  school: DemoSchool;
+}
 
 /** Main thread -> worker. */
 export interface WorkerRequestMessage {
@@ -18,7 +32,7 @@ export interface WorkerFlushMessage {
   id: number;
 }
 
-export type MainToWorkerMessage = WorkerRequestMessage | WorkerFlushMessage;
+export type MainToWorkerMessage = WorkerInitMessage | WorkerRequestMessage | WorkerFlushMessage;
 
 /** Worker -> main thread. */
 export type WorkerToMainMessage =

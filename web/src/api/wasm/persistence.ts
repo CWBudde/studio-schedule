@@ -1,3 +1,4 @@
+import type { DemoSchool } from '@/features/demo/school';
 import type { StoredCookie } from './cookieJar';
 
 /**
@@ -8,12 +9,15 @@ import type { StoredCookie } from './cookieJar';
  * a worker (tabLock.ts). As a second line of defence against a tab that lost
  * the lock but still saves (it was frozen when another tab took over), saves
  * are fenced: each worker claims the data with a new epoch, and a save is
- * written only while the stored epoch is still its own. The saved state
- * lives until "Reset demo" clears it; a snapshot of another build is refused
- * by the Go side, which then starts from the seed (docs/demo-mode.md).
+ * written only while the stored epoch is still its own. Each demo school
+ * has its own record (`snapshotKey`), the epoch is one for both: one worker
+ * per origin runs, whichever school it runs. The saved state lives until
+ * "Reset demo" clears the school's record; a snapshot of another build (or
+ * another school) is refused by the Go side, which then starts from the seed
+ * (docs/demo-mode.md).
  */
 
-/** What is saved: one record, replaced on every save. */
+/** What is saved: one record per school, replaced on every save. */
 export interface DemoSnapshot {
   /** Version of this record's shape; a record of another version is ignored. */
   format: typeof SNAPSHOT_FORMAT;
@@ -43,8 +47,20 @@ export interface SnapshotStorage {
   transact<T>(mode: 'readonly' | 'readwrite', body: (tx: SnapshotTx) => Promise<T>): Promise<T>;
 }
 
-const CURRENT = 'current';
+/**
+ * The record of each school's snapshot. Programme's is `current`, the record
+ * of the demo before it had two schools: its visitors keep their data.
+ */
+const SNAPSHOT_KEYS: Record<DemoSchool, string> = {
+  programme: 'current',
+  werkstatt: 'current-werkstatt',
+};
 const OWNER = 'owner';
+
+/** The record that holds `school`'s snapshot. */
+export function snapshotKey(school: DemoSchool): string {
+  return SNAPSHOT_KEYS[school];
+}
 
 /** A save of a worker whose claim another worker has replaced. */
 export class StaleOwnerError extends Error {
@@ -61,15 +77,16 @@ export interface Claim {
 }
 
 /**
- * Makes the caller the owner of the saved data and reads it, in one
- * transaction: saves of earlier owners are refused from then on.
+ * Makes the caller the owner of the saved data and reads `school`'s
+ * snapshot, in one transaction: saves of earlier owners (of either school)
+ * are refused from then on.
  */
-export function claim(storage: SnapshotStorage): Promise<Claim> {
+export function claim(storage: SnapshotStorage, school: DemoSchool): Promise<Claim> {
   return storage.transact('readwrite', async (tx) => {
     const owner = await tx.get(OWNER);
     const epoch = (typeof owner === 'number' ? owner : 0) + 1;
     await tx.put(OWNER, epoch);
-    return { epoch, snapshot: toSnapshot(await tx.get(CURRENT)) };
+    return { epoch, snapshot: toSnapshot(await tx.get(snapshotKey(school))) };
   });
 }
 
@@ -80,12 +97,13 @@ export function claim(storage: SnapshotStorage): Promise<Claim> {
  */
 export async function claimOrGiveUp(
   storage: SnapshotStorage,
+  school: DemoSchool,
   timeoutMs = 3_000,
 ): Promise<Claim | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      claim(storage),
+      claim(storage, school),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error('IndexedDB did not answer')), timeoutMs);
       }),
@@ -98,21 +116,25 @@ export async function claimOrGiveUp(
   }
 }
 
-/** Saves `snapshot` if `epoch` still owns the data; else StaleOwnerError. */
+/** Saves `school`'s `snapshot` if `epoch` still owns the data; else StaleOwnerError. */
 export function saveSnapshot(
   storage: SnapshotStorage,
+  school: DemoSchool,
   epoch: number,
   snapshot: DemoSnapshot,
 ): Promise<void> {
   return storage.transact('readwrite', async (tx) => {
     if ((await tx.get(OWNER)) !== epoch) throw new StaleOwnerError();
-    await tx.put(CURRENT, snapshot);
+    await tx.put(snapshotKey(school), snapshot);
   });
 }
 
-/** Deletes the saved snapshot (the owner epoch stays, so stale saves stay refused). */
-export function clearSnapshot(storage: SnapshotStorage): Promise<void> {
-  return storage.transact('readwrite', (tx) => tx.delete(CURRENT));
+/**
+ * Deletes `school`'s saved snapshot; the other school's stays, and so does
+ * the owner epoch, so stale saves stay refused.
+ */
+export function clearSnapshot(storage: SnapshotStorage, school: DemoSchool): Promise<void> {
+  return storage.transact('readwrite', (tx) => tx.delete(snapshotKey(school)));
 }
 
 /** The record as a snapshot, or null if it is none (or of another version). */
@@ -152,7 +174,7 @@ function isCookie(value: unknown): value is StoredCookie {
 }
 
 /**
- * Saves snapshots, debounced: `schedule` after each change, and the save
+ * Saves `school`'s snapshots, debounced: `schedule` after each change, and the save
  * runs once the changes have paused for `delayMs`. Saves never overlap.
  * `onError` hears about the first failed save only (e.g. no quota, or
  * IndexedDB blocked in a private window), so the visitor is told once. A
@@ -165,6 +187,7 @@ export class SnapshotSaver {
   private failed = false;
   private stopped = false;
   private readonly storage: SnapshotStorage;
+  private readonly school: DemoSchool;
   private readonly epoch: number;
   private readonly capture: () => Promise<DemoSnapshot>;
   private readonly onError: (err: unknown) => void;
@@ -172,12 +195,14 @@ export class SnapshotSaver {
 
   constructor(
     storage: SnapshotStorage,
+    school: DemoSchool,
     epoch: number,
     capture: () => Promise<DemoSnapshot>,
     onError: (err: unknown) => void = () => undefined,
     delayMs = 250,
   ) {
     this.storage = storage;
+    this.school = school;
     this.epoch = epoch;
     this.capture = capture;
     this.onError = onError;
@@ -221,7 +246,7 @@ export class SnapshotSaver {
     try {
       const snapshot = await this.capture();
       if (this.stopped) return;
-      await saveSnapshot(this.storage, this.epoch, snapshot);
+      await saveSnapshot(this.storage, this.school, this.epoch, snapshot);
     } catch (err) {
       if (this.stopped) return;
       if (err instanceof StaleOwnerError) {
@@ -241,7 +266,7 @@ export class SnapshotSaver {
 export interface ResetSteps {
   /** Stops this tab's worker, so nothing is saved any more. */
   stop(): void;
-  /** Deletes the saved snapshot. */
+  /** Deletes the saved snapshot of the school this page runs. */
   clear(): Promise<void>;
   /** Remembers, across the reload, that the reset failed. */
   markFailed(): void;
@@ -250,8 +275,8 @@ export interface ResetSteps {
 
 /**
  * Resets the demo without relying on the worker (which may have crashed or
- * hang in a save): stop it, delete the snapshot from this thread, reload. A
- * delete that fails or takes longer than `timeoutMs` is reported after the
+ * hang in a save): stop it, delete the school's snapshot from this thread,
+ * reload. A delete that fails or takes longer than `timeoutMs` is reported after the
  * reload instead of blocking the page.
  */
 export async function resetDemoData(steps: ResetSteps, timeoutMs = 5_000): Promise<void> {
@@ -278,8 +303,9 @@ const STORE_NAME = 'snapshot';
 
 /**
  * The saved data in IndexedDB: database `studio-schedule-demo`, object store
- * `snapshot` with the records `current` (the snapshot) and `owner` (the
- * epoch of the worker that may save).
+ * `snapshot` with the records `current` (Programme's snapshot),
+ * `current-werkstatt` (Werkstatt's) and `owner` (the epoch of the worker
+ * that may save, one for both schools).
  */
 export function indexedDbStorage(): SnapshotStorage {
   let db: Promise<IDBDatabase> | null = null;

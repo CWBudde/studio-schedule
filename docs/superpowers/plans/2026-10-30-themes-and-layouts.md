@@ -111,7 +111,31 @@ Tailwind v4, shadcn/ui, TanStack Router/Query, react-i18next, Vitest, Playwright
   - `maxBackgroundBytes` is a constant in the card: `BrandingSettings` has no `…MaxBytes` field like
     the receipt settings' `logoMaxBytes`.
 
-- [ ] 2.3 `demo-schools` Two demo schools: `?demo=` param and stored choice, worker seeds the variant, one saved state per school, about page second button, banner switch link, README and docs/demo-mode.md — see "Task 2.3" below.
+- [x] 2.3 `demo-schools` Two demo schools: `?demo=` param and stored choice, worker seeds the variant, one saved state per school, about page second button, banner switch link, README and docs/demo-mode.md — see "Task 2.3" below.
+  - Done: the interfaces as listed, plus `seed.ParseSchool` (empty/unknown → programme, `ok` false;
+    `cmd/wasm` warns for an unknown value only), `wasmbridge.SnapshotBuild(version, school)` (the
+    snapshot's `build` header is `"<version> (<school>)"`, so the memory store refuses another
+    school's snapshot as `ErrSnapshotMismatch` without a store change), `persistence.snapshotKey`,
+    an `init` worker message (`WasmBridge` posts it first; the worker waits for it before it claims),
+    and `transport.switchSchool`, which flushes the worker before `switchDemoSchool` reloads (the
+    250 ms save debounce would otherwise lose a change made just before a switch). Tests: 4 new Go
+    tests (`TestWerkstattOwnIdentity`, `TestParseSchool`, `TestSnapshotBuild`,
+    `TestSnapshotOfAnotherSchool`), 2 updated; web unit tests 1058 (school 11, persistence +5,
+    bridge +2, transport 4, AboutPage +4, DemoBanner 4); e2e 202 (about.spec +3 per project).
+    `just test`, `just lint`, `just check-wasm-deps`, `just wasm-smoke`, `just check-formatted`,
+    `pnpm -C web check`/`test` and `just e2e` green.
+  - Seed: the werkstatt school has its own imprint, issuer "Tanzhaus am Lindenhof" (Lindenhofweg 12,
+    10999 Beispielstadt), German footer and prefix `TL`; `demoAt` now takes the school's settings,
+    so its seeded receipts are German and its own (programme output unchanged). Residual: the pass
+    type names and the cancellation reason in those receipts stay English (shared data).
+  - Discoveries: transport reads the school once per page load (`pageSchool`), so a reset in a tab
+    whose stored choice another tab changed still clears the school that tab runs. The offline
+    query cache's buster carries the school in the demo, so a switch never shows the other school's
+    cached answers. The e2e fixture's `demoSchool` init script sets the key only if absent (init
+    scripts rerun on every reload and would undo a switch). The e2e names in the Werkstatt school
+    accept English or German (its language is `de`); 5.1 asserts `data-theme`.
+  - Programme snapshots saved by an earlier build carry the plain version and are refused once; every
+    release changes the version anyway.
 
 - [ ] 3.1 `werkstatt-shell` Werkstatt theme chunk: tokens light/dark, Roboto Condensed, school background, Shell (header, tabs, phone drop menu, page panel), dialog styling — see "Task 3.1" below.
 
