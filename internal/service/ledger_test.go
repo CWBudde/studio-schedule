@@ -113,10 +113,10 @@ func ledgerTx(
 	})
 }
 
-// TestUpdateLessonStoreFaults: a store failure while the ledger writes a
+// TestLedgerUpdateLessonStoreFaults: a store failure while the ledger writes a
 // lesson and settles its bookings is returned, and no lesson, redemption or
 // visit changes.
-func TestUpdateLessonStoreFaults(t *testing.T) {
+func TestLedgerUpdateLessonStoreFaults(t *testing.T) {
 	t.Parallel()
 
 	now := mustInstant(t, bookingNow)

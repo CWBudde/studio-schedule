@@ -104,10 +104,10 @@ func TestSellFailedCommitTakesNoNumber(t *testing.T) {
 	}
 }
 
-// TestCancelStoreFaults: a store failure anywhere in a Storno is returned
+// TestCancelReceiptStoreFaults: a store failure anywhere in a Storno is returned
 // and leaves no cancellation receipt, no mail, no number taken and the pass
 // active: the Storno is atomic.
-func TestCancelStoreFaults(t *testing.T) {
+func TestCancelReceiptStoreFaults(t *testing.T) {
 	t.Parallel()
 
 	SweepFaults(t, FaultSweep{Setup: func(t *testing.T) (*FaultStore, func() error) {
