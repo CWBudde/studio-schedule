@@ -399,5 +399,16 @@
       "pass": "Karte",
       "actions": "Aktionen"
     }
+  },
+  "werkstatt": {
+    "book": "Eintragen",
+    "cancel": "Austragen",
+    "waitlist": "Warteliste",
+    "full": "Voll",
+    "details": "Details",
+    "participants": "Teilnehmende: {{taken}} / {{capacity}}",
+    "booked": "Gebucht",
+    "prevDay": "Vorheriger Tag",
+    "nextDay": "Nächster Tag"
   }
 }

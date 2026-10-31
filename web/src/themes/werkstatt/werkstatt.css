@@ -152,6 +152,10 @@
   --werkstatt-red-foreground: #ffffff;
   --werkstatt-brown: #b39474;
   --werkstatt-brown-foreground: #2e2012;
+  /* A lesson card's participant count while places are free (full: --destructive). */
+  --werkstatt-green: #2d6a3e;
+  /* The star of a booked lesson; its outline is --primary, as yellow alone vanishes on white. */
+  --werkstatt-star: #fbec19;
 }
 
 /* `:where()` keeps this at 0,1,0 (see above); later in the file, so it wins in dark mode. */
@@ -200,6 +204,8 @@
   /* #b39474 with dark text would glare in dark mode; a darker brown that carries white text. */
   --werkstatt-brown: #7a5f42;
   --werkstatt-brown-foreground: #ffffff;
+  --werkstatt-green: #7fd19b;
+  --werkstatt-star: #fbec19;
 }
 
 /*
@@ -285,6 +291,42 @@
 [data-theme='werkstatt'] [data-slot='dialog-close'] svg,
 [data-theme='werkstatt'] [data-slot='sheet-close'] svg {
   stroke-width: 1.25;
+}
+
+/*
+ * Lesson cards (LessonCard.tsx). In light mode a card takes its course type's tint (courseTint.ts,
+ * set as --course-tint; tokens.test.ts checks the text on each), in dark mode --card. Ended
+ * lessons (no tint) sit on --muted; canceled ones get a faint checker over it.
+ */
+[data-theme='werkstatt'] .werkstatt-card {
+  background-color: var(--course-tint, var(--card));
+}
+
+:where(.dark)[data-theme='werkstatt'] .werkstatt-card {
+  background-color: var(--card);
+}
+
+[data-theme='werkstatt'] .werkstatt-card[data-past],
+[data-theme='werkstatt'] .werkstatt-card[data-canceled] {
+  background-color: var(--muted);
+}
+
+[data-theme='werkstatt'] .werkstatt-card[data-canceled] {
+  background-image: repeating-conic-gradient(rgb(0 0 0 / 4%) 0 25%, transparent 0 50%);
+  background-size: 12px 12px;
+}
+
+:where(.dark)[data-theme='werkstatt'] .werkstatt-card[data-canceled] {
+  background-image: repeating-conic-gradient(rgb(255 255 255 / 5%) 0 25%, transparent 0 50%);
+}
+
+/* A full lesson's square button: red and mint stripes; its label sits on a plain chip. */
+[data-theme='werkstatt'] .werkstatt-full {
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--werkstatt-red) 0 8px,
+    var(--werkstatt-mint) 8px 16px
+  );
 }
 
 /*

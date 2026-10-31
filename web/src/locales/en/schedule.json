@@ -399,5 +399,16 @@
       "pass": "Pass",
       "actions": "Actions"
     }
+  },
+  "werkstatt": {
+    "book": "Book",
+    "cancel": "Cancel",
+    "waitlist": "Waiting list",
+    "full": "Full",
+    "details": "Details",
+    "participants": "Participants: {{taken}} / {{capacity}}",
+    "booked": "Booked",
+    "prevDay": "Previous day",
+    "nextDay": "Next day"
   }
 }

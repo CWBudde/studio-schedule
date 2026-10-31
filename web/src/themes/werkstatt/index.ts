@@ -1,7 +1,10 @@
 import type { Theme } from '../slots';
+import { DayHeading } from './DayHeading';
 import { Home } from './Home';
+import { LessonCard } from './LessonCard';
 import { Participants } from './Participants';
 import { Profile } from './Profile';
+import { ScheduleList } from './ScheduleList';
 import { Shell } from './Shell';
 import './werkstatt.css';
 
@@ -12,5 +15,5 @@ import './werkstatt.css';
  */
 export const werkstatt = {
   id: 'werkstatt',
-  slots: { Shell, Home, Profile, Participants },
+  slots: { Shell, ScheduleList, DayHeading, LessonCard, Home, Profile, Participants },
 } as const satisfies Theme;
