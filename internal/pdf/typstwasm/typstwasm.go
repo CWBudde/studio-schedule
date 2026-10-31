@@ -154,7 +154,7 @@ func (r *Renderer) Render(ctx context.Context, input []byte) ([]byte, error) {
 
 	out, renderErr, err := call(ctx, m, input)
 
-	if err != nil || m.Memory().Size() > maxMemory {
+	if err != nil || tooLarge(m.Memory()) {
 		// A trapped or canceled instance is unusable, and a large one is
 		// not worth keeping.
 		_ = m.Close(context.WithoutCancel(ctx))
@@ -171,6 +171,14 @@ func (r *Renderer) Render(ctx context.Context, input []byte) ([]byte, error) {
 	}
 
 	return out, nil
+}
+
+// tooLarge reports whether an instance's memory is beyond maxMemory. It
+// counts pages: Memory.Size overflows to 0 at the maximum of 4 GiB.
+func tooLarge(mem api.Memory) bool {
+	pages, _ := mem.Grow(0)
+
+	return uint64(pages)<<16 > maxMemory
 }
 
 // acquire takes an idle instance, or a slot to create one, waiting if all
