@@ -740,8 +740,21 @@ gives only 53.8 %, because most code is run by other packages' tests.
       `goose.PartialError.Applied`; reproducer skipped in `migrate_test.go` until the store fix);
       `seed`/`serve` call a gap in the goose table "outdated, run migrate up", which `migrate up`
       refuses
-- [ ] `internal/httpapi` and `internal/app`: the error mappings (`toHTTPError`, conflicts, field
-      errors) and middleware branches without a test
+- [x] `internal/httpapi` and `internal/app`: the error mappings (`toHTTPError`, conflicts, field
+      errors) and middleware branches without a test (2026-10-31): every `toHTTPError` mapping (a
+      table test), the 500s a failing store causes through `app.New` (45 endpoints, on a test-only
+      `faultStore` in `internal/app` that fails the transactions touching a poisoned repository:
+      generic detail, `requestId` = `X-Request-Id`, the cause logged once at ERROR), the domain
+      branches (impersonation, email change, rate limits, merge and import summaries, mail-log
+      cursors, announcement audiences, waiting-list invites, the data export), an operation without
+      an access level (500, fails closed), readiness probes that give up, path redaction, and the
+      mail, push and purge jobs. `internal/httpapi` 93.5 % → 99.9 % (106 → 1 uncovered),
+      `internal/app` 91.8 % → 99.7 % (27 → 1), total 89.4 % → 90.5 % on this item alone. No bug
+      found; two unreachable branches removed (`getMe`'s own principal check behind
+      `AccessSignedIn`, the error of encoding the all-string web manifest). Left: the panic on
+      unparsable embedded mail templates (`app.newRenderer`) and the renaming of a booking-rules
+      `FieldError` in `updateBookingRules`, unreachable while Huma's schema limits equal the
+      domain's
 - [x] Stores: the postgres error paths, and the sqlc queries no test runs. Each gets a contract case
       in `storetest` or is deleted as unused (2026-10-31): every one of the 226 sqlc queries has a
       caller, none deleted. Contract cases on both stores (read-only rejection of the push,
