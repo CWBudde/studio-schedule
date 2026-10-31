@@ -1225,3 +1225,85 @@ func TestWaitlistExpireDueIsolatesLessons(t *testing.T) {
 	wantStatus(t, f.entry(t, inA.ID), domain.WaitlistInvited)
 	wantStatus(t, f.entry(t, inB.ID), domain.WaitlistExpired)
 }
+
+// TestWaitlistInviteClosed: the link of an invite says why its lesson
+// cannot be booked any more, whatever the state of the invite: the school
+// canceled the lesson (which sent the invite back to waiting), it started,
+// the office hid it, or it became a room rental after its list ended.
+func TestWaitlistInviteClosed(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newBookingFixture(t)
+
+	canceled := f.fullLesson(t, 1)
+	f.cancelStella(t, "2026-10-20T08:00:00Z", canceled)
+	f.linkedInvite(t, canceled, f.mia, "canceled-token", inviteValid, false)
+
+	if _, err := f.lessonService(t, bookingNow).CancelLesson(ctx, f.principal(t, f.olga), canceled.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	started := f.fullLesson(t, 1)
+	f.linkedInvite(t, started, f.mia, "started-token", inviteValid, false)
+
+	hidden := f.oneOff(t, waitlistLesson, 1, domain.VisibilityHidden, domain.LessonWorkshop)
+	f.linkedInvite(t, hidden, f.mia, "hidden-token", inviteValid, false)
+
+	at := mustInstant(t, waitlistLesson)
+	rental := domain.Lesson{
+		ID: ids.New[domain.LessonID](f.seq), CourseTypeID: f.courseType, RoomID: f.room, StartsAt: at,
+		EndsAt: at.Add(time.Hour), Status: domain.LessonScheduled, Visibility: domain.VisibilityPublic,
+		Kind: domain.LessonRental, Capacity: 1,
+	}
+	f.write(t, func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Create(ctx, rental) })
+	f.storeEntry(t, domain.WaitlistEntry{
+		LessonID: rental.ID, PersonID: f.mia.ID, Status: domain.WaitlistWithdrawn,
+		InviteTokenHash: domain.HashToken("rental-token"), InvitedAt: mustInstant(t, "2026-10-20T10:00:00Z"),
+		ExpiresAt: mustInstant(t, inviteValid),
+	})
+
+	for _, tt := range []struct {
+		token string
+		now   string
+		state InviteState
+		why   ClosedReason
+	}{
+		{"canceled-token", bookingNow, InviteWaiting, ClosedCanceled},
+		{"started-token", waitlistLesson, InviteExpired, ClosedStarted},
+		{"hidden-token", bookingNow, InviteOpen, ClosedRelease},
+		{"rental-token", bookingNow, InviteWithdrawn, ClosedRental},
+	} {
+		v, err := f.waitlistService(t, tt.now).Invite(ctx, tt.token)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.token, err)
+		}
+
+		if v.State != tt.state || v.Closed != tt.why {
+			t.Errorf("%s: state %s, closed %q; want %s, %q", tt.token, v.State, v.Closed, tt.state, tt.why)
+		}
+	}
+
+	// The open invite of the hidden lesson cannot be accepted either.
+	_, err := f.waitlistService(t, bookingNow).AcceptInvite(ctx, "hidden-token")
+	wantClosed(t, err, ClosedRelease)
+}
+
+// TestWaitlistOverbookedCancel: a cancellation in a lesson the office
+// overbooked frees no place, so nobody on the list is invited.
+func TestWaitlistOverbookedCancel(t *testing.T) {
+	t.Parallel()
+
+	f := newBookingFixture(t)
+	l := f.fullLesson(t, 1)
+	f.bookAs(t, f.anna, l) // beyond the capacity
+	olga := f.waitingEntry(t, l, f.olga, "2026-10-20T11:00:00Z")
+
+	f.cancelStella(t, bookingNow, l)
+
+	wantStatus(t, f.entry(t, olga.ID), domain.WaitlistWaiting)
+
+	if mails := f.mailsOf(t, mail.TemplateWaitlistInvite); len(mails) != 0 {
+		t.Errorf("invites %+v", mails)
+	}
+}
