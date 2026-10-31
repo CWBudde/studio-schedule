@@ -181,6 +181,11 @@ func testTimetable(t *testing.T, newStore func(*testing.T) store.Store) {
 			err = e.read(func(ctx context.Context, tx store.Tx) error { return tx.Classes().RemoveMember(ctx, c.ID, p1.ID) })
 			wantErr(e.t, err, store.ErrReadOnly)
 
+			newcomer := domain.ClassMember{ClassID: c.ID, PersonID: e.person("Nia", "Newcomer").ID}
+			err = e.read(func(ctx context.Context, tx store.Tx) error { return tx.Classes().AddMember(ctx, newcomer) })
+			wantErr(e.t, err, store.ErrReadOnly)
+			wantSlice(e.t, list(), []domain.ClassMember{m1, m2})
+
 			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Classes().RemoveMember(ctx, c.ID, p1.ID) })
 			wantSlice(e.t, list(), []domain.ClassMember{m2})
 

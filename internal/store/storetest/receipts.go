@@ -195,10 +195,66 @@ func testReceipts(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantErr(e.t, err, domain.ErrNotFound)
 		},
 		"ReadOnlyRejectsWrites": func(e *env) {
-			r := e.newReceipt(2026, 1, e.person("Ada", "Payer"))
+			payer := e.person("Ada", "Payer")
+			r := e.newReceipt(2026, 1, payer)
 
 			err := e.read(func(ctx context.Context, tx store.Tx) error { return tx.Receipts().Create(ctx, r) })
 			wantErr(e.t, err, store.ErrReadOnly)
+
+			_, err = get(e, r.ID)
+			wantErr(e.t, err, domain.ErrNotFound)
+
+			// A PDF for a receipt that exists, valid but for the transaction.
+			stored := e.receipt(e.newReceipt(2026, 2, payer))
+			err = e.read(func(ctx context.Context, tx store.Tx) error {
+				return tx.Receipts().PutPDF(ctx, stored.ID, []byte("%PDF-1.7"))
+			})
+			wantErr(e.t, err, store.ErrReadOnly)
+
+			_, err = query(e, func(ctx context.Context, tx store.Tx) ([]byte, error) { return tx.Receipts().PDF(ctx, stored.ID) })
+			wantErr(e.t, err, domain.ErrNotFound)
+		},
+		"GetCancellationOfNoReceiptIsNotFound": func(e *env) {
+			// A sale cancels no receipt: asking for the cancellation of the
+			// zero ID must not find it.
+			r := e.receipt(e.newReceipt(2026, 1, e.person("Ada", "Payer")))
+			e.receipt(e.cancellationOf(r, 2))
+
+			for name, id := range map[string]domain.ReceiptID{"zero": {}, "unknown": newID[domain.ReceiptID](e)} {
+				_, err := query(e, func(ctx context.Context, tx store.Tx) (domain.Receipt, error) {
+					return tx.Receipts().GetCancellation(ctx, id)
+				})
+				if !errors.Is(err, domain.ErrNotFound) {
+					e.t.Errorf("%s: want ErrNotFound, got %v", name, err)
+				}
+			}
+		},
+		"ListCancellationsByCanceledReceipt": func(e *env) {
+			payer := e.person("Ada", "Payer")
+			first := e.receipt(e.newReceipt(2026, 1, payer))
+			second := e.receipt(e.newReceipt(2026, 2, payer))
+			kept := e.receipt(e.newReceipt(2026, 3, payer))
+
+			// The newer cancellation cancels the newer receipt, so the order by
+			// canceled receipt is the reverse of the newest-first order of List.
+			ofFirst := e.receipt(e.cancellationOf(first, 4))
+			ofSecond := e.receipt(e.cancellationOf(second, 5))
+
+			if compareIDs(first.ID, second.ID) >= 0 {
+				e.t.Fatalf("want ascending IDs from the sequence, got %v, %v", first.ID, second.ID)
+			}
+
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Receipt, error) {
+				return tx.Receipts().ListCancellations(ctx, []domain.ReceiptID{second.ID, kept.ID, {}, first.ID})
+			})
+			wantNumbers(e.t, got, ofFirst.Number, ofSecond.Number)
+			wantReceipt(e.t, got[0], ofFirst)
+			wantReceipt(e.t, got[1], ofSecond)
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Receipt, error) {
+				return tx.Receipts().ListCancellations(ctx, nil)
+			})
+			wantNumbers(e.t, got)
 		},
 		"CanceledOnce": func(e *env) {
 			r := e.receipt(e.newReceipt(2026, 1, e.person("Ada", "Payer")))
@@ -382,6 +438,24 @@ func testReceipts(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			got, _ = pdf()
 			wantEqual(e.t, string(got), "%PDF-1.7 one")
+		},
+		"EmptyPDFIsInvalid": func(e *env) {
+			r := e.receipt(e.newReceipt(2026, 1, e.person("Ada", "Payer")))
+
+			for name, pdf := range map[string][]byte{"nil": nil, "empty": {}} {
+				err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Receipts().PutPDF(ctx, r.ID, pdf) })
+				if !errors.Is(err, domain.ErrValidation) {
+					e.t.Errorf("%s: want ErrValidation, got %v", name, err)
+				}
+			}
+
+			_, err := query(e, func(ctx context.Context, tx store.Tx) ([]byte, error) { return tx.Receipts().PDF(ctx, r.ID) })
+			wantErr(e.t, err, domain.ErrNotFound)
+
+			// The rejected attempts left room for the PDF.
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				return tx.Receipts().PutPDF(ctx, r.ID, []byte("%PDF-1.7"))
+			})
 		},
 		"PayerCannotBeDeleted": func(e *env) {
 			payer := e.person("Ada", "Payer")

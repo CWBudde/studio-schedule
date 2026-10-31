@@ -288,6 +288,45 @@ func testPushSubscriptions(t *testing.T, newStore func(*testing.T) store.Store) 
 			wantSlice(e.t, e.pushSubsOf(ada), []domain.PushSubscription{used, fresh})
 			wantEqual(e.t, e.pushMessageGone(msg.ID), true)
 		},
+		"ReadOnlyRejectsWrites": func(e *env) {
+			ada := e.account(e.person("Ada", "Lovelace"), "ada@example.org")
+			sub := e.pushSub(ada, "https://push.example.net/push/phone", t0)
+			e.savePushSubs(sub)
+			msg := e.pushMessage(sub, t0)
+			e.createPushMessages(msg)
+
+			// Every write names a record that exists, so only the read-only
+			// transaction can make it fail.
+			for name, write := range map[string]func(context.Context, store.Tx) error{
+				"Save":   func(ctx context.Context, tx store.Tx) error { return tx.PushSubscriptions().Save(ctx, sub) },
+				"Delete": func(ctx context.Context, tx store.Tx) error { return tx.PushSubscriptions().Delete(ctx, sub.ID) },
+				"DeleteByAccount": func(ctx context.Context, tx store.Tx) error {
+					_, err := tx.PushSubscriptions().DeleteByAccount(ctx, ada.ID)
+
+					return err
+				},
+				"DeleteByEndpoint": func(ctx context.Context, tx store.Tx) error {
+					_, err := tx.PushSubscriptions().DeleteByEndpoint(ctx, ada.ID, sub.Endpoint)
+
+					return err
+				},
+				"Touch": func(ctx context.Context, tx store.Tx) error {
+					return tx.PushSubscriptions().Touch(ctx, sub.ID, t0.Add(time.Hour))
+				},
+				"DeleteUnusedBefore": func(ctx context.Context, tx store.Tx) error {
+					_, err := tx.PushSubscriptions().DeleteUnusedBefore(ctx, t0.Add(time.Hour))
+
+					return err
+				},
+			} {
+				if err := e.read(write); !errors.Is(err, store.ErrReadOnly) {
+					e.t.Errorf("%s: want ErrReadOnly, got %v", name, err)
+				}
+			}
+
+			wantSlice(e.t, e.pushSubsOf(ada), []domain.PushSubscription{sub})
+			wantEqual(e.t, e.pushMessageGone(msg.ID), false)
+		},
 		"GoWithTheirAccount": func(e *env) {
 			ada := e.account(e.person("Ada", "Lovelace"), "ada@example.org")
 			sub := e.pushSub(ada, "https://push.example.net/push/phone", t0)
@@ -436,6 +475,39 @@ func testPushOutbox(t *testing.T, newStore func(*testing.T) store.Store) {
 					e.t.Errorf("message %v taken %d times", id, n)
 				}
 			}
+		},
+		"ReadOnlyRejectsWrites": func(e *env) {
+			ada := e.account(e.person("Ada", "Lovelace"), "ada@example.org")
+			sub := e.pushSub(ada, "https://push.example.net/push/phone", t0)
+			e.savePushSubs(sub)
+			m := e.pushMessage(sub, t0)
+			e.createPushMessages(m)
+			fresh := e.pushMessage(sub, t0)
+
+			for name, write := range map[string]func(context.Context, store.Tx) error{
+				"Create": func(ctx context.Context, tx store.Tx) error { return tx.PushOutbox().Create(ctx, fresh) },
+				"Update": func(ctx context.Context, tx store.Tx) error {
+					sent := m
+					sent.Attempts, sent.NextAttemptAt, sent.SentAt = 1, time.Time{}, t0.Add(time.Minute)
+
+					return tx.PushOutbox().Update(ctx, sent)
+				},
+				"DeleteCreatedBefore": func(ctx context.Context, tx store.Tx) error {
+					_, err := tx.PushOutbox().DeleteCreatedBefore(ctx, t0.Add(time.Hour))
+
+					return err
+				},
+			} {
+				if err := e.read(write); !errors.Is(err, store.ErrReadOnly) {
+					e.t.Errorf("%s: want ErrReadOnly, got %v", name, err)
+				}
+			}
+
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) (domain.PushMessage, error) {
+				return tx.PushOutbox().Get(ctx, m.ID)
+			})
+			wantEqual(e.t, got, m)
+			wantEqual(e.t, e.pushMessageGone(fresh.ID), true)
 		},
 		"DeleteCreatedBefore": func(e *env) {
 			ada := e.account(e.person("Ada", "Lovelace"), "ada@example.org")

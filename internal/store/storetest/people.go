@@ -168,6 +168,18 @@ func testPersons(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			err = e.read(func(ctx context.Context, tx store.Tx) error { return tx.Persons().RemoveGuardian(ctx, link) })
 			wantErr(e.t, err, store.ErrReadOnly)
+
+			// A link between persons that exist, refused only for the
+			// transaction; the dependent stays without a second guardian.
+			other := e.person("Otto", "Parent")
+			second := domain.Guardian{GuardianID: other.ID, DependentID: kid.ID}
+			err = e.read(func(ctx context.Context, tx store.Tx) error { return tx.Persons().AddGuardian(ctx, second) })
+			wantErr(e.t, err, store.ErrReadOnly)
+
+			guardians := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Person, error) {
+				return tx.Persons().ListGuardians(ctx, kid.ID)
+			})
+			wantSlice(e.t, guardians, []domain.Person{parent})
 		},
 		"Lock": func(e *env) {
 			a, b := e.person("Ada", "Lock"), e.person("Bea", "Lock")

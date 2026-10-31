@@ -2,6 +2,7 @@ package storetest
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -163,6 +164,77 @@ func testAnnouncements(t *testing.T, newStore func(*testing.T) store.Store) {
 				})
 				wantErr(e.t, err, domain.ErrConflict)
 			}
+		},
+		// The CRUD case's update writes the mail state first, which fails on
+		// its own; Update alone must not create a missing announcement.
+		"UpdateMissingIsNotFound": func(e *env) {
+			olga := e.account(e.person("Olga", "Office"), "olga@example.org")
+			a := e.newAnnouncement(olga, "Holiday", t0)
+
+			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Announcements().Update(ctx, a) })
+			wantErr(e.t, err, domain.ErrNotFound)
+
+			_, err = query(e, func(ctx context.Context, tx store.Tx) (domain.Announcement, error) {
+				return tx.Announcements().Get(ctx, a.ID)
+			})
+			wantErr(e.t, err, domain.ErrNotFound)
+		},
+		"ReadOnlyRejectsMailWrites": func(e *env) {
+			olga := e.account(e.person("Olga", "Office"), "olga@example.org")
+			a := e.newAnnouncement(olga, "Holiday", t0)
+			a.Email = true
+			e.createAnnouncements(a)
+
+			emailed := a
+			emailed.EmailedAt, emailed.EmailRecipients = t0.Add(time.Minute), 3
+
+			for name, write := range map[string]func(context.Context, store.Tx) error{
+				"SetMailState": func(ctx context.Context, tx store.Tx) error {
+					return tx.Announcements().SetMailState(ctx, emailed)
+				},
+				"CreateMailing": func(ctx context.Context, tx store.Tx) error {
+					return tx.Announcements().CreateMailing(ctx, e.mailing(a, olga, t0))
+				},
+			} {
+				if err := e.read(write); !errors.Is(err, store.ErrReadOnly) {
+					e.t.Errorf("%s: want ErrReadOnly, got %v", name, err)
+				}
+			}
+
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) (domain.Announcement, error) {
+				return tx.Announcements().Get(ctx, a.ID)
+			})
+			wantEqual(e.t, got, a)
+
+			mailings := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.AnnouncementMailing, error) {
+				return tx.Announcements().ListMailings(ctx, t0.Add(-time.Hour), t0.Add(time.Hour))
+			})
+			wantSlice(e.t, mailings, nil)
+		},
+		"MailingConflicts": func(e *env) {
+			olga := e.account(e.person("Olga", "Office"), "olga@example.org")
+			a := e.newAnnouncement(olga, "Holiday", t0)
+			e.createAnnouncements(a)
+
+			m := e.mailing(a, olga, t0)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Announcements().CreateMailing(ctx, m) })
+
+			sameID := e.mailing(a, olga, t0.Add(time.Minute))
+			sameID.ID, sameID.Recipients = m.ID, 9
+			noSender := e.mailing(a, olga, t0)
+			noSender.SenderID = newID[domain.AccountID](e)
+
+			for name, bad := range map[string]domain.AnnouncementMailing{"same id": sameID, "no sender": noSender} {
+				err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Announcements().CreateMailing(ctx, bad) })
+				if !isConflict(err) {
+					e.t.Errorf("%s: want ErrConflict, got %v", name, err)
+				}
+			}
+
+			mailings := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.AnnouncementMailing, error) {
+				return tx.Announcements().ListMailings(ctx, t0.Add(-time.Hour), t0.Add(time.Hour))
+			})
+			wantSlice(e.t, mailings, []domain.AnnouncementMailing{m})
 		},
 		"Lists": func(e *env) {
 			olga := e.account(e.person("Olga", "Office"), "olga@example.org")
