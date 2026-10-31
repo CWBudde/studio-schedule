@@ -729,9 +729,17 @@ gives only 53.8 %, because most code is run by other packages' tests.
       or `servicetest` scenarios on both stores. Store errors only a broken database produces come
       from a fault-injecting `store.Store` wrapper in tests. A defensive branch that cannot be
       reached is removed, not excluded
-- [ ] `cmd/studio-schedule`: the commands run in-process through cobra (`init`, `import`,
+- [x] `cmd/studio-schedule`: the commands run in-process through cobra (`init`, `import`,
       `migrate`, `seed`, `healthcheck`, `vapid-keys`, `serve` startup refusals) against the test
-      database
+      database (2026-10-31): the package has its own lazily started test database
+      (`testdb_test.go`); `serve` starts for real on PostgreSQL and on the demo store and refuses an
+      outdated, newer or damaged schema, a bad SMTP config and a used port; `main` returns its exit
+      status through `runMain`. 70.3 % → 97.7 % (12 uncovered: failing library calls, shutdown
+      timeouts, a broken embedded renderer); total 89.3 % → 90.3 %. Found: `migrate up` does not list
+      the migrations it applied before a failing one (`postgres.Migrator.Up` drops
+      `goose.PartialError.Applied`; reproducer skipped in `migrate_test.go` until the store fix);
+      `seed`/`serve` call a gap in the goose table "outdated, run migrate up", which `migrate up`
+      refuses
 - [ ] `internal/httpapi` and `internal/app`: the error mappings (`toHTTPError`, conflicts, field
       errors) and middleware branches without a test
 - [x] Stores: the postgres error paths, and the sqlc queries no test runs. Each gets a contract case
