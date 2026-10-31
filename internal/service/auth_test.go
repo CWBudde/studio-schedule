@@ -49,6 +49,12 @@ type authFixture struct {
 	st    store.Store
 	clock *stepClock
 	svc   *service.AuthService
+
+	// The parts of svc, for a second service on the same data (faulty).
+	mem      *memory.Store
+	seq      *ids.Sequence
+	hasher   service.PasswordHasher
+	renderer *mail.Renderer
 }
 
 func newAuthFixture(t *testing.T) *authFixture {
@@ -80,9 +86,18 @@ func newAuthFixtureWith(t *testing.T, hasher service.PasswordHasher) *authFixtur
 	}
 
 	clk := &stepClock{t: time.Date(2026, time.October, 23, 16, 0, 0, 0, time.UTC)}
-	svc := service.NewAuthService(st, clk, ids.NewSequence(), hasher, renderer, appURL)
+	seq := ids.NewSequence()
+	svc := service.NewAuthService(st, clk, seq, hasher, renderer, appURL)
 
-	return &authFixture{t: t, st: st, clock: clk, svc: svc}
+	return &authFixture{t: t, st: st, clock: clk, svc: svc, mem: st, seq: seq, hasher: hasher, renderer: renderer}
+}
+
+// faulty returns a FaultStore on the fixture's data and an AuthService on
+// it that shares the fixture's clock, IDs, hasher and renderer.
+func (f *authFixture) faulty() (*service.FaultStore, *service.AuthService) {
+	fs := service.NewFaultStore(f.mem)
+
+	return fs, service.NewAuthService(fs, f.clock, f.seq, f.hasher, f.renderer, appURL)
 }
 
 func (f *authFixture) register(email, pw string) {
