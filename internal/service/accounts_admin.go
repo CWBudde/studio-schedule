@@ -211,9 +211,9 @@ func (s *AuthService) DeleteOwnAccount(ctx context.Context, p Principal, passwor
 			return err
 		}
 
+		// The password checked above cannot be gone: only deleting the
+		// account deletes it, and that waits for the lock of its person.
 		switch cur, err := tx.Credentials().Get(ctx, acc.ID); {
-		case errors.Is(err, domain.ErrNotFound):
-			return ErrWrongPassword
 		case err != nil:
 			return err
 		case cur.PasswordHash != cred.PasswordHash:
