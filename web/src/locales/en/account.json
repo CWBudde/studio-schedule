@@ -125,5 +125,8 @@
     "offline": "Not available offline",
     "enableFailed": "Notifications could not be turned on. Please try again.",
     "disableFailed": "Notifications could not be turned off. Please try again."
+  },
+  "werkstatt": {
+    "title": "My details"
   }
 }

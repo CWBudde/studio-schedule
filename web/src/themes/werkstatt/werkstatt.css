@@ -286,3 +286,139 @@
 [data-theme='werkstatt'] [data-slot='sheet-close'] svg {
   stroke-width: 1.25;
 }
+
+/*
+ * ---------------------------------------------------------------------------------------------
+ * Profile ("My details", Profile.tsx): the account page's connected cards, restyled inside
+ * `.werkstatt-profile` only, so the cards in features/account stay Programme's everywhere else.
+ * Unlayered, so these plain selectors beat the cards' Tailwind utilities (@layer utilities). What
+ * the cards open in a portal (the dependent sheet, the delete confirmation) sits outside the
+ * wrapper and keeps the dialog styling above.
+ * ---------------------------------------------------------------------------------------------
+ */
+
+/* The cards: light and flat on the page panel (no shadow, no ring), with the theme's 3px radius. */
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='card'] {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+
+/* Section titles: light, in large type (the h2 inside carries its own weight and size). */
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='card-title'],
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='card-title'] > * {
+  font-size: 1.625rem;
+  line-height: 1.2;
+  font-weight: 300;
+}
+
+/* Labels: light, above their inputs (TextField and the language field stack them already). */
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='label'] {
+  font-size: 0.9375rem;
+  font-weight: 300;
+}
+
+/* One column: the forms' two-up grids (person data, new password) stack, inputs full width. */
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='card-content'] form .grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='select-trigger'] {
+  width: 100%;
+}
+
+/*
+ * Inputs, the language select and text areas: light text, the 1px --input border, 3px radius. A
+ * password field is an input group: the border is the group's, the input inside has none.
+ */
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='input'],
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='select-trigger'],
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='textarea'],
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='input-group'] {
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  font-weight: 300;
+}
+
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='input-group-control'] {
+  font-weight: 300;
+}
+
+/* The border above beats the utilities' focus and error colours: restore both (the ring stays). */
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='input']:focus-visible,
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='select-trigger']:focus-visible,
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='textarea']:focus-visible,
+[data-theme='werkstatt']
+  .werkstatt-profile
+  [data-slot='input-group']:has([data-slot='input-group-control']:focus-visible) {
+  border-color: var(--ring);
+}
+
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='input'][aria-invalid='true'],
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='select-trigger'][aria-invalid='true'],
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='textarea'][aria-invalid='true'],
+[data-theme='werkstatt']
+  .werkstatt-profile
+  [data-slot='input-group']:has([data-slot='input-group-control'][aria-invalid='true']) {
+  border-color: var(--destructive);
+}
+
+/* Every button takes the theme's radius. */
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='button'] {
+  border-radius: var(--radius);
+}
+
+/*
+ * Primary actions (Save details, Change password, …, Sign in): mint, uppercase. Button sets
+ * data-variant to its variant, "default" included; :not([data-variant]) covers a caller that
+ * renders the slot without it. Text pairs as tokens.test.ts checks them: mint/mint-foreground,
+ * red-dark/red-foreground.
+ */
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='button'][data-variant='default'],
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='button']:not([data-variant]),
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='button'][data-variant='destructive'] {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='button'][data-variant='default'],
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='button']:not([data-variant]) {
+  background-color: var(--werkstatt-mint);
+  color: var(--werkstatt-mint-foreground);
+}
+
+/* Destructive actions (Delete account, Remove a child): the red that carries white text. */
+[data-theme='werkstatt'] .werkstatt-profile [data-slot='button'][data-variant='destructive'] {
+  background-color: var(--werkstatt-red-dark);
+  color: var(--werkstatt-red-foreground);
+}
+
+/*
+ * Hover: the solid faces above beat the utilities' hover tints, so an inset frame in the text
+ * colour marks it instead (the face, and so the contrast, stays).
+ */
+[data-theme='werkstatt']
+  .werkstatt-profile
+  [data-slot='button']:is([data-variant='default'], :not([data-variant])):hover:not(
+    :focus-visible
+  ) {
+  box-shadow: inset 0 0 0 1px var(--werkstatt-mint-foreground);
+}
+
+[data-theme='werkstatt']
+  .werkstatt-profile
+  [data-slot='button'][data-variant='destructive']:hover:not(:focus-visible) {
+  box-shadow: inset 0 0 0 1px var(--werkstatt-red-foreground);
+}
+
+/* Focus: a ring outside the solid face, visible on mint and red alike. */
+[data-theme='werkstatt']
+  .werkstatt-profile
+  [data-slot='button']:is(
+    [data-variant='default'],
+    [data-variant='destructive'],
+    :not([data-variant])
+  ):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
