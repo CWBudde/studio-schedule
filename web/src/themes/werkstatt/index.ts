@@ -1,4 +1,7 @@
 import type { Theme } from '../slots';
+import { Home } from './Home';
+import { Participants } from './Participants';
+import { Profile } from './Profile';
 import { Shell } from './Shell';
 import './werkstatt.css';
 
@@ -9,5 +12,5 @@ import './werkstatt.css';
  */
 export const werkstatt = {
   id: 'werkstatt',
-  slots: { Shell },
+  slots: { Shell, Home, Profile, Participants },
 } as const satisfies Theme;
