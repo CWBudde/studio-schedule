@@ -1,4 +1,4 @@
-import { expect, gotoDemo, type Page, signIn, signOut, test } from './fixtures';
+import { expect, gotoDemo, lessons, type Page, signIn, signOut, test } from './fixtures';
 
 // The Werkstatt demo school (docs/demo-mode.md, "Two demo schools") in its
 // own theme (ADR 0018). Its language is German; the visitor here chose
@@ -124,5 +124,62 @@ test.describe('the navigation', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Classes' })).toBeVisible();
     await expect(nav).toHaveCount(0);
     await expect(menu).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
+test.describe('the schedule', () => {
+  /** The school's rooms (internal/seed/demo.go, werkstattLocations). */
+  const rooms = /^(Oben|Unten|Trainingsraum)$/;
+
+  test('desktop: each day in room columns, none of them empty', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'phones get one column');
+    await gotoDemo(page, '/schedule');
+    const day = page.getByRole('main').getByRole('region').first();
+    await expect(lessons(day).first()).toBeVisible();
+
+    const columns = day.getByRole('list', { name: rooms });
+    const count = await columns.count();
+    expect(count).toBeGreaterThan(0);
+    // Exactly the rooms the day uses: no other list, and each column holds lessons.
+    await expect(day.getByRole('list')).toHaveCount(count);
+    for (let i = 0; i < count; i++) {
+      await expect(columns.nth(i).getByRole('listitem').first()).toBeVisible();
+    }
+    // Side by side, not squeezed: each column at least 13rem wide.
+    for (let i = 0; i < count; i++) {
+      const box = await columns.nth(i).boundingBox();
+      expect(box?.width ?? 0).toBeGreaterThanOrEqual(13 * 16 - 1);
+    }
+  });
+
+  test('phone: one column of cards, no room columns', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'wider screens get room columns');
+    await gotoDemo(page, '/schedule');
+    const day = page.getByRole('main').getByRole('region').first();
+    await expect(lessons(day).first()).toBeVisible();
+
+    await expect(day.getByRole('list')).toHaveCount(1);
+    await expect(day.getByRole('list', { name: rooms })).toHaveCount(0);
+  });
+
+  test("a guardian's square button opens the lesson, never books a guess", async ({ page }) => {
+    // The demo member books for their children too (review focus 3): the
+    // card cannot know whom to book, so its button opens the sheet.
+    await signIn(page, 'Member');
+    await gotoDemo(page, '/schedule');
+    const main = page.getByRole('main');
+    const details = main.getByRole('button', { name: 'Details', exact: true });
+    await expect(details.first()).toBeVisible();
+    await expect(main.getByRole('button', { name: 'Book', exact: true })).toHaveCount(0);
+
+    // `has` is relative to each group, so not the `main`-scoped locator.
+    const card = main
+      .getByRole('group')
+      .filter({ has: page.getByRole('button', { name: 'Details', exact: true }) })
+      .first();
+    const label = (await card.getAttribute('aria-label')) ?? '';
+    const course = label.slice(0, label.indexOf(','));
+    await card.getByRole('button', { name: 'Details', exact: true }).click();
+    await expect(page.getByRole('dialog').getByRole('heading', { name: course })).toBeVisible();
   });
 });

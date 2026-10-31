@@ -390,5 +390,16 @@
       "notNow": "This is not possible now: attendance opens at the start of the lesson, and instructors make changes until the end of its day."
     },
     "stale": "The participants could not be updated; this may not be the latest state."
+  },
+  "werkstatt": {
+    "book": "Book",
+    "cancel": "Cancel",
+    "waitlist": "Waiting list",
+    "full": "Full",
+    "details": "Details",
+    "participants": "Participants: {{taken}} / {{capacity}}",
+    "booked": "Booked",
+    "prevDay": "Previous day",
+    "nextDay": "Next day"
   }
 }
