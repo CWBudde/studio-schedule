@@ -202,7 +202,47 @@ Tailwind v4, shadcn/ui, TanStack Router/Query, react-i18next, Vitest, Playwright
 
 - [ ] 4.1 `werkstatt-schedule` Werkstatt ScheduleList, DayHeading and LessonCard (day bands, room columns, square action button) — see "Task 4.1" below.
 
-- [ ] 4.2 `werkstatt-pages` Werkstatt Home, Profile and Participants slots — see "Task 4.2" below.
+- [x] 4.2 `werkstatt-pages` Werkstatt Home, Profile and Participants slots — see "Task 4.2" below.
+  - Done: `web/src/themes/werkstatt/{Home,Profile,Participants}.tsx`, registered in `index.ts`;
+    `HomeProps.myLessons` (`HomeMyLessons`: `unknown | signedOut | loading | error | ready` with
+    `days: ScheduleDay[]` and `renderLesson`), filled by `features/home/useMyLessons.tsx`: the lessons
+    of the coming 7 days the visitor or a dependent is booked for (`bookedFor`) that have not ended,
+    canceled ones included, on the server's clock; the card is the schedule's `ScheduleLessonCard`
+    (now exported, LessonCard slot + quick action) and opens the lesson in the schedule. Same query
+    key as the next lessons' teaser, so Programme asks no more than before; Programme ignores the
+    field. Tests: Home 7 + `HomePage.test` +3 (container, with Werkstatt's Home in `ThemeContext`;
+    signed out it asks for the schedule once and never for `/family`), Profile 9 (3 through the real
+    `AccountPage`: the PUT body, a refused empty name), Participants 18, registry +1; 1236 web unit
+    tests. `pnpm -C web check`, `pnpm -C web test`, `just check-formatted` green; `just e2e` 216
+    passed, 2 skipped, 2 failed: `pwa.spec.ts` on both projects, a time-of-day flake (see below).
+    The chunk is now 20.0 kB JS + 9.0 kB CSS.
+  - Home: h1 the school's name; "Infos" (h2, light) with `home.intro` by a round `UserRound`
+    avatar, the announcements and a short system status (backend, version for the office, time
+    zone, retry on failure — the Programme status card's facts); "My schedule" with the DayHeading
+    slot per day and a "Full schedule" link. While the account is unknown the right column is a
+    skeleton without a heading, so a signed-out visitor never sees "My schedule" flash.
+  - Profile: the connected cards unchanged, inside `.werkstatt-profile`; werkstatt.css restyles them
+    (flat cards, 300-weight titles and labels, the person-data and password grids stacked, inputs
+    and the password input group with the 1px `--input` border, focus and error border colours
+    restored, mint/red buttons with an inset frame on hover and a 2px ring on focus). The h1 is
+    `account:werkstatt.title` ("My details"/"Meine Daten"; `myData.title` is the export card).
+    Residual: what the cards open in a portal (dependent sheet, delete confirmation) sits outside
+    the wrapper and keeps the general Werkstatt dialog look, so the confirmation's delete button is
+    Programme's tinted destructive.
+  - Participants: one table (Present/Status, Name, Email, Phone, Pass, Trial lesson, actions);
+    the checkbox marks attended/booked, a no-show and a reset button keep Programme's three states;
+    history (office) and remove as icon buttons; the add button (mint) and "All attended" below;
+    the canceled bookings as a second table, the waiting list as a list. In the lesson sheet the
+    table scrolls sideways (only Present, Name and Email fit at 1280px).
+  - Discovery: `Button` renders `data-variant="default"` for the default variant (the parameter
+    default), so `[data-variant='default']` selects it. `pwa.spec.ts` "offline, the last schedule
+    …" picks the first card with "N free" and fails while that lesson has started but not ended
+    (Programme school: at 10:29 Creative Dance 10:00–10:45, rerun at 10:48 Classical Ballet
+    10:00–11:30, both "This lesson has started", no Book button); not touched here.
+  - For 4.1: Home renders the DayHeading slot and `renderLesson` (the LessonCard slot), so 4.1's
+    look applies there once merged; nothing else to wire.
+  - For 5.1: the Home spec can sign in as the demo member and expect "My schedule" with the
+    booked lessons (the seed's member has several in the coming week); Profile's h1 is "My details".
 
 - [ ] 5.1 `werkstatt-e2e` Werkstatt end-to-end spec, CLAUDE.md code map, architecture docs, final visual comparison — see "Task 5.1" below.
 
