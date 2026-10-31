@@ -301,6 +301,7 @@ func TestCloneValidation(t *testing.T) {
 		{"past day", CloneRequest{Unit: CloneDay, Source: mustDate(t, "2026-10-13"), Target: mustDate(t, "2026-10-20")}, "target"},
 		{"current week", CloneRequest{Unit: CloneWeek, Source: mustDate(t, "2026-10-12"), Target: mustDate(t, "2026-10-19")}, "target"},
 		{"invalid target", CloneRequest{Unit: CloneDay, Source: mustDate(t, "2026-10-12")}, "target"},
+		{"invalid source", CloneRequest{Unit: CloneDay, Target: mustDate(t, "2026-10-29")}, "source"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := svc.PreviewClone(t.Context(), tc.req)
