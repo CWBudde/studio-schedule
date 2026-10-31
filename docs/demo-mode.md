@@ -166,8 +166,7 @@ The demo offers one fictional school per theme (ADR 0018), on the same site: **p
 Lindenhof", the Werkstatt look, German, with a background photo). They share every person and class
 (`seed.DemoSchoolAt`); the settings differ (name, theme, accent, language, background, imprint and
 receipt issuer; the seeded receipts are the werkstatt school's own, in German), and so do the
-places: the werkstatt school teaches in its house's rooms "Oben", "Unten" and "Trainingsraum" and
-in a sports hall and outdoors on a sports ground nearby.
+places: the werkstatt school has one house with the rooms "Oben", "Unten" and "Trainingsraum".
 
 - **Choosing:** `web/src/features/demo/school.ts`. The page address may name the school outside the
   hash, `?demo=werkstatt` or `?demo=programme` (the README links both). `main.tsx` reads it before

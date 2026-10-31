@@ -1749,20 +1749,20 @@ func TestDemoSchoolSameData(t *testing.T) {
 			w.Number, w.Locale, w.Issuer, w.Footer = p.Number, p.Locale, p.Issuer, p.Footer
 		}
 
-		// The places differ too (TestWerkstattPlaces): the rooms are the
-		// programme's in another order and with other names. Map each
-		// room to the programme room whose classes it holds.
-		sameRoom := map[domain.RoomID]domain.RoomID{}
-		for i, c := range werkstatt.Classes {
-			sameRoom[c.RoomID] = programme.Classes[i].RoomID
+		// The places differ too (TestWerkstattPlaces): each programme room
+		// is one werkstatt room, which may hold several. Move the
+		// programme's classes and lessons into the werkstatt rooms.
+		inRoom := map[domain.RoomID]domain.RoomID{}
+		for i, c := range programme.Classes {
+			inRoom[c.RoomID] = werkstatt.Classes[i].RoomID
 		}
 
-		for i := range werkstatt.Classes {
-			werkstatt.Classes[i].RoomID = sameRoom[werkstatt.Classes[i].RoomID]
+		for i := range programme.Classes {
+			programme.Classes[i].RoomID = inRoom[programme.Classes[i].RoomID]
 		}
 
-		for i := range werkstatt.Lessons {
-			werkstatt.Lessons[i].RoomID = sameRoom[werkstatt.Lessons[i].RoomID]
+		for i := range programme.Lessons {
+			programme.Lessons[i].RoomID = inRoom[programme.Lessons[i].RoomID]
 		}
 
 		werkstatt.Locations, werkstatt.Rooms = programme.Locations, programme.Rooms
@@ -2048,29 +2048,10 @@ func TestWerkstattPlaces(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	locations := map[domain.LocationID]string{}
-	for _, l := range werkstatt.Locations {
-		locations[l.ID] = l.Name
+	if len(werkstatt.Locations) != 1 || werkstatt.Locations[0].Name != "Tanzhaus am Lindenhof" {
+		t.Fatalf("werkstatt locations = %+v, want only the Tanzhaus am Lindenhof", werkstatt.Locations)
 	}
 
-	got := map[string]string{}
-	for _, r := range werkstatt.Rooms {
-		got[r.Name] = locations[r.LocationID]
-	}
-
-	want := map[string]string{
-		"Oben":          "Tanzhaus am Lindenhof",
-		"Unten":         "Tanzhaus am Lindenhof",
-		"Trainingsraum": "Tanzhaus am Lindenhof",
-		"Sporthalle":    "Sportplatz am Ahornweg",
-		"Draußen":       "Sportplatz am Ahornweg",
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("werkstatt rooms (room → location) = %v, want %v", got, want)
-	}
-
-	// Each room holds the classes of one programme room of the same
-	// capacity, so the schools differ in their places only.
 	rooms := func(d seed.Dataset) map[domain.RoomID]domain.Room {
 		m := map[domain.RoomID]domain.Room{}
 		for _, r := range d.Rooms {
@@ -2081,24 +2062,47 @@ func TestWerkstattPlaces(t *testing.T) {
 	}
 	programmeRooms, werkstattRooms := rooms(programme), rooms(werkstatt)
 
+	var names []string
+	for _, r := range werkstatt.Rooms {
+		names = append(names, r.Name)
+	}
+
+	if want := []string{"Oben", "Unten", "Trainingsraum"}; !slices.Equal(names, want) {
+		t.Errorf("werkstatt rooms = %q, want %q", names, want)
+	}
+
 	if len(werkstatt.Classes) != len(programme.Classes) {
 		t.Fatalf("werkstatt has %d classes, programme %d", len(werkstatt.Classes), len(programme.Classes))
 	}
 
-	held := map[string]string{}
+	// Every programme room's classes move together into one werkstatt
+	// room, which has room for them.
+	inRoom := map[string]string{}
 	for i, c := range werkstatt.Classes {
 		p := programme.Classes[i]
 		pr, wr := programmeRooms[p.RoomID], werkstattRooms[c.RoomID]
 
-		if c.ID != p.ID || wr.Capacity != pr.Capacity {
-			t.Errorf("class %v in %s (%d places), programme's %v in %s (%d places)",
-				c.ID, wr.Name, wr.Capacity, p.ID, pr.Name, pr.Capacity)
+		if c.ID != p.ID || c.Capacity > wr.Capacity {
+			t.Errorf("class %v (%d places) in %s (%d places)", c.ID, c.Capacity, wr.Name, wr.Capacity)
 		}
 
-		if other, ok := held[wr.Name]; ok && other != pr.Name {
-			t.Errorf("%s holds the classes of %s and %s", wr.Name, other, pr.Name)
+		if other, ok := inRoom[pr.Name]; ok && other != wr.Name {
+			t.Errorf("the classes of %s are in %s and %s", pr.Name, other, wr.Name)
 		}
 
-		held[wr.Name] = pr.Name
+		inRoom[pr.Name] = wr.Name
+	}
+
+	// No two lessons, workshops included, meet in one room.
+	byRoom := map[domain.RoomID][]domain.Lesson{}
+	for _, l := range werkstatt.Lessons {
+		for _, other := range byRoom[l.RoomID] {
+			if l.StartsAt.Before(other.EndsAt) && other.StartsAt.Before(l.EndsAt) {
+				t.Errorf("in %s, lesson %v (%v) meets lesson %v (%v)",
+					werkstattRooms[l.RoomID].Name, l.ID, l.StartsAt, other.ID, other.StartsAt)
+			}
+		}
+
+		byRoom[l.RoomID] = append(byRoom[l.RoomID], l)
 	}
 }

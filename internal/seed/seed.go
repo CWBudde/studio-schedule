@@ -53,8 +53,9 @@ func DemoSettings() domain.Settings {
 // School selects one of the fictional demo schools (ADR 0018). They share
 // every person, class and all the history and differ in their settings
 // (their name, imprint, receipt issuer, theme, accent color, language and
-// background, and so in the receipts issued with them) and in the names of
-// their locations and rooms; each room holds the same classes in both.
+// background, and so in the receipts issued with them) and in their
+// places: the werkstatt school's one house holds the same classes in
+// fewer rooms.
 // The zero School is not valid: a caller names the school it wants.
 type School string
 

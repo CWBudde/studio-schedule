@@ -64,8 +64,7 @@ color in both themes.
 
 **The demo offers one school per theme.** `seed.LoadDemoSchoolAt` seeds `programme` (today's demo,
 unchanged; `LoadDemoAt` is this school) or `werkstatt`: the same people, classes and history in
-locations and rooms of its own (a house with "Oben", "Unten" and a training room, and a sports
-ground), with another fictional name, the Werkstatt theme, its accent, German as the default language and a
+a place of its own (one house with the rooms "Oben", "Unten" and "Trainingsraum"), with another fictional name, the Werkstatt theme, its accent, German as the default language and a
 CC0 background photo embedded in the seed package (`internal/seed/assets`, source and licence noted
 next to it). `studio-schedule seed --school` takes the variant, so it is not demo-only. The web demo
 picks the school and keeps its data per school (docs/demo-mode.md).

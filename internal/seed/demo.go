@@ -117,6 +117,12 @@ func demoAt(anchor domain.Date, settings domain.Settings, locations []locationSp
 		b.location(l)
 	}
 
+	// A school with fewer places than the programme's skips the IDs they
+	// would take, so that every later entity has the same ID in both.
+	for range placeIDs(demoLocations) - placeIDs(locations) {
+		b.seq.NewUUID()
+	}
+
 	for _, s := range demoStaff {
 		b.staffMember(s)
 	}
@@ -276,12 +282,12 @@ type locationSpec struct {
 	rooms   []roomSpec
 }
 
-// roomSpec is a room; holds names the programme room whose classes it
-// holds in another school's places, empty for the programme room itself.
+// roomSpec is a room; holds names the programme rooms whose classes it
+// holds in another school's places, none for a programme room itself.
 type roomSpec struct {
 	name     string
 	capacity int
-	holds    string
+	holds    []string
 }
 
 var demoLocations = []locationSpec{
@@ -293,20 +299,27 @@ var demoLocations = []locationSpec{
 	}},
 }
 
-// werkstattLocations are the werkstatt school's places, laid out like a
-// dance school with its own house (two halls, "oben" and "unten", and a
-// training room) and a sports ground nearby. Every room holds the classes of
-// one programme room of the same capacity. The addresses are fictional.
+// werkstattLocations are the werkstatt school's places: one house with two
+// halls, "Oben" and "Unten", and a training room. The halls hold the
+// classes of the programme's two largest rooms; the training room those of
+// the three small ones, whose classes and workshops never meet in time
+// (TestWerkstattPlaces). The address is fictional.
 var werkstattLocations = []locationSpec{
 	{"Tanzhaus am Lindenhof", "Lindenhofweg 12, 10999 Beispielstadt", []roomSpec{
-		{name: "Oben", capacity: 20, holds: "Studio A"},
-		{name: "Unten", capacity: 24, holds: "Hall 1"},
-		{name: "Trainingsraum", capacity: 14, holds: "Studio B"},
+		{name: "Oben", capacity: 20, holds: []string{"Studio A"}},
+		{name: "Unten", capacity: 24, holds: []string{"Hall 1"}},
+		{name: "Trainingsraum", capacity: 14, holds: []string{"Studio B", "Hall 2", "Studio C"}},
 	}},
-	{"Sportplatz am Ahornweg", "Ahornweg 3, 10999 Beispielstadt", []roomSpec{
-		{name: "Sporthalle", capacity: 12, holds: "Hall 2"},
-		{name: "Draußen", capacity: 10, holds: "Studio C"},
-	}},
+}
+
+// placeIDs is the number of IDs the places of locations take.
+func placeIDs(locations []locationSpec) int {
+	n := len(locations)
+	for _, l := range locations {
+		n += len(l.rooms)
+	}
+
+	return n
 }
 
 // staffSpec is a staff member; person is the "Given Family" key of their
@@ -626,12 +639,13 @@ func (b *builder) location(spec locationSpec) {
 		room := domain.Room{ID: ids.New[domain.RoomID](b.seq), LocationID: l.ID, Name: r.name, Capacity: r.capacity}
 		b.d.Rooms = append(b.d.Rooms, room)
 
-		key := r.holds
-		if key == "" {
-			key = r.name
+		if len(r.holds) == 0 {
+			b.rooms[r.name] = room.ID
 		}
 
-		b.rooms[key] = room.ID
+		for _, key := range r.holds {
+			b.rooms[key] = room.ID
+		}
 	}
 }
 
