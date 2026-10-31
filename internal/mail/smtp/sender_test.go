@@ -11,6 +11,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"errors"
+	"io"
 	"math/big"
 	"mime"
 	"net"
@@ -38,13 +39,51 @@ type fakeServer struct {
 	ln         net.Listener
 	tlsConfig  *tls.Config // non-nil: offers STARTTLS, or speaks TLS at once if implicit
 	implicit   bool
-	silent     bool // accepts connections but never greets
-	rejectRcpt bool // answers RCPT with 550
+	silent     bool              // accepts connections but never greets
+	rejectRcpt bool              // answers RCPT with 550
+	greeting   string            // replaces the 220 greeting
+	noAuth     bool              // leaves AUTH out of the EHLO extensions
+	replies    map[string]string // verb → reply that replaces the normal handling
+	afterDot   string            // replaces the 250 after the final dot of DATA
+	hangAt     string            // a verb, hangInData or hangAfterDot: stop answering there
 
 	mu       sync.Mutex
-	sessions []session
+	sessions []session // every message received through DATA, accepted or not
 	conns    int
 	done     chan struct{}
+	hung     chan struct{} // closed when the server starts hanging at hangAt
+	hungOnce sync.Once
+}
+
+const (
+	// hangInData makes the server answer DATA with 354, read the first
+	// hangInDataBytes of the message and then stop reading.
+	hangInData = "DATA-BODY"
+	// hangAfterDot makes the server read the whole message but never answer.
+	hangAfterDot = "DATA-END"
+
+	hangInDataBytes = 64 << 10
+)
+
+// withReply makes the server answer verb with reply instead of handling it.
+func withReply(verb, reply string) fakeOption {
+	return func(s *fakeServer) {
+		if s.replies == nil {
+			s.replies = map[string]string{}
+		}
+
+		s.replies[verb] = reply
+	}
+}
+
+// withHang makes the server stop answering at step (a verb, hangInData or
+// hangAfterDot) until the test ends.
+func withHang(step string) fakeOption { return func(s *fakeServer) { s.hangAt = step } }
+
+// hang blocks until the test ends, after telling the test it got here.
+func (s *fakeServer) hang() {
+	s.hungOnce.Do(func() { close(s.hung) })
+	<-s.done
 }
 
 type fakeOption func(*fakeServer)
@@ -57,7 +96,7 @@ func startFake(t *testing.T, opts ...fakeOption) *fakeServer {
 		t.Fatal(err)
 	}
 
-	s := &fakeServer{ln: ln, done: make(chan struct{})}
+	s := &fakeServer{ln: ln, done: make(chan struct{}), hung: make(chan struct{})}
 	for _, o := range opts {
 		o(s)
 	}
@@ -132,7 +171,11 @@ func (s *fakeServer) handle(conn net.Conn) {
 	tp := textproto.NewConn(conn)
 	reply := func(format string, args ...any) { _ = tp.PrintfLine(format, args...) }
 
-	reply("220 fake.example.org ESMTP")
+	if s.greeting != "" {
+		reply("%s", s.greeting)
+	} else {
+		reply("220 fake.example.org ESMTP")
+	}
 
 	var sess session
 
@@ -143,10 +186,27 @@ func (s *fakeServer) handle(conn net.Conn) {
 		}
 
 		verb, arg, _ := strings.Cut(line, " ")
+		verb = strings.ToUpper(verb)
 
-		switch strings.ToUpper(verb) {
+		if verb == s.hangAt {
+			s.hang()
+
+			return
+		}
+
+		if r, ok := s.replies[verb]; ok {
+			reply("%s", r)
+
+			continue
+		}
+
+		switch verb {
 		case "EHLO", "HELO":
-			ext := []string{"fake.example.org", "8BITMIME", "AUTH PLAIN"}
+			ext := []string{"fake.example.org", "8BITMIME"}
+			if !s.noAuth {
+				ext = append(ext, "AUTH PLAIN")
+			}
+
 			if s.tlsConfig != nil && !isTLS {
 				ext = append(ext, "STARTTLS")
 			}
@@ -204,6 +264,16 @@ func (s *fakeServer) handle(conn net.Conn) {
 		case "DATA":
 			reply("354 go ahead")
 
+			if s.hangAt == hangInData {
+				if _, err := io.CopyN(io.Discard, tp.R, hangInDataBytes); err != nil {
+					return
+				}
+
+				s.hang()
+
+				return
+			}
+
 			data, err := tp.ReadDotBytes()
 			if err != nil {
 				return
@@ -217,7 +287,16 @@ func (s *fakeServer) handle(conn net.Conn) {
 
 			sess = session{auth: sess.auth}
 
-			reply("250 queued")
+			switch {
+			case s.hangAt == hangAfterDot:
+				s.hang()
+
+				return
+			case s.afterDot != "":
+				reply("%s", s.afterDot)
+			default:
+				reply("250 queued")
+			}
 		case "RSET", "NOOP":
 			reply("250 ok")
 		case "QUIT":
