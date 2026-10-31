@@ -40,11 +40,19 @@ describe('registry', () => {
     expect(Object.keys(theme.slots).sort()).toEqual([...slotNames].sort());
   });
 
-  it('loads Werkstatt with its own Shell and schedule, the other slots falling back to Programme', async () => {
+  it('loads Werkstatt with its own Shell, schedule and pages, the other slots falling back to Programme', async () => {
     const theme = await loadTheme('werkstatt');
 
     expect(theme.id).toBe('werkstatt');
-    const own = ['DayHeading', 'LessonCard', 'ScheduleList', 'Shell'] as const;
+    const own = [
+      'DayHeading',
+      'Home',
+      'LessonCard',
+      'Participants',
+      'Profile',
+      'ScheduleList',
+      'Shell',
+    ] as const;
     expect(Object.keys(theme.slots).sort()).toEqual([...own]);
     for (const name of own) {
       expect(theme.slots[name], name).toBeDefined();

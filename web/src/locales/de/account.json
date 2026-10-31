@@ -125,5 +125,8 @@
     "offline": "Offline nicht verfügbar",
     "enableFailed": "Die Benachrichtigungen konnten nicht eingeschaltet werden. Bitte versuche es noch einmal.",
     "disableFailed": "Die Benachrichtigungen konnten nicht ausgeschaltet werden. Bitte versuche es noch einmal."
+  },
+  "werkstatt": {
+    "title": "Meine Daten"
   }
 }

@@ -389,7 +389,16 @@
       "failed": "That did not work. Please try again.",
       "notNow": "This is not possible now: attendance opens at the start of the lesson, and instructors make changes until the end of its day."
     },
-    "stale": "The participants could not be updated; this may not be the latest state."
+    "stale": "The participants could not be updated; this may not be the latest state.",
+    "table": {
+      "present": "Present",
+      "status": "Status",
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "pass": "Pass",
+      "actions": "Actions"
+    }
   },
   "werkstatt": {
     "book": "Book",
