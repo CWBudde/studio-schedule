@@ -889,24 +889,33 @@ show it.
 Order: the ADR, then the shared command layer (the MCP server of Phase 12 builds on it), then the
 command groups by need: recovery and diagnosis first, then data, then reports.
 
-- [ ] ADR "Command line" (0020) settles the open decisions, each one asked first:
-  - [ ] Local, remote or both. A local command opens the database (`DATABASE_URL`) and calls the
+- [x] ADR "Command line" (0020) settles the open decisions, each one asked first (2026-11-01)
+      — [ADR 0020](docs/decisions/0020-command-line.md):
+  - [x] Local, remote or both. A local command opens the database (`DATABASE_URL`) and calls the
         services through the `app` wiring, as `import` does. It works while the server is down
         but needs shell access. A remote command calls the HTTP API with a personal access token
         (`--server`, `--token`; a new `api_tokens` table with hashed tokens, the account's access
         level, an expiry, revocable on the account page). It works from a laptop and, unchanged,
         against the PHP backend (Phase 13). Proposal: operator commands local only, admin commands
-        both, behind one client interface
-  - [ ] Actor: who does a local command act as? A `system` principal with the OS user in the
+        both, behind one client interface (2026-11-01) — local only, behind `cli.Env`; a remote mode
+        with tokens is a later item with its own ADR
+  - [x] Actor: who does a local command act as? A `system` principal with the OS user in the
         audit details, or `--as <admin email>` with that admin's access level (ADR 0005)?
-  - [ ] Output for scripts: text tables by default, `--output json` with a stable schema (the
+        (2026-11-01) — `--as <email>` (env `STUDIO_AS`): that account's role, checked against the
+        command's access level; `Principal.Via` puts the channel and OS user into
+        `AuditDetails.Via`; operator commands take none
+  - [x] Output for scripts: text tables by default, `--output json` with a stable schema (the
         OpenAPI types where a command mirrors an operation), documented exit codes (0 ok, 1
-        failed, 2 usage, 3 not found, 4 conflict), colour only on a terminal
-  - [ ] Safety: a command that deletes, anonymises, mails or cancels asks for confirmation on a
+        failed, 2 usage, 3 not found, 4 conflict), colour only on a terminal (2026-11-01) — as
+        proposed; JSON is the operation's response body where one exists; exit 4 also for a role too
+        low
+  - [x] Safety: a command that deletes, anonymises, mails or cancels asks for confirmation on a
         terminal and needs `--yes` otherwise. A `--dry-run` where the service supports one (as
-        `import` does)
-  - [ ] Job state: store the runs (`job_runs`: job, start, end, result, error), so `jobs list` can
+        `import` does) (2026-11-01) — as proposed; without a terminal and `--yes` exit 2
+  - [x] Job state: store the runs (`job_runs`: job, start, end, result, error), so `jobs list` can
         show them from another process, or keep them in memory and offer `jobs run` only
+        (2026-11-01) — stored in `job_runs` (both stores, pruned after 30 days), a per-job lock
+        (advisory on PostgreSQL), a run that loses the lock is `skipped`
 - [ ] Command layer: `cmd/studio-schedule/cli` (command → service call → presenter), no SQL in
       `cmd`. The services' validation and field errors are printed with the field's name. Global
       flags `--database-url`, `--output`, `--yes` (and `--server`, `--token` if the ADR chooses
