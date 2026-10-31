@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -98,5 +99,47 @@ func TestPushSenderErrors(t *testing.T) {
 	sub.Endpoint = "https://127.0.0.1:1/push/x"
 	if err := (pushSender{sender}).Send(t.Context(), sub, []byte(`{}`), time.Minute); !errors.Is(err, service.ErrPushRefused) {
 		t.Errorf("private address: want ErrPushRefused, got %v", err)
+	}
+}
+
+// TestNewPusherRejectsBadConfig: keys or a subject that config.Load would
+// refuse fail here too, naming web push, instead of a sender that cannot
+// send.
+func TestNewPusherRejectsBadConfig(t *testing.T) {
+	t.Parallel()
+
+	keys, err := webpush.GenerateKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		push config.Push
+		want error
+	}{
+		"private key not base64url": {
+			push: config.Push{PublicKey: keys.PublicKey(), PrivateKey: "not base64!", Subject: "mailto:office@example.test"},
+			want: webpush.ErrInvalidKey,
+		},
+		"public key of another pair": {
+			push: config.Push{
+				PublicKey:  "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
+				PrivateKey: keys.PrivateKey(), Subject: "mailto:office@example.test",
+			},
+			want: webpush.ErrInvalidKey,
+		},
+		"no subject": {
+			push: config.Push{PublicKey: keys.PublicKey(), PrivateKey: keys.PrivateKey()},
+			want: webpush.ErrConfig,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			p, err := newPusher(config.Config{Push: tc.push}, clock.System{}, slog.New(slog.DiscardHandler))
+			if p != nil || !errors.Is(err, tc.want) || !strings.HasPrefix(err.Error(), "web push: ") {
+				t.Errorf("newPusher = %v, %v; want a web push error wrapping %v", p, err, tc.want)
+			}
+		})
 	}
 }

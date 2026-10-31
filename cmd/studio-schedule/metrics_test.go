@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -17,6 +18,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/seed"
+	"github.com/cwbudde/studio-schedule/internal/service"
 	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/memory"
 )
@@ -262,3 +264,65 @@ func (h recordHandler) Handle(_ context.Context, r slog.Record) error {
 
 func (h recordHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
 func (h recordHandler) WithGroup(string) slog.Handler      { return h }
+
+// TestMetricsFailures: a failed job run counts as a failure and leaves its
+// last success alone; an outbox that cannot be counted leaves the gauge out
+// of a scrape that still succeeds, and logs a warning.
+func TestMetricsFailures(t *testing.T) {
+	t.Parallel()
+
+	records := make(chan slog.Record, 8)
+	down := errors.New("the database is down")
+
+	m, reg := newMetrics(version, func(context.Context) (service.MailCounts, error) {
+		return service.MailCounts{Pending: 3}, down
+	}, slog.New(recordHandler(records)))
+
+	m.ObserveJob("deliver-mail", errors.New("the mail server refused"), 2*time.Second)
+	m.ObserveJob("purge-mail", nil, time.Second)
+
+	status, body := get(t, metricsHandler(reg, slog.New(slog.DiscardHandler)), "/metrics")
+	if status != http.StatusOK {
+		t.Fatalf("/metrics = %d %s", status, body)
+	}
+
+	for _, want := range []string{
+		`studio_schedule_job_runs_total{job="deliver-mail",result="failure"} 1`,
+		`studio_schedule_job_duration_seconds_sum{job="deliver-mail"} 2`,
+		`studio_schedule_job_runs_total{job="purge-mail",result="success"} 1`,
+		`studio_schedule_job_last_success_timestamp_seconds{job="purge-mail"}`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/metrics lacks %s", want)
+		}
+	}
+
+	for _, unwanted := range []string{
+		`studio_schedule_job_runs_total{job="deliver-mail",result="success"}`,
+		`studio_schedule_job_last_success_timestamp_seconds{job="deliver-mail"}`,
+		"studio_schedule_outbox_mails{",
+	} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("/metrics has %s", unwanted)
+		}
+	}
+
+	select {
+	case rec := <-records:
+		var logged error
+
+		rec.Attrs(func(a slog.Attr) bool {
+			if a.Key == "err" {
+				logged, _ = a.Value.Any().(error)
+			}
+
+			return true
+		})
+
+		if rec.Level != slog.LevelWarn || rec.Message != "metrics: counting the outbox failed" || !errors.Is(logged, down) {
+			t.Errorf("logged %s %q (err %v)", rec.Level, rec.Message, logged)
+		}
+	default:
+		t.Error("the failed count was not logged")
+	}
+}

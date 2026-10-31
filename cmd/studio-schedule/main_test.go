@@ -353,3 +353,14 @@ func TestVAPIDKeysCommand(t *testing.T) {
 		t.Fatalf("Load: %v, %#v", err, cfg.Push)
 	}
 }
+
+// TestWriteOpenAPIFails: a specification that cannot be written (stdout
+// closed) is an error, not a silently truncated file.
+func TestWriteOpenAPIFails(t *testing.T) {
+	t.Parallel()
+
+	broken := errors.New("stdout is closed")
+	if err := writeOpenAPI(initFailingWriter{broken}); !errors.Is(err, broken) || !strings.HasPrefix(err.Error(), "write OpenAPI: ") {
+		t.Fatalf("writeOpenAPI = %v, want the write error", err)
+	}
+}

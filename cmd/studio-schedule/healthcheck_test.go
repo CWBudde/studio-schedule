@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,5 +97,23 @@ func TestHealthURL(t *testing.T) {
 		if got := healthURL(addr); got != want {
 			t.Errorf("healthURL(%q) = %q, want %q", addr, got, want)
 		}
+	}
+}
+
+// TestHealthcheckIgnoresRedirects: only this server's own 200 counts; a
+// redirect, even to a healthy endpoint, is not followed and fails.
+func TestHealthcheckIgnoresRedirects(t *testing.T) {
+	t.Parallel()
+
+	healthy := healthServer(t, http.StatusOK, 0)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://"+healthy+"/healthz", http.StatusFound)
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := execute(nil, "healthcheck", "--addr", srv.Listener.Addr().String())
+	if err == nil || !strings.Contains(err.Error(), "answered 302 Found") {
+		t.Fatalf("healthcheck error = %v, want the redirect's status", err)
 	}
 }
