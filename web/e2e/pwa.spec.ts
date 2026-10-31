@@ -84,21 +84,34 @@ offlineTest(
 
     await nav.getByRole('link', { name: 'Schedule' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Schedule' })).toBeVisible();
-    const card = page
+    const cards = page
       .getByRole('main')
       .getByRole('button', { name: /\d{2}:\d{2}–\d{2}:\d{2}/ })
       .filter({ hasText: /\d+ free/ })
-      .filter({ hasNotText: 'Booked' })
-      .first();
-    const cardName = (await card.getAttribute('aria-label')) ?? '';
-    await card.click();
+      .filter({ hasNotText: 'Booked' });
+    await expect(cards.first()).toBeVisible();
+    // A lesson that has started still shows its free places, but its sheet has
+    // no Book button: take the first card whose lesson can still be booked.
+    let cardName = '';
+    for (let i = 0; !cardName; i++) {
+      const label = (await cards.nth(i).getAttribute('aria-label')) ?? '';
+      await cards.nth(i).click();
+      const opened = page.getByRole('dialog', { name: label.split(', ')[0] ?? '' });
+      const booking = opened.getByRole('region', { name: 'Booking' });
+      const bookable = booking.getByRole('button', { name: 'Book', exact: true });
+      const started = booking.getByText('This lesson has started.');
+      await expect(bookable.or(started)).toBeVisible();
+      if (!(await started.isVisible())) {
+        await expect(bookable).toBeEnabled();
+        cardName = label;
+      }
+      await opened.getByRole('button', { name: 'Close' }).click();
+      await expect(opened).toBeHidden();
+    }
     const sheet = page.getByRole('dialog', { name: cardName.split(', ')[0] ?? '' });
     const book = sheet
       .getByRole('region', { name: 'Booking' })
       .getByRole('button', { name: 'Book', exact: true });
-    await expect(book).toBeEnabled();
-    await sheet.getByRole('button', { name: 'Close' }).click();
-    await expect(sheet).toBeHidden();
 
     await serviceWorkerReady(page);
     // The cache is saved a moment after the last change.
