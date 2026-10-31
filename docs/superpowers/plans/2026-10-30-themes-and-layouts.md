@@ -165,7 +165,40 @@ Tailwind v4, shadcn/ui, TanStack Router/Query, react-i18next, Vitest, Playwright
   - Programme snapshots saved by an earlier build carry the plain version and are refused once; every
     release changes the version anyway.
 
-- [ ] 3.1 `werkstatt-shell` Werkstatt theme chunk: tokens light/dark, Roboto Condensed, school background, Shell (header, tabs, phone drop menu, page panel), dialog styling — see "Task 3.1" below.
+- [x] 3.1 `werkstatt-shell` Werkstatt theme chunk: tokens light/dark, Roboto Condensed, school background, Shell (header, tabs, phone drop menu, page panel), dialog styling — see "Task 3.1" below.
+  - Done: `web/src/themes/werkstatt/` (`index.ts`, `werkstatt.css`, `Shell.tsx`), registered as
+    `import('./werkstatt')`; the build guard in `vite.chunks.ts` also fails when the entry's chunks
+    hold Werkstatt modules or load CSS with Roboto Condensed (checked by breaking it both ways). The
+    chunk is 4.6 kB JS + 5.7 kB CSS, plus six woff2 files. Tests: `tokens.test.ts` (75: every text
+    pair ≥ 4.5:1 in light and dark, translucent surfaces composited; the dark block redefines every
+    light token; selectors and `--school-background` without fallback pinned), `Shell.test.tsx`
+    (12), registry +1, `AppHeader.test.tsx` +2 (session); web unit tests 1198. New
+    `web/e2e/werkstatt.spec.ts` (7 cases, 12 runs on the two projects: font and background, a school without a
+    background is plain `#fbfaf8` (review focus 1), header sign-in/out, account-menu sign-out,
+    dialog scrim, desktop tabs, phone menu); `just e2e` 218 passed, 2 skipped (the desktop-only and
+    phone-only cases). `pnpm -C web check`, `just check-formatted` green.
+  - Deviations: `ShellProps.header.session` (`unknown | signedOut | signedIn` with `signOut`) for
+    the "» Anmelden/Abmelden" button, since slots may not call mutations; `useSignOut`
+    (`components/layout/useSignOut.ts`) is shared with the account menu. Signed out, Werkstatt
+    shows its button instead of `header.account`; signed in, the account menu and "» Abmelden".
+    Colours changed for contrast: muted text `#5d6b7f` (`#66758a` is 4.49:1 on `#fbfaf8`), today
+    `#d81b6f` with white (4.9:1; `#f8398a` is 3.5:1, and My lessons, which has no Werkstatt slot,
+    puts 18px medium text on it), dark destructive `#f26f67`, dark text on mint/brown
+    (`--werkstatt-*-foreground`). The fonts are own `@font-face` rules (latin, latin-ext; woff2).
+    The ui components needed no change (their `data-slot`s exist). The header is not sticky.
+  - Discoveries: `@theme inline` writes the font families into `font-sans`/`font-heading`, so
+    overriding `--font-sans` changes nothing; werkstatt.css sets them on the page and the two
+    utilities. fontsource's per-subset files (`latin-300.css`) have no `unicode-range`, so importing
+    two lets the later hide the earlier. The token blocks are 0,1,0 (`[data-theme='werkstatt']`,
+    `:where(.dark)[…]`) and win over index.css by load order while the accent's `html:root`
+    (0,1,1) still wins; the day bands are 0,2,0+ so the accent does not repaint today. Under
+    Vitest's `css: false`, `import x from './a.css?raw'` is `""` (tokens.test reads the file).
+  - Residual: over a very dark photo, muted text on the bare panel is about 3:1 (the panel and
+    wash opacities are the spec's); iOS Safari ignores `background-attachment: fixed`.
+  - For 4.1: cancel text goes on `--werkstatt-red-dark` (white on `--werkstatt-red` is 4.0:1);
+    mint and brown carry `--werkstatt-mint-foreground`/`-brown-foreground` (dark in light mode).
+  - For 5.1: `web/e2e/werkstatt.spec.ts` exists; extend it. It sets the visitor's language to
+    English (`studio-schedule.lang`) so the shared helpers' names apply.
 
 - [ ] 4.1 `werkstatt-schedule` Werkstatt ScheduleList, DayHeading and LessonCard (day bands, room columns, square action button) — see "Task 4.1" below.
 

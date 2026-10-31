@@ -32,6 +32,21 @@ export interface NavItem {
   icon: LucideIcon;
 }
 
+/**
+ * The visitor's session, for a theme with a sign-in/sign-out button of its
+ * own: unknown until the account is known (so neither flashes).
+ */
+export type ShellSession =
+  | { state: 'unknown' }
+  | { state: 'signedOut' }
+  | {
+      state: 'signedIn';
+      /** Signs out, with the account menu's notices. */
+      signOut(): void;
+      /** Whether a sign-out runs. */
+      signingOut: boolean;
+    };
+
 /** The app around every page that is not bare. */
 export interface ShellProps {
   /** The page: the backend gate around the route's outlet. */
@@ -51,6 +66,7 @@ export interface ShellProps {
     /** "Sign in", or the signed-in person's menu. */
     account: ReactNode;
     language: ReactNode;
+    session: ShellSession;
   };
   footer: ReactNode;
 }

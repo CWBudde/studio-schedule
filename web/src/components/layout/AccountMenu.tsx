@@ -1,10 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { LogIn, LogOut, Settings, ShieldCheck, UserRound, UsersRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMe } from '@/api/useMe';
-import { toast } from 'sonner';
-import { logoutMutation } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -15,14 +12,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { canAdminister } from '@/features/admin/access';
+import { useSignOut } from './useSignOut';
 
 /** "Sign in" when signed out; the signed-in person's menu (with "Sign out") otherwise. */
 export function AccountMenu() {
   const { t } = useTranslation('auth');
   const { t: tAdmin } = useTranslation('admin');
-  const queryClient = useQueryClient();
   const me = useMe();
-  const logout = useMutation(logoutMutation(queryClient));
+  const logout = useSignOut();
 
   // Neither while unknown, so "Sign in" does not flash for a signed-in person.
   if (me.isPending) return null;
@@ -77,15 +74,7 @@ export function AccountMenu() {
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          disabled={logout.isPending}
-          onSelect={() =>
-            logout.mutate(undefined, {
-              onSuccess: () => toast.success(t('account.signedOut')),
-              onError: () => toast.error(t('account.signOutFailed')),
-            })
-          }
-        >
+        <DropdownMenuItem disabled={logout.pending} onSelect={logout.signOut}>
           <LogOut aria-hidden="true" />
           {t('account.signOut')}
         </DropdownMenuItem>

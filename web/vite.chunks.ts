@@ -12,6 +12,14 @@ import type { Plugin } from 'vite';
 const chartLibrary = /node_modules[\\/]recharts[\\/]/;
 const nodeModules = /node_modules[\\/]/;
 
+/**
+ * The Werkstatt theme (src/themes/werkstatt) and its font: a lazy chunk of
+ * their own, never loaded with the entry (Programme is the entry's theme).
+ */
+const werkstattModule =
+  /[\\/]src[\\/]themes[\\/]werkstatt[\\/]|[\\/]@fontsource[\\/]roboto-condensed[\\/]/;
+const werkstattFont = 'Roboto Condensed';
+
 /** What the chunking sees of a module. */
 interface GraphModule {
   importers: readonly string[];
@@ -59,7 +67,8 @@ export function chartsOnly(ids: Iterable<string>, graph: ModuleGraph): Set<strin
 /**
  * The code-splitting groups and a plugin that fails the build if the
  * entry's chunks (the entry and what it imports statically) hold any
- * module of the `charts` chunk.
+ * module of the `charts` chunk or of the Werkstatt theme, or load CSS with
+ * Werkstatt's font.
  */
 export function vendorChunks() {
   // The node_modules the `vendor` group's test saw: Rolldown calls every
@@ -80,8 +89,9 @@ export function vendorChunks() {
       name: (id: string, ctx: { getModuleInfo: ModuleGraph }) =>
         chartsOf((m) => ctx.getModuleInfo(m)).has(id) ? null : 'vendor',
       debugName: 'vendor',
+      // Werkstatt's font stays with the theme's chunk: `vendor` loads with the entry.
       test: (id: string) => {
-        if (!nodeModules.test(id)) return false;
+        if (!nodeModules.test(id) || werkstattModule.test(id)) return false;
         seen.add(id);
         charts = undefined;
         return true;
@@ -98,7 +108,7 @@ export function vendorChunks() {
   ];
 
   const guard: Plugin = {
-    name: 'studio-schedule:charts-chunk-guard',
+    name: 'studio-schedule:entry-chunk-guard',
     apply: 'build',
     generateBundle(_options, bundle) {
       const exclusive = chartsOnly(this.getModuleIds(), (id) => this.getModuleInfo(id));
@@ -113,11 +123,31 @@ export function vendorChunks() {
         queue.push(...(chunks.get(name)?.imports ?? []));
       }
       for (const name of initial) {
-        const leaked = chunks.get(name)?.moduleIds.filter((id) => exclusive.has(id)) ?? [];
+        const chunk = chunks.get(name);
+        const leaked = chunk?.moduleIds.filter((id) => exclusive.has(id)) ?? [];
         if (leaked.length > 0) {
           this.error(
             `${name} is loaded with the entry but holds chart modules: ${leaked.slice(0, 5).join(', ')}`,
           );
+        }
+        const werkstatt = chunk?.moduleIds.filter((id) => werkstattModule.test(id)) ?? [];
+        if (werkstatt.length > 0) {
+          this.error(
+            `${name} is loaded with the entry but holds Werkstatt modules: ${werkstatt.slice(0, 5).join(', ')}`,
+          );
+        }
+        for (const css of chunk?.viteMetadata?.importedCss ?? []) {
+          const asset = bundle[css];
+          if (asset?.type !== 'asset') continue;
+          const text =
+            typeof asset.source === 'string'
+              ? asset.source
+              : new TextDecoder().decode(asset.source);
+          if (text.includes(werkstattFont)) {
+            this.error(
+              `${css} is loaded with the entry but has Werkstatt's font (${werkstattFont})`,
+            );
+          }
         }
       }
     },

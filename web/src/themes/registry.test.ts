@@ -40,6 +40,14 @@ describe('registry', () => {
     expect(Object.keys(theme.slots).sort()).toEqual([...slotNames].sort());
   });
 
+  it('loads Werkstatt with its own Shell, the other slots falling back to Programme', async () => {
+    const theme = await loadTheme('werkstatt');
+
+    expect(theme.id).toBe('werkstatt');
+    expect(theme.slots.Shell).toBeDefined();
+    expect(theme.slots.Shell).not.toBe(programme.slots.Shell);
+  });
+
   it("knows exactly the API's themes", async () => {
     expect([...themeIds].sort()).toEqual((await apiThemes()).sort());
     expectTypeOf<ThemeId>().toEqualTypeOf<components['schemas']['PublicSettings']['theme']>();

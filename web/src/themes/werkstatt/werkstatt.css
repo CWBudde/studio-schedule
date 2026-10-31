@@ -1,0 +1,288 @@
+/*
+ * "Werkstatt": the look of a dance-school workshop (ADR 0018). Condensed type, a plum primary, a
+ * translucent page over the school's background photo. Imported only by the Werkstatt chunk
+ * (index.ts), so it always loads after index.css; plain CSS, no Tailwind directives.
+ *
+ * Contrast of every text/background pair is checked in tokens.test.ts.
+ */
+
+/*
+ * Roboto Condensed, latin and latin-ext only (German needs latin; names may need latin-ext). Our
+ * own faces instead of fontsource's per-subset files: those have no unicode-range, so the later
+ * face would hide the earlier one for every character. With the ranges the browser loads
+ * latin-ext only when a page needs it. Woff2 only, as every supported browser reads it. The
+ * cyrillic, greek and vietnamese files stay out of the build (the PWA precaches every woff2).
+ */
+@font-face {
+  font-family: 'Roboto Condensed';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300;
+  src: url('@fontsource/roboto-condensed/files/roboto-condensed-latin-ext-300-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Roboto Condensed';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300;
+  src: url('@fontsource/roboto-condensed/files/roboto-condensed-latin-300-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Roboto Condensed';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/roboto-condensed/files/roboto-condensed-latin-ext-400-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Roboto Condensed';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/roboto-condensed/files/roboto-condensed-latin-400-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Roboto Condensed';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('@fontsource/roboto-condensed/files/roboto-condensed-latin-ext-700-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Roboto Condensed';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('@fontsource/roboto-condensed/files/roboto-condensed-latin-700-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/*
+ * The tokens. Specificity decides who wins:
+ *   index.css `:root` / `.dark`                       0,1,0  (earlier in the page)
+ *   these blocks, `[data-theme]` / `:where(.dark)[…]` 0,1,0  (later, so they beat index.css)
+ *   the school's accent, `html:root` / `html.dark`    0,1,1  (branding.ts; beats these blocks)
+ *   the day colours below, `:root[data-theme]` / …    0,2,0+ (beat the accent)
+ * Keep the two token blocks at exactly 0,1,0: a stronger selector would hide the school's
+ * accent (--primary, --ring, --sidebar-primary, --sidebar-ring). The cost: in dark mode the light
+ * block still beats index.css's `.dark`, so the dark block must redefine every token the light
+ * block sets, or a light value leaks into dark mode (tokens.test.ts checks this).
+ */
+[data-theme='werkstatt'] {
+  --radius: 0.1875rem; /* 3px */
+  --background: #fbfaf8;
+  --foreground: #354052;
+  --card: rgb(255 255 255 / 80%);
+  --card-foreground: #354052;
+  --popover: #ffffff;
+  --popover-foreground: #354052;
+  --primary: #9c215b;
+  --primary-foreground: #ffffff;
+  --secondary: #e6eaee;
+  --secondary-foreground: #354052;
+  --muted: #f1f3f5;
+  /* #7f8fa4 in the old app (3.3:1); darkened to reach 4.5:1 on the page, cards and --muted. */
+  --muted-foreground: #5d6b7f;
+  --accent: #f6e8ef;
+  --accent-foreground: #7d1a49;
+  --destructive: #c32f25;
+  --border: #dfe2e5;
+  --input: #abb0b2;
+  --ring: #9c215b;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #354052;
+  --sidebar-primary: #9c215b;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f6e8ef;
+  --sidebar-accent-foreground: #7d1a49;
+  --sidebar-border: #dfe2e5;
+  --sidebar-ring: #9c215b;
+  /* No stage light on the page (Programme's gradient). */
+  --spotlight: transparent;
+
+  /* The wash between the school's background photo and the page. */
+  --werkstatt-wash: rgb(255 255 255 / 55%);
+  /* The page panel, the header bar, the tab text, the phone drop menu, the dialogs' scrim. */
+  --werkstatt-panel: rgb(255 255 255 / 50%);
+  --werkstatt-header: rgb(255 255 255 / 87%);
+  --werkstatt-tab: #344450;
+  --werkstatt-menu: #ffffff;
+  --werkstatt-scrim: rgb(50 32 14 / 40%);
+  /*
+   * The action colours (book, cancel, waiting list). White text fails on #74b391 (2.5:1),
+   * #dc5047 (4.0:1) and #b39474 (2.8:1). Mint and brown carry dark text instead; the cancel
+   * button's face is --werkstatt-red-dark with white text (5.4:1), and --werkstatt-red carries no
+   * text (the stripes of a full lesson, borders).
+   */
+  --werkstatt-mint: #74b391;
+  --werkstatt-mint-foreground: #10301f;
+  --werkstatt-red: #dc5047;
+  --werkstatt-red-dark: #c32f25;
+  --werkstatt-red-foreground: #ffffff;
+  --werkstatt-brown: #b39474;
+  --werkstatt-brown-foreground: #2e2012;
+}
+
+/* `:where()` keeps this at 0,1,0 (see above); later in the file, so it wins in dark mode. */
+:where(.dark)[data-theme='werkstatt'] {
+  --radius: 0.1875rem;
+  --background: #141214;
+  --foreground: #ececec;
+  --card: rgb(28 26 28 / 85%);
+  --card-foreground: #ececec;
+  --popover: #1c1a1c;
+  --popover-foreground: #ececec;
+  --primary: #f8398a;
+  --primary-foreground: #1a0a11;
+  --secondary: #2a272a;
+  --secondary-foreground: #ececec;
+  --muted: #262326;
+  --muted-foreground: #a8a3a8;
+  --accent: #3a2230;
+  --accent-foreground: #fbc4dc;
+  /* #c32f25 reaches only 3.3:1 on the dark page; a lighter red for text. */
+  --destructive: #f26f67;
+  --border: #383838;
+  --input: #383838;
+  --ring: #f8398a;
+  --sidebar: #1c1a1c;
+  --sidebar-foreground: #ececec;
+  --sidebar-primary: #f8398a;
+  --sidebar-primary-foreground: #1a0a11;
+  --sidebar-accent: #3a2230;
+  --sidebar-accent-foreground: #fbc4dc;
+  --sidebar-border: #383838;
+  --sidebar-ring: #f8398a;
+  --spotlight: transparent;
+
+  --werkstatt-wash: rgb(0 0 0 / 55%);
+  --werkstatt-panel: rgb(20 18 20 / 70%);
+  --werkstatt-header: rgb(20 18 20 / 87%);
+  --werkstatt-tab: #c9c6c9;
+  --werkstatt-menu: #1c1a1c;
+  --werkstatt-scrim: rgb(0 0 0 / 60%);
+  --werkstatt-mint: #3a7053;
+  --werkstatt-mint-foreground: #ffffff;
+  --werkstatt-red: #dc5047;
+  --werkstatt-red-dark: #c32f25;
+  --werkstatt-red-foreground: #ffffff;
+  /* #b39474 with dark text would glare in dark mode; a darker brown that carries white text. */
+  --werkstatt-brown: #7a5f42;
+  --werkstatt-brown-foreground: #ffffff;
+}
+
+/*
+ * The day bands. The accent sheet sets --day-today to the school's accent; in Werkstatt the today
+ * band stays pink, so these rules are stronger than the accent's (0,2,0 and 0,3,0 against 0,1,1).
+ *
+ * Today: white on the spec's #f8398a reaches only 3.5:1, enough for large text only, and pages
+ * without a Werkstatt slot (My lessons) put 18px medium text on it. A deeper pink, #d81b6f, carries
+ * white text at 4.9:1 at any size.
+ */
+:root[data-theme='werkstatt'] {
+  --day-today: #d81b6f;
+  --day-today-foreground: #ffffff;
+  --day-tomorrow: #fbec19;
+  --day-tomorrow-foreground: #9c215b;
+  --day-later: #68b3c9;
+  --day-later-foreground: #10333d;
+}
+
+/* Dark mode: the same hues, deeper, so the bands do not glare; today's text is dark (5.4:1). */
+:root.dark[data-theme='werkstatt'] {
+  --day-today: #f8398a;
+  --day-today-foreground: #1a0a11;
+  --day-tomorrow: #4d4708;
+  --day-tomorrow-foreground: #fbec19;
+  --day-later: #1f4a57;
+  --day-later-foreground: #d4eef5;
+}
+
+/*
+ * Type. index.css's `@theme inline` writes the font families into the utilities, so overriding
+ * --font-sans would change nothing: set the family on the page and on the two utilities instead.
+ * Headings are Roboto Condensed too, never Programme's Bodoni.
+ */
+:root[data-theme='werkstatt'],
+[data-theme='werkstatt'] .font-sans,
+[data-theme='werkstatt'] .font-heading {
+  font-family: 'Roboto Condensed', sans-serif;
+}
+
+/*
+ * The school's background photo under a wash, fixed and cover-sized; beats index.css's body rule
+ * (`@layer base`), as unlayered CSS wins over layers.
+ *
+ * A school without a background must look finished (plain colour, no broken image, no dark gap).
+ * That is why var(--school-background) has no fallback: without the property (branding.ts sets it
+ * only while there is an image) the whole background-image declaration is invalid at
+ * computed-value time and becomes `none` — no wash, no image, just --background.
+ */
+[data-theme='werkstatt'] body {
+  background-color: var(--background);
+  background-image:
+    linear-gradient(var(--werkstatt-wash), var(--werkstatt-wash)), var(--school-background);
+  background-attachment: fixed;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+/* Dialogs, sheets and alert dialogs: a warm scrim with blur, a plain panel, a light title. */
+[data-theme='werkstatt'] [data-slot='dialog-overlay'],
+[data-theme='werkstatt'] [data-slot='sheet-overlay'],
+[data-theme='werkstatt'] [data-slot='alert-dialog-overlay'] {
+  background-color: var(--werkstatt-scrim);
+  backdrop-filter: blur(2px);
+}
+
+[data-theme='werkstatt'] [data-slot='dialog-content'],
+[data-theme='werkstatt'] [data-slot='sheet-content'],
+[data-theme='werkstatt'] [data-slot='alert-dialog-content'] {
+  background-color: var(--popover);
+  border-radius: 3px;
+}
+
+[data-theme='werkstatt'] [data-slot='dialog-title'],
+[data-theme='werkstatt'] [data-slot='sheet-title'],
+[data-theme='werkstatt'] [data-slot='alert-dialog-title'] {
+  font-size: 1.375rem;
+  line-height: 1.2;
+  font-weight: 300;
+}
+
+[data-theme='werkstatt'] [data-slot='dialog-close'] svg,
+[data-theme='werkstatt'] [data-slot='sheet-close'] svg {
+  stroke-width: 1.25;
+}
