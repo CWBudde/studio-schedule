@@ -61,7 +61,7 @@ export function ScheduleList({ schedule, receivedAt }: { schedule: Schedule; rec
 }
 
 /** A lesson's card (the LessonCard slot) with its quick action and that action's dialog. */
-function ScheduleLessonCard({
+export function ScheduleLessonCard({
   lesson,
   timeZone,
   now,

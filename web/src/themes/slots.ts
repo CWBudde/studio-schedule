@@ -134,6 +134,25 @@ export interface HomeStatus {
   onRetry(): void;
 }
 
+/**
+ * The signed-in visitor's own lessons of the coming week: those they or a
+ * dependent are booked for and that have not ended (features/home/useMyLessons.tsx).
+ */
+export type HomeMyLessons =
+  /** Whether the visitor is signed in is not known yet. */
+  | { state: 'unknown' }
+  | { state: 'signedOut' }
+  /** The school's time zone or the schedule is still loading. */
+  | { state: 'loading' }
+  | { state: 'error'; onRetry(): void }
+  | {
+      state: 'ready';
+      /** The days with such a lesson, in order; empty when there is none. */
+      days: ScheduleDay[];
+      /** A lesson's card: the LessonCard slot, connected to its quick action; opens it in the schedule. */
+      renderLesson(lesson: ScheduleLesson): ReactNode;
+    };
+
 /** The home page (features/home/HomePage.tsx). */
 export interface HomeProps {
   /** The school's name, once the public settings are there. */
@@ -143,6 +162,7 @@ export interface HomeProps {
   /** The teaser of the next lessons, with the theme's layout classes. */
   renderNextLessons(className?: string): ReactNode;
   status: HomeStatus;
+  myLessons: HomeMyLessons;
 }
 
 // --- Profile ---------------------------------------------------------------

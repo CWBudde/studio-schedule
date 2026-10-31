@@ -4,14 +4,19 @@ import { useMe } from '@/api/useMe';
 import { AnnouncementList } from '@/features/announcements/AnnouncementList';
 import { useSlot } from '@/themes/useSlot';
 import { NextLessons } from './NextLessons';
+import { useMyLessons } from './useMyLessons';
 
-/** The home page: the school, its announcements, the next lessons and the system status. */
+/**
+ * The home page: the school, its announcements, the next lessons, the
+ * visitor's own lessons (for themes that show them) and the system status.
+ */
 export function HomePage() {
   const Home = useSlot('Home');
   const health = useQuery(healthQuery);
   const settings = useQuery(publicSettingsQuery);
   // Only the office and admins learn the version, for support (ASVS 14.3.3).
   const version = useMe().data?.version;
+  const myLessons = useMyLessons();
 
   return (
     // The slot changes only with the theme, and then remounting what it renders is intended.
@@ -31,6 +36,7 @@ export function HomePage() {
           void settings.refetch();
         },
       }}
+      myLessons={myLessons}
     />
   );
 }
