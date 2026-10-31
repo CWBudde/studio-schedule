@@ -1,13 +1,22 @@
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Theme } from '@/themes/slots';
+import { ThemeContext } from '@/themes/themeContext';
+import { Home as WerkstattHome } from '@/themes/werkstatt/Home';
 import {
+  family,
   healthOk,
   ids,
+  lessonBallet,
+  lessonContemporary,
+  lessonWorkshop,
   meMember,
   meOffice,
   mockApiGet,
   publicSettings,
   schedule,
+  signedOut,
 } from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { HomePage } from './HomePage';
@@ -104,5 +113,109 @@ describe('HomePage', () => {
     expect(await screen.findByText('Error')).toBeInTheDocument();
     expect(screen.getByText('Could not load data from the backend.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+});
+
+/** A theme whose home shows the member's own lessons (Werkstatt's, without its CSS). */
+const withMyLessons: Theme = { id: 'werkstatt', slots: { Home: WerkstattHome } };
+
+const nora = { personId: meMember.personId, name: 'Nora Example' };
+
+describe('HomePage with the member’s own lessons', () => {
+  it('shows the lessons the member’s family is booked for, by day, and opens one in the schedule', async () => {
+    mockApiGet({
+      '/api/v1/health': { body: healthOk },
+      '/api/v1/settings/public': { body: publicSettings },
+      '/api/v1/auth/me': { body: meMember },
+      '/api/v1/family': { body: family },
+      '/api/v1/schedule': {
+        body: {
+          ...schedule,
+          lessons: [
+            { ...lessonBallet, bookedFor: [{ ...nora, bookingId: 'b-1' }] },
+            // A canceled lesson they are booked for stays, so they learn it is off.
+            { ...lessonContemporary, bookedFor: [{ ...nora, bookingId: 'b-2' }] },
+            // Not booked: only the full schedule shows it.
+            lessonWorkshop,
+          ],
+        },
+      },
+    });
+
+    const { router } = renderInRouter(
+      <ThemeContext.Provider value={withMyLessons}>
+        <HomePage />
+      </ThemeContext.Provider>,
+    );
+
+    const mine = within(await screen.findByRole('region', { name: 'My schedule' }));
+    const monday = within(await mine.findByRole('region', { name: /Monday, October 26/ }));
+    const ballet = monday.getByRole('button', { name: /Ballet/ });
+    expect(
+      within(mine.getByRole('region', { name: /Tuesday, October 27/ })).getByRole('button', {
+        name: /Contemporary.*Canceled/,
+      }),
+    ).toBeInTheDocument();
+    expect(mine.queryByRole('button', { name: /Jazz/ })).not.toBeInTheDocument();
+    // Signed in, the teaser gives way to the member's own lessons.
+    expect(screen.queryByRole('region', { name: 'Next lessons' })).not.toBeInTheDocument();
+
+    await userEvent.click(ballet);
+    expect(router.state.location.pathname).toBe('/schedule');
+    expect(router.state.location.search).toEqual({ from: '2026-10-26', lesson: ids.lessonBallet });
+  });
+
+  it('leaves out the lessons that have ended', async () => {
+    mockApiGet({
+      '/api/v1/health': { body: healthOk },
+      '/api/v1/settings/public': { body: publicSettings },
+      '/api/v1/auth/me': { body: meMember },
+      '/api/v1/family': { body: family },
+      '/api/v1/schedule': {
+        body: {
+          ...schedule,
+          // Monday evening after the ballet class (17:00–18:30 UTC).
+          now: '2026-10-26T19:00:00Z',
+          lessons: [
+            { ...lessonBallet, bookedFor: [{ ...nora, bookingId: 'b-1' }] },
+            { ...lessonWorkshop, bookedFor: [{ ...nora, bookingId: 'b-3' }] },
+          ],
+        },
+      },
+    });
+
+    renderInRouter(
+      <ThemeContext.Provider value={withMyLessons}>
+        <HomePage />
+      </ThemeContext.Provider>,
+    );
+
+    const mine = within(await screen.findByRole('region', { name: 'My schedule' }));
+    expect(await mine.findByRole('button', { name: /Jazz/ })).toBeInTheDocument();
+    expect(mine.queryByRole('button', { name: /Ballet/ })).not.toBeInTheDocument();
+    expect(mine.queryByRole('region', { name: /October 26/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the next lessons to a visitor who is signed out, and does not ask for theirs', async () => {
+    const get = mockApiGet({
+      '/api/v1/health': { body: healthOk },
+      '/api/v1/settings/public': { body: publicSettings },
+      '/api/v1/schedule': { body: schedule },
+      ...signedOut,
+    });
+
+    renderInRouter(
+      <ThemeContext.Provider value={withMyLessons}>
+        <HomePage />
+      </ThemeContext.Provider>,
+    );
+
+    const teaser = within(await screen.findByRole('region', { name: 'Next lessons' }));
+    expect(await teaser.findByRole('link', { name: /Ballet/ })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'My schedule' })).not.toBeInTheDocument();
+    // Only the teaser asks for the schedule; the card's family is never needed.
+    const paths = (get.mock.calls as unknown[][]).map((call) => call[0]);
+    expect(paths.filter((path) => path === '/api/v1/schedule')).toHaveLength(1);
+    expect(paths).not.toContain('/api/v1/family');
   });
 });

@@ -102,6 +102,14 @@
       "empty": "In den nächsten 7 Tagen finden keine Stunden statt.",
       "viewAll": "Ganzer Stundenplan",
       "loadError": "Der Stundenplan konnte nicht geladen werden."
+    },
+    "info": "Infos",
+    "mine": {
+      "title": "Mein Stundenplan",
+      "empty": "In den nächsten 7 Tagen bist du für keine Stunde eingetragen.",
+      "loading": "Deine Stunden werden geladen…",
+      "loadError": "Deine Stunden konnten nicht geladen werden.",
+      "retry": "Erneut versuchen"
     }
   },
   "footer": {
