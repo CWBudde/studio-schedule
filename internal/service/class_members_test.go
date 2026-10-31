@@ -182,3 +182,27 @@ func TestAddClassMemberRaces(t *testing.T) {
 		t.Errorf("reference deleted meanwhile: %v, want ErrNotFound and no ErrDuplicate", err)
 	}
 }
+
+// TestUpdateClassMemberInvalidDate refuses an impossible pause date as a
+// field error and keeps the membership and its bookings.
+func TestUpdateClassMemberInvalidDate(t *testing.T) {
+	t.Parallel()
+
+	f := newBookingFixture(t)
+	c := f.memberClass(t)
+
+	_, err := f.timetable(t, bookingNow).UpdateClassMember(t.Context(), f.principal(t, f.olga), domain.ClassMember{
+		ClassID: c.ID, PersonID: f.mia.ID, PausedUntil: domain.Date{Year: 2026, Month: 2, Day: 30},
+	})
+	wantFieldError(t, err, "pausedUntil")
+
+	if m := f.memberOf(t, c.ID, f.mia); !m.PausedUntil.IsZero() {
+		t.Errorf("membership %+v, want no pause", m)
+	}
+
+	for _, l := range f.classLessons(t, c.ID) {
+		if b := f.bookingOf(t, l, f.mia); len(b) != 1 || b[0].Status != domain.BookingBooked {
+			t.Errorf("%s: bookings %+v, want Mia's kept", l.SlotDate, b)
+		}
+	}
+}
