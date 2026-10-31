@@ -303,3 +303,39 @@ func TestMergeNeedsAnActor(t *testing.T) {
 		t.Errorf("the failed merge changed %v", changed)
 	}
 }
+
+// TestMergeRefusesInvalidStoredData: the merge never writes a person that
+// fails validation. A survivor whose stored data does not pass today's
+// rules (an email the stores accept, kept from before the rule) refuses the
+// merge on that field, and nothing is written; the office corrects the
+// person first.
+func TestMergeRefusesInvalidStoredData(t *testing.T) {
+	t.Parallel()
+
+	w := newMergeFaultWorld(t)
+
+	err := w.mem.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		p, err := tx.Persons().Get(ctx, w.survivor)
+		if err != nil {
+			return err
+		}
+
+		p.Email = "sara at example.org"
+
+		return tx.Persons().Update(ctx, p)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fs := service.NewFaultStore(w.mem)
+	before := fs.Snapshot(t)
+	svc := service.NewPersonService(fs, clock.NewFixed(mergeFaultNow), w.seq, service.Mails{})
+
+	_, err = svc.Merge(t.Context(), w.office(w.mem), service.MergeRequest{SurvivorID: w.survivor, MergedID: w.merged}, true)
+	wantField(t, err, "email")
+
+	if changed := before.Changed(fs.Snapshot(t)); len(changed) > 0 {
+		t.Errorf("the refused merge changed %v", changed)
+	}
+}
