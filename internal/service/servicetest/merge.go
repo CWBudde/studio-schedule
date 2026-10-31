@@ -30,6 +30,8 @@ func Merge(t *testing.T, newStore func(t *testing.T) store.Store) {
 		"MovesDismissals":        mergeMovesDismissals,
 		"NotesTooLong":           mergeNotesTooLong,
 		"TombstonesTakeNoWrites": mergeTombstonesTakeNoWrites,
+		"Waitlist":               mergeWaitlist,
+		"MovesStaffAndKeepsOwn":  mergeMovesStaffAndKeepsOwn,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -766,5 +768,117 @@ func mergeTombstonesTakeNoWrites(t *testing.T, w *world) {
 
 	if got := w.get(merged.ID); got.MergedInto != survivor.ID {
 		t.Errorf("tombstone %+v", got)
+	}
+}
+
+// waits stores an open waiting-list entry of p for l.
+func (w *world) waits(l domain.Lesson, p domain.Person) domain.WaitlistEntry {
+	w.t.Helper()
+
+	e := domain.WaitlistEntry{
+		ID: newID[domain.WaitlistEntryID](w), LessonID: l.ID, PersonID: p.ID, Status: domain.WaitlistWaiting,
+		JoinedAt: now.Add(-time.Hour),
+	}
+	w.write(func(ctx context.Context, tx store.Tx) error { return tx.Waitlist().Create(ctx, e) })
+
+	return e
+}
+
+// mergeWaitlist: the open entries of the duplicate move, except where the
+// survivor has a booking or an entry of the lesson already: those are
+// withdrawn. An entry of the survivor of a lesson the merge gives it a
+// booking of is withdrawn too; its entries of other lessons stay.
+func mergeWaitlist(t *testing.T, w *world) {
+	ctx := t.Context()
+	survivor, merged := w.person("Wim", "Example", ""), w.person("Wim", "Example", "")
+	moving, waitBooked, waitBoth := w.lessons[0], w.lessons[1], w.lessons[2]
+	waitMove := w.lesson(domain.ClassID{}, now.Add(96*time.Hour))
+	elsewhere := w.lesson(domain.ClassID{}, now.Add(120*time.Hour))
+
+	w.booking(moving, merged, false)
+	ownMoving := w.waits(moving, survivor) // the survivor gets the duplicate's booking
+	w.booking(waitBooked, survivor, false)
+	dupBooked := w.waits(waitBooked, merged) // the survivor is booked
+	ownBoth, dupBoth := w.waits(waitBoth, survivor), w.waits(waitBoth, merged)
+	dupMove := w.waits(waitMove, merged)
+	ownElsewhere := w.waits(elsewhere, survivor)
+
+	sum, err := w.persons().Merge(ctx, w.office, service.MergeRequest{SurvivorID: survivor.ID, MergedID: merged.ID}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if sum.WaitlistMoved != 1 || sum.WaitlistWithdrawn != 3 || sum.BookingsMoved != 1 || len(sum.Canceled) != 0 {
+		t.Errorf("summary %+v; want 1 entry moved, 3 withdrawn, 1 booking moved", sum)
+	}
+
+	for _, want := range []struct {
+		e      domain.WaitlistEntry
+		status domain.WaitlistStatus
+		person domain.PersonID
+	}{
+		{ownMoving, domain.WaitlistWithdrawn, survivor.ID},
+		{dupBooked, domain.WaitlistWithdrawn, merged.ID},
+		{ownBoth, domain.WaitlistWaiting, survivor.ID},
+		{dupBoth, domain.WaitlistWithdrawn, merged.ID},
+		{dupMove, domain.WaitlistWaiting, survivor.ID},
+		{ownElsewhere, domain.WaitlistWaiting, survivor.ID},
+	} {
+		got := read(w, func(ctx context.Context, tx store.Tx) (domain.WaitlistEntry, error) {
+			return tx.Waitlist().Get(ctx, want.e.ID)
+		})
+
+		if got.Status != want.status || got.PersonID != want.person {
+			t.Errorf("entry of %v for lesson %v: %s of %v; want %s of %v",
+				want.e.PersonID, want.e.LessonID, got.Status, got.PersonID, want.status, want.person)
+		}
+	}
+}
+
+// mergeMovesStaffAndKeepsOwn: the duplicate's staff link moves to the
+// survivor; a guardian both have stays once, and the survivor's own pass
+// and its memberships of classes the duplicate has no part in stay as they
+// are.
+func mergeMovesStaffAndKeepsOwn(t *testing.T, w *world) {
+	ctx := t.Context()
+	survivor, merged, guardian := w.person("Ron", "Example", ""), w.person("Ron", "Example", ""), w.person("Gil", "Example", "")
+	w.link(guardian, survivor)
+	w.link(guardian, merged)
+	own := w.pass(survivor, domain.Person{}, 4)
+	w.member(w.classes[1], survivor)
+
+	staff := domain.Staff{
+		ID: newID[domain.StaffID](w), PersonID: merged.ID, DisplayName: "Ron E.", Kind: domain.StaffAccompanist, Active: true,
+	}
+	w.write(func(ctx context.Context, tx store.Tx) error { return tx.Staff().Create(ctx, staff) })
+
+	sum, err := w.persons().Merge(ctx, w.office, service.MergeRequest{SurvivorID: survivor.ID, MergedID: merged.ID}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if sum.StaffMoved != 1 || sum.LinksDropped != 1 || sum.LinksMoved != 0 || sum.PassesMoved != 0 ||
+		sum.MembershipsMoved != 0 || len(sum.MembershipsDropped) != 0 {
+		t.Errorf("summary %+v", sum)
+	}
+
+	got := read(w, func(ctx context.Context, tx store.Tx) (domain.Staff, error) { return tx.Staff().Get(ctx, staff.ID) })
+	if got.PersonID != survivor.ID {
+		t.Errorf("staff link of %v, want the survivor", got.PersonID)
+	}
+
+	if g := w.guardiansOf(survivor.ID); len(g) != 1 || g[0].ID != guardian.ID {
+		t.Errorf("the survivor's guardians %+v; want Gil once", g)
+	}
+
+	if p := w.passOf(own.ID); p.PersonID != survivor.ID || !p.PayerID.IsZero() || p.VisitsRemaining != 4 {
+		t.Errorf("the survivor's own pass %+v changed from %+v", p, own)
+	}
+
+	memberships := read(w, func(ctx context.Context, tx store.Tx) ([]domain.ClassMember, error) {
+		return tx.Classes().ListMemberships(ctx, survivor.ID)
+	})
+	if len(memberships) != 1 || memberships[0].ClassID != w.classes[1] {
+		t.Errorf("the survivor's memberships %+v", memberships)
 	}
 }
