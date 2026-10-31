@@ -200,7 +200,34 @@ Tailwind v4, shadcn/ui, TanStack Router/Query, react-i18next, Vitest, Playwright
   - For 5.1: `web/e2e/werkstatt.spec.ts` exists; extend it. It sets the visitor's language to
     English (`studio-schedule.lang`) so the shared helpers' names apply.
 
-- [ ] 4.1 `werkstatt-schedule` Werkstatt ScheduleList, DayHeading and LessonCard (day bands, room columns, square action button) — see "Task 4.1" below.
+- [x] 4.1 `werkstatt-schedule` Werkstatt ScheduleList, DayHeading and LessonCard (day bands, room columns, square action button) — see "Task 4.1" below.
+  - Done: `web/src/themes/werkstatt/` `ScheduleList.tsx`, `roomColumns.ts`, `DayHeading.tsx`,
+    `LessonCard.tsx`, `courseTint.ts`, registered in `index.ts`; strings under `schedule:werkstatt.*`
+    (en, de). Tests: ScheduleList 12 (room columns, one room, a room of another day, order by start,
+    location then room, "Room · Location" with two locations, phone single list, each lesson rendered
+    once, prevId/nextId; `roomColumns` 3), DayHeading 6, LessonCard 23 (each quick action, review
+    focus 3: `open` → "Details" calls `onOpen`, never `run`; star and frame; German), courseTint 3,
+    tokens +36 (`--werkstatt-green` pairs; card text on all six tints), registry pins the four own
+    slots; web unit tests 1278. `werkstatt.spec.ts` +3 cases (desktop room columns, each with lessons
+    and ≥ 13rem wide; phone one list; a guardian's square button is "Details" and opens the sheet).
+    `just web-check` green; `just e2e` 220 passed, 4 skipped, 2 failed — `pwa.spec.ts` offline case
+    only, a time-of-day flake (see below) that fails the same way on the base commit. Chunk
+    11.8 kB JS + 6.6 kB CSS.
+  - Deviations: the card's muted line is "room · location": the API has no course description
+    (`CourseTypeRef` is id and name). "Participants: taken / capacity" uses `capacity - freePlaces`, so
+    a place an invite holds counts as taken. The card is a `group` named like its body button, so
+    "Book" can be found per card. The frame is `border-primary` + `ring-1` (2px, no layout jump). With
+    many rooms a day scrolls sideways (columns ≥ 13rem) instead of squeezing (review focus 4).
+  - Discoveries: the app uses a hash router in the demo, so a plain `href="#id"` would change the
+    route; the day arrows keep the href but scroll to and focus the heading (`tabIndex=-1`). The demo
+    **member is a guardian**: every Werkstatt card shows "Details", never "Book" (review focus 3 as
+    intended). `pwa.spec.ts`'s offline case picks a card with "N free"; Programme shows free places on
+    a lesson that has started but not ended, whose sheet says "has started" without a Book button, so
+    it fails while such a lesson runs (Saturday 10:00–10:45 in the seed); unrelated to this task.
+  - For 5.1: "book with the card's Eintragen button" needs an account that books for itself only (the
+    demo member has dependents), or book in the sheet; `werkstatt.spec.ts` has the schedule cases.
+  - For 4.2: Home can reuse `DayHeading`/`LessonCard` through `useSlot`; the card needs a
+    `quickAction` (`useLessonQuickAction`) from its container.
 
 - [ ] 4.2 `werkstatt-pages` Werkstatt Home, Profile and Participants slots — see "Task 4.2" below.
 
