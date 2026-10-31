@@ -94,8 +94,9 @@ The Runner records every run in `job_runs`: the job, the start and end, the resu
 (`ok|failed|skipped`) and the error message without internals. The table exists in both stores.
 The daily `purge-personal-data` job (`service/retention.go`) prunes runs older than 30 days.
 
-Each run takes a per-job lock in the database: a transaction-level advisory lock on PostgreSQL,
-and a mutex per job name on the memory store. A run whose lock another process holds (a second
+Each run takes a per-job lock beside the transactions, so the job's own transactions run while
+it is held: on PostgreSQL a session-level advisory lock on a connection of its own, released when
+the run ends or the connection drops, and on the memory store a mutex per job name. A run whose lock another process holds (a second
 `serve`, or `jobs run`) is skipped and recorded as `skipped`. `jobs list` shows each job's interval
 and its last run with its result. `jobs run <name>` runs one job now, under the same lock, and
 waits for it.
