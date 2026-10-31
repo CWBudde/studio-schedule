@@ -81,7 +81,7 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
         <span className="flex items-baseline justify-between gap-2">
           <span
             className={cn(
-              'font-bold tracking-wide md:uppercase',
+              'text-base font-light tracking-wide md:text-lg md:uppercase',
               canceled && 'line-through decoration-1',
             )}
           >
@@ -96,7 +96,7 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
         <span className="flex flex-wrap items-center gap-1.5">
           <span
             className={cn(
-              'font-bold tabular-nums',
+              'text-lg tabular-nums',
               !quiet && 'text-primary',
               canceled && 'line-through',
             )}

@@ -272,7 +272,31 @@ Tailwind v4, shadcn/ui, TanStack Router/Query, react-i18next, Vitest, Playwright
   - For 5.1: the Home spec can sign in as the demo member and expect "My schedule" with the
     booked lessons (the seed's member has several in the coming week); Profile's h1 is "My details".
 
-- [ ] 5.1 `werkstatt-e2e` Werkstatt end-to-end spec, CLAUDE.md code map, architecture docs, final visual comparison — see "Task 5.1" below.
+- [x] 5.1 `werkstatt-e2e` Werkstatt end-to-end spec, CLAUDE.md code map, architecture docs, final visual comparison — see "Task 5.1" below.
+  - Done: `werkstatt.spec.ts` +5 cases (day bands in their tones and the room row; booking with
+    the card's "Book" and canceling with "Cancel" through the confirmation; home's "My schedule"
+    with a booked lesson that opens in the schedule; the account page keeps a phone number; the
+    office marks a participant present in the table, which fits the sheet on desktop), 15 cases,
+    26 runs on the two projects (4 skipped: desktop-/phone-only), 3× repeated without a flake.
+    Docs: CLAUDE.md "Themes" bullet, architecture.md "Themes", demo-mode.md names the spec.
+    `just ci` green: e2e 232 passed, 4 skipped; `e2e-server` 7; 1320 web unit tests.
+  - Deviation: the demo member is a guardian (always "Details"), so the booking case signs in by
+    email as Irene Inkwell, a seed member without children.
+  - Visual pass (no reference screenshots provided; 48 captures, desktop/phone, light/dark, against
+    the old app's stylesheet, read only). Fixed: the 28rem lesson sheet hid the participants
+    table's phone, pass, trial and remove columns (a sheet holding it is up to 56rem from 40rem,
+    `:has(.werkstatt-participants)`; phones scroll); dark `--input` `#383838` was 1.5:1, the
+    unchecked present boxes vanished (`#737073`, 3.5:1, pinned ≥ 3:1 in `tokens.test.ts`); the
+    phone header's tools wrapped to the left under the menu (`ml-auto`). Closer to the old type:
+    day band text centred, 18/24px; card titles light and larger, the time 18px regular; the room
+    row taller. The chunk is now 27.5 kB JS + 10.0 kB CSS.
+  - Discovery: a first visit without a cached theme renders Programme until the settings arrive,
+    then the ThemeProvider remounts the page in Werkstatt and what was typed is gone (the phone
+    project lost the login email); the spec waits for `data-theme` before typing. Seeding the
+    theme cache from the demo's school choice would avoid it in the demo; not done here.
+  - Residual (old look, not cheap or taste): the "» Anmelden" button's size and small caps, tab
+    size and centring, a sticky room row, course tints in dark mode, framed Home cards, uppercase
+    course titles on phones; light `--input` keeps the spec's `#abb0b2` (2.2:1).
 
 ---
 

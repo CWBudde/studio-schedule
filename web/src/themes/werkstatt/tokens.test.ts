@@ -184,6 +184,21 @@ describe.each(['light', 'dark'] as const)('werkstatt tokens, %s', (mode) => {
   });
 });
 
+describe('werkstatt input borders (dark mode)', () => {
+  // Checkboxes and inputs are drawn by their 1px --input border: in dark mode
+  // it must reach WCAG 1.4.11's 3:1 on what they sit on (#383838 was 1.5:1,
+  // the unchecked "present" boxes all but vanished). Light mode keeps the
+  // previous app's #abb0b2 (about 2.2:1 on white), as the spec has it.
+  const s = surfaces('dark');
+  it.each([
+    ['the page', s.background],
+    ['a card', s.card],
+    ['a popover/dialog', s.popover],
+  ] as const)('on %s reaches 3:1', (_what, surface) => {
+    expect(contrast(s.t('--input'), surface)).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe('werkstatt lesson card tints (light mode)', () => {
   const { t } = surfaces('light');
   const texts = [

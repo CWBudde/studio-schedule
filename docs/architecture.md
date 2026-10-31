@@ -284,6 +284,33 @@ What the school stores about a person, and how it goes
   pause (`watchOnline`, `useOnline`), and `transportFetch` refuses writes. The account page's
   `PushCard` subscribes the device (`web/src/features/push`).
 
+## Themes
+
+The look is the school's, the same for every visitor
+([ADR 0018](decisions/0018-themes-and-layouts.md)): `domain.Theme` on the branding card is
+`programme` (the app's own look, the zero value) or `werkstatt` (the previous dance-school app's
+visual language), and the public settings carry it, so a visitor gets it before signing in. The
+background image is a setting of its own, stored like the receipt logo; only Werkstatt shows it.
+
+- **Slots:** `web/src/themes/registry.ts` lists the themes, `slots.ts` types their layout slots
+  (the shell, the schedule list, its day heading and lesson card, home, profile, the lesson
+  participants). A page computes its view model and its actions (book, cancel, filters, forms) once
+  and renders `useSlot('…')`; a slot neither fetches nor mutates. Programme provides every slot; a
+  slot another theme leaves out is Programme's, so every other page keeps Programme's structure in
+  that theme's colors and fonts.
+- **Loading:** Programme is in the entry chunk. Werkstatt is a chunk of its own
+  (`import('./werkstatt')`) with its CSS and font, its rules scoped under `[data-theme='werkstatt']`;
+  the build guard in `web/vite.chunks.ts` fails when the entry loads any of it. The school's accent
+  (`html:root`) still overrides the primary color; the text contrast of Werkstatt's tokens
+  (≥ 4.5:1, light and dark) is pinned in `werkstatt/tokens.test.ts`.
+- **Switching:** `web/public/theme.js` sets the theme cached by the last visit as
+  `<html data-theme>` before the first paint, so a returning visitor sees no flash of the other
+  look. `ThemeProvider` (in `RootLayout`, so bare routes drop it) then follows the public settings:
+  a changed theme takes over without a reload, with a loading state while its chunk loads, and a
+  theme that fails to load (offline, say) is replaced by Programme and not cached.
+- **Demo:** the web demo offers one fictional school per theme ([demo-mode.md](demo-mode.md), "Two
+  demo schools"); `web/e2e/werkstatt.spec.ts` drives the Werkstatt one.
+
 ## Decision records
 
 Architectural decisions are recorded in [docs/decisions](decisions/).
