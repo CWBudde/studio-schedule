@@ -37,6 +37,7 @@ func (r settingsRepo) Get(ctx context.Context) (domain.Settings, error) {
 		LegalNotice:        row.LegalNotice.String,
 		AccentColor:        row.AccentColor.String,
 		Theme:              domain.Theme(row.Theme.String),
+		ReleasedThrough:    fromPgDate(row.ReleasedThrough),
 
 		WaitlistInviteExpiry: fromPgInterval(row.WaitlistInviteExpiry),
 		RedemptionMode:       domain.RedemptionMode(row.RedemptionMode),
@@ -160,6 +161,7 @@ func (r settingsRepo) Put(ctx context.Context, s domain.Settings) error {
 		LegalNotice:        pgText(s.LegalNotice),
 		AccentColor:        pgText(s.AccentColor),
 		Theme:              pgText(string(s.Theme)),
+		ReleasedThrough:    pgDate(s.ReleasedThrough),
 
 		WaitlistInviteExpiry: pgInterval(s.WaitlistInviteExpiry),
 		RedemptionMode:       string(s.RedemptionMode),

@@ -17,6 +17,7 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 		Currency: "EUR", ReceiptPrefix: "CS1",
 		ReleaseWeekday: time.Saturday, ReleaseTime: domain.TimeOfDay{Hour: 9, Minute: 30}, ReleaseWeeksAhead: 2,
 		BookingCutoff: 30 * time.Minute, CancellationCutoff: 12 * time.Hour, DefaultVisibleDays: 21,
+		ReleasedThrough:      domain.Date{Year: 2027, Month: time.March, Day: 28},
 		LegalNotice:          "Contract School, Example Street 1, 00000 Example Town",
 		AccentColor:          "#7a1f3d",
 		WaitlistInviteExpiry: 90 * time.Minute,
@@ -61,6 +62,7 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 			updated.BookingCutoff = 0
 			updated.LegalNotice = ""
 			updated.AccentColor = ""
+			updated.ReleasedThrough = domain.Date{}
 			updated.WaitlistInviteExpiry = 30 * 24 * time.Hour
 			updated.RedemptionMode = domain.RedeemOnBooking
 			updated.Receipts = domain.ReceiptSettings{}

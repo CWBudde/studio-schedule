@@ -470,24 +470,42 @@ type BookingRules struct {
 	CancellationCutoff   time.Duration
 	WaitlistInviteExpiry time.Duration
 	DefaultVisibleDays   int
+	// ReleasedThrough is the manual released-through date, zero for none
+	// (ADR 0003, amendment 2026-10-31).
+	ReleasedThrough domain.Date
 }
 
 // SetBookingRules changes the booking rules from now on. Released lessons
 // stay released, but a narrower window holds back the ones it no longer
-// reaches. A wider window (more weeks ahead or more days of early access)
-// generates the lessons it reaches right away, after the change is stored,
-// rather than at the next hourly run; SettingsView.Generated counts them.
-// The change is stored either way: a failure to generate is no error but
-// SettingsView.GenerateErr, and the hourly job generates the lessons.
+// reaches. A wider window (more weeks ahead, more days of early access or
+// a later released-through date) generates the lessons it reaches right
+// away, after the change is stored, rather than at the next hourly run;
+// SettingsView.Generated counts them. The change is stored either way: a
+// failure to generate is no error but SettingsView.GenerateErr, and the
+// hourly job generates the lessons. The released-through date may lie at
+// most 52 weeks after today (domain.ValidateReleasedThrough); a past one
+// is kept and has no effect.
 func (s *SettingsService) SetBookingRules(ctx context.Context, r BookingRules) (SettingsView, error) {
 	var widened bool
 
 	out, err := s.update(ctx, "booking rules", viewWindow, func(settings *domain.Settings, _ store.SettingsUsage) error {
-		widened = r.ReleaseWeeksAhead > settings.ReleaseWeeksAhead || r.DefaultVisibleDays > settings.DefaultVisibleDays
+		// Valid settings name a known zone.
+		loc, err := time.LoadLocation(settings.Timezone)
+		if err != nil {
+			return fmt.Errorf("school time zone %q: %w", settings.Timezone, err)
+		}
+
+		if err := domain.ValidateReleasedThrough(r.ReleasedThrough, domain.DateOf(s.clock.Now(), loc)); err != nil {
+			return err
+		}
+
+		widened = r.ReleaseWeeksAhead > settings.ReleaseWeeksAhead || r.DefaultVisibleDays > settings.DefaultVisibleDays ||
+			r.ReleasedThrough.Compare(settings.ReleasedThrough) > 0
 		settings.ReleaseWeekday, settings.ReleaseTime, settings.ReleaseWeeksAhead = r.ReleaseWeekday, r.ReleaseTime,
 			r.ReleaseWeeksAhead
 		settings.BookingCutoff, settings.CancellationCutoff = r.BookingCutoff, r.CancellationCutoff
 		settings.WaitlistInviteExpiry, settings.DefaultVisibleDays = r.WaitlistInviteExpiry, r.DefaultVisibleDays
+		settings.ReleasedThrough = r.ReleasedThrough
 
 		return nil
 	})
@@ -509,15 +527,23 @@ type ReleasePreview struct {
 	Window ReleaseWindow
 }
 
+// ReleaseRule is a release rule being typed: the weekly rule and the
+// manual released-through date (zero for none).
+type ReleaseRule struct {
+	Weekday         time.Weekday
+	Time            domain.TimeOfDay
+	WeeksAhead      int
+	ReleasedThrough domain.Date
+}
+
 // PreviewRelease computes the release window of a release rule at the
 // current instant in the school's time zone, without storing anything, so
 // the form shows what a change would release. Only the rule is checked
-// (domain.ValidateReleaseRule): out-of-range values are FieldErrors on
-// releaseWeekday, releaseTime and releaseWeeksAhead.
-func (s *SettingsService) PreviewRelease(
-	ctx context.Context, weekday time.Weekday, at domain.TimeOfDay, weeksAhead int,
-) (ReleasePreview, error) {
-	if err := domain.ValidateReleaseRule(weekday, at, weeksAhead); err != nil {
+// (domain.ValidateReleaseRule, domain.ValidateReleasedThrough):
+// out-of-range values are FieldErrors on releaseWeekday, releaseTime,
+// releaseWeeksAhead and releasedThrough.
+func (s *SettingsService) PreviewRelease(ctx context.Context, r ReleaseRule) (ReleasePreview, error) {
+	if err := domain.ValidateReleaseRule(r.Weekday, r.Time, r.WeeksAhead); err != nil {
 		return ReleasePreview{}, err
 	}
 
@@ -529,8 +555,13 @@ func (s *SettingsService) PreviewRelease(
 			return err
 		}
 
-		settings.ReleaseWeekday, settings.ReleaseTime, settings.ReleaseWeeksAhead = weekday, at, weeksAhead
 		out.Now = s.clock.Now()
+		if err := domain.ValidateReleasedThrough(r.ReleasedThrough, domain.DateOf(out.Now, loc)); err != nil {
+			return err
+		}
+
+		settings.ReleaseWeekday, settings.ReleaseTime, settings.ReleaseWeeksAhead = r.Weekday, r.Time, r.WeeksAhead
+		settings.ReleasedThrough = r.ReleasedThrough
 		out.Window = ComputeReleaseWindow(settings, loc, out.Now)
 
 		return nil

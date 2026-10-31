@@ -60,7 +60,8 @@ func (g *LessonGenerator) GenerateAhead(ctx context.Context) (int, error) {
 // horizon returns the school dates [from, to) that generation keeps filled:
 // from today to max(7·(ReleaseWeeksAhead+2), visible days) + 7 days after
 // it (inclusive), visible days being the longest early access of any
-// account (DefaultVisibleDays or an account's override). The horizon covers
+// account (DefaultVisibleDays or an account's override), and at least to
+// 7 days after a manual ReleasedThrough date. The horizon covers
 // everything a release or a member's view can reach before the next hourly
 // run.
 func horizon(ctx context.Context, tx store.Tx, s domain.Settings, today domain.Date) (from, to domain.Date, err error) {
@@ -71,6 +72,12 @@ func horizon(ctx context.Context, tx store.Tx, s domain.Settings, today domain.D
 
 	visible := max(s.DefaultVisibleDays, longest)
 	ahead := max(7*(s.ReleaseWeeksAhead+2), visible) + 7
+
+	// The manual released-through date releases through a fixed day; the
+	// horizon reaches a week past it, as it reaches a week past early access.
+	if !s.ReleasedThrough.IsZero() {
+		ahead = max(ahead, today.DaysUntil(s.ReleasedThrough)+7)
+	}
 
 	return today, today.AddDays(ahead + 1), nil
 }

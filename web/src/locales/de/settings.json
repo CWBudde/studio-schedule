@@ -12,7 +12,8 @@
     "weeksAhead": "Gib eine ganze Zahl von 1 bis 52 ein.",
     "visibleDays": "Gib eine ganze Zahl von 1 bis 366 ein.",
     "cutoff": "Gib eine ganze Zahl ein, höchstens 30 Tage.",
-    "inviteExpiry": "Gib eine ganze Zahl ein, mindestens 1 Minute und höchstens 30 Tage."
+    "inviteExpiry": "Gib eine ganze Zahl ein, mindestens 1 Minute und höchstens 30 Tage.",
+    "releasedThroughLatest": "Wähle einen Tag höchstens 52 Wochen ab heute."
   },
   "school": {
     "title": "Schule",
@@ -93,6 +94,13 @@
     "releaseTime": "Uhrzeit der Freigabe",
     "releaseWeeksAhead": "Wochen im Voraus freigegeben",
     "releaseWeeksAheadHint": "Jede Freigabe öffnet die Stunden bis zum selben Tag so viele Wochen später.",
+    "manualReleasedThrough": "Zusätzlich freigeben bis einschließlich",
+    "manualReleasedThroughHint": "Optional: gibt den Stundenplan bis zu diesem Tag frei, auch bevor die wöchentliche Freigabe ihn erreicht. Das Datum erweitert die wöchentliche Freigabe nur und hält nichts zurück; sobald die wöchentliche Freigabe über diesen Tag hinausgeht, wirkt es nicht mehr.",
+    "manualReleasedThroughClear": "Datum entfernen",
+    "ruleReleasesThrough": "Die wöchentliche Freigabe allein reicht bis einschließlich {{date}}.",
+    "manualExtends": "Dieses Datum erweitert die Freigabe: Die wöchentliche Freigabe allein reicht bis einschließlich {{date}}.",
+    "manualNoEffect": "Dieses Datum wirkt derzeit nicht: Die wöchentliche Freigabe reicht schon bis einschließlich {{date}}.",
+    "ruleReleasedThrough": "Wöchentliche Freigabe allein bis",
     "bookingCutoff": "Buchung schließt vor Beginn",
     "bookingCutoffHint": "0: Buchen ist bis zum Beginn der Stunde möglich.",
     "cancellationCutoff": "Stornieren schließt vor Beginn",
@@ -121,7 +129,7 @@
     "releasedThrough": "Freigegeben bis einschließlich",
     "previewHint": "Mit diesen Regeln, ab jetzt.",
     "previewLoading": "Die Freigabe wird berechnet …",
-    "previewIncomplete": "Regel unvollständig: Gib eine Uhrzeit und 1 bis 52 Wochen an, um zu sehen, was sie freigibt.",
+    "previewIncomplete": "Regel unvollständig: Gib eine Uhrzeit, 1 bis 52 Wochen und ein Datum höchstens 52 Wochen voraus (oder keins) an, um zu sehen, was sie freigibt.",
     "previewFailed": "Die Freigabe konnte nicht berechnet werden.",
     "generated_one": "Die Einstellungen wurden gespeichert. {{count}} Stunde des größeren Zeitraums wurde angelegt.",
     "generated_other": "Die Einstellungen wurden gespeichert. {{count}} Stunden des größeren Zeitraums wurden angelegt."

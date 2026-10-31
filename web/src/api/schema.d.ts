@@ -866,7 +866,7 @@ export interface paths {
         get: operations["getBookingRules"];
         /**
          * Update the booking rules
-         * @description Replaces the booking rules from now on. A wider window (more weeks ahead, more days of early access) generates the lessons it reaches at once (`generatedLessons`). Invalid fields are a 422 on them.
+         * @description Replaces the booking rules from now on. A wider window (more weeks ahead, more days of early access, a later released-through date) generates the lessons it reaches at once (`generatedLessons`). Invalid fields are a 422 on them.
          */
         put: operations["updateBookingRules"];
         post?: never;
@@ -3330,6 +3330,11 @@ export interface components {
              */
             releaseWeeksAhead: number;
             /**
+             * Format: date
+             * @description A school date through which the schedule is released beyond the weekly rule; it only extends the release and has no effect once the rule reaches past it. At most 52 weeks after today; absent: none.
+             */
+            releasedThrough?: string;
+            /**
              * Format: int64
              * @description How long a waiting-list invite holds its place, in minutes (never beyond the booking cutoff).
              */
@@ -3368,6 +3373,11 @@ export interface components {
              * @description Each release opens the lessons up to the same weekday this many weeks later.
              */
             releaseWeeksAhead: number;
+            /**
+             * Format: date
+             * @description A school date through which the schedule is released beyond the weekly rule; it only extends the release and has no effect once the rule reaches past it. At most 52 weeks after today; absent: none.
+             */
+            releasedThrough?: string;
             /**
              * Format: int64
              * @description How long a waiting-list invite holds its place, in minutes (never beyond the booking cutoff).
@@ -6608,9 +6618,14 @@ export interface components {
             now: string;
             /**
              * Format: date-time
-             * @description Regular lessons that start before this instant are released.
+             * @description Regular lessons that start before this instant are released: the later of ruleReleasedUntil and midnight after the released-through date.
              */
             releasedUntil: string;
+            /**
+             * Format: date-time
+             * @description Where the weekly rule alone releases through, without the released-through date.
+             */
+            ruleReleasedUntil: string;
         };
         RequestEmailChangeInputBody: {
             /** @description Language of the mail (BCP 47), e.g. de; defaults to the school's. */
@@ -9366,6 +9381,8 @@ export interface operations {
                 releaseTime: string;
                 /** @description How many weeks each release opens. */
                 releaseWeeksAhead: number;
+                /** @description The released-through date being typed; absent: none. */
+                releasedThrough?: string;
             };
             header?: never;
             path?: never;

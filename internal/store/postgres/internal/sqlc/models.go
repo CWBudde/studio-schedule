@@ -406,6 +406,7 @@ type Setting struct {
 	Background           []byte
 	BackgroundType       pgtype.Text
 	BackgroundDigest     pgtype.Text
+	ReleasedThrough      pgtype.Date
 }
 
 type Staff struct {

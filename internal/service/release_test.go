@@ -220,3 +220,111 @@ func TestReleaseWindowBoundary(t *testing.T) {
 		t.Error("Saturday 31st 00:00 must not be released")
 	}
 }
+
+// TestReleasedThroughExtendsWindow checks the manual released-through date
+// (ADR 0003, amendment 2026-10-31): the window ends at the later of the
+// rule's end and school-local midnight after the date; the rule's own end
+// stays in RuleReleasedUntil.
+func TestReleasedThroughExtendsWindow(t *testing.T) {
+	t.Parallel()
+
+	berlin := mustZone(t, "Europe/Berlin")
+	at := func(y int, m time.Month, d, hh int) time.Time { return time.Date(y, m, d, hh, 0, 0, 0, berlin) }
+	utc := func(y int, m time.Month, d, hh int) time.Time { return time.Date(y, m, d, hh, 0, 0, 0, time.UTC) }
+
+	// Friday 18:00, two weeks ahead; at the release on Friday the 16th the
+	// rule releases through Friday the 30th (until Saturday the 31st 00:00).
+	now := at(2026, time.October, 16, 18)
+	ruleEnd := utc(2026, time.October, 30, 23) // Saturday 31st 00:00 CET
+
+	tests := []struct {
+		name    string
+		through domain.Date
+		want    time.Time
+	}{
+		{name: "no date", want: ruleEnd},
+		{name: "a date in the past", through: domain.Date{Year: 2026, Month: time.October, Day: 1}, want: ruleEnd},
+		{name: "a date before the rule's end", through: domain.Date{Year: 2026, Month: time.October, Day: 29}, want: ruleEnd},
+		{name: "the rule's last day", through: domain.Date{Year: 2026, Month: time.October, Day: 30}, want: ruleEnd},
+		{
+			name:    "a date after the rule's end, across the end of DST",
+			through: domain.Date{Year: 2026, Month: time.November, Day: 20},
+			want:    utc(2026, time.November, 20, 23), // Saturday 21st 00:00 CET
+		},
+		{
+			name:    "a date across the start of DST: midnight CEST",
+			through: domain.Date{Year: 2027, Month: time.March, Day: 28},
+			want:    utc(2027, time.March, 28, 22), // Monday 29th 00:00 CEST
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			s := releaseSettings(time.Friday, domain.TimeOfDay{Hour: 18}, 2)
+			s.ReleasedThrough = tt.through
+
+			got := ComputeReleaseWindow(s, berlin, now)
+			if !got.ReleasedUntil.Equal(tt.want) {
+				t.Errorf("ReleasedUntil = %v, want %v", got.ReleasedUntil, tt.want)
+			}
+
+			if !got.RuleReleasedUntil.Equal(ruleEnd) {
+				t.Errorf("RuleReleasedUntil = %v, want %v", got.RuleReleasedUntil, ruleEnd)
+			}
+
+			if !got.LastRelease.Equal(now) || !got.NextRelease.Equal(at(2026, time.October, 23, 18)) {
+				t.Errorf("the date moved the releases: %v, %v", got.LastRelease, got.NextRelease)
+			}
+		})
+	}
+
+	// Once the weekly rule passes the date, the date has no effect.
+	s := releaseSettings(time.Friday, domain.TimeOfDay{Hour: 18}, 2)
+	s.ReleasedThrough = domain.Date{Year: 2026, Month: time.November, Day: 3}
+
+	later := ComputeReleaseWindow(s, berlin, at(2026, time.October, 23, 18))
+	if !later.ReleasedUntil.Equal(later.RuleReleasedUntil) {
+		t.Errorf("after the rule passed the date: ReleasedUntil = %v, want the rule's %v",
+			later.ReleasedUntil, later.RuleReleasedUntil)
+	}
+}
+
+// TestReleasedThroughVisibility: guests see regular lessons through the
+// date; members' visibleUntil is the later of the date and their early
+// access, which only adds to it.
+func TestReleasedThroughVisibility(t *testing.T) {
+	t.Parallel()
+
+	berlin := mustZone(t, "Europe/Berlin")
+	now := time.Date(2026, time.October, 21, 12, 0, 0, 0, berlin)
+
+	s := releaseSettings(time.Sunday, domain.TimeOfDay{Hour: 18}, 1) // released until Monday the 26th
+	s.DefaultVisibleDays = 14                                        // members until Thursday, November 5th
+	s.ReleasedThrough = domain.Date{Year: 2026, Month: time.November, Day: 20}
+	w := ComputeReleaseWindow(s, berlin, now)
+
+	regular := func(startsAt time.Time) domain.Lesson {
+		return domain.Lesson{StartsAt: startsAt, Visibility: domain.VisibilityPublic, Kind: domain.LessonRegular}
+	}
+
+	if !visibleToGuest(regular(time.Date(2026, time.November, 20, 23, 59, 0, 0, berlin)), w) {
+		t.Error("a guest must see the last minute of the released-through date")
+	}
+
+	if visibleToGuest(regular(time.Date(2026, time.November, 21, 0, 0, 0, 0, berlin)), w) {
+		t.Error("a guest must not see the day after the released-through date")
+	}
+
+	member := Principal{AccountID: domain.AccountID{1}, Role: domain.RoleMember}
+	if got, want := viewerOf(member, s, berlin, now).visibleUntil(w), w.ReleasedUntil; !got.Equal(want) {
+		t.Errorf("member visibleUntil = %v, want the released-through end %v", got, want)
+	}
+
+	member.VisibleDays = 60 // early access beyond the date still adds
+	if got, want := viewerOf(member, s, berlin, now).visibleUntil(w),
+		time.Date(2026, time.December, 21, 0, 0, 0, 0, berlin); !got.Equal(want) {
+		t.Errorf("member with 60 days: visibleUntil = %v, want %v", got, want)
+	}
+}

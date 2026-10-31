@@ -520,18 +520,24 @@ func TestGenerateAhead(t *testing.T) {
 		weeksAhead  int
 		visibleDays int
 		accountDays int    // an account's visible-days override; 0 = none
+		through     string // the manual released-through date; "" = none
 		first, last string // first and last Friday lesson, school dates
 	}{
 		// max(7·(1+2), 14) + 7 = 28 days: [10-23, 11-21).
-		{"release window dominates", 1, 14, 0, "2026-10-23", "2026-11-20"},
+		{"release window dominates", 1, 14, 0, "", "2026-10-23", "2026-11-20"},
 		// max(7·(1+2), 30) + 7 = 37 days: [10-23, 11-30).
-		{"visible days dominate", 1, 30, 0, "2026-10-23", "2026-11-27"},
+		{"visible days dominate", 1, 30, 0, "", "2026-10-23", "2026-11-27"},
 		// max(7·(3+2), 14) + 7 = 42 days: [10-23, 12-05).
-		{"more weeks ahead", 3, 14, 0, "2026-10-23", "2026-12-04"},
+		{"more weeks ahead", 3, 14, 0, "", "2026-10-23", "2026-12-04"},
 		// max(7·(1+2), 45) + 7 = 52 days: [10-23, 12-15).
-		{"an account's early access dominates", 1, 14, 45, "2026-10-23", "2026-12-11"},
+		{"an account's early access dominates", 1, 14, 45, "", "2026-10-23", "2026-12-11"},
 		// A shorter override does not shorten the horizon.
-		{"a shorter override", 1, 30, 5, "2026-10-23", "2026-11-27"},
+		{"a shorter override", 1, 30, 5, "", "2026-10-23", "2026-11-27"},
+		// The released-through date plus 7 days: [10-23, 2027-01-23).
+		{"a released-through date dominates", 1, 14, 0, "2027-01-15", "2026-10-23", "2027-01-22"},
+		// A date inside the horizon, or in the past, changes nothing.
+		{"an earlier released-through date", 1, 14, 0, "2026-11-06", "2026-10-23", "2026-11-20"},
+		{"a past released-through date", 1, 14, 0, "2026-10-01", "2026-10-23", "2026-11-20"},
 	}
 
 	for _, tt := range tests {
@@ -541,6 +547,10 @@ func TestGenerateAhead(t *testing.T) {
 			settings := seed.DemoSettings()
 			settings.ReleaseWeeksAhead = tt.weeksAhead
 			settings.DefaultVisibleDays = tt.visibleDays
+
+			if tt.through != "" {
+				settings.ReleasedThrough = mustDate(t, tt.through)
+			}
 
 			f := newGenFixture(t, settings)
 			f.addClass(t, time.Friday, domain.TimeOfDay{Hour: 19})

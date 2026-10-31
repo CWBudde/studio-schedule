@@ -194,8 +194,8 @@ func registerSettings(api huma.API, h *handlers) {
 		Path:        BasePath + "/admin/settings/booking-rules",
 		Summary:     "Update the booking rules",
 		Description: "Replaces the booking rules from now on. A wider window (more weeks ahead, more days of " +
-			"early access) generates the lessons it reaches at once (`generatedLessons`). Invalid fields are a " +
-			"422 on them.",
+			"early access, a later released-through date) generates the lessons it reaches at once " +
+			"(`generatedLessons`). Invalid fields are a 422 on them.",
 		Tags: tags,
 	}, h.updateBookingRules)
 
@@ -532,14 +532,16 @@ type BookingRulesData struct {
 	CancellationCutoffMinutes   int              `doc:"Canceling without losing the visit closes this many minutes before a lesson starts; 0: at the start." json:"cancellationCutoffMinutes" maximum:"43200" minimum:"0"`
 	WaitlistInviteExpiryMinutes int              `doc:"How long a waiting-list invite holds its place, in minutes (never beyond the booking cutoff)." json:"waitlistInviteExpiryMinutes" maximum:"43200" minimum:"1"`
 	DefaultVisibleDays          int              `doc:"Early access: members see the lessons they may see this many days ahead, released or not, unless their account says otherwise." json:"defaultVisibleDays" maximum:"366" minimum:"1"`
+	ReleasedThrough             domain.Date      `doc:"A school date through which the schedule is released beyond the weekly rule; it only extends the release and has no effect once the rule reaches past it. At most 52 weeks after today; absent: none." format:"date" json:"releasedThrough,omitzero" required:"false"`
 }
 
 // ReleaseWindowBody is the release window of a rule at an instant.
 type ReleaseWindowBody struct {
-	Now           time.Time `doc:"The instant the window is computed at."                   json:"now"`
-	LastReleaseAt time.Time `doc:"The latest release at or before now."                     json:"lastReleaseAt"`
-	NextReleaseAt time.Time `doc:"The next release."                                        json:"nextReleaseAt"`
-	ReleasedUntil time.Time `doc:"Regular lessons that start before this instant are released." json:"releasedUntil"`
+	Now               time.Time `doc:"The instant the window is computed at."                   json:"now"`
+	LastReleaseAt     time.Time `doc:"The latest release at or before now."                     json:"lastReleaseAt"`
+	NextReleaseAt     time.Time `doc:"The next release."                                        json:"nextReleaseAt"`
+	ReleasedUntil     time.Time `doc:"Regular lessons that start before this instant are released: the later of ruleReleasedUntil and midnight after the released-through date." json:"releasedUntil"`
+	RuleReleasedUntil time.Time `doc:"Where the weekly rule alone releases through, without the released-through date." json:"ruleReleasedUntil"`
 }
 
 // BookingRules is the response body of the booking rules.
@@ -581,6 +583,7 @@ func (h *handlers) updateBookingRules(ctx context.Context, in *BookingRulesInput
 		CancellationCutoff:   time.Duration(b.CancellationCutoffMinutes) * time.Minute,
 		WaitlistInviteExpiry: time.Duration(b.WaitlistInviteExpiryMinutes) * time.Minute,
 		DefaultVisibleDays:   b.DefaultVisibleDays,
+		ReleasedThrough:      b.ReleasedThrough,
 	})
 
 	var fe *domain.FieldError
@@ -612,6 +615,7 @@ func (h *handlers) bookingRulesOutput(ctx context.Context) func(service.Settings
 				CancellationCutoffMinutes:   int(v.CancellationCutoff / time.Minute),
 				WaitlistInviteExpiryMinutes: int(v.WaitlistInviteExpiry / time.Minute),
 				DefaultVisibleDays:          v.DefaultVisibleDays,
+				ReleasedThrough:             v.ReleasedThrough,
 			},
 			Window:           releaseWindowBody(v.Now, v.Window),
 			GeneratedLessons: v.Generated,
@@ -622,15 +626,16 @@ func (h *handlers) bookingRulesOutput(ctx context.Context) func(service.Settings
 func releaseWindowBody(now time.Time, w service.ReleaseWindow) ReleaseWindowBody {
 	return ReleaseWindowBody{
 		Now: now.UTC(), LastReleaseAt: w.LastRelease.UTC(), NextReleaseAt: w.NextRelease.UTC(),
-		ReleasedUntil: w.ReleasedUntil.UTC(),
+		ReleasedUntil: w.ReleasedUntil.UTC(), RuleReleasedUntil: w.RuleReleasedUntil.UTC(),
 	}
 }
 
 // PreviewReleaseWindowInput is the request of previewReleaseWindow.
 type PreviewReleaseWindowInput struct {
-	ReleaseWeekday    int    `doc:"The day of the weekly release, 0 = Sunday to 6 = Saturday." maximum:"6" minimum:"0" query:"releaseWeekday" required:"true"`
-	ReleaseTime       string `doc:"The time of the release (HH:MM) in the school time zone." example:"18:00" pattern:"^[0-2][0-9]:[0-5][0-9]$" query:"releaseTime" required:"true"`
-	ReleaseWeeksAhead int    `doc:"How many weeks each release opens." maximum:"52" minimum:"1" query:"releaseWeeksAhead" required:"true"`
+	ReleaseWeekday    int         `doc:"The day of the weekly release, 0 = Sunday to 6 = Saturday." maximum:"6" minimum:"0" query:"releaseWeekday" required:"true"`
+	ReleaseTime       string      `doc:"The time of the release (HH:MM) in the school time zone." example:"18:00" pattern:"^[0-2][0-9]:[0-5][0-9]$" query:"releaseTime" required:"true"`
+	ReleaseWeeksAhead int         `doc:"How many weeks each release opens." maximum:"52" minimum:"1" query:"releaseWeeksAhead" required:"true"`
+	ReleasedThrough   domain.Date `doc:"The released-through date being typed; absent: none." format:"date" query:"releasedThrough"`
 }
 
 // PreviewReleaseWindowOutput is the response of previewReleaseWindow.
@@ -648,7 +653,10 @@ func (h *handlers) previewReleaseWindow(
 		})
 	}
 
-	p, err := h.deps.Settings.PreviewRelease(ctx, time.Weekday(in.ReleaseWeekday), at, in.ReleaseWeeksAhead)
+	p, err := h.deps.Settings.PreviewRelease(ctx, service.ReleaseRule{
+		Weekday: time.Weekday(in.ReleaseWeekday), Time: at, WeeksAhead: in.ReleaseWeeksAhead,
+		ReleasedThrough: in.ReleasedThrough,
+	})
 
 	// The rule comes in the query, so its errors are located there.
 	var fe *domain.FieldError

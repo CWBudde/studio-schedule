@@ -137,42 +137,69 @@ export const durations = [
   },
 ] as const;
 
+const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Whether v is a school date (YYYY-MM-DD) that exists. */
+export function isSchoolDate(v: string): boolean {
+  if (!datePattern.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
+/** How many days after today the released-through date may lie: 52 weeks, as in the API. */
+export const maxReleasedThroughDays = 7 * 52;
+
 /**
  * The booking rules: the release (weekday 0 = Sunday, time, weeks ahead),
- * three durations entered in a unit each, and the days of early access.
- * The output is the API's body, the durations in minutes.
+ * the optional released-through date (empty for none; at most `latest`, the
+ * school date 52 weeks after today, when known), three durations entered in
+ * a unit each, and the days of early access. The output is the API's body,
+ * the durations in minutes; an empty date is left out.
  */
-export const rulesSchema = z
-  .object({
-    releaseWeekday: z.enum(['0', '1', '2', '3', '4', '5', '6']),
-    releaseTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'startTime'),
-    releaseWeeksAhead: whole.refine((v) => +v >= 1 && +v <= 52, 'weeksAhead'),
-    bookingCutoff: whole,
-    bookingCutoffUnit: z.enum(units),
-    cancellationCutoff: whole,
-    cancellationCutoffUnit: z.enum(units),
-    waitlistInviteExpiry: whole,
-    waitlistInviteExpiryUnit: z.enum(units),
-    defaultVisibleDays: whole.refine((v) => +v >= 1 && +v <= 366, 'visibleDays'),
-  })
-  .superRefine((v, ctx) => {
-    for (const d of durations) {
-      const minutes = Number(v[d.field]) * unitMinutes[v[`${d.field}Unit`]];
-      if (minutes < d.min || minutes > maxMinutes) {
-        ctx.addIssue({ code: 'custom', path: [d.field], message: d.message });
+export const rulesSchemaUntil = (latest?: string) =>
+  z
+    .object({
+      releaseWeekday: z.enum(['0', '1', '2', '3', '4', '5', '6']),
+      releaseTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'startTime'),
+      releaseWeeksAhead: whole.refine((v) => +v >= 1 && +v <= 52, 'weeksAhead'),
+      releasedThrough: z
+        .string()
+        .trim()
+        .refine((v) => v === '' || isSchoolDate(v), 'date')
+        .refine(
+          (v) => v === '' || !latest || !isSchoolDate(v) || v <= latest,
+          'releasedThroughLatest',
+        ),
+      bookingCutoff: whole,
+      bookingCutoffUnit: z.enum(units),
+      cancellationCutoff: whole,
+      cancellationCutoffUnit: z.enum(units),
+      waitlistInviteExpiry: whole,
+      waitlistInviteExpiryUnit: z.enum(units),
+      defaultVisibleDays: whole.refine((v) => +v >= 1 && +v <= 366, 'visibleDays'),
+    })
+    .superRefine((v, ctx) => {
+      for (const d of durations) {
+        const minutes = Number(v[d.field]) * unitMinutes[v[`${d.field}Unit`]];
+        if (minutes < d.min || minutes > maxMinutes) {
+          ctx.addIssue({ code: 'custom', path: [d.field], message: d.message });
+        }
       }
-    }
-  })
-  .transform((v): BookingRulesData => ({
-    releaseWeekday: Number(v.releaseWeekday),
-    releaseTime: v.releaseTime,
-    releaseWeeksAhead: Number(v.releaseWeeksAhead),
-    bookingCutoffMinutes: Number(v.bookingCutoff) * unitMinutes[v.bookingCutoffUnit],
-    cancellationCutoffMinutes: Number(v.cancellationCutoff) * unitMinutes[v.cancellationCutoffUnit],
-    waitlistInviteExpiryMinutes:
-      Number(v.waitlistInviteExpiry) * unitMinutes[v.waitlistInviteExpiryUnit],
-    defaultVisibleDays: Number(v.defaultVisibleDays),
-  }));
+    })
+    .transform((v): BookingRulesData => ({
+      releaseWeekday: Number(v.releaseWeekday),
+      releaseTime: v.releaseTime,
+      releaseWeeksAhead: Number(v.releaseWeeksAhead),
+      ...(v.releasedThrough ? { releasedThrough: v.releasedThrough } : {}),
+      bookingCutoffMinutes: Number(v.bookingCutoff) * unitMinutes[v.bookingCutoffUnit],
+      cancellationCutoffMinutes:
+        Number(v.cancellationCutoff) * unitMinutes[v.cancellationCutoffUnit],
+      waitlistInviteExpiryMinutes:
+        Number(v.waitlistInviteExpiry) * unitMinutes[v.waitlistInviteExpiryUnit],
+      defaultVisibleDays: Number(v.defaultVisibleDays),
+    }));
+
+export const rulesSchema = rulesSchemaUntil();
 
 export type RulesValues = z.input<typeof rulesSchema>;
 export type RulesField = keyof RulesValues;
@@ -185,6 +212,7 @@ export function rulesValues(r: BookingRules): RulesValues {
     releaseWeekday: String(r.releaseWeekday) as RulesValues['releaseWeekday'],
     releaseTime: r.releaseTime,
     releaseWeeksAhead: String(r.releaseWeeksAhead),
+    releasedThrough: r.releasedThrough ?? '',
     bookingCutoff: booking.amount,
     bookingCutoffUnit: booking.unit,
     cancellationCutoff: cancellation.amount,
@@ -200,6 +228,7 @@ export const rulesServerFields: Partial<Record<keyof BookingRulesData, RulesFiel
   releaseWeekday: 'releaseWeekday',
   releaseTime: 'releaseTime',
   releaseWeeksAhead: 'releaseWeeksAhead',
+  releasedThrough: 'releasedThrough',
   bookingCutoffMinutes: 'bookingCutoff',
   cancellationCutoffMinutes: 'cancellationCutoff',
   waitlistInviteExpiryMinutes: 'waitlistInviteExpiry',

@@ -427,6 +427,43 @@ func TestBookVisibility(t *testing.T) {
 	}
 }
 
+// TestBookReleasedThrough books up to the manual released-through date,
+// beyond the weekly release and early access (ADR 0003, amendment
+// 2026-10-31), and not after it.
+func TestBookReleasedThrough(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newBookingFixture(t)
+	f.write(t, func(ctx context.Context, tx store.Tx) error {
+		s, err := tx.Settings().Get(ctx)
+		s.ReleasedThrough = domain.Date{Year: 2026, Month: time.November, Day: 20}
+
+		return errors.Join(err, tx.Settings().Put(ctx, s))
+	})
+
+	svc := f.bookingService(t, bookingNow)
+	anna, olga := f.principal(t, f.anna), f.principal(t, f.olga)
+
+	last := f.regular(t, "2026-11-20T22:00:00Z")  // Friday 23:00 in Berlin, the last day released
+	after := f.regular(t, "2026-11-20T23:00:00Z") // Saturday 00:00 in Berlin
+
+	if _, err := svc.Book(ctx, anna, last.ID, f.mia.ID); err != nil {
+		t.Errorf("member books the last day released: %v", err)
+	}
+
+	if _, err := svc.Book(ctx, olga, last.ID, f.olga.ID); err != nil {
+		t.Errorf("office books the last day released: %v", err)
+	}
+
+	if _, err := svc.Book(ctx, anna, after.ID, f.mia.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("member books the day after: want ErrNotFound, got %v", err)
+	}
+
+	_, err := svc.Book(ctx, olga, after.ID, f.olga.ID)
+	wantClosed(t, err, ClosedRelease)
+}
+
 func TestBookCanceledLesson(t *testing.T) {
 	t.Parallel()
 

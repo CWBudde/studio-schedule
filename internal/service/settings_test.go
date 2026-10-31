@@ -314,7 +314,7 @@ func TestSettingsGetAndPreview(t *testing.T) {
 		t.Errorf("school = %+v, %v; want neither usage nor window", s, err)
 	}
 
-	p, err := svc.PreviewRelease(t.Context(), time.Friday, domain.TimeOfDay{Hour: 9}, 3)
+	p, err := svc.PreviewRelease(t.Context(), service.ReleaseRule{Weekday: time.Friday, Time: domain.TimeOfDay{Hour: 9}, WeeksAhead: 3})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,10 +332,10 @@ func TestSettingsGetAndPreview(t *testing.T) {
 		t.Errorf("the preview changed the settings: %+v", again.Settings)
 	}
 
-	_, err = svc.PreviewRelease(t.Context(), time.Friday, domain.TimeOfDay{Hour: 9}, 53)
+	_, err = svc.PreviewRelease(t.Context(), service.ReleaseRule{Weekday: time.Friday, Time: domain.TimeOfDay{Hour: 9}, WeeksAhead: 53})
 	wantField(t, err, "releaseWeeksAhead")
 
-	_, err = svc.PreviewRelease(t.Context(), time.Weekday(7), domain.TimeOfDay{Hour: 9}, 2)
+	_, err = svc.PreviewRelease(t.Context(), service.ReleaseRule{Weekday: time.Weekday(7), Time: domain.TimeOfDay{Hour: 9}, WeeksAhead: 2})
 	wantField(t, err, "releaseWeekday")
 }
 
@@ -356,7 +356,7 @@ func TestSettingsPreviewIgnoresOtherSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := svc.PreviewRelease(t.Context(), time.Friday, domain.TimeOfDay{Hour: 9}, 3); err != nil {
+	if _, err := svc.PreviewRelease(t.Context(), service.ReleaseRule{Weekday: time.Friday, Time: domain.TimeOfDay{Hour: 9}, WeeksAhead: 3}); err != nil {
 		t.Fatalf("preview with a stored invalid accent: %v", err)
 	}
 }
@@ -551,6 +551,116 @@ func TestSettingsSetBookingRules(t *testing.T) {
 	rules.WaitlistInviteExpiry = 0
 	_, err = svc.SetBookingRules(ctx, rules)
 	wantField(t, err, "waitlistInviteExpiry")
+}
+
+// TestSettingsReleasedThrough: the manual released-through date extends
+// the window, generates the lessons it reaches at once, may lie at most 52
+// weeks ahead, and a past date is kept without effect (ADR 0003, amendment
+// 2026-10-31).
+func TestSettingsReleasedThrough(t *testing.T) {
+	t.Parallel()
+
+	st, svc := newDemoSettings(t)
+	ctx := t.Context()
+	berlin, _ := time.LoadLocation("Europe/Berlin")
+
+	if _, err := service.NewLessonGenerator(st, clock.NewFixed(settingsNow), ids.V7{}).GenerateAhead(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	current, err := svc.BookingRules(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rules := service.BookingRules{
+		ReleaseWeekday: current.ReleaseWeekday, ReleaseTime: current.ReleaseTime,
+		ReleaseWeeksAhead: current.ReleaseWeeksAhead, BookingCutoff: current.BookingCutoff,
+		CancellationCutoff: current.CancellationCutoff, WaitlistInviteExpiry: current.WaitlistInviteExpiry,
+		DefaultVisibleDays: current.DefaultVisibleDays,
+		ReleasedThrough:    domain.Date{Year: 2027, Month: time.January, Day: 15},
+	}
+
+	v, err := svc.SetBookingRules(ctx, rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if v.ReleasedThrough != rules.ReleasedThrough || v.Generated == 0 {
+		t.Fatalf("stored %v, generated %d; want %v and new lessons", v.ReleasedThrough, v.Generated, rules.ReleasedThrough)
+	}
+
+	if want := time.Date(2027, time.January, 16, 0, 0, 0, 0, berlin); !v.Window.ReleasedUntil.Equal(want) {
+		t.Errorf("released until %v, want %v", v.Window.ReleasedUntil, want)
+	}
+
+	if want := time.Date(2026, time.October, 26, 0, 0, 0, 0, berlin); !v.Window.RuleReleasedUntil.Equal(want) {
+		t.Errorf("the rule releases until %v, want %v", v.Window.RuleReleasedUntil, want)
+	}
+
+	// The lessons of the last released week exist.
+	var count int
+
+	err = st.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		lessons, err := tx.Lessons().ListRange(ctx, v.Window.ReleasedUntil.AddDate(0, 0, -7), v.Window.ReleasedUntil)
+		count = len(lessons)
+
+		return err
+	})
+	if err != nil || count == 0 {
+		t.Fatalf("no lessons in the last released week: %v", err)
+	}
+
+	// The same date again: nothing to generate.
+	if v, err = svc.SetBookingRules(ctx, rules); err != nil || v.Generated != 0 {
+		t.Fatalf("same date: generated %d, %v", v.Generated, err)
+	}
+
+	// 52 weeks after today (Wednesday 2026-10-21) is the latest date.
+	rules.ReleasedThrough = domain.Date{Year: 2027, Month: time.October, Day: 20}
+	if _, err := svc.SetBookingRules(ctx, rules); err != nil {
+		t.Fatalf("52 weeks ahead: %v", err)
+	}
+
+	rules.ReleasedThrough = domain.Date{Year: 2027, Month: time.October, Day: 21}
+	_, err = svc.SetBookingRules(ctx, rules)
+	wantField(t, err, "releasedThrough")
+
+	// A past date is kept and has no effect.
+	rules.ReleasedThrough = domain.Date{Year: 2026, Month: time.October, Day: 1}
+	if v, err = svc.SetBookingRules(ctx, rules); err != nil {
+		t.Fatalf("past date: %v", err)
+	}
+
+	if v.ReleasedThrough != rules.ReleasedThrough || !v.Window.ReleasedUntil.Equal(v.Window.RuleReleasedUntil) {
+		t.Errorf("past date: stored %v, released until %v; want it kept without effect",
+			v.ReleasedThrough, v.Window.ReleasedUntil)
+	}
+
+	// Clearing it: the rule alone.
+	rules.ReleasedThrough = domain.Date{}
+	if v, err = svc.SetBookingRules(ctx, rules); err != nil || !v.ReleasedThrough.IsZero() {
+		t.Fatalf("cleared: %v, %v", v.ReleasedThrough, err)
+	}
+
+	// The preview takes the date being typed, and checks it.
+	p, err := svc.PreviewRelease(ctx, service.ReleaseRule{
+		Weekday: time.Sunday, Time: domain.TimeOfDay{Hour: 18}, WeeksAhead: 1,
+		ReleasedThrough: domain.Date{Year: 2026, Month: time.November, Day: 20},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := time.Date(2026, time.November, 21, 0, 0, 0, 0, berlin); !p.Window.ReleasedUntil.Equal(want) {
+		t.Errorf("preview: released until %v, want %v", p.Window.ReleasedUntil, want)
+	}
+
+	_, err = svc.PreviewRelease(ctx, service.ReleaseRule{
+		Weekday: time.Sunday, Time: domain.TimeOfDay{Hour: 18}, WeeksAhead: 1,
+		ReleasedThrough: domain.Date{Year: 2028, Month: time.January, Day: 1},
+	})
+	wantField(t, err, "releasedThrough")
 }
 
 // failingWrites fails every read-write transaction after the first n.

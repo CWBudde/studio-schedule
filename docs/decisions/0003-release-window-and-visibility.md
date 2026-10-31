@@ -80,3 +80,34 @@ it answers the first request), then on their interval.
   so its schedule is never empty. The server's demo seed (`seed.LoadDemo`, used by `serve` without
   a database and by `studio-schedule seed`) keeps the fixed school year 2026/27, so its schedule is
   empty once that term has ended.
+
+## Amendment (2026-10-31): a manual "released through" date
+
+The previous system had an office setting "Up to which day should the schedule be visible?". The
+school decided to keep it, but only to **extend** the weekly release, never to hold anything back.
+
+**The setting.** `Settings.ReleasedThrough` is an optional school date (`settings.released_through`,
+migration 00027; the zero `domain.Date`, NULL, is none). An admin edits it on the booking-rules
+card (ADR 0013), the office reads it.
+
+**The window.** `ComputeReleaseWindow` stays the one place that computes the release: its
+`ReleasedUntil` is the later of the rule's end (now also returned as `RuleReleasedUntil`) and
+school-local midnight after `ReleasedThrough` (`ReleasedThrough.AddDays(1).At(00:00, zone)`, so a
+DST change on that day does not shift it). `LastRelease` and `NextRelease` stay the rule's.
+Everything that reads the window picks the date up unchanged: what guests see, members'
+`visibleUntil` (early access still only adds; it is the later of the two), booking (ADR 0009),
+the calendar feeds (ADR 0011) and the booking-rules card. The client still never computes the
+window: the card's answer and its preview carry `releasedUntil` and `ruleReleasedUntil`, so the form
+shows whether the date reaches further than the rule.
+
+**No clean-up.** Once the weekly rule passes the date, the date has no effect, and nothing clears
+it. A past date is therefore allowed when saved too (it has no effect), so a stored date never keeps
+the card from saving after its day has passed. A date may lie at most 52 weeks (364 days) after
+today in the school's zone, the reach of the longest weekly release
+(`domain.ValidateReleasedThrough`, a field error on `releasedThrough`; the preview checks it the
+same way).
+
+**Generation.** The rolling horizon reaches at least 7 days past the date:
+`max(today + max(7·(ReleaseWeeksAhead + 2), visible days) + 7, ReleasedThrough + 7)`. Saving a later
+date counts as a wider window (ADR 0013): it generates the lessons it reaches at once with
+`GenerateAhead`.

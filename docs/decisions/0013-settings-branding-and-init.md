@@ -36,13 +36,16 @@ language what locks them (`Usage`), the booking rules the release window.
   tag. Migration 00018 rewrites a stored one to its base language when that is `en` or `de`, else to
   `en`, the app's fallback; the services read the settings the same way (`domain.SchoolLocale`), so a
   legacy value can never keep the other cards from saving.
-- `booking-rules`: the release weekday, time and weeks ahead, the booking and cancellation cutoffs
-  and the waiting-list invite hold in minutes, and the default early access in days; the answer adds
-  the release `window` now (`now`, `lastReleaseAt`, `nextReleaseAt`, `releasedUntil`) and
+- `booking-rules`: the release weekday, time and weeks ahead, the optional `releasedThrough` date
+  (amended 2026-10-31, ADR 0003: it only extends the release, at most 52 weeks ahead), the booking
+  and cancellation cutoffs and the waiting-list invite hold in minutes, and the default early access
+  in days; the answer adds the release `window` now (`now`, `lastReleaseAt`, `nextReleaseAt`,
+  `releasedUntil`, and `ruleReleasedUntil`, the rule's end without the date) and
   `generatedLessons`. `GET …/booking-rules/preview?releaseWeekday&releaseTime&releaseWeeksAhead`
-  computes the window of a rule being typed with `ComputeReleaseWindow`, so the client still never
-  computes the rule itself (ADR 0003). It checks the rule alone (`domain.ValidateReleaseRule`, errors
-  on `query.<field>`), not the stored settings.
+  (and `releasedThrough`, optional) computes the window of a rule being typed with
+  `ComputeReleaseWindow`, so the client still never computes the rule itself (ADR 0003). It checks
+  the rule alone (`domain.ValidateReleaseRule`, `domain.ValidateReleasedThrough`, errors on
+  `query.<field>`), not the stored settings.
 
 **Time zone and currency are chosen at the first setup.** Every lesson instant was computed in the
 school's zone, and every amount is in minor units of the currency. So the time zone may change only
@@ -53,8 +56,8 @@ always saves. The language may always change. This amends ADR 0003, under which 
 the seed.
 
 **Booking rules change from now on.** A narrower window holds back the lessons it no longer reaches;
-released lessons keep their bookings. A wider one (more weeks ahead, or more days of default early
-access) generates the lessons it reaches right away, with `LessonGenerator.GenerateAhead` in its own
+released lessons keep their bookings. A wider one (more weeks ahead, more days of default early
+access, or a later released-through date) generates the lessons it reaches right away, with `LessonGenerator.GenerateAhead` in its own
 transaction after the settings are stored (transactions never nest), instead of waiting for the
 hourly job; the answer counts them. If that generation fails, the change stays and the job catches
 up: the `PUT` still answers 200 with the stored rules and `generatedLessons` 0, and the server logs

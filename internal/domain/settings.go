@@ -31,6 +31,12 @@ type Settings struct {
 	ReleaseWeekday    time.Weekday
 	ReleaseTime       TimeOfDay
 	ReleaseWeeksAhead int
+	// ReleasedThrough is an optional school date through which the office
+	// releases the schedule beyond the weekly rule; the zero Date is none.
+	// It only extends the release window, never narrows it, and has no
+	// effect once the rule reaches past it (ADR 0003, amendment
+	// 2026-10-31).
+	ReleasedThrough Date
 
 	// BookingCutoff and CancellationCutoff are how long before a lesson
 	// starts booking and canceling close. Zero means "until the start".
@@ -93,6 +99,7 @@ func (s Settings) Validate() error {
 		),
 		on("redemptionMode", s.RedemptionMode.Valid(), "invalid redemption mode"),
 		on("theme", s.Theme.Valid(), "theme must be programme or werkstatt"),
+		on("releasedThrough", s.ReleasedThrough.IsZero() || s.ReleasedThrough.Valid(), "invalid released-through date"),
 	)
 	if err != nil {
 		return err
@@ -128,6 +135,25 @@ func ValidateReleaseRule(weekday time.Weekday, at TimeOfDay, weeksAhead int) err
 		on(
 			"releaseWeeksAhead", weeksAhead >= 1 && weeksAhead <= maxWeeksAhead,
 			"release weeks ahead must be between 1 and 52",
+		),
+	)
+}
+
+// ValidateReleasedThrough checks a manual released-through date against
+// the school date today: none, or at most MaxReleasedThroughDays after
+// today. A past date is allowed and has no effect (the rule releases further
+// already), so a stored date never keeps the card from saving once its day
+// has passed. Errors are FieldErrors on releasedThrough.
+func ValidateReleasedThrough(d, today Date) error {
+	if d.IsZero() {
+		return nil
+	}
+
+	return validate(
+		on("releasedThrough", d.Valid(), "invalid released-through date"),
+		on(
+			"releasedThrough", d.Valid() && today.DaysUntil(d) <= MaxReleasedThroughDays,
+			"released-through date must be at most 52 weeks after today",
 		),
 	)
 }
@@ -194,9 +220,13 @@ const (
 
 // Upper bounds that keep schedule arithmetic sane.
 const (
-	maxWeeksAhead  = 52
-	maxVisibleDays = 366
-	maxCutoff      = 30 * 24 * time.Hour
+	maxWeeksAhead = 52
+	// MaxReleasedThroughDays is how many days after today the manual
+	// released-through date may lie at most: the 52 weeks of the longest
+	// weekly release.
+	MaxReleasedThroughDays = 7 * maxWeeksAhead
+	maxVisibleDays         = 366
+	maxCutoff              = 30 * 24 * time.Hour
 	// minInviteExpiry keeps an invitation answerable at all.
 	minInviteExpiry = time.Minute
 )

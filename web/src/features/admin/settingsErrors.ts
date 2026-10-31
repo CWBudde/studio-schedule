@@ -11,6 +11,7 @@ const settingsErrors = [
   'visibleDays',
   'cutoff',
   'inviteExpiry',
+  'releasedThroughLatest',
 ] as const;
 type SettingsErrorKey = (typeof settingsErrors)[number];
 const isSettingsErrorKey = (key: unknown): key is SettingsErrorKey =>

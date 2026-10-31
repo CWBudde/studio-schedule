@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Save } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Save, XIcon } from 'lucide-react';
+import { type ReactNode, useMemo } from 'react';
 import { Controller, type UseFormRegisterReturn, useForm, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -40,8 +40,10 @@ import { useDescription } from './crud/useDescription';
 import { Section } from './PersonSection';
 import {
   durations,
+  isSchoolDate,
+  maxReleasedThroughDays,
   type RulesField,
-  rulesSchema,
+  rulesSchemaUntil,
   rulesServerFields,
   type RulesValues,
   rulesValues,
@@ -90,7 +92,7 @@ function useDuration() {
 }
 
 function RulesFacts({ rules }: { rules: BookingRules }) {
-  const { t } = useTranslation('settings');
+  const { t, i18n } = useTranslation('settings');
   const weekday = useWeekdayName();
   const duration = useDuration();
   return (
@@ -99,6 +101,10 @@ function RulesFacts({ rules }: { rules: BookingRules }) {
         [t('rules.releaseWeekday'), weekday(rules.releaseWeekday)],
         [t('rules.releaseTime'), rules.releaseTime],
         [t('rules.releaseWeeksAhead'), String(rules.releaseWeeksAhead)],
+        [
+          t('rules.manualReleasedThrough'),
+          rules.releasedThrough ? formatDayHeading(rules.releasedThrough, i18n.language) : '',
+        ],
         [t('rules.bookingCutoff'), duration(rules.bookingCutoffMinutes)],
         [t('rules.cancellationCutoff'), duration(rules.cancellationCutoffMinutes)],
         [t('rules.waitlistInviteExpiry'), duration(rules.waitlistInviteExpiryMinutes)],
@@ -110,10 +116,19 @@ function RulesFacts({ rules }: { rules: BookingRules }) {
   );
 }
 
+/** The last school date before an instant of the window (a school-local midnight). */
+const lastDayBefore = (instant: string, zone: string) =>
+  schoolDateOf(Date.parse(instant) - 1, zone);
+
+/** Whether the released-through date reaches beyond the weekly release (the server decides). */
+const extended = (w: ReleaseWindow) =>
+  Date.parse(w.releasedUntil) > Date.parse(w.ruleReleasedUntil);
+
 /**
  * The release window: the last and the next release, and the last day
- * released. Without one, a rule being typed is incomplete or could not be
- * previewed, or the window is still loading.
+ * released; when the released-through date reaches further, also the last
+ * day of the weekly release alone. Without one, a rule being typed is
+ * incomplete or could not be previewed, or the window is still loading.
  */
 function Window({
   window: w,
@@ -138,11 +153,23 @@ function Window({
           <dt className="text-muted-foreground">{t('rules.releasedThrough')}</dt>
           <dd>
             {formatDayHeading(
-              schoolDateOf(Date.parse(w.releasedUntil) - 1, zone),
+              lastDayBefore(w.releasedUntil, zone),
               i18n.language,
               schoolDateOf(Date.parse(w.now), zone),
             )}
           </dd>
+          {extended(w) && (
+            <>
+              <dt className="text-muted-foreground">{t('rules.ruleReleasedThrough')}</dt>
+              <dd>
+                {formatDayHeading(
+                  lastDayBefore(w.ruleReleasedUntil, zone),
+                  i18n.language,
+                  schoolDateOf(Date.parse(w.now), zone),
+                )}
+              </dd>
+            </>
+          )}
         </dl>
       ) : missing === 'loading' ? (
         <p role="status" className="text-muted-foreground">
@@ -165,20 +192,27 @@ type PreviewMissing = 'loading' | 'incomplete' | 'failed';
 
 /** The window of the release rule being typed, once it is valid and settled. */
 function usePreview(
-  values: Pick<RulesValues, 'releaseWeekday' | 'releaseTime' | 'releaseWeeksAhead'>,
+  values: Pick<
+    RulesValues,
+    'releaseWeekday' | 'releaseTime' | 'releaseWeeksAhead' | 'releasedThrough'
+  >,
+  latest: string | undefined,
 ): { window?: ReleaseWindow; missing: PreviewMissing } {
   const weeks = Number(values.releaseWeeksAhead);
+  const through = values.releasedThrough.trim();
   const valid =
     releaseTimePattern.test(values.releaseTime) &&
     Number.isInteger(weeks) &&
     weeks >= 1 &&
-    weeks <= 52;
+    weeks <= 52 &&
+    (through === '' || (isSchoolDate(through) && (!latest || through <= latest)));
   const params = useDebouncedValue(
     valid
       ? {
           releaseWeekday: Number(values.releaseWeekday),
           releaseTime: values.releaseTime,
           releaseWeeksAhead: weeks,
+          ...(through ? { releasedThrough: through } : {}),
         }
       : undefined,
     300,
@@ -204,16 +238,26 @@ function RulesForm({ rules }: { rules: BookingRules }) {
   const weekday = useWeekdayName();
   const queryClient = useQueryClient();
   const update = useMutation(updateBookingRulesMutation(queryClient));
+  const zone = useQuery(publicSettingsQuery).data?.timezone;
+  // The latest released-through date: 52 weeks after the server's today
+  // in the school's zone; the server checks it too.
+  const latest = zone
+    ? addDays(schoolDateOf(Date.parse(rules.window.now), zone), maxReleasedThroughDays)
+    : undefined;
+  const resolver = useMemo(() => zodResolver(rulesSchemaUntil(latest)), [latest]);
   const form = useForm<RulesValues, unknown, BookingRulesData>({
-    resolver: zodResolver(rulesSchema),
+    resolver,
     defaultValues: rulesValues(rules),
   });
   const { errors } = form.formState;
-  const [releaseWeekday, releaseTime, releaseWeeksAhead] = useWatch({
+  const [releaseWeekday, releaseTime, releaseWeeksAhead, releasedThrough] = useWatch({
     control: form.control,
-    name: ['releaseWeekday', 'releaseTime', 'releaseWeeksAhead'],
+    name: ['releaseWeekday', 'releaseTime', 'releaseWeeksAhead', 'releasedThrough'],
   });
-  const preview = usePreview({ releaseWeekday, releaseTime, releaseWeeksAhead });
+  const preview = usePreview(
+    { releaseWeekday, releaseTime, releaseWeeksAhead, releasedThrough },
+    latest,
+  );
 
   const onSubmit = (body: BookingRulesData) =>
     update.mutate(body, {
@@ -229,7 +273,13 @@ function RulesForm({ rules }: { rules: BookingRules }) {
         const api = Object.keys(rulesServerFields) as (keyof typeof rulesServerFields)[];
         for (const field of invalidFields(error, api)) {
           const formField = rulesServerFields[field];
-          if (formField) form.setError(formField, { type: 'server', message: 'invalid' });
+          if (formField) {
+            form.setError(formField, {
+              type: 'server',
+              // The format is checked here; the server refuses a date too far ahead.
+              message: formField === 'releasedThrough' ? 'releasedThroughLatest' : 'invalid',
+            });
+          }
         }
       },
     });
@@ -295,6 +345,18 @@ function RulesForm({ rules }: { rules: BookingRules }) {
         error={errorText(errors.releaseWeeksAhead)}
         {...form.register('releaseWeeksAhead')}
       />
+      <ReleasedThroughField
+        label={t('rules.manualReleasedThrough')}
+        clearLabel={t('rules.manualReleasedThroughClear')}
+        hint={t('rules.manualReleasedThroughHint')}
+        effect={releaseEffect(preview.window, releasedThrough.trim() !== '')}
+        error={errorText(errors.releasedThrough)}
+        max={latest}
+        input={form.register('releasedThrough')}
+        onClear={() =>
+          form.setValue('releasedThrough', '', { shouldDirty: true, shouldValidate: true })
+        }
+      />
       <Window window={preview.window} missing={preview.missing} hint={t('rules.previewHint')} />
       {durations.map(duration)}
       <TextField
@@ -309,6 +371,83 @@ function RulesForm({ rules }: { rules: BookingRules }) {
         {update.isPending ? tAdmin('form.saving') : tAdmin('form.save')}
       </Button>
     </form>
+  );
+}
+
+/** What the released-through date does with the window being previewed. */
+type ReleaseEffect = { kind: 'rule' | 'extends' | 'noEffect'; window: ReleaseWindow } | undefined;
+
+function releaseEffect(w: ReleaseWindow | undefined, dated: boolean): ReleaseEffect {
+  if (!w) return undefined;
+  if (!dated) return { kind: 'rule', window: w };
+  return { kind: extended(w) ? 'extends' : 'noEffect', window: w };
+}
+
+const effectKeys = {
+  rule: 'rules.ruleReleasesThrough',
+  extends: 'rules.manualExtends',
+  noEffect: 'rules.manualNoEffect',
+} as const;
+
+/**
+ * The optional released-through date: a date input with a button that
+ * clears it, the hint, and what the date does now, so the office sees
+ * whether it matters (the weekly release alone, from the server's preview).
+ */
+function ReleasedThroughField({
+  label,
+  clearLabel,
+  hint,
+  effect,
+  error,
+  max,
+  input,
+  onClear,
+}: {
+  label: string;
+  clearLabel: string;
+  hint: string;
+  effect: ReleaseEffect;
+  error: string | undefined;
+  max: string | undefined;
+  input: UseFormRegisterReturn;
+  onClear: () => void;
+}) {
+  const { t, i18n } = useTranslation('settings');
+  const zone = useQuery(publicSettingsQuery).data?.timezone;
+  const effectText =
+    effect && zone
+      ? t(effectKeys[effect.kind], {
+          date: formatDayHeading(
+            lastDayBefore(effect.window.ruleReleasedUntil, zone),
+            i18n.language,
+            schoolDateOf(Date.parse(effect.window.now), zone),
+          ),
+        })
+      : undefined;
+  const { id, describedBy, lines } = useDescription(
+    effectText ? `${hint} ${effectText}` : hint,
+    error,
+  );
+  return (
+    <div className="grid gap-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          type="date"
+          className="w-44"
+          max={max}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          {...input}
+        />
+        <Button type="button" variant="ghost" size="icon" aria-label={clearLabel} onClick={onClear}>
+          <XIcon aria-hidden="true" />
+        </Button>
+      </div>
+      {lines}
+    </div>
   );
 }
 

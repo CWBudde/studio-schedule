@@ -12,7 +12,8 @@
     "weeksAhead": "Enter a whole number from 1 to 52.",
     "visibleDays": "Enter a whole number from 1 to 366.",
     "cutoff": "Enter a whole number, at most 30 days.",
-    "inviteExpiry": "Enter a whole number, at least 1 minute and at most 30 days."
+    "inviteExpiry": "Enter a whole number, at least 1 minute and at most 30 days.",
+    "releasedThroughLatest": "Choose a day at most 52 weeks from today."
   },
   "school": {
     "title": "School",
@@ -93,6 +94,13 @@
     "releaseTime": "Release time",
     "releaseWeeksAhead": "Weeks released ahead",
     "releaseWeeksAheadHint": "Each release opens the lessons up to the same day this many weeks later.",
+    "manualReleasedThrough": "Also release through",
+    "manualReleasedThroughHint": "Optional: releases the schedule through this day even before the weekly release reaches it. It only extends the weekly release and never holds anything back; once the weekly release passes this day, the date has no effect.",
+    "manualReleasedThroughClear": "Clear the date",
+    "ruleReleasesThrough": "The weekly release alone reaches through {{date}}.",
+    "manualExtends": "This date extends the release: the weekly release alone reaches through {{date}}.",
+    "manualNoEffect": "This date has no effect now: the weekly release already reaches through {{date}}.",
+    "ruleReleasedThrough": "Weekly release alone through",
     "bookingCutoff": "Booking closes before the start",
     "bookingCutoffHint": "0: booking stays open until the lesson starts.",
     "cancellationCutoff": "Canceling closes before the start",
@@ -121,7 +129,7 @@
     "releasedThrough": "Released through",
     "previewHint": "With these rules, from now on.",
     "previewLoading": "Computing the release window…",
-    "previewIncomplete": "Rule incomplete: enter a release time and 1 to 52 weeks to see what it releases.",
+    "previewIncomplete": "Rule incomplete: enter a release time, 1 to 52 weeks and a date at most 52 weeks ahead (or none) to see what it releases.",
     "previewFailed": "The release window could not be computed.",
     "generated_one": "The settings have been saved. {{count}} lesson of the wider window was created.",
     "generated_other": "The settings have been saved. {{count}} lessons of the wider window were created."

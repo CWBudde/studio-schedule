@@ -51,6 +51,7 @@ const window = {
   lastReleaseAt: '2026-10-18T16:00:00Z',
   nextReleaseAt: '2026-10-25T17:00:00Z',
   releasedUntil: '2026-11-01T23:00:00Z',
+  ruleReleasedUntil: '2026-11-01T23:00:00Z',
 };
 const rules = {
   releaseWeekday: 0,

@@ -123,7 +123,9 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   `service.loadSchool` is the one place that resolves the school time zone.
 - The release window and the lessons a guest sees are computed on the server only
   ([ADR 0003](decisions/0003-release-window-and-visibility.md)); the schedule response carries
-  `releasedUntil`, `nextReleaseAt` and the server's `now`.
+  `releasedUntil`, `nextReleaseAt` and the server's `now`. `service.ComputeReleaseWindow` is the one
+  place that computes it, the optional manual `Settings.ReleasedThrough` date included (it only
+  extends the window; ADR 0003, amendment 2026-10-31).
 
 ## Background jobs
 

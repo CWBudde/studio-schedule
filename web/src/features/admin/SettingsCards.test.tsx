@@ -41,6 +41,7 @@ const window = {
   lastReleaseAt: '2026-10-18T16:00:00Z',
   nextReleaseAt: '2026-10-25T17:00:00Z',
   releasedUntil: '2026-11-01T23:00:00Z',
+  ruleReleasedUntil: '2026-11-01T23:00:00Z',
 };
 const rules = {
   releaseWeekday: 0,
@@ -436,6 +437,119 @@ describe('Booking rules', () => {
     expect(invite).toHaveAccessibleDescription(expect.stringContaining('Please check this entry.'));
   });
 
+  it('previews and saves a released-through date beyond the weekly release', async () => {
+    const get = mockApiGet(
+      fixtures(meAdmin, {
+        '/api/v1/admin/settings/booking-rules/preview': ({ params }: MockRequest) => ({
+          body:
+            params?.query?.releasedThrough === '2026-11-20'
+              ? { ...window, releasedUntil: '2026-11-20T23:00:00Z' }
+              : window,
+        }),
+      }),
+    );
+    const put = mockApiPut({
+      '/api/v1/admin/settings/booking-rules': ({ body }) => ({
+        body: { ...rules, ...(body as object), generatedLessons: 3 },
+      }),
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const f = await form('Booking rules');
+    const date = f.getByLabelText('Also release through');
+    // Without a date, the hint names where the weekly release alone reaches.
+    expect(
+      await f.findByText(/The weekly release alone reaches through Sunday, November 1\./),
+    ).toBeInTheDocument();
+    // 52 weeks after the server's today in the school's zone.
+    expect(date).toHaveAttribute('max', '2027-10-20');
+
+    await user.type(date, '2026-11-20');
+
+    expect(await f.findByText('Friday, November 20')).toBeInTheDocument();
+    expect(date).toHaveAccessibleDescription(
+      expect.stringContaining(
+        'This date extends the release: the weekly release alone reaches through Sunday, November 1.',
+      ),
+    );
+    expect(f.getByText('Weekly release alone through')).toBeInTheDocument();
+    expect(get).toHaveBeenCalledWith('/api/v1/admin/settings/booking-rules/preview', {
+      params: {
+        query: {
+          releaseWeekday: 0,
+          releaseTime: '18:00',
+          releaseWeeksAhead: 2,
+          releasedThrough: '2026-11-20',
+        },
+      },
+      signal: expect.any(AbortSignal),
+    });
+
+    await user.click(f.getByRole('button', { name: 'Save changes' }));
+    expect(
+      await screen.findByText(
+        'The settings have been saved. 3 lessons of the wider window were created.',
+      ),
+    ).toBeInTheDocument();
+    expect(put).toHaveBeenCalledWith('/api/v1/admin/settings/booking-rules', {
+      body: expect.objectContaining({ releasedThrough: '2026-11-20' }),
+    });
+  });
+
+  it('says when the released-through date has no effect, and clears it', async () => {
+    mockApiGet(
+      fixtures(meAdmin, {
+        '/api/v1/admin/settings/booking-rules': {
+          body: { ...rules, releasedThrough: '2026-10-28' },
+        },
+      }),
+    );
+    const put = mockApiPut({
+      '/api/v1/admin/settings/booking-rules': ({ body }) => ({
+        body: { ...rules, ...(body as object) },
+      }),
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const f = await form('Booking rules');
+    const date = f.getByLabelText('Also release through');
+    expect(date).toHaveValue('2026-10-28');
+    expect(
+      await f.findByText(
+        /This date has no effect now: the weekly release already reaches through Sunday, November 1\./,
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(f.getByRole('button', { name: 'Clear the date' }));
+    expect(date).toHaveValue('');
+    await user.click(f.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(put.mock.calls[0]?.[1]).toEqual({
+      body: expect.not.objectContaining({ releasedThrough: expect.anything() }),
+    });
+  });
+
+  it('refuses a released-through date more than 52 weeks ahead', async () => {
+    mockApiGet(fixtures());
+    const put = mockApiPut({ '/api/v1/admin/settings/booking-rules': { body: rules } });
+    const user = userEvent.setup();
+
+    renderPage();
+    const f = await form('Booking rules');
+    const date = f.getByLabelText('Also release through');
+    await waitFor(() => expect(date).toHaveAttribute('max', '2027-10-20'));
+    await user.type(date, '2027-10-21');
+    await user.click(f.getByRole('button', { name: 'Save changes' }));
+
+    expect(date).toHaveAccessibleDescription(
+      expect.stringContaining('Choose a day at most 52 weeks from today.'),
+    );
+    expect(put).not.toHaveBeenCalled();
+  });
+
   it('shows the office the rules and the window', async () => {
     mockApiGet(fixtures(meOffice));
 
@@ -445,7 +559,35 @@ describe('Booking rules', () => {
     expect(await c.findByText('2 hours')).toBeInTheDocument();
     expect(c.getByText('1 day')).toBeInTheDocument();
     expect(await c.findByText('Sunday, November 1')).toBeInTheDocument();
+    expect(c.getByText('Also release through').nextElementSibling).toHaveTextContent('—');
     expect(c.queryByRole('form')).not.toBeInTheDocument();
+  });
+
+  it('shows the office the released-through date and where the weekly release alone reaches', async () => {
+    mockApiGet(
+      fixtures(meOffice, {
+        '/api/v1/admin/settings/booking-rules': {
+          body: {
+            ...rules,
+            releasedThrough: '2026-11-20',
+            window: { ...window, releasedUntil: '2026-11-20T23:00:00Z' },
+          },
+        },
+      }),
+    );
+
+    renderPage();
+
+    const c = await card('Booking rules');
+    expect(
+      (await c.findByText('Weekly release alone through')).nextElementSibling,
+    ).toHaveTextContent('Sunday, November 1');
+    expect(c.getByText('Also release through').nextElementSibling).toHaveTextContent(
+      'Friday, November 20',
+    );
+    expect(c.getByText('Released through').nextElementSibling).toHaveTextContent(
+      'Friday, November 20',
+    );
   });
 
   it('renders in German', async () => {

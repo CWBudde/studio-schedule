@@ -16,7 +16,7 @@ SELECT
     school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time,
     release_weeks_ahead, booking_cutoff, cancellation_cutoff, default_visible_days, legal_notice,
     waitlist_invite_expiry, redemption_mode, issuer_name, issuer_address, issuer_tax_id, issuer_email,
-    issuer_phone, tax_mode, tax_note, receipt_footer, accent_color, theme
+    issuer_phone, tax_mode, tax_note, receipt_footer, accent_color, theme, released_through
 FROM settings
 `
 
@@ -45,6 +45,7 @@ type GetSettingsRow struct {
 	ReceiptFooter        pgtype.Text
 	AccentColor          pgtype.Text
 	Theme                pgtype.Text
+	ReleasedThrough      pgtype.Date
 }
 
 // Everything but the logo, which only receipts read (GetSettingsLogo), and
@@ -77,6 +78,7 @@ func (q *Queries) GetSettings(ctx context.Context) (GetSettingsRow, error) {
 		&i.ReceiptFooter,
 		&i.AccentColor,
 		&i.Theme,
+		&i.ReleasedThrough,
 	)
 	return i, err
 }
@@ -152,9 +154,10 @@ INSERT INTO settings (
     school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time,
     release_weeks_ahead, booking_cutoff, cancellation_cutoff, default_visible_days, legal_notice,
     waitlist_invite_expiry, redemption_mode, issuer_name, issuer_address, issuer_tax_id, issuer_email,
-    issuer_phone, tax_mode, tax_note, receipt_footer, accent_color, theme
+    issuer_phone, tax_mode, tax_note, receipt_footer, accent_color, theme, released_through
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
+    $25
 )
 ON CONFLICT (id) DO UPDATE SET
     school_name = excluded.school_name,
@@ -180,7 +183,8 @@ ON CONFLICT (id) DO UPDATE SET
     tax_note = excluded.tax_note,
     receipt_footer = excluded.receipt_footer,
     accent_color = excluded.accent_color,
-    theme = excluded.theme
+    theme = excluded.theme,
+    released_through = excluded.released_through
 `
 
 type PutSettingsParams struct {
@@ -208,6 +212,7 @@ type PutSettingsParams struct {
 	ReceiptFooter        pgtype.Text
 	AccentColor          pgtype.Text
 	Theme                pgtype.Text
+	ReleasedThrough      pgtype.Date
 }
 
 func (q *Queries) PutSettings(ctx context.Context, arg PutSettingsParams) error {
@@ -236,6 +241,7 @@ func (q *Queries) PutSettings(ctx context.Context, arg PutSettingsParams) error 
 		arg.ReceiptFooter,
 		arg.AccentColor,
 		arg.Theme,
+		arg.ReleasedThrough,
 	)
 	return err
 }
