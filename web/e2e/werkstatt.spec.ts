@@ -317,7 +317,7 @@ test('the account page saves a phone number', async ({ page }) => {
   await expect(card.getByLabel('Phone (optional)')).toHaveValue('+49 000 0000199');
 });
 
-test('the office marks a participant present in the table', async ({ page }) => {
+test('the office marks a participant present in the table', async ({ page, isMobile }) => {
   await signIn(page, 'Office');
   await gotoDemo(page, '/schedule');
   await page.getByRole('button', { name: 'Previous 14 days' }).click();
@@ -335,6 +335,17 @@ test('the office marks a participant present in the table', async ({ page }) => 
     .getByRole('region', { name: 'Participants' })
     .getByRole('table', { name: 'Booked participants' });
   const present = table.getByRole('checkbox', { name: / attended$/, checked: false }).first();
+  await expect(present).toBeVisible();
+  if (!isMobile) {
+    // The sheet widens for the table (werkstatt.css): every column shows
+    // without scrolling sideways. On a phone the table scrolls.
+    expect(
+      await table.evaluate((el) => {
+        const box = el.parentElement ?? el;
+        return box.scrollWidth <= box.clientWidth;
+      }),
+    ).toBe(true);
+  }
   const label = (await present.getAttribute('aria-label')) ?? '';
   const name = label.replace(/ attended$/, '');
   expect(name).not.toBe('');

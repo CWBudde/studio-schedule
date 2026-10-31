@@ -73,7 +73,8 @@ export function Shell({ children, banners, announcements, header, footer }: Shel
             {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
           </Button>
           <HomeLink schoolName={header.schoolName} logoUrl={header.logoUrl} />
-          <div className="flex min-w-0 items-center gap-1">
+          {/* ml-auto: on phones the tools wrap onto a second row, at its right edge. */}
+          <div className="ml-auto flex min-w-0 items-center gap-1">
             {header.tools}
             {header.language}
             <Session {...header} />
