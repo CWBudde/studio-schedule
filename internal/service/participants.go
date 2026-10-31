@@ -260,10 +260,10 @@ func (s *ParticipantService) Add(
 			return err
 		}
 
+		// The person, if any, was read live under its lock above: no
+		// deletion or merge can make it unknown now.
 		participant, err := participantName(ctx, tx, b)
-		if errors.Is(err, domain.ErrNotFound) {
-			return errUnknownPerson
-		} else if err != nil {
+		if err != nil {
 			return err
 		}
 
