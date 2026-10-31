@@ -1749,9 +1749,27 @@ func TestDemoSchoolSameData(t *testing.T) {
 			w.Number, w.Locale, w.Issuer, w.Footer = p.Number, p.Locale, p.Issuer, p.Footer
 		}
 
+		// The places differ too (TestWerkstattPlaces): the rooms are the
+		// programme's in another order and with other names. Map each
+		// room to the programme room whose classes it holds.
+		sameRoom := map[domain.RoomID]domain.RoomID{}
+		for i, c := range werkstatt.Classes {
+			sameRoom[c.RoomID] = programme.Classes[i].RoomID
+		}
+
+		for i := range werkstatt.Classes {
+			werkstatt.Classes[i].RoomID = sameRoom[werkstatt.Classes[i].RoomID]
+		}
+
+		for i := range werkstatt.Lessons {
+			werkstatt.Lessons[i].RoomID = sameRoom[werkstatt.Lessons[i].RoomID]
+		}
+
+		werkstatt.Locations, werkstatt.Rooms = programme.Locations, programme.Rooms
+
 		werkstatt.Settings, werkstatt.Background = programme.Settings, programme.Background
 		if !reflect.DeepEqual(werkstatt, programme) {
-			t.Fatalf("%v: the werkstatt school differs from the programme school beyond its settings and receipts", anchor)
+			t.Fatalf("%v: the werkstatt school differs from the programme school beyond its settings, receipts and places", anchor)
 		}
 	}
 }
@@ -1828,7 +1846,10 @@ func TestLoadDemoWerkstatt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	d := seed.Demo()
+	d, err := seed.DemoSchoolAt(seed.FixedDemoAnchor, seed.SchoolWerkstatt)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	err = st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 		got, err := tx.Settings().Get(ctx)
@@ -2014,5 +2035,70 @@ func TestParseSchool(t *testing.T) {
 		if got, ok := seed.ParseSchool(c.name); got != c.want || ok != c.ok {
 			t.Errorf("ParseSchool(%q) = %q, %v; want %q, %v", c.name, got, ok, c.want, c.ok)
 		}
+	}
+}
+
+func TestWerkstattPlaces(t *testing.T) {
+	t.Parallel()
+
+	programme := seed.DemoAt(seed.FixedDemoAnchor)
+
+	werkstatt, err := seed.DemoSchoolAt(seed.FixedDemoAnchor, seed.SchoolWerkstatt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	locations := map[domain.LocationID]string{}
+	for _, l := range werkstatt.Locations {
+		locations[l.ID] = l.Name
+	}
+
+	got := map[string]string{}
+	for _, r := range werkstatt.Rooms {
+		got[r.Name] = locations[r.LocationID]
+	}
+
+	want := map[string]string{
+		"Oben":          "Tanzhaus am Lindenhof",
+		"Unten":         "Tanzhaus am Lindenhof",
+		"Trainingsraum": "Tanzhaus am Lindenhof",
+		"Sporthalle":    "Sportplatz am Ahornweg",
+		"Draußen":       "Sportplatz am Ahornweg",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("werkstatt rooms (room → location) = %v, want %v", got, want)
+	}
+
+	// Each room holds the classes of one programme room of the same
+	// capacity, so the schools differ in their places only.
+	rooms := func(d seed.Dataset) map[domain.RoomID]domain.Room {
+		m := map[domain.RoomID]domain.Room{}
+		for _, r := range d.Rooms {
+			m[r.ID] = r
+		}
+
+		return m
+	}
+	programmeRooms, werkstattRooms := rooms(programme), rooms(werkstatt)
+
+	if len(werkstatt.Classes) != len(programme.Classes) {
+		t.Fatalf("werkstatt has %d classes, programme %d", len(werkstatt.Classes), len(programme.Classes))
+	}
+
+	held := map[string]string{}
+	for i, c := range werkstatt.Classes {
+		p := programme.Classes[i]
+		pr, wr := programmeRooms[p.RoomID], werkstattRooms[c.RoomID]
+
+		if c.ID != p.ID || wr.Capacity != pr.Capacity {
+			t.Errorf("class %v in %s (%d places), programme's %v in %s (%d places)",
+				c.ID, wr.Name, wr.Capacity, p.ID, pr.Name, pr.Capacity)
+		}
+
+		if other, ok := held[wr.Name]; ok && other != pr.Name {
+			t.Errorf("%s holds the classes of %s and %s", wr.Name, other, pr.Name)
+		}
+
+		held[wr.Name] = pr.Name
 	}
 }

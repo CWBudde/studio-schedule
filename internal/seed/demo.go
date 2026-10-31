@@ -50,7 +50,7 @@ func Demo() Dataset { return DemoAt(FixedDemoAnchor) }
 // DemoAt panics if the demo time zone cannot be loaded (no zoneinfo
 // database); LoadDemoAt reports that as an error instead.
 func DemoAt(anchor domain.Date) Dataset {
-	d, err := demoAt(anchor, DemoSettings())
+	d, err := demoAt(anchor, DemoSettings(), demoLocations)
 	if err != nil {
 		panic(err)
 	}
@@ -59,11 +59,11 @@ func DemoAt(anchor domain.Date) Dataset {
 }
 
 // DemoSchoolAt is DemoAt for the demo school school: the same data, with
-// the school's settings and background (School), and its receipts issued
-// with those settings (issuer, language, number and line text). An unknown
-// school fails with domain.ErrValidation.
+// the school's settings, background and places (School), and its receipts
+// issued with those settings (issuer, language, number and line text). An
+// unknown school fails with domain.ErrValidation.
 func DemoSchoolAt(anchor domain.Date, school School) (Dataset, error) {
-	settings, background, err := schoolData(school)
+	settings, background, locations, err := schoolData(school)
 	if err != nil {
 		return Dataset{}, err
 	}
@@ -76,7 +76,7 @@ func DemoSchoolAt(anchor domain.Date, school School) (Dataset, error) {
 
 	// Built with the school's own settings, so its receipts name its
 	// issuer, in its language.
-	d, err := demoAt(anchor, settings)
+	d, err := demoAt(anchor, settings, locations)
 	if err != nil {
 		return Dataset{}, err
 	}
@@ -87,9 +87,9 @@ func DemoSchoolAt(anchor domain.Date, school School) (Dataset, error) {
 }
 
 // demoAt builds the demo data for anchor with the school's settings, which
-// the receipts are issued with; everything else is the same for every
-// school.
-func demoAt(anchor domain.Date, settings domain.Settings) (Dataset, error) {
+// the receipts are issued with, and its locations and rooms; everything else
+// is the same for every school.
+func demoAt(anchor domain.Date, settings domain.Settings, locations []locationSpec) (Dataset, error) {
 	// The workshops start at wall-clock times of the school.
 	loc, err := time.LoadLocation(settings.Timezone)
 	if err != nil {
@@ -113,7 +113,7 @@ func demoAt(anchor domain.Date, settings domain.Settings) (Dataset, error) {
 		b.household(h)
 	}
 
-	for _, l := range demoLocations {
+	for _, l := range locations {
 		b.location(l)
 	}
 
@@ -276,14 +276,37 @@ type locationSpec struct {
 	rooms   []roomSpec
 }
 
+// roomSpec is a room; holds names the programme room whose classes it
+// holds in another school's places, empty for the programme room itself.
 type roomSpec struct {
 	name     string
 	capacity int
+	holds    string
 }
 
 var demoLocations = []locationSpec{
-	{"Studio North", "Example Street 12, 00000 Example Town", []roomSpec{{"Studio A", 20}, {"Studio B", 14}, {"Studio C", 10}}},
-	{"Studio South", "Sample Road 3, 00000 Example Town", []roomSpec{{"Hall 1", 24}, {"Hall 2", 12}}},
+	{"Studio North", "Example Street 12, 00000 Example Town", []roomSpec{
+		{name: "Studio A", capacity: 20}, {name: "Studio B", capacity: 14}, {name: "Studio C", capacity: 10},
+	}},
+	{"Studio South", "Sample Road 3, 00000 Example Town", []roomSpec{
+		{name: "Hall 1", capacity: 24}, {name: "Hall 2", capacity: 12},
+	}},
+}
+
+// werkstattLocations are the werkstatt school's places, laid out like a
+// dance school with its own house (two halls, "oben" and "unten", and a
+// training room) and a sports ground nearby. Every room holds the classes of
+// one programme room of the same capacity. The addresses are fictional.
+var werkstattLocations = []locationSpec{
+	{"Tanzhaus am Lindenhof", "Lindenhofweg 12, 10999 Beispielstadt", []roomSpec{
+		{name: "Oben", capacity: 20, holds: "Studio A"},
+		{name: "Unten", capacity: 24, holds: "Hall 1"},
+		{name: "Trainingsraum", capacity: 14, holds: "Studio B"},
+	}},
+	{"Sportplatz am Ahornweg", "Ahornweg 3, 10999 Beispielstadt", []roomSpec{
+		{name: "Sporthalle", capacity: 12, holds: "Hall 2"},
+		{name: "Draußen", capacity: 10, holds: "Studio C"},
+	}},
 }
 
 // staffSpec is a staff member; person is the "Given Family" key of their
@@ -602,7 +625,13 @@ func (b *builder) location(spec locationSpec) {
 	for _, r := range spec.rooms {
 		room := domain.Room{ID: ids.New[domain.RoomID](b.seq), LocationID: l.ID, Name: r.name, Capacity: r.capacity}
 		b.d.Rooms = append(b.d.Rooms, room)
-		b.rooms[r.name] = room.ID
+
+		key := r.holds
+		if key == "" {
+			key = r.name
+		}
+
+		b.rooms[key] = room.ID
 	}
 }
 

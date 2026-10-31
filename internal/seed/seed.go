@@ -51,9 +51,10 @@ func DemoSettings() domain.Settings {
 }
 
 // School selects one of the fictional demo schools (ADR 0018). They share
-// every person, class, room and all the history and differ in their
-// settings: their name, imprint, receipt issuer, theme, accent color,
-// language and background, and so in the receipts issued with them.
+// every person, class and all the history and differ in their settings
+// (their name, imprint, receipt issuer, theme, accent color, language and
+// background, and so in the receipts issued with them) and in the names of
+// their locations and rooms; each room holds the same classes in both.
 // The zero School is not valid: a caller names the school it wants.
 type School string
 
@@ -92,16 +93,17 @@ func ParseSchool(name string) (school School, ok bool) {
 //go:embed assets/werkstatt-background.jpg
 var werkstattBackground string
 
-// schoolData returns the settings and the background of school: the
-// programme school's are DemoSettings and none; the werkstatt school has
-// its own identity (name, imprint, receipt issuer and prefix), theme,
-// accent, language and background, and the programme school's rules.
-func schoolData(school School) (domain.Settings, domain.Background, error) {
+// schoolData returns the settings, the background and the places of school:
+// the programme school's are DemoSettings, none and demoLocations; the
+// werkstatt school has its own identity (name, imprint, receipt issuer and
+// prefix), theme, accent, language, background and places
+// (werkstattLocations), and the programme school's rules.
+func schoolData(school School) (domain.Settings, domain.Background, []locationSpec, error) {
 	settings := DemoSettings()
 
 	switch school {
 	case SchoolProgramme:
-		return settings, domain.Background{}, nil
+		return settings, domain.Background{}, demoLocations, nil
 	case SchoolWerkstatt:
 		// A fictional name; the accent passes the 4.5:1 contrast check,
 		// and its dark variant is derived from it (domain.DarkAccent).
@@ -121,14 +123,16 @@ func schoolData(school School) (domain.Settings, domain.Background, error) {
 		settings.Receipts.Footer = "Bankverbindung: Beispielbank · IBAN XX00 0000 0000 0000 0000 00"
 
 		// A fresh copy: the store owns what it is given.
-		return settings, domain.Background{ContentType: domain.BackgroundJPEG, Data: []byte(werkstattBackground)}, nil
+		background := domain.Background{ContentType: domain.BackgroundJPEG, Data: []byte(werkstattBackground)}
+
+		return settings, background, werkstattLocations, nil
 	default:
 		names := make([]string, 0, len(Schools()))
 		for _, s := range Schools() {
 			names = append(names, string(s))
 		}
 
-		return domain.Settings{}, domain.Background{}, fmt.Errorf("seed: unknown demo school %q, want one of %s: %w",
+		return domain.Settings{}, domain.Background{}, nil, fmt.Errorf("seed: unknown demo school %q, want one of %s: %w",
 			school, strings.Join(names, ", "), domain.ErrValidation)
 	}
 }
