@@ -734,8 +734,20 @@ gives only 53.8 %, because most code is run by other packages' tests.
       database
 - [ ] `internal/httpapi` and `internal/app`: the error mappings (`toHTTPError`, conflicts, field
       errors) and middleware branches without a test
-- [ ] Stores: the postgres error paths, and the sqlc queries no test runs. Each gets a contract case
-      in `storetest` or is deleted as unused
+- [x] Stores: the postgres error paths, and the sqlc queries no test runs. Each gets a contract case
+      in `storetest` or is deleted as unused (2026-10-31): every one of the 226 sqlc queries has a
+      caller, none deleted. Contract cases on both stores (read-only rejection of the push,
+      announcement, receipt PDF, guardian and class member writes; unknown announcement, duplicate
+      mailing, `GetCancellation` of no receipt, ordered `ListCancellations`, empty PDF), postgres
+      tests that make the errors happen (out-of-range numbers fail before any SQL, a canceled context
+      in a live transaction, corrupt JSON rows, a closed pool, a commit on a terminated backend,
+      failed `Up`/`Down`, a broken goose version table), memory snapshot corruption and the lock
+      wait. `internal/store/postgres` 91 → 12 uncovered, `internal/store/memory` 46 → 6,
+      `internal/store` 4 → 0; total 89.4 % → 90.1 % (14,074 of 15,613). The rest is unreachable:
+      library errors on fixed input (embedded migrations, `json.Marshal` of typed details, the
+      second parse of a URL), `bytes.Buffer` writes, and a booking without its lesson. Found: memory's
+      `PutPDF` checks read-only before an empty PDF, postgres the other way round; `Restore`
+      accepts trailing data after a snapshot
 - [ ] Adapters: `internal/mail/smtp` (a fake SMTP server: rejects, timeouts, TLS), `internal/webpush`
       (an `httptest` push service: 404/410 drops the subscription, 429/5xx retries),
       `internal/pdf/pdftext`, `internal/pdf/typstwasm` (malformed input, module errors)
