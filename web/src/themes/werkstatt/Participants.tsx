@@ -109,7 +109,8 @@ function ParticipantsTable({
   const actions = canEdit || office;
 
   return (
-    <section aria-labelledby={headingId} className="space-y-3">
+    // werkstatt-participants: werkstatt.css widens the lesson sheet that holds the table.
+    <section aria-labelledby={headingId} className="werkstatt-participants space-y-3">
       <Heading id={headingId} />
       <p className="text-sm text-muted-foreground">{counts.join(' · ')}</p>
       {stale && (

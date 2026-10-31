@@ -178,7 +178,8 @@
   /* #c32f25 reaches only 3.3:1 on the dark page; a lighter red for text. */
   --destructive: #f26f67;
   --border: #383838;
-  --input: #383838;
+  /* Inputs and checkboxes are drawn by this border: 3.5:1 on the page and cards (WCAG 1.4.11). */
+  --input: #737073;
   --ring: #f8398a;
   --sidebar: #1c1a1c;
   --sidebar-foreground: #ececec;
@@ -291,6 +292,19 @@
 [data-theme='werkstatt'] [data-slot='dialog-close'] svg,
 [data-theme='werkstatt'] [data-slot='sheet-close'] svg {
   stroke-width: 1.25;
+}
+
+/*
+ * The lesson sheet with Werkstatt's participants table (Participants.tsx) is wider than the
+ * sheet's 28rem, so the table's phone, pass, trial and remove columns show without scrolling.
+ * The table takes about 46rem with the seed's names; 56rem leaves room for longer ones and for
+ * fonts that render wider (Linux). Phones keep the full-width sheet, where the table scrolls.
+ */
+@media (min-width: 40rem) {
+  [data-theme='werkstatt']
+    [data-slot='sheet-content'][data-side='right']:has(.werkstatt-participants) {
+    max-width: 56rem;
+  }
 }
 
 /*

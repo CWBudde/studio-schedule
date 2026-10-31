@@ -106,6 +106,17 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   settings (`web/src/components/layout/branding.ts`). The `init` command
   (`cmd/studio-schedule/init.go`, `service/setup.go`) sets up a new school and prints the first
   admin's setup link.
+- **Themes:** ADR 0018. `domain.Theme` (`programme`, the zero value, or `werkstatt`) is on the
+  branding card, the background image beside it like the receipt logo (`SettingsRepo.Background`,
+  `getSchoolBackground`, `--school-background` from `branding.ts`). `web/src/themes`: a registry
+  (`registry.ts`) of themes with typed slots (`slots.ts`: `Shell`, `ScheduleList`, `DayHeading`,
+  `LessonCard`, `Home`, `Profile`, `Participants`); a page computes its view model and actions once
+  and renders `useSlot('…')`, and a slot neither fetches nor mutates. Programme provides every slot,
+  a slot a theme lacks is Programme's (`slotOf`). Werkstatt is a lazy chunk (`import('./werkstatt')`)
+  with its CSS scoped under `[data-theme='werkstatt']`, kept out of the entry by the guard in
+  `web/vite.chunks.ts`. `web/public/theme.js` sets the cached theme (`themeCache.ts`) as `data-theme`
+  before first paint, `ThemeProvider` then the school's. Contrast: `werkstatt/tokens.test.ts`; e2e:
+  `web/e2e/werkstatt.spec.ts`.
 - **Admin writes:** the office maintains catalogue and timetable (`service/catalog_admin.go`,
   `httpapi/catalog_admin.go`; classes in `service/class_admin.go`, whose edits move the future
   lessons along in `class_sync.go`, terms in `service/term_admin.go`, whose new dates delete or

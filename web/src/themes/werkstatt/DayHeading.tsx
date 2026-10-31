@@ -27,7 +27,7 @@ export function DayHeading({ id, date, tone, prevId, nextId }: DayHeadingProps) 
         id={id}
         tabIndex={-1}
         aria-current={tone === 'today' ? 'date' : undefined}
-        className="min-w-0 flex-1 px-2 text-base font-bold tracking-[1.5px] uppercase outline-none"
+        className="min-w-0 flex-1 px-2 text-center text-lg font-bold tracking-[1.5px] uppercase outline-none min-[600px]:text-2xl"
       >
         {tone === 'today' || tone === 'tomorrow' ? t(`list.${tone}`, { day: heading }) : heading}
       </h2>

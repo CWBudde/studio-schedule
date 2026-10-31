@@ -89,7 +89,7 @@ function RoomColumns({
               {/* No gap between the columns' header cells: the grey row reads as one band. */}
               <p
                 id={headerId}
-                className="truncate bg-secondary px-3 py-1.5 text-[0.7rem] font-bold tracking-wide text-primary uppercase"
+                className="truncate bg-secondary px-3 py-2.5 text-[0.78rem] font-bold tracking-wide text-primary uppercase"
               >
                 {column.label}
               </p>
