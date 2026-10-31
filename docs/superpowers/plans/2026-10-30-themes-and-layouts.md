@@ -284,7 +284,7 @@ Tailwind v4, shadcn/ui, TanStack Router/Query, react-i18next, Vitest, Playwright
     email as Irene Inkwell, a seed member without children.
   - Visual pass (no reference screenshots provided; 48 captures, desktop/phone, light/dark, against
     the old app's stylesheet, read only). Fixed: the 28rem lesson sheet hid the participants
-    table's phone, pass, trial and remove columns (a sheet holding it is up to 48rem from 40rem,
+    table's phone, pass, trial and remove columns (a sheet holding it is up to 56rem from 40rem,
     `:has(.werkstatt-participants)`; phones scroll); dark `--input` `#383838` was 1.5:1, the
     unchecked present boxes vanished (`#737073`, 3.5:1, pinned ≥ 3:1 in `tokens.test.ts`); the
     phone header's tools wrapped to the left under the menu (`ml-auto`). Closer to the old type:

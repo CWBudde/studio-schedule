@@ -297,12 +297,13 @@
 /*
  * The lesson sheet with Werkstatt's participants table (Participants.tsx) is wider than the
  * sheet's 28rem, so the table's phone, pass, trial and remove columns show without scrolling.
- * Phones keep the full-width sheet, where the table scrolls sideways.
+ * The table takes about 46rem with the seed's names; 56rem leaves room for longer ones and for
+ * fonts that render wider (Linux). Phones keep the full-width sheet, where the table scrolls.
  */
 @media (min-width: 40rem) {
   [data-theme='werkstatt']
     [data-slot='sheet-content'][data-side='right']:has(.werkstatt-participants) {
-    max-width: 48rem;
+    max-width: 56rem;
   }
 }
 
