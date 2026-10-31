@@ -291,10 +291,10 @@ func (s *Sender) buildMessage(m mail.Message) ([]byte, error) {
 		return nil, err
 	}
 
+	// The multipart writer writes into b, and a bytes.Buffer never fails a
+	// write; with a valid boundary, the writer's errors cannot occur.
 	mw := multipart.NewWriter(&b)
-	if err := mw.SetBoundary("mixed-" + boundary); err != nil {
-		return nil, err
-	}
+	_ = mw.SetBoundary("mixed-" + boundary)
 
 	header("Content-Type", mime.FormatMediaType("multipart/mixed", map[string]string{"boundary": mw.Boundary()}))
 	b.WriteString("\r\n")
@@ -304,33 +304,19 @@ func (s *Sender) buildMessage(m mail.Message) ([]byte, error) {
 		part.Set("Content-Transfer-Encoding", "quoted-printable")
 	}
 
-	w, err := mw.CreatePart(part)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err := w.Write(body); err != nil {
-		return nil, err
-	}
+	w, _ := mw.CreatePart(part)
+	_, _ = w.Write(body)
 
 	for _, a := range m.Attachments {
-		w, err := mw.CreatePart(textproto.MIMEHeader{
+		w, _ := mw.CreatePart(textproto.MIMEHeader{
 			"Content-Type":              {mime.FormatMediaType(a.ContentType, map[string]string{"name": a.Filename})},
 			"Content-Disposition":       {mime.FormatMediaType("attachment", map[string]string{"filename": a.Filename})},
 			"Content-Transfer-Encoding": {"base64"},
 		})
-		if err != nil {
-			return nil, err
-		}
-
-		if err := writeBase64(w, a.Content); err != nil {
-			return nil, err
-		}
+		writeBase64(w, a.Content)
 	}
 
-	if err := mw.Close(); err != nil {
-		return nil, err
-	}
+	_ = mw.Close()
 
 	return b.Bytes(), nil
 }
@@ -338,14 +324,13 @@ func (s *Sender) buildMessage(m mail.Message) ([]byte, error) {
 const textPlain = "text/plain; charset=utf-8"
 
 // body returns the Content-Type and the encoded body of m's text: text/plain
-// alone (quoted-printable), or multipart/alternative with its HTML.
+// alone (quoted-printable), or multipart/alternative with its HTML. Only the
+// random boundary can fail.
 func (s *Sender) body(m mail.Message) (string, []byte, error) {
 	var b bytes.Buffer
 
 	if m.HTML == "" {
-		if err := writeQuotedPrintable(&b, m.Text); err != nil {
-			return "", nil, err
-		}
+		writeQuotedPrintable(&b, m.Text)
 
 		return textPlain, b.Bytes(), nil
 	}
@@ -355,62 +340,48 @@ func (s *Sender) body(m mail.Message) (string, []byte, error) {
 		return "", nil, err
 	}
 
+	// As in buildMessage: the writer writes into a bytes.Buffer, so its
+	// errors cannot occur.
 	mw := multipart.NewWriter(&b)
-	if err := mw.SetBoundary("alt-" + boundary); err != nil {
-		return "", nil, err
-	}
+	_ = mw.SetBoundary("alt-" + boundary)
 
 	for _, part := range []struct{ contentType, body string }{
 		{textPlain, m.Text},
 		{"text/html; charset=utf-8", m.HTML},
 	} {
-		w, err := mw.CreatePart(textproto.MIMEHeader{
+		w, _ := mw.CreatePart(textproto.MIMEHeader{
 			"Content-Type":              {part.contentType},
 			"Content-Transfer-Encoding": {"quoted-printable"},
 		})
-		if err != nil {
-			return "", nil, err
-		}
-
-		if err := writeQuotedPrintable(w, part.body); err != nil {
-			return "", nil, err
-		}
+		writeQuotedPrintable(w, part.body)
 	}
 
-	if err := mw.Close(); err != nil {
-		return "", nil, err
-	}
+	_ = mw.Close()
 
 	return mime.FormatMediaType("multipart/alternative", map[string]string{"boundary": mw.Boundary()}), b.Bytes(), nil
 }
 
-// writeBase64 encodes data in lines of 76 characters (RFC 2045).
-func writeBase64(w io.Writer, data []byte) error {
+// writeBase64 encodes data in lines of 76 characters (RFC 2045). w writes
+// into a bytes.Buffer, so its errors cannot occur.
+func writeBase64(w io.Writer, data []byte) {
 	enc := base64.StdEncoding.EncodeToString(data)
 
 	for len(enc) > 0 {
 		n := min(len(enc), 76)
-		if _, err := io.WriteString(w, enc[:n]+"\r\n"); err != nil {
-			return err
-		}
-
+		_, _ = io.WriteString(w, enc[:n]+"\r\n")
 		enc = enc[n:]
 	}
-
-	return nil
 }
 
 // writeQuotedPrintable encodes body with CRLF line breaks, whatever line
-// breaks it came with.
-func writeQuotedPrintable(w io.Writer, body string) error {
+// breaks it came with. w writes into a bytes.Buffer, so its errors cannot
+// occur.
+func writeQuotedPrintable(w io.Writer, body string) {
 	body = strings.ReplaceAll(body, "\r\n", "\n")
 
 	qp := quotedprintable.NewWriter(w)
-	if _, err := io.WriteString(qp, body); err != nil {
-		return err
-	}
-
-	return qp.Close()
+	_, _ = io.WriteString(qp, body)
+	_ = qp.Close()
 }
 
 // randomHex returns 16 random bytes as hex.
