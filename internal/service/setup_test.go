@@ -134,16 +134,83 @@ func TestSetupInitInvalid(t *testing.T) {
 
 			_, err := service.NewSetupService(st, clock.NewFixed(settingsNow), ids.NewSequence(), "/").Init(t.Context(), d)
 			wantField(t, err, field)
-
-			// Nothing was stored.
-			err = st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
-				_, err := tx.Settings().Get(ctx)
-
-				return err
-			})
-			if !errors.Is(err, domain.ErrNotFound) {
-				t.Fatalf("settings stored: %v", err)
-			}
+			noSettings(t, st)
 		})
 	}
+}
+
+// noSettings fails the test if st holds school settings.
+func noSettings(t *testing.T, st store.Store) {
+	t.Helper()
+
+	err := st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		_, err := tx.Settings().Get(ctx)
+
+		return err
+	})
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("settings stored: %v", err)
+	}
+}
+
+// TestSetupInitWithoutEmail: the first admin needs an email address, the
+// account's sign-in, though a person may have none.
+func TestSetupInitWithoutEmail(t *testing.T) {
+	t.Parallel()
+
+	st := memory.New()
+	d := setupData()
+	d.AdminEmail = " "
+
+	_, err := service.NewSetupService(st, clock.NewFixed(settingsNow), ids.NewSequence(), "/").Init(t.Context(), d)
+	wantField(t, err, "email")
+	noSettings(t, st)
+}
+
+// TestSetupInitEmailInUse: a store without settings whose accounts include
+// the admin's email (data restored without its settings) refuses the
+// setup as ErrEmailInUse and stores nothing.
+func TestSetupInitEmailInUse(t *testing.T) {
+	t.Parallel()
+
+	st := memory.New()
+	seq := ids.NewSequence()
+	p := domain.Person{ID: ids.New[domain.PersonID](seq), GivenName: "Edda", FamilyName: "Example"}
+
+	err := st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		if err := tx.Persons().Create(ctx, p); err != nil {
+			return err
+		}
+
+		return tx.Accounts().Create(ctx, domain.Account{
+			ID: ids.New[domain.AccountID](seq), PersonID: p.ID, Email: setupData().AdminEmail, Role: domain.RoleMember,
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = service.NewSetupService(st, clock.NewFixed(settingsNow), seq, "/").Init(t.Context(), setupData())
+	if !errors.Is(err, service.ErrEmailInUse) {
+		t.Fatalf("Init = %v, want ErrEmailInUse", err)
+	}
+
+	noSettings(t, st)
+}
+
+// TestSetupInitStoreFaults: a store failure while a school is set up is
+// returned and stores neither the settings nor the admin.
+func TestSetupInitStoreFaults(t *testing.T) {
+	t.Parallel()
+
+	service.SweepFaults(t, service.FaultSweep{Setup: func(t *testing.T) (*service.FaultStore, func() error) {
+		fs := service.NewFaultStore(memory.New())
+		svc := service.NewSetupService(fs, clock.NewFixed(settingsNow), ids.NewSequence(), "/")
+
+		return fs, func() error {
+			_, err := svc.Init(t.Context(), setupData())
+
+			return err
+		}
+	}})
 }
