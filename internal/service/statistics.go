@@ -305,10 +305,8 @@ func (st *Statistics) resolveRange(ctx context.Context, tx store.Tx, q Statistic
 			return err
 		}
 
+		// The term includes today: it ends today or later.
 		st.Term, st.From, st.To = term, term.StartsOn, st.Today
-		if term.EndsOn.Compare(st.To) < 0 {
-			st.To = term.EndsOn
-		}
 
 		// A term of more than a year: its latest year.
 		if st.From.DaysUntil(st.To) >= MaxStatisticsDays {
