@@ -57,3 +57,27 @@ func TestParseRejectsOtherInput(t *testing.T) {
 		}
 	}
 }
+
+func TestMisses(t *testing.T) {
+	r := Report{
+		Total: Package{Path: "total", Statements: 100, Covered: 94},
+		Packages: []Package{
+			{Path: "internal/a", Statements: 10, Covered: 7},
+			{Path: "internal/b", Statements: 90, Covered: 87},
+		},
+	}
+	if got := r.Misses(0, 0); got != nil {
+		t.Errorf("Misses(0, 0) = %q, want none: a floor of 0 is off", got)
+	}
+	if got := r.Misses(94, 70); got != nil {
+		t.Errorf("Misses(94, 70) = %q, want none: a value at the floor passes", got)
+	}
+	got := r.Misses(95, 80)
+	want := []string{
+		"total 94.0% is below the 95% floor",
+		"internal/a 70.0% is below the 80% package floor (3 uncovered)",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("Misses(95, 80) =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}

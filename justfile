@@ -98,9 +98,15 @@ test-race:
 test-cover:
     go test -coverpkg=./... -coverprofile=coverage.out ./...
 
-# Report coverage.out: the total, then the packages with the most uncovered statements
-coverage:
-    go run ./tools/coverage coverage.out
+# The coverage floors (percent of statements) `just coverage` and CI enforce. They go up as
+# coverage grows and only go down by a decision recorded in PLAN.md (Phase 9).
+coverage_min := "95"
+coverage_min_package := "80"
+
+# Report coverage.out (the total, then the packages with the most uncovered statements) and
+# fail below the floors; args go to tools/coverage, e.g. `just coverage -top 0`
+coverage *args:
+    go run ./tools/coverage -min {{coverage_min}} -min-package {{coverage_min_package}} {{args}} coverage.out
 
 # Run the PostgreSQL store tests (Docker container, or STUDIO_TEST_DATABASE_URL)
 test-pg *args:
@@ -132,7 +138,7 @@ e2e-server *args: build
 restore-drill:
     ./scripts/restore-drill.sh
 
-# Everything CI runs but `just vuln`, then the coverage report (needs Docker; e2e needs `just e2e-install`)
+# Everything CI runs but `just vuln`, then the coverage report and gate (needs Docker; e2e needs `just e2e-install`)
 ci: check-tidy check-formatted check-sqlc lint test-cover check-wasm-deps typst-wasm-check web-check wasm-smoke e2e e2e-server restore-drill
     @just coverage
 

@@ -9,7 +9,10 @@
 // the packages with the most uncovered statements; -markdown writes it as a
 // table for a GitHub job summary.
 //
-// Usage: go run ./tools/coverage [-markdown] [-top n] coverage.out
+// With -min and -min-package it is also the gate: after the report it names
+// every floor the profile misses on stderr and exits 1 (see PLAN.md, Phase 9).
+//
+// Usage: go run ./tools/coverage [-markdown] [-top n] [-min pct] [-min-package pct] coverage.out
 package main
 
 import (
@@ -60,31 +63,64 @@ type Report struct {
 func main() {
 	markdown := flag.Bool("markdown", false, "write a Markdown table (for $GITHUB_STEP_SUMMARY)")
 	top := flag.Int("top", 15, "list the n packages with the most uncovered statements (0: all)")
+	minTotal := flag.Float64("min", 0, "fail below this total coverage in percent (0: no floor)")
+	minPackage := flag.Float64("min-package", 0, "fail if a package is below this coverage in percent (0: no floor)")
 	flag.Parse()
 	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: coverage [-markdown] [-top n] coverage.out")
+		fmt.Fprintln(os.Stderr, "usage: coverage [-markdown] [-top n] [-min pct] [-min-package pct] coverage.out")
 		os.Exit(2)
 	}
-	if err := run(os.Stdout, flag.Arg(0), *markdown, *top); err != nil {
+	misses, err := run(os.Stdout, flag.Arg(0), *markdown, *top, *minTotal, *minPackage)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "coverage:", err)
+		os.Exit(1)
+	}
+	if len(misses) > 0 {
+		for _, m := range misses {
+			fmt.Fprintln(os.Stderr, "coverage:", m)
+		}
 		os.Exit(1)
 	}
 }
 
-func run(w io.Writer, profile string, markdown bool, top int) error {
+func run(w io.Writer, profile string, markdown bool, top int, minTotal, minPackage float64) ([]string, error) {
 	f, err := os.Open(profile) //nolint:gosec // G304: the profile the developer names on the command line
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer f.Close()
 	r, err := Parse(f)
 	if err != nil {
-		return fmt.Errorf("%s: %w", profile, err)
+		return nil, fmt.Errorf("%s: %w", profile, err)
 	}
 	if markdown {
-		return r.WriteMarkdown(w, top)
+		err = r.WriteMarkdown(w, top)
+	} else {
+		err = r.WriteText(w, top)
 	}
-	return r.WriteText(w, top)
+	if err != nil {
+		return nil, err
+	}
+	return r.Misses(minTotal, minPackage), nil
+}
+
+// Misses names each floor the report falls below: the total under minTotal,
+// and every package under minPackage, the most uncovered first. A floor of 0
+// is off.
+func (r Report) Misses(minTotal, minPackage float64) []string {
+	var out []string
+	if minTotal > 0 && r.Total.Percent() < minTotal {
+		out = append(out, fmt.Sprintf("total %.1f%% is below the %.0f%% floor", r.Total.Percent(), minTotal))
+	}
+	if minPackage > 0 {
+		for _, p := range r.Packages {
+			if p.Percent() < minPackage {
+				out = append(out, fmt.Sprintf("%s %.1f%% is below the %.0f%% package floor (%d uncovered)",
+					p.Path, p.Percent(), minPackage, p.Uncovered()))
+			}
+		}
+	}
+	return out
 }
 
 // Parse reads a cover profile and aggregates it per package.

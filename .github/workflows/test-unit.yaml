@@ -21,6 +21,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Setup just
+        uses: extractions/setup-just@v3
+
       # Includes the PostgreSQL contract tests: testcontainers starts
       # postgres:18-alpine on the runner's Docker. -coverpkg=./... counts a
       # package's statements whichever package's tests run them (the stores
@@ -31,12 +34,17 @@ jobs:
       # Always reported, also when a test failed: the total and the packages
       # with the most uncovered statements, in the log and the job summary
       # (tools/coverage leaves out test suites, generated code and tools).
-      # Not yet a gate; see PLAN.md, Phase 9.
       - name: Coverage report
         if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
         run: |
           go run ./tools/coverage -top 0 coverage.out
           go run ./tools/coverage -markdown coverage.out >> "$GITHUB_STEP_SUMMARY"
+
+      # The gate: fails below the floors in the justfile (PLAN.md, Phase 9),
+      # naming each miss (the full table is in the report above).
+      # Only after green tests; a failed test fails the job already.
+      - name: Coverage gate
+        run: just coverage -top 1
 
       - name: Upload coverage
         if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
