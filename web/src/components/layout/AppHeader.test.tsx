@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { familyQuery } from '@/api/queries';
 import {
   family,
@@ -14,6 +15,7 @@ import {
   publicSettings,
   signedOut,
 } from '@/test/mockApi';
+import { Toaster } from '@/components/ui/sonner';
 import { renderInRouter } from '@/test/utils';
 import { Header } from '@/themes/programme/Shell';
 import { useShellHeader } from './AppHeader';
@@ -228,5 +230,49 @@ describe('AppHeader', () => {
     expect(screen.queryByRole('button', { name: 'Nora Example' })).not.toBeInTheDocument();
     expect(await screen.findByText('No family data')).toBeInTheDocument();
     expect(queryClient.getQueryData(familyQuery.queryKey)).toBeUndefined();
+  });
+
+  describe('the session, for a theme with a sign-in/out button of its own', () => {
+    // Sonner's store outlives a test: the account menu's sign-out above leaves its notice.
+    beforeEach(() => {
+      toast.dismiss();
+    });
+
+    /** The header hook's session, as a theme's Shell gets it. */
+    function Session() {
+      const { session } = useShellHeader();
+      if (session.state !== 'signedIn') return <p>Session: {session.state}</p>;
+      return (
+        <button type="button" disabled={session.signingOut} onClick={session.signOut}>
+          Theme sign-out
+        </button>
+      );
+    }
+
+    it('is signed out for a visitor', async () => {
+      mockApiGet({ ...signedOut, ...notDemo });
+
+      renderInRouter(<Session />);
+
+      expect(await screen.findByText('Session: signedOut')).toBeInTheDocument();
+    });
+
+    it("signs out like the account menu, with the menu's notice", async () => {
+      mockApiGet({ ...notDemo, '/api/v1/auth/me': { body: meMember } });
+      const post = mockApiPost({ '/api/v1/auth/logout': { status: 204 } });
+      const user = userEvent.setup();
+
+      renderInRouter(
+        <>
+          <Session />
+          <Toaster />
+        </>,
+      );
+      await user.click(await screen.findByRole('button', { name: 'Theme sign-out' }));
+
+      expect(await screen.findByText('Session: signedOut')).toBeInTheDocument();
+      expect(post).toHaveBeenCalledWith('/api/v1/auth/logout');
+      expect(await screen.findByText('You have been signed out.')).toBeInTheDocument();
+    });
   });
 });

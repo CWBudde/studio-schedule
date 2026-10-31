@@ -32,7 +32,13 @@ function Page() {
     <Shell
       banners={null}
       announcements={null}
-      header={{ nav: [], tools: null, account: null, language: null }}
+      header={{
+        nav: [],
+        tools: null,
+        account: null,
+        language: null,
+        session: { state: 'unknown' },
+      }}
       footer={null}
     >
       <p>The page</p>

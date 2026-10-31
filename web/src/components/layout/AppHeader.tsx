@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useMe } from '@/api/useMe';
 import { DemoMailbox } from '@/features/demo/DemoMailbox';
 import { canTeach } from '@/features/teach/access';
-import type { NavItem, ShellProps } from '@/themes/slots';
+import type { NavItem, ShellProps, ShellSession } from '@/themes/slots';
 import { AccountMenu } from './AccountMenu';
 import {
   useApplyBranding,
@@ -13,6 +13,7 @@ import {
 } from './branding';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ResetDemo } from './ResetDemo';
+import { useSignOut } from './useSignOut';
 
 /**
  * The header of the Shell slot: the school's name and logo, the main
@@ -26,6 +27,7 @@ export function useShellHeader(): ShellProps['header'] {
   useApplyBranding(settings);
   useSchoolBackground(settings?.hasBackground);
   const logoUrl = useSchoolLogoUrl(settings?.hasLogo);
+  const logout = useSignOut();
 
   const nav: NavItem[] = [
     { to: '/schedule', label: t('nav.schedule'), icon: CalendarDays },
@@ -47,5 +49,16 @@ export function useShellHeader(): ShellProps['header'] {
     ),
     account: <AccountMenu />,
     language: <LanguageSwitcher />,
+    session: sessionOf(me, logout),
   };
+}
+
+function sessionOf(
+  me: ReturnType<typeof useMe>,
+  logout: ReturnType<typeof useSignOut>,
+): ShellSession {
+  // As the account menu: neither while unknown.
+  if (me.isPending) return { state: 'unknown' };
+  if (!me.data) return { state: 'signedOut' };
+  return { state: 'signedIn', signOut: logout.signOut, signingOut: logout.pending };
 }
