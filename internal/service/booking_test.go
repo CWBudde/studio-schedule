@@ -693,6 +693,81 @@ func TestCancelCanceledLesson(t *testing.T) {
 	}
 }
 
+// TestCancelFollowingMovedBooking: a booking that a concurrent merge moved
+// to another person before the lesson lock (here Mia's, merged into Tom)
+// is no longer among the person's bookings read under the locks, so
+// nothing is canceled and nothing mailed, and the call succeeds with no
+// bookings. This pins the current behavior.
+func TestCancelFollowingMovedBooking(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newBookingFixture(t)
+	c := f.addClass(t, time.Tuesday, domain.TimeOfDay{Hour: 18})
+	l := weeklyLessons(t, f, c, 9, "2026-10-27")[0]
+	f.bookAs(t, f.mia, l)
+	b := f.bookingIn(t, l, f.mia)
+
+	moved := editingStore{Store: f.st, onLock: func(ctx context.Context, tx store.Tx, locked domain.Lesson) domain.Lesson {
+		got, err := tx.Bookings().Get(ctx, b.ID)
+		if err == nil && got.PersonID == f.mia.ID {
+			got.PersonID = f.tom.ID
+			err = tx.Bookings().Update(ctx, got)
+		}
+
+		if err != nil {
+			t.Error(err)
+		}
+
+		return locked
+	}}
+
+	r, err := mail.NewRenderer()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewBookingService(moved, clock.NewFixed(mustInstant(t, bookingNow)), f.seq, testMails(r))
+
+	out, err := svc.CancelFollowing(ctx, f.principal(t, f.anna), b.ID, domain.Date{})
+	if err != nil || len(out.Bookings) != 0 || !out.PausedUntil.IsZero() {
+		t.Fatalf("CancelFollowing = %+v, %v; want nothing canceled", out, err)
+	}
+
+	if got, _ := f.booking(t, b.ID); got.Status != domain.BookingBooked || got.PersonID != f.tom.ID {
+		t.Errorf("booking %+v, want Tom's, active", got)
+	}
+
+	if mails := f.mails(t); len(mails) != 0 {
+		t.Errorf("mails %+v", mails)
+	}
+}
+
+// TestCancelBeforeBooked refuses a cancellation at a time before the
+// booking was made (a clock behind the one that booked) as a validation
+// error, and keeps the booking.
+func TestCancelBeforeBooked(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newBookingFixture(t)
+	anna := f.principal(t, f.anna)
+	l := f.regular(t, "2026-10-22T16:00:00Z")
+
+	b, err := f.bookingService(t, bookingNow).Book(ctx, anna, l.ID, f.mia.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := f.bookingServiceAt(t, b.BookedAt.Add(-time.Second)).Cancel(ctx, anna, b.ID); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("cancel before the booking: %v, want a validation error", err)
+	}
+
+	if got, events := f.booking(t, b.ID); got.Status != domain.BookingBooked || len(events) != 1 {
+		t.Fatalf("booking %+v, events %+v; want it kept", got, events)
+	}
+}
+
 // TestCancelFollowing previews and cancels a person's bookings of a class
 // from one lesson on.
 func TestCancelFollowing(t *testing.T) {
