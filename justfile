@@ -94,6 +94,14 @@ test:
 test-race:
     go test -race ./...
 
+# Run Go tests and write a cross-package cover profile to coverage.out (report: `just coverage`)
+test-cover:
+    go test -coverpkg=./... -coverprofile=coverage.out ./...
+
+# Report coverage.out: the total, then the packages with the most uncovered statements
+coverage:
+    go run ./tools/coverage coverage.out
+
 # Run the PostgreSQL store tests (Docker container, or STUDIO_TEST_DATABASE_URL)
 test-pg *args:
     go test -race -count=1 ./internal/store/postgres {{args}}
@@ -124,8 +132,9 @@ e2e-server *args: build
 restore-drill:
     ./scripts/restore-drill.sh
 
-# Everything CI runs but `just vuln` (needs Docker; the e2e tests need `just e2e-install` once)
-ci: check-tidy check-formatted check-sqlc lint test check-wasm-deps typst-wasm-check web-check wasm-smoke e2e e2e-server restore-drill
+# Everything CI runs but `just vuln`, then the coverage report (needs Docker; e2e needs `just e2e-install`)
+ci: check-tidy check-formatted check-sqlc lint test-cover check-wasm-deps typst-wasm-check web-check wasm-smoke e2e e2e-server restore-drill
+    @just coverage
 
 # ---------------------------------------------------------------- build & run
 

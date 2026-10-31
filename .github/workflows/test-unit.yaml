@@ -22,19 +22,21 @@ jobs:
           go-version-file: go.mod
 
       # Includes the PostgreSQL contract tests: testcontainers starts
-      # postgres:18-alpine on the runner's Docker.
+      # postgres:18-alpine on the runner's Docker. -coverpkg=./... counts a
+      # package's statements whichever package's tests run them (the stores
+      # run the shared contract suite, internal/app drives the services).
       - name: Run unit tests
-        run: go test -race -coverprofile=coverage.out ./...
+        run: go test -race -coverpkg=./... -coverprofile=coverage.out ./...
 
-      # Coverage is measured and published, not yet gated: a floor only
-      # means something once a baseline from this job exists to ratchet
-      # against. The summary shows the total; the per-function list is in the
-      # go-coverage artifact (`go tool cover -func=coverage.out`).
-      - name: Coverage summary
+      # Always reported, also when a test failed: the total and the packages
+      # with the most uncovered statements, in the log and the job summary
+      # (tools/coverage leaves out test suites, generated code and tools).
+      # Not yet a gate; see PLAN.md, Phase 9.
+      - name: Coverage report
         if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
         run: |
-          total=$(go tool cover -func=coverage.out | tail -n 1 | awk '{print $NF}')
-          echo "## Go coverage: ${total} of statements" >> "$GITHUB_STEP_SUMMARY"
+          go run ./tools/coverage -top 0 coverage.out
+          go run ./tools/coverage -markdown coverage.out >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage
         if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
