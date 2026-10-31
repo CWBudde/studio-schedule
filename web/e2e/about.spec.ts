@@ -103,6 +103,13 @@ test('"Open in the Werkstatt look" opens the Werkstatt school', async ({ page })
   await expect(switchTo(page, 'Programme')).toBeVisible();
 });
 
+test('a ?demo=werkstatt link opens the Werkstatt school directly', async ({ page }) => {
+  await page.goto('?demo=werkstatt');
+
+  await expect(schoolHome(page, werkstatt)).toBeVisible({ timeout: 30_000 });
+  expect(new URL(page.url()).search).toBe('');
+});
+
 test.describe('in the Werkstatt school', () => {
   test.use({ demoEntered: true, demoSchool: 'werkstatt' });
 

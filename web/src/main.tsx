@@ -1,11 +1,13 @@
 import './zodConfig';
+// Before the router: it reads `?demo=`, which the router's history removes.
+import '@/features/demo/linkedSchool';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { startBackend } from '@/api/transport';
-import { hasEnteredDemo, markDemoEntered } from '@/features/demo/entered';
-import { chooseDemoSchool, demoSchool, takeDemoParam } from '@/features/demo/school';
+import { hasEnteredDemo } from '@/features/demo/entered';
+import { demoSchool } from '@/features/demo/school';
 import { isDemo } from '@/lib/env';
 import { indexedDbPersister, offlineCacheOptions, refreshRestored } from '@/lib/offlineCache';
 import { registerServiceWorker } from '@/pwa';
@@ -13,15 +15,6 @@ import { queryClient, router } from '@/router';
 import './i18n';
 import './index.css';
 
-// A demo link with `?demo=<school>` (the README's) opens that school
-// directly: it counts as the visitor's choice and skips the about page.
-if (isDemo) {
-  const linked = takeDemoParam(new URL(location.href));
-  if (linked) {
-    chooseDemoSchool(linked);
-    markDemoEntered();
-  }
-}
 // In the demo build this boots the Go/WASM backend in a Web Worker at once
 // for a returning visitor; on a first visit the app's layout starts it, so
 // the about page loads none of it.

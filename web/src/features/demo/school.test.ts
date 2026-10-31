@@ -95,15 +95,30 @@ describe('switchDemoSchool', () => {
     let reloadedAt = '';
     const reload = vi.fn(() => {
       // What the reload loads: the address as switchDemoSchool left it.
-      reloadedAt = location.pathname + location.hash;
+      reloadedAt = location.pathname + location.search + location.hash;
     });
 
     school.switchDemoSchool('werkstatt', reload);
 
     expect(reload).toHaveBeenCalledOnce();
-    expect(reloadedAt).toMatch(/^\/(#\/)?$/);
+    expect(reloadedAt).toMatch(/^\/\?demo=werkstatt(#\/)?$/);
     expect(school.demoSchool()).toBe('werkstatt');
     expect(localStorage.getItem('studio-schedule-demo-school')).toBe('werkstatt');
     expect(entered.hasEnteredDemo()).toBe(true);
+  });
+
+  it('names the school in the reloaded address, for a browser that blocks storage', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
+    history.replaceState(null, '', '/');
+    let reloadedAt = '';
+    const reload = vi.fn(() => {
+      reloadedAt = location.href;
+    });
+
+    school.switchDemoSchool('werkstatt', reload);
+
+    expect(school.takeDemoParam(new URL(reloadedAt))).toBe('werkstatt');
   });
 });

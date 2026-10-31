@@ -55,12 +55,15 @@ export function takeDemoParam(url: URL): DemoSchool | undefined {
 
 /**
  * Opens the demo with the other school: stores the choice and reloads at the
- * home page, so a new worker seeds or restores that school's data.
+ * home page, so a new worker seeds or restores that school's data. The
+ * reloaded address names the school with `?demo=` too, so the choice survives
+ * the reload where storage is blocked.
  */
 export function switchDemoSchool(s: DemoSchool, reload = () => window.location.reload()): void {
   chooseDemoSchool(s);
   markDemoEntered();
   const home = new URL(import.meta.env.BASE_URL, window.location.href);
+  home.searchParams.set('demo', s);
   if (routerHistory === 'hash') home.hash = '/';
   history.replaceState(null, '', home);
   reload();
