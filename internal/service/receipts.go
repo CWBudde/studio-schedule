@@ -418,11 +418,14 @@ func (s *ReceiptService) voidUnused(ctx context.Context, tx store.Tx, receipt do
 		return err
 	}
 
-	for _, l := range locked {
-		if l.ID == pass.ID {
-			pass = l
-		}
+	i := slices.IndexFunc(locked, func(l domain.Pass) bool { return l.ID == pass.ID })
+	if i < 0 {
+		// A merge (ADR 0015) moved the pass to another owner after it was
+		// read: refuse rather than write it back with the owner it had.
+		return fmt.Errorf("pass %v changed its owner meanwhile: %w", pass.ID, domain.ErrConflict)
 	}
+
+	pass = locked[i]
 
 	uses, err := tx.Redemptions().CountByPasses(ctx, []domain.PassID{pass.ID})
 	if err != nil {
