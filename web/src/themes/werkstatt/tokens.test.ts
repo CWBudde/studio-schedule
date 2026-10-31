@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contrastRatio, parseColor } from '@/lib/color';
+import { courseTints } from './courseTint';
 
 /**
  * Werkstatt's colour tokens (werkstatt.css), read as text: every text colour
@@ -142,6 +143,9 @@ describe.each(['light', 'dark'] as const)('werkstatt tokens, %s', (mode) => {
     ['tab text on the header bar', '--werkstatt-tab', s.header],
     ['tab text in the phone drop menu', '--werkstatt-tab', s.menu],
     ['body text in the phone drop menu', '--foreground', s.menu],
+    ['participant count (free places) on a card', '--werkstatt-green', s.card],
+    ['participant count (free places) on a card on the panel', '--werkstatt-green', s.cardOnPanel],
+    ['participant count (full) on a card on the panel', '--destructive', s.cardOnPanel],
   ];
 
   it.each(pairs)('%s reaches 4.5:1 (%s)', (_what, text, surface) => {
@@ -178,6 +182,25 @@ describe.each(['light', 'dark'] as const)('werkstatt tokens, %s', (mode) => {
     const band = over(t('--day-today'), s.background);
     expect(contrast(t('--day-today-foreground'), band)).toBeGreaterThanOrEqual(4.5);
   });
+});
+
+describe('werkstatt lesson card tints (light mode)', () => {
+  const { t } = surfaces('light');
+  const texts = [
+    '--card-foreground',
+    '--muted-foreground',
+    '--primary',
+    '--werkstatt-green',
+    '--destructive',
+  ];
+
+  it.each(courseTints.flatMap((tint) => texts.map((text) => [text, tint] as const)))(
+    '%s on %s reaches 4.5:1',
+    (text, tint) => {
+      const surface = parse(tint).rgb;
+      expect(contrast(t(text), surface)).toBeGreaterThanOrEqual(4.5);
+    },
+  );
 });
 
 describe('werkstatt token blocks', () => {

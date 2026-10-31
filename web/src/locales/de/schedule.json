@@ -390,5 +390,16 @@
       "notNow": "Das geht jetzt nicht: Die Anwesenheit öffnet mit Beginn der Stunde, und Lehrkräfte ändern bis zum Ende ihres Tages."
     },
     "stale": "Die Teilnehmenden konnten nicht aktualisiert werden; das ist vielleicht nicht der neueste Stand."
+  },
+  "werkstatt": {
+    "book": "Eintragen",
+    "cancel": "Austragen",
+    "waitlist": "Warteliste",
+    "full": "Voll",
+    "details": "Details",
+    "participants": "Teilnehmende: {{taken}} / {{capacity}}",
+    "booked": "Gebucht",
+    "prevDay": "Vorheriger Tag",
+    "nextDay": "Nächster Tag"
   }
 }
