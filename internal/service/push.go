@@ -139,10 +139,9 @@ func pushTo(
 			return fmt.Errorf("render %s notification: %v", n.template, err) //nolint:errorlint // see above
 		}
 
-		payload, err := json.Marshal(pushPayload{Title: text.Title, Body: text.Body, URL: n.url, Tag: n.tag, Lang: locale})
-		if err != nil {
-			return fmt.Errorf("push payload: %w", err)
-		}
+		// Marshaling a struct of strings cannot fail (invalid UTF-8 is
+		// replaced, not refused).
+		payload, _ := json.Marshal(pushPayload{Title: text.Title, Body: text.Body, URL: n.url, Tag: n.tag, Lang: locale})
 
 		for _, sub := range subs {
 			if err := enqueuePush(ctx, tx, src, now, sub.ID, string(payload), n.expires); err != nil {
