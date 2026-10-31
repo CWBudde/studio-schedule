@@ -9,7 +9,8 @@
     "schedule": "Schedule",
     "classes": "Classes",
     "teach": "Teaching",
-    "myLessons": "My lessons"
+    "myLessons": "My lessons",
+    "menu": "Menu"
   },
   "a11y": {
     "skipToContent": "Skip to content"

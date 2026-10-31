@@ -9,7 +9,8 @@
     "schedule": "Stundenplan",
     "classes": "Kurse",
     "teach": "Unterricht",
-    "myLessons": "Meine Stunden"
+    "myLessons": "Meine Stunden",
+    "menu": "Menü"
   },
   "a11y": {
     "skipToContent": "Zum Inhalt springen"

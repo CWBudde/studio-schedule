@@ -7,10 +7,7 @@ import type { Theme, ThemeId } from './slots';
  */
 const loaders: Record<ThemeId, () => Promise<Theme>> = {
   programme: () => Promise.resolve(programme),
-  // Werkstatt's slots and styles arrive with its own chunk (task 3.1 of the
-  // themes plan: `import('./werkstatt')`). Until then it provides no slot,
-  // so it looks like Programme under its own id.
-  werkstatt: () => Promise.resolve({ id: 'werkstatt', slots: {} }),
+  werkstatt: () => import('./werkstatt').then((m) => m.werkstatt),
 };
 
 /** Every theme's id. */
