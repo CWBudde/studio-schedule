@@ -154,12 +154,7 @@ func (s *FamilyService) AddDependent(ctx context.Context, p Principal, d PersonD
 			return err
 		}
 
-		link := domain.Guardian{GuardianID: p.PersonID, DependentID: person.ID}
-		if err := link.Validate(); err != nil {
-			return err
-		}
-
-		return tx.Persons().AddGuardian(ctx, link)
+		return tx.Persons().AddGuardian(ctx, domain.Guardian{GuardianID: p.PersonID, DependentID: person.ID})
 	})
 	if err != nil {
 		return domain.Person{}, fmt.Errorf("add dependent: %w", err)
