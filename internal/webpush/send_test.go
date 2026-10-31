@@ -1,6 +1,9 @@
 package webpush
 
 import (
+	"bytes"
+	"cmp"
+	"context"
 	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -14,6 +17,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -127,7 +131,11 @@ func TestValidateSubject(t *testing.T) {
 		}
 	}
 
-	for _, bad := range []string{"", "office@example.org", "mailto:", "http://schedule.example.org", "https://"} {
+	for _, bad := range []string{
+		"", "office@example.org", "mailto:", "http://schedule.example.org", "https://",
+		// url.Parse refuses these.
+		"https://[::1", "https://schedule.example.org/%zz",
+	} {
 		if err := ValidateSubject(bad); !errors.Is(err, ErrConfig) {
 			t.Errorf("%q: want ErrConfig, got %v", bad, err)
 		}
@@ -167,13 +175,17 @@ func TestIsPublic(t *testing.T) {
 }
 
 // pushService is a fake push service that checks each request like a real
-// one and decrypts its payload with the browser's key.
+// one and decrypts its payload with the browser's key. It answers status
+// with body ("  details  " if empty) and, if set, a Location header.
 type pushService struct {
 	t        *testing.T
 	ua       *ecdh.PrivateKey
 	auth     []byte
 	vapidKey string
 	status   int
+	body     string
+	location string
+	requests atomic.Int32 // every request, also to a wrong path
 	got      chan pushRequest
 }
 
@@ -186,8 +198,13 @@ type pushRequest struct {
 func (p *pushService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	t := p.t
 
+	p.requests.Add(1)
+
 	if r.Method != http.MethodPost || r.URL.Path != "/push/abc" {
 		t.Errorf("request %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+
+		return
 	}
 
 	scheme, params, ok := strings.Cut(r.Header.Get("Authorization"), " ")
@@ -219,8 +236,22 @@ func (p *pushService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	p.got <- pushRequest{payload: decrypt(t, p.ua, p.auth, body), header: r.Header.Clone(), claims: verifyToken(t, token, k)}
 
+	if p.location != "" {
+		w.Header().Set("Location", p.location)
+	}
+
 	w.WriteHeader(p.status)
-	_, _ = w.Write([]byte("  details  "))
+
+	_, _ = w.Write([]byte(cmp.Or(p.body, "  details  ")))
+}
+
+// assertNoRequest fails if the push service was asked anything.
+func (p *pushService) assertNoRequest(t *testing.T) {
+	t.Helper()
+
+	if n := p.requests.Load(); n != 0 {
+		t.Errorf("the push service got %d requests", n)
+	}
 }
 
 func newPushService(t *testing.T, status int) (*pushService, *httptest.Server, Subscription, *Sender, clock.Clock) {
@@ -295,13 +326,30 @@ func TestSendWithoutUrgencyOrTTL(t *testing.T) {
 
 	svc, _, sub, sender, _ := newPushService(t, http.StatusCreated)
 
-	if err := sender.Send(t.Context(), sub, []byte("{}"), Options{}); err != nil {
-		t.Fatal(err)
-	}
+	// A negative TTL is sent as 0, like none.
+	for _, ttl := range []time.Duration{0, -time.Hour} {
+		if err := sender.Send(t.Context(), sub, []byte("{}"), Options{TTL: ttl}); err != nil {
+			t.Fatal(err)
+		}
 
-	got := <-svc.got
-	if got.header.Get("TTL") != "0" || got.header.Get("Urgency") != "" {
-		t.Errorf("TTL %q, Urgency %q", got.header.Get("TTL"), got.header.Get("Urgency"))
+		got := <-svc.got
+		if got.header.Get("TTL") != "0" || got.header.Get("Urgency") != "" {
+			t.Errorf("TTL %v: header TTL %q, Urgency %q", ttl, got.header.Get("TTL"), got.header.Get("Urgency"))
+		}
+	}
+}
+
+func TestSendAcceptsEverySuccess(t *testing.T) {
+	t.Parallel()
+
+	for _, status := range []int{http.StatusOK, http.StatusCreated, http.StatusAccepted, http.StatusNoContent} {
+		svc, _, sub, sender, _ := newPushService(t, status)
+
+		if err := sender.Send(t.Context(), sub, []byte("{}"), Options{}); err != nil {
+			t.Errorf("%d: %v", status, err)
+		}
+
+		<-svc.got
 	}
 }
 
@@ -312,12 +360,20 @@ func TestSendRefusals(t *testing.T) {
 		status          int
 		gone, permanent bool
 	}{
+		// The subscription is gone: delete it.
 		{http.StatusGone, true, true},
 		{http.StatusNotFound, true, true},
-		{http.StatusRequestEntityTooLarge, false, true},
+		// The request itself is refused: sending it again cannot help.
+		{http.StatusBadRequest, false, true},
+		{http.StatusUnauthorized, false, true},
 		{http.StatusForbidden, false, true},
+		{http.StatusRequestEntityTooLarge, false, true},
+		// Overloaded or failing: retry later.
 		{http.StatusTooManyRequests, false, false},
 		{http.StatusInternalServerError, false, false},
+		{http.StatusBadGateway, false, false},
+		{http.StatusServiceUnavailable, false, false},
+		// A redirect without a Location is returned as it is.
 		{http.StatusMovedPermanently, false, false},
 	} {
 		svc, _, sub, sender, _ := newPushService(t, tc.status)
@@ -332,6 +388,152 @@ func TestSendRefusals(t *testing.T) {
 
 		if se.StatusCode != tc.status || se.Gone() != tc.gone || se.Permanent() != tc.permanent || se.Body != "details" {
 			t.Errorf("%d: %+v gone %v permanent %v", tc.status, se, se.Gone(), se.Permanent())
+		}
+	}
+}
+
+func TestSendTruncatesTheErrorBody(t *testing.T) {
+	t.Parallel()
+
+	svc, _, sub, sender, _ := newPushService(t, http.StatusBadRequest)
+	// The first maxErrorBody bytes end in a space, which is trimmed; what
+	// follows them is not read.
+	svc.body = "\t" + strings.Repeat("e", maxErrorBody-2) + " " + strings.Repeat("z", 100)
+
+	err := sender.Send(t.Context(), sub, []byte("{}"), Options{})
+	<-svc.got
+
+	var se *StatusError
+	if !errors.As(err, &se) {
+		t.Fatalf("want a StatusError, got %v", err)
+	}
+
+	if want := strings.Repeat("e", maxErrorBody-2); se.Body != want {
+		t.Errorf("body of %d bytes %q, want the %d bytes %q", len(se.Body), se.Body, len(want), want)
+	}
+}
+
+func TestStatusErrorMessage(t *testing.T) {
+	t.Parallel()
+
+	for err, want := range map[*StatusError]string{
+		{StatusCode: http.StatusGone, Body: "details"}: "webpush: push service answered 410 Gone: details",
+		{StatusCode: http.StatusServiceUnavailable}:    "webpush: push service answered 503 Service Unavailable",
+	} {
+		if got := err.Error(); got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	}
+}
+
+// TestSendFollowsNoRedirects runs the client of NewClient, with only its
+// transport swapped for one that trusts the test server and may reach the
+// loopback address, against redirects to another path of the push service.
+func TestSendFollowsNoRedirects(t *testing.T) {
+	t.Parallel()
+
+	for _, status := range []int{
+		http.StatusMovedPermanently, http.StatusFound, http.StatusTemporaryRedirect, http.StatusPermanentRedirect,
+	} {
+		svc, srv, sub, defaultSender, clk := newPushService(t, status)
+		svc.location = srv.URL + "/elsewhere"
+
+		client := NewClient()
+		client.Transport = srv.Client().Transport
+
+		sender, err := New(Config{Keys: defaultSender.keys, Subject: "mailto:office@example.org", Clock: clk, Client: client})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = sender.Send(t.Context(), sub, []byte("{}"), Options{})
+		<-svc.got
+
+		var se *StatusError
+		if !errors.As(err, &se) || se.StatusCode != status || se.Permanent() || se.Gone() {
+			t.Errorf("%d: want a StatusError of the redirect, got %v", status, err)
+		}
+
+		// The handler counts /elsewhere too (and fails the test for it).
+		if n := svc.requests.Load(); n != 1 {
+			t.Errorf("%d: the push service got %d requests, want 1", status, n)
+		}
+	}
+}
+
+func TestSendRefusesInvalidMessages(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		p256dh  func(*[PublicKeyLen]byte)
+		payload []byte
+		want    error
+	}{
+		"p256dh all zeros": {p256dh: func(k *[PublicKeyLen]byte) { *k = [PublicKeyLen]byte{} }, want: ErrInvalidKey},
+		"p256dh not on the curve": {
+			// An uncompressed point (0x04, x, y) with x = y = 1.
+			p256dh: func(k *[PublicKeyLen]byte) {
+				*k = [PublicKeyLen]byte{0: 0x04, 32: 1, 64: 1}
+			},
+			want: ErrInvalidKey,
+		},
+		"payload too large": {payload: bytes.Repeat([]byte("x"), MaxPayload+1), want: ErrPayloadTooLarge},
+	} {
+		svc, _, sub, sender, _ := newPushService(t, http.StatusCreated)
+
+		if tc.p256dh != nil {
+			tc.p256dh(&sub.P256DH)
+		}
+
+		payload := tc.payload
+		if payload == nil {
+			payload = []byte("{}")
+		}
+
+		if _, err := Encrypt(sub, payload); !errors.Is(err, tc.want) {
+			t.Errorf("%s: Encrypt: want %v, got %v", name, tc.want, err)
+		}
+
+		if err := sender.Send(t.Context(), sub, payload, Options{}); !errors.Is(err, tc.want) {
+			t.Errorf("%s: Send: want %v, got %v", name, tc.want, err)
+		}
+
+		svc.assertNoRequest(t)
+	}
+}
+
+func TestSendWithoutContext(t *testing.T) {
+	t.Parallel()
+
+	svc, _, sub, sender, _ := newPushService(t, http.StatusCreated)
+
+	var ctx context.Context // a caller's bug: no context at all
+
+	if err := sender.Send(ctx, sub, []byte("{}"), Options{}); err == nil {
+		t.Error("a nil context: want an error")
+	}
+
+	svc.assertNoRequest(t)
+}
+
+func TestRefusePrivate(t *testing.T) {
+	t.Parallel()
+
+	// Documentation addresses (RFC 5737, RFC 3849) count as public for
+	// IsPublic: it rules out what is reachable inside, not what is unrouted.
+	for _, address := range []string{"203.0.113.7:443", "[2001:db8::1]:443"} {
+		if err := refusePrivate("tcp", address, nil); err != nil {
+			t.Errorf("%s: %v", address, err)
+		}
+	}
+
+	for _, address := range []string{
+		"127.0.0.1:443", "[::1]:443", "10.1.2.3:443", "[::ffff:192.168.1.1]:443", "169.254.169.254:80",
+		"203.0.113.7",          // no port
+		"push.example.net:443", // a name, not a resolved address
+	} {
+		if err := refusePrivate("tcp", address, nil); !errors.Is(err, ErrPrivateAddress) {
+			t.Errorf("%s: want ErrPrivateAddress, got %v", address, err)
 		}
 	}
 }
