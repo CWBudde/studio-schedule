@@ -34,6 +34,7 @@ func Push(t *testing.T, newStore func(t *testing.T) store.Store) {
 		"DeliverRecordsTheAnswers":    pushDeliver,
 		"DeliverGivesUp":              pushGiveUp,
 		"SessionsEndSubscriptionsGo":  pushSessionsEnd,
+		"DeviceLeavesWhileSending":    pushLeavesWhileSending,
 	}
 
 	for name, run := range scenarios {
@@ -50,6 +51,8 @@ type fakeSender struct {
 	mu      sync.Mutex
 	answers map[string]error
 	sent    map[string][]string
+	// during, if set, runs within each send, before the answer.
+	during func(endpoint string)
 }
 
 func (f *fakeSender) PublicKey() string { return "BPublicKey" }
@@ -67,6 +70,10 @@ func (f *fakeSender) Send(_ context.Context, sub domain.PushSubscription, payloa
 	}
 
 	f.sent[sub.Endpoint] = append(f.sent[sub.Endpoint], string(payload))
+
+	if f.during != nil {
+		f.during(sub.Endpoint)
+	}
 
 	return f.answers[sub.Endpoint]
 }
@@ -541,5 +548,54 @@ func pushSessionsEnd(t *testing.T, w *world) {
 
 	if subs := w.pushSubs(bob.ID); len(subs) != 1 {
 		t.Errorf("Bob has %d subscriptions, want 1", len(subs))
+	}
+}
+
+// pushLeavesWhileSending: a device that unsubscribes while its message is
+// on its way takes the message with it. Recording the answer then finds
+// nothing to record, which is no failure: the phone's message, taken by
+// its push service, counts as sent; the laptop's "gone" has nothing left
+// to delete.
+func pushLeavesWhileSending(t *testing.T, w *world) {
+	anna := w.account(w.person("Anna", "Example", ""), "anna@example.net")
+	subs := service.NewPushService(w.st, clock.NewFixed(now), w.seq, &fakeSender{})
+
+	for _, d := range []string{"phone", "laptop"} {
+		w.subscribe(subs, w.principal(anna), "https://push.example.net/push/"+d)
+	}
+
+	var queued []domain.PushMessage
+
+	for _, s := range w.pushSubs(anna.ID) {
+		m := domain.PushMessage{
+			ID: ids.New[domain.PushMessageID](w.seq), SubscriptionID: s.ID, Payload: `{"title":"x"}`,
+			CreatedAt: now, ExpiresAt: now.Add(time.Hour), NextAttemptAt: now,
+		}
+		w.write(func(ctx context.Context, tx store.Tx) error { return tx.PushOutbox().Create(ctx, m) })
+		queued = append(queued, m)
+	}
+
+	sender := &fakeSender{
+		answers: map[string]error{"https://push.example.net/push/laptop": service.ErrPushGone},
+		during: func(endpoint string) {
+			if err := subs.Unsubscribe(t.Context(), w.principal(anna), endpoint); err != nil {
+				t.Error(err)
+			}
+		},
+	}
+
+	sent, err := service.NewPushService(w.st, clock.NewFixed(now), w.seq, sender).Deliver(t.Context())
+	if err != nil || sent != 1 {
+		t.Fatalf("deliver: %d, %v; want the phone's message sent", sent, err)
+	}
+
+	if n := len(w.pushSubs(anna.ID)); n != 0 {
+		t.Errorf("%d subscriptions left", n)
+	}
+
+	for _, q := range queued {
+		if m, found := w.pushMessage(q.ID); found {
+			t.Errorf("message %+v stayed", m)
+		}
 	}
 }
