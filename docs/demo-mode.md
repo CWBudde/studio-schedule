@@ -269,7 +269,13 @@ returning visitor), the home page, the schedule list and week grid, filters, the
 countdown, early-published workshops, deep links, German, that an edit, the session and generated
 lessons survive a reload until "Reset demo", that "Use here" moves the demo between two tabs, and
 the two demo schools (the about page's Werkstatt button, the banner's switch, a booking that
-survives a visit to the other school; the fixture option `demoSchool` picks a test's school). Each test runs in a fresh browser context, so saved data never leaks
+survives a visit to the other school; the fixture option `demoSchool` picks a test's school).
+`web/e2e/werkstatt.spec.ts` drives the Werkstatt school (`test.use({ demoSchool: 'werkstatt' })`,
+the visitor's language set to English so the shared helpers' names apply): its look (`data-theme`,
+the font, the background, and a school without one), the header's sign-in and sign-out, dialogs,
+the tabs and the phone menu, the schedule's day bands and room columns, booking and canceling with
+a card's square button, home's "My schedule", the account page and taking attendance in the
+participants table. Each test runs in a fresh browser context, so saved data never leaks
 from one test to the next. Any console error fails a test. The
 `test-e2e` CI job runs them on every push and uploads the Playwright report when they fail. Run
 `just e2e-install` once to download the browser.
