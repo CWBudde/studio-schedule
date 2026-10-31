@@ -54,6 +54,10 @@ const (
 	ClosedCanceled ClosedReason = "canceled"
 	// ClosedStarted: the lesson has started or is over.
 	ClosedStarted ClosedReason = "started"
+	// ClosedRental: the lesson is a room rental, which takes no bookings
+	// and no waiting list (ADR 0007, amendment). Only staff, who see it,
+	// get it.
+	ClosedRental ClosedReason = "rental"
 )
 
 // BookingClosedError refuses a booking of a lesson the caller may see but
@@ -489,7 +493,8 @@ func membership(
 }
 
 // bookable checks that p may book lesson l now (ADR 0009): a lesson p may
-// not see is domain.ErrNotFound, like in the schedule. Then member rules
+// not see is domain.ErrNotFound, like in the schedule, and a room rental
+// is never bookable (ClosedRental). Then member rules
 // apply to everyone, staff included, and the lesson must be scheduled and
 // before its booking cutoff.
 func bookable(p Principal, settings domain.Settings, loc *time.Location, now time.Time, l domain.Lesson) error {
@@ -498,6 +503,8 @@ func bookable(p Principal, settings domain.Settings, loc *time.Location, now tim
 	switch {
 	case !viewerOf(p, settings, loc, now).sees(l, w):
 		return fmt.Errorf("%w: lesson %v", domain.ErrNotFound, l.ID)
+	case !l.Kind.Bookable():
+		return &BookingClosedError{Why: ClosedRental}
 	case !memberViewer(p, settings, loc, now).sees(l, w):
 		return &BookingClosedError{Why: ClosedRelease}
 	case l.Status == domain.LessonCanceled:

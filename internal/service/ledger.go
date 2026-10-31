@@ -26,9 +26,15 @@ func chargesIn(ctx context.Context, tx store.Tx) (charges, error) {
 }
 
 // createBooking stores the new booking b of lesson l and settles its pass:
-// a booking due when it is made uses one. A store error of the create is
-// returned unchanged, for the caller to map.
+// a booking due when it is made uses one. A room rental takes none (a
+// *BookingClosedError with ClosedRental): every booking passes here, so no
+// path books one and no pass is ever redeemed for one. A store error of the
+// create is returned unchanged, for the caller to map.
 func createBooking(ctx context.Context, tx store.Tx, c charges, now time.Time, l domain.Lesson, b domain.Booking) error {
+	if !l.Kind.Bookable() {
+		return &BookingClosedError{Why: ClosedRental}
+	}
+
 	if err := tx.Bookings().Create(ctx, b); err != nil {
 		return err
 	}

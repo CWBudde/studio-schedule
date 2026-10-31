@@ -12,7 +12,8 @@ type feedLabels struct {
 	bookings, teaching, schedule    string
 	instructor, accompanist, room   string
 	booked, canceled, canceledNote  string
-	workshop, private               string
+	workshop, private, rental       string
+	renter                          string
 	instructorRole, accompanistRole string
 	locationSchedule                string // with %s for the location
 }
@@ -23,14 +24,14 @@ var feedLabelSets = map[string]feedLabels{
 		bookings: "My lessons", teaching: "Teaching", schedule: "Schedule", locationSchedule: "Schedule (%s)",
 		instructor: "Instructor", accompanist: "Accompanist", room: "Room",
 		booked: "Booked", canceled: "Canceled", canceledNote: "This lesson is canceled.",
-		workshop: "Workshop", private: "Private lesson",
+		workshop: "Workshop", private: "Private lesson", rental: "Room rental", renter: "Rented by",
 		instructorRole: "instructor", accompanistRole: "accompanist",
 	},
 	"de": {
 		bookings: "Meine Stunden", teaching: "Unterricht", schedule: "Stundenplan", locationSchedule: "Stundenplan (%s)",
 		instructor: "Lehrkraft", accompanist: "Korrepetition", room: "Raum",
 		booked: "Gebucht", canceled: "Abgesagt", canceledNote: "Diese Stunde fällt aus.",
-		workshop: "Workshop", private: "Privatstunde",
+		workshop: "Workshop", private: "Privatstunde", rental: "Raumvermietung", renter: "Gemietet von",
 		instructorRole: "Lehrkraft", accompanistRole: "Korrepetition",
 	},
 }
@@ -74,9 +75,12 @@ func (l feedLabels) role(r TeachRole) string {
 
 // kind names a lesson kind other than regular.
 func (l feedLabels) kind(k domain.LessonKind) string {
-	if k == domain.LessonPrivate {
+	switch k {
+	case domain.LessonPrivate:
 		return l.private
+	case domain.LessonRental:
+		return l.rental
+	default:
+		return l.workshop
 	}
-
-	return l.workshop
 }

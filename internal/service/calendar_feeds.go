@@ -592,9 +592,17 @@ func (s *CalendarFeedService) event(
 ) ical.Event {
 	l := e.Lesson
 
+	// A room rental, which only staff see in a schedule feed, has its
+	// renter instead of an instructor (ADR 0007, amendment).
+	rental := l.Kind == domain.LessonRental
+
 	who := e.Instructor.DisplayName
-	if scope == domain.FeedBookings {
+
+	switch {
+	case scope == domain.FeedBookings:
 		who = strings.Join(e.names, ", ")
+	case rental:
+		who = l.Renter
 	}
 
 	summary := e.CourseType.Name + " – " + who
@@ -629,7 +637,12 @@ func (s *CalendarFeedService) event(
 		desc = append(desc, labels.booked+": "+who)
 	}
 
-	desc = append(desc, labels.instructor+": "+e.Instructor.DisplayName)
+	if rental {
+		desc = append(desc, labels.renter+": "+l.Renter)
+	} else {
+		desc = append(desc, labels.instructor+": "+e.Instructor.DisplayName)
+	}
+
 	if !l.AccompanistID.IsZero() {
 		desc = append(desc, labels.accompanist+": "+e.Accompanist.DisplayName)
 	}

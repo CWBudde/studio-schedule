@@ -13,7 +13,7 @@ import { staysOnList } from './waitlist';
  * (Werkstatt's square button; Programme's cards only open the sheet).
  */
 export type QuickAction =
-  /** Signed out, ended or started, canceled, or closed for booking. */
+  /** Signed out, ended or started, canceled, closed for booking, or a room rental. */
   | { kind: 'none' }
   /**
    * More than one person to book for (or the family not known yet), or a
@@ -68,7 +68,8 @@ export function useLessonQuickAction(
   const [canceling, setCanceling] = useState<BookedFor | null>(null);
 
   const action = ((): QuickAction => {
-    if (!me.data) return none;
+    // A room rental (staff only) takes no bookings.
+    if (!me.data || lesson.kind === 'rental') return none;
     const closed = closedState(lesson, now);
     if (closed === 'canceled' || closed === 'started') return none;
     if (!family.data) return open;

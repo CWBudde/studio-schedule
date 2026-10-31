@@ -34,6 +34,7 @@ func toLesson(row sqlc.Lesson) domain.Lesson {
 		CancelNote:    row.CancelNote.String,
 		CanceledAt:    fromPgInstant(row.CanceledAt),
 		CanceledBy:    fromPgID[domain.AccountID](row.CanceledBy),
+		Renter:        row.Renter.String,
 	}
 }
 
@@ -62,6 +63,7 @@ func lessonParams(l domain.Lesson) (sqlc.CreateLessonParams, error) {
 		CancelNote:    pgText(l.CancelNote),
 		CanceledAt:    pgInstant(l.CanceledAt),
 		CanceledBy:    pgID(l.CanceledBy),
+		Renter:        pgText(l.Renter),
 	}, nil
 }
 

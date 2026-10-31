@@ -392,7 +392,8 @@ function LessonFields({
     ...scheduleQuery({ from: date, to: valid ? addDays(date, 1) : date }),
     enabled: valid,
   });
-  const lessons = valid ? (schedule.data?.lessons ?? []) : [];
+  // A room rental has nobody to reach (ADR 0007, amendment).
+  const lessons = valid ? (schedule.data?.lessons ?? []).filter((l) => l.kind !== 'rental') : [];
   const { errors } = form.formState;
   return (
     <>

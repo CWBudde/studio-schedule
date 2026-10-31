@@ -2,11 +2,12 @@ import { demoName, expect, gotoDemo, lessons, type Page, signIn, test } from './
 
 /*
  * The demo seed has a workshop for members only 5 days after the visit date
- * and a hidden one 6 days after it, both within the 14 days the schedule
- * list shows by default.
+ * and a hidden one 6 days after it, and a room rental (hidden too) 4 days
+ * after it, all within the 14 days the schedule list shows by default.
  */
 const membersOnly = /, Members only$/;
-const hidden = /, Hidden – staff only$/;
+const hidden = /, Workshop, Hidden – staff only$/;
+const rental = /, Room rental, Copperleaf Theater Group, Hidden – staff only$/;
 
 /** Opens the schedule from the main navigation and waits for its lessons. */
 async function openSchedule(page: Page): Promise<void> {
@@ -45,6 +46,7 @@ test('an admin signs in as a member, sees what they see and returns', async ({ p
   await expect(workshop).toHaveCount(1);
   await expect(workshop).toHaveAccessibleName(membersOnly);
   await expect(lessons(main).filter({ hasText: 'Hidden – staff only' })).toHaveCount(0);
+  await expect(lessons(main).filter({ hasText: 'Room rental' })).toHaveCount(0);
   await expect(main.getByText(/^Early access: as a member you already see classes/)).toBeVisible();
   // The banner stays on every page.
   await expect(banner).toBeVisible();
@@ -53,8 +55,8 @@ test('an admin signs in as a member, sees what they see and returns', async ({ p
 
   await expect(banner).toBeHidden();
   await expect(header.getByRole('button', { name: admin })).toBeVisible();
-  // As staff again, the schedule shows the hidden workshop as well.
-  await expect(lessons(main).filter({ hasText: 'Hidden – staff only' })).toHaveCount(1);
+  // As staff again, the schedule shows the hidden workshop and the room rental as well.
+  await expect(lessons(main).filter({ hasText: 'Hidden – staff only' })).toHaveCount(2);
 });
 
 test('a visitor sees neither the workshop for members nor the hidden one', async ({ page }) => {
@@ -65,20 +67,33 @@ test('a visitor sees neither the workshop for members nor the hidden one', async
   const names = await lessons(main).evaluateAll((els) =>
     els.map((el) => el.getAttribute('aria-label') ?? ''),
   );
-  expect(names.filter((name) => membersOnly.test(name) || hidden.test(name))).toEqual([]);
+  expect(
+    names.filter((name) => membersOnly.test(name) || hidden.test(name) || rental.test(name)),
+  ).toEqual([]);
   await expect(main.getByText('Members only')).toHaveCount(0);
   await expect(main.getByText('Hidden – staff only')).toHaveCount(0);
+  await expect(main.getByText('Room rental')).toHaveCount(0);
 });
 
-test('an instructor sees the hidden workshop with its badge', async ({ page }) => {
+test('an instructor sees the hidden workshop and the room rental with their badges', async ({
+  page,
+}) => {
   await signIn(page, 'Instructor');
 
   await openSchedule(page);
 
   const main = page.getByRole('main');
-  const workshop = lessons(main).filter({ hasText: 'Hidden – staff only' });
+  const workshop = lessons(main).filter({ hasText: 'Workshop' }).filter({
+    hasText: 'Hidden – staff only',
+  });
   await expect(workshop).toHaveCount(1);
   await expect(workshop).toHaveAccessibleName(hidden);
   await expect(workshop.getByText('Hidden – staff only')).toBeVisible();
+
+  // The rental names its renter instead of an instructor and offers no booking.
+  const rented = lessons(main).filter({ hasText: 'Room rental' });
+  await expect(rented).toHaveCount(1);
+  await expect(rented).toHaveAccessibleName(rental);
+  await expect(rented.getByText('Copperleaf Theater Group')).toBeVisible();
   await expect(main.getByText(/^As staff you see every lesson/)).toBeVisible();
 });

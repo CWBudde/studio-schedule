@@ -157,6 +157,8 @@ func demoAt(anchor domain.Date, settings domain.Settings, locations []locationSp
 	b.visitors(anchor)
 	b.announcements(anchor)
 	b.duplicates()
+	// Last, so every other entity keeps its ID.
+	b.rental(anchor, demoRental)
 
 	return b.d, nil
 }
@@ -512,6 +514,37 @@ var demoWorkshops = []workshopSpec{
 	{24, at(13, 30), 120, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", 16, ""},
 	{5, at(13, 30), 120, "Studio B", "Contemporary", "Marco Wrenfield", "", 12, domain.VisibilityMembers},
 	{6, at(13, 30), 120, "Hall 1", "Hip-Hop", "Nina Tapworth", "", 15, domain.VisibilityHidden},
+}
+
+// rentalSpec is a room rental (ADR 0007, amendment): a room blocked for an
+// outside renter; days counts from the anchor.
+type rentalSpec struct {
+	days       int
+	start      domain.TimeOfDay
+	minutes    int
+	room       string
+	courseType string
+	renter     string
+}
+
+// demoRental lies on the day between the first two workshops, at their
+// time, when no weekly class runs: staff see it in its room, nobody else.
+var demoRental = rentalSpec{4, at(13, 30), 120, "Studio B", "Contemporary", "Copperleaf Theater Group"}
+
+func (b *builder) rental(anchor domain.Date, spec rentalSpec) {
+	start := anchor.AddDays(spec.days).At(spec.start, b.loc)
+
+	b.d.Lessons = append(b.d.Lessons, domain.Lesson{
+		ID:           ids.New[domain.LessonID](b.seq),
+		CourseTypeID: lookup(b.courseTypes, spec.courseType),
+		RoomID:       lookup(b.rooms, spec.room),
+		StartsAt:     start,
+		EndsAt:       start.Add(time.Duration(spec.minutes) * time.Minute),
+		Status:       domain.LessonScheduled,
+		Visibility:   domain.VisibilityHidden,
+		Kind:         domain.LessonRental,
+		Renter:       spec.renter,
+	})
 }
 
 // fullWorkshopSpec is a small public workshop that members have booked up,

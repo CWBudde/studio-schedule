@@ -62,6 +62,8 @@ where it differs.
 | Detached           | Edited individually | Einzeln bearbeitet     | Lesson of a class the office edited; follows the class no more (0007)    |
 | One-off lesson     | One-off lesson      | Einzeltermin           | Lesson without a class, e.g. a workshop; created by the office (0007)    |
 | Room taken         | Room taken          | Raum belegt            | Another lesson uses the room then (409 `room-taken`; ADR 0007)           |
+| Room rental        | Room rental         | Raumvermietung         | Kind `rental`: room blocked for a renter; staff only, no bookings (0007) |
+| Renter             | Rented by           | Gemietet von           | Who rents the room (`lessons.renter`); formerly "interne Stunde"         |
 
 Roles: `guest` (not logged in) · `member` (Mitglied) · `instructor` (Lehrkraft) · `office` (Büro) ·
 `admin` (Administration).

@@ -3864,10 +3864,10 @@ export interface components {
              */
             type: string;
             /**
-             * @description Why the lesson cannot be booked; only with reason closed. cutoff: the booking cutoff before the start has passed; release: members may not book the lesson yet, or at all (staff book under member rules); canceled: the school canceled the lesson; started: the lesson has started or is over.
+             * @description Why the lesson cannot be booked; only with reason closed. cutoff: the booking cutoff before the start has passed; release: members may not book the lesson yet, or at all (staff book under member rules); canceled: the school canceled the lesson; started: the lesson has started or is over; rental: the lesson is a room rental, which takes no bookings.
              * @enum {string}
              */
-            why?: "cutoff" | "release" | "canceled" | "started";
+            why?: "cutoff" | "release" | "canceled" | "started" | "rental";
         };
         ConflictLesson: {
             courseType: components["schemas"]["CourseTypeRef"];
@@ -4981,12 +4981,12 @@ export interface components {
         LessonCreateData: {
             /**
              * Format: uuid
-             * @description Accompanist, if any.
+             * @description Accompanist, if any; a room rental has none.
              */
             accompanistId?: string;
             /**
              * Format: int64
-             * @description Maximum number of participants.
+             * @description Maximum number of participants; at least 1, and 0 for a room rental.
              */
             capacity: number;
             /** @description Save even if the lesson starts in the past (skips the 409 past). */
@@ -5010,14 +5010,16 @@ export interface components {
             durationMinutes: number;
             /**
              * Format: uuid
-             * @description Instructor.
+             * @description Instructor; required, except for a room rental, which has none.
              */
-            instructorId: string;
+            instructorId?: string;
             /**
-             * @description Regular lesson or special format; workshops and private lessons are published early.
+             * @description Regular lesson or special format; workshops and private lessons are published early. A room rental blocks the room for an outside renter: one-off, hidden, without instructor, accompanist or capacity, and it takes no bookings.
              * @enum {string}
              */
-            kind: "regular" | "workshop" | "private";
+            kind: "regular" | "workshop" | "private" | "rental";
+            /** @description Who rents the room; required for a room rental, absent otherwise. */
+            renter?: string;
             /**
              * Format: uuid
              * @description Room.
@@ -5029,7 +5031,7 @@ export interface components {
              */
             startTime: string;
             /**
-             * @description Who may see the lesson.
+             * @description Who may see the lesson; a room rental is hidden (staff only).
              * @enum {string}
              */
             visibility: "public" | "members" | "hidden";
@@ -5037,12 +5039,12 @@ export interface components {
         LessonData: {
             /**
              * Format: uuid
-             * @description Accompanist, if any.
+             * @description Accompanist, if any; a room rental has none.
              */
             accompanistId?: string;
             /**
              * Format: int64
-             * @description Maximum number of participants.
+             * @description Maximum number of participants; at least 1, and 0 for a room rental.
              */
             capacity: number;
             /** @description Save even if the lesson starts in the past (skips the 409 past). */
@@ -5061,14 +5063,16 @@ export interface components {
             durationMinutes: number;
             /**
              * Format: uuid
-             * @description Instructor.
+             * @description Instructor; required, except for a room rental, which has none.
              */
-            instructorId: string;
+            instructorId?: string;
             /**
-             * @description Regular lesson or special format; workshops and private lessons are published early.
+             * @description Regular lesson or special format; workshops and private lessons are published early. A room rental blocks the room for an outside renter: one-off, hidden, without instructor, accompanist or capacity, and it takes no bookings.
              * @enum {string}
              */
-            kind: "regular" | "workshop" | "private";
+            kind: "regular" | "workshop" | "private" | "rental";
+            /** @description Who rents the room; required for a room rental, absent otherwise. */
+            renter?: string;
             /**
              * Format: uuid
              * @description Room.
@@ -5080,7 +5084,7 @@ export interface components {
              */
             startTime: string;
             /**
-             * @description Who may see the lesson.
+             * @description Who may see the lesson; a room rental is hidden (staff only).
              * @enum {string}
              */
             visibility: "public" | "members" | "hidden";
@@ -5099,7 +5103,7 @@ export interface components {
             bookingClosesAt: string;
             /**
              * Format: int64
-             * @description Maximum number of participants.
+             * @description Maximum number of participants; 0 for a room rental.
              */
             capacity: number;
             /**
@@ -5125,12 +5129,13 @@ export interface components {
              * @description Lesson ID.
              */
             id: string;
-            instructor: components["schemas"]["StaffRef"];
+            /** @description Instructor; absent for a room rental. */
+            instructor?: components["schemas"]["StaffRef"];
             /**
-             * @description Regular lesson or special format.
+             * @description Regular lesson or special format; a room rental (only staff see one) takes no bookings.
              * @enum {string}
              */
-            kind: "regular" | "workshop" | "private";
+            kind: "regular" | "workshop" | "private" | "rental";
             /**
              * Format: date-time
              * @description From this instant on a cancellation is late: the cancellation cutoff before the start (UTC); absent for a lesson the school canceled, which is never canceled late.
@@ -5144,6 +5149,8 @@ export interface components {
             location: components["schemas"]["LocationRef"];
             /** @description Postal address of the location. */
             locationAddress?: string;
+            /** @description Who rents the room; only for a room rental. */
+            renter?: string;
             room: components["schemas"]["RoomRef"];
             /**
              * Format: date-time
@@ -5263,7 +5270,7 @@ export interface components {
             accompanist?: components["schemas"]["StaffRef"];
             /**
              * Format: int64
-             * @description Maximum number of participants.
+             * @description Maximum number of participants; 0 for a room rental.
              */
             capacity: number;
             /**
@@ -5282,18 +5289,21 @@ export interface components {
              * @description Lesson ID.
              */
             id: string;
-            instructor: components["schemas"]["StaffRef"];
+            /** @description Instructor; absent for a room rental. */
+            instructor?: components["schemas"]["StaffRef"];
             /**
-             * @description Regular lesson or special format.
+             * @description Regular lesson or special format; a room rental (only staff see one) takes no bookings.
              * @enum {string}
              */
-            kind: "regular" | "workshop" | "private";
+            kind: "regular" | "workshop" | "private" | "rental";
             /**
              * @description Level of the class; absent for one-off lessons.
              * @enum {string}
              */
             level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
             location: components["schemas"]["LocationRef"];
+            /** @description Who rents the room; only for a room rental. */
+            renter?: string;
             room: components["schemas"]["RoomRef"];
             /**
              * Format: date-time
@@ -6813,7 +6823,7 @@ export interface components {
             bookingClosesAt: string;
             /**
              * Format: int64
-             * @description Maximum number of participants.
+             * @description Maximum number of participants; 0 for a room rental.
              */
             capacity: number;
             /**
@@ -6837,12 +6847,13 @@ export interface components {
              * @description Lesson ID.
              */
             id: string;
-            instructor: components["schemas"]["StaffRef"];
+            /** @description Instructor; absent for a room rental. */
+            instructor?: components["schemas"]["StaffRef"];
             /**
-             * @description Regular lesson or special format.
+             * @description Regular lesson or special format; a room rental (only staff see one) takes no bookings.
              * @enum {string}
              */
-            kind: "regular" | "workshop" | "private";
+            kind: "regular" | "workshop" | "private" | "rental";
             /**
              * Format: date-time
              * @description From this instant on a cancellation is late: the cancellation cutoff before the start (UTC); absent for a lesson the school canceled, which is never canceled late.
@@ -6854,6 +6865,8 @@ export interface components {
              */
             level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
             location: components["schemas"]["LocationRef"];
+            /** @description Who rents the room; only for a room rental. */
+            renter?: string;
             room: components["schemas"]["RoomRef"];
             /**
              * Format: date-time
@@ -7293,7 +7306,7 @@ export interface components {
             attendanceTaken: boolean;
             /**
              * Format: int64
-             * @description Maximum number of participants.
+             * @description Maximum number of participants; 0 for a room rental.
              */
             capacity: number;
             /**
@@ -7332,18 +7345,21 @@ export interface components {
              * @description Lesson ID.
              */
             id: string;
-            instructor: components["schemas"]["StaffRef"];
+            /** @description Instructor; absent for a room rental. */
+            instructor?: components["schemas"]["StaffRef"];
             /**
-             * @description Regular lesson or special format.
+             * @description Regular lesson or special format; a room rental (only staff see one) takes no bookings.
              * @enum {string}
              */
-            kind: "regular" | "workshop" | "private";
+            kind: "regular" | "workshop" | "private" | "rental";
             /**
              * @description Level of the class; absent for one-off lessons.
              * @enum {string}
              */
             level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
             location: components["schemas"]["LocationRef"];
+            /** @description Who rents the room; only for a room rental. */
+            renter?: string;
             /**
              * @description The caller's part: instructor or accompanist of the lesson, or office for a lesson of others.
              * @enum {string}
@@ -7522,7 +7538,7 @@ export interface components {
              * @description Why the lesson cannot be booked now, if it cannot (see the closed conflict); the place cannot be taken then.
              * @enum {string}
              */
-            closed?: "cutoff" | "release" | "canceled" | "started";
+            closed?: "cutoff" | "release" | "canceled" | "started" | "rental";
             /**
              * Format: date-time
              * @description Until when the invite reserves (or reserved) the place; absent while waiting.

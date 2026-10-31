@@ -584,8 +584,12 @@
     "kinds": {
       "regular": "Regular lesson",
       "workshop": "Workshop",
-      "private": "Private lesson"
+      "private": "Private lesson",
+      "rental": "Room rental"
     },
+    "renter": "Rented by",
+    "renterHint": "Who rents the room, e.g. a theater group. Only staff see it.",
+    "rentalHint": "A room rental blocks the room for an outside renter: only staff see it, it has no instructor and takes no bookings.",
     "choose": "Choose",
     "roomTaken": "{{room}} is taken at that time",
     "roomTakenBy": "{{lesson}} uses the room.",

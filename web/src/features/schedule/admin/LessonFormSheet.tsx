@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarPlus, Save } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import type { LessonDetail } from '@/api/client';
@@ -33,6 +33,7 @@ import { invalidFields } from '@/features/auth/form';
 import { TextField } from '@/features/auth/TextField';
 import { ConfirmNotice, RoomTakenNotice } from './ConfirmNotice';
 import {
+  isRental,
   kinds,
   lessonData,
   lessonFields,
@@ -40,6 +41,7 @@ import {
   type LessonOutput,
   lessonSchema,
   lessonValues,
+  maxRenterLength,
   newLessonData,
   visibilities,
 } from './lessonForms';
@@ -193,6 +195,7 @@ function LessonForm({
     defaultValues: lessonValues(editing, timeZone),
   });
   const { errors } = form.formState;
+  const rental = isRental(useWatch({ control: form.control, name: 'kind' }));
   // The confirmations and the room of the last try.
   const [confirmed, setConfirmed] = useState<Confirmations>({});
   const [sentRoomId, setSentRoomId] = useState('');
@@ -349,6 +352,34 @@ function LessonForm({
             )}
           />
         )}
+        <Controller
+          control={form.control}
+          name="kind"
+          render={({ field }) => (
+            <SelectField
+              label={t('lessons.kind')}
+              placeholder={t('lessons.choose')}
+              options={options.kinds}
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              error={errorText(errors.kind)}
+            />
+          )}
+        />
+        {rental && (
+          <>
+            <p className="text-sm text-muted-foreground">{t('lessons.rentalHint')}</p>
+            <TextField
+              label={t('lessons.renter')}
+              hint={t('lessons.renterHint')}
+              maxLength={maxRenterLength}
+              autoComplete="off"
+              error={errorText(errors.renter)}
+              {...form.register('renter')}
+            />
+          </>
+        )}
         <TextField
           label={t('lessons.date')}
           type="date"
@@ -388,77 +419,67 @@ function LessonForm({
             />
           )}
         />
-        <Controller
-          control={form.control}
-          name="instructorId"
-          render={({ field }) => (
-            <SelectField
-              label={t('lessons.instructor')}
-              placeholder={t('lessons.choose')}
-              options={options.instructors}
-              value={field.value}
-              onChange={field.onChange}
-              onBlur={field.onBlur}
-              error={errorText(errors.instructorId)}
+        {/* A room rental has no staff, no places and is hidden (ADR 0007, amendment). */}
+        {!rental && (
+          <>
+            <Controller
+              control={form.control}
+              name="instructorId"
+              render={({ field }) => (
+                <SelectField
+                  label={t('lessons.instructor')}
+                  placeholder={t('lessons.choose')}
+                  options={options.instructors}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  error={errorText(errors.instructorId)}
+                />
+              )}
             />
-          )}
-        />
-        <Controller
-          control={form.control}
-          name="accompanistId"
-          render={({ field }) => (
-            <SelectField
-              label={t('lessons.accompanist')}
-              placeholder={t('lessons.noAccompanist')}
-              options={options.accompanists}
-              value={field.value || none}
-              onChange={(value) => field.onChange(value === none ? '' : value)}
-              onBlur={field.onBlur}
-              error={errorText(errors.accompanistId)}
+            <Controller
+              control={form.control}
+              name="accompanistId"
+              render={({ field }) => (
+                <SelectField
+                  label={t('lessons.accompanist')}
+                  placeholder={t('lessons.noAccompanist')}
+                  options={options.accompanists}
+                  value={field.value || none}
+                  onChange={(value) => field.onChange(value === none ? '' : value)}
+                  onBlur={field.onBlur}
+                  error={errorText(errors.accompanistId)}
+                />
+              )}
             />
-          )}
-        />
-        <TextField
-          label={t('lessons.capacity')}
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={1000}
-          step={1}
-          hint={editing ? t('lessons.capacityHintEdit') : t('lessons.capacityHint')}
-          error={errorText(errors.capacity)}
-          {...form.register('capacity')}
-        />
-        <Controller
-          control={form.control}
-          name="visibility"
-          render={({ field }) => (
-            <SelectField
-              label={t('lessons.visibility')}
-              placeholder={t('lessons.choose')}
-              options={options.visibilities}
-              value={field.value}
-              onChange={field.onChange}
-              onBlur={field.onBlur}
-              error={errorText(errors.visibility)}
+            <TextField
+              label={t('lessons.capacity')}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={1000}
+              step={1}
+              hint={editing ? t('lessons.capacityHintEdit') : t('lessons.capacityHint')}
+              error={errorText(errors.capacity)}
+              {...form.register('capacity')}
             />
-          )}
-        />
-        <Controller
-          control={form.control}
-          name="kind"
-          render={({ field }) => (
-            <SelectField
-              label={t('lessons.kind')}
-              placeholder={t('lessons.choose')}
-              options={options.kinds}
-              value={field.value}
-              onChange={field.onChange}
-              onBlur={field.onBlur}
-              error={errorText(errors.kind)}
+            <Controller
+              control={form.control}
+              name="visibility"
+              render={({ field }) => (
+                <SelectField
+                  label={t('lessons.visibility')}
+                  placeholder={t('lessons.choose')}
+                  options={options.visibilities}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  error={errorText(errors.visibility)}
+                />
+              )}
             />
-          )}
-        />
+          </>
+        )}
         <FormSheetActions
           pending={save.isPending}
           submitLabel={editing ? t('form.save') : t('lessons.add')}

@@ -20,6 +20,10 @@ function waitlistOf(lesson: ScheduleLesson, now: number): { waiting: Named[]; in
   };
 }
 
+/** Whether the free places show: never for a room rental, which has none to book. */
+const freeShown = (lesson: ScheduleLesson, showFree: boolean) =>
+  showFree && lesson.kind !== 'rental';
+
 /** Whether AvailabilityBadges shows anything at `now`, e.g. to refer to it only then. */
 export function hasAvailabilityBadges(
   lesson: ScheduleLesson,
@@ -27,7 +31,11 @@ export function hasAvailabilityBadges(
   now: number,
 ): boolean {
   const { waiting, invited } = waitlistOf(lesson, now);
-  return showFree || (lesson.bookedFor ?? []).length > 0 || waiting.length + invited.length > 0;
+  return (
+    freeShown(lesson, showFree) ||
+    (lesson.bookedFor ?? []).length > 0 ||
+    waiting.length + invited.length > 0
+  );
 }
 
 /**
@@ -98,7 +106,7 @@ export function AvailabilityBadges({
           </span>
         </Badge>
       )}{' '}
-      {showFree &&
+      {freeShown(lesson, showFree) &&
         (lesson.freePlaces > 0 ? (
           <Badge variant="outline">{t('booking.badge.free', { count: lesson.freePlaces })}</Badge>
         ) : (

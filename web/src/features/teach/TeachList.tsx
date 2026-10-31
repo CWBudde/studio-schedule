@@ -274,7 +274,7 @@ function LessonRow({
               <UserRound className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               <span>
                 <span className="sr-only">{tSchedule('list.instructor')}: </span>
-                {lesson.instructor.displayName}
+                {lesson.instructor?.displayName}
                 {lesson.accompanist && (
                   <>
                     {' · '}

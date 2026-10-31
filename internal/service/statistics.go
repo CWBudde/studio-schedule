@@ -418,6 +418,11 @@ func (st *Statistics) compute(ctx context.Context, tx store.Tx, loc *time.Locati
 	lessons := make([]domain.Lesson, 0, len(all))
 
 	for _, l := range all {
+		// A room rental has no places or bookings (ADR 0007, amendment).
+		if !l.Kind.Bookable() {
+			continue
+		}
+
 		if l.Status == domain.LessonCanceled {
 			st.Totals.CanceledLessons++
 

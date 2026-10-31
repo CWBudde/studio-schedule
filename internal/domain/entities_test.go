@@ -326,6 +326,61 @@ func TestLessonValidate(t *testing.T) {
 	}
 }
 
+func TestLessonValidateRental(t *testing.T) {
+	t.Parallel()
+
+	checkValidate(t, rentalFixture, map[string]func(*domain.Lesson){
+		"instructor":  func(l *domain.Lesson) { l.InstructorID = newID[domain.StaffID]() },
+		"accompanist": func(l *domain.Lesson) { l.AccompanistID = newID[domain.StaffID]() },
+		"capacity":    func(l *domain.Lesson) { l.Capacity = 4 },
+		"public":      func(l *domain.Lesson) { l.Visibility = domain.VisibilityPublic },
+		"members":     func(l *domain.Lesson) { l.Visibility = domain.VisibilityMembers },
+		"no renter":   func(l *domain.Lesson) { l.Renter = "" },
+		"blank renter": func(l *domain.Lesson) {
+			l.Renter = "  "
+		},
+		"long renter": func(l *domain.Lesson) {
+			l.Renter = strings.Repeat("ä", domain.MaxRenterLength+1)
+		},
+		"of a class": func(l *domain.Lesson) {
+			l.ClassID, l.SlotDate = newID[domain.ClassID](), domain.Date{Year: 2026, Month: time.September, Day: 7}
+		},
+	})
+
+	if err := rentalFixture().Validate(); err != nil {
+		t.Errorf("rental: %v", err)
+	}
+
+	long := rentalFixture()
+	long.Renter = strings.Repeat("ä", domain.MaxRenterLength)
+
+	if err := long.Validate(); err != nil {
+		t.Errorf("longest renter: %v", err)
+	}
+
+	// Only a rental names a renter.
+	regular := lessonFixture()
+	regular.Renter = "Copperleaf Theater Group"
+
+	if err := regular.Validate(); err == nil {
+		t.Error("a regular lesson with a renter is valid")
+	}
+
+	if domain.LessonRental.Bookable() || !domain.LessonWorkshop.Bookable() {
+		t.Error("only a room rental takes no bookings")
+	}
+}
+
+// rentalFixture is a valid room rental: no instructor, no capacity, hidden,
+// with a renter.
+func rentalFixture() domain.Lesson {
+	l := lessonFixture()
+	l.Kind, l.InstructorID, l.Capacity = domain.LessonRental, domain.StaffID{}, 0
+	l.Visibility, l.Renter = domain.VisibilityHidden, "Copperleaf Theater Group"
+
+	return l
+}
+
 func lessonFixture() domain.Lesson {
 	return domain.Lesson{
 		ID: newID[domain.LessonID](), CourseTypeID: newID[domain.CourseTypeID](), RoomID: newID[domain.RoomID](),

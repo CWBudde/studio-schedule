@@ -246,8 +246,11 @@ func checkReferences(ctx context.Context, tx store.Tx, r references) (instructor
 		return domain.Staff{}, domain.Staff{}, known(err, errUnknownRoom)
 	}
 
-	if instructor, err = tx.Staff().Get(ctx, r.InstructorID); err != nil {
-		return domain.Staff{}, domain.Staff{}, known(err, errUnknownInstructor)
+	// A room rental has no instructor (ADR 0007, amendment).
+	if !r.InstructorID.IsZero() {
+		if instructor, err = tx.Staff().Get(ctx, r.InstructorID); err != nil {
+			return domain.Staff{}, domain.Staff{}, known(err, errUnknownInstructor)
+		}
 	}
 
 	if !r.AccompanistID.IsZero() {

@@ -319,7 +319,7 @@ describe('TeachPage', () => {
         lessons: [monday, morning, tuesday, evening, tomorrow]
           .map((l) => ({ ...l, role: 'office' as const }))
           .filter(
-            (l) => !q.staffId || l.instructor.id === q.staffId || l.accompanist?.id === q.staffId,
+            (l) => !q.staffId || l.instructor?.id === q.staffId || l.accompanist?.id === q.staffId,
           ),
       }),
     );

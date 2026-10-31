@@ -74,7 +74,9 @@ func overCapacity(n, held int) string {
 }
 
 // LessonData are the fields the office edits on a lesson. Date and
-// StartTime are school-local; AccompanistID is zero for none.
+// StartTime are school-local; AccompanistID is zero for none. A room rental
+// has no instructor, accompanist or capacity, is hidden and names its
+// Renter (domain.Lesson.Validate).
 type LessonData struct {
 	Date          domain.Date
 	StartTime     domain.TimeOfDay
@@ -85,6 +87,7 @@ type LessonData struct {
 	Capacity      int
 	Visibility    domain.LessonVisibility
 	Kind          domain.LessonKind
+	Renter        string
 	// ConfirmRoomOverlap saves even if another lesson uses the room at
 	// that time.
 	ConfirmRoomOverlap bool
@@ -212,6 +215,10 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 
 		active, held, err := places(ctx, tx, now, l.ID)
 		if err != nil {
+			return err
+		}
+
+		if err := becomesRental(ctx, tx, old, l); err != nil {
 			return err
 		}
 
@@ -438,10 +445,36 @@ func (s *LessonService) apply(l *domain.Lesson, d LessonData, loc *time.Location
 	start := d.Date.At(d.StartTime, loc)
 	l.StartsAt, l.EndsAt = start, start.Add(d.Duration)
 	l.RoomID, l.InstructorID, l.AccompanistID = d.RoomID, d.InstructorID, d.AccompanistID
-	l.Capacity, l.Visibility, l.Kind = d.Capacity, d.Visibility, d.Kind
+	l.Capacity, l.Visibility, l.Kind, l.Renter = d.Capacity, d.Visibility, d.Kind, strings.TrimSpace(d.Renter)
 	l.Detached = !l.ClassID.IsZero()
 
 	return l.Validate()
+}
+
+// becomesRental refuses to make old, which is no room rental, the rental
+// l while bookings (canceled ones included) or its waiting list refer to
+// it: a rental takes neither (ADR 0007, amendment). A validation error on
+// kind.
+func becomesRental(ctx context.Context, tx store.Tx, old, l domain.Lesson) error {
+	if l.Kind != domain.LessonRental || old.Kind == domain.LessonRental {
+		return nil
+	}
+
+	booked, err := hasBookings(ctx, tx, l.ID)
+	if err != nil {
+		return err
+	}
+
+	open, err := tx.Waitlist().ListOpenByLessons(ctx, []domain.LessonID{l.ID})
+	if err != nil {
+		return err
+	}
+
+	if booked || len(open) > 0 {
+		return &domain.FieldError{Field: "kind", Msg: "a lesson with bookings or a waiting list cannot become a room rental"}
+	}
+
+	return nil
 }
 
 // confirmPast returns ErrLessonPast if l does not start in the future and

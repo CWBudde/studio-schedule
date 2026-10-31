@@ -90,15 +90,16 @@ type LessonSummary struct {
 	StartsAt    time.Time       `doc:"Start instant (UTC)."                                              json:"startsAt"`
 	EndsAt      time.Time       `doc:"End instant (UTC)."                                                json:"endsAt"`
 	Status      string          `doc:"Whether the lesson takes place."  enum:"scheduled,canceled"         json:"status"`
-	Kind        string          `doc:"Regular lesson or special format." enum:"regular,workshop,private" json:"kind"`
+	Kind        string          `doc:"Regular lesson or special format; a room rental (only staff see one) takes no bookings." enum:"regular,workshop,private,rental" json:"kind"`
 	Visibility  string          `doc:"Who may see the lesson: everyone, signed-in members, or staff only." enum:"public,members,hidden" json:"visibility"`
 	Level       string          `doc:"Level of the class; absent for one-off lessons." enum:"beginner,intermediate,advanced,professional,open" json:"level,omitempty"`
-	Capacity    int             `doc:"Maximum number of participants." minimum:"1"                       json:"capacity"`
+	Capacity    int             `doc:"Maximum number of participants; 0 for a room rental." minimum:"0"   json:"capacity"`
 	CourseType  CourseTypeRef   `json:"courseType"`
 	Room        RoomRef         `json:"room"`
 	Location    LocationRef     `json:"location"`
-	Instructor  StaffRef        `json:"instructor"`
+	Instructor  *StaffRef       `doc:"Instructor; absent for a room rental." json:"instructor,omitempty"`
 	Accompanist *StaffRef       `doc:"Accompanist; absent if the lesson has none." json:"accompanist,omitempty"`
+	Renter      string          `doc:"Who rents the room; only for a room rental." json:"renter,omitempty"`
 }
 
 // LessonDetail is the response body of getLesson and of the lesson writes.
@@ -268,7 +269,11 @@ func lessonSummary(sl service.ScheduledLesson) LessonSummary {
 		CourseType: CourseTypeRef{ID: sl.CourseType.ID, Name: sl.CourseType.Name},
 		Room:       RoomRef{ID: sl.Room.ID, Name: sl.Room.Name},
 		Location:   LocationRef{ID: sl.Location.ID, Name: sl.Location.Name},
-		Instructor: StaffRef{ID: sl.Instructor.ID, DisplayName: sl.Instructor.DisplayName},
+		Renter:     l.Renter,
+	}
+
+	if !sl.Instructor.ID.IsZero() {
+		out.Instructor = &StaffRef{ID: sl.Instructor.ID, DisplayName: sl.Instructor.DisplayName}
 	}
 
 	if !sl.Accompanist.ID.IsZero() {

@@ -180,6 +180,7 @@ function LessonDetails({
   const me = useQuery(meQuery);
   const label = useLessonLabel()(lesson, timeZone);
   const canceled = lesson.status === 'canceled';
+  const rental = lesson.kind === 'rental';
   // What the office sees of the cancellation (ADR 0007).
   const admin = lesson.admin;
   const canceledAt = admin?.canceledAt && formatTimestamp(admin.canceledAt, timeZone, lang);
@@ -247,16 +248,28 @@ function LessonDetails({
             )}
           </Row>
           <Row label={t('detail.room')}>{lesson.room.name}</Row>
-          <Row label={t('detail.instructor')}>{lesson.instructor.displayName}</Row>
+          {lesson.instructor && (
+            <Row label={t('detail.instructor')}>{lesson.instructor.displayName}</Row>
+          )}
           {lesson.accompanist && (
             <Row label={t('detail.accompanist')}>{lesson.accompanist.displayName}</Row>
           )}
-          <Row label={t('detail.capacity')}>{t('detail.places', { count: lesson.capacity })}</Row>
+          {rental ? (
+            <Row label={t('detail.renter')}>{lesson.renter}</Row>
+          ) : (
+            <Row label={t('detail.capacity')}>{t('detail.places', { count: lesson.capacity })}</Row>
+          )}
         </dl>
 
-        <BookingSection lesson={lesson} timeZone={timeZone} label={label} />
-
-        <ParticipantsSection lesson={lesson} timeZone={timeZone} label={label} />
+        {/* A room rental takes no bookings and has no participants (ADR 0007, amendment). */}
+        {rental ? (
+          <p className="text-muted-foreground">{t('detail.rental')}</p>
+        ) : (
+          <>
+            <BookingSection lesson={lesson} timeZone={timeZone} label={label} />
+            <ParticipantsSection lesson={lesson} timeZone={timeZone} label={label} />
+          </>
+        )}
 
         {canAdminister(me.data?.role) && (
           <LessonActions lesson={lesson} timeZone={timeZone} onDeleted={onDeleted} />

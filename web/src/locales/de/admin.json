@@ -584,8 +584,12 @@
     "kinds": {
       "regular": "Reguläre Stunde",
       "workshop": "Workshop",
-      "private": "Privatstunde"
+      "private": "Privatstunde",
+      "rental": "Raumvermietung"
     },
+    "renter": "Gemietet von",
+    "renterHint": "Wer den Raum mietet, z. B. eine Theatergruppe. Nur das Team sieht es.",
+    "rentalHint": "Eine Raumvermietung blockiert den Raum für externe Mieter: Nur das Team sieht sie, sie hat keine Lehrkraft und ist nicht buchbar.",
     "choose": "Auswählen",
     "roomTaken": "{{room}} ist zu dieser Zeit belegt",
     "roomTakenBy": "{{lesson}} nutzt den Raum.",

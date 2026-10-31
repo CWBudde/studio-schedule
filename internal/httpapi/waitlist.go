@@ -150,7 +150,7 @@ type WaitlistInvite struct {
 	GivenName string        `doc:"Given name of the person the place is reserved for." json:"givenName"`
 	ExpiresAt time.Time     `doc:"Until when the invite reserves (or reserved) the place; absent while waiting." json:"expiresAt,omitzero"`
 	Position  int           `doc:"Place among the waiting entries, 1 for the next to be invited; only with state waiting." json:"position,omitzero" minimum:"1"`
-	Closed    string        `doc:"Why the lesson cannot be booked now, if it cannot (see the closed conflict); the place cannot be taken then." enum:"cutoff,release,canceled,started" json:"closed,omitempty"`
+	Closed    string        `doc:"Why the lesson cannot be booked now, if it cannot (see the closed conflict); the place cannot be taken then." enum:"cutoff,release,canceled,started,rental" json:"closed,omitempty"`
 	Lesson    LessonSummary `json:"lesson"`
 }
 

@@ -170,8 +170,14 @@ func (s *TeachService) Lessons(ctx context.Context, p Principal, q TeachQuery) (
 
 		lessons, err := s.lessonsOf(ctx, tx, p, own, q.Staff,
 			out.From.At(domain.TimeOfDay{}, loc), out.To.At(domain.TimeOfDay{}, loc))
-		if err != nil || len(lessons) == 0 {
+		if err != nil {
 			return err
+		}
+
+		// A room rental has no participants to teach (ADR 0007, amendment).
+		lessons = slices.DeleteFunc(lessons, func(l domain.Lesson) bool { return !l.Kind.Bookable() })
+		if len(lessons) == 0 {
+			return nil
 		}
 
 		out.Lessons, err = teachLessons(ctx, tx, p, loc, out.Now, own, out.From, out.To, lessons)

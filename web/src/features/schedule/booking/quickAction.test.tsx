@@ -94,6 +94,20 @@ describe('useLessonQuickAction', () => {
       [lessonBallet, Date.parse('2026-10-26T19:00:00Z')],
       // Past the booking cutoff: Monday 17:30 Berlin.
       [lessonBallet, Date.parse('2026-10-26T16:30:00Z')],
+      // A room rental, which only staff see, takes no bookings.
+      [
+        {
+          ...lessonBallet,
+          kind: 'rental',
+          visibility: 'hidden',
+          instructor: undefined,
+          accompanist: undefined,
+          renter: 'Copperleaf Theater Group',
+          capacity: 0,
+          freePlaces: 0,
+        },
+        friday,
+      ],
     ];
     for (const [lesson, now] of lessons) {
       const { unmount } = await renderProbe(lesson, now);

@@ -152,6 +152,32 @@ describe('Werkstatt LessonCard', () => {
     expect(group.queryByText('Beginner')).not.toBeInTheDocument();
   });
 
+  it('marks a room rental with its renter, without staff, places or a quick action', () => {
+    const name = `${label}, Room rental, Copperleaf Theater Group, Hidden – staff only`;
+    const { card } = renderCard({
+      lesson: {
+        ...ballet,
+        classId: undefined,
+        level: undefined,
+        kind: 'rental',
+        visibility: 'hidden',
+        instructor: undefined,
+        accompanist: undefined,
+        renter: 'Copperleaf Theater Group',
+        capacity: 0,
+        freePlaces: 0,
+      },
+      name,
+    });
+
+    expect(card.getByText('Room rental')).toBeInTheDocument();
+    expect(card.getByText('Copperleaf Theater Group')).toBeInTheDocument();
+    expect(card.queryByText('Alex Example', { exact: false })).not.toBeInTheDocument();
+    expect(card.queryByText(/Participants/)).not.toBeInTheDocument();
+    expect(card.queryByText('Full')).not.toBeInTheDocument();
+    expect(card.getAllByRole('button')).toEqual([card.getByRole('button', { name })]);
+  });
+
   it('opens the sheet from the card body', async () => {
     const user = userEvent.setup();
     const { onOpen, card } = renderCard();

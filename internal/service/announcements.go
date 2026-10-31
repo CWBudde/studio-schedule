@@ -45,6 +45,7 @@ var (
 	// errUnknownCourseType is the class's (class_admin.go).
 	errUnknownClass  error = &domain.FieldError{Field: "classId", Msg: "class does not exist"}
 	errUnknownLesson error = &domain.FieldError{Field: "lessonId", Msg: "lesson does not exist"}
+	errRentalLesson  error = &domain.FieldError{Field: "lessonId", Msg: "a room rental has no participants"}
 )
 
 // TooManyAnnouncementMailsError refuses to email an announcement on a
@@ -305,7 +306,8 @@ func (s *AnnouncementService) write(
 }
 
 // checkAudienceRefs reports an unknown class, course type or lesson of the
-// audience as a *domain.FieldError on its field.
+// audience as a *domain.FieldError on its field, and so a room rental,
+// which has nobody to reach (ADR 0007, amendment).
 func checkAudienceRefs(ctx context.Context, tx store.Tx, aud AnnouncementAudience) error {
 	check := func(err, unknown error) error {
 		if errors.Is(err, domain.ErrNotFound) {
@@ -325,7 +327,10 @@ func checkAudienceRefs(ctx context.Context, tx store.Tx, aud AnnouncementAudienc
 
 		return check(err, errUnknownCourseType)
 	case domain.AudienceLesson:
-		_, err := tx.Lessons().Get(ctx, aud.LessonID)
+		l, err := tx.Lessons().Get(ctx, aud.LessonID)
+		if err == nil && !l.Kind.Bookable() {
+			return errRentalLesson
+		}
 
 		return check(err, errUnknownLesson)
 	default:

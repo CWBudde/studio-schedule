@@ -364,7 +364,8 @@ function CloneItem({
 }) {
   const { t, i18n } = useTranslation('admin');
   const lang = i18n.resolvedLanguage ?? 'en';
-  const staff = [lesson.instructor.displayName, lesson.accompanist?.displayName]
+  // A room rental names its renter instead of staff.
+  const staff = [lesson.instructor?.displayName ?? lesson.renter, lesson.accompanist?.displayName]
     .filter(Boolean)
     .join(', ');
   return (

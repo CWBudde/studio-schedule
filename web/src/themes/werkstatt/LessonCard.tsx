@@ -20,7 +20,8 @@ const focusRing = 'outline-none focus-visible:ring-[3px] focus-visible:ring-ring
  * Werkstatt's lesson card: the lesson as a button that opens its sheet, and
  * beside it a square button for the quick action (book, cancel, waiting
  * list; "Details" where the sheet must choose the person; "Full"
- * disabled). Tinted by course type (werkstatt.css); a booked lesson gets a
+ * disabled; none for a room rental, which shows its renter instead of
+ * staff and places). Tinted by course type (werkstatt.css); a booked lesson gets a
  * primary frame and a star; ended lessons are dimmed by colour (not by
  * opacity, which would break the text contrast), canceled ones checkered.
  * The card is a group named like its button, so its quick action can be
@@ -34,6 +35,8 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
   const label = useLessonCardLabel()(lesson, timeZone);
   const canceled = lesson.status === 'canceled';
   const quiet = canceled || past;
+  // A room rental has no places and no quick action (quickAction answers none).
+  const rental = lesson.kind === 'rental';
   const booked = (lesson.bookedFor ?? []).length > 0;
   // freePlaces already leaves out the places that waiting-list invites hold:
   // those count as taken here, as they do for a booking.
@@ -112,16 +115,26 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
           <span className="text-muted-foreground">
             {lesson.room.name} · {lesson.location.name}
           </span>
-          {!quiet && (
+          {!quiet && !rental && (
             <span className={full ? 'text-destructive' : 'text-(--werkstatt-green)'}>
               {t('werkstatt.participants', { taken, capacity: lesson.capacity })}
             </span>
           )}
-          <span className={cn(!quiet && 'text-primary')}>
-            {lesson.accompanist
-              ? `${lesson.instructor.displayName} (${lesson.accompanist.displayName})`
-              : lesson.instructor.displayName}
-          </span>
+          {lesson.instructor ? (
+            <span className={cn(!quiet && 'text-primary')}>
+              {lesson.accompanist
+                ? `${lesson.instructor.displayName} (${lesson.accompanist.displayName})`
+                : lesson.instructor.displayName}
+            </span>
+          ) : (
+            // A room rental (staff only) has its renter instead of staff.
+            lesson.renter && (
+              <span>
+                <span className="sr-only">{t('list.renter')}: </span>
+                {lesson.renter}
+              </span>
+            )
+          )}
         </span>
         <AvailabilityBadges id={availabilityId} lesson={lesson} showFree={false} now={now} />
       </button>

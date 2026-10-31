@@ -120,11 +120,12 @@ type LessonData struct {
 	StartTime          domain.TimeOfDay `doc:"Start time (HH:MM) in the school time zone." example:"18:00" json:"startTime"          pattern:"^[0-2][0-9]:[0-5][0-9]$"`
 	DurationMinutes    int              `doc:"Length in minutes; the lesson ends on its day." json:"durationMinutes" maximum:"1440" minimum:"1"`
 	RoomID             domain.RoomID    `doc:"Room."                                       json:"roomId"`
-	InstructorID       domain.StaffID   `doc:"Instructor."                                 json:"instructorId"`
-	AccompanistID      domain.StaffID   `doc:"Accompanist, if any."                        json:"accompanistId,omitzero" required:"false"`
-	Capacity           int              `doc:"Maximum number of participants."             json:"capacity"           maximum:"1000" minimum:"1"`
-	Visibility         string           `doc:"Who may see the lesson."                     enum:"public,members,hidden" json:"visibility"`
-	Kind               string           `doc:"Regular lesson or special format; workshops and private lessons are published early." enum:"regular,workshop,private" json:"kind"`
+	InstructorID       domain.StaffID   `doc:"Instructor; required, except for a room rental, which has none."   json:"instructorId,omitzero" required:"false"`
+	AccompanistID      domain.StaffID   `doc:"Accompanist, if any; a room rental has none." json:"accompanistId,omitzero" required:"false"`
+	Capacity           int              `doc:"Maximum number of participants; at least 1, and 0 for a room rental." json:"capacity" maximum:"1000" minimum:"0"`
+	Visibility         string           `doc:"Who may see the lesson; a room rental is hidden (staff only)." enum:"public,members,hidden" json:"visibility"`
+	Kind               string           `doc:"Regular lesson or special format; workshops and private lessons are published early. A room rental blocks the room for an outside renter: one-off, hidden, without instructor, accompanist or capacity, and it takes no bookings." enum:"regular,workshop,private,rental" json:"kind"`
+	Renter             string           `doc:"Who rents the room; required for a room rental, absent otherwise." json:"renter,omitempty" maxLength:"100" required:"false"`
 	ConfirmRoomOverlap bool             `doc:"Save even if another lesson uses the room at an overlapping time (skips the 409 room-taken)." json:"confirmRoomOverlap,omitempty" required:"false"`
 	ConfirmPast        bool             `doc:"Save even if the lesson starts in the past (skips the 409 past)." json:"confirmPast,omitempty" required:"false"`
 }
@@ -304,7 +305,7 @@ func (d LessonData) service() service.LessonData {
 	return service.LessonData{
 		Date: d.Date, StartTime: d.StartTime, Duration: time.Duration(d.DurationMinutes) * time.Minute,
 		RoomID: d.RoomID, InstructorID: d.InstructorID, AccompanistID: d.AccompanistID, Capacity: d.Capacity,
-		Visibility: domain.LessonVisibility(d.Visibility), Kind: domain.LessonKind(d.Kind),
+		Visibility: domain.LessonVisibility(d.Visibility), Kind: domain.LessonKind(d.Kind), Renter: d.Renter,
 		ConfirmRoomOverlap: d.ConfirmRoomOverlap, ConfirmPast: d.ConfirmPast,
 	}
 }

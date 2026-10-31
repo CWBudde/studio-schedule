@@ -16,6 +16,7 @@ export type CardLesson = Pick<
   | 'location'
   | 'instructor'
   | 'accompanist'
+  | 'renter'
 >;
 
 /**
@@ -32,8 +33,8 @@ export const lessonCardButton =
 /**
  * The accessible name of a lesson card: "Ballet, Monday, October 26,
  * 18:00–19:30", then whether it is canceled (`canceledLabel`, by default
- * "Canceled"), its kind unless a regular class, and its visibility unless
- * public.
+ * "Canceled"), its kind unless a regular class, a room rental's renter, and
+ * its visibility unless public.
  */
 export function useLessonCardLabel(): (
   lesson: CardLesson,
@@ -47,6 +48,7 @@ export function useLessonCardLabel(): (
       lessonLabel(lesson, timeZone),
       lesson.status === 'canceled' && (canceledLabel ?? t('status.canceled')),
       lesson.kind !== 'regular' && t(`kind.${lesson.kind}`),
+      lesson.renter,
       lesson.visibility !== 'public' && t(`visibility.${lesson.visibility}`),
     ]
       .filter(Boolean)

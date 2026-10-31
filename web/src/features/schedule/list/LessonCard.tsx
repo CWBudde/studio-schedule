@@ -1,4 +1,4 @@
-import { Clock, MapPin, UserRound, UsersRound } from 'lucide-react';
+import { Clock, KeyRound, MapPin, UserRound, UsersRound } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
@@ -103,19 +103,32 @@ export function LessonCardBody({
             {lesson.room.name} · {lesson.location.name}
           </span>
         </span>
-        <span className="inline-flex items-start gap-1.5">
-          <UserRound className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span>
-            <span className="sr-only">{t('list.instructor')}: </span>
-            <span className={cn(!quiet && 'text-primary')}>{lesson.instructor.displayName}</span>
-            {lesson.accompanist && (
-              <>
-                {' · '}
-                <span>{t('list.accompaniedBy', { name: lesson.accompanist.displayName })}</span>
-              </>
-            )}
+        {lesson.instructor ? (
+          <span className="inline-flex items-start gap-1.5">
+            <UserRound className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <span>
+              <span className="sr-only">{t('list.instructor')}: </span>
+              <span className={cn(!quiet && 'text-primary')}>{lesson.instructor.displayName}</span>
+              {lesson.accompanist && (
+                <>
+                  {' · '}
+                  <span>{t('list.accompaniedBy', { name: lesson.accompanist.displayName })}</span>
+                </>
+              )}
+            </span>
           </span>
-        </span>
+        ) : (
+          lesson.renter && (
+            // A room rental (staff only) has its renter instead of staff.
+            <span className="inline-flex items-start gap-1.5">
+              <KeyRound className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <span>
+                <span className="sr-only">{t('list.renter')}: </span>
+                {lesson.renter}
+              </span>
+            </span>
+          )
+        )}
         {person && (
           <span className="inline-flex items-start gap-1.5 text-foreground">
             <UsersRound className="mt-0.5 size-4 shrink-0" aria-hidden="true" />

@@ -15,7 +15,8 @@
   "kind": {
     "regular": "Class",
     "workshop": "Workshop",
-    "private": "Private lesson"
+    "private": "Private lesson",
+    "rental": "Room rental"
   },
   "status": {
     "scheduled": "Scheduled",
@@ -32,6 +33,7 @@
     "tomorrow": "Tomorrow, {{day}}",
     "instructor": "Instructor",
     "accompaniedBy": "accompanied by {{name}}",
+    "renter": "Rented by",
     "place": "Place",
     "for": "For",
     "loading": "Loading schedule…",
@@ -83,6 +85,8 @@
     "location": "Location",
     "instructor": "Instructor",
     "accompanist": "Accompanist",
+    "renter": "Rented by",
+    "rental": "The room is rented out at this time. Only staff see this, and it cannot be booked.",
     "capacity": "Capacity",
     "places_one": "{{count}} place",
     "places_other": "{{count}} places",
@@ -122,7 +126,8 @@
       "cutoff": "Booking has closed.",
       "release": "Not bookable yet.",
       "canceled": "Canceled lessons cannot be booked.",
-      "started": "This lesson has started."
+      "started": "This lesson has started.",
+      "rental": "Room rentals cannot be booked."
     },
     "signIn": "Sign in to book",
     "for": "Book for",
@@ -171,7 +176,8 @@
         "cutoff": "Booking has closed for this lesson.",
         "release": "This lesson cannot be booked yet.",
         "canceled": "This lesson is canceled and cannot be booked.",
-        "started": "This lesson has started and cannot be booked any more."
+        "started": "This lesson has started and cannot be booked any more.",
+        "rental": "This is a room rental and cannot be booked."
       },
       "alreadyCanceled": "This booking was canceled already.",
       "notFound": "This lesson or booking is not available any more.",

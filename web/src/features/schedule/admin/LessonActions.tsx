@@ -64,6 +64,7 @@ export function LessonActions({
   const started = useNow() >= Date.parse(lesson.startsAt);
   const canceled = lesson.status === 'canceled';
   const hidden = lesson.visibility === 'hidden';
+  const rental = lesson.kind === 'rental';
   const bookings = lesson.admin?.activeBookings ?? 0;
   const label = t('lessons.label', {
     courseType: lesson.courseType.name,
@@ -95,7 +96,7 @@ export function LessonActions({
         {t('lessons.manage')}
       </h3>
       <ul className="space-y-1 text-sm text-muted-foreground">
-        {lesson.admin && (
+        {lesson.admin && !rental && (
           <li>
             {bookings > 0 ? t('lessons.bookings', { count: bookings }) : t('lessons.noBookings')}
           </li>
@@ -119,15 +120,18 @@ export function LessonActions({
           <Pencil aria-hidden="true" />
           {t('lessons.edit')}
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={started || visibility.isPending}
-          onClick={onHide}
-        >
-          {hidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
-          {hidden ? t('lessons.unhide') : t('lessons.hide')}
-        </Button>
+        {/* A room rental is always hidden (ADR 0007, amendment). */}
+        {!rental && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={started || visibility.isPending}
+            onClick={onHide}
+          >
+            {hidden ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}
+            {hidden ? t('lessons.unhide') : t('lessons.hide')}
+          </Button>
+        )}
         {canceled ? (
           <Button variant="outline" size="sm" disabled={started} onClick={() => setOpen('restore')}>
             <RotateCcw aria-hidden="true" />

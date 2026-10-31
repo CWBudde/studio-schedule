@@ -115,10 +115,10 @@ func places(ctx context.Context, tx store.Tx, now time.Time, id domain.LessonID)
 	return active, heldPlaces(open, now)[id], nil
 }
 
-// offerable reports whether lesson l takes invites at now: it takes place,
-// members may see it, and booking has not closed.
+// offerable reports whether lesson l takes invites at now: it is no room
+// rental, it takes place, members may see it, and booking has not closed.
 func offerable(settings domain.Settings, now time.Time, l domain.Lesson) bool {
-	return l.Status == domain.LessonScheduled && l.Visibility != domain.VisibilityHidden &&
+	return l.Kind.Bookable() && l.Status == domain.LessonScheduled && l.Visibility != domain.VisibilityHidden &&
 		now.Before(bookingClosesAt(settings, l)) && now.Before(l.StartsAt)
 }
 

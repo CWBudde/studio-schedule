@@ -231,3 +231,36 @@ lesson's instructor or accompanist is an active staff member whose `staff.person
 signed-in account's person; the office acts on every lesson, and any other lesson is a 404. The
 operations are at the access level `staff` (ADR 0005), which checks the role; the service checks the
 lesson.
+
+## Amendment (2026-10-31): room rentals
+
+The previous system had an "internal lesson": a room blocked for an outside renter. It comes back
+as the lesson kind **`rental`** (`domain.LessonRental`, "Room rental", "Raumvermietung") next to
+regular, workshop and private.
+
+- **One-off only.** Classes carry no kind (they generate regular lessons), so a rental is a one-off
+  lesson the office creates like any other (`createLesson`), copies with the week clone, edits,
+  cancels and deletes. A lesson of a class cannot be a rental (422 on `kind`).
+- **Occupies its room.** The 409 `room-taken` check treats a rental like any lesson, in both
+  directions: a lesson in a rented room and a rental in a taken room are refused unless the office
+  confirms the overlap.
+- **No instructor, no places, no price.** A rental has no instructor and no accompanist
+  (forbidden, not optional: the room is the only resource it holds, and no staff member's teaching
+  view, feed or participant rights reach it), a capacity of 0, and is always `hidden`. Lessons
+  carry no price (passes do, ADR 0012), so there is none to drop. It keeps a course type, which
+  every lesson needs; the office picks the closest one. Instead of staff it names its **renter**
+  (`lessons.renter`, 1–100 characters, only on a rental), free text for staff such as a group's
+  name. Each rule is a 422 on its field; migration 00026 mirrors them as CHECK constraints
+  (`instructor_id` becomes nullable).
+- **Takes no bookings.** Booking, the waiting list (join, invite, accept) and the staff's
+  participant writes refuse it as `closed` with `why` `rental`; `createBooking`, through which
+  every booking passes, refuses it too, so no pass is ever redeemed for one. Turning a lesson that
+  bookings (canceled ones included) or its waiting list refer to into a rental is a 422 on `kind`.
+  An announcement cannot address a rental's participants (422 on `lessonId`); the web leaves
+  rentals out of that picker.
+- **Staff only.** Being hidden, a rental never reaches guests or members: not in the schedule, the
+  lesson detail (404), their calendar feeds or the announcements' audiences. Staff see it in the
+  schedule, in its room column, marked "Room rental" with its renter and without booking actions
+  or free places; a staff member's schedule feed shows it with the renter in place of the
+  instructor. The instructor view (`/teach`) leaves it out (it has no participants), and so do the
+  statistics, which therefore never see its zero capacity.

@@ -64,8 +64,8 @@ func (q ScheduleQuery) matches(sl ScheduledLesson) bool {
 }
 
 // ScheduledLesson is a lesson with the records it references. Level is
-// the level of its class (zero for one-off lessons); Accompanist is zero if
-// the lesson has none.
+// the level of its class (zero for one-off lessons); Instructor is zero for
+// a room rental, Accompanist if the lesson has none.
 type ScheduledLesson struct {
 	Lesson                  domain.Lesson
 	Level                   domain.Level
@@ -659,8 +659,11 @@ func (r lessonRefs) resolve(l domain.Lesson) (ScheduledLesson, error) {
 		return sl, fmt.Errorf("lesson %v: course type %v: %w", l.ID, l.CourseTypeID, errBrokenReference)
 	}
 
-	if sl.Instructor, ok = r.staff[l.InstructorID]; !ok {
-		return sl, fmt.Errorf("lesson %v: instructor %v: %w", l.ID, l.InstructorID, errBrokenReference)
+	// A room rental has no instructor; Instructor stays zero.
+	if !l.InstructorID.IsZero() {
+		if sl.Instructor, ok = r.staff[l.InstructorID]; !ok {
+			return sl, fmt.Errorf("lesson %v: instructor %v: %w", l.ID, l.InstructorID, errBrokenReference)
+		}
 	}
 
 	if !l.AccompanistID.IsZero() {

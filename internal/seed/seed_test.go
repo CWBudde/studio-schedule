@@ -173,7 +173,9 @@ func TestDemoWorkshops(t *testing.T) {
 
 	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
 		d := seed.DemoAt(anchor)
-		d.Lessons = slices.DeleteFunc(d.Lessons, func(l domain.Lesson) bool { return !l.ClassID.IsZero() })
+		d.Lessons = slices.DeleteFunc(d.Lessons, func(l domain.Lesson) bool {
+			return !l.ClassID.IsZero() || l.Kind == domain.LessonRental
+		})
 
 		if n := len(d.Lessons); n < 5 || n > 6 {
 			t.Fatalf("%v: %d one-off lessons, want 5..6 workshops", anchor, n)
@@ -261,6 +263,56 @@ func TestDemoWorkshops(t *testing.T) {
 
 		if beyond == 0 {
 			t.Errorf("%v: no workshop beyond the release window (until %v)", anchor, window.ReleasedUntil)
+		}
+	}
+}
+
+// TestDemoRental checks the room rental: one valid, hidden rental after the
+// anchor, in the term, that clashes with no weekly class and no workshop in
+// its room.
+func TestDemoRental(t *testing.T) {
+	t.Parallel()
+
+	loc, err := time.LoadLocation(seed.DemoSettings().Timezone)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
+		d := seed.DemoAt(anchor)
+
+		var rentals []domain.Lesson
+
+		for _, l := range d.Lessons {
+			if l.Kind == domain.LessonRental {
+				rentals = append(rentals, l)
+			}
+		}
+
+		if len(rentals) != 1 {
+			t.Fatalf("%v: %d rentals, want 1", anchor, len(rentals))
+		}
+
+		r := rentals[0]
+		validAll(t, rentals)
+
+		day := domain.DateOf(r.StartsAt, loc)
+		if day.Compare(anchor) <= 0 || day.Compare(d.Terms[0].EndsOn) > 0 {
+			t.Errorf("%v: rental on %v, want after the anchor in the term", anchor, day)
+		}
+
+		for _, l := range d.Lessons {
+			if l.ID != r.ID && l.RoomID == r.RoomID && l.StartsAt.Before(r.EndsAt) && r.StartsAt.Before(l.EndsAt) {
+				t.Errorf("%v: rental clashes with lesson %+v", anchor, l)
+			}
+		}
+
+		for _, c := range d.Classes {
+			start := day.At(c.StartTime, loc)
+			if c.Weekday == day.Weekday() && c.RoomID == r.RoomID &&
+				r.StartsAt.Before(start.Add(c.Duration)) && start.Before(r.EndsAt) {
+				t.Errorf("%v: rental clashes with class %v", anchor, c.ID)
+			}
 		}
 	}
 }

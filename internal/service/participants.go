@@ -186,8 +186,8 @@ type NewParticipant struct {
 // (domain.ErrNotFound otherwise). Unlike a member's booking, it ignores the
 // release window and the booking cutoff, and the lesson may have started:
 // it is allowed until the lesson's day is over (ErrDayOver; the office
-// always), but not into a lesson the school canceled (a *BookingClosedError
-// with ClosedCanceled). An unknown or merged person is a validation error on
+// always), but not into a lesson the school canceled or a room rental (a
+// *BookingClosedError with ClosedCanceled or ClosedRental). An unknown or merged person is a validation error on
 // personId, invalid guest details on guest.name or guest.email, a note
 // without a trial on trialNote. A person with an active booking is
 // ErrAlreadyBooked. A lesson whose active bookings and the places held by
@@ -235,7 +235,10 @@ func (s *ParticipantService) Add(
 
 		now := s.clock.Now()
 
-		if l.Status == domain.LessonCanceled {
+		switch {
+		case !l.Kind.Bookable():
+			return &BookingClosedError{Why: ClosedRental}
+		case l.Status == domain.LessonCanceled:
 			return &BookingClosedError{Why: ClosedCanceled}
 		}
 

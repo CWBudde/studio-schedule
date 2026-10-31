@@ -219,8 +219,9 @@ The demo is a _demo installation_ (`app.Deps.Demo`, also set for `serve` with `D
   server, in the in-memory store. The seed has two pairs of duplicates for the Duplicates page:
   Lena Quillfeather twice with the same email (one with the member number M-1042, which the sample
   updates) and Jonas Brightwater twice with the same name, none with an account.
-- **What each role sees:** the demo data has one workshop for members only and one hidden workshop
-  (staff only), a few days after the visit date. Signing in as the demo member, instructor or admin
+- **What each role sees:** the demo data has one workshop for members only, one hidden workshop
+  (staff only) and a room rental (staff only, ADR 0007, amendment) a few days after the visit
+  date. Signing in as the demo member, instructor or admin
   shows the difference. The admin can open Accounts and "sign in as" another account; a banner
   leads back ([ADR 0005](decisions/0005-rbac-and-impersonation.md)).
 - **Mail links:** the Worker passes the app's URL (with the `#/` route prefix) to Go as the

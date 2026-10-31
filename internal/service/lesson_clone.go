@@ -370,7 +370,7 @@ func (c *cloner) copyOf(l domain.Lesson, shift int) domain.Lesson {
 	return domain.Lesson{
 		CourseTypeID: l.CourseTypeID, RoomID: l.RoomID, InstructorID: l.InstructorID, AccompanistID: l.AccompanistID,
 		StartsAt: start, EndsAt: start.Add(l.EndsAt.Sub(l.StartsAt)), Status: domain.LessonScheduled,
-		Visibility: l.Visibility, Kind: l.Kind, Capacity: l.Capacity,
+		Visibility: l.Visibility, Kind: l.Kind, Capacity: l.Capacity, Renter: l.Renter,
 	}
 }
 
@@ -385,7 +385,9 @@ func (c *cloner) skip(ctx context.Context, src ScheduledLesson, cp domain.Lesson
 		return skipped(SkipClassSlot), nil
 	case !cp.StartsAt.After(c.now):
 		return skipped(SkipStarted), nil
-	case !src.Instructor.Active || !src.Lesson.AccompanistID.IsZero() && !src.Accompanist.Active:
+	// A room rental has no staff to be inactive.
+	case !src.Lesson.InstructorID.IsZero() && !src.Instructor.Active ||
+		!src.Lesson.AccompanistID.IsZero() && !src.Accompanist.Active:
 		return skipped(SkipStaffInactive), nil
 	}
 

@@ -15,7 +15,8 @@
   "kind": {
     "regular": "Kurs",
     "workshop": "Workshop",
-    "private": "Privatstunde"
+    "private": "Privatstunde",
+    "rental": "Raumvermietung"
   },
   "status": {
     "scheduled": "Findet statt",
@@ -32,6 +33,7 @@
     "tomorrow": "Morgen, {{day}}",
     "instructor": "Lehrkraft",
     "accompaniedBy": "Korrepetition: {{name}}",
+    "renter": "Gemietet von",
     "place": "Ort",
     "for": "Für",
     "loading": "Stundenplan wird geladen…",
@@ -83,6 +85,8 @@
     "location": "Standort",
     "instructor": "Lehrkraft",
     "accompanist": "Korrepetition",
+    "renter": "Gemietet von",
+    "rental": "Der Raum ist zu dieser Zeit vermietet. Nur das Team sieht das, und es ist nicht buchbar.",
     "capacity": "Plätze",
     "places_one": "{{count}} Platz",
     "places_other": "{{count}} Plätze",
@@ -122,7 +126,8 @@
       "cutoff": "Die Buchung ist geschlossen.",
       "release": "Noch nicht buchbar.",
       "canceled": "Ausgefallene Stunden können nicht gebucht werden.",
-      "started": "Diese Stunde hat begonnen."
+      "started": "Diese Stunde hat begonnen.",
+      "rental": "Raumvermietungen sind nicht buchbar."
     },
     "signIn": "Zum Buchen anmelden",
     "for": "Buchen für",
@@ -171,7 +176,8 @@
         "cutoff": "Für diese Stunde ist die Buchung geschlossen.",
         "release": "Diese Stunde ist noch nicht buchbar.",
         "canceled": "Diese Stunde fällt aus und kann nicht gebucht werden.",
-        "started": "Diese Stunde hat begonnen und kann nicht mehr gebucht werden."
+        "started": "Diese Stunde hat begonnen und kann nicht mehr gebucht werden.",
+        "rental": "Das ist eine Raumvermietung und nicht buchbar."
       },
       "alreadyCanceled": "Diese Buchung war schon storniert.",
       "notFound": "Diese Stunde oder Buchung ist nicht mehr verfügbar.",

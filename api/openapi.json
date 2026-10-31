@@ -2194,12 +2194,13 @@
             "type": "string"
           },
           "why": {
-            "description": "Why the lesson cannot be booked; only with reason closed. cutoff: the booking cutoff before the start has passed; release: members may not book the lesson yet, or at all (staff book under member rules); canceled: the school canceled the lesson; started: the lesson has started or is over.",
+            "description": "Why the lesson cannot be booked; only with reason closed. cutoff: the booking cutoff before the start has passed; release: members may not book the lesson yet, or at all (staff book under member rules); canceled: the school canceled the lesson; started: the lesson has started or is over; rental: the lesson is a room rental, which takes no bookings.",
             "enum": [
               "cutoff",
               "release",
               "canceled",
-              "started"
+              "started",
+              "rental"
             ],
             "type": "string"
           }
@@ -4406,15 +4407,15 @@
         "additionalProperties": false,
         "properties": {
           "accompanistId": {
-            "description": "Accompanist, if any.",
+            "description": "Accompanist, if any; a room rental has none.",
             "format": "uuid",
             "type": "string"
           },
           "capacity": {
-            "description": "Maximum number of participants.",
+            "description": "Maximum number of participants; at least 1, and 0 for a room rental.",
             "format": "int64",
             "maximum": 1000,
-            "minimum": 1,
+            "minimum": 0,
             "type": "integer"
           },
           "confirmPast": {
@@ -4443,17 +4444,23 @@
             "type": "integer"
           },
           "instructorId": {
-            "description": "Instructor.",
+            "description": "Instructor; required, except for a room rental, which has none.",
             "format": "uuid",
             "type": "string"
           },
           "kind": {
-            "description": "Regular lesson or special format; workshops and private lessons are published early.",
+            "description": "Regular lesson or special format; workshops and private lessons are published early. A room rental blocks the room for an outside renter: one-off, hidden, without instructor, accompanist or capacity, and it takes no bookings.",
             "enum": [
               "regular",
               "workshop",
-              "private"
+              "private",
+              "rental"
             ],
+            "type": "string"
+          },
+          "renter": {
+            "description": "Who rents the room; required for a room rental, absent otherwise.",
+            "maxLength": 100,
             "type": "string"
           },
           "roomId": {
@@ -4470,7 +4477,7 @@
             "type": "string"
           },
           "visibility": {
-            "description": "Who may see the lesson.",
+            "description": "Who may see the lesson; a room rental is hidden (staff only).",
             "enum": [
               "public",
               "members",
@@ -4485,7 +4492,6 @@
           "startTime",
           "durationMinutes",
           "roomId",
-          "instructorId",
           "capacity",
           "visibility",
           "kind"
@@ -4496,15 +4502,15 @@
         "additionalProperties": false,
         "properties": {
           "accompanistId": {
-            "description": "Accompanist, if any.",
+            "description": "Accompanist, if any; a room rental has none.",
             "format": "uuid",
             "type": "string"
           },
           "capacity": {
-            "description": "Maximum number of participants.",
+            "description": "Maximum number of participants; at least 1, and 0 for a room rental.",
             "format": "int64",
             "maximum": 1000,
-            "minimum": 1,
+            "minimum": 0,
             "type": "integer"
           },
           "confirmPast": {
@@ -4528,17 +4534,23 @@
             "type": "integer"
           },
           "instructorId": {
-            "description": "Instructor.",
+            "description": "Instructor; required, except for a room rental, which has none.",
             "format": "uuid",
             "type": "string"
           },
           "kind": {
-            "description": "Regular lesson or special format; workshops and private lessons are published early.",
+            "description": "Regular lesson or special format; workshops and private lessons are published early. A room rental blocks the room for an outside renter: one-off, hidden, without instructor, accompanist or capacity, and it takes no bookings.",
             "enum": [
               "regular",
               "workshop",
-              "private"
+              "private",
+              "rental"
             ],
+            "type": "string"
+          },
+          "renter": {
+            "description": "Who rents the room; required for a room rental, absent otherwise.",
+            "maxLength": 100,
             "type": "string"
           },
           "roomId": {
@@ -4555,7 +4567,7 @@
             "type": "string"
           },
           "visibility": {
-            "description": "Who may see the lesson.",
+            "description": "Who may see the lesson; a room rental is hidden (staff only).",
             "enum": [
               "public",
               "members",
@@ -4569,7 +4581,6 @@
           "startTime",
           "durationMinutes",
           "roomId",
-          "instructorId",
           "capacity",
           "visibility",
           "kind"
@@ -4600,9 +4611,9 @@
             "type": "string"
           },
           "capacity": {
-            "description": "Maximum number of participants.",
+            "description": "Maximum number of participants; 0 for a room rental.",
             "format": "int64",
-            "minimum": 1,
+            "minimum": 0,
             "type": "integer"
           },
           "classId": {
@@ -4634,14 +4645,16 @@
             "type": "string"
           },
           "instructor": {
-            "$ref": "#/components/schemas/StaffRef"
+            "$ref": "#/components/schemas/StaffRef",
+            "description": "Instructor; absent for a room rental."
           },
           "kind": {
-            "description": "Regular lesson or special format.",
+            "description": "Regular lesson or special format; a room rental (only staff see one) takes no bookings.",
             "enum": [
               "regular",
               "workshop",
-              "private"
+              "private",
+              "rental"
             ],
             "type": "string"
           },
@@ -4666,6 +4679,10 @@
           },
           "locationAddress": {
             "description": "Postal address of the location.",
+            "type": "string"
+          },
+          "renter": {
+            "description": "Who rents the room; only for a room rental.",
             "type": "string"
           },
           "room": {
@@ -4712,7 +4729,6 @@
           "courseType",
           "room",
           "location",
-          "instructor",
           "freePlaces",
           "bookingClosesAt"
         ],
@@ -4894,9 +4910,9 @@
             "description": "Accompanist; absent if the lesson has none."
           },
           "capacity": {
-            "description": "Maximum number of participants.",
+            "description": "Maximum number of participants; 0 for a room rental.",
             "format": "int64",
-            "minimum": 1,
+            "minimum": 0,
             "type": "integer"
           },
           "classId": {
@@ -4918,14 +4934,16 @@
             "type": "string"
           },
           "instructor": {
-            "$ref": "#/components/schemas/StaffRef"
+            "$ref": "#/components/schemas/StaffRef",
+            "description": "Instructor; absent for a room rental."
           },
           "kind": {
-            "description": "Regular lesson or special format.",
+            "description": "Regular lesson or special format; a room rental (only staff see one) takes no bookings.",
             "enum": [
               "regular",
               "workshop",
-              "private"
+              "private",
+              "rental"
             ],
             "type": "string"
           },
@@ -4942,6 +4960,10 @@
           },
           "location": {
             "$ref": "#/components/schemas/LocationRef"
+          },
+          "renter": {
+            "description": "Who rents the room; only for a room rental.",
+            "type": "string"
           },
           "room": {
             "$ref": "#/components/schemas/RoomRef"
@@ -4979,8 +5001,7 @@
           "capacity",
           "courseType",
           "room",
-          "location",
-          "instructor"
+          "location"
         ],
         "type": "object"
       },
@@ -8097,9 +8118,9 @@
             "type": "string"
           },
           "capacity": {
-            "description": "Maximum number of participants.",
+            "description": "Maximum number of participants; 0 for a room rental.",
             "format": "int64",
-            "minimum": 1,
+            "minimum": 0,
             "type": "integer"
           },
           "classId": {
@@ -8127,14 +8148,16 @@
             "type": "string"
           },
           "instructor": {
-            "$ref": "#/components/schemas/StaffRef"
+            "$ref": "#/components/schemas/StaffRef",
+            "description": "Instructor; absent for a room rental."
           },
           "kind": {
-            "description": "Regular lesson or special format.",
+            "description": "Regular lesson or special format; a room rental (only staff see one) takes no bookings.",
             "enum": [
               "regular",
               "workshop",
-              "private"
+              "private",
+              "rental"
             ],
             "type": "string"
           },
@@ -8156,6 +8179,10 @@
           },
           "location": {
             "$ref": "#/components/schemas/LocationRef"
+          },
+          "renter": {
+            "description": "Who rents the room; only for a room rental.",
+            "type": "string"
           },
           "room": {
             "$ref": "#/components/schemas/RoomRef"
@@ -8201,7 +8228,6 @@
           "courseType",
           "room",
           "location",
-          "instructor",
           "freePlaces",
           "bookingClosesAt"
         ],
@@ -8965,9 +8991,9 @@
             "type": "boolean"
           },
           "capacity": {
-            "description": "Maximum number of participants.",
+            "description": "Maximum number of participants; 0 for a room rental.",
             "format": "int64",
-            "minimum": 1,
+            "minimum": 0,
             "type": "integer"
           },
           "classId": {
@@ -9009,14 +9035,16 @@
             "type": "string"
           },
           "instructor": {
-            "$ref": "#/components/schemas/StaffRef"
+            "$ref": "#/components/schemas/StaffRef",
+            "description": "Instructor; absent for a room rental."
           },
           "kind": {
-            "description": "Regular lesson or special format.",
+            "description": "Regular lesson or special format; a room rental (only staff see one) takes no bookings.",
             "enum": [
               "regular",
               "workshop",
-              "private"
+              "private",
+              "rental"
             ],
             "type": "string"
           },
@@ -9033,6 +9061,10 @@
           },
           "location": {
             "$ref": "#/components/schemas/LocationRef"
+          },
+          "renter": {
+            "description": "Who rents the room; only for a room rental.",
+            "type": "string"
           },
           "role": {
             "description": "The caller's part: instructor or accompanist of the lesson, or office for a lesson of others.",
@@ -9099,8 +9131,7 @@
           "capacity",
           "courseType",
           "room",
-          "location",
-          "instructor"
+          "location"
         ],
         "type": "object"
       },
@@ -9369,7 +9400,8 @@
               "cutoff",
               "release",
               "canceled",
-              "started"
+              "started",
+              "rental"
             ],
             "type": "string"
           },

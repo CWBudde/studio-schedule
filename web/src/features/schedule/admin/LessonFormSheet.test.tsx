@@ -334,6 +334,98 @@ describe('LessonFormSheet', () => {
     expect(await screen.findAllByText('The lesson has been added.')).not.toHaveLength(0);
   });
 
+  it('adds a room rental: a renter instead of staff, places and visibility', async () => {
+    const post = mockApiPost({ '/api/v1/lessons': { status: 201, body: lessonWorkshopOffice } });
+    const user = userEvent.setup();
+    const { onClose } = renderSheet({ mode: 'add' });
+
+    const sheet = within(await screen.findByRole('dialog', { name: 'New one-off lesson' }));
+    await sheet.findByRole('combobox', { name: 'Course type' });
+    await pick(user, sheet, 'Course type', 'Jazz');
+    await pick(user, sheet, 'Kind', 'Room rental');
+    for (const name of ['Instructor', 'Accompanist', 'Visibility']) {
+      expect(sheet.queryByRole('combobox', { name })).toBeNull();
+    }
+    expect(sheet.queryByLabelText('Capacity')).toBeNull();
+    expect(sheet.getByText(/only staff see it, it has no instructor/)).toBeInTheDocument();
+
+    await fill(user, sheet, 'Date', '2026-11-07');
+    await fill(user, sheet, 'Start time', '14:00');
+    await fill(user, sheet, 'Duration (minutes)', '120');
+    await pick(user, sheet, 'Room', 'North Studio · Room A');
+    await user.click(sheet.getByRole('button', { name: 'Add lesson' }));
+    // The renter is needed.
+    expect(await sheet.findByText('Please fill in this field.')).toBeInTheDocument();
+    expect(post).not.toHaveBeenCalled();
+
+    await fill(user, sheet, 'Rented by', '  Copperleaf Theater Group ');
+    await user.click(sheet.getByRole('button', { name: 'Add lesson' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(post).toHaveBeenCalledWith('/api/v1/lessons', {
+      body: {
+        courseTypeId: ids.jazz,
+        date: '2026-11-07',
+        startTime: '14:00',
+        durationMinutes: 120,
+        roomId: ids.roomA,
+        capacity: 0,
+        visibility: 'hidden',
+        kind: 'rental',
+        renter: 'Copperleaf Theater Group',
+      },
+    });
+  });
+
+  it('edits a room rental and turns it into a lesson', async () => {
+    const rental = {
+      ...lessonWorkshopOffice,
+      kind: 'rental' as const,
+      visibility: 'hidden' as const,
+      instructor: undefined,
+      renter: 'Copperleaf Theater Group',
+      capacity: 0,
+      freePlaces: 0,
+    };
+    const put = mockApiPut({ '/api/v1/lessons/{lessonId}': { body: lessonWorkshopOffice } });
+    const user = userEvent.setup();
+    const { onClose } = renderSheet({ mode: 'edit', lesson: rental });
+
+    const sheet = within(await screen.findByRole('dialog', { name: 'Edit lesson' }));
+    expect(await sheet.findByLabelText('Rented by')).toHaveValue('Copperleaf Theater Group');
+    expect(sheet.getByRole('combobox', { name: 'Kind' })).toHaveTextContent('Room rental');
+    expect(sheet.queryByRole('combobox', { name: 'Instructor' })).toBeNull();
+
+    // As a workshop it needs an instructor and a capacity again, and no renter.
+    await pick(user, sheet, 'Kind', 'Workshop');
+    expect(sheet.queryByLabelText('Rented by')).toBeNull();
+    expect(sheet.getByLabelText('Capacity')).toHaveValue(null);
+    await user.click(sheet.getByRole('button', { name: 'Save changes' }));
+    expect(await sheet.findByText('Please choose one.')).toBeInTheDocument();
+    expect(sheet.getByText('Enter a whole number from 1 to 1000.')).toBeInTheDocument();
+    expect(put).not.toHaveBeenCalled();
+
+    await pick(user, sheet, 'Instructor', 'Riley Sample');
+    await fill(user, sheet, 'Capacity', '12');
+    await pick(user, sheet, 'Visibility', 'Public');
+    await user.click(sheet.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(put).toHaveBeenCalledWith('/api/v1/lessons/{lessonId}', {
+      params: { path: { lessonId: ids.lessonWorkshop } },
+      body: {
+        date: '2026-11-07',
+        startTime: '14:00',
+        durationMinutes: 180,
+        roomId: ids.roomA,
+        instructorId: ids.staffRiley,
+        capacity: 12,
+        visibility: 'public',
+        kind: 'workshop',
+      },
+    });
+  });
+
   it('checks the form before it asks the API', async () => {
     const post = mockApiPost({});
     const user = userEvent.setup();

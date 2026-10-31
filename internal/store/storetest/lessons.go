@@ -310,6 +310,42 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			wantSlice(e.t, got, nil)
 		},
+		"Rental": func(e *env) {
+			// A room rental (ADR 0007, amendment) has no instructor and no
+			// capacity, keeps its renter, takes its room like any lesson
+			// and is no staff member's lesson.
+			s := e.setting()
+			rental := e.newLesson(s, t0, 5)
+			rental.Kind, rental.InstructorID, rental.Capacity = domain.LessonRental, domain.StaffID{}, 0
+			rental.Visibility, rental.Renter = domain.VisibilityHidden, "Copperleaf Theater Group"
+			valid(e.t, rental)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Create(ctx, rental) })
+
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) (domain.Lesson, error) {
+				return tx.Lessons().Get(ctx, rental.ID)
+			})
+			wantEqual(e.t, got, rental)
+
+			rental.Renter = "Maplewood Choir"
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Update(ctx, rental) })
+
+			got = mustQuery(e, func(ctx context.Context, tx store.Tx) (domain.Lesson, error) {
+				return tx.Lessons().Get(ctx, rental.ID)
+			})
+			wantEqual(e.t, got, rental)
+
+			own := e.lesson(s, t0.Add(30*time.Minute), 5)
+
+			overlaps := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+				return tx.Lessons().ListRoomOverlaps(ctx, s.room.ID, t0, t0.Add(time.Hour), own.ID)
+			})
+			wantSlice(e.t, overlaps, []domain.Lesson{rental})
+
+			taught := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+				return tx.Lessons().ListByStaff(ctx, []domain.StaffID{s.instructor.ID}, t0, t0.Add(time.Hour))
+			})
+			wantSlice(e.t, taught, []domain.Lesson{own})
+		},
 		"MissingReferenceIsConflict": func(e *env) {
 			s := e.setting()
 			for name, mutate := range map[string]func(*domain.Lesson){

@@ -185,6 +185,7 @@ type Lesson struct {
 	CancelNote    pgtype.Text
 	CanceledAt    pgtype.Timestamptz
 	CanceledBy    pgtype.UUID
+	Renter        pgtype.Text
 }
 
 type LessonNotice struct {

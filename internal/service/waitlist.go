@@ -327,11 +327,13 @@ func (s *WaitlistService) Leave(ctx context.Context, p Principal, id domain.Wait
 	return nil
 }
 
-// acceptable checks that the place of lesson l may be taken at now: the
-// school has not canceled it, it has not started, booking has not closed,
-// and members may still see it.
+// acceptable checks that the place of lesson l may be taken at now: it is
+// no room rental, the school has not canceled it, it has not started,
+// booking has not closed, and members may still see it.
 func acceptable(settings domain.Settings, now time.Time, l domain.Lesson) error {
 	switch {
+	case !l.Kind.Bookable():
+		return &BookingClosedError{Why: ClosedRental}
 	case l.Status == domain.LessonCanceled:
 		return &BookingClosedError{Why: ClosedCanceled}
 	case !now.Before(l.StartsAt):

@@ -1087,7 +1087,7 @@ func (r lessonRepo) put(l domain.Lesson) error {
 
 	switch {
 	case (!l.ClassID.IsZero() && !s.classes.has(l.ClassID)) || !s.courseTypes.has(l.CourseTypeID) ||
-		!s.rooms.has(l.RoomID) || !s.staff.has(l.InstructorID) ||
+		!s.rooms.has(l.RoomID) || (!l.InstructorID.IsZero() && !s.staff.has(l.InstructorID)) ||
 		(!l.AccompanistID.IsZero() && !s.staff.has(l.AccompanistID)) ||
 		(!l.CanceledBy.IsZero() && !s.accounts.has(l.CanceledBy)):
 		return conflict("lesson references a missing record")
@@ -1194,7 +1194,7 @@ func (r lessonRepo) ListByStaff(
 		_, instructor := wanted[l.InstructorID]
 		_, accompanist := wanted[l.AccompanistID]
 
-		return (instructor || (accompanist && !l.AccompanistID.IsZero())) &&
+		return ((instructor && !l.InstructorID.IsZero()) || (accompanist && !l.AccompanistID.IsZero())) &&
 			!l.StartsAt.Before(from) && l.StartsAt.Before(to)
 	})
 
