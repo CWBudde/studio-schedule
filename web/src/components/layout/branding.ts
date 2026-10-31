@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBackendStatus } from '@/api/backendStatus';
-import { publicSettingsQuery, schoolLogoQuery } from '@/api/queries';
+import { publicSettingsQuery, schoolBackgroundQuery, schoolLogoQuery } from '@/api/queries';
 import { applySchoolLanguage } from '@/i18n';
 import { useDataUrl } from '@/lib/useDataUrl';
 
@@ -16,6 +16,26 @@ export function usePublicSettings() {
 export function useSchoolLogoUrl(hasLogo: boolean | undefined): string | undefined {
   const logo = useQuery({ ...schoolLogoQuery, enabled: hasLogo === true });
   return useDataUrl(hasLogo ? logo.data : null);
+}
+
+/** The custom property that holds the school's background image (the themes that show one read it). */
+export const backgroundProperty = '--school-background';
+
+/**
+ * Sets the school's background image as `--school-background` on the page
+ * while it has one, and removes it otherwise. Programme shows none.
+ */
+export function useSchoolBackground(hasBackground: boolean | undefined) {
+  const background = useQuery({ ...schoolBackgroundQuery, enabled: hasBackground === true });
+  const url = useDataUrl(hasBackground ? background.data : null);
+  useEffect(() => {
+    if (!url) return;
+    const style = document.documentElement.style;
+    style.setProperty(backgroundProperty, `url("${url}")`);
+    return () => {
+      style.removeProperty(backgroundProperty);
+    };
+  }, [url]);
 }
 
 const styleId = 'school-accent';

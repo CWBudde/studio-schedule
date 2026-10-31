@@ -1,72 +1,51 @@
-import { Link } from '@tanstack/react-router';
+import { BookmarkCheck, CalendarDays, Presentation, Shapes } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMe } from '@/api/useMe';
 import { DemoMailbox } from '@/features/demo/DemoMailbox';
 import { canTeach } from '@/features/teach/access';
+import type { NavItem, ShellProps } from '@/themes/slots';
 import { AccountMenu } from './AccountMenu';
-import { BrandMark } from './BrandMark';
-import { useApplyBranding, usePublicSettings, useSchoolLogoUrl } from './branding';
+import {
+  useApplyBranding,
+  usePublicSettings,
+  useSchoolBackground,
+  useSchoolLogoUrl,
+} from './branding';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ResetDemo } from './ResetDemo';
 
-// Programme-style small capitals; the current page is underlined in the primary color.
-const navLink =
-  'relative rounded-sm px-2 py-1.5 text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase transition-colors after:absolute after:inset-x-2 after:bottom-0 after:h-px after:origin-left after:scale-x-0 after:bg-primary after:transition-transform hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none data-[status=active]:text-primary data-[status=active]:after:scale-x-100 motion-reduce:after:transition-none sm:px-3 sm:after:inset-x-3';
-
-export function AppHeader() {
+/**
+ * The header of the Shell slot: the school's name and logo, the main
+ * navigation for the caller's role, and the tools. It also applies the
+ * school's branding (title, accent, language, background) to the page.
+ */
+export function useShellHeader(): ShellProps['header'] {
   const { t } = useTranslation();
-  const { t: tSettings } = useTranslation('settings');
   const me = useMe();
   const settings = usePublicSettings().data;
   useApplyBranding(settings);
+  useSchoolBackground(settings?.hasBackground);
   const logoUrl = useSchoolLogoUrl(settings?.hasLogo);
-  const name = settings?.schoolName;
 
-  // Two hairlines at the bottom, like the rule under a programme's masthead.
-  return (
-    <header className="border-b bg-background/80 shadow-[0_3px_0_-2px_var(--border)] backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      {/* One row on wider screens; on phones the main navigation gets a row of its own. */}
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-1 px-4">
-        <Link
-          to="/"
-          aria-label={name ? tSettings('header.home', { school: name }) : t('app.home')}
-          className="mr-auto flex h-16 items-center gap-2.5 rounded-md font-heading text-xl font-semibold tracking-tight focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-        >
-          {logoUrl ? (
-            <img src={logoUrl} alt="" className="h-9 w-auto max-w-32 object-contain" />
-          ) : (
-            <BrandMark className="size-9" />
-          )}
-          <span className="hidden sm:inline">{name ?? t('app.name')}</span>
-        </Link>
-        <nav
-          aria-label={t('nav.label')}
-          className="order-last -mx-2 flex w-full flex-wrap items-center pb-2 sm:order-none sm:mx-0 sm:w-auto sm:pb-0"
-        >
-          <Link to="/schedule" className={navLink}>
-            {t('nav.schedule')}
-          </Link>
-          <Link to="/classes" className={navLink}>
-            {t('nav.classes')}
-          </Link>
-          {me.data && (
-            <Link to="/my-lessons" className={navLink}>
-              {t('nav.myLessons')}
-            </Link>
-          )}
-          {canTeach(me.data?.role) && (
-            <Link to="/teach" className={navLink}>
-              {t('nav.teach')}
-            </Link>
-          )}
-        </nav>
-        <div className="flex min-w-0 items-center gap-1">
-          <DemoMailbox />
-          <ResetDemo />
-          <AccountMenu />
-          <LanguageSwitcher />
-        </div>
-      </div>
-    </header>
-  );
+  const nav: NavItem[] = [
+    { to: '/schedule', label: t('nav.schedule'), icon: CalendarDays },
+    { to: '/classes', label: t('nav.classes'), icon: Shapes },
+  ];
+  if (me.data) nav.push({ to: '/my-lessons', label: t('nav.myLessons'), icon: BookmarkCheck });
+  if (canTeach(me.data?.role))
+    nav.push({ to: '/teach', label: t('nav.teach'), icon: Presentation });
+
+  return {
+    schoolName: settings?.schoolName,
+    logoUrl,
+    nav,
+    tools: (
+      <>
+        <DemoMailbox />
+        <ResetDemo />
+      </>
+    ),
+    account: <AccountMenu />,
+    language: <LanguageSwitcher />,
+  };
 }

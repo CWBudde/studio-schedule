@@ -15,7 +15,13 @@ import {
   signedOut,
 } from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
-import { AppHeader } from './AppHeader';
+import { Header } from '@/themes/programme/Shell';
+import { useShellHeader } from './AppHeader';
+
+/** Today's header: the Shell's header as Programme shows it. */
+function AppHeader() {
+  return <Header {...useShellHeader()} />;
+}
 
 afterEach(() => {
   vi.restoreAllMocks();

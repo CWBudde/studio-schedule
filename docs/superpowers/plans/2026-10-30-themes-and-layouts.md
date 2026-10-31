@@ -88,7 +88,35 @@ Tailwind v4, shadcn/ui, TanStack Router/Query, react-i18next, Vitest, Playwright
     (it uses `LoadDemoAt`); left for 2.3.
   - `misspell` (US) flags "programme": added to its `ignore-rules` in `.golangci.yml`.
 
-- [ ] 2.1 `slots` Theme registry, typed slots, ThemeProvider, theme cache script, Programme moved behind the slots without visual change, `useLessonQuickAction` — see "Task 2.1" below.
+- [x] 2.1 `slots` Theme registry, typed slots, ThemeProvider, theme cache script, Programme moved behind the slots without visual change, `useLessonQuickAction` — see "Task 2.1" below.
+  - Done: `web/src/themes` (`slots.ts`, `registry.ts`, `useSlot.ts` with `slotOf`, `themeContext.ts`,
+    `themeCache.ts`, `ThemeProvider.tsx`, `programme/` with all seven slots); containers in
+    `RootLayout` (+ `useShellHeader` in `AppHeader.tsx`), `ScheduleList`, `HomePage`, `AccountPage`,
+    `ParticipantsSection`; `TeachList` uses the `DayHeading` slot too (`list/DayHeading.tsx` is gone);
+    booking rules shared in `booking/bookingRules.ts`. 33 new Vitest cases (1061 in total),
+    `just web-check` and `just e2e` (196) green. Before/after screenshots (home, schedule, lesson sheet,
+    account, office participants; 1280×900 and 390×844, light and dark; clock frozen in page and
+    worker): 20 of 20 pixel-identical.
+  - Deviations: `useLessonQuickAction(lesson, timeZone, now)` returns `{ action, dialog }` (a hook
+    cannot render the cancel confirmation; the list's server clock instead of one timer per card).
+    `HomeProps.renderNextLessons(className)`, `ProfileProps`/`ParticipantsProps` are discriminated
+    by `state`; `ShellProps` has `announcements` and `header.language` (today's DOM order). The
+    ThemeProvider sits in `RootShell`'s non-bare layout, not around the whole router; bare routes
+    drop `data-theme`, and theme.js skips `#/about`. A failed theme load shows Programme
+    (`console.warn`) and is not cached. `AppHeader.test.tsx`/`branding.test.tsx` got a 3-line
+    test-local `AppHeader` (header hook + Programme's `Header`); their cases are unchanged.
+  - Discovery: `QuickAction` `full` is never produced: a full lesson open for booking always has a
+    waiting list (`bookable` in `internal/service/booking.go`, no setting turns it off); the member
+    stays for the slot contract. The sheet offers "cancel" on a canceled, not yet started lesson; the
+    quick action answers `none` there.
+  - Residual: signed-in schedule visitors now load `/family` once (shared by the cards), also in
+    Programme. A Programme school with a background still downloads it. Rendering a slot needs
+    `eslint-disable-next-line react-hooks/static-components` (one comment per container).
+  - For 2.2: background upload/remove must invalidate `schoolBackgroundQuery` and the public
+    settings. A switch to a non-Programme theme shows the loading state and remounts the page.
+  - For 3.1: replace registry's inline empty `werkstatt` theme with `import('./werkstatt')`.
+  - For 5.1: with a cached non-Programme theme, "Starting demo backend…" appears only after the
+    theme loads ("Loading the school's look…" first), so `gotoDemo`'s `toBeHidden` may pass early.
 
 - [x] 2.2 `branding-ui` Branding card: theme select and background image upload/remove — see "Task 2.2" below.
   - Done: the theme is a select in the Branding form, with the selected theme's line as its hint (the

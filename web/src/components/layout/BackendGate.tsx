@@ -35,12 +35,17 @@ export function BackendGate({ children }: { children: ReactNode }) {
 
 function BackendLoading() {
   const { t } = useTranslation();
+  return <PageLoading title={t('backend.starting')} hint={t('backend.startingHint')} />;
+}
+
+/** A spinner with what is loading, above the outline of a page (the backend, a theme). */
+export function PageLoading({ title, hint }: { title: string; hint?: string }) {
   return (
     <div role="status" aria-live="polite" className="mx-auto w-full max-w-md py-12">
       <div className="flex flex-col items-center gap-3 text-center">
         <Loader2 className="size-8 animate-spin text-primary" aria-hidden="true" />
-        <p className="font-heading text-lg font-medium">{t('backend.starting')}</p>
-        <p className="text-sm text-muted-foreground">{t('backend.startingHint')}</p>
+        <p className="font-heading text-lg font-medium">{title}</p>
+        {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
       </div>
       <div className="mt-8 space-y-3" aria-hidden="true">
         <Skeleton className="h-6 w-1/2" />

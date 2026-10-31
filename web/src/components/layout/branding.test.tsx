@@ -1,16 +1,24 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import { screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { healthOk, mockApiGet, publicSettings, signedOut } from '@/test/mockApi';
 import i18n from '@/i18n';
-import { renderInRouter } from '@/test/utils';
+import { renderInRouter, renderWithQuery } from '@/test/utils';
+import { Header } from '@/themes/programme/Shell';
 import { AppFooter } from './AppFooter';
-import { AppHeader } from './AppHeader';
-import { accentStyleSheet } from './branding';
+import { useShellHeader } from './AppHeader';
+import { accentStyleSheet, backgroundProperty, useSchoolBackground } from './branding';
+
+/** Today's header: the Shell's header as Programme shows it. */
+function AppHeader() {
+  return <Header {...useShellHeader()} />;
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
   document.getElementById('school-accent')?.remove();
   document.title = 'Studio Schedule';
+  document.documentElement.style.removeProperty(backgroundProperty);
 });
 
 const notDemo = { '/api/v1/demo/mailbox': { status: 404, body: undefined } };
@@ -132,5 +140,61 @@ describe('accentStyleSheet', () => {
     expect(css).toContain('html.dark{--primary:#97b7f8;');
     // Light text stays on the light variant in the dark theme.
     expect(css).toMatch(/html\.dark\{[^}]*--day-today:#1d4ed8;/);
+  });
+});
+
+describe('useSchoolBackground', () => {
+  function Background({ hasBackground }: { hasBackground: boolean | undefined }) {
+    useSchoolBackground(hasBackground);
+    return null;
+  }
+  const background = () => document.documentElement.style.getPropertyValue(backgroundProperty);
+  const image = { body: new Blob(['jpg'], { type: 'image/jpeg' }) };
+
+  it('sets the school background as a custom property once the image is there', async () => {
+    mockApiGet({ '/api/v1/settings/background': image });
+
+    renderWithQuery(<Background hasBackground />);
+
+    await waitFor(() => expect(background()).toBe(`url("data:image/jpeg;base64,${btoa('jpg')}")`));
+  });
+
+  it('removes it when the school no longer has one, and when it unmounts', async () => {
+    mockApiGet({ '/api/v1/settings/background': image });
+
+    const { queryClient, rerender, unmount } = renderWithQuery(<Background hasBackground />);
+    await waitFor(() => expect(background()).not.toBe(''));
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <Background hasBackground={false} />
+      </QueryClientProvider>,
+    );
+    expect(background()).toBe('');
+
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <Background hasBackground />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(background()).not.toBe(''));
+    unmount();
+    expect(background()).toBe('');
+  });
+
+  it('asks for no image without a background', async () => {
+    const get = mockApiGet({ '/api/v1/settings/background': image });
+
+    renderWithQuery(
+      <>
+        <Background hasBackground={false} />
+        <Background hasBackground={undefined} />
+      </>,
+    );
+
+    // Give a request the chance to go out.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(get).not.toHaveBeenCalled();
+    expect(background()).toBe('');
   });
 });

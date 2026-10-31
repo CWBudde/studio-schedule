@@ -75,6 +75,9 @@
     "reload": "Neu laden",
     "reset": "Demo zurücksetzen"
   },
+  "theme": {
+    "loading": "Das Erscheinungsbild der Schule wird geladen…"
+  },
   "home": {
     "eyebrow": "Tanz- & Ballettschule",
     "title": "Willkommen",

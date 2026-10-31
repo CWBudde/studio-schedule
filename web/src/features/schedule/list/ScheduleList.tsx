@@ -3,25 +3,21 @@ import { useId, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Schedule, ScheduleLesson } from '@/api/client';
 import { Button } from '@/components/ui/button';
+import { useLessonQuickAction } from '@/features/schedule/booking/quickAction';
 import { addDays, formatDateTime, todayIn } from '@/lib/schoolTime';
 import { useServerNow } from '@/lib/useNow';
-import { cn } from '@/lib/utils';
-import { AvailabilityBadges, hasAvailabilityBadges } from '../booking/AvailabilityBadges';
-import { DayHeading } from './DayHeading';
-import { LessonCardBody } from './LessonCard';
-import { lessonCardButton, lessonCardSurface, useLessonCardLabel } from './cardParts';
-import { type Day as DayOf, type DayTone, dayTone, groupByDay } from './days';
+import type { ScheduleDay } from '@/themes/slots';
+import { useSlot } from '@/themes/useSlot';
+import { dayTone, groupByDay } from './days';
 import { clearedFilters, hasActiveFilter } from '../filters/filterParams';
 import { useScheduleSearch } from '../useScheduleSearch';
 
-type Day = DayOf<ScheduleLesson>;
-
 /**
  * The schedule as a feed of lesson cards grouped by school day, each day
- * under a sticky heading colored by its distance from today. Lessons that
- * have ended are muted. Both follow the server's clock (`schedule.now`, as
- * of `receivedAt`), checked once a minute. Days without lessons are left
- * out.
+ * under a heading colored by its distance from today (the ScheduleList,
+ * DayHeading and LessonCard slots). Lessons that have ended are muted. Both
+ * follow the server's clock (`schedule.now`, as of `receivedAt`), checked
+ * once a minute. Days without lessons are left out.
  */
 export function ScheduleList({ schedule, receivedAt }: { schedule: Schedule; receivedAt: number }) {
   const { i18n } = useTranslation('schedule');
@@ -30,104 +26,69 @@ export function ScheduleList({ schedule, receivedAt }: { schedule: Schedule; rec
   const now = useServerNow(schedule.now, receivedAt);
   const today = todayIn(schedule.timezone, now);
   const tomorrow = addDays(today, 1);
-  const days = useMemo(
+  const idPrefix = useId();
+  const List = useSlot('ScheduleList');
+  const grouped = useMemo(
     () => groupByDay(schedule.lessons, schedule.timezone),
     [schedule.lessons, schedule.timezone],
   );
-
-  if (days.length === 0) return <EmptySchedule schedule={schedule} lang={lang} />;
+  const days: ScheduleDay[] = grouped.map((day) => ({
+    ...day,
+    tone: dayTone(day.date, today, tomorrow),
+    headingId: `${idPrefix}${day.date}`,
+  }));
+  const onOpen = (lessonId: string) => void update({ lesson: lessonId });
 
   return (
-    <div className="space-y-6">
-      {days.map((day) => (
-        <DaySection
-          key={day.date}
-          day={day}
-          tone={dayTone(day.date, today, tomorrow)}
-          now={now}
+    // The slot changes only with the theme, and then remounting what it renders is intended.
+    // eslint-disable-next-line react-hooks/static-components
+    <List
+      days={days}
+      timeZone={schedule.timezone}
+      now={now}
+      empty={<EmptySchedule schedule={schedule} lang={lang} />}
+      onOpen={onOpen}
+      renderLesson={(lesson) => (
+        <ScheduleLessonCard
+          lesson={lesson}
           timeZone={schedule.timezone}
-          onOpen={(lesson) => void update({ lesson })}
+          now={now}
+          onOpen={() => onOpen(lesson.id)}
         />
-      ))}
-    </div>
+      )}
+    />
   );
 }
 
-function DaySection({
-  day,
-  tone,
-  now,
-  timeZone,
-  onOpen,
-}: {
-  day: Day;
-  tone: DayTone;
-  now: number;
-  timeZone: string;
-  onOpen: (lessonId: string) => void;
-}) {
-  const headingId = useId();
-  return (
-    <section aria-labelledby={headingId} className="space-y-3">
-      <DayHeading id={headingId} date={day.date} tone={tone} />
-      <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {day.lessons.map((lesson) => (
-          <li key={lesson.id} className="flex">
-            <LessonCard
-              lesson={lesson}
-              past={Date.parse(lesson.endsAt) <= now}
-              now={now}
-              timeZone={timeZone}
-              onOpen={() => onOpen(lesson.id)}
-            />
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function LessonCard({
+/** A lesson's card (the LessonCard slot) with its quick action and that action's dialog. */
+function ScheduleLessonCard({
   lesson,
-  past,
-  now,
   timeZone,
+  now,
   onOpen,
 }: {
   lesson: ScheduleLesson;
-  past: boolean;
+  timeZone: string;
   /** The server's clock, in ms. */
   now: number;
-  timeZone: string;
   onOpen: () => void;
 }) {
-  const detailsId = useId();
-  const availabilityId = useId();
-  const label = useLessonCardLabel()(lesson, timeZone);
-  const canceled = lesson.status === 'canceled';
-  // Canceled and ended lessons lose their accent colors.
-  const quiet = canceled || past;
-
+  const LessonCard = useSlot('LessonCard');
+  const { action, dialog } = useLessonQuickAction(lesson, timeZone, now);
   return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-describedby={
-        hasAvailabilityBadges(lesson, !quiet, now) ? `${detailsId} ${availabilityId}` : detailsId
-      }
-      onClick={onOpen}
-      data-canceled={canceled || undefined}
-      data-past={past || undefined}
-      className={cn(
-        lessonCardSurface,
-        lessonCardButton,
-        'w-full transition-[background-color,box-shadow] hover:ring-primary/30',
-      )}
-    >
-      <LessonCardBody lesson={lesson} timeZone={timeZone} detailsId={detailsId} quiet={quiet}>
-        <AvailabilityBadges id={availabilityId} lesson={lesson} showFree={!quiet} now={now} />
-      </LessonCardBody>
-    </button>
+    <>
+      {/* The slot changes only with the theme, and then remounting what it renders is intended. */}
+      {/* eslint-disable-next-line react-hooks/static-components */}
+      <LessonCard
+        lesson={lesson}
+        timeZone={timeZone}
+        now={now}
+        past={Date.parse(lesson.endsAt) <= now}
+        quickAction={action}
+        onOpen={onOpen}
+      />
+      {dialog}
+    </>
   );
 }
 

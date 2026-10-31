@@ -1,21 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { CalendarX2, ListPlus, LogIn, X } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 import type { LessonDetail, Me } from '@/api/client';
-import { type ClosedWhy, closedWhy } from '@/api/conflict';
-import {
-  type BookedFor,
-  bookLessonMutation,
-  familyQuery,
-  joinWaitlistMutation,
-  meQuery,
-  myPassesQuery,
-} from '@/api/queries';
+import type { ClosedWhy } from '@/api/conflict';
+import { type BookedFor, familyQuery, meQuery, myPassesQuery } from '@/api/queries';
 import { Badge } from '@/components/ui/badge';
-import { fullName } from '@/features/account/personForm';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -29,15 +20,17 @@ import {
 import { PassHint } from '@/features/passes/PassHint';
 import { formatDateTime, schoolDateOf } from '@/lib/schoolTime';
 import { useServerClock } from '../useServerClock';
-import { useBookingErrorText } from './bookingErrors';
+import {
+  type Bookable,
+  bookablePersons,
+  closedState,
+  unbookedPersons,
+  useBookingWrites,
+} from './bookingRules';
 import { CancelBookingDialog } from './CancelBookingDialog';
 import { CancelFollowingDialog } from './CancelFollowingDialog';
 import { cancelIsLate } from './lateCancel';
-import { staysOnList } from './waitlist';
 import { WaitlistRow } from './WaitlistRow';
-
-/** A person the signed-in account books for: itself or one of its dependents. */
-type Bookable = { id: string; name: string; self: boolean };
 
 /**
  * The booking part of the lesson sheet: the free places, and for a
@@ -85,18 +78,6 @@ export function BookingSection({
   );
 }
 
-/**
- * Why the lesson cannot be booked, in the order the API checks: canceled,
- * started, past the booking cutoff. Only the API knows whether members may
- * book it yet (release); it says so with a 409.
- */
-function closedState(lesson: LessonDetail, now: number): ClosedWhy | undefined {
-  if (lesson.status === 'canceled') return 'canceled';
-  if (now >= Date.parse(lesson.startsAt)) return 'started';
-  if (now >= Date.parse(lesson.bookingClosesAt)) return 'cutoff';
-  return undefined;
-}
-
 /** "3 places left" and until when, "This lesson is full." or why it is closed. */
 function Availability({
   lesson,
@@ -142,11 +123,8 @@ function MemberBooking({
   now: number;
 }) {
   const { t } = useTranslation('schedule');
-  const queryClient = useQueryClient();
-  const errorText = useBookingErrorText();
   const family = useQuery(familyQuery);
-  const book = useMutation(bookLessonMutation(queryClient));
-  const join = useMutation(joinWaitlistMutation(queryClient));
+  const { book, join, refused, bookFor, joinFor } = useBookingWrites(lesson.id);
   const passes = useQuery(myPassesQuery);
   const selectId = useId();
   const stayId = useId();
@@ -159,29 +137,12 @@ function MemberBooking({
 
   const started = now >= Date.parse(lesson.startsAt);
   // A refusal for this lesson stays until the sheet shows another one.
-  const refused =
-    (book.variables?.lessonId === lesson.id ? closedWhy(book.error) : undefined) ??
-    (join.variables?.lessonId === lesson.id ? closedWhy(join.error) : undefined);
   const closed = closedState(lesson, now) ?? refused;
 
-  const self: Bookable = { id: me.personId, name: fullName(me), self: true };
-  const persons: Bookable[] = [
-    self,
-    ...(family.data?.dependents ?? []).map((d) => ({
-      id: d.id,
-      name: fullName(d),
-      self: false,
-    })),
-  ];
+  const persons = bookablePersons(me, family.data?.dependents);
   const booked = lesson.bookedFor ?? [];
   const waitlist = lesson.waitlist ?? [];
-  // Whoever is booked or on the waiting list already is not offered; an
-  // invite that ran out and ends does not count.
-  const unbooked = persons.filter(
-    (p) =>
-      !booked.some((b) => b.personId === p.id) &&
-      !waitlist.some((w) => w.personId === p.id && staysOnList(w, now)),
-  );
+  const unbooked = unbookedPersons(persons, lesson, now);
   const target = unbooked.find((p) => p.id === chosen) ?? unbooked[0];
   const canBook = !closed && lesson.freePlaces > 0 && !book.isPending;
   // A full lesson that could be booked otherwise has a waiting list. While a
@@ -193,45 +154,13 @@ function MemberBooking({
   const showHint = !closed && lesson.freePlaces > 0 && target !== undefined && !!passes.data;
   const nameOf = (p: Bookable) => (p.self ? t('booking.you', { name: p.name }) : p.name);
 
+  // A closed lesson says so in the section; everything else in a toast.
   const onBook = () => {
-    if (!target) return;
-    book.mutate(
-      { lessonId: lesson.id, personId: target.id, name: target.name },
-      {
-        onSuccess: () =>
-          toast.success(t('booking.bookedToast', { name: target.name }), {
-            description: t('booking.mailHint'),
-          }),
-        onError: (error) => {
-          // A closed lesson says so in the section; everything else in a toast.
-          if (!closedWhy(error)) toast.error(errorText(error, target.name));
-        },
-      },
-    );
+    if (target) bookFor(target);
   };
 
   const onJoin = () => {
-    if (!target) return;
-    join.mutate(
-      { lessonId: lesson.id, personId: target.id, name: target.name, stayOnList },
-      {
-        onSuccess: (entry) => {
-          setStay(undefined);
-          toast.success(
-            entry.position === undefined
-              ? t('booking.waitlist.joinedToastPlain', { name: target.name })
-              : t('booking.waitlist.joinedToast', {
-                  name: target.name,
-                  position: entry.position,
-                }),
-            { description: t('booking.waitlist.inviteHint') },
-          );
-        },
-        onError: (error) => {
-          if (!closedWhy(error)) toast.error(errorText(error, target.name));
-        },
-      },
-    );
+    if (target) joinFor(target, stayOnList, () => setStay(undefined));
   };
 
   return (

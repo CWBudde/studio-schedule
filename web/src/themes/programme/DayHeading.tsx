@@ -1,14 +1,15 @@
 import { useTranslation } from 'react-i18next';
-import { formatDayHeading, type SchoolDate } from '@/lib/schoolTime';
+import { dayToneClass } from '@/features/schedule/list/days';
+import { formatDayHeading } from '@/lib/schoolTime';
 import { cn } from '@/lib/utils';
-import { type DayTone, dayToneClass } from './days';
+import type { DayHeadingProps } from '../slots';
 
 /**
  * The sticky heading of a school day in a list of lessons, colored by the
  * day's distance from today; today and tomorrow say so, and today is the
- * current date for assistive technology.
+ * current date for assistive technology. The neighbours' ids go unused.
  */
-export function DayHeading({ id, date, tone }: { id: string; date: SchoolDate; tone: DayTone }) {
+export function DayHeading({ id, date, tone }: DayHeadingProps) {
   const { t, i18n } = useTranslation('schedule');
   const heading = formatDayHeading(date, i18n.resolvedLanguage ?? 'en');
   return (
