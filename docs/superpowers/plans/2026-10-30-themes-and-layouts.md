@@ -223,7 +223,8 @@ Tailwind v4, shadcn/ui, TanStack Router/Query, react-i18next, Vitest, Playwright
     **member is a guardian**: every Werkstatt card shows "Details", never "Book" (review focus 3 as
     intended). `pwa.spec.ts`'s offline case picks a card with "N free"; Programme shows free places on
     a lesson that has started but not ended, whose sheet says "has started" without a Book button, so
-    it fails while such a lesson runs (Saturday 10:00–10:45 in the seed); unrelated to this task.
+    it fails whenever the first such card is a running lesson (Saturday 10:00–10:45, then
+    10:00–11:30 in the seed: failing at 10:39 and 10:49); unrelated to this task.
   - For 5.1: "book with the card's Eintragen button" needs an account that books for itself only (the
     demo member has dependents), or book in the sheet; `werkstatt.spec.ts` has the schedule cases.
   - For 4.2: Home can reuse `DayHeading`/`LessonCard` through `useSlot`; the card needs a
