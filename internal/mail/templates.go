@@ -68,9 +68,15 @@ const (
 	// changed or reset (ASVS 2.2.3); it has no link. Data:
 	// PasswordChangedData.
 	TemplatePasswordChanged = "password-changed"
+	// TemplateTest is the test mail of `studio-schedule mail test`, which
+	// checks that the mail server delivers. It goes straight to the mail
+	// server, never through the outbox, so it is no template of the mail
+	// log and not in TemplateNames. Data: TestData.
+	TemplateTest = "test"
 )
 
-// TemplateNames returns all template names.
+// TemplateNames returns the names of the templates of the outbox's mails:
+// every template but TemplateTest.
 func TemplateNames() []string {
 	return []string{
 		TemplateConfirmEmail, TemplateResetPassword, TemplateChangeEmail, TemplateEmailChanged, TemplateInvite,
@@ -460,6 +466,23 @@ func (d AnnouncementData) Validate() error {
 		return fmt.Errorf("%w: an announcement needs a title", domain.ErrValidation)
 	case strings.TrimSpace(d.Message) == "":
 		return fmt.Errorf("%w: an announcement needs a message", domain.ErrValidation)
+	}
+
+	return nil
+}
+
+// TestData is the data of TemplateTest.
+type TestData struct {
+	// Server is the mail server the test mail goes through, e.g.
+	// "mail.example.org".
+	Server string
+}
+
+// Validate checks the data before rendering. All errors wrap
+// domain.ErrValidation.
+func (d TestData) Validate() error {
+	if strings.TrimSpace(d.Server) == "" {
+		return fmt.Errorf("%w: a test mail names its mail server", domain.ErrValidation)
 	}
 
 	return nil

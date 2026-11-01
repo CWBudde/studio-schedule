@@ -79,6 +79,8 @@ func passwordChangedData() mail.PasswordChangedData {
 	return mail.PasswordChangedData{SchoolName: "Studio Example", GivenName: "Anna"}
 }
 
+func testData() mail.TestData { return mail.TestData{Server: "mail.example.org"} }
+
 // golden compares got with testdata/<name> and rewrites the file with -update.
 func golden(t *testing.T, name, got string) {
 	t.Helper()
@@ -123,6 +125,7 @@ func TestRenderGolden(t *testing.T) {
 		{mail.TemplateInvite, inviteData()},
 		{mail.TemplateAccountDeleted, accountDeletedData()},
 		{mail.TemplatePasswordChanged, passwordChangedData()},
+		{mail.TemplateTest, testData()},
 	}
 
 	for _, tt := range tests {
@@ -598,7 +601,8 @@ func TestRenderWrongData(t *testing.T) {
 }
 
 // TestTemplateParity checks that every template exists in every locale, with
-// all three parts (and the notification of PushTemplateNames), and that the
+// all three parts (and the notification of PushTemplateNames), TemplateTest
+// too, and that the
 // templates directory holds nothing else.
 func TestTemplateParity(t *testing.T) {
 	t.Parallel()
@@ -613,7 +617,7 @@ func TestTemplateParity(t *testing.T) {
 	want := map[string]bool{}
 
 	for _, loc := range locales {
-		for _, name := range mail.TemplateNames() {
+		for _, name := range append(mail.TemplateNames(), mail.TemplateTest) {
 			for _, part := range []string{"subject.txt", "txt", "html"} {
 				want[loc+"/"+name+"."+part] = true
 			}
@@ -652,7 +656,7 @@ func TestTemplateParity(t *testing.T) {
 	}
 }
 
-// TestRenderAllTemplates renders every template in every locale with the
+// TestRenderAllTemplates renders every template (TemplateTest too) in every locale with the
 // data type registered for it, so a template referring to a missing field
 // fails here.
 func TestRenderAllTemplates(t *testing.T) {
@@ -678,9 +682,10 @@ func TestRenderAllTemplates(t *testing.T) {
 		mail.TemplateAnnouncement:     announcementData(),
 		mail.TemplateAccountDeleted:   accountDeletedData(),
 		mail.TemplatePasswordChanged:  passwordChangedData(),
+		mail.TemplateTest:             testData(),
 	}
 
-	for _, name := range mail.TemplateNames() {
+	for _, name := range append(mail.TemplateNames(), mail.TemplateTest) {
 		data, ok := samples[name]
 		if !ok {
 			t.Errorf("no sample data for template %s", name)
@@ -700,5 +705,33 @@ func TestRenderAllTemplates(t *testing.T) {
 				t.Errorf("Render(%s, %s) gives an invalid message: %v", loc, name, err)
 			}
 		}
+	}
+}
+
+// TestRenderTestMail names the mail server in both parts and both locales,
+// is no template of the outbox, and refuses data without a server.
+func TestRenderTestMail(t *testing.T) {
+	t.Parallel()
+
+	r := newRenderer(t)
+
+	for _, loc := range r.Locales() {
+		got, err := r.Render(loc, mail.TemplateTest, testData())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !strings.Contains(got.Text, "mail.example.org") || !strings.Contains(got.HTML, "mail.example.org") {
+			t.Errorf("%s: the test mail does not name its server:\n%s\n%s", loc, got.Text, got.HTML)
+		}
+	}
+
+	if slices.Contains(mail.TemplateNames(), mail.TemplateTest) || mail.SecretLink(mail.TemplateTest) {
+		t.Error("the test mail is a template of the outbox")
+	}
+
+	_, err := r.Render("en", mail.TemplateTest, mail.TestData{Server: " "})
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Errorf("Render without a server = %v, want a validation error", err)
 	}
 }

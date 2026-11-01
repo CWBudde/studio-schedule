@@ -85,7 +85,7 @@ func NewRenderer() (*Renderer, error) {
 		r.locales = append(r.locales, loc)
 		r.sets[loc] = map[string]templateSet{}
 
-		for _, name := range TemplateNames() {
+		for _, name := range append(TemplateNames(), TemplateTest) {
 			set, err := parseSet(fsys, loc, name)
 			if err != nil {
 				return nil, fmt.Errorf("mail template %s/%s: %w", loc, name, err)
