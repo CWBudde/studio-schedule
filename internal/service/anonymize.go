@@ -183,7 +183,7 @@ func (s *PersonService) anonymize(
 
 	e := domain.AuditEvent{
 		ID: ids.New[domain.AuditEventID](s.ids), At: now, ActorID: actorOf(p), Action: domain.AuditPersonAnonymized,
-		TargetKind: domain.AuditTargetPerson, TargetPersonID: id,
+		TargetKind: domain.AuditTargetPerson, TargetPersonID: id, Details: domain.AuditDetails{Via: p.Via},
 	}
 	if err := e.Validate(); err != nil {
 		return sum, err

@@ -508,7 +508,8 @@
     "nothing": "Nichts",
     "noAccess": "Nur die Administration kann diese Seite sehen.",
     "holder": "Die Kontoinhaberin oder der Kontoinhaber",
-    "roleChange": "{{from}} → {{to}}"
+    "roleChange": "{{from}} → {{to}}",
+    "viaCli": "über die Kommandozeile ({{user}})"
   },
   "lessons": {
     "manage": "Stunde verwalten",

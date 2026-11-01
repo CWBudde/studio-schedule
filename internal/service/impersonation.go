@@ -65,7 +65,7 @@ func (s *AuthService) Impersonate(ctx context.Context, admin Principal, target d
 
 		out = SignedIn{Token: token, Principal: principal(acc, sess), ExpiresAt: sess.ExpiresAt}
 
-		return s.audit(ctx, tx, admin.AccountID, domain.AuditImpersonationStarted, acc.ID)
+		return s.audit(ctx, tx, admin.AccountID, admin.Via, domain.AuditImpersonationStarted, acc.ID)
 	})
 	if err != nil {
 		return SignedIn{}, fmt.Errorf("impersonate %s: %w", target, err)
@@ -107,7 +107,7 @@ func (s *AuthService) StopImpersonation(ctx context.Context, p Principal) (Signe
 
 		out = SignedIn{Token: token, Principal: principal(admin, sess), ExpiresAt: sess.ExpiresAt}
 
-		return s.audit(ctx, tx, admin.ID, domain.AuditImpersonationEnded, p.AccountID)
+		return s.audit(ctx, tx, admin.ID, p.Via, domain.AuditImpersonationEnded, p.AccountID)
 	})
 	if err != nil {
 		return SignedIn{}, fmt.Errorf("stop impersonation: %w", err)
@@ -127,13 +127,14 @@ func (s *AuthService) endSession(ctx context.Context, tx store.Tx, id domain.Ses
 	return err
 }
 
-// audit records that actor did action to target.
+// audit records that actor did action to target through the channel via.
 func (s *AuthService) audit(
-	ctx context.Context, tx store.Tx, actor domain.AccountID, action domain.AuditAction, target domain.AccountID,
+	ctx context.Context, tx store.Tx, actor domain.AccountID, via domain.AuditVia, action domain.AuditAction,
+	target domain.AccountID,
 ) error {
 	e := domain.AuditEvent{
 		ID: ids.New[domain.AuditEventID](s.ids), At: s.clock.Now(), ActorID: actor, Action: action,
-		TargetKind: domain.AuditTargetAccount, TargetID: target,
+		TargetKind: domain.AuditTargetAccount, TargetID: target, Details: domain.AuditDetails{Via: via},
 	}
 	if err := e.Validate(); err != nil {
 		return err

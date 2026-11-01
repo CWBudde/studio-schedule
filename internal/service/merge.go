@@ -258,7 +258,9 @@ func (s *PersonService) merge(ctx context.Context, tx store.Tx, p Principal, req
 	e := domain.AuditEvent{
 		ID: ids.New[domain.AuditEventID](s.ids), At: s.clock.Now(), ActorID: actorOf(p), Action: domain.AuditPersonMerged,
 		TargetKind: domain.AuditTargetPerson, TargetPersonID: survivor.ID,
-		Details: domain.AuditDetails{MergedPersonID: merged.ID, MergedName: merged.GivenName + " " + merged.FamilyName},
+		Details: domain.AuditDetails{
+			MergedPersonID: merged.ID, MergedName: merged.GivenName + " " + merged.FamilyName, Via: p.Via,
+		},
 	}
 	if err := e.Validate(); err != nil {
 		return sum, err

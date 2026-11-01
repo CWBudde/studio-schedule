@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { AuditEventEntry } from '@/api/client';
 import { listAuditEventsQuery, meQuery, publicSettingsQuery } from '@/api/queries';
 import { formatTimestamp } from '@/lib/schoolTime';
@@ -106,19 +107,32 @@ function AuditTable() {
               },
               { id: 'action', header: t('audit.action') },
             ),
-            // No actor: the account's holder deleted it themself.
-            columns.accessor((e) => (e.actor ? accountText(e.actor) : t('audit.holder')), {
-              id: 'actor',
-              header: t('audit.actor'),
-              cell: (info) => {
-                const actor = info.row.original.actor;
-                return actor ? (
-                  <Account account={actor} />
-                ) : (
-                  <span className="block font-medium">{t('audit.holder')}</span>
-                );
+            // No actor: the account's holder deleted it themself. The channel,
+            // when not the API, is searchable too.
+            columns.accessor(
+              (e) =>
+                [e.actor ? accountText(e.actor) : t('audit.holder'), viaLabel(e, t)]
+                  .filter(Boolean)
+                  .join(' '),
+              {
+                id: 'actor',
+                header: t('audit.actor'),
+                cell: (info) => {
+                  const event = info.row.original;
+                  const via = viaLabel(event, t);
+                  return (
+                    <>
+                      {event.actor ? (
+                        <Account account={event.actor} />
+                      ) : (
+                        <span className="block font-medium">{t('audit.holder')}</span>
+                      )}
+                      {via && <span className="block text-xs text-muted-foreground">{via}</span>}
+                    </>
+                  );
+                },
               },
-            }),
+            ),
             columns.accessor(
               (e) => targetText(e, t('audit.mail', { to: e.details?.recipient ?? '' })),
               {
@@ -147,6 +161,16 @@ function AuditTable() {
       initialSorting={[{ id: 'at', desc: true }]}
     />
   );
+}
+
+/**
+ * The channel the actor acted through, when not the API (ADR 0020): the
+ * command line, with the OS user who ran it. Undefined for the API and for
+ * a channel this page does not know.
+ */
+function viaLabel(e: AuditEventEntry, t: TFunction<'admin'>) {
+  const via = e.details?.via;
+  return via?.channel === 'cli' ? t('audit.viaCli', { user: via.osUser }) : undefined;
 }
 
 /**

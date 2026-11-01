@@ -95,6 +95,14 @@ type AuditDetails struct {
 	// ADR 0016.
 	PreviousRole string `doc:"The role before account-role-changed." enum:"member,instructor,office,admin" json:"previousRole,omitempty"`
 	Role         string `doc:"The role after account-role-changed."  enum:"member,instructor,office,admin" json:"role,omitempty"`
+	// ADR 0020.
+	Via *AuditVia `doc:"The channel the actor acted through, for any action; absent for the API." json:"via,omitempty"`
+}
+
+// AuditVia is the channel an actor acted through when not the API.
+type AuditVia struct {
+	Channel string `doc:"The channel the actor acted through when not the API: cli, the command line (ADR 0020), with --as the actor's email; later versions may add channels." enum:"cli" json:"channel"`
+	OSUser  string `doc:"The operating system user who ran the command (unknown if it could not be told)." json:"osUser"`
 }
 
 // AuditEventEntry is an event in the audit log.
@@ -171,6 +179,10 @@ func (h *handlers) listAuditEvents(ctx context.Context, _ *struct{}) (*AuditEven
 			entry.Details = &AuditDetails{
 				MailID: d.MailID, Recipient: d.Recipient, Template: d.Template, MergedPersonID: d.MergedPersonID,
 				MergedName: d.MergedName, PreviousRole: string(d.PreviousRole), Role: string(d.Role),
+			}
+
+			if !d.Via.IsZero() {
+				entry.Details.Via = &AuditVia{Channel: string(d.Via.Channel), OSUser: d.Via.OSUser}
 			}
 		}
 

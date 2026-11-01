@@ -90,6 +90,10 @@ type Principal struct {
 	// VisibleDays is the account's early-access override (0: the school's
 	// default).
 	VisibleDays int
+	// Via is the channel of a principal without a session, the command
+	// line's (Actor); zero for a request through the API. The audit events
+	// written for the principal record it (AuditDetails.Via).
+	Via domain.AuditVia
 }
 
 // SignedIn is a new or extended session together with its secret token,
@@ -619,7 +623,9 @@ func (s *AuthService) Logout(ctx context.Context, token string) error {
 		// An impersonation that expired already ended then; it is not
 		// ended again.
 		if !sess.ImpersonatorID.IsZero() && s.clock.Now().Before(sessionEnd(sess)) {
-			err := s.audit(ctx, tx, sess.ImpersonatorID, domain.AuditImpersonationEnded, sess.AccountID)
+			// A sign-out has no principal: no channel.
+			err := s.audit(ctx, tx, sess.ImpersonatorID, domain.AuditVia{}, domain.AuditImpersonationEnded,
+				sess.AccountID)
 			if err != nil {
 				return err
 			}
@@ -744,6 +750,45 @@ func principal(acc domain.Account, sess domain.Session) Principal {
 		AccountID: acc.ID, PersonID: acc.PersonID, Email: acc.Email, Role: acc.Role, SessionID: sess.ID,
 		ImpersonatorID: sess.ImpersonatorID, VisibleDays: acc.VisibleDays,
 	}
+}
+
+// Actor errors: the account of email cannot act (ADR 0020). Both are not
+// found: the command line exits with 3 for them.
+var (
+	ErrNoActor       = fmt.Errorf("%w: no account has this email", domain.ErrNotFound)
+	ErrActorInactive = fmt.Errorf("%w: the account is not confirmed or is disabled", domain.ErrNotFound)
+)
+
+// Actor returns the principal of the account with email, acting through
+// via, for a command of the command line (ADR 0020): the account's own
+// role and person, with no session. Unlike a sign-in, no password is asked:
+// whoever runs the command can read and write the database already. An
+// unknown account is ErrNoActor, one that may not sign in (unconfirmed or
+// disabled) ErrActorInactive.
+func (s *AuthService) Actor(ctx context.Context, email string, via domain.AuditVia) (Principal, error) {
+	var acc domain.Account
+
+	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		var err error
+
+		acc, err = tx.Accounts().GetByEmail(ctx, strings.TrimSpace(email))
+
+		return err
+	})
+
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		return Principal{}, ErrNoActor
+	case err != nil:
+		return Principal{}, fmt.Errorf("actor: %w", err)
+	case !mayActAs(acc):
+		return Principal{}, ErrActorInactive
+	}
+
+	p := principal(acc, domain.Session{})
+	p.Via = via
+
+	return p, nil
 }
 
 // mayActAs reports whether a session may act as acc: it is confirmed and not

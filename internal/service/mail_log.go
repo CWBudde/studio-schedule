@@ -196,7 +196,7 @@ func (s *MailLogService) Requeue(ctx context.Context, p Principal, id domain.Out
 
 		e := domain.AuditEvent{
 			ID: ids.New[domain.AuditEventID](s.ids), At: now, ActorID: actorOf(p), Action: domain.AuditMailRequeued,
-			Details: domain.AuditDetails{MailID: m.ID, Recipient: m.To, Template: m.Template},
+			Details: domain.AuditDetails{MailID: m.ID, Recipient: m.To, Template: m.Template, Via: p.Via},
 		}
 		if err := e.Validate(); err != nil {
 			return err

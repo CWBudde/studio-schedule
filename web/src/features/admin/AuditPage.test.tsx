@@ -175,6 +175,48 @@ describe('AuditPage', () => {
     expect((await rows()).map((cells) => cells[1])).toEqual(['Mail queued again']);
   });
 
+  it('says which events were written through the command line, and by which OS user', async () => {
+    const viaCli: AuditEventEntry = {
+      ...lostEvent,
+      id: '0190a000-0000-7000-8000-000000000389',
+      at: '2026-10-21T08:00:00Z',
+      action: 'account-disabled',
+      target: { id: lost, email: 'nameless@example.org' },
+      details: { via: { channel: 'cli', osUser: 'operator' } },
+    };
+    mockApiGet({
+      ...asAdmin,
+      '/api/v1/admin/audit': { body: { items: [viaCli, ...auditEvents] } },
+    });
+    const user = userEvent.setup();
+
+    renderWithQuery(<AuditPage />);
+
+    expect((await rows()).map((cells) => [cells[1], cells[2]])).toEqual([
+      ['account-merged', 'Ada Adminada.admin@example.com'],
+      ['Sign-in as ended', 'Ada Adminada.admin@example.com'],
+      ['Sign-in as started', 'Ada Adminada.admin@example.com'],
+      ['Account disabled', 'Ada Adminada.admin@example.comvia command line (operator)'],
+    ]);
+    expect(screen.getAllByText(/command line/)).toHaveLength(1);
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search the audit log' }), 'operator');
+    expect((await rows()).map((cells) => cells[1])).toEqual(['Account disabled']);
+  });
+
+  it('says in German that an event was written through the command line', async () => {
+    const viaCli: AuditEventEntry = {
+      ...lostEvent,
+      details: { via: { channel: 'cli', osUser: 'operator' } },
+    };
+    mockApiGet({ ...asAdmin, '/api/v1/admin/audit': { body: { items: [viaCli] } } });
+    await i18n.changeLanguage('de');
+
+    renderWithQuery(<AuditPage />);
+
+    expect(await screen.findByText('über die Kommandozeile (operator)')).toBeInTheDocument();
+  });
+
   it('names an anonymized person in the current language', async () => {
     const anonymized: AuditEventEntry = {
       ...lostEvent,

@@ -81,6 +81,29 @@ func AuditTargetKinds() []AuditTargetKind {
 // Valid reports whether k is a known target kind.
 func (k AuditTargetKind) Valid() bool { return slices.Contains(AuditTargetKinds(), k) }
 
+// AuditChannel is how an actor reached the app, when not through the API.
+type AuditChannel string
+
+// ChannelCLI is the command line (ADR 0020): a command run as an account
+// with --as.
+const ChannelCLI AuditChannel = "cli"
+
+// AuditChannels returns all channels.
+func AuditChannels() []AuditChannel { return []AuditChannel{ChannelCLI} }
+
+// Valid reports whether c is a known channel.
+func (c AuditChannel) Valid() bool { return slices.Contains(AuditChannels(), c) }
+
+// AuditVia is the channel an actor acted through and the OS user who ran
+// it (ADR 0020). The zero value is the API: a request with a session.
+type AuditVia struct {
+	Channel AuditChannel `json:"channel,omitempty"`
+	OSUser  string       `json:"osUser,omitempty"`
+}
+
+// IsZero reports whether v is the API.
+func (v AuditVia) IsZero() bool { return v == AuditVia{} }
+
 // AuditDetails are what an event records beyond its target, stored as a
 // JSON object. Every field is optional; an action documents the ones it
 // sets.
@@ -97,6 +120,9 @@ type AuditDetails struct {
 	// and after.
 	PreviousRole Role `json:"previousRole,omitempty"`
 	Role         Role `json:"role,omitempty"`
+	// Via is the channel the actor acted through, for any action; zero for
+	// the API.
+	Via AuditVia `json:"via,omitzero"`
 }
 
 // IsZero reports whether the details record nothing.
@@ -157,6 +183,10 @@ func (e AuditEvent) Validate() error {
 			(e.Action == AuditAccountRoleChanged) == (e.Details.Role != "" || e.Details.PreviousRole != "") &&
 				(e.Action != AuditAccountRoleChanged || e.Details.Role.Valid() && e.Details.PreviousRole.Valid()),
 			"a role change names both roles, and only a role change names roles",
+		},
+		rule{
+			e.Details.Via.IsZero() || e.Details.Via.Channel.Valid(),
+			"an audit event's channel must be known",
 		},
 	)
 }

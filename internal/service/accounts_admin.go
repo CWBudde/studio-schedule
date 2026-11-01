@@ -179,7 +179,7 @@ func (s *AuthService) DeleteAccount(ctx context.Context, p Principal, id domain.
 			return err
 		}
 
-		return s.auditDeleted(ctx, tx, actorOf(p), acc)
+		return s.auditDeleted(ctx, tx, actorOf(p), p.Via, acc)
 	})
 	if err != nil {
 		return fmt.Errorf("delete account %s: %w", id, err)
@@ -232,7 +232,7 @@ func (s *AuthService) DeleteOwnAccount(ctx context.Context, p Principal, passwor
 			return err
 		}
 
-		return s.auditDeleted(ctx, tx, domain.AccountID{}, acc)
+		return s.auditDeleted(ctx, tx, domain.AccountID{}, p.Via, acc)
 	})
 	if err != nil {
 		return fmt.Errorf("delete own account: %w", err)
@@ -304,7 +304,9 @@ func lastAdmin(acc domain.Account, admins []domain.Account) bool {
 // (zero: all of them), its own and the impersonation sessions it started
 // (SessionRepo.DeleteByAccount), and records each impersonation among them
 // that was still running as impersonation-ended by the admin who started
-// it, as Logout does. An impersonation past its end had ended already. The
+// it, as Logout does, with no channel (a zero Via): its actor is the
+// impersonator, who did not act through the command line, whoever ended
+// the sessions. An impersonation past its end had ended already. The
 // account's web push subscriptions go too (ADR 0017): a device someone
 // else signed out of, by a new password or by the office, gets no more
 // notifications; a session that is kept saves its device again.
@@ -366,11 +368,14 @@ func accountEntry(ctx context.Context, tx store.Tx, acc domain.Account) (Account
 	return AccountEntry{Account: acc, Person: person}, nil
 }
 
-// auditAccount records that p changed the account target.
+// auditAccount records that p changed the account target, through p's
+// channel.
 func (s *AuthService) auditAccount(
 	ctx context.Context, tx store.Tx, p Principal, action domain.AuditAction, target domain.AccountID,
 	details domain.AuditDetails,
 ) error {
+	details.Via = p.Via
+
 	e := domain.AuditEvent{
 		ID: ids.New[domain.AuditEventID](s.ids), At: s.clock.Now(), ActorID: actorOf(p), Action: action,
 		TargetKind: domain.AuditTargetAccount, TargetID: target, Details: details,
@@ -383,11 +388,13 @@ func (s *AuthService) auditAccount(
 }
 
 // auditDeleted records that actor (zero: its holder) deleted the account
-// acc, with the account's person as the target.
-func (s *AuthService) auditDeleted(ctx context.Context, tx store.Tx, actor domain.AccountID, acc domain.Account) error {
+// acc through the channel via, with the account's person as the target.
+func (s *AuthService) auditDeleted(
+	ctx context.Context, tx store.Tx, actor domain.AccountID, via domain.AuditVia, acc domain.Account,
+) error {
 	e := domain.AuditEvent{
 		ID: ids.New[domain.AuditEventID](s.ids), At: s.clock.Now(), ActorID: actor, Action: domain.AuditAccountDeleted,
-		TargetKind: domain.AuditTargetPerson, TargetPersonID: acc.PersonID,
+		TargetKind: domain.AuditTargetPerson, TargetPersonID: acc.PersonID, Details: domain.AuditDetails{Via: via},
 	}
 	if err := e.Validate(); err != nil {
 		return err

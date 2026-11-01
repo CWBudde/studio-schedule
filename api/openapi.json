@@ -862,6 +862,10 @@
           "template": {
             "description": "Its template.",
             "type": "string"
+          },
+          "via": {
+            "$ref": "#/components/schemas/AuditVia",
+            "description": "The channel the actor acted through, for any action; absent for the API."
           }
         },
         "type": "object"
@@ -946,6 +950,27 @@
         },
         "required": [
           "id"
+        ],
+        "type": "object"
+      },
+      "AuditVia": {
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "description": "The channel the actor acted through when not the API: cli, the command line (ADR 0020), with --as the actor's email; later versions may add channels.",
+            "enum": [
+              "cli"
+            ],
+            "type": "string"
+          },
+          "osUser": {
+            "description": "The operating system user who ran the command (unknown if it could not be told).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "osUser"
         ],
         "type": "object"
       },

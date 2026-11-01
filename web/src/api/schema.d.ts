@@ -3144,6 +3144,8 @@ export interface components {
             role?: "member" | "instructor" | "office" | "admin";
             /** @description Its template. */
             template?: string;
+            /** @description The channel the actor acted through, for any action; absent for the API. */
+            via?: components["schemas"]["AuditVia"];
         };
         AuditEventEntry: {
             /** @description What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one), person-anonymized (target: the person), account-disabled, account-enabled and account-role-changed (target: the account; details of a role change: both roles), account-deleted (target: the account's person, which stays; without an actor its holder deleted it); later versions may add actions. An event that targeted an account deleted since targets its person. */
@@ -3183,6 +3185,15 @@ export interface components {
              * @description Person ID.
              */
             id: string;
+        };
+        AuditVia: {
+            /**
+             * @description The channel the actor acted through when not the API: cli, the command line (ADR 0020), with --as the actor's email; later versions may add channels.
+             * @enum {string}
+             */
+            channel: "cli";
+            /** @description The operating system user who ran the command (unknown if it could not be told). */
+            osUser: string;
         };
         BookLessonData: {
             /**

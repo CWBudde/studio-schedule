@@ -508,7 +508,8 @@
     "nothing": "Nothing",
     "noAccess": "Only administrators can see this page.",
     "holder": "The account holder",
-    "roleChange": "{{from}} → {{to}}"
+    "roleChange": "{{from}} → {{to}}",
+    "viaCli": "via command line ({{user}})"
   },
   "lessons": {
     "manage": "Manage this lesson",
