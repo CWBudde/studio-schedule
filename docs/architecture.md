@@ -136,7 +136,7 @@ announcements whose publication has come, once, at most 100 mails a run;
 [ADR 0014](decisions/0014-announcements-and-mail-log.md)),
 `purge-mail` (daily, removes the bodies of mails sent 30 days ago and the mails of 180 days ago),
 `purge-personal-data` (daily, anonymizes the guests of lessons that ended 12 months ago and deletes
-audit events older than 3 years and import runs older than 1 year;
+audit events older than 3 years, import runs older than 1 year and job runs older than 30 days;
 [ADR 0016](decisions/0016-privacy-and-account-administration.md)) and,
 when a mailer is configured, `deliver-mail` (every minute), and with a push sender, `deliver-push`
 (every minute, and woken when a request queues a notification;
@@ -150,6 +150,28 @@ the existing lessons of each class and creates only the missing slots that have 
 Office edits of a class or a term run the same per-class fill inside their own transaction, under
 the class lock, after moving or deleting the future lessons the edit affects
 ([ADR 0007](decisions/0007-timetable-administration.md)).
+
+Every run is recorded and runs under a per-job lock ([ADR 0020](decisions/0020-command-line.md)).
+The Runner (`jobs.NewRunner(jobs.Config{Store, Clock, IDs, Logger}, …)`) first takes the job's lock
+with `Store.TryLockJob`. It sits beside the transactions, not inside one: the job's own `InTx` calls
+run while it is held. A run whose lock another holder has (a second `serve` on the same database, or
+a command) does not happen and is recorded as `skipped`; a run that cannot ask for the lock fails.
+Each run ends with one write to `job_runs` (`Tx.JobRuns()`: the job, start, end, result
+`ok|failed|skipped`, and for a failed run the error as it is logged, cut to 1000 characters, never a
+stack), with a context that survives the shutdown's cancellation. A failure to record is logged
+and changes nothing else. On PostgreSQL the lock is a session-level
+`pg_try_advisory_lock(class, hashtext(job))` on one dedicated connection from the pool, which holds
+all of the process's job locks, is returned to the pool when the last one is released, and drops
+every lock with it if it dies. One connection per lock could deadlock: with the pool's default size,
+jobs whose tickers coincide would each hold a lock connection while waiting for a transaction's.
+Advisory locks are re-entrant within a session, so the store refuses a name it already holds before
+it asks the server, and `postgres.Open` refuses a pool of fewer than two connections
+(`pool_max_conns`). The memory store keeps a `sync.Mutex` per job name (`TryLock`), and leaves
+`job_runs` out of the demo's snapshot: otherwise the demo would save every minute, and its saved
+data would grow by thousands of rows a day. For the command line, the Runner lists its jobs
+(`Jobs`), reads each one's latest run (`Statuses`, from `JobRuns().Latest`), and runs a named job
+now under the same lock (`RunNow`; an unknown name is `domain.ErrNotFound`, a held lock
+`domain.ErrConflict`).
 
 ## Statistics
 

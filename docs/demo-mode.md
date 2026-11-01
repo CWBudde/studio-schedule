@@ -99,7 +99,7 @@ rendered on its first download and then stored, like the original of a receipt s
 The demo keeps what a visitor does across reloads, in their browser only:
 
 - **What is saved:** a snapshot of the complete in-memory store (`memory.Store.Snapshot`, every
-  table) and the Worker's cookie jar (the session), as one record per demo school in the IndexedDB
+  table but the job runs, which start again on each load; ADR 0020) and the Worker's cookie jar (the session), as one record per demo school in the IndexedDB
   database `studio-schedule-demo` (`web/src/api/wasm/persistence.ts`): `current` for the programme
   school, `current-werkstatt` for the werkstatt school (see "Two demo schools"). Cookies that do not have the
   expected shape are dropped on restore.

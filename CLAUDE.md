@@ -189,6 +189,12 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   migration 00023: what keeps an account is a 409 `in-use`), and the daily `purge-personal-data`
   job (`service/retention.go`, `app/jobs_privacy.go`). Scenarios on both stores:
   `servicetest.Privacy`.
+- **Jobs:** ADR 0020. `internal/jobs` (the Runner) and `app.Jobs(deps)` (the job list, the
+  `measured` metrics). Each run takes `Store.TryLockJob(name)` beside the transactions (PostgreSQL:
+  a session advisory lock on one dedicated pool connection for all of a process's jobs; memory: a
+  mutex per name), a held lock records the run as `skipped`, and every run ends in `Tx.JobRuns()`
+  (`job_runs`; left out of the demo's snapshot, purged after 30 days by `purge-personal-data`).
+  `Runner.Jobs`/`Statuses`/`RunNow` are what the `jobs list|run` commands build on.
 - **PWA & web push:** ADR 0017. The service worker is `web/src/sw.ts` (vite-plugin-pwa
   `injectManifest`; precaches the shell, never `*.wasm`, never the API), registered with the update
   toast in `web/src/pwa.ts`; offline the allow-listed query cache comes from IndexedDB

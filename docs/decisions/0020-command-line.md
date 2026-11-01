@@ -101,6 +101,14 @@ the run ends or the connection drops, and on the memory store a mutex per job na
 and its last run with its result. `jobs run <name>` runs one job now, under the same lock, and
 waits for it.
 
+Amendment (2026-11-01, while building it): on PostgreSQL one dedicated connection holds all of a
+process's job locks, not one connection per lock. With the pool's default size, jobs whose tickers
+coincide would each hold a lock connection while waiting for one for their transaction, and block
+the jobs and every request. Advisory locks are re-entrant within a session, so the store refuses a
+job name it already holds before asking the server. The demo's saved snapshot leaves `job_runs`
+out: its jobs run every minute, so saving them would save the demo every minute and let its saved
+data grow by thousands of rows a day.
+
 ### The command layer
 
 `cmd/studio-schedule/cli` holds the shared layer:

@@ -953,6 +953,15 @@ command groups by need: recovery and diagnosis first, then data, then reports.
 - [ ] Jobs: `jobs list` (name, interval, last run and result) and `jobs run <name>` (one job now,
       e.g. `generate-lessons`, `purge-personal-data`, `deliver-mail`). A database lock keeps a
       serving instance and the command from running the same job at once
+  - [x] Storage and lock (2026-11-01) — the Runner records every run in `job_runs` (both stores,
+        `Tx.JobRuns()`; the memory store leaves the runs out of the demo's snapshot), under
+        `Store.TryLockJob` beside the transactions: on PostgreSQL a session advisory lock on one
+        dedicated pool connection for all of a process's job locks (one connection per lock could
+        exhaust the pool and deadlock), on the memory store a mutex per name. A held lock records
+        the run as `skipped`. `purge-personal-data` deletes runs after 30 days. `Runner.Jobs`,
+        `Statuses` and `RunNow` (unknown name `ErrNotFound`, held lock `ErrConflict`) are ready for
+        the commands
+  - [ ] The `jobs list` and `jobs run <name>` commands on the command layer
 - [ ] Mail: `mail test --to` renders a test mail and sends it through the configured SMTP.
       `mail list --status failed`; `mail requeue <id>|--failed` is audited as `mail-requeued`
       (ADR 0014)
