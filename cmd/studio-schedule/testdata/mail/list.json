@@ -1,0 +1,49 @@
+{
+  "items": [
+    {
+      "id": "00000000-0000-7000-8000-00000000a004",
+      "to": "gina.example@example.org",
+      "subject": "About booking-confirmed",
+      "template": "booking-confirmed",
+      "createdAt": "2026-09-22T06:00:00Z",
+      "status": "sent",
+      "attempts": 1,
+      "sentAt": "2026-09-22T06:01:00Z",
+      "body": "shown"
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000a003",
+      "to": "ella.example@example.org",
+      "subject": "About announcement",
+      "template": "announcement",
+      "createdAt": "2026-09-22T05:00:00Z",
+      "status": "pending",
+      "attempts": 1,
+      "nextAttemptAt": "2026-09-22T05:01:00Z",
+      "lastError": "421 try again later",
+      "body": "shown"
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000a002",
+      "to": "finn.example@example.org",
+      "subject": "About invite",
+      "template": "invite",
+      "createdAt": "2026-09-22T04:00:00Z",
+      "status": "failed",
+      "attempts": 5,
+      "lastError": "550 no such user",
+      "body": "withheld"
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000a001",
+      "to": "ella.example@example.org",
+      "subject": "About receipt",
+      "template": "receipt",
+      "createdAt": "2026-09-22T03:00:00Z",
+      "status": "failed",
+      "attempts": 5,
+      "lastError": "550 no such user",
+      "body": "shown"
+    }
+  ]
+}

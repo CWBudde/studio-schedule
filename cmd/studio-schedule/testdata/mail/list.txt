@@ -1,0 +1,4 @@
+00000000-0000-7000-8000-00000000a004  2026-09-22 08:00  sent     booking-confirmed  gina.example@example.org  About booking-confirmed  1  -
+00000000-0000-7000-8000-00000000a003  2026-09-22 07:00  pending  announcement       ella.example@example.org  About announcement       1  421 try again later
+00000000-0000-7000-8000-00000000a002  2026-09-22 06:00  failed   invite             finn.example@example.org  About invite             5  550 no such user
+00000000-0000-7000-8000-00000000a001  2026-09-22 05:00  failed   receipt            ella.example@example.org  About receipt            5  550 no such user

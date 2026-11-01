@@ -971,9 +971,17 @@ command groups by need: recovery and diagnosis first, then data, then reports.
         for an unknown job (listing the jobs), 4 for a held lock. Their JSON has no operation, so
         docs/cli.md documents it. Not destructive (ADR 0020, amendment): a job only does early what
         serve does on its tick, which its help spells out
-- [ ] Mail: `mail test --to` renders a test mail and sends it through the configured SMTP.
+- [x] Mail: `mail test --to` renders a test mail and sends it through the configured SMTP.
       `mail list --status failed`; `mail requeue <id>|--failed` is audited as `mail-requeued`
-      (ADR 0014)
+      (ADR 0014) (2026-11-01) — `mail test --to [--locale]` is an operator check like doctor's
+      smtp line: the new `test` template (en, de; not in `TemplateNames`, since it never goes
+      through the outbox) straight through the sender of `newDelivery`, exit 1 with the server's
+      error, 2 without `SMTP_HOST`. `mail list` (`admin`, `--status`, `--template`, `--cursor`;
+      the hint for the next page on stderr) prints searchMails' body, never bodies.
+      `mail requeue <id>|--failed` (`admin`) prints requeueMail's body, or with `--failed`
+      (`MailLogService.RequeueFailed`, one transaction, each mail audited) the counts; mails with a
+      secret link stay failed. Deviation (ADR 0020, amendment): both forms confirm, since requeuing
+      mails. Not built: a recipient filter, which as a search term would come from stdin
 - [ ] Persons and privacy: `persons search` reads the search term from a prompt or stdin, never
       an argument (shell history, `ps`; ASVS 8.3.1). `persons export <id> -o file.json`,
       `persons anonymize <id>` (ADR 0016), `persons duplicates`,

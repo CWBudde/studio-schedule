@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -303,16 +304,27 @@ func TestDoctorSMTP(t *testing.T) {
 }
 
 // smtpServer is a minimal SMTP server on 127.0.0.1 that offers AUTH PLAIN
-// and accepts or rejects every login; it records the verbs it gets.
+// and accepts or rejects every login (reject), and accepts every mail or
+// rejects every recipient (rejectRCPT); it records the verbs it gets and
+// the messages it accepts.
 type smtpServer struct {
-	ln     net.Listener
-	reject bool
+	ln         net.Listener
+	reject     bool
+	rejectRCPT bool
 
-	mu    sync.Mutex
-	verbs []string
+	mu       sync.Mutex
+	verbs    []string
+	messages []string
 }
 
 func startSMTP(t *testing.T, reject bool) *smtpServer {
+	t.Helper()
+
+	return startSMTPServer(t, &smtpServer{reject: reject})
+}
+
+// startSMTPServer starts s on a free port of 127.0.0.1.
+func startSMTPServer(t *testing.T, s *smtpServer) *smtpServer {
 	t.Helper()
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -320,7 +332,7 @@ func startSMTP(t *testing.T, reject bool) *smtpServer {
 		t.Fatal(err)
 	}
 
-	s := &smtpServer{ln: ln, reject: reject}
+	s.ln = ln
 
 	var wg sync.WaitGroup
 
@@ -350,6 +362,33 @@ func (s *smtpServer) recorded() string {
 	defer s.mu.Unlock()
 
 	return strings.Join(s.verbs, " ")
+}
+
+// received returns the messages the server accepted.
+func (s *smtpServer) received() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return slices.Clone(s.messages)
+}
+
+// receive reads a message up to the line "." and records it.
+func (s *smtpServer) receive(lines *bufio.Scanner) bool {
+	var msg strings.Builder
+
+	for lines.Scan() {
+		if lines.Text() == "." {
+			s.mu.Lock()
+			s.messages = append(s.messages, msg.String())
+			s.mu.Unlock()
+
+			return true
+		}
+
+		msg.WriteString(lines.Text() + "\n")
+	}
+
+	return false
 }
 
 func (s *smtpServer) serve(conn net.Conn) {
@@ -385,6 +424,16 @@ func (s *smtpServer) serve(conn net.Conn) {
 			} else {
 				ok = reply("235 ok")
 			}
+		case "MAIL":
+			ok = reply("250 ok")
+		case "RCPT":
+			if s.rejectRCPT {
+				ok = reply("550 no such user here")
+			} else {
+				ok = reply("250 ok")
+			}
+		case "DATA":
+			ok = reply("354 end with .") && s.receive(lines) && reply("250 queued")
 		case "QUIT":
 			_ = reply("221 bye")
 

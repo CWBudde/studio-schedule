@@ -1,0 +1,6 @@
+{
+  "to": "office@example.org",
+  "server": "127.0.0.1",
+  "locale": "de",
+  "subject": "Testmail von studio-schedule"
+}

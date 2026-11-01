@@ -1,0 +1,12 @@
+{
+  "id": "00000000-0000-7000-8000-00000000a001",
+  "to": "ella.example@example.org",
+  "subject": "About receipt",
+  "template": "receipt",
+  "createdAt": "2026-09-22T03:00:00Z",
+  "status": "pending",
+  "attempts": 0,
+  "nextAttemptAt": "2026-09-22T08:00:00Z",
+  "lastError": "550 no such user",
+  "body": "shown"
+}
