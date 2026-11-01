@@ -207,26 +207,6 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
   be the command line, with the OS user, and the link as printed. The command gets the OS user
   from `cli.System.OSUser` through `newAccountsCmd`, since `cli.Env` exposes only the principal's
   `Via`. The audit view shows such an event as "An operator" with the via line.
-- **`settings`: the file is an argument, and the areas include receipts and passes.** `-o` is the
-  global `--output`, so `settings export [file]` takes its file as an argument, like
-  `settings import <file>`. Besides the cards of ADR 0013 (`school`, `branding`, `regional`,
-  `booking-rules`), the receipt settings (`receipts`) and the redemption mode (`passes`) are areas
-  too: each is a pair of API operations whose request body is flat `key=value` data. The export is
-  `{"version": 1, …}` with every area's request body; an area in it replaces the whole area on
-  import, in one transaction (`SettingsService.Import`), and a key the API requires is required
-  there too. `settings set` is not destructive: it changes only the values it names.
-- **`persons export` writes a file with `--file`, not `-o`.** `-o` is the global `--output`'s
-  short flag, and cobra panics on a command's flag that reuses it, so the export takes
-  `--file`/`-f` (mode 0600, an existing file only with `--force`). Its document is the export's
-  JSON in either output format; with `--file`, stdout gets one line of text, or nothing with
-  `--output json`. A command whose operation answers without a body
-  (`persons duplicates dismiss`) prints nothing with `--output json`. `persons merge --apply`
-  ones. Its link is valid for an hour (`ResetTokenTTL`). Not audited yet: issuing a reset link and
-  ending sessions have no audit action of their own. A new action needs a migration
-  (`audit_actions`), the domain constant, the audit page's strings and the description of
-  `listAuditEvents`, so it waits for a change of its own. The impersonations that end are audited,
-  as before. The `last-admin` guard cannot be reached from the command line alone: `--as` needs an
-  admin who can sign in, and an admin's own account is refused as `own-account` first.
 - **`settings`: the areas include receipts and passes.** Besides the cards of ADR 0013 (`school`,
   `branding`, `regional`, `booking-rules`), the receipt settings (`receipts`) and the redemption
   mode (`passes`) are areas too: each is a pair of API operations whose request body is flat
