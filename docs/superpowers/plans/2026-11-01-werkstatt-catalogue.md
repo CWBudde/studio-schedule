@@ -46,8 +46,8 @@ react-i18next, Vitest, Playwright.
   stale `api/openapi.json` or `web/src/api/schema.d.ts` (`just check-generated`).
 - **Both stores:** every repo method gets a `internal/store/storetest` case that passes on memory and
   PostgreSQL (`just test-pg`, Docker). After a query change, `just sqlc` (`just check-sqlc`).
-- **Migrations** are numbered in the order of this plan: `00031_room_position.sql` (1.1),
-  `00032_levels.sql` (2.1) and `00033_class_audience.sql` (3.1). If `main` has taken a number in
+- **Migrations** are numbered in the order of this plan: `00032_room_position.sql` (1.1),
+  `00033_levels.sql` (2.1) and `00034_class_audience.sql` (3.1). If `main` has taken a number in
   the meantime, use the next free one and say so in the PR.
 - **Coverage gate:** 95 % total, 80 % per package (`just test-cover`, `just coverage`). A branch
   no input can reach is deleted, never excluded.
@@ -82,11 +82,11 @@ react-i18next, Vitest, Playwright.
 
 ## Checklist (one ccbatch session each)
 
-- [ ] 1.1 `room-order` Rooms get a position: migration 00031, `RoomRepo.SetOrder`, `setRoomOrder`, `position` in the API, move up/down on the locations page, Werkstatt room columns by position, ADR 0007 amendment — see "Task 1.1" below.
+- [ ] 1.1 `room-order` Rooms get a position: migration 00032, `RoomRepo.SetOrder`, `setRoomOrder`, `position` in the API, move up/down on the locations page, Werkstatt room columns by position, ADR 0007 amendment — see "Task 1.1" below.
 
-- [ ] 2.1 `levels` Levels as records of the school: migration 00032, `LevelRepo`, `listLevels` and the four office writes, the admin Levels page, the programme seed's levels, ADR 0021 (levels part) — see "Task 2.1" below.
+- [ ] 2.1 `levels` Levels as records of the school: migration 00033, `LevelRepo`, `listLevels` and the four office writes, the admin Levels page, the programme seed's levels, ADR 0021 (levels part) — see "Task 2.1" below.
 
-- [ ] 3.1 `class-audience` Classes state a level span or all levels, a stage and an age range: migration 00033 (moves `classes.level` onto level rows), service `Audience`, API fields, the level filter by level ID, statistics, CLI, `formatAudience` on every card and table, the class sheet's new fields, ADR 0021 completed — see "Task 3.1" below.
+- [ ] 3.1 `class-audience` Classes state a level span or all levels, a stage and an age range: migration 00034 (moves `classes.level` onto level rows), service `Audience`, API fields, the level filter by level ID, statistics, CLI, `formatAudience` on every card and table, the class sheet's new fields, ADR 0021 completed — see "Task 3.1" below.
 
 - [ ] 4.1 `seed-split` Each demo school is built from its own tables (`schoolSpec`); the programme dataset stays byte-identical (digest test); per-school validity, overlap and login tests replace `TestDemoSchoolSameData`; `SchoolLogins` wired into the WASM demo — see "Task 4.1" below.
 
@@ -100,7 +100,7 @@ react-i18next, Vitest, Playwright.
 
 - Modify: `internal/domain/catalogue.go` (`Room.Position`, `Validate`) and its tests in
   `internal/domain/entities_test.go`
-- Create: `internal/store/postgres/migrations/00031_room_position.sql`
+- Create: `internal/store/postgres/migrations/00032_room_position.sql`
 - Modify: `internal/store/postgres/queries/catalog.sql`, then `just sqlc`;
   `internal/store/postgres/catalog.go` (roomRepo)
 - Modify: `internal/store/store.go` (`RoomRepo`), `internal/store/memory/repos.go` (roomRepo; and
@@ -277,7 +277,7 @@ export const setRoomOrderMutation: (queryClient: QueryClient) => /* useMutation 
 - Modify: `internal/domain/catalogue.go` (rename the enum, below), every user of it
 - Create: `internal/domain/level.go` (+ `level_test.go`); modify `internal/domain/id.go`
   (`LevelID`, following `CourseTypeID`)
-- Create: `internal/store/postgres/migrations/00032_levels.sql`,
+- Create: `internal/store/postgres/migrations/00033_levels.sql`,
   `internal/store/postgres/queries/levels.sql`, `internal/store/postgres/levels.go`
 - Modify: `internal/store/store.go` (`LevelRepo`, `Tx.Levels()`), `internal/store/memory/repos.go`
   (or a new `levels.go` there), `internal/store/memory/memory.go` (state),
@@ -491,7 +491,7 @@ export const createLevelMutation, updateLevelMutation, deleteLevelMutation, setL
 
 - Modify: `internal/domain/timetable.go` (`Class`), delete `SkillLevel` from
   `internal/domain/catalogue.go`, create `internal/domain/audience.go` (+ tests)
-- Create: `internal/store/postgres/migrations/00033_class_audience.sql`,
+- Create: `internal/store/postgres/migrations/00034_class_audience.sql`,
   `internal/store/postgres/migration_audience_test.go`
 - Modify: `internal/store/postgres/queries/timetable.sql`, `internal/store/postgres/timetable.go`,
   `internal/store/memory` (classes; `levelRepo.Delete` checks classes), `internal/store/storetest/
@@ -668,11 +668,11 @@ export function formatAgeYears(months: number): string;
    constraints. Leave the levels in place (2.1's Down drops the table).
 
    `migration_audience_test.go` (package `postgres`, runs with `just test-pg`):
-   - Take a `newUnmigratedDatabase(t)` and a goose provider (`newProvider`), `UpTo(32)`.
+   - Take a `newUnmigratedDatabase(t)` and a goose provider (`newProvider`), `UpTo(33)`.
    - Insert one level named "BEGINNER" with code "B", and a location, room, course type, staff
      and term.
    - Insert classes with level `beginner`, `advanced`, `open` and a second `advanced`.
-   - `UpTo(33)`.
+   - `UpTo(34)`.
    - Assert:
      - the `beginner` class points at the existing "BEGINNER" row;
      - one new "Advanced" level got position 2 and code "A", and both advanced classes use it;

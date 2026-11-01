@@ -39,7 +39,7 @@ Three changes get there:
 **Domain.** `domain.Room` gets `Position int` (1-based within its location). `Validate` requires
 `Position > 0`.
 
-**Store.** Migration `00031_room_position.sql` (the next free number at the time of writing):
+**Store.** Migration `00032_room_position.sql` (the next free number at the time of writing):
 `rooms.position integer NOT NULL CHECK (position > 0)`, backfilled per location in the current
 name order, so nothing visible changes for an existing school. No unique constraint (a reorder
 writes all positions in one transaction).
@@ -116,9 +116,9 @@ fields (`levelFromId`, `levelToId`, `allLevels`, `stage`, `ageFromMonths`, `ageT
 - `SetOrder` writes positions 1..n. It fails with `domain.ErrValidation` unless the IDs are
   exactly the school's levels, the same rule as `RoomRepo.SetOrder`.
 - `Delete` of a level a class uses fails with `domain.ErrInUse` (FK `ON DELETE RESTRICT`).
-- Migration `00032_levels.sql` creates `levels` (uuid id, name, code, position; unique on
+- Migration `00033_levels.sql` creates `levels` (uuid id, name, code, position; unique on
   `lower(name)` and on `lower(code)`).
-- Migration `00033_class_audience.sql` (the next free numbers at the time of writing):
+- Migration `00034_class_audience.sql` (the next free numbers at the time of writing):
   - inserts a row for each old enum value an existing class uses, named and coded in English
     (Beginner B, Intermediate I, Advanced A, Professional P), in scale order;
   - replaces `classes.level` with `level_from_id` and `level_to_id` (nullable, both or neither),
