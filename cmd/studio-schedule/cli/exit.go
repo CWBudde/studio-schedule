@@ -127,6 +127,8 @@ func Report(w io.Writer, err error, asJSON bool) {
 
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
+	// As Output.Print: a location "<person-b>" stays "<person-b>".
+	enc.SetEscapeHTML(false)
 	_ = enc.Encode(problem)
 }
 

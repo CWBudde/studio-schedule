@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/cwbudde/studio-schedule/internal/config"
@@ -73,6 +74,24 @@ func TestUsage(t *testing.T) {
 
 	if err := (ranError{base}); err.Error() != "no file" || !errors.Is(err, base) {
 		t.Errorf("ranError = %v", err)
+	}
+}
+
+// TestReportEscapesNoHTML writes a problem document's text as it is, like
+// Output.Print: a location "<person-b>" is not "\u003cperson-b\u003e".
+func TestReportEscapesNoHTML(t *testing.T) {
+	t.Parallel()
+
+	field := &domain.FieldError{Field: "<person-b>", Msg: "must not be <person-a> & itself"}
+
+	var buf bytes.Buffer
+
+	Report(&buf, ranError{field}, true)
+
+	got := buf.String()
+	if !strings.Contains(got, `"location": "<person-b>"`) || !strings.Contains(got, "<person-a> & itself") ||
+		strings.Contains(got, `\u003c`) || strings.Contains(got, `\u0026`) {
+		t.Errorf("Report = %s, want the text unescaped", got)
 	}
 }
 
