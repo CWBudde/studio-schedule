@@ -166,3 +166,13 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
   everyone booked, so the flag could only lie; the help and the question say it mails.
   `stats` leaves the top participants out of the text unless `--participants`, as they name
   persons; the JSON is the operation's full body, as the API gives it to the office.
+- **`jobs run` asks no confirmation.** A job deletes (`purge-sessions`, `purge-mail`,
+  `purge-personal-data`) or mails (`deliver-mail`) only what serve would on its next tick, so
+  running it early changes nothing an operator has to confirm; its help says what each job does.
+  A failed run exits with status 1 even when the job's error wraps a conflict or a missing row, so
+  4 stays the held lock and 3 the unknown job. The jobs are built as serve builds them: the
+  senders come from the same constructor through `cli.System.Delivery`, so `deliver-mail` and
+  `deliver-push` are there exactly when serve has them.
+- **`mail requeue <id>` asks too, not only `--failed`.** Queuing a mail again mails it, so both
+  forms confirm like every command that mails. `mail test` sends straight through the mail server,
+  never through the outbox, so its template (`test`) is not one of the mail log's templates.

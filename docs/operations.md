@@ -132,6 +132,19 @@ These go before or after the command, as `studio-schedule --output json doctor` 
 | `stats`            | `--to`                   | the last school date of a custom range (inclusive; at most 366 days)           |
 | `stats`            | `--participants`         | list the top participants in the text, with their names (JSON always has them) |
 
+### Commands and flags: jobs and mail
+
+`jobs list` and `jobs run <name>` take no flags of their own.
+
+| Command        | Flag         | Meaning                                                                      |
+| -------------- | ------------ | ---------------------------------------------------------------------------- |
+| `mail test`    | `--to`       | the address the test mail goes to (required)                                 |
+| `mail test`    | `--locale`   | the language of the test mail: `en` (default) or `de`                        |
+| `mail list`    | `--status`   | only mails in this state: `pending`, `sent` or `failed`                      |
+| `mail list`    | `--template` | only mails of this template, e.g. `receipt`                                  |
+| `mail list`    | `--cursor`   | where the page starts: the cursor of the previous page's hint (`nextCursor`) |
+| `mail requeue` | `--failed`   | queue every failed mail again instead of one                                 |
+
 `migrate up` applies every pending migration, `migrate down` rolls back the latest one and
 `migrate status` lists them all; `seed` loads the fictional demo data into an empty, migrated
 database. `openapi` prints the OpenAPI document, `version` the build version and `vapid-keys` a new
