@@ -385,9 +385,18 @@ func (h *handlers) getSchoolSettings(ctx context.Context, _ *struct{}) (*SchoolS
 }
 
 func (h *handlers) updateSchoolSettings(ctx context.Context, in *SchoolSettingsInput) (*SchoolSettingsOutput, error) {
-	return h.schoolSettingsOutput(ctx)(h.deps.Settings.SetSchool(ctx, service.SchoolProfile{
-		Name: in.Body.SchoolName, LegalNotice: in.Body.LegalNotice,
-	}))
+	return h.schoolSettingsOutput(ctx)(h.deps.Settings.SetSchool(ctx, in.Body.Profile()))
+}
+
+// Profile is the service's input of the school profile s.
+func (s SchoolSettings) Profile() service.SchoolProfile {
+	return service.SchoolProfile{Name: s.SchoolName, LegalNotice: s.LegalNotice}
+}
+
+// NewSchoolSettings is the school profile card of v, the response body of
+// getSchoolSettings and updateSchoolSettings.
+func NewSchoolSettings(v service.SettingsView) SchoolSettings {
+	return SchoolSettings{SchoolName: v.SchoolName, LegalNotice: v.LegalNotice}
 }
 
 // schoolSettingsOutput answers with the settings of the card, or maps err.
@@ -397,7 +406,7 @@ func (h *handlers) schoolSettingsOutput(ctx context.Context) func(service.Settin
 			return nil, h.toHTTPError(ctx, err)
 		}
 
-		return &SchoolSettingsOutput{Body: SchoolSettings{SchoolName: v.SchoolName, LegalNotice: v.LegalNotice}}, nil
+		return &SchoolSettingsOutput{Body: NewSchoolSettings(v)}, nil
 	}
 }
 
@@ -436,15 +445,34 @@ func (h *handlers) getBrandingSettings(ctx context.Context, _ *struct{}) (*Brand
 func (h *handlers) updateBrandingSettings(
 	ctx context.Context, in *BrandingSettingsInput,
 ) (*BrandingSettingsOutput, error) {
-	b := service.Branding{AccentColor: in.Body.AccentColor}
+	return h.brandingSettingsOutput(ctx)(h.deps.Settings.SetBranding(ctx, in.Body.Branding()))
+}
 
-	// The enum refuses an empty theme: "" is an absent one, which stays.
-	if in.Body.Theme != "" {
-		theme := domain.Theme(in.Body.Theme)
+// Branding is the service's input of the branding d: an empty theme is an
+// absent one, which stays (the enum refuses an empty theme).
+func (d BrandingSettingsData) Branding() service.Branding {
+	b := service.Branding{AccentColor: d.AccentColor}
+
+	if d.Theme != "" {
+		theme := domain.Theme(d.Theme)
 		b.Theme = &theme
 	}
 
-	return h.brandingSettingsOutput(ctx)(h.deps.Settings.SetBranding(ctx, b))
+	return b
+}
+
+// NewBrandingSettings is the branding card of v, the response body of
+// getBrandingSettings and updateBrandingSettings.
+func NewBrandingSettings(v service.SettingsView) BrandingSettings {
+	return BrandingSettings{
+		AccentColor: v.AccentColor, AccentColorDark: v.AccentDark(), Theme: string(v.Theme.OrDefault()),
+		MinContrast: domain.MinAccentContrast, HasLogo: !v.Logo.IsZero(), HasBackground: !v.Background.IsZero(),
+	}
+}
+
+// Data is the editable part of the branding b.
+func (b BrandingSettings) Data() BrandingSettingsData {
+	return BrandingSettingsData{AccentColor: b.AccentColor, Theme: b.Theme}
 }
 
 // brandingSettingsOutput answers with the settings of the card, or maps err.
@@ -454,10 +482,7 @@ func (h *handlers) brandingSettingsOutput(ctx context.Context) func(service.Sett
 			return nil, h.toHTTPError(ctx, err)
 		}
 
-		return &BrandingSettingsOutput{Body: BrandingSettings{
-			AccentColor: v.AccentColor, AccentColorDark: v.AccentDark(), Theme: string(v.Theme.OrDefault()),
-			MinContrast: domain.MinAccentContrast, HasLogo: !v.Logo.IsZero(), HasBackground: !v.Background.IsZero(),
-		}}, nil
+		return &BrandingSettingsOutput{Body: NewBrandingSettings(v)}, nil
 	}
 }
 
@@ -493,9 +518,7 @@ func (h *handlers) getRegionalSettings(ctx context.Context, _ *struct{}) (*Regio
 func (h *handlers) updateRegionalSettings(
 	ctx context.Context, in *RegionalSettingsInput,
 ) (*RegionalSettingsOutput, error) {
-	v, err := h.deps.Settings.SetRegional(ctx, service.Regional{
-		Timezone: in.Body.Timezone, DefaultLocale: in.Body.DefaultLocale, Currency: in.Body.Currency,
-	})
+	v, err := h.deps.Settings.SetRegional(ctx, in.Body.Regional())
 
 	switch {
 	case errors.Is(err, service.ErrTimezoneLocked):
@@ -514,12 +537,23 @@ func (h *handlers) regionalSettingsOutput(ctx context.Context) func(service.Sett
 			return nil, h.toHTTPError(ctx, err)
 		}
 
-		return &RegionalSettingsOutput{Body: RegionalSettings{
-			RegionalSettingsData: RegionalSettingsData{
-				Timezone: v.Timezone, DefaultLocale: v.DefaultLocale, Currency: v.Currency,
-			},
-			TimezoneLocked: v.TimezoneLocked(), CurrencyLocked: v.CurrencyLocked(),
-		}}, nil
+		return &RegionalSettingsOutput{Body: NewRegionalSettings(v)}, nil
+	}
+}
+
+// Regional is the service's input of the time and language d.
+func (d RegionalSettingsData) Regional() service.Regional {
+	return service.Regional{Timezone: d.Timezone, DefaultLocale: d.DefaultLocale, Currency: d.Currency}
+}
+
+// NewRegionalSettings is the time and language card of v, the response
+// body of getRegionalSettings and updateRegionalSettings.
+func NewRegionalSettings(v service.SettingsView) RegionalSettings {
+	return RegionalSettings{
+		RegionalSettingsData: RegionalSettingsData{
+			Timezone: v.Timezone, DefaultLocale: v.DefaultLocale, Currency: v.Currency,
+		},
+		TimezoneLocked: v.TimezoneLocked(), CurrencyLocked: v.CurrencyLocked(),
 	}
 }
 
@@ -562,6 +596,17 @@ type BookingRulesOutput struct {
 	Body BookingRules
 }
 
+// SettingsField is the request field of a settings field that the domain
+// names (domain.Settings.Validate): the same name, but the domain's
+// durations are fields counting minutes in the API.
+func SettingsField(field string) string {
+	if f, ok := bookingRulesFields[field]; ok {
+		return f
+	}
+
+	return field
+}
+
 // bookingRulesFields are the request fields of the domain's fields, which
 // count durations in minutes.
 var bookingRulesFields = map[string]string{
@@ -575,20 +620,11 @@ func (h *handlers) getBookingRules(ctx context.Context, _ *struct{}) (*BookingRu
 }
 
 func (h *handlers) updateBookingRules(ctx context.Context, in *BookingRulesInput) (*BookingRulesOutput, error) {
-	b := in.Body
-
-	v, err := h.deps.Settings.SetBookingRules(ctx, service.BookingRules{
-		ReleaseWeekday: time.Weekday(b.ReleaseWeekday), ReleaseTime: b.ReleaseTime, ReleaseWeeksAhead: b.ReleaseWeeksAhead,
-		BookingCutoff:        time.Duration(b.BookingCutoffMinutes) * time.Minute,
-		CancellationCutoff:   time.Duration(b.CancellationCutoffMinutes) * time.Minute,
-		WaitlistInviteExpiry: time.Duration(b.WaitlistInviteExpiryMinutes) * time.Minute,
-		DefaultVisibleDays:   b.DefaultVisibleDays,
-		ReleasedThrough:      b.ReleasedThrough,
-	})
+	v, err := h.deps.Settings.SetBookingRules(ctx, in.Body.Rules())
 
 	var fe *domain.FieldError
 	if errors.As(err, &fe) {
-		if field, ok := bookingRulesFields[fe.Field]; ok {
+		if field := SettingsField(fe.Field); field != fe.Field {
 			err = &domain.FieldError{Field: field, Msg: fe.Msg}
 		}
 	}
@@ -608,19 +644,61 @@ func (h *handlers) bookingRulesOutput(ctx context.Context) func(service.Settings
 			return nil, h.toHTTPError(ctx, err)
 		}
 
-		return &BookingRulesOutput{Body: BookingRules{
-			BookingRulesData: BookingRulesData{
-				ReleaseWeekday: int(v.ReleaseWeekday), ReleaseTime: v.ReleaseTime, ReleaseWeeksAhead: v.ReleaseWeeksAhead,
-				BookingCutoffMinutes:        int(v.BookingCutoff / time.Minute),
-				CancellationCutoffMinutes:   int(v.CancellationCutoff / time.Minute),
-				WaitlistInviteExpiryMinutes: int(v.WaitlistInviteExpiry / time.Minute),
-				DefaultVisibleDays:          v.DefaultVisibleDays,
-				ReleasedThrough:             v.ReleasedThrough,
-			},
-			Window:           releaseWindowBody(v.Now, v.Window),
-			GeneratedLessons: v.Generated,
-		}}, nil
+		return &BookingRulesOutput{Body: NewBookingRules(v)}, nil
 	}
+}
+
+// Rules is the service's input of the booking rules d.
+func (d BookingRulesData) Rules() service.BookingRules {
+	return service.BookingRules{
+		ReleaseWeekday: time.Weekday(d.ReleaseWeekday), ReleaseTime: d.ReleaseTime, ReleaseWeeksAhead: d.ReleaseWeeksAhead,
+		BookingCutoff:        time.Duration(d.BookingCutoffMinutes) * time.Minute,
+		CancellationCutoff:   time.Duration(d.CancellationCutoffMinutes) * time.Minute,
+		WaitlistInviteExpiry: time.Duration(d.WaitlistInviteExpiryMinutes) * time.Minute,
+		DefaultVisibleDays:   d.DefaultVisibleDays,
+		ReleasedThrough:      d.ReleasedThrough,
+	}
+}
+
+// NewBookingRules is the booking rules card of v, the response body of
+// getBookingRules and updateBookingRules.
+func NewBookingRules(v service.SettingsView) BookingRules {
+	return BookingRules{
+		BookingRulesData: BookingRulesData{
+			ReleaseWeekday: int(v.ReleaseWeekday), ReleaseTime: v.ReleaseTime, ReleaseWeeksAhead: v.ReleaseWeeksAhead,
+			BookingCutoffMinutes:        int(v.BookingCutoff / time.Minute),
+			CancellationCutoffMinutes:   int(v.CancellationCutoff / time.Minute),
+			WaitlistInviteExpiryMinutes: int(v.WaitlistInviteExpiry / time.Minute),
+			DefaultVisibleDays:          v.DefaultVisibleDays,
+			ReleasedThrough:             v.ReleasedThrough,
+		},
+		Window:           releaseWindowBody(v.Now, v.Window),
+		GeneratedLessons: v.Generated,
+	}
+}
+
+// NewReceiptSettings is the receipt settings card of s, the response body
+// of getReceiptSettings and updateReceiptSettings.
+func NewReceiptSettings(s service.ReceiptSettings) ReceiptSettingsBody { return receiptSettingsBody(s) }
+
+// Update is the service's input of the receipt settings d, as
+// updateReceiptSettings passes them to ReceiptService.SetSettings.
+func (d ReceiptSettingsData) Update() service.ReceiptSettingsUpdate {
+	return service.ReceiptSettingsUpdate{
+		Settings: domain.ReceiptSettings{
+			Issuer: domain.ReceiptIssuer{
+				Name: d.IssuerName, Address: d.IssuerAddress, TaxID: d.TaxID, Email: d.Email, Phone: d.Phone,
+			},
+			TaxMode: domain.TaxMode(d.TaxMode), TaxNote: d.TaxNote, Footer: d.Footer,
+		},
+		Prefix: d.ReceiptPrefix,
+	}
+}
+
+// NewPassSettings is the pass settings card of the redemption mode, the
+// response body of getPassSettings and updatePassSettings.
+func NewPassSettings(mode domain.RedemptionMode) PassSettings {
+	return PassSettings{RedemptionMode: string(mode)}
 }
 
 func releaseWindowBody(now time.Time, w service.ReleaseWindow) ReleaseWindowBody {
