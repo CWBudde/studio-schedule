@@ -1150,44 +1150,67 @@ account's access level, the services' validation, the audit log.
 Order: the ADR, then a read-only server over stdio built on the command layer of Phase 11, then
 resources and prompts, then opt-in writes, then the remote transport if the ADR chooses it.
 
-- [ ] ADR "MCP server" (0021) settles the open decisions, each one asked first:
-  - [ ] Shape: `studio-schedule mcp` over stdio (the client starts the binary; it uses the
+- [x] ADR "MCP server" (0022; the plan said 0021, which went to the Werkstatt catalogue's
+      "Levels and class audience") settles the open decisions, each one asked first (2026-11-01)
+      — [ADR 0022](docs/decisions/0022-mcp-server.md):
+  - [x] Shape: `studio-schedule mcp` over stdio (the client starts the binary; it uses the
         database directly or the remote mode of Phase 11), a streamable HTTP endpoint `/mcp` in
         `serve` (for clients that connect to a URL), or both. An endpoint in `serve` becomes part
         of the API the PHP backend (Phase 13) must serve too. stdio in remote mode works against
-        both backends without porting
-  - [ ] Authentication: stdio acts as the CLI's actor (Phase 11). HTTP needs OAuth 2.1 as the MCP
+        both backends without porting (2026-11-01) — stdio only, in the local mode (ADR 0020 has
+        no remote mode); a remote client starts it over SSH. No `/mcp` in `serve`, so nothing for
+        PHP to port
+  - [x] Authentication: stdio acts as the CLI's actor (Phase 11). HTTP needs OAuth 2.1 as the MCP
         specification asks (the app as authorization server, PKCE, client registration), or the
-        personal access tokens of Phase 11 as bearer tokens
-  - [ ] One definition: are tools generated from the CLI command layer (name, input schema,
+        personal access tokens of Phase 11 as bearer tokens (2026-11-01) — `--as` / `STUDIO_AS`,
+        resolved at start (exit 3 like the CLI, exit 4 when the role reaches no tool) and again on
+        every tool call with the role checked against the tool's level, so a disabled or demoted
+        account loses access at once; the role fixes the tool list at start; a new
+        channel `mcp` in `AuditDetails.Via`
+  - [x] One definition: are tools generated from the CLI command layer (name, input schema,
         handler, presenter), so a command and its tool cannot drift? The JSON output of Phase 11
-        would then be the tool result
-  - [ ] Which tools: read-only by default, with writes opted in per group by an admin (a setting
+        would then be the tool result (2026-11-01) — not generated (`cli.Spec` has no typed
+        input): each tool has its own typed input, calls the command's service method and returns
+        its `--output json` body through the `httpapi.New…` converters; a parity test per pair
+  - [x] Which tools: read-only by default, with writes opted in per group by an admin (a setting
         or a flag). Never `accounts delete`, `persons anonymize` or `migrate down`. Are the tool
         annotations (`readOnlyHint`, `destructiveHint`) enough, or does a write need a
-        confirmation round trip?
-  - [ ] Personal data and minors: what may a language model see? Minimise data per tool (names
+        confirmation round trip? (2026-11-01) — a flag, `mcp --allow-writes <group,…>`
+        (`bookings`, `lessons`, `announcements`, `mail`, `jobs`; the only writes), no setting;
+        annotations are enough, the client's approval takes the place of `--yes`; `doctor` and
+        `db check` are tools for `admin`
+  - [x] Personal data and minors: what may a language model see? Minimise data per tool (names
         and contact data only where the question needs them), make the office opt in, audit
         every tool call (`mcp-tool-called`: tool, actor, never the arguments of a search). A
         docs/privacy.md section explains that the assistant's provider sees what the tools return
-  - [ ] SDK: the official `github.com/modelcontextprotocol/go-sdk` (server side only, kept out of
-        `cmd/wasm` by `check-wasm-deps`)
+        (2026-11-01) — the opt-in is `mcp --personal-data`, without which only tools without person
+        data are listed; every call is audited (reads too, no target, the outcome but never the
+        arguments)
+  - [x] SDK: the official `github.com/modelcontextprotocol/go-sdk` (server side only, kept out of
+        `cmd/wasm` by `check-wasm-deps`) (2026-11-01) — as proposed, v1.8.0
 - [ ] Read tools: the schedule (date range, location, course type), a lesson with participants
       and waitlist (staff and office), free places, rooms free at a time, person search, a
-      person's bookings and passes, statistics, receipts, the mail log, `doctor`, `db check`
+      person's bookings and passes, statistics, receipts, the mail log, `doctor`, `db check`. With
+      them the server itself (ADR 0022): `studio-schedule mcp --as` on the command layer, the
+      per-call account check, `domain.ChannelMCP`, the `mcp-tool-called` audit action (migration,
+      constant, audit page strings), and the `--personal-data` split of the tool list
 - [ ] Resources: the school settings, the current term's timetable, the glossary (so the model
       uses the school's words), and templates for `lesson://{id}` and `person://{id}` (office)
 - [ ] Prompts in the school's language: "weekly overview", "whom to invite from the waiting
       list", "draft an announcement for a canceled lesson"
 - [ ] Write tools (opt-in): book or cancel for a person (the booking rules apply), cancel a
       lesson with notification, create an announcement as a draft (the tool never sends one; the
-      office publishes it), requeue failed mail, run a job
+      office publishes it), requeue failed mail, run a job. Listed per group of `--allow-writes`
+      (ADR 0022), annotated `destructiveHint`/`idempotentHint`
 - [ ] Remote transport (if decided): `/mcp` behind the access middleware, with rate limits,
       request IDs and the ADR's authentication. The WASM demo has no MCP server (its transport
-      is the browser), and it shows nothing that suggests one
+      is the browser), and it shows nothing that suggests one (2026-11-01) — not chosen: ADR 0022
+      settles on stdio only; a remote transport waits for a remote mode with its own ADR
 - [ ] Tests: an in-process MCP client (go-sdk) against the server on both stores. They cover the
       tool list per access level, valid input schemas, golden results, refused writes and audit
-      rows, and each tool against the CLI command it mirrors; the coverage gate of Phase 9 applies
+      rows, and each tool against the CLI command it mirrors where one exists (ADR 0022); the tool
+      list with and without `--personal-data` and per `--allow-writes` group; a demoted or disabled
+      account refused on its next call; the coverage gate of Phase 9 applies
 - [ ] Docs: docs/mcp.md (setup for Claude Desktop, `claude mcp add` for Claude Code, other
       clients; the tool list; privacy); the CLAUDE.md code map
 
@@ -1208,7 +1231,7 @@ Order: the ADR, then the conformance suite (proven against the Go server first),
 skeleton, then the API areas in the order of the phases. From then on, every new feature (Phase 14
 included) lands in both backends.
 
-- [ ] ADR "PHP backend" (0022) settles the open decisions, each one asked first:
+- [ ] ADR "PHP backend" (0023) settles the open decisions, each one asked first:
   - [ ] Target hosting: shared hosting (Apache/nginx + PHP-FPM, cron, no daemon, often no
         `exec`), a container, or both. This decides the next three questions
   - [ ] Database: PostgreSQL only (same schema, data portable between the backends) or also
