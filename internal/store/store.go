@@ -138,6 +138,8 @@ type Tx interface {
 	PushSubscriptions() PushSubscriptionRepo
 	PushOutbox() PushOutboxRepo
 	JobRuns() JobRunRepo
+	Events() EventRepo
+	EventRegistrations() EventRegistrationRepo
 }
 
 // SettingsRepo stores the single, school-wide settings record.
@@ -180,7 +182,8 @@ type SettingsUsage struct {
 	// Lessons: some lesson exists, whose instants were computed in the
 	// school's time zone.
 	Lessons bool
-	// Prices: some pass type has a price above 0, or some pass was paid.
+	// Prices: some pass type or event has a price above 0, some pass was
+	// paid, or some event registration has a price above 0.
 	Prices bool
 	// Receipts: some receipt was issued.
 	Receipts bool
@@ -200,8 +203,9 @@ type PersonRepo interface {
 	Update(ctx context.Context, p domain.Person) error
 	// Delete fails with domain.ErrConflict while the person is referenced
 	// (account, staff, guardian link, class member, booking or a booking
-	// merged from them, a pass they own or paid for, a receipt they paid,
-	// an audit event about them, a person merged into them). The person's
+	// merged from them, an event registration, a pass they own or paid for,
+	// a receipt they paid, an audit event about them, a person merged into
+	// them). The person's
 	// waiting-list entries and duplicate dismissals are deleted with it.
 	Delete(ctx context.Context, id domain.PersonID) error
 	// GetByMemberNo finds the person with the member number.
@@ -344,7 +348,7 @@ type AccountRepo interface {
 	// and announcement dismissals. Records that only name it as who did
 	// something forget it (zero): booking events, waiting-list entries it
 	// added, lessons it canceled, passes it sold, import runs and lesson
-	// notices it sent. Audit events that target it target its person
+	// notices it sent, events it created and event registrations it made. Audit events that target it target its person
 	// instead. While receipts it created, audit events it acted in,
 	// announcements it wrote or mailed, or duplicate dismissals it recorded
 	// name it, the deletion fails with domain.ErrConflict and changes
@@ -455,7 +459,7 @@ type CourseTypeRepo interface {
 	// type has the name, ignoring ASCII case.
 	Create(ctx context.Context, c domain.CourseType) error
 	Update(ctx context.Context, c domain.CourseType) error
-	// Delete fails with domain.ErrConflict while classes, lessons or
+	// Delete fails with domain.ErrConflict while classes, lessons, events or
 	// announcements use the course type.
 	Delete(ctx context.Context, id domain.CourseTypeID) error
 	// List returns all course types ordered by name and ID.
@@ -522,7 +526,7 @@ type LessonRepo interface {
 	Get(ctx context.Context, id domain.LessonID) (domain.Lesson, error)
 	// Create fails with domain.ErrConflict if the class already has a lesson
 	// for the same slot date, or a referenced record (the canceling account
-	// included) does not exist.
+	// and the event included) does not exist.
 	Create(ctx context.Context, l domain.Lesson) error
 	// Update fails with domain.ErrConflict under the same rules as Create.
 	Update(ctx context.Context, l domain.Lesson) error
@@ -549,6 +553,9 @@ type LessonRepo interface {
 	// ListByIDs returns the lessons with the given IDs, each once and
 	// ordered by StartsAt and ID. IDs that do not exist are left out.
 	ListByIDs(ctx context.Context, ids []domain.LessonID) ([]domain.Lesson, error)
+	// ListByEvent returns the sessions of an event (the lessons whose
+	// EventID it is), canceled ones included, ordered by StartsAt and ID.
+	ListByEvent(ctx context.Context, event domain.EventID) ([]domain.Lesson, error)
 	// ListByStaff returns the lessons with from <= StartsAt < to whose
 	// instructor or accompanist is one of the staff members, ordered by
 	// StartsAt and ID.
@@ -1200,4 +1207,101 @@ type JobRunRepo interface {
 	// DeleteStartedBefore deletes every run that started before the instant
 	// and returns how many it deleted. It needs a ReadWrite transaction.
 	DeleteStartedBefore(ctx context.Context, before time.Time) (int, error)
+}
+
+// EventRepo stores events (ADR 0019) and their images. Slugs are unique,
+// exactly (they are lowercase already). An event's sessions are lessons
+// (LessonRepo.ListByEvent), its registrations EventRegistrationRepo's.
+type EventRepo interface {
+	Get(ctx context.Context, id domain.EventID) (domain.Event, error)
+	// BySlug finds the event with the slug, or domain.ErrNotFound.
+	BySlug(ctx context.Context, slug string) (domain.Event, error)
+	// Create fails with domain.ErrDuplicate if another event has the slug,
+	// and with domain.ErrConflict (but not ErrDuplicate) if the ID is taken
+	// or the course type or the creating account does not exist.
+	Create(ctx context.Context, e domain.Event) error
+	// Update fails under the same rules as Create.
+	Update(ctx context.Context, e domain.Event) error
+	// Delete deletes an event with its image. It fails with domain.ErrInUse
+	// (a domain.ErrConflict) while lessons (its sessions) or registrations,
+	// canceled ones included, refer to it, and changes nothing then.
+	Delete(ctx context.Context, id domain.EventID) error
+	// List returns all events ordered by the start of their first session
+	// (canceled sessions included), events without a session last, then by
+	// ID.
+	List(ctx context.Context) ([]domain.Event, error)
+	// Lock returns the event and locks it until the transaction ends (in
+	// PostgreSQL: SELECT … FOR UPDATE). Every capacity check and
+	// registration change of an event runs under this lock, before any lock
+	// of its lessons (event → lessons → passes). It needs a ReadWrite
+	// transaction and fails with ErrReadOnly otherwise.
+	Lock(ctx context.Context, id domain.EventID) (domain.Event, error)
+
+	// Image returns the event's image (stored like the school's background,
+	// ADR 0018), the zero Background if it has none, or domain.ErrNotFound
+	// if the event does not exist. It is apart from Get, which lists read.
+	Image(ctx context.Context, id domain.EventID) (domain.Background, error)
+	// PutImage replaces the event's image; the zero Background removes it.
+	// It fails with domain.ErrNotFound if the event does not exist.
+	PutImage(ctx context.Context, id domain.EventID, img domain.Background) error
+	// ImageInfo returns the content type and the digest of the event's
+	// image (domain.Background.Digest, kept when it is written) without
+	// reading it, the zero BackgroundInfo without one, or
+	// domain.ErrNotFound if the event does not exist.
+	ImageInfo(ctx context.Context, id domain.EventID) (domain.BackgroundInfo, error)
+}
+
+// EventRegistrationRepo stores the registrations for events (ADR 0019). A
+// person has at most one open (waiting, invited or registered) registration
+// per event; an invite token hash, a receipt and a Storno belong to one
+// registration each.
+type EventRegistrationRepo interface {
+	Get(ctx context.Context, id domain.EventRegistrationID) (domain.EventRegistration, error)
+	// GetByInviteTokenHash finds the registration an invite token was sent
+	// for. Only an invited registration has one, so the zero hash finds
+	// none.
+	GetByInviteTokenHash(ctx context.Context, hash [32]byte) (domain.EventRegistration, error)
+	// GetByReceipt finds the registration whose payment the receipt
+	// confirms (ReceiptID), or domain.ErrNotFound.
+	GetByReceipt(ctx context.Context, receipt domain.ReceiptID) (domain.EventRegistration, error)
+	// Create fails with domain.ErrDuplicate if the person has an open
+	// registration for the event, and with domain.ErrConflict (but not
+	// ErrDuplicate) if the ID, the token hash, the receipt or the Storno is
+	// taken or a referenced record (event, person, receipt, account) does
+	// not exist.
+	Create(ctx context.Context, r domain.EventRegistration) error
+	// Update fails under the same rules as Create.
+	Update(ctx context.Context, r domain.EventRegistration) error
+	// ListByEvent returns the registrations of an event, canceled ones
+	// included, ordered by CreatedAt and ID: the order of its waiting list.
+	ListByEvent(ctx context.Context, event domain.EventID) ([]domain.EventRegistration, error)
+	// ListByPersons returns the registrations of the given persons, canceled
+	// ones included, ordered by CreatedAt and ID.
+	ListByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.EventRegistration, error)
+	// CountsByEvents returns, by event, the open registrations of each of
+	// the given events at the instant; events whose counts are all zero
+	// are left out.
+	CountsByEvents(
+		ctx context.Context, events []domain.EventID, at time.Time,
+	) (map[domain.EventID]EventRegistrationCounts, error)
+	// AnonymizeGuests replaces the name of every guest registration of an
+	// event whose last session ended before the instant with
+	// domain.AnonymousGuestName and clears its email (ADR 0016, ADR 0019),
+	// canceled ones included, and returns how many it changed; one
+	// anonymized already is not changed again, and an event without
+	// sessions keeps its guests. It needs a ReadWrite transaction.
+	AnonymizeGuests(ctx context.Context, endedBefore time.Time) (int, error)
+}
+
+// EventRegistrationCounts counts the open registrations of an event at an
+// instant (EventRegistrationRepo.CountsByEvents). The event is full when
+// Registered plus Invited reach its capacity.
+type EventRegistrationCounts struct {
+	// Registered counts the registrations with a place.
+	Registered int
+	// Invited counts the invites still open at the instant (ExpiresAt after
+	// it): each holds a place.
+	Invited int
+	// Waiting counts the registrations waiting for a place.
+	Waiting int
 }

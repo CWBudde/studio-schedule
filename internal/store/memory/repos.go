@@ -180,6 +180,7 @@ func (r personRepo) Delete(_ context.Context, id domain.PersonID) error {
 		s.bookings.exists(func(b domain.Booking) bool { return b.PersonID == id || b.MergedFrom == id }) ||
 		s.passes.exists(func(p domain.Pass) bool { return p.PersonID == id || p.PayerID == id }) ||
 		s.receipts.exists(func(rc domain.Receipt) bool { return rc.PayerID == id }) ||
+		s.eventRegistrations.exists(func(reg domain.EventRegistration) bool { return reg.PersonID == id }) ||
 		s.audit.exists(func(e domain.AuditEvent) bool { return e.TargetPersonID == id }) ||
 		s.persons.exists(func(p domain.Person) bool { return p.MergedInto == id })
 	for g := range s.guardians.rows {
@@ -498,6 +499,16 @@ func (r accountRepo) forget(id domain.AccountID) {
 		n.SenderID = domain.AccountID{}
 		s.notices.put(gen, n.ID, n)
 	}
+
+	for _, e := range s.events.filter(func(e domain.Event) bool { return e.CreatedBy == id }) {
+		e.CreatedBy = domain.AccountID{}
+		s.events.put(gen, e.ID, e)
+	}
+
+	for _, reg := range s.eventRegistrations.filter(func(reg domain.EventRegistration) bool { return reg.RegisteredBy == id }) {
+		reg.RegisteredBy = domain.AccountID{}
+		s.eventRegistrations.put(gen, reg.ID, reg)
+	}
 }
 
 func (r accountRepo) MaxVisibleDays(context.Context) (int, error) {
@@ -801,7 +812,8 @@ func (r courseTypeRepo) Delete(_ context.Context, id domain.CourseTypeID) error 
 		return notFound("course type")
 	case s.classes.exists(func(c domain.Class) bool { return c.CourseTypeID == id }),
 		s.lessons.exists(func(l domain.Lesson) bool { return l.CourseTypeID == id }),
-		s.announcements.exists(func(a domain.Announcement) bool { return a.CourseTypeID == id }):
+		s.announcements.exists(func(a domain.Announcement) bool { return a.CourseTypeID == id }),
+		s.events.exists(func(e domain.Event) bool { return e.CourseTypeID == id }):
 		return conflict("course type %s is referenced", id)
 	}
 
@@ -1093,7 +1105,8 @@ func (r lessonRepo) put(l domain.Lesson) error {
 		(!l.CourseTypeID.IsZero() && !s.courseTypes.has(l.CourseTypeID)) ||
 		!s.rooms.has(l.RoomID) || (!l.InstructorID.IsZero() && !s.staff.has(l.InstructorID)) ||
 		(!l.AccompanistID.IsZero() && !s.staff.has(l.AccompanistID)) ||
-		(!l.CanceledBy.IsZero() && !s.accounts.has(l.CanceledBy)):
+		(!l.CanceledBy.IsZero() && !s.accounts.has(l.CanceledBy)) ||
+		(!l.EventID.IsZero() && !s.events.has(l.EventID)):
 		return conflict("lesson references a missing record")
 	case !l.ClassID.IsZero() && s.lessons.exists(func(o domain.Lesson) bool {
 		return o.ID != l.ID && o.ClassID == l.ClassID && o.SlotDate == l.SlotDate
@@ -1215,6 +1228,14 @@ func (r lessonRepo) ListRoomOverlaps(
 		return l.RoomID == room && l.Status != domain.LessonCanceled && l.ID != exclude &&
 			l.StartsAt.Before(to) && l.EndsAt.After(from)
 	})
+
+	return sorted(lessons, func(a, b domain.Lesson) int {
+		return cmp.Or(a.StartsAt.Compare(b.StartsAt), compareID(a.ID, b.ID))
+	}), nil
+}
+
+func (r lessonRepo) ListByEvent(_ context.Context, event domain.EventID) ([]domain.Lesson, error) {
+	lessons := r.tx.state.lessons.filter(func(l domain.Lesson) bool { return l.EventID == event && !event.IsZero() })
 
 	return sorted(lessons, func(a, b domain.Lesson) int {
 		return cmp.Or(a.StartsAt.Compare(b.StartsAt), compareID(a.ID, b.ID))

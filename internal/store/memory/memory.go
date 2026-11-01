@@ -85,6 +85,11 @@ type state struct {
 	pushSubs   table[domain.PushSubscriptionID, domain.PushSubscription]
 	pushOutbox table[domain.PushMessageID, domain.PushMessage]
 
+	events table[domain.EventID, domain.Event]
+	// eventImages holds the image of each event that has one.
+	eventImages        table[domain.EventID, eventImage]
+	eventRegistrations table[domain.EventRegistrationID, domain.EventRegistration]
+
 	// jobRuns is left out of the snapshot (transient in snapshot.go): the
 	// demo's job history starts again on every page load.
 	jobRuns table[domain.JobRunID, domain.JobRun]
@@ -286,6 +291,10 @@ func (t *tx) PushSubscriptions() store.PushSubscriptionRepo {
 }
 func (t *tx) PushOutbox() store.PushOutboxRepo { return pushOutboxRepo{t} }
 func (t *tx) JobRuns() store.JobRunRepo        { return jobRunRepo{t} }
+func (t *tx) Events() store.EventRepo          { return eventRepo{t} }
+func (t *tx) EventRegistrations() store.EventRegistrationRepo {
+	return eventRegistrationRepo{t}
+}
 
 func (t *tx) checkWritable() error {
 	if t.mode != store.ReadWrite {
@@ -391,7 +400,9 @@ func (r settingsRepo) Usage(context.Context) (store.SettingsUsage, error) {
 	return store.SettingsUsage{
 		Lessons: s.lessons.exists(func(domain.Lesson) bool { return true }),
 		Prices: s.passTypes.exists(func(t domain.PassType) bool { return t.Price > 0 }) ||
-			s.passes.exists(func(p domain.Pass) bool { return p.PricePaid > 0 }),
+			s.passes.exists(func(p domain.Pass) bool { return p.PricePaid > 0 }) ||
+			s.events.exists(func(e domain.Event) bool { return e.Price > 0 }) ||
+			s.eventRegistrations.exists(func(reg domain.EventRegistration) bool { return reg.Price > 0 }),
 		Receipts: s.receipts.exists(func(domain.Receipt) bool { return true }),
 	}, nil
 }

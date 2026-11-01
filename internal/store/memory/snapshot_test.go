@@ -175,8 +175,35 @@ func fullStore(t *testing.T) *Store {
 			P256DH: [65]byte{4, 1}, Auth: [16]byte{2}, DeviceLabel: "Firefox on Linux", CreatedAt: at, LastUsedAt: at,
 		}
 
+		courseTypes := sorted(st.state.courseTypes.filter(all),
+			func(a, b domain.CourseType) int { return compareID(a.ID, b.ID) })
+		event := domain.Event{
+			ID: ids.New[domain.EventID](src), Slug: "snapshot-intensive", Title: "Snapshot intensive",
+			Description: "Two days", CourseTypeID: courseTypes[0].ID, Capacity: 12, Price: 9000, VATRate: 1900,
+			Status: domain.EventPublished, SignupOpensAt: at, SignupClosesAt: at.Add(24 * time.Hour),
+			CancelUntil: at.Add(12 * time.Hour), CreatedAt: at, UpdatedAt: at, CreatedBy: account,
+		}
+		session, _ := st.state.lessons.get(lesson)
+		session.EventID = event.ID
+
 		return errors.Join(
 			tx.Receipts().Create(ctx, receipt),
+			tx.Events().Create(ctx, event),
+			tx.Events().PutImage(ctx, event.ID, domain.Background{
+				ContentType: domain.BackgroundPNG, Data: []byte("\x89PNG\r\n\x1a\nevent"),
+			}),
+			tx.Lessons().Update(ctx, session),
+			tx.EventRegistrations().Create(ctx, domain.EventRegistration{
+				ID: ids.New[domain.EventRegistrationID](src), EventID: event.ID, PersonID: person,
+				Status: domain.EventRegistered, Payment: domain.EventPaid, Price: 9000, VATRate: 1900,
+				ReceiptID: receipt.ID, RegisteredBy: account, CreatedAt: at, UpdatedAt: at,
+			}),
+			tx.EventRegistrations().Create(ctx, domain.EventRegistration{
+				ID: ids.New[domain.EventRegistrationID](src), EventID: event.ID, GuestName: "Snapshot Guest",
+				GuestEmail: "guest@example.org", Status: domain.EventInvited, Payment: domain.EventUnpaid,
+				Price: 9000, VATRate: 1900, InviteTokenHash: [32]byte{9, 9}, InvitedAt: at,
+				ExpiresAt: at.Add(time.Hour), CreatedAt: at, UpdatedAt: at,
+			}),
 			tx.Receipts().PutPDF(ctx, receipt.ID, []byte("%PDF-1.7 snapshot")),
 			tx.Settings().PutLogo(ctx, domain.Logo{ContentType: domain.LogoPNG, Data: []byte("\x89PNG\r\n\x1a\nx")}),
 			tx.Settings().PutBackground(ctx, domain.Background{

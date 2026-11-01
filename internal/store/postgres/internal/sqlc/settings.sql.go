@@ -288,8 +288,10 @@ func (q *Queries) PutSettingsLogo(ctx context.Context, arg PutSettingsLogoParams
 const settingsUsage = `-- name: SettingsUsage :one
 SELECT
     EXISTS (SELECT 1 FROM lessons) AS lessons,
-    (EXISTS (SELECT 1 FROM pass_types WHERE price > 0) OR EXISTS (SELECT 1 FROM passes WHERE price_paid > 0))::boolean
-        AS prices,
+    (
+        EXISTS (SELECT 1 FROM pass_types WHERE price > 0) OR EXISTS (SELECT 1 FROM passes WHERE price_paid > 0)
+        OR EXISTS (SELECT 1 FROM events WHERE price > 0) OR EXISTS (SELECT 1 FROM event_registrations WHERE price > 0)
+    )::boolean AS prices,
     EXISTS (SELECT 1 FROM receipts) AS receipts
 `
 

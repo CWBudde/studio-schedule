@@ -16,7 +16,7 @@ import (
 
 // Constraints and unique indexes whose violation has a domain meaning beyond
 // "duplicate key" (see migrations/00001_core.sql, 00006, 00007, 00008, 00012,
-// 00015, 00016, 00017 and 00021).
+// 00015, 00016, 00017, 00021 and 00031).
 const (
 	constraintMemberNo        = "persons_member_no_key"
 	constraintAccountEmail    = "accounts_email_key"
@@ -37,6 +37,8 @@ const (
 	constraintReceiptSequence = "receipts_year_sequence_key"
 	constraintReceiptCancels  = "receipts_cancels_key"
 	constraintReceiptPDF      = "receipt_pdfs_pkey"
+	constraintEventSlug       = "events_slug_key"
+	constraintOpenEventReg    = "event_registrations_one_open_key"
 )
 
 // conflicts describes the unique constraints above: the message, and the
@@ -44,7 +46,8 @@ const (
 // for what exists only once per person: an account, a guardian link, a
 // class membership, an active booking of a lesson, an active calendar feed
 // of a subject, a pass type's name, a booking's redemption, a receipt's
-// number, cancellation and PDF, a person's member number).
+// number, cancellation and PDF, a person's member number, an event's slug
+// and an open registration of a person for an event).
 // Other unique and foreign key violations get a generic message naming the
 // constraint.
 var conflicts = map[string]struct {
@@ -70,6 +73,8 @@ var conflicts = map[string]struct {
 	constraintReceiptSequence: {"the receipt sequence number is taken", domain.ErrDuplicate},
 	constraintReceiptCancels:  {"the receipt is canceled already", domain.ErrDuplicate},
 	constraintReceiptPDF:      {"the receipt has its PDF already", domain.ErrDuplicate},
+	constraintEventSlug:       {"event slug is taken", domain.ErrDuplicate},
+	constraintOpenEventReg:    {"person is registered for the event already", domain.ErrDuplicate},
 }
 
 // retryableError reports a serialization failure or deadlock. InTx retries

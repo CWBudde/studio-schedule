@@ -150,6 +150,52 @@ type CourseType struct {
 	Description pgtype.Text
 }
 
+type Event struct {
+	ID             pgtype.UUID
+	Slug           string
+	Title          string
+	Description    pgtype.Text
+	CourseTypeID   pgtype.UUID
+	Capacity       int32
+	Price          int64
+	VatRateBp      int32
+	Status         string
+	SignupOpensAt  pgtype.Timestamptz
+	SignupClosesAt pgtype.Timestamptz
+	CancelUntil    pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	CreatedBy      pgtype.UUID
+}
+
+type EventImage struct {
+	EventID     pgtype.UUID
+	Image       []byte
+	ImageType   string
+	ImageDigest string
+}
+
+type EventRegistration struct {
+	ID                    pgtype.UUID
+	EventID               pgtype.UUID
+	PersonID              pgtype.UUID
+	GuestName             pgtype.Text
+	GuestEmail            pgtype.Text
+	Status                string
+	Payment               string
+	Price                 int64
+	VatRateBp             int32
+	ReceiptID             pgtype.UUID
+	CancellationReceiptID pgtype.UUID
+	InviteTokenHash       []byte
+	InvitedAt             pgtype.Timestamptz
+	ExpiresAt             pgtype.Timestamptz
+	RegisteredBy          pgtype.UUID
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
+	CanceledAt            pgtype.Timestamptz
+}
+
 type ImportRun struct {
 	ID               pgtype.UUID
 	FileName         string
@@ -195,6 +241,7 @@ type Lesson struct {
 	CanceledAt    pgtype.Timestamptz
 	CanceledBy    pgtype.UUID
 	Renter        pgtype.Text
+	EventID       pgtype.UUID
 }
 
 type LessonNotice struct {

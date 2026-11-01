@@ -35,6 +35,7 @@ func toLesson(row sqlc.Lesson) domain.Lesson {
 		CanceledAt:    fromPgInstant(row.CanceledAt),
 		CanceledBy:    fromPgID[domain.AccountID](row.CanceledBy),
 		Renter:        row.Renter.String,
+		EventID:       fromPgID[domain.EventID](row.EventID),
 	}
 }
 
@@ -64,6 +65,7 @@ func lessonParams(l domain.Lesson) (sqlc.CreateLessonParams, error) {
 		CanceledAt:    pgInstant(l.CanceledAt),
 		CanceledBy:    pgID(l.CanceledBy),
 		Renter:        pgText(l.Renter),
+		EventID:       pgID(l.EventID),
 	}, nil
 }
 
@@ -139,6 +141,12 @@ func (r lessonRepo) ListRange(ctx context.Context, from, to time.Time) ([]domain
 
 func (r lessonRepo) ListByIDs(ctx context.Context, ids []domain.LessonID) ([]domain.Lesson, error) {
 	rows, err := r.q.ListLessonsByIDs(ctx, pgIDs(ids))
+
+	return convertRows(rows, err, toLesson)
+}
+
+func (r lessonRepo) ListByEvent(ctx context.Context, event domain.EventID) ([]domain.Lesson, error) {
+	rows, err := r.q.ListLessonsByEvent(ctx, pgID(event))
 
 	return convertRows(rows, err, toLesson)
 }

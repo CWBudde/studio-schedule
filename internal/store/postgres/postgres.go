@@ -1,9 +1,9 @@
 // Package postgres implements store.Store on PostgreSQL with pgx and
 // sqlc-generated queries (internal/sqlc, from queries/ and migrations/).
 //
-// Transactions run at READ COMMITTED. Lessons().Lock takes a row lock
-// (SELECT … FOR UPDATE); everything else relies on the constraints of the
-// schema. InTx retries the whole callback after serialization failures and
+// Transactions run at READ COMMITTED. The Lock methods (Lessons().Lock,
+// Events().Lock, …) take row locks (SELECT … FOR UPDATE); everything else
+// relies on the constraints of the schema. InTx retries the whole callback after serialization failures and
 // deadlocks (SQLSTATE 40001/40P01), so callbacks must not have side effects
 // outside the transaction.
 //
@@ -277,3 +277,7 @@ func (t *tx) PushSubscriptions() store.PushSubscriptionRepo {
 }
 func (t *tx) PushOutbox() store.PushOutboxRepo { return pushOutboxRepo{t.q} }
 func (t *tx) JobRuns() store.JobRunRepo        { return jobRunRepo{t.q} }
+func (t *tx) Events() store.EventRepo          { return eventRepo{t.q} }
+func (t *tx) EventRegistrations() store.EventRegistrationRepo {
+	return eventRegistrationRepo{t.q}
+}

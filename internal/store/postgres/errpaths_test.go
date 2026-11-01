@@ -143,6 +143,22 @@ func TestOutOfRangeValuesFailWrites(t *testing.T) {
 		"class update": func(ctx context.Context, tx store.Tx) error {
 			return tx.Classes().Update(ctx, domain.Class{ID: ids.New[domain.ClassID](seq), Weekday: time.Saturday + 1})
 		},
+		"event capacity": func(ctx context.Context, tx store.Tx) error {
+			return tx.Events().Create(ctx, domain.Event{ID: ids.New[domain.EventID](seq), Capacity: big})
+		},
+		"event VAT rate": func(ctx context.Context, tx store.Tx) error {
+			return tx.Events().Update(ctx, domain.Event{ID: ids.New[domain.EventID](seq), Capacity: 1, VATRate: big})
+		},
+		"event registration create": func(ctx context.Context, tx store.Tx) error {
+			return tx.EventRegistrations().Create(ctx, domain.EventRegistration{
+				ID: ids.New[domain.EventRegistrationID](seq), VATRate: big,
+			})
+		},
+		"event registration update": func(ctx context.Context, tx store.Tx) error {
+			return tx.EventRegistrations().Update(ctx, domain.EventRegistration{
+				ID: ids.New[domain.EventRegistrationID](seq), VATRate: -big - 1,
+			})
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := st.InTx(t.Context(), store.ReadWrite, write)
@@ -175,7 +191,8 @@ func TestOutOfRangeValuesFailWrites(t *testing.T) {
 		(SELECT count(*) FROM lesson_notices) + (SELECT count(*) FROM outbox_mails) +
 		(SELECT count(*) FROM push_outbox) + (SELECT count(*) FROM receipts) +
 		(SELECT count(*) FROM receipt_counters) + (SELECT count(*) FROM import_runs) +
-		(SELECT count(*) FROM accounts)`).Scan(&rows)
+		(SELECT count(*) FROM accounts) + (SELECT count(*) FROM events) +
+		(SELECT count(*) FROM event_registrations)`).Scan(&rows)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,6 +377,14 @@ func TestCanceledQueryInTx(t *testing.T) {
 			_, err := tx.ReceiptCounters().Next(ctx, 2026)
 
 			return err
+		}},
+		"event registration counts": {store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+			_, err := tx.EventRegistrations().CountsByEvents(ctx, []domain.EventID{ids.New[domain.EventID](seq)}, now)
+
+			return err
+		}},
+		"event image removal": {store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+			return tx.Events().PutImage(ctx, ids.New[domain.EventID](seq), domain.Background{})
 		}},
 		"waiting list by lessons": {store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 			_, err := tx.Waitlist().CountByLessons(ctx, lessons)

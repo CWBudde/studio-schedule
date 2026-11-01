@@ -383,6 +383,15 @@ var codecs = []codec{
 	rows("pushOutbox", func(s *state) *table[domain.PushMessageID, domain.PushMessage] { return &s.pushOutbox },
 		func(v domain.PushMessage) domain.PushMessageID { return v.ID }),
 	transient("jobRuns"),
+	rows("events", func(s *state) *table[domain.EventID, domain.Event] { return &s.events },
+		func(v domain.Event) domain.EventID { return v.ID }),
+	rows("eventImages", func(s *state) *table[domain.EventID, eventImage] { return &s.eventImages },
+		func(v eventImage) domain.EventID { return v.EventID }),
+	rows("eventRegistrations",
+		func(s *state) *table[domain.EventRegistrationID, domain.EventRegistration] {
+			return &s.eventRegistrations
+		},
+		func(v domain.EventRegistration) domain.EventRegistrationID { return v.ID }),
 }
 
 // OnCommit registers fn to run after every read-write transaction that
