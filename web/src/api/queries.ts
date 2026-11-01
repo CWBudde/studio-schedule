@@ -1357,9 +1357,17 @@ export const deleteCourseTypeMutation = (queryClient: QueryClient) =>
     onError: onCatalogueError(queryClient),
   });
 
-/** After a write to the levels: the list is asked again. */
+/**
+ * After a write to the levels: the list is asked again, and so is what names
+ * the levels of classes: the classes, the schedule, the instructor view,
+ * "My lessons", the lessons (refreshTimetable) and the statistics.
+ */
 function refreshLevels(queryClient: QueryClient) {
-  return queryClient.invalidateQueries({ queryKey: levelsQuery.queryKey });
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: levelsQuery.queryKey }),
+    queryClient.invalidateQueries({ queryKey: [...adminQueryKey, 'statistics'] }),
+    refreshTimetable(queryClient),
+  ]);
 }
 
 /** The errors of a level write: a 404 means someone else deleted it meanwhile. */
@@ -1489,7 +1497,11 @@ export const classDataOf = (c: ClassEntry, retired = c.retired): ClassData => ({
   roomId: c.roomId,
   instructorId: c.instructor.id,
   ...(c.accompanist ? { accompanistId: c.accompanist.id } : {}),
-  level: c.level,
+  ...(c.levelFrom && c.levelTo ? { levelFromId: c.levelFrom.id, levelToId: c.levelTo.id } : {}),
+  ...(c.allLevels ? { allLevels: true } : {}),
+  ...(c.stage !== undefined ? { stage: c.stage } : {}),
+  ...(c.ageFromMonths !== undefined ? { ageFromMonths: c.ageFromMonths } : {}),
+  ...(c.ageToMonths !== undefined ? { ageToMonths: c.ageToMonths } : {}),
   weekday: c.weekday,
   startTime: c.startTime,
   durationMinutes: c.durationMinutes,

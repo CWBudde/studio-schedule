@@ -10,6 +10,7 @@ import type { QuickAction } from '@/features/schedule/booking/quickAction';
 import { showsKind, useLessonTitle } from '@/features/schedule/lessonLabel';
 import { useLessonCardLabel } from '@/features/schedule/list/cardParts';
 import { VisibilityBadge } from '@/features/schedule/visibility/VisibilityBadge';
+import { formatAudience } from '@/lib/audience';
 import { formatTimeRange } from '@/lib/schoolTime';
 import { cn } from '@/lib/utils';
 import type { LessonCardProps } from '../slots';
@@ -35,6 +36,7 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
   const availabilityId = useId();
   const label = useLessonCardLabel()(lesson, timeZone);
   const title = useLessonTitle();
+  const audience = formatAudience(lesson, t, 'short');
   const canceled = lesson.status === 'canceled';
   const quiet = canceled || past;
   // A room rental has no places and no quick action (quickAction answers none).
@@ -95,10 +97,8 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
           >
             {title(lesson)}
           </span>
-          {lesson.level && (
-            <span className="shrink-0 text-right text-xs text-muted-foreground">
-              {t(`level.${lesson.level}`)}
-            </span>
+          {audience && (
+            <span className="max-w-1/2 text-right text-xs text-muted-foreground">{audience}</span>
           )}
         </span>
         <span className="flex flex-wrap items-center gap-1.5">

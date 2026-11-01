@@ -26,6 +26,7 @@ import {
 } from '@/test/mockApi';
 import {
   addDependentMutation,
+  allClassesQuery,
   bookLessonMutation,
   cancelBookingMutation,
   allStaffQuery,
@@ -45,6 +46,7 @@ import {
   lessonQuery,
   familyQuery,
   impersonateMutation,
+  levelsQuery,
   listAccountsQuery,
   loginMutation,
   logoutMutation,
@@ -65,11 +67,14 @@ import {
   scheduleQuery,
   sessionCaches,
   setAttendanceMutation,
+  setLevelOrderMutation,
+  statisticsQuery,
   staffQuery,
   stopImpersonationMutation,
   teachLessonsQuery,
   updateDependentMutation,
   updateLessonMutation,
+  updateLevelMutation,
   updateLocaleMutation,
   updateMyPersonMutation,
   updateStaffMutation,
@@ -362,6 +367,58 @@ describe('catalogue administration', () => {
       new MutationObserver(queryClient, deleteStaffMutation(queryClient)).mutate(ids.staffAlex),
     ).rejects.toMatchObject({ status: 409 });
     expect(queryClient.getQueryState(allStaffQuery.queryKey)?.isInvalidated).toBe(false);
+  });
+});
+
+describe('level administration', () => {
+  /** The keys of what names levels: the levels, classes, schedule, lessons and statistics. */
+  const namingLevels = [
+    levelsQuery.queryKey,
+    allClassesQuery(ids.termAutumn).queryKey,
+    scheduleQuery(range).queryKey,
+    teachLessonsQuery({}).queryKey,
+    myLessonsQuery.queryKey,
+    lessonQuery(ids.lessonBallet).queryKey,
+    statisticsQuery({ range: 'term' }).queryKey,
+  ];
+
+  /** A client with everything that names levels cached. */
+  function levelsClient() {
+    const queryClient = new QueryClient();
+    for (const key of namingLevels) queryClient.setQueryData(key, []);
+    return queryClient;
+  }
+
+  it('refreshes what names the levels after a level is renamed', async () => {
+    mockApiPut({
+      '/api/v1/levels/{levelId}': ({ body }) => ({
+        body: { id: ids.levelBeginner, position: 1, ...(body as object) },
+      }),
+    });
+    const queryClient = levelsClient();
+
+    await new MutationObserver(queryClient, updateLevelMutation(queryClient)).mutate({
+      levelId: ids.levelBeginner,
+      body: { name: 'Starter' },
+    });
+
+    for (const key of namingLevels) {
+      expect(queryClient.getQueryState(key)?.isInvalidated, JSON.stringify(key)).toBe(true);
+    }
+  });
+
+  it('refreshes what names the levels after the levels are reordered', async () => {
+    mockApiPut({ '/api/v1/level-order': { status: 204 } });
+    const queryClient = levelsClient();
+
+    await new MutationObserver(queryClient, setLevelOrderMutation(queryClient)).mutate([
+      ids.levelIntermediate,
+      ids.levelBeginner,
+    ]);
+
+    for (const key of namingLevels) {
+      expect(queryClient.getQueryState(key)?.isInvalidated, JSON.stringify(key)).toBe(true);
+    }
   });
 });
 

@@ -1,16 +1,6 @@
 import { z } from 'zod';
-import type { LessonLevel } from '@/api/client';
 
 const schoolDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-
-/** Every lesson level of the API, in the order the filter offers them. */
-export const levels = ['beginner', 'intermediate', 'advanced', 'professional', 'open'] as const;
-
-// A level the API adds must be added above (and vice versa).
-type Missing = Exclude<LessonLevel, (typeof levels)[number]>;
-type Unknown = Exclude<(typeof levels)[number], LessonLevel>;
-const levelsMatchAPI: [Missing, Unknown] extends [never, never] ? true : false = true;
-void levelsMatchAPI;
 
 /**
  * Search params of /schedule. Everything is optional so URLs stay short;
@@ -18,7 +8,7 @@ void levelsMatchAPI;
  *
  * - view: 'list' (default) or 'week'
  * - from: first school date shown (default: today in the school time zone)
- * - location, instructor, courseType, level: filters, as in getSchedule
+ * - location, instructor, courseType, level: filters by ID, as in getSchedule
  * - lesson: the lesson whose detail sheet is open (deep link)
  */
 export const scheduleSearchSchema = z.object({
@@ -27,7 +17,8 @@ export const scheduleSearchSchema = z.object({
   location: z.uuid().optional().catch(undefined),
   instructor: z.uuid().optional().catch(undefined),
   courseType: z.uuid().optional().catch(undefined),
-  level: z.enum(levels).optional().catch(undefined),
+  // A level ID; an old bookmark's fixed level (`?level=beginner`) is dropped.
+  level: z.uuid().optional().catch(undefined),
   lesson: z.uuid().optional().catch(undefined),
 });
 

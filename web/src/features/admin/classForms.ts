@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import type { ClassData, ClassEntry } from '@/api/queries';
-import { levels } from '@/features/schedule/search';
 import { capacity } from './locationForms';
 
 // Limits as in the API (ClassData). Messages are keys of `auth:form.errors`
@@ -26,11 +25,45 @@ export const durationMinutes = z
   .transform(Number)
   .pipe(z.number().int().min(1, 'duration').max(1440, 'duration'));
 
+/** The value of the level select for "all levels"; the other values are '' (none) and level IDs. */
+export const allLevels = 'all';
+
+/** A stage as typed: empty for none, else 1 to 9. */
+export const stage = z
+  .string()
+  .trim()
+  .refine((s) => s === '' || /^[1-9]$/.test(s), 'stage')
+  .transform((s) => (s === '' ? undefined : Number(s)));
+
+/** The months of an age in years as typed, '3.5' or '3,5'; NaN if it is no number. */
+const monthsOf = (years: string) =>
+  /^\d{1,3}([.,]\d+)?$/.test(years) ? Number(years.replace(',', '.')) * 12 : NaN;
+
+/**
+ * An age in years as typed: empty for none, else whole or half years from
+ * ½ to 100, in months (the API's 1 to 1200, by halves as the web enters them).
+ */
+export const ageMonths = z
+  .string()
+  .trim()
+  .refine((s) => {
+    if (s === '') return true;
+    const months = monthsOf(s);
+    return months >= 6 && months <= 1200 && months % 6 === 0;
+  }, 'age')
+  .transform((s) => (s === '' ? undefined : monthsOf(s)));
+
+/** The years of an age in months, as the age inputs hold them: 42 → '3.5'. */
+const yearsOf = (months?: number) => (months === undefined ? '' : String(months / 12));
+
 /**
  * A class's form, every field as the inputs hold it: an empty `accompanistId`
- * means none, the weekday is '0' (Sunday) to '6', the start time 'HH:MM' in
- * the school's time zone. The class must end by midnight, and its
- * accompanist cannot be its instructor.
+ * means none, `level` is '' (no level), `allLevels` or the ID of the span's
+ * first level and `levelTo` the ID of its other end, the weekday is '0'
+ * (Sunday) to '6', the start time 'HH:MM' in the school's time zone, the
+ * ages are years. The class must end by midnight, its accompanist cannot be
+ * its instructor, and its age range cannot end before it starts. The output
+ * is the request body without `retired`.
  */
 export const classSchema = z
   .object({
@@ -38,7 +71,11 @@ export const classSchema = z
     roomId: chosen,
     instructorId: chosen,
     accompanistId: z.string(),
-    level: chosen.pipe(z.enum(levels)),
+    level: z.string(),
+    levelTo: z.string(),
+    stage,
+    ageFrom: ageMonths,
+    ageTo: ageMonths,
     weekday: z
       .string()
       .regex(/^[0-6]$/, 'choose')
@@ -54,10 +91,22 @@ export const classSchema = z
     if (minutesOf(v.startTime) + v.durationMinutes > 1440) {
       ctx.addIssue({ code: 'custom', path: ['durationMinutes'], message: 'midnight' });
     }
-  }) satisfies z.ZodType<
-  Omit<ClassData, 'retired' | 'accompanistId'> & { accompanistId: string },
-  ClassInput
->;
+    if (v.ageFrom !== undefined && v.ageTo !== undefined && v.ageTo < v.ageFrom) {
+      ctx.addIssue({ code: 'custom', path: ['ageTo'], message: 'ageRange' });
+    }
+  })
+  .transform(({ accompanistId, level, levelTo, stage, ageFrom, ageTo, ...rest }): ClassBody => ({
+    ...rest,
+    ...(accompanistId ? { accompanistId } : {}),
+    ...(level === allLevels ? { allLevels: true } : {}),
+    ...(level && level !== allLevels ? { levelFromId: level, levelToId: levelTo } : {}),
+    ...(stage !== undefined ? { stage } : {}),
+    ...(ageFrom !== undefined ? { ageFromMonths: ageFrom } : {}),
+    ...(ageTo !== undefined ? { ageToMonths: ageTo } : {}),
+  })) satisfies z.ZodType<ClassBody, ClassInput>;
+
+/** The request body of a class but for `retired`. */
+type ClassBody = Omit<ClassData, 'retired'>;
 
 /** The form values: what the inputs hold. */
 export type ClassInput = {
@@ -66,6 +115,10 @@ export type ClassInput = {
   instructorId: string;
   accompanistId: string;
   level: string;
+  levelTo: string;
+  stage: string;
+  ageFrom: string;
+  ageTo: string;
   weekday: string;
   startTime: string;
   durationMinutes: string;
@@ -74,17 +127,23 @@ export type ClassInput = {
 
 export type ClassOutput = z.output<typeof classSchema>;
 
-export const classFields = [
-  'courseTypeId',
-  'roomId',
-  'instructorId',
-  'accompanistId',
-  'level',
-  'weekday',
-  'startTime',
-  'durationMinutes',
-  'capacity',
-] as const satisfies (keyof ClassInput)[];
+/** The form field of each request body field, for the fields of a 422 answer. */
+export const classFields = {
+  courseTypeId: 'courseTypeId',
+  roomId: 'roomId',
+  instructorId: 'instructorId',
+  accompanistId: 'accompanistId',
+  levelFromId: 'level',
+  allLevels: 'level',
+  levelToId: 'levelTo',
+  stage: 'stage',
+  ageFromMonths: 'ageFrom',
+  ageToMonths: 'ageTo',
+  weekday: 'weekday',
+  startTime: 'startTime',
+  durationMinutes: 'durationMinutes',
+  capacity: 'capacity',
+} as const satisfies Record<keyof ClassBody, keyof ClassInput>;
 
 /** The form values of a class, or of a new one with nothing chosen yet. */
 export const classValues = (c?: ClassEntry): ClassInput => ({
@@ -92,20 +151,20 @@ export const classValues = (c?: ClassEntry): ClassInput => ({
   roomId: c?.roomId ?? '',
   instructorId: c?.instructor.id ?? '',
   accompanistId: c?.accompanist?.id ?? '',
-  level: c?.level ?? '',
+  level: c?.allLevels ? allLevels : (c?.levelFrom?.id ?? ''),
+  levelTo: c?.levelTo?.id ?? '',
+  stage: c?.stage === undefined ? '' : String(c.stage),
+  ageFrom: yearsOf(c?.ageFromMonths),
+  ageTo: yearsOf(c?.ageToMonths),
   weekday: c ? String(c.weekday) : '',
   startTime: c?.startTime ?? '',
   durationMinutes: c ? String(c.durationMinutes) : '',
   capacity: c ? String(c.capacity) : '',
 });
 
-/** The request body of the form values: without an accompanist, `accompanistId` is left out. */
-export const classData = (
-  { accompanistId, ...rest }: ClassOutput,
-  retired: boolean,
-): ClassData => ({
-  ...rest,
-  ...(accompanistId ? { accompanistId } : {}),
+/** The request body of the form values. */
+export const classData = (values: ClassOutput, retired: boolean): ClassData => ({
+  ...values,
   retired,
 });
 

@@ -17,6 +17,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { formatAudience } from '@/lib/audience';
 import { formatCompactMoney, formatMoney } from '@/lib/money';
 import { personName } from '@/lib/personName';
 import { addDays, formatDate, formatDateTime } from '@/lib/schoolTime';
@@ -310,6 +311,7 @@ type Formats = ReturnType<typeof useFormats>;
 
 function StatisticsView({ stats }: { stats: Statistics }) {
   const { t } = useTranslation('statistics');
+  const { t: ts } = useTranslation('schedule');
   const f = useFormats(stats.currency);
   const monthly = stats.granularity === 'month';
   const periodsTable = t(monthly ? 'tables.periodsByMonth' : 'tables.periodsByWeek');
@@ -376,9 +378,11 @@ function StatisticsView({ stats }: { stats: Statistics }) {
       <FiguresTable
         caption={t('tables.classes')}
         nameHeader={t('tables.class')}
+        audienceHeader={t('tables.audience')}
         rows={stats.classes.map((c) => ({
           key: c.classId ?? c.lessonId ?? '',
           name: <ClassName row={c} timezone={stats.timezone} lang={f.lang} />,
+          audience: formatAudience(c, ts, 'long'),
           figures: c,
         }))}
         f={f}
@@ -593,18 +597,25 @@ function PeriodsTable({ stats, caption, f }: { stats: Statistics; caption: strin
 type FigureRow = {
   key: string;
   name: ReactNode;
+  /** Whom the class is for, in the column of `audienceHeader`. */
+  audience?: string;
   figures: Omit<Figures, 'passesSold' | 'salesGross' | 'canceledLessons' | 'activeMembers'>;
 };
 
-/** A table of the lesson figures of some groups (classes, rooms, …). */
+/**
+ * A table of the lesson figures of some groups (classes, rooms, …); with
+ * `audienceHeader`, a column of whom each is for follows the name.
+ */
 function FiguresTable({
   caption,
   nameHeader,
+  audienceHeader,
   rows,
   f,
 }: {
   caption: string;
   nameHeader: string;
+  audienceHeader?: string;
   rows: FigureRow[];
   f: Formats;
 }) {
@@ -619,6 +630,7 @@ function FiguresTable({
           <TableHeader>
             <TableRow>
               <TableHead scope="col">{nameHeader}</TableHead>
+              {audienceHeader && <TableHead scope="col">{audienceHeader}</TableHead>}
               <TableHead scope="col" className={numeric}>
                 {t('tables.lessons')}
               </TableHead>
@@ -648,6 +660,7 @@ function FiguresTable({
                 <TableHead scope="row" className="font-normal whitespace-nowrap">
                   {r.name}
                 </TableHead>
+                {audienceHeader && <TableCell>{r.audience}</TableCell>}
                 <TableCell className={numeric}>{f.count(r.figures.lessons)}</TableCell>
                 <TableCell className={numeric}>{f.count(r.figures.bookings)}</TableCell>
                 <TableCell className={numeric}>{f.count(r.figures.capacity)}</TableCell>

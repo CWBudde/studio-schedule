@@ -12,7 +12,8 @@ const now = Date.parse('2026-10-23T10:00:00Z');
 const rental: ScheduleLesson = {
   ...lessonBallet,
   classId: undefined,
-  level: undefined,
+  levelFrom: undefined,
+  levelTo: undefined,
   kind: 'rental',
   visibility: 'hidden',
   instructor: undefined,
