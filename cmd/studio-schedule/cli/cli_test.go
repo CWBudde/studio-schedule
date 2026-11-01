@@ -59,6 +59,8 @@ type record struct {
 
 // testCommands are the commands of the test tree, built on a.
 func testCommands(a *App, rec *record) []*cobra.Command {
+	var only string // --only of validate
+
 	whoami := func(access httpapi.Access) *cobra.Command {
 		return a.Command(Spec{
 			Use: "whoami-" + string(access), Short: "print the account of --as", Access: access,
@@ -114,6 +116,19 @@ func testCommands(a *App, rec *record) []*cobra.Command {
 
 				return rec.fail
 			},
+		}),
+		a.Command(Spec{
+			Use: "validate", Short: "check --only before the database opens", Store: true,
+			Fields: map[string]string{"checks": "--only"},
+			Flags:  func(cmd *cobra.Command) { cmd.Flags().StringVar(&only, "only", "", "a check") },
+			Validate: func([]string) error {
+				if only != "" && only != "known" {
+					return &domain.FieldError{Field: "checks", Msg: fmt.Sprintf("unknown check %q", only)}
+				}
+
+				return nil
+			},
+			Run: func(context.Context, *Env, []string) error { rec.ran = true; return nil },
 		}),
 		a.Command(Spec{
 			Use: "table", Short: "print a table",
@@ -915,6 +930,39 @@ func TestEnv(t *testing.T) {
 }
 
 type fakeRenderer struct{ service.ReceiptRenderer }
+
+// TestValidate refuses invalid input before the database is opened: an
+// unknown check is a usage error naming its flag even when the database
+// cannot be reached, as text and as a problem document.
+func TestValidate(t *testing.T) {
+	t.Parallel()
+
+	unreachable := harness{open: func(context.Context, string) (store.Store, func(), error) {
+		return nil, nil, errors.New("connection refused")
+	}}
+
+	var rec record
+
+	got := unreachable.run(t, &rec, "validate", "--only", "bogus")
+	if got.code != ExitUsage || got.stderr != "error: --only: unknown check \"bogus\"\n" || rec.ran {
+		t.Errorf("unknown check: exit %d, stderr %q, ran %t", got.code, got.stderr, rec.ran)
+	}
+
+	got = unreachable.run(t, &rec, "validate", "--only", "bogus", "-o", "json")
+	if got.code != ExitUsage || !strings.Contains(got.stderr, `"location": "--only"`) {
+		t.Errorf("unknown check, JSON: exit %d, stderr %s", got.code, got.stderr)
+	}
+
+	// Valid input goes on to open the database.
+	if got := unreachable.run(t, &rec, "validate", "--only", "known"); got.code != ExitFailed ||
+		got.stderr != "error: connection refused\n" || rec.ran {
+		t.Errorf("known check, unreachable: exit %d, stderr %q, ran %t", got.code, got.stderr, rec.ran)
+	}
+
+	if got := (harness{st: demoStore(t)}).run(t, &rec, "validate", "--only", "known"); got.code != ExitOK || !rec.ran {
+		t.Errorf("known check: exit %d, stderr %q, ran %t", got.code, got.stderr, rec.ran)
+	}
+}
 
 func TestAppURL(t *testing.T) {
 	t.Parallel()

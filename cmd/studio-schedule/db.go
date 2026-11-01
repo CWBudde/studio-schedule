@@ -12,10 +12,9 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/service"
 )
 
-// newDBCmd is the group `db` (ADR 0020). Its commands open the database
-// with open themselves.
-func newDBCmd(app *cli.App, open cli.Opener) *cobra.Command {
-	return cli.Group("db", "Check the database", newDBCheckCmd(app, open))
+// newDBCmd is the group `db` (ADR 0020).
+func newDBCmd(app *cli.App) *cobra.Command {
+	return cli.Group("db", "Check the database", newDBCheckCmd(app))
 }
 
 // dbCheckJSON documents what `db check --output json` prints.
@@ -24,10 +23,10 @@ const dbCheckJSON = `one object: ok (bool, false when a check found something), 
 	`entity, id, message}: the check that found it; the entity pass, booking, lesson, person or ` +
 	`receipt-year; the record's ID, or the year of a receipt counter; and what is inconsistent)`
 
-func newDBCheckCmd(app *cli.App, open cli.Opener) *cobra.Command {
+func newDBCheckCmd(app *cli.App) *cobra.Command {
 	var (
-		only []string
-		cmd  *cobra.Command
+		only   []string
+		checks []service.IntegrityCheck
 	)
 
 	return app.Command(cli.Spec{
@@ -46,45 +45,36 @@ func newDBCheckCmd(app *cli.App, open cli.Opener) *cobra.Command {
 			"unknown check or without a database URL. With --output json it prints " + dbCheckJSON + ".",
 		Example: "  studio-schedule db check\n  studio-schedule db check --only passes,capacity --output json",
 		JSON:    dbCheckJSON,
-		Flags: func(c *cobra.Command) {
-			cmd = c
-			c.Flags().StringSliceVar(&only, "only", nil, "run only these checks (repeatable or comma-separated): "+
+		Store:   true,
+		Flags: func(cmd *cobra.Command) {
+			cmd.Flags().StringSliceVar(&only, "only", nil, "run only these checks (repeatable or comma-separated): "+
 				integrityCheckNames())
 		},
 		Fields: map[string]string{"checks": "--only"},
-		Run: func(ctx context.Context, env *cli.Env, _ []string) error {
-			url, err := databaseFlag{}.load(cmd, app.Lookup)
-			if err != nil {
-				return err
-			}
-
-			checks := make([]service.IntegrityCheck, len(only))
+		// An unknown check is refused before the database is opened.
+		Validate: func([]string) error {
+			names := make([]service.IntegrityCheck, len(only))
 			for i, name := range only {
-				checks[i] = service.IntegrityCheck(name)
+				names[i] = service.IntegrityCheck(name)
 			}
 
-			// An unknown check is refused before the database is opened.
-			if checks, err = service.SelectIntegrityChecks(checks...); err != nil {
-				return err
-			}
+			var err error
 
-			return runDBCheck(ctx, env, open, url, checks)
+			checks, err = service.SelectIntegrityChecks(names...)
+
+			return err
+		},
+		Run: func(ctx context.Context, env *cli.Env, _ []string) error {
+			return runDBCheck(ctx, env, checks)
 		},
 	})
 }
 
-// runDBCheck runs checks (service.SelectIntegrityChecks) on the database of url and
-// prints the findings; findings are an error after the report, so the
-// command exits with status 1.
-func runDBCheck(ctx context.Context, env *cli.Env, open cli.Opener, url string, checks []service.IntegrityCheck) error {
-	st, release, err := open(ctx, url)
-	if err != nil {
-		return err
-	}
-
-	defer release()
-
-	findings, err := service.NewIntegrityService(st).Check(ctx, checks...)
+// runDBCheck runs checks (service.SelectIntegrityChecks) and prints the
+// findings; findings are an error after the report, so the command exits
+// with status 1.
+func runDBCheck(ctx context.Context, env *cli.Env, checks []service.IntegrityCheck) error {
+	findings, err := env.Services.Integrity.Check(ctx, checks...)
 	if err != nil {
 		return err
 	}

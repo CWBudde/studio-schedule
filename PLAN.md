@@ -1087,7 +1087,9 @@ command groups by need: recovery and diagnosis first, then data, then reports.
       after it, is a finding. A clean demo school and data written only through the services
       (merge, anonymize, cancellations, overrides) have none, on both stores. Deviation, amended in
       ADR 0020: `app.Services` has no integrity service yet, so the command builds it on the store
-      it opens with the process's opener (`newDBCmd(app, sys.Open)`)
+      it opens with the process's opener (`newDBCmd(app, sys.Open)`). Since resolved: the service
+      is `app.Services.Integrity`, the command opens the database through the layer, and
+      `Spec.Validate` refuses an unknown check before that (2026-11-01)
 - [ ] Reports: `stats --from --to` (the statistics service as a table or JSON);
       `events list|registrations <slug>|mark-paid` (Phase 10). `stats` is done (2026-11-01):
       `office`, `--range` (last4Weeks by default, last12Weeks, term, custom) or `--from --to`,

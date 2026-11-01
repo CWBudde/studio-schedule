@@ -183,6 +183,10 @@ type Spec struct {
 	// Fields name the flags of the fields a service's field error names
 	// (domain.FieldError), e.g. "email": "--email".
 	Fields map[string]string
+	// Validate, if set, checks the arguments and flags before anything is
+	// opened, so invalid input is a usage error even when the database
+	// cannot be reached.
+	Validate func(args []string) error
 	// Run does the work: it calls one service method and presents the
 	// result with env.Out.
 	Run func(ctx context.Context, env *Env, args []string) error
@@ -466,6 +470,12 @@ func (a *App) run(ctx context.Context, cmd *cobra.Command, spec Spec, args []str
 
 	if spec.Access == "" && cmd.Flags().Changed(config.FlagAs) {
 		return Usagef("--as: %s acts as no account", cmd.CommandPath())
+	}
+
+	if spec.Validate != nil {
+		if err := spec.Validate(args); err != nil {
+			return withFields(err, spec.Fields)
+		}
 	}
 
 	if spec.Store || spec.Access != "" {

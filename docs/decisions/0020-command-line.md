@@ -148,15 +148,15 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
 - **The demo does not save job runs.** Its saved snapshot leaves `job_runs` out: its jobs run
   every minute, so saving them would save the demo every minute and let its saved data grow by
   thousands of rows a day.
-- **`db check` builds its service itself.** The integrity checks are `service.IntegrityService`,
-  one read-only transaction over a few aggregate store reads. `app.Services` has no field for it
-  yet, so `db check` opens the database with the process's opener and builds the service on that
-  store, instead of reaching it through `cli.Env.Services`. It calls the service only, never the
-  store, and once `app.Services` has an `Integrity` field, the command takes it from there like
-  every other command. The check agrees with the services rather than with a stricter reading:
-  a lesson booked beyond its capacity is a finding only where the bookings' events record no
-  override (ADR 0009), and an anonymized person keeps the passes it had (ADR 0016), so only a pass
-  sold after the anonymization is a finding.
+- **`db check` reaches its service like every command.** The integrity checks are
+  `service.IntegrityService` (`app.Services.Integrity`), one read-only transaction over a few
+  aggregate store reads; the command, an operator command, opens the database through the layer
+  (`Spec.Store`). Its `--only` is checked first (`Spec.Validate`), so an unknown check is a usage
+  error even when the database cannot be reached. (Built first on a store the command opened
+  itself, while `app.Services` had no field for it.) The check agrees with the services rather
+  than with a stricter reading: a lesson booked beyond its capacity is a finding only where the
+  bookings' events record no override (ADR 0009), and an anonymized person keeps the passes it
+  had (ADR 0016), so only a pass sold after the anonymization is a finding.
 - **The timetable commands need `office`, also where the operation is public.** `lessons list`,
   `terms list` and `classes list` print what the office's pages show (hidden and canceled
   lessons, retired classes), so they need `office` like those pages, although `getSchedule` and

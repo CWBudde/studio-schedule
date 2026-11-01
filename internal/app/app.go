@@ -266,6 +266,9 @@ type Services struct {
 	MailLog       *service.MailLogService
 	Imports       *service.ImportService
 	Push          *service.PushService
+	// Integrity checks the data for inconsistencies the database cannot
+	// rule out: `db check` on the command line.
+	Integrity *service.IntegrityService
 }
 
 // NewServices builds the services of deps exactly as New does. It panics
@@ -304,9 +307,10 @@ func newServices(deps Deps, renderer *mail.Renderer) Services {
 		Generator:  newLessonGenerator(deps),
 		Announcements: service.NewAnnouncementService(deps.Store, deps.Clock, deps.IDs, renderer,
 			func() { deps.Wake.Wake(announcementsJob) }),
-		MailLog: service.NewMailLogService(deps.Store, deps.Clock, deps.IDs),
-		Imports: service.NewImportService(deps.Store, deps.Clock, deps.IDs),
-		Push:    service.NewPushService(deps.Store, deps.Clock, deps.IDs, deps.Pusher),
+		MailLog:   service.NewMailLogService(deps.Store, deps.Clock, deps.IDs),
+		Imports:   service.NewImportService(deps.Store, deps.Clock, deps.IDs),
+		Push:      service.NewPushService(deps.Store, deps.Clock, deps.IDs, deps.Pusher),
+		Integrity: service.NewIntegrityService(deps.Store),
 	}
 }
 

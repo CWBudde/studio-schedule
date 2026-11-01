@@ -219,7 +219,8 @@ func TestDBCheckRefused(t *testing.T) {
 			"outdated schema", cliRun{open: failingOpener(errSchemaOutdated)}.with(dbURL...), nil, 1,
 			"error: " + errSchemaOutdated.Error() + "\n",
 		},
-		{"unreadable", cliRun{st: unreadableStore{demoStore(t)}}, nil, 1, "error: the disk is unreadable\n"},
+		// The layer reads the school's time zone before the check.
+		{"unreadable", cliRun{st: unreadableStore{demoStore(t)}}, nil, 1, "error: public settings: the disk is unreadable\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -232,7 +233,7 @@ func TestDBCheckRefused(t *testing.T) {
 	}
 }
 
-// TestDBCheckReadOnly changes nothing: it runs one read-only transaction
+// TestDBCheckReadOnly changes nothing: it reads in read-only transactions
 // and leaves the data as it was, findings or not.
 func TestDBCheckReadOnly(t *testing.T) {
 	t.Parallel()
@@ -263,7 +264,8 @@ func TestDBCheckReadOnly(t *testing.T) {
 		t.Error("db check changed the data")
 	}
 
-	if want := []store.TxMode{store.ReadOnly, store.ReadOnly, store.ReadOnly}; !slices.Equal(rec.modes(), want) {
+	// Each run: the layer's read of the school's time zone, then the check.
+	if want := slices.Repeat([]store.TxMode{store.ReadOnly}, 6); !slices.Equal(rec.modes(), want) {
 		t.Errorf("transactions %v, want %v", rec.modes(), want)
 	}
 }

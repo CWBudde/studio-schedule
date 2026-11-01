@@ -37,7 +37,7 @@ func newRoot(sys cli.System) *cobra.Command {
 	root.AddCommand(newHealthcheckCmd(env))
 	root.AddCommand(newVAPIDKeysCmd())
 	root.AddCommand(newConfigCmd(app), newDoctorCmd(app))
-	root.AddCommand(newDBCmd(app, sys.Open))
+	root.AddCommand(newDBCmd(app))
 	root.AddCommand(newLessonsCmd(app), newTermsCmd(app), newClassesCmd(app), newStatsCmd(app))
 	root.AddCommand(newJobsCmd(app), newMailCmd(app))
 	root.AddCommand(newAccountsCmd(app, sys.OSUser))
