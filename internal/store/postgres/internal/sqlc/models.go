@@ -252,6 +252,13 @@ type LessonNotice struct {
 	Recipients int32
 }
 
+type Level struct {
+	ID       pgtype.UUID
+	Name     string
+	Code     pgtype.Text
+	Position int32
+}
+
 type Location struct {
 	ID      pgtype.UUID
 	Name    string

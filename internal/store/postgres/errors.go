@@ -16,7 +16,7 @@ import (
 
 // Constraints and unique indexes whose violation has a domain meaning beyond
 // "duplicate key" (see migrations/00001_core.sql, 00006, 00007, 00008, 00012,
-// 00015, 00016, 00017, 00021 and 00031).
+// 00015, 00016, 00017, 00021, 00031 and 00034).
 const (
 	constraintMemberNo        = "persons_member_no_key"
 	constraintAccountEmail    = "accounts_email_key"
@@ -28,6 +28,8 @@ const (
 	constraintLocationName    = "locations_name_key"
 	constraintRoomName        = "rooms_location_name_key"
 	constraintCourseTypeName  = "course_types_name_key"
+	constraintLevelName       = "levels_name_key"
+	constraintLevelCode       = "levels_code_key"
 	constraintOpenWaitlist    = "waitlist_entries_one_open_key"
 	constraintActiveFeed      = "calendar_feeds_one_active_key"
 	constraintPassTypeName    = "pass_types_name_key"
@@ -42,12 +44,13 @@ const (
 )
 
 // conflicts describes the unique constraints above: the message, and the
-// error it wraps (domain.ErrDuplicate for the unique names of ADR 0007 and
-// for what exists only once per person: an account, a guardian link, a
-// class membership, an active booking of a lesson, an active calendar feed
-// of a subject, a pass type's name, a booking's redemption, a receipt's
-// number, cancellation and PDF, a person's member number, an event's slug
-// and an open registration of a person for an event).
+// error it wraps (domain.ErrDuplicate for the unique names of ADR 0007, the
+// level names and codes (ADR 0021), and for what exists only once per
+// person: an account, a guardian link, a class membership, an active booking
+// of a lesson, an active calendar feed of a subject, a pass type's name, a
+// booking's redemption, a receipt's number, cancellation and PDF, a person's
+// member number, an event's slug and an open registration of a person for an
+// event).
 // Other unique and foreign key violations get a generic message naming the
 // constraint.
 var conflicts = map[string]struct {
@@ -64,6 +67,8 @@ var conflicts = map[string]struct {
 	constraintLocationName:    {"location name is taken", domain.ErrDuplicate},
 	constraintRoomName:        {"room name is taken at the location", domain.ErrDuplicate},
 	constraintCourseTypeName:  {"course type name is taken", domain.ErrDuplicate},
+	constraintLevelName:       {"level name is taken", domain.ErrDuplicate},
+	constraintLevelCode:       {"level code is taken", domain.ErrDuplicate},
 	constraintOpenWaitlist:    {"person is on the waiting list of the lesson already", domain.ErrDuplicate},
 	constraintActiveFeed:      {"the account has an active calendar feed of this subject", domain.ErrDuplicate},
 	constraintPassTypeName:    {"pass type name is taken", domain.ErrDuplicate},

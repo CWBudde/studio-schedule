@@ -118,6 +118,7 @@ type Tx interface {
 	Rooms() RoomRepo
 	Staff() StaffRepo
 	CourseTypes() CourseTypeRepo
+	Levels() LevelRepo
 	Terms() TermRepo
 	Classes() ClassRepo
 	Lessons() LessonRepo
@@ -473,6 +474,26 @@ type CourseTypeRepo interface {
 	Delete(ctx context.Context, id domain.CourseTypeID) error
 	// List returns all course types ordered by name and ID.
 	List(ctx context.Context) ([]domain.CourseType, error)
+}
+
+// LevelRepo stores the school's level scale (ADR 0021).
+type LevelRepo interface {
+	Get(ctx context.Context, id domain.LevelID) (domain.Level, error)
+	// Create and Update fail with domain.ErrDuplicate if another level has
+	// the name or the (non-empty) code, ignoring ASCII case.
+	Create(ctx context.Context, l domain.Level) error
+	// Update writes the name and the code and fails with domain.ErrNotFound
+	// for an unknown level. It never writes the position, which only
+	// SetOrder changes, so an edit cannot undo a concurrent reorder.
+	Update(ctx context.Context, l domain.Level) error
+	// Delete fails with domain.ErrConflict while classes use the level.
+	Delete(ctx context.Context, id domain.LevelID) error
+	// List returns all levels ordered by position, name and ID.
+	List(ctx context.Context) ([]domain.Level, error)
+	// SetOrder sets the positions of the levels to 1..n in the order given.
+	// It fails with domain.ErrValidation unless order holds every level
+	// exactly once and nothing else.
+	SetOrder(ctx context.Context, order []domain.LevelID) error
 }
 
 // TermRepo stores terms.

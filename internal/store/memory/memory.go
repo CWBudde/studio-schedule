@@ -57,6 +57,7 @@ type state struct {
 	rooms           table[domain.RoomID, domain.Room]
 	staff           table[domain.StaffID, domain.Staff]
 	courseTypes     table[domain.CourseTypeID, domain.CourseType]
+	levels          table[domain.LevelID, domain.Level]
 	terms           table[domain.TermID, domain.Term]
 	classes         table[domain.ClassID, domain.Class]
 	classMembers    table[memberKey, domain.ClassMember]
@@ -258,6 +259,7 @@ func (t *tx) Locations() store.LocationRepo     { return locationRepo{t} }
 func (t *tx) Rooms() store.RoomRepo             { return roomRepo{t} }
 func (t *tx) Staff() store.StaffRepo            { return staffRepo{t} }
 func (t *tx) CourseTypes() store.CourseTypeRepo { return courseTypeRepo{t} }
+func (t *tx) Levels() store.LevelRepo           { return levelRepo{t} }
 func (t *tx) Terms() store.TermRepo             { return termRepo{t} }
 func (t *tx) Classes() store.ClassRepo          { return classRepo{t} }
 func (t *tx) Lessons() store.LessonRepo         { return lessonRepo{t} }
