@@ -969,9 +969,18 @@ command groups by need: recovery and diagnosis first, then data, then reports.
       an argument (shell history, `ps`; ASVS 8.3.1). `persons export <id> -o file.json`,
       `persons anonymize <id>` (ADR 0016), `persons duplicates`,
       `persons merge <survivor> <duplicate>` (ADR 0015)
-- [ ] Timetable: `lessons list --date|--from --to`, `lessons generate --until`,
+- [x] Timetable: `lessons list --date|--from --to`, `lessons generate --until`,
       `lessons cancel <id> --notify` (a sick instructor, from an SSH app on a phone),
-      `terms list`, `classes list`
+      `terms list`, `classes list` (2026-11-01): all `office`, as the office's pages.
+      `lessons list` (getSchedule's body; `--to` inclusive, at most 42 days) shows ID, date,
+      time, class or kind, instructor, room, active bookings/places and status in the school's
+      zone; `lessons generate --until` (`LessonGenerator.GenerateUntil`, now in `app.Services`)
+      creates what has not started from today on and prints the count;
+      `lessons cancel <id> [--note]` and the added `lessons restore <id> [--confirm-room-overlap]`
+      confirm, name the lesson and print cancelLesson's/restoreLesson's body. `terms list`
+      (listTerms) marks the current term, `classes list [--term]` (listAllClasses, retired ones
+      included) defaults to it (`TimetableService.CurrentTerm`). Deviation: no `--notify`, as
+      `CancelLesson` always mails everyone booked: the command says so in its help and question
 - [ ] Passes and receipts: `passes list --person`, `receipts list --from --to`,
       `receipts pdf <number> -o file`, `receipts export --year --format csv` (for the tax
       adviser). `receipts verify` checks the numbers are gapless per year, every Storno names its
@@ -993,7 +1002,11 @@ command groups by need: recovery and diagnosis first, then data, then reports.
       ADR 0020: `app.Services` has no integrity service yet, so the command builds it on the store
       it opens with the process's opener (`newDBCmd(app, sys.Open)`)
 - [ ] Reports: `stats --from --to` (the statistics service as a table or JSON);
-      `events list|registrations <slug>|mark-paid` (Phase 10)
+      `events list|registrations <slug>|mark-paid` (Phase 10). `stats` is done (2026-11-01):
+      `office`, `--range` (last4Weeks by default, last12Weeks, term, custom) or `--from --to`,
+      the totals and the tables by period, class, room, course type and instructor; the top
+      participants only with `--participants`, the JSON is getStatistics's full body. The
+      `events` commands wait for Phase 10
 - [ ] Tests: every command runs in-process (cobra `Execute` with buffers) on the memory store
       and PostgreSQL. They cover golden text and JSON output, exit codes, and the refusal without
       `--yes`. The commands count towards the coverage gate (Phase 9)
