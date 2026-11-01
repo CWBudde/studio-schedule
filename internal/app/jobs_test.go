@@ -3,7 +3,9 @@ package app_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -59,6 +61,64 @@ func TestJobsGenerateLessons(t *testing.T) {
 
 	if !strings.Contains(logs.String(), "lessons generated") {
 		t.Errorf("no log of the generated lessons:\n%s", logs.String())
+	}
+}
+
+// TestJobsRecordRuns: every run is recorded (ADR 0020). After the startup
+// run, each job has an ok run; a job runs on request (the command line),
+// and an unknown one is not found.
+func TestJobsRecordRuns(t *testing.T) {
+	t.Parallel()
+
+	st := memory.New()
+	if err := seed.LoadDemo(t.Context(), st); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Date(2026, time.October, 23, 8, 0, 0, 0, time.UTC)
+	runner := app.Jobs(app.Deps{Store: st, Clock: clock.NewFixed(now), IDs: ids.V7{}})
+
+	statuses, err := runner.Statuses(t.Context())
+	if err != nil || len(statuses) != len(runner.Jobs()) {
+		t.Fatalf("statuses before the first run: %+v, %v", statuses, err)
+	}
+
+	for _, s := range statuses {
+		if !s.Last.ID.IsZero() {
+			t.Errorf("%s has a run before the first: %+v", s.Name, s.Last)
+		}
+	}
+
+	if err := runner.RunOnce(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	statuses, err = runner.Statuses(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var names []string
+
+	for _, s := range statuses {
+		names = append(names, s.Name)
+
+		if s.Every <= 0 || s.Last.Job != s.Name || s.Last.Result != domain.JobOK || !s.Last.StartedAt.Equal(now) {
+			t.Errorf("%s (every %s): latest run %+v, want an ok run at startup", s.Name, s.Every, s.Last)
+		}
+	}
+
+	if !slices.Contains(names, "generate-lessons") || !slices.Contains(names, "purge-personal-data") {
+		t.Errorf("jobs %v, want generate-lessons and purge-personal-data among them", names)
+	}
+
+	run, err := runner.RunNow(t.Context(), "generate-lessons")
+	if err != nil || run.Job != "generate-lessons" || run.Result != domain.JobOK || run.ID == statuses[0].Last.ID {
+		t.Fatalf("RunNow(generate-lessons) = %+v, %v", run, err)
+	}
+
+	if _, err := runner.RunNow(t.Context(), "no-such-job"); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("RunNow of an unknown job: %v, want not found", err)
 	}
 }
 

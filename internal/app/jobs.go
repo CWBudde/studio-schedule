@@ -12,7 +12,11 @@ import (
 
 // Jobs returns the background jobs of the application, built from the same
 // Deps as New. The caller runs them once at startup (RunOnce) and then in
-// the background (Run); see package jobs.
+// the background (Run); see package jobs. Every run takes the job's lock
+// in deps.Store, so two processes never run one job at once, and is
+// recorded there (ADR 0020). The command line lists the jobs and their
+// latest runs (Runner.Jobs, Runner.Statuses) and runs one on request
+// (Runner.RunNow).
 func Jobs(deps Deps) *jobs.Runner {
 	deps = deps.withDefaults()
 	lessons := service.NewLessonGenerator(deps.Store, deps.Clock, deps.IDs)
@@ -113,7 +117,7 @@ func Jobs(deps Deps) *jobs.Runner {
 		all[i].Run = measured(all[i], deps)
 	}
 
-	return jobs.NewRunner(deps.Logger, all...)
+	return jobs.NewRunner(jobs.Config{Logger: deps.Logger, Store: deps.Store, Clock: deps.Clock, IDs: deps.IDs}, all...)
 }
 
 // deliverPushJob is the name of the job that sends web push messages.
@@ -143,7 +147,8 @@ func deliverPush(deps Deps) jobs.Job {
 
 // measured returns the Run of j reporting each run to deps.Metrics: its
 // duration and whether it failed or panicked (the panic goes on to the
-// runner, which recovers and logs it).
+// runner, which recovers and logs it). It runs inside the job's lock, so
+// a skipped run is not observed.
 func measured(j jobs.Job, deps Deps) func(ctx context.Context) error {
 	return func(ctx context.Context) (err error) {
 		start := deps.Clock.Now()
