@@ -447,6 +447,24 @@ func TestScheduleWithoutSettings(t *testing.T) {
 	}
 }
 
+// TestScheduleTimeZone returns the school's time zone, and ErrNoSchool
+// without settings.
+func TestScheduleTimeZone(t *testing.T) {
+	t.Parallel()
+
+	f := newScheduleFixture(t)
+
+	loc, err := f.svc.TimeZone(t.Context())
+	if err != nil || loc.String() != "Europe/Berlin" {
+		t.Errorf("TimeZone() = %v, %v; want Europe/Berlin", loc, err)
+	}
+
+	svc := NewScheduleService(memory.New(), clock.NewFixed(time.Date(2026, time.October, 21, 10, 0, 0, 0, time.UTC)))
+	if _, err := svc.TimeZone(t.Context()); !errors.Is(err, ErrNoSchool) {
+		t.Errorf("without settings: want ErrNoSchool, got %v", err)
+	}
+}
+
 func TestLesson(t *testing.T) {
 	t.Parallel()
 

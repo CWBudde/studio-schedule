@@ -57,6 +57,29 @@ func (g *LessonGenerator) GenerateAhead(ctx context.Context) (int, error) {
 	})
 }
 
+// errUntilPast refuses GenerateUntil a last date before today.
+var errUntilPast error = &domain.FieldError{Field: "until", Msg: "the last date must not lie before today"}
+
+// GenerateUntil creates the missing lessons from today's school date
+// through until (inclusive) that have not started yet, like GenerateAhead
+// with until as the end of the horizon: the command line's
+// `lessons generate --until`. It returns how many it created; run again,
+// it creates none. A date before today is a *domain.FieldError on until.
+func (g *LessonGenerator) GenerateUntil(ctx context.Context, until domain.Date) (int, error) {
+	return g.generate(ctx, func(
+		_ context.Context, _ store.Tx, _ domain.Settings, loc *time.Location,
+	) (domain.Date, domain.Date, time.Time, error) {
+		now := g.clock.Now()
+		today := domain.DateOf(now, loc)
+
+		if until.Compare(today) < 0 {
+			return domain.Date{}, domain.Date{}, time.Time{}, errUntilPast
+		}
+
+		return today, until.AddDays(1), now, nil
+	})
+}
+
 // horizon returns the school dates [from, to) that generation keeps filled:
 // from today to max(7·(ReleaseWeeksAhead+2), visible days) + 7 days after
 // it (inclusive), visible days being the longest early access of any

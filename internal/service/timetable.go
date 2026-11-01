@@ -46,6 +46,30 @@ func (s *TimetableService) Terms(ctx context.Context) ([]domain.Term, error) {
 	return terms, nil
 }
 
+// CurrentTerm returns the term that includes today's school date, the one
+// that started last if terms overlap: the term the command line's class
+// list shows by default. Without one it is ErrNoCurrentTerm, which wraps
+// domain.ErrNotFound.
+func (s *TimetableService) CurrentTerm(ctx context.Context) (domain.Term, error) {
+	var term domain.Term
+
+	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		_, loc, err := loadSchool(ctx, tx)
+		if err != nil {
+			return err
+		}
+
+		term, err = currentTerm(ctx, tx, domain.DateOf(s.clock.Now(), loc))
+
+		return err
+	})
+	if err != nil {
+		return domain.Term{}, fmt.Errorf("current term: %w", err)
+	}
+
+	return term, nil
+}
+
 // TimetableClass is a weekly class with its staff, so the timetable can
 // name them even after they were deactivated (ADR 0007). Accompanist is zero
 // when there is none.

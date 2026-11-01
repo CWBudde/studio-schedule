@@ -128,3 +128,54 @@ func TestTimetableClassesTermWithoutClasses(t *testing.T) {
 		t.Fatalf("Classes() = %v, %v; want no classes", got, err)
 	}
 }
+
+// TestTimetableCurrentTerm returns the term that includes today's school
+// date, the later one where terms overlap, and ErrNoCurrentTerm outside the
+// terms.
+func TestTimetableCurrentTerm(t *testing.T) {
+	t.Parallel()
+
+	st := catalogDemoStore(t)
+	demo := seed.Demo().Terms[0]
+	at := func(d domain.Date) *service.TimetableService {
+		// Noon UTC is the same school date in Berlin.
+		now := time.Date(d.Year, d.Month, d.Day, 12, 0, 0, 0, time.UTC)
+
+		return service.NewTimetableService(st, clock.NewFixed(now), ids.NewSequence(), service.Mails{})
+	}
+
+	for _, d := range []domain.Date{demo.StartsOn, demo.EndsOn} {
+		if got, err := at(d).CurrentTerm(t.Context()); err != nil || got != demo {
+			t.Errorf("on %s: CurrentTerm() = %+v, %v; want the demo term", d, got, err)
+		}
+	}
+
+	for _, d := range []domain.Date{demo.StartsOn.AddDays(-1), demo.EndsOn.AddDays(1)} {
+		if _, err := at(d).CurrentTerm(t.Context()); !errors.Is(err, service.ErrNoCurrentTerm) ||
+			!errors.Is(err, domain.ErrNotFound) {
+			t.Errorf("on %s: want ErrNoCurrentTerm, got %v", d, err)
+		}
+	}
+
+	// A term that starts later and overlaps wins.
+	summer := domain.Term{
+		ID: mustParseID[domain.TermID](t, unknownID), Name: "Summer Intensive",
+		StartsOn: demo.EndsOn.AddDays(-10), EndsOn: demo.EndsOn.AddDays(20),
+	}
+
+	err := st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return tx.Terms().Create(ctx, summer)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := at(demo.EndsOn).CurrentTerm(t.Context()); err != nil || got != summer {
+		t.Errorf("overlap: CurrentTerm() = %+v, %v; want the summer term", got, err)
+	}
+
+	empty := service.NewTimetableService(memory.New(), clock.NewFixed(time.Time{}), ids.NewSequence(), service.Mails{})
+	if _, err := empty.CurrentTerm(t.Context()); !errors.Is(err, service.ErrNoSchool) {
+		t.Errorf("without settings: want ErrNoSchool, got %v", err)
+	}
+}

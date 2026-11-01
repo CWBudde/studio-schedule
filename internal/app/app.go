@@ -257,6 +257,9 @@ type Services struct {
 	Persons      *service.PersonService
 	Outbox       *service.OutboxService
 	Statistics   *service.StatisticsService
+	// Generator creates the lessons of the weekly classes: the
+	// generate-lessons job's, and `lessons generate` on the command line.
+	Generator *service.LessonGenerator
 	// Announcements wake the announcements job through Deps.Wake when one
 	// is due now; without a Waker they wait for the job's next tick.
 	Announcements *service.AnnouncementService
@@ -298,6 +301,7 @@ func newServices(deps Deps, renderer *mail.Renderer) Services {
 		Persons:    service.NewPersonService(deps.Store, deps.Clock, deps.IDs, mails),
 		Outbox:     service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer, receipts),
 		Statistics: service.NewStatisticsService(deps.Store, deps.Clock),
+		Generator:  service.NewLessonGenerator(deps.Store, deps.Clock, deps.IDs),
 		Announcements: service.NewAnnouncementService(deps.Store, deps.Clock, deps.IDs, renderer,
 			func() { deps.Wake.Wake(announcementsJob) }),
 		MailLog: service.NewMailLogService(deps.Store, deps.Clock, deps.IDs),

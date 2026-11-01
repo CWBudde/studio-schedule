@@ -628,3 +628,60 @@ func TestGenerateDemoData(t *testing.T) {
 		t.Fatalf("created = %d, want one lesson per demo class (%d)", created, want)
 	}
 }
+
+// TestGenerateUntil creates the lessons from today through the last date,
+// none that has started, and none again on a second run; a last date before
+// today is a field error on until.
+func TestGenerateUntil(t *testing.T) {
+	t.Parallel()
+
+	f := newGenFixture(t, seed.DemoSettings())
+	f.addClass(t, time.Friday, domain.TimeOfDay{Hour: 19})
+	f.addClass(t, time.Friday, domain.TimeOfDay{Hour: 21})
+
+	// 20:00 on Friday 2026-10-23 in Berlin: the 19:00 lesson has started.
+	gen := generatorAt(f.st, mustInstant(t, "2026-10-23T18:00:00Z"))
+
+	n, err := gen.GenerateUntil(t.Context(), mustDate(t, "2026-11-06"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{
+		"2026-10-23T19:00:00Z", // 21:00 today
+		"2026-10-30T18:00:00Z", "2026-10-30T20:00:00Z",
+		"2026-11-06T18:00:00Z", "2026-11-06T20:00:00Z", // the last date included
+	}
+	if got := lessonStarts(f.lessons(t)); n != len(want) || !slices.Equal(got, want) {
+		t.Fatalf("created %d lessons starting at %v, want %v", n, got, want)
+	}
+
+	if n, err := gen.GenerateUntil(t.Context(), mustDate(t, "2026-11-06")); n != 0 || err != nil {
+		t.Errorf("again: created %d, %v", n, err)
+	}
+
+	// Today is the earliest last date.
+	if n, err := gen.GenerateUntil(t.Context(), mustDate(t, "2026-10-23")); n != 0 || err != nil {
+		t.Errorf("today: created %d, %v", n, err)
+	}
+
+	var field *domain.FieldError
+	if _, err := gen.GenerateUntil(t.Context(), mustDate(t, "2026-10-22")); !errors.As(err, &field) ||
+		field.Field != "until" {
+		t.Errorf("yesterday: want a field error on until, got %v", err)
+	}
+
+	if len(f.lessons(t)) != len(want) {
+		t.Error("a refused run created lessons")
+	}
+}
+
+func TestGenerateUntilWithoutSettings(t *testing.T) {
+	t.Parallel()
+
+	_, err := generatorAt(memory.New(), mustInstant(t, "2026-10-23T10:00:00Z")).
+		GenerateUntil(t.Context(), mustDate(t, "2026-12-31"))
+	if !errors.Is(err, ErrNoSchool) {
+		t.Fatalf("want ErrNoSchool, got %v", err)
+	}
+}

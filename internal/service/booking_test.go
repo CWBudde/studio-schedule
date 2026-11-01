@@ -1322,13 +1322,35 @@ func TestLessonCountsBookingsOnce(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if sl.FreePlaces != 4 || (sl.Admin != nil && sl.Admin.ActiveBookings != 1) {
-			t.Errorf("%s: free places %d, admin %+v", p.GivenName, sl.FreePlaces, sl.Admin)
+		if sl.FreePlaces != 4 || sl.Booked != 1 || (sl.Admin != nil && sl.Admin.ActiveBookings != 1) {
+			t.Errorf("%s: free places %d, booked %d, admin %+v", p.GivenName, sl.FreePlaces, sl.Booked, sl.Admin)
 		}
 
 		if counting.counts != 1 {
 			t.Errorf("%s: active bookings counted %d times, want once", p.GivenName, counting.counts)
 		}
+	}
+}
+
+// TestScheduleCountsBooked gives each lesson of a schedule its active
+// bookings, for everyone: the command line's lesson list shows them.
+func TestScheduleCountsBooked(t *testing.T) {
+	t.Parallel()
+
+	f := newBookingFixture(t)
+	l := f.regular(t, "2026-10-22T16:00:00Z")
+	f.bookAs(t, f.mia, l)
+
+	svc := NewScheduleService(f.st, clock.NewFixed(mustInstant(t, bookingNow)))
+	day := domain.DateOf(l.StartsAt, berlin(t))
+
+	s, err := svc.Schedule(t.Context(), f.principal(t, f.olga), ScheduleQuery{From: day, To: day.AddDays(1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(s.Lessons) != 1 || s.Lessons[0].Booked != 1 || s.Lessons[0].FreePlaces != 4 {
+		t.Fatalf("schedule lessons %+v, want the lesson with one booking", s.Lessons)
 	}
 }
 

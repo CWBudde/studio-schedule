@@ -79,6 +79,10 @@ type ScheduledLesson struct {
 	// FreePlaces is the capacity minus the active bookings and the places
 	// that waiting-list invites hold, at least 0 (ADR 0010).
 	FreePlaces int
+	// Booked counts the active (not canceled) bookings: what the command
+	// line's lesson list shows beside the capacity. The API leaves it out of
+	// the schedule (the office's getLesson has it as admin.activeBookings).
+	Booked int
 	// BookingClosesAt is when booking closes: the booking cutoff before
 	// the start (ADR 0009).
 	BookingClosesAt time.Time
@@ -204,6 +208,25 @@ func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQ
 	}
 
 	return out, nil
+}
+
+// TimeZone returns the school's time zone, in which the command line
+// shows the dates and times of lessons. Without settings it is
+// ErrNoSchool.
+func (s *ScheduleService) TimeZone(ctx context.Context) (*time.Location, error) {
+	var loc *time.Location
+
+	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		_, loc, err = loadSchool(ctx, tx)
+
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("time zone: %w", err)
+	}
+
+	return loc, nil
 }
 
 // Lesson returns one lesson p may see; a zero p is a guest. A lesson that
@@ -446,6 +469,7 @@ func waitingPerson(person domain.Person, e domain.WaitlistEntry, open []domain.W
 // booking it closes and when canceling it becomes late (ADR 0009, ADR
 // 0010). It is the only place that sets them.
 func (sl *ScheduledLesson) setAvailability(settings domain.Settings, active, held int) {
+	sl.Booked = active
 	sl.FreePlaces = max(0, sl.Lesson.Capacity-active-held)
 	sl.BookingClosesAt = bookingClosesAt(settings, sl.Lesson)
 	sl.LateCancelFrom = lateCancelFrom(settings, sl.Lesson)
