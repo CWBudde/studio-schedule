@@ -1040,10 +1040,24 @@ command groups by need: recovery and diagnosis first, then data, then reports.
       (listTerms) marks the current term, `classes list [--term]` (listAllClasses, retired ones
       included) defaults to it (`TimetableService.CurrentTerm`). Deviation: no `--notify`, as
       `CancelLesson` always mails everyone booked: the command says so in its help and question
-- [ ] Passes and receipts: `passes list --person`, `receipts list --from --to`,
+- [x] Passes and receipts: `passes list --person`, `receipts list --from --to`,
       `receipts pdf <number> -o file`, `receipts export --year --format csv` (for the tax
       adviser). `receipts verify` checks the numbers are gapless per year, every Storno names its
-      original, and the totals match the lines
+      original, and the totals match the lines (2026-11-01): `office` like their operations, their
+      JSON the bodies of listPersonPasses and searchReceipts (`httpapi.NewAdminPassList`,
+      `NewReceiptList`). `passes list` prints type, visits used and left, valid from/until, status,
+      usable today and the payer ("Deleted person" if anonymized). `receipts list` defaults to the
+      year to date (`ReceiptService.Issued` reads the years the range touches). `receipts pdf`
+      finds the receipt by its number (`ByNumber`) and starts the renderer only for a receipt
+      without a stored PDF (the seed's), which it then stores, as the download does.
+      `receipts export` writes RFC 4180 CSV, one line per line item (columns in docs/cli.md), formula
+      injection neutralised in the text cells. `receipts verify [--year]` is an operator command
+      (`ReceiptService.Verify`): gaps, a number that does not end in its year and sequence, a
+      Storno that cancels no sale or does not negate it, totals that are not the lines' sums; exit
+      1 on a finding. Deviations, amended in the ADR: the file is `--file`/`-f` (mode 0600,
+      `--force`), not `-o`, which is `--output`'s short flag; CSV is the only format, so there is no
+      `--format`, and `--output json` is refused; duplicate numbers and a second Storno are not
+      checked, as both stores refuse them (unique constraints)
 - [x] Integrity: `db check` compares pass visits with redemptions, bookings with capacity,
       tombstones with what still references them, and the receipt counters. It is read-only and
       exits 1 on a finding (2026-11-01): `service.IntegrityService.Check` (the MCP server's entry)

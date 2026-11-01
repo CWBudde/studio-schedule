@@ -203,3 +203,9 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
   `--output json`. A command whose operation answers without a body
   (`persons duplicates dismiss`) prints nothing with `--output json`. `persons merge --apply`
   runs the preview first, so it asks with both names and refuses a conflict before the question.
+- **Receipts write files with `--file` and know one format.** `receipts pdf` writes its PDF with
+  `--file`/`-f` (mode 0600, an existing file only with `--force`), since `-o` is `--output`'s
+  short flag. `receipts export` writes CSV only: it has no `--format` and refuses
+  `--output json`. `receipts verify` does not look for duplicate numbers or a receipt canceled
+  twice, which both stores refuse with unique constraints; it checks instead that a number ends in
+  its year and sequence and that a Storno negates its original.
