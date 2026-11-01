@@ -164,6 +164,11 @@ func (h *handlers) listDuplicates(ctx context.Context, _ *struct{}) (*DuplicateL
 		return nil, h.toHTTPError(ctx, err)
 	}
 
+	return &DuplicateListOutput{Body: NewDuplicateList(pairs)}, nil
+}
+
+// NewDuplicateList is the response body of listDuplicates for pairs.
+func NewDuplicateList(pairs []service.DuplicatePair) DuplicateList {
 	items := make([]DuplicatePair, 0, len(pairs))
 
 	for _, p := range pairs {
@@ -179,7 +184,7 @@ func (h *handlers) listDuplicates(ctx context.Context, _ *struct{}) (*DuplicateL
 		items = append(items, pair)
 	}
 
-	return &DuplicateListOutput{Body: DuplicateList{Items: items}}, nil
+	return DuplicateList{Items: items}
 }
 
 func duplicateCandidate(c service.DuplicateCandidate) DuplicateCandidate {
@@ -220,8 +225,14 @@ func (h *handlers) mergePersons(ctx context.Context, in *MergeInput) (*MergeSumm
 		return nil, h.toHTTPError(ctx, err)
 	}
 
+	return &MergeSummaryOutput{Body: NewMergeSummary(sum, in.Body.Apply)}, nil
+}
+
+// NewMergeSummary is the response body of mergePersons for sum, a merge
+// done (applied) or a preview.
+func NewMergeSummary(sum service.MergeSummary, applied bool) MergeSummary {
 	out := MergeSummary{
-		Applied: in.Body.Apply, Survivor: adminPerson(sum.Survivor), BookingsMoved: sum.BookingsMoved, History: sum.History,
+		Applied: applied, Survivor: adminPerson(sum.Survivor), BookingsMoved: sum.BookingsMoved, History: sum.History,
 		Canceled: make([]MergeCanceled, 0, len(sum.Canceled)), WaitlistMoved: sum.WaitlistMoved,
 		WaitlistWithdrawn: sum.WaitlistWithdrawn, MembershipsMoved: sum.MembershipsMoved,
 		MembershipsDropped: make([]MergeClass, 0, len(sum.MembershipsDropped)), PassesMoved: sum.PassesMoved,
@@ -243,5 +254,5 @@ func (h *handlers) mergePersons(ctx context.Context, in *MergeInput) (*MergeSumm
 		})
 	}
 
-	return &MergeSummaryOutput{Body: out}, nil
+	return out
 }

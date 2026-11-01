@@ -145,7 +145,12 @@ func (h *handlers) searchPersons(ctx context.Context, in *PersonSearchInput) (*P
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	return &PersonMatchListOutput{Body: PersonMatchList{Items: personMatches(persons)}}, nil
+	return &PersonMatchListOutput{Body: NewPersonMatchList(persons)}, nil
+}
+
+// NewPersonMatchList is the response body of searchPersons for persons.
+func NewPersonMatchList(persons []domain.Person) PersonMatchList {
+	return PersonMatchList{Items: personMatches(persons)}
 }
 
 func personMatch(p domain.Person) PersonMatch {
@@ -271,6 +276,11 @@ func (h *handlers) getPerson(ctx context.Context, in *PersonRefInput) (*PersonDe
 		return nil, h.toHTTPError(ctx, err)
 	}
 
+	return &PersonDetailOutput{Body: NewPersonDetail(d)}, nil
+}
+
+// NewPersonDetail is the response body of getPerson for d.
+func NewPersonDetail(d service.PersonDetail) PersonDetail {
 	out := PersonDetail{
 		AdminPerson: adminPerson(d.Person),
 		Guardians:   personMatches(d.Guardians),
@@ -303,7 +313,7 @@ func (h *handlers) getPerson(ctx context.Context, in *PersonRefInput) (*PersonDe
 		})
 	}
 
-	return &PersonDetailOutput{Body: out}, nil
+	return out
 }
 
 func (h *handlers) createPerson(ctx context.Context, in *PersonRecordInput) (*AdminPersonOutput, error) {

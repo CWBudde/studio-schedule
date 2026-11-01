@@ -183,7 +183,7 @@ func (h *handlers) exportPerson(ctx context.Context, in *PersonRefInput) (*Perso
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	return &PersonExportOutput{Body: personExport(x)}, nil
+	return &PersonExportOutput{Body: NewPersonExport(x)}, nil
 }
 
 func (h *handlers) exportMyData(ctx context.Context, in *ExportMyDataInput) (*PersonExportOutput, error) {
@@ -194,7 +194,7 @@ func (h *handlers) exportMyData(ctx context.Context, in *ExportMyDataInput) (*Pe
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	return &PersonExportOutput{Body: personExport(x)}, nil
+	return &PersonExportOutput{Body: NewPersonExport(x)}, nil
 }
 
 func (h *handlers) anonymizePerson(ctx context.Context, in *PersonRefInput) (*AnonymizeOutput, error) {
@@ -205,11 +205,16 @@ func (h *handlers) anonymizePerson(ctx context.Context, in *PersonRefInput) (*An
 		return nil, h.privacyError(ctx, err)
 	}
 
-	return &AnonymizeOutput{Body: AnonymizeResult{
+	return &AnonymizeOutput{Body: NewAnonymizeResult(sum)}, nil
+}
+
+// NewAnonymizeResult is the response body of anonymizePerson for sum.
+func NewAnonymizeResult(sum service.AnonymizeSummary) AnonymizeResult {
+	return AnonymizeResult{
 		Person: adminPerson(sum.Person), BookingsCanceled: sum.BookingsCanceled, WaitlistWithdrawn: sum.WaitlistWithdrawn,
 		MembershipsEnded: sum.MembershipsEnded, LinksRemoved: sum.LinksRemoved, StaffUnlinked: sum.StaffUnlinked,
 		AccountDeleted: sum.AccountDeleted,
-	}}, nil
+	}
 }
 
 func (h *handlers) disableAccount(ctx context.Context, in *AccountRefInput) (*AccountEntryOutput, error) {
@@ -474,8 +479,9 @@ type ExportReceipt struct {
 	Canceled      bool             `doc:"Whether a sale was canceled." json:"canceled"`
 }
 
-// personExport is the API form of an export.
-func personExport(x service.PersonExport) PersonExport {
+// NewPersonExport is the response body of exportPerson and exportMyData for
+// x.
+func NewPersonExport(x service.PersonExport) PersonExport {
 	p := x.Person
 	out := PersonExport{
 		Format: exportFormat, Version: service.ExportVersion, ExportedAt: x.ExportedAt.UTC(),
