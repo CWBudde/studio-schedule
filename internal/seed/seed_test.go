@@ -2164,3 +2164,43 @@ func TestWerkstattPlaces(t *testing.T) {
 		byRoom[l.RoomID] = append(byRoom[l.RoomID], l)
 	}
 }
+
+// TestDemoRoomPositions: every school's rooms are numbered from 1 within
+// their location in the order of its table; Werkstatt's halls come before
+// its training room.
+func TestDemoRoomPositions(t *testing.T) {
+	t.Parallel()
+
+	for _, school := range seed.Schools() {
+		d, err := seed.DemoSchoolAt(seed.FixedDemoAnchor, school)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		next := map[domain.LocationID]int{}
+		for _, r := range d.Rooms {
+			next[r.LocationID]++
+			if r.Position != next[r.LocationID] {
+				t.Errorf("%s: room %s at position %d, want %d", school, r.Name, r.Position, next[r.LocationID])
+			}
+		}
+
+		if len(next) != len(d.Locations) {
+			t.Errorf("%s: rooms at %d of %d locations", school, len(next), len(d.Locations))
+		}
+	}
+
+	werkstatt, err := seed.DemoSchoolAt(seed.FixedDemoAnchor, seed.SchoolWerkstatt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got []string
+	for _, r := range werkstatt.Rooms {
+		got = append(got, fmt.Sprintf("%d %s", r.Position, r.Name))
+	}
+
+	if want := []string{"1 Oben", "2 Unten", "3 Trainingsraum"}; !slices.Equal(got, want) {
+		t.Errorf("werkstatt rooms = %q, want %q", got, want)
+	}
+}

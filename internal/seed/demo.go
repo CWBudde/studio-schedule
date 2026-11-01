@@ -666,8 +666,10 @@ func (b *builder) location(spec locationSpec) {
 	l := domain.Location{ID: ids.New[domain.LocationID](b.seq), Name: spec.name, Address: spec.address}
 	b.d.Locations = append(b.d.Locations, l)
 
-	for _, r := range spec.rooms {
-		room := domain.Room{ID: ids.New[domain.RoomID](b.seq), LocationID: l.ID, Name: r.name, Capacity: r.capacity}
+	for i, r := range spec.rooms {
+		room := domain.Room{
+			ID: ids.New[domain.RoomID](b.seq), LocationID: l.ID, Name: r.name, Capacity: r.capacity, Position: i + 1,
+		}
 		b.d.Rooms = append(b.d.Rooms, room)
 
 		if len(r.holds) == 0 {
