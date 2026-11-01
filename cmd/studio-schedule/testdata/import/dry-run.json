@@ -1,0 +1,159 @@
+{
+  "applied": false,
+  "counts": {
+    "rows": 6,
+    "created": 4,
+    "updated": 1,
+    "unchanged": 0,
+    "failed": 1,
+    "guardiansCreated": 2,
+    "guardiansUpdated": 0,
+    "linksAdded": 5
+  },
+  "rows": [
+    {
+      "line": 2,
+      "memberNo": "M-1042",
+      "givenName": "Lena",
+      "familyName": "Quillfeather",
+      "personId": "00000000-0000-7000-8000-000000000326",
+      "action": "update",
+      "changes": [
+        "phone",
+        "notes"
+      ],
+      "issues": [],
+      "duplicates": [],
+      "guardians": []
+    },
+    {
+      "line": 3,
+      "memberNo": "M-2001",
+      "givenName": "Paula",
+      "familyName": "Amberly",
+      "action": "create",
+      "changes": [
+        "memberNo",
+        "givenName",
+        "familyName",
+        "notes",
+        "birthDate"
+      ],
+      "issues": [],
+      "duplicates": [],
+      "guardians": [
+        {
+          "slot": 1,
+          "givenName": "Clara",
+          "familyName": "Amberly",
+          "personId": "00000000-0000-7000-8000-000000000001",
+          "action": "unchanged",
+          "matchedBy": "email",
+          "linked": true
+        },
+        {
+          "slot": 2,
+          "givenName": "Tom",
+          "familyName": "Amberly",
+          "personId": "00000000-0000-7000-8000-000000000003",
+          "action": "unchanged",
+          "matchedBy": "name",
+          "linked": true
+        }
+      ]
+    },
+    {
+      "line": 4,
+      "memberNo": "M-2002",
+      "givenName": "Theo",
+      "familyName": "Windmere",
+      "action": "create",
+      "changes": [
+        "memberNo",
+        "givenName",
+        "familyName",
+        "notes",
+        "birthDate"
+      ],
+      "issues": [],
+      "duplicates": [],
+      "guardians": [
+        {
+          "slot": 1,
+          "givenName": "Greta",
+          "familyName": "Windmere",
+          "action": "create",
+          "linked": true
+        }
+      ]
+    },
+    {
+      "line": 5,
+      "memberNo": "M-2003",
+      "givenName": "Mila",
+      "familyName": "Windmere",
+      "action": "create",
+      "changes": [
+        "memberNo",
+        "givenName",
+        "familyName",
+        "notes",
+        "birthDate"
+      ],
+      "issues": [],
+      "duplicates": [],
+      "guardians": [
+        {
+          "slot": 1,
+          "givenName": "Greta",
+          "familyName": "Windmere",
+          "action": "unchanged",
+          "matchedBy": "email",
+          "linked": true
+        },
+        {
+          "slot": 2,
+          "givenName": "Henrik",
+          "familyName": "Windmere",
+          "action": "create",
+          "linked": true
+        }
+      ]
+    },
+    {
+      "line": 6,
+      "memberNo": "M-2004",
+      "givenName": "Oskar",
+      "familyName": "Brookfield",
+      "action": "create",
+      "changes": [
+        "memberNo",
+        "givenName",
+        "familyName",
+        "email",
+        "phone",
+        "notes",
+        "birthDate"
+      ],
+      "issues": [],
+      "duplicates": [],
+      "guardians": []
+    },
+    {
+      "line": 7,
+      "memberNo": "M-2005",
+      "givenName": "Ina",
+      "familyName": "Fallowmere",
+      "action": "error",
+      "changes": [],
+      "issues": [
+        {
+          "code": "invalid",
+          "field": "birthDate"
+        }
+      ],
+      "duplicates": [],
+      "guardians": []
+    }
+  ]
+}

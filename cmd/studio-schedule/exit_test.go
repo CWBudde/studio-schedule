@@ -25,9 +25,10 @@ func mainRun(args ...string) (code int, stdout, stderr string) {
 	return code, out.String(), errOut.String()
 }
 
-// TestRunMainExitStatus pins the exit status contract of the binary: 0 on
-// success, 1 with "error: <err>" on stderr (and nothing else, the usage
-// is silenced) when the command fails.
+// TestRunMainExitStatus pins the exit status contract of the binary (ADR
+// 0020): 0 on success; on a failure "error: <err>" on stderr (and nothing
+// else, the usage is silenced) with 1 when the command failed and 2 for a
+// usage error: an unknown command or flag, a missing database URL.
 func TestRunMainExitStatus(t *testing.T) {
 	t.Parallel()
 
@@ -36,24 +37,38 @@ func TestRunMainExitStatus(t *testing.T) {
 		t.Errorf("version: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 
+	// Nothing listens on port 1, so connecting fails.
+	unreachable := "postgres://app@127.0.0.1:1/studio?connect_timeout=2"
+
 	for name, tc := range map[string]struct {
 		args   []string
+		code   int
 		stderr string
 	}{
 		"unknown command": {
-			args:   []string{"nonsense"},
+			args: []string{"nonsense"}, code: 2,
 			stderr: "error: unknown command \"nonsense\" for \"studio-schedule\"\n",
 		},
-		"unknown flag":          {args: []string{"version", "--loud"}, stderr: "error: unknown flag: --loud\n"},
-		"seed needs a database": {args: []string{"seed"}, stderr: "error: " + errNoDatabaseURL.Error() + "\n"},
+		"unknown flag": {args: []string{"version", "--loud"}, code: 2, stderr: "error: unknown flag: --loud\n"},
+		"extra argument": {
+			args: []string{"version", "x"}, code: 2,
+			stderr: "error: unknown command \"x\" for \"studio-schedule version\"\n",
+		},
+		"seed needs a database": {
+			args: []string{"seed"}, code: 2,
+			stderr: "error: " + errNoDatabaseURL.Error() + "\n",
+		},
+		"invalid configuration": {args: []string{"serve", "--addr", "nonsense"}, code: 2},
+		"no database to reach":  {args: []string{"seed", "--database-url", unreachable}, code: 1},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			code, stdout, stderr := mainRun(tc.args...)
-			if code != 1 || stdout != "" || stderr != tc.stderr {
-				t.Errorf("%v: exit %d, stdout %q, stderr %q; want exit 1, stderr %q", tc.args, code, stdout, stderr,
-					tc.stderr)
+			if code != tc.code || stdout != "" || (tc.stderr != "" && stderr != tc.stderr) ||
+				!strings.HasPrefix(stderr, "error: ") {
+				t.Errorf("%v: exit %d, stdout %q, stderr %q; want exit %d, stderr %q", tc.args, code, stdout, stderr,
+					tc.code, tc.stderr)
 			}
 		})
 	}
@@ -80,9 +95,16 @@ func TestMainProcess(t *testing.T) {
 		args           string
 		code           int
 		stdout, stderr string
+		// prefix: stderr starts with stderr.
+		prefix bool
 	}{
 		"success": {args: "version", stdout: version + "\n"},
-		"failure": {args: "seed", code: 1, stderr: "error: " + errNoDatabaseURL.Error() + "\n"},
+		"usage":   {args: "seed", code: 2, stderr: "error: " + errNoDatabaseURL.Error() + "\n"},
+		// The driver's message differs between machines: its start.
+		"failure": {
+			args: "seed\n--database-url\npostgres://app@127.0.0.1:1/studio?connect_timeout=2", code: 1,
+			stderr: "error: postgres: check schema: ", prefix: true,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -106,7 +128,12 @@ func TestMainProcess(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if code != tc.code || stdout.String() != tc.stdout || stderr.String() != tc.stderr {
+			stderrOK := stderr.String() == tc.stderr
+			if tc.prefix {
+				stderrOK = strings.HasPrefix(stderr.String(), tc.stderr)
+			}
+
+			if code != tc.code || stdout.String() != tc.stdout || !stderrOK {
 				t.Errorf("studio-schedule %s: exit %d, stdout %q, stderr %q; want exit %d, stdout %q, stderr %q",
 					tc.args, code, stdout.String(), stderr.String(), tc.code, tc.stdout, tc.stderr)
 			}

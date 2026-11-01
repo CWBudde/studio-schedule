@@ -1,0 +1,8 @@
+line 2  update  M-1042  Lena Quillfeather  phone, notes
+line 3  create  M-2001  Paula Amberly      memberNo, givenName, familyName, notes, birthDate; guardian Clara Amberly: unchanged, linked; guardian Tom Amberly: unchanged, linked
+line 4  create  M-2002  Theo Windmere      memberNo, givenName, familyName, notes, birthDate; guardian Greta Windmere: create, linked
+line 5  create  M-2003  Mila Windmere      memberNo, givenName, familyName, notes, birthDate; guardian Greta Windmere: unchanged, linked; guardian Henrik Windmere: create, linked
+line 6  create  M-2004  Oskar Brookfield   memberNo, givenName, familyName, email, phone, notes, birthDate
+line 7  error   M-2005  Ina Fallowmere     birthDate: invalid
+would import 6 rows: 4 created, 1 updated, 0 unchanged, 1 failed; guardians: 2 created, 0 updated, 5 links added
+dry run: nothing was written; run again with --apply to import

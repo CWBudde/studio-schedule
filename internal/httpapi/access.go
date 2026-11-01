@@ -30,8 +30,9 @@ const (
 // value is published as the x-access extension in the OpenAPI document.
 const accessKey = "x-access"
 
-// minRole is the least role an access level admits; RoleGuest for public.
-func (a Access) minRole() (domain.Role, bool) {
+// MinRole is the least role an access level admits; RoleGuest for public.
+// The command line checks its commands' levels with it (ADR 0020).
+func (a Access) MinRole() (domain.Role, bool) {
 	switch a {
 	case AccessPublic:
 		return domain.RoleGuest, true
@@ -60,7 +61,7 @@ func register[I, O any](
 // Declare returns op with its access level set, for operations registered
 // with huma.Register directly.
 func Declare(op huma.Operation, access Access) huma.Operation {
-	if _, ok := access.minRole(); !ok {
+	if _, ok := access.MinRole(); !ok {
 		panic("httpapi: operation " + op.OperationID + " has an unknown access level " + string(access))
 	}
 
@@ -87,7 +88,7 @@ func (h *handlers) accessMiddleware(api huma.API) func(huma.Context, func(huma.C
 	return func(ctx huma.Context, next func(huma.Context)) {
 		access, _ := ctx.Operation().Metadata[accessKey].(Access)
 
-		minimum, ok := access.minRole()
+		minimum, ok := access.MinRole()
 		if !ok {
 			// Fail closed: an operation registered without a level.
 			h.deps.Logger.ErrorContext(ctx.Context(), "operation without access level",

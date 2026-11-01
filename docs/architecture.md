@@ -318,6 +318,24 @@ background image is a setting of its own, stored like the receipt logo; only Wer
 - **Demo:** the web demo offers one fictional school per theme ([demo-mode.md](demo-mode.md), "Two
   demo schools"); `web/e2e/werkstatt.spec.ts` drives the Werkstatt one.
 
+## Command line
+
+The binary's commands administer a school from the server's shell
+([ADR 0020](decisions/0020-command-line.md)); there is no remote mode. `cmd/studio-schedule/cli` is
+the command layer: a command is a `cli.Spec` (its use, flags, access level, whether it is
+destructive, what it prints as JSON), and the layer loads the configuration, opens the database
+after checking its schema, builds the services with `app.NewServices` (the same as `app.New`'s, so
+a command and its HTTP operation share their rules, validation and audit), resolves the account of
+`--as` (or `STUDIO_AS`) through `service.AuthService.Actor` and checks its role against the access
+level. The principal carries `Via` (the command line and the OS user), which every audit event
+written for it stores in `AuditDetails.Via`. The layer also presents the result (text, or one JSON
+document with `--output json`), maps errors to exit codes 0–4 and stderr (`ExitCode`, `Report`),
+asks before a destructive change (`Env.Confirm`, `--yes`) and reads secrets and search terms from
+stdin (`Env.ReadLine`). The commands stay thin, one file per group in `cmd/studio-schedule`, each
+added with one line in `root.go`. Tests run the tree in-process (`cliRun`) on the memory store and
+PostgreSQL, with golden files for the output, and [cli.md](cli.md), the reference, is generated
+from the tree (`just cli-docs`); CI fails when it is stale, as for `api/openapi.json`.
+
 ## Testing
 
 - **Layers:** each package tests its own code. The stores share the `storetest` contract suite

@@ -226,7 +226,7 @@ func TestUnknownAccessLevel(t *testing.T) {
 	t.Parallel()
 
 	for _, a := range []Access{"", "superuser", "Admin"} {
-		if role, ok := a.minRole(); ok || role != "" {
+		if role, ok := a.MinRole(); ok || role != "" {
 			t.Errorf("minRole(%q) = %q, %v; want none", a, role, ok)
 		}
 

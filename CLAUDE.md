@@ -36,6 +36,7 @@ just lint        # golangci-lint + js/wasm vet
 just fix         # golangci-lint --fix, then fmt
 just fmt         # treefmt + prettier
 just gen-api     # after changing any HTTP operation: regenerates api/openapi.json + TS types
+just cli-docs    # after changing a command: regenerate docs/cli.md (CI checks it)
 just web-check   # pnpm -C web check (eslint, tsc, prettier) && pnpm -C web test (vitest)
 just demo-serve  # WASM demo locally
 just wasm-smoke  # builds app.wasm, smoke-tests the bridge and the receipt renderer in Node
@@ -196,6 +197,15 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   the causing transaction, e.g. `waitlister.invite`; the `deliver-push` job), the repos
   `PushSubscriptions()`/`PushOutbox()`, the demo's sender `wasmbridge.PushSender` (worker → page →
   `showNotification`), and the account page's `web/src/features/push`.
+- **Command line:** ADR 0020. `cmd/studio-schedule/cli` is the layer: `cli.Spec` (use, flags,
+  access level, destructive, the `--output json` schema), `cli.Env` (services, principal, clock),
+  the `Output` presenter (text or JSON), `ExitCode`/`Report` (errors to exit codes 0–4 and stderr),
+  `Env.Confirm` and `Env.ReadLine` (secrets and search terms from stdin, never arguments). Commands
+  stay thin in `cmd/studio-schedule`, one file per group, registered with one line in `root.go`.
+  `--as`/`STUDIO_AS` resolves through `service.AuthService.Actor`; the principal's `Via` lands in
+  `AuditDetails.Via`. The services come from `app.NewServices`, the same as `app.New`'s. Tests run
+  the tree in-process with `cliRun` (`clirun_test.go`) on both stores, goldens in `testdata/`
+  (`-update`). `docs/cli.md` is generated from the tree (`clidocs_test.go`, `just cli-docs`).
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),

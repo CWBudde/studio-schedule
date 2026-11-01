@@ -24,9 +24,11 @@ var documentedOnly = []string{"XDG_CACHE_HOME"}
 // TestConfigurationReference fails when docs/operations.md and the code
 // disagree: every environment variable of internal/config (its Env*
 // constants) must be in the table "Environment variables", with the flag
-// that config.Load pairs it with (or none) in its column "Flag", every flag
-// of every command in the table "Commands and flags", and neither table may
-// name a variable or flag that the code does not have.
+// that config.Load pairs it with (or none) in its column "Flag", every
+// global flag (the root's persistent flags) in the table "Global flags",
+// with that variable (or none) in its second column, every flag of every
+// command in the table "Commands and flags", and no table may name a
+// variable or flag that the code does not have.
 func TestConfigurationReference(t *testing.T) {
 	t.Parallel()
 
@@ -46,7 +48,7 @@ func TestConfigurationReference(t *testing.T) {
 			t.Fatalf("%s: row %q has no flag column", operationsDoc, row)
 		}
 
-		documented[codeSpan(t, row[0])] = flagCell(t, row[1])
+		documented[codeSpan(t, row[0])] = optionalCell(t, row[1])
 	}
 
 	for _, name := range append(envVars, documentedOnly...) {
@@ -67,6 +69,44 @@ func TestConfigurationReference(t *testing.T) {
 		t.Errorf("%s: the table \"Environment variables\" names %s, which the code does not read", operationsDoc, name)
 	}
 
+	root := newRootCmd(nil)
+
+	// Global flags: the flag, as `--name`, and the variable that config.Load
+	// pairs it with, as `NAME` or a dash.
+	envOf := map[string]string{}
+	for env, flag := range pairs {
+		envOf[flag] = env
+	}
+
+	globals := map[string]string{}
+	for _, row := range tableRows(t, string(doc), "Global flags") {
+		if len(row) < 2 {
+			t.Fatalf("%s: row %q has no variable column", operationsDoc, row)
+		}
+
+		globals[codeSpan(t, row[0])] = optionalCell(t, row[1])
+	}
+
+	root.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+		name := "--" + f.Name
+
+		env, ok := globals[name]
+		if !ok {
+			t.Errorf("%s: the table \"Global flags\" lacks %s", operationsDoc, name)
+		}
+
+		if want := envOf[name]; ok && env != want {
+			t.Errorf("%s: the table \"Global flags\" gives %s the variable %q, but the code pairs it with %q",
+				operationsDoc, name, env, want)
+		}
+
+		delete(globals, name)
+	})
+
+	for name := range globals {
+		t.Errorf("%s: the table \"Global flags\" names %s, which is no global flag", operationsDoc, name)
+	}
+
 	// Flags: the command (its first word) and the flag, as `--name`.
 	flags := map[string]bool{}
 	for _, row := range tableRows(t, string(doc), "Commands and flags") {
@@ -78,7 +118,7 @@ func TestConfigurationReference(t *testing.T) {
 		flags[command+" "+codeSpan(t, row[1])] = true
 	}
 
-	for _, f := range commandFlags(newRootCmd(nil)) {
+	for _, f := range commandFlags(root) {
 		if !flags[f] {
 			t.Errorf("%s: the table \"Commands and flags\" lacks %s", operationsDoc, f)
 		}
@@ -163,9 +203,9 @@ func codeFence(line string) string {
 	return ""
 }
 
-// flagCell returns the flag of a cell of the column "Flag": the text of its
-// code span, or "" for a dash (no flag).
-func flagCell(t *testing.T, cell string) string {
+// optionalCell returns the text of the code span of a cell that names a
+// flag or variable, or "" for a dash (none).
+func optionalCell(t *testing.T, cell string) string {
 	t.Helper()
 
 	switch cell {

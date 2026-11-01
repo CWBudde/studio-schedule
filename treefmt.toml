@@ -21,6 +21,8 @@ excludes = [
     "internal/webui/dist/**",
     # Generated from the Go code (just gen-api), never edited by hand.
     "api/openapi.json",
+    # Golden files: the commands' exact output (go test ./cmd/studio-schedule -update).
+    "cmd/studio-schedule/testdata/**",
     ".release-please-manifest.json",
 ]
 

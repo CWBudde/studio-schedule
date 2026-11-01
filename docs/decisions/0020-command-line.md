@@ -60,8 +60,8 @@ account.
 
 ### Output and exit codes
 
-- **Text by default:** tables via `text/tabwriter`, one record per line, with a header line only
-  on a terminal. Dates and times are in the school's time zone, never the machine's.
+- **Text by default:** aligned tables, one record per line, with a header line only on a
+  terminal (see the amendment on `text/tabwriter`). Dates and times are in the school's time zone, never the machine's.
 - **`--output json`:** one JSON document on stdout. Where a command mirrors an API operation, the
   document is the operation's response body, with the field names and types of the OpenAPI schema
   (the generated `api/openapi.json` is the contract). A command without an operation documents its
@@ -128,3 +128,14 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
 - `job_runs` is a new table, and every job run takes a lock. A school that runs two `serve`
   instances no longer runs the same job twice at once.
 - A remote mode with tokens and an HTTP client stays possible, and stays unbuilt.
+
+## Amendment (2026-11-01, the command layer)
+
+- **Tables are aligned by the layer, not `text/tabwriter`.** `tabwriter` counts the bytes of a
+  color's escape sequence as width, so on a color terminal a bold header or a colored cell
+  shifted its column. The presenter (`cli.Text`) pads each column to its widest visible cell
+  instead; on a pipe the output is the same as `tabwriter`'s.
+- **Commands not yet on the layer print text only.** `serve`, `migrate`, `seed`, `init`,
+  `healthcheck`, `openapi`, `version`, `vapid-keys` and `completion` refuse `--as`, `--yes` and
+  `--output json` with exit code 2 rather than ignoring them. `--database-url` is a global flag
+  that every command reads.

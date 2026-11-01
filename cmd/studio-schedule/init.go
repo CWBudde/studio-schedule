@@ -56,14 +56,7 @@ func (o *initOptions) fields() []initField {
 type storeOpener func(ctx context.Context, databaseURL string) (st store.Store, release func(), err error)
 
 func newInitCmd(env config.LookupFunc) *cobra.Command {
-	return newInitCmdWith(env, func(ctx context.Context, databaseURL string) (store.Store, func(), error) {
-		st, err := openPostgres(ctx, databaseURL)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return st, st.Close, nil
-	})
+	return newInitCmdWith(env, openDatabase)
 }
 
 // newInitCmdWith is the init command with the store from open (tests use
@@ -83,10 +76,7 @@ func newInitCmdWith(env config.LookupFunc, open storeOpener) *cobra.Command {
 			"school is set up already.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			var flags config.Flags
-			if cmd.Flags().Changed(config.FlagDatabaseURL) {
-				flags.DatabaseURL = &o.db.url
-			}
+			flags := config.Flags{DatabaseURL: o.db.explicit(cmd)}
 
 			if cmd.Flags().Changed(config.FlagBaseURL) {
 				flags.BaseURL = &o.baseURL
@@ -116,7 +106,6 @@ func newInitCmdWith(env config.LookupFunc, open storeOpener) *cobra.Command {
 		},
 	}
 
-	o.db.register(cmd.Flags())
 	cmd.Flags().StringVar(&o.baseURL, config.FlagBaseURL, "",
 		"public origin of the app that the setup link points to (env "+config.EnvBaseURL+")")
 

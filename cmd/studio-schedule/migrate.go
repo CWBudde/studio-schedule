@@ -27,8 +27,6 @@ func newMigrateCmd(env config.LookupFunc) *cobra.Command {
 		Args: cobra.NoArgs,
 	}
 
-	db.register(cmd.PersistentFlags())
-
 	// withMigrator runs fn with a migrator for the configured database.
 	withMigrator := func(cmd *cobra.Command, fn func(ctx context.Context, m *postgres.Migrator, out io.Writer) error) error {
 		databaseURL, err := db.load(cmd, env)

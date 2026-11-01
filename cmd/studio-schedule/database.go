@@ -5,15 +5,15 @@ import (
 	"errors"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 
+	"github.com/cwbudde/studio-schedule/cmd/studio-schedule/cli"
 	"github.com/cwbudde/studio-schedule/internal/config"
 	"github.com/cwbudde/studio-schedule/internal/store/postgres"
 )
 
 var (
 	// errNoDatabaseURL is returned by the commands that need a database.
-	errNoDatabaseURL = errors.New("no database URL: set " + config.EnvDatabaseURL + " or --database-url")
+	errNoDatabaseURL = cli.ErrNoDatabaseURL
 	// errSchemaOutdated is returned when the database lacks migrations that
 	// the binary embeds.
 	errSchemaOutdated = errors.New("the database schema is not up to date: run `studio-schedule migrate up`")
@@ -22,23 +22,26 @@ var (
 	errSchemaNewer = errors.New("the database schema is newer than this binary: run a newer studio-schedule")
 )
 
-const databaseURLUsage = "PostgreSQL connection URL or key=value DSN; prefer the env var, flags are " +
-	"visible in the process list (env " + config.EnvDatabaseURL + ")"
+// databaseFlag reads the global --database-url (cli.App.Wire) for the
+// commands that need a database.
+type databaseFlag struct{}
 
-// databaseFlag binds --database-url for the commands that need a database.
-type databaseFlag struct{ url string }
+// explicit returns --database-url if it was given.
+func (databaseFlag) explicit(cmd *cobra.Command) *string {
+	f := cmd.Flags().Lookup(config.FlagDatabaseURL)
+	if f == nil || !f.Changed {
+		return nil
+	}
 
-func (f *databaseFlag) register(flags *pflag.FlagSet) {
-	flags.StringVar(&f.url, config.FlagDatabaseURL, "", databaseURLUsage)
+	v := f.Value.String()
+
+	return &v
 }
 
 // load returns the configured database URL (flag > env) or errNoDatabaseURL.
 // These commands write no log, so the log settings are not checked.
-func (f *databaseFlag) load(cmd *cobra.Command, env config.LookupFunc) (string, error) {
-	var flags config.Flags
-	if cmd.Flags().Changed(config.FlagDatabaseURL) {
-		flags.DatabaseURL = &f.url
-	}
+func (f databaseFlag) load(cmd *cobra.Command, env config.LookupFunc) (string, error) {
+	flags := config.Flags{DatabaseURL: f.explicit(cmd)}
 
 	cfg, err := config.LoadWithoutLog(env, flags)
 	if err != nil {

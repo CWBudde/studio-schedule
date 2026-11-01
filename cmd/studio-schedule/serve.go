@@ -16,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/cwbudde/studio-schedule/cmd/studio-schedule/cli"
 	"github.com/cwbudde/studio-schedule/internal/app"
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/config"
@@ -25,6 +26,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/mail/smtp"
 	"github.com/cwbudde/studio-schedule/internal/pdf/typstwasm"
 	"github.com/cwbudde/studio-schedule/internal/seed"
+	"github.com/cwbudde/studio-schedule/internal/service"
 	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/memory"
 	"github.com/cwbudde/studio-schedule/internal/webui"
@@ -66,7 +68,7 @@ func newServeCmd(env config.LookupFunc) *cobra.Command {
 // config.Load applies the real defaults, so an unset flag never shadows the
 // environment.
 type serveFlags struct {
-	databaseURL string
+	db          databaseFlag
 	httpAddr    string
 	baseURL     string
 	metricsAddr string
@@ -77,7 +79,6 @@ type serveFlags struct {
 func (f *serveFlags) register(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.httpAddr, config.FlagHTTPAddr, config.DefaultHTTPAddr,
 		"listen address host:port (env "+config.EnvHTTPAddr+")")
-	cmd.Flags().StringVar(&f.databaseURL, config.FlagDatabaseURL, "", databaseURLUsage)
 	cmd.Flags().StringVar(&f.baseURL, config.FlagBaseURL, "",
 		"public origin of the app, e.g. https://schedule.example.org (env "+config.EnvBaseURL+")")
 	cmd.Flags().StringVar(&f.metricsAddr, config.FlagMetricsAddr, "",
@@ -100,7 +101,7 @@ func (f *serveFlags) explicit(cmd *cobra.Command) config.Flags {
 	}
 
 	return config.Flags{
-		DatabaseURL: changed(config.FlagDatabaseURL, &f.databaseURL),
+		DatabaseURL: f.db.explicit(cmd),
 		HTTPAddr:    changed(config.FlagHTTPAddr, &f.httpAddr),
 		BaseURL:     changed(config.FlagBaseURL, &f.baseURL),
 		LogFormat:   changed(config.FlagLogFormat, &f.logFormat),
@@ -321,17 +322,8 @@ func isHTTPS(baseURL string) bool {
 	return err == nil && u.Scheme == "https" // Parse lower-cases the scheme
 }
 
-// appURL is the root of the web app for links in mails: BASE_URL, or the
-// listen address on localhost.
-func appURL(cfg config.Config) string {
-	if cfg.BaseURL != "" {
-		return cfg.BaseURL + "/"
-	}
-
-	_, port, _ := net.SplitHostPort(cfg.HTTPAddr) // validated by config.Load
-
-	return "http://localhost:" + port + "/"
-}
+// appURL is the root of the web app for links in mails (cli.AppURL).
+func appURL(cfg config.Config) string { return cli.AppURL(cfg) }
 
 // newMailer returns the SMTP sender of cfg, or nil without SMTP_HOST: then
 // mails stay in the outbox.
@@ -438,12 +430,7 @@ func warnWithoutSettings(ctx context.Context, st store.Store, logger *slog.Logge
 // directory if there is one, so a restart is quick. Renders wait for the
 // compilation; a failure is logged at once and fails every receipt.
 func newPDFRenderer(ctx context.Context, clk clock.Clock, logger *slog.Logger) *typstwasm.Renderer {
-	opts := typstwasm.Options{}
-	if dir, err := os.UserCacheDir(); err == nil {
-		opts.CacheDir = filepath.Join(dir, "studio-schedule", "wazero")
-	}
-
-	r := typstwasm.New(opts)
+	r := typstwasm.New(pdfOptions())
 
 	go func() {
 		start := clk.Now()
@@ -457,4 +444,23 @@ func newPDFRenderer(ctx context.Context, clk clock.Clock, logger *slog.Logger) *
 	}()
 
 	return r
+}
+
+// pdfOptions are the receipt renderer's options: the compiled code is
+// cached in the user's cache directory if there is one.
+func pdfOptions() typstwasm.Options {
+	opts := typstwasm.Options{}
+	if dir, err := os.UserCacheDir(); err == nil {
+		opts.CacheDir = filepath.Join(dir, "studio-schedule", "wazero")
+	}
+
+	return opts
+}
+
+// startPDF starts the receipt renderer of a command (cli.System.PDF), as
+// serve does; release stops it.
+func startPDF() (service.ReceiptRenderer, func()) {
+	r := typstwasm.New(pdfOptions())
+
+	return r, func() { _ = r.Close(context.Background()) }
 }

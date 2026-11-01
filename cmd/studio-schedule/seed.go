@@ -81,7 +81,6 @@ func newSeedCmd(env config.LookupFunc) *cobra.Command {
 		},
 	}
 
-	db.register(cmd.Flags())
 	cmd.Flags().StringVar(&anchor, "anchor", seed.FixedDemoAnchor.String(),
 		"date the demo term lies around: YYYY-MM-DD, or "+anchorToday+" (in the demo school's time zone)")
 	cmd.Flags().StringVar(&school, "school", string(seed.SchoolProgramme),

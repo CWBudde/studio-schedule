@@ -46,9 +46,9 @@ fix:
 check-tidy:
     ./scripts/error-on-diff.sh go mod tidy
 
-# Fail if generated files (OpenAPI spec, TS types) are stale
+# Fail if generated files (OpenAPI spec, TS types, docs/cli.md) are stale
 check-generated:
-    ./scripts/error-on-diff.sh sh -c 'ln -s "{{ justfile_directory() }}/web/node_modules" web/node_modules && just gen-api'
+    ./scripts/error-on-diff.sh sh -c 'ln -s "{{ justfile_directory() }}/web/node_modules" web/node_modules && just gen-api && just cli-docs'
 
 # Fail if the sqlc-generated query code is stale
 check-sqlc:
@@ -83,6 +83,10 @@ typst-wasm:
 gen-api:
     go run ./cmd/studio-schedule openapi > api/openapi.json
     pnpm -C web gen:api
+
+# Regenerate docs/cli.md from the command tree
+cli-docs:
+    go test ./cmd/studio-schedule -run '^TestCLIReference$' -count=1 -update
 
 # ---------------------------------------------------------------- test
 

@@ -71,6 +71,14 @@ const (
 	EnvVAPIDPublicKey  = "VAPID_PUBLIC_KEY"
 	EnvVAPIDPrivateKey = "VAPID_PRIVATE_KEY"
 	EnvVAPIDSubject    = "VAPID_SUBJECT"
+
+	// EnvAs is the email of the account a command of the command line acts
+	// as (ADR 0020); --as wins over it. serve ignores it.
+	EnvAs = "STUDIO_AS"
+	// EnvNoColor, when set and not empty, turns off the command line's
+	// colors (https://no-color.org). It is no setting of Config: the
+	// commands read it themselves.
+	EnvNoColor = "NO_COLOR"
 )
 
 // Flag names of the settings that a flag can set. The commands bind them;
@@ -82,6 +90,7 @@ const (
 	FlagLogFormat   = "log-format"
 	FlagLogLevel    = "log-level"
 	FlagMetricsAddr = "metrics-addr"
+	FlagAs          = "as"
 )
 
 // Defaults when neither flag nor env sets a value.
@@ -128,6 +137,9 @@ type Config struct {
 	// MetricsAddr is the host:port of the separate server of the
 	// Prometheus metrics (/metrics). Empty means no metrics.
 	MetricsAddr string
+	// As is the email of the account a command acts as (STUDIO_AS, --as);
+	// empty for none. The account is looked up when a command needs it.
+	As string
 
 	// Log is the log output; the zero value is text at level info.
 	Log Log
@@ -204,6 +216,7 @@ type Flags struct {
 	MetricsAddr *string
 	LogFormat   *string
 	LogLevel    *string
+	As          *string
 }
 
 // Load combines flags, the environment (read through lookup; nil means an
@@ -250,11 +263,13 @@ func load(lookup LookupFunc, flags Flags, withLog bool) (Config, error) {
 	httpAddr := pick(flags.HTTPAddr, FlagHTTPAddr, EnvHTTPAddr, DefaultHTTPAddr)
 	baseURL := pick(flags.BaseURL, FlagBaseURL, EnvBaseURL, "")
 	metricsAddr := pick(flags.MetricsAddr, FlagMetricsAddr, EnvMetricsAddr, "")
+	as := pick(flags.As, FlagAs, EnvAs, "")
 
 	cfg := Config{
 		DatabaseURL: databaseURL.value,
 		HTTPAddr:    httpAddr.value,
 		MetricsAddr: metricsAddr.value,
+		As:          as.value,
 		SMTP: SMTP{
 			Host:     env(EnvSMTPHost),
 			Username: env(EnvSMTPUsername),

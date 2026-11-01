@@ -67,8 +67,9 @@ const MaxImportErrors = 200
 type ImportRun struct {
 	ID       ImportRunID
 	FileName string
-	// ActorID is the account that ran the import; zero for the command
-	// line.
+	// ActorID is the account that ran the import, also on the command line
+	// (its --as, ADR 0020); zero only for a run of the command line before
+	// that.
 	ActorID    AccountID
 	StartedAt  time.Time
 	FinishedAt time.Time

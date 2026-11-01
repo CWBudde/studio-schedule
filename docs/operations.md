@@ -27,7 +27,7 @@ Prefer the environment for secrets: flags are visible in the process list.
 
 | Variable                  | Flag             | Default                       | Meaning                                                                                                                                                                                                                                                                                                                             |
 | ------------------------- | ---------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`            | `--database-url` | empty                         | PostgreSQL connection (below). Empty: `serve` refuses to start unless `DEMO_MODE=true`. `migrate`, `seed`, `init` and `import` need it.                                                                                                                                                                                             |
+| `DATABASE_URL`            | `--database-url` | empty                         | PostgreSQL connection (below); the flag is the global `--database-url` ([Global flags](#global-flags)). Empty: `serve` refuses to start unless `DEMO_MODE=true`. `migrate`, `seed`, `init`, `import` and the commands that act as an account need it.                                                                               |
 | `DEMO_MODE`               | –                | `false`                       | `true` or `false`. Explicit opt-in to run `serve` without a database, on an in-memory store with the fictional demo data and its published demo logins; changes are lost on exit. Never set it in production: a missing `DATABASE_URL` must fail loudly instead of silently becoming the public demo.                               |
 | `HTTP_ADDR`               | `--addr`         | `:8080`                       | Listen address `host:port` of the app (API, web UI, `/healthz`, `/readyz`). `healthcheck` requests this port on the local host.                                                                                                                                                                                                     |
 | `BASE_URL`                | `--base-url`     | `http://localhost:<port>`     | The public origin `scheme://host[:port]`, without path. Links in mails, calendar feed URLs and the link `init` prints point to it. With `https://` the session cookie is `Secure` and every answer carries `Strict-Transport-Security`; with `http://` or unset, `serve` warns at startup.                                          |
@@ -46,6 +46,8 @@ Prefer the environment for secrets: flags are visible in the process list.
 | `VAPID_PRIVATE_KEY`       | –                | empty                         | The private key of that pair. Masked in every log line. Keep it: a new pair invalidates every device's notifications (members turn them on again).                                                                                                                                                                                  |
 | `VAPID_SUBJECT`           | –                | empty                         | The contact the browser vendors' push services see, a `mailto:` or `https:` URL: `mailto:office@example.test`.                                                                                                                                                                                                                      |
 | `XDG_CACHE_HOME`          | –                | the system's cache directory  | Not a setting of the app: the cache directory of the user (on Linux `~/.cache`). The compiled receipt renderer is kept in `<cache>/studio-schedule/wazero`; it is disposable. The image sets `/var/cache/studio-schedule`.                                                                                                          |
+| `STUDIO_AS`               | `--as`           | empty                         | The email of the account a command of the command line acts as ([The command line](#the-command-line)); its role must reach the command's access level. `serve` ignores it.                                                                                                                                                         |
+| `NO_COLOR`                | –                | empty                         | Set and not empty: the command line's text output has no colors ([no-color.org](https://no-color.org)).                                                                                                                                                                                                                             |
 
 **`DATABASE_URL`** takes either form libpq knows, with any of its parameters:
 
@@ -60,45 +62,89 @@ Use `sslmode=verify-full` (or at least `require`) for a database on another host
 CA certificates to verify a managed database's certificate. `sslmode=disable` is fine only on a
 private network such as the one of Docker Compose.
 
+### Global flags
+
+These go before or after the command, as `studio-schedule --output json import members.csv` or
+`studio-schedule import -o json members.csv`; [cli.md](cli.md#global-flags) has their details.
+
+| Flag             | Variable       | Meaning                                                                                                  |
+| ---------------- | -------------- | -------------------------------------------------------------------------------------------------------- |
+| `--database-url` | `DATABASE_URL` | as `DATABASE_URL`: the database of every command that needs one                                          |
+| `--output`, `-o` | –              | `text` (default) or `json`: one JSON document on stdout; a command that prints text only refuses `json`  |
+| `--yes`, `-y`    | –              | confirm a destructive command without a prompt; needed when stdin is not a terminal                      |
+| `--as`           | `STUDIO_AS`    | as `STUDIO_AS`: the email of the account a command acts as; a command that acts as no account refuses it |
+
 ### Commands and flags
 
-| Command                  | Flag                  | Meaning                                                                                                                                                                                                                 |
-| ------------------------ | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `serve`                  | `--addr`              | as `HTTP_ADDR`                                                                                                                                                                                                          |
-| `serve`                  | `--database-url`      | as `DATABASE_URL`                                                                                                                                                                                                       |
-| `serve`                  | `--base-url`          | as `BASE_URL`                                                                                                                                                                                                           |
-| `serve`                  | `--metrics-addr`      | as `METRICS_ADDR`                                                                                                                                                                                                       |
-| `serve`                  | `--log-format`        | as `LOG_FORMAT`                                                                                                                                                                                                         |
-| `serve`                  | `--log-level`         | as `LOG_LEVEL`                                                                                                                                                                                                          |
-| `migrate up/down/status` | `--database-url`      | as `DATABASE_URL`. `up` applies every pending migration, `down` rolls back the latest one, `status` lists them all.                                                                                                     |
-| `seed`                   | `--database-url`      | as `DATABASE_URL`. Loads the fictional demo data into an empty, migrated database.                                                                                                                                      |
-| `seed`                   | `--anchor`            | the date the demo term and workshops lie around: `YYYY-MM-DD`, or `today` in the demo school's time zone (Europe/Berlin); default `2026-09-22`, the fixed date of the tests. Use `today` for a demo that stays current. |
-| `seed`                   | `--school`            | the demo school: `programme` (default, the app's own look) or `werkstatt` (the same data as a German school in the Werkstatt look, with a background image).                                                            |
-| `init`                   | `--database-url`      | as `DATABASE_URL`                                                                                                                                                                                                       |
-| `init`                   | `--base-url`          | as `BASE_URL`: the origin of the printed setup link                                                                                                                                                                     |
-| `init`                   | `--school-name`       | the school's name                                                                                                                                                                                                       |
-| `init`                   | `--timezone`          | the school's IANA time zone, e.g. `Europe/Berlin`                                                                                                                                                                       |
-| `init`                   | `--locale`            | the default language, `en` (default) or `de`                                                                                                                                                                            |
-| `init`                   | `--currency`          | ISO 4217 currency, default `EUR`                                                                                                                                                                                        |
-| `init`                   | `--admin-email`       | email address of the first admin                                                                                                                                                                                        |
-| `init`                   | `--admin-given-name`  | given name of the first admin                                                                                                                                                                                           |
-| `init`                   | `--admin-family-name` | family name of the first admin                                                                                                                                                                                          |
-| `import`                 | `--database-url`      | as `DATABASE_URL`                                                                                                                                                                                                       |
-| `import`                 | `--map`               | `field=Header`: the column of a field (repeatable), instead of matching the headers by name                                                                                                                             |
-| `import`                 | `--notes`             | a further column whose values go into the notes (repeatable)                                                                                                                                                            |
-| `import`                 | `--apply`             | import; without it, a dry run that writes nothing                                                                                                                                                                       |
-| `healthcheck`            | `--addr`              | as `HTTP_ADDR`: the port to request `/healthz` at                                                                                                                                                                       |
+| Command                               | Flag                  | Meaning                                                                                                                                                                                                                 |
+| ------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `serve`                               | `--addr`              | as `HTTP_ADDR`                                                                                                                                                                                                          |
+| `serve`                               | `--base-url`          | as `BASE_URL`                                                                                                                                                                                                           |
+| `serve`                               | `--metrics-addr`      | as `METRICS_ADDR`                                                                                                                                                                                                       |
+| `serve`                               | `--log-format`        | as `LOG_FORMAT`                                                                                                                                                                                                         |
+| `serve`                               | `--log-level`         | as `LOG_LEVEL`                                                                                                                                                                                                          |
+| `seed`                                | `--anchor`            | the date the demo term and workshops lie around: `YYYY-MM-DD`, or `today` in the demo school's time zone (Europe/Berlin); default `2026-09-22`, the fixed date of the tests. Use `today` for a demo that stays current. |
+| `seed`                                | `--school`            | the demo school: `programme` (default, the app's own look) or `werkstatt` (the same data as a German school in the Werkstatt look, with a background image).                                                            |
+| `init`                                | `--base-url`          | as `BASE_URL`: the origin of the printed setup link                                                                                                                                                                     |
+| `init`                                | `--school-name`       | the school's name                                                                                                                                                                                                       |
+| `init`                                | `--timezone`          | the school's IANA time zone, e.g. `Europe/Berlin`                                                                                                                                                                       |
+| `init`                                | `--locale`            | the default language, `en` (default) or `de`                                                                                                                                                                            |
+| `init`                                | `--currency`          | ISO 4217 currency, default `EUR`                                                                                                                                                                                        |
+| `init`                                | `--admin-email`       | email address of the first admin                                                                                                                                                                                        |
+| `init`                                | `--admin-given-name`  | given name of the first admin                                                                                                                                                                                           |
+| `init`                                | `--admin-family-name` | family name of the first admin                                                                                                                                                                                          |
+| `import`                              | `--map`               | `field=Header`: the column of a field (repeatable), instead of matching the headers by name                                                                                                                             |
+| `import`                              | `--notes`             | a further column whose values go into the notes (repeatable)                                                                                                                                                            |
+| `import`                              | `--apply`             | import; without it, a dry run that writes nothing                                                                                                                                                                       |
+| `healthcheck`                         | `--addr`              | as `HTTP_ADDR`: the port to request `/healthz` at                                                                                                                                                                       |
+| `completion bash/zsh/fish/powershell` | `--no-descriptions`   | leave the commands' descriptions out of the completions                                                                                                                                                                 |
 
-`openapi` prints the OpenAPI document, `version` the build version and `vapid-keys` a new VAPID key
-pair for web push; none takes a flag. To turn web push on
+`migrate up` applies every pending migration, `migrate down` rolls back the latest one and
+`migrate status` lists them all; `seed` loads the fictional demo data into an empty, migrated
+database. `openapi` prints the OpenAPI document, `version` the build version and `vapid-keys` a new
+VAPID key pair for web push; none of these takes a flag of its own. To turn web push on
 ([ADR 0017](decisions/0017-pwa-and-web-push.md)), run `studio-schedule vapid-keys` once, put both
 lines and a `VAPID_SUBJECT` into the environment and restart; keep the keys like a password. The
 server then sends notifications to the browser vendors' push services over HTTPS (outbound port
 443 to public addresses).
-`init` asks for every value no flag gives; without a terminal, give them all as flags. Every
-command explains itself with `--help`. A test (`cmd/studio-schedule/docs_test.go`) fails when a
-variable or flag of the code is missing from these tables, or a table names one the code doesn't
-have.
+`init` asks for every value no flag gives; without a terminal, give them all as flags.
+Every command explains itself with `--help`, and [cli.md](cli.md) is the reference of
+all of them. A test (`cmd/studio-schedule/docs_test.go`) fails when a variable or flag of the code,
+global or a command's, is missing from these tables, or a table names one the code doesn't have.
+
+### The command line
+
+Every command runs locally on the server's shell, with the database's credentials; there is no
+remote mode ([ADR 0020](decisions/0020-command-line.md)). [cli.md](cli.md) lists every command with
+its flags, output and exit codes; it is generated from the commands (`just cli-docs`). With Docker
+Compose, run a command as `docker compose run --rm app <command>`.
+
+- **Acting as an account:** a command that does what the office or an admin does in the app (such
+  as `import`) acts as the account of `--as <email>`, or of `STUDIO_AS`: a confirmed, enabled
+  account whose role reaches the command's access level. No password is asked, since whoever can
+  run the binary with the database's credentials can change the database anyway. The audit log
+  records the change as made via the command line, with the OS user. Operator commands (`serve`,
+  `migrate`, `seed`, `init`, …) act as no account and refuse `--as`.
+- **Exit codes:** `0` ok; `1` failed, including a check with findings and an import with failed
+  rows; `2` usage (an unknown flag, a missing argument, invalid input before anything ran, a refused
+  confirmation); `3` not found, also an unknown `--as`; `4` conflict, also a role too low for the
+  command.
+- **JSON:** `--output json` prints one JSON document on stdout: the response body of the API
+  operation the command mirrors, as in `api/openapi.json`, or the schema that cli.md gives. Fields
+  are only added; a rename or a removal waits for a major release. An error goes to stderr as one
+  line, `error: …`, and with `--output json` as a problem document (`title`, `status`, `detail`,
+  `errors`).
+- **Confirmation:** a command that deletes, anonymizes, mails, cancels or merges asks `[y/N]` when
+  stdin is a terminal. In a script or a cron job, give `--yes`: without it and without a terminal,
+  the command changes nothing and exits with `2`. Secrets and search terms come from stdin, never
+  from arguments.
+- **Completion:** `studio-schedule completion bash` (or `zsh`, `fish`, `powershell`) prints a
+  completion script; `studio-schedule completion bash --help` explains where to put it.
+
+```sh
+source <(studio-schedule completion bash)   # completions in the current shell
+studio-schedule completion bash > /etc/bash_completion.d/studio-schedule  # in every new shell
+```
 
 ## Deployment guide
 

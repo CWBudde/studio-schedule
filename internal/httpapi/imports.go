@@ -245,6 +245,12 @@ func (h *handlers) runImport(ctx context.Context, in *ImportRunInput) (*ImportRe
 		return nil, h.toHTTPError(ctx, err)
 	}
 
+	return &ImportResultOutput{Body: NewImportResult(res)}, nil
+}
+
+// NewImportResult is the response body of runImport for res; the command
+// line's `import --output json` prints it too (ADR 0020).
+func NewImportResult(res service.ImportResult) ImportResult {
 	out := ImportResult{
 		Applied: res.Applied, RunID: res.RunID, Counts: importCounts(res.Counts),
 		Rows: make([]ImportRow, 0, len(res.Rows)),
@@ -282,7 +288,7 @@ func (h *handlers) runImport(ctx context.Context, in *ImportRunInput) (*ImportRe
 		out.Rows = append(out.Rows, row)
 	}
 
-	return &ImportResultOutput{Body: out}, nil
+	return out
 }
 
 func (h *handlers) listImportRuns(ctx context.Context, _ *struct{}) (*ImportRunListOutput, error) {
