@@ -16,8 +16,8 @@ func privacyJobs(deps Deps) []jobs.Job {
 	return []jobs.Job{{
 		// Anonymizes the guests of lessons that ended 12 months ago and
 		// deletes the audit events of 3 years ago, the import runs of a
-		// year ago, the push subscriptions unused for 6 months and the push
-		// messages of a week ago.
+		// year ago, the push subscriptions unused for 6 months, the push
+		// messages of a week ago and the job runs of 30 days ago.
 		Name:  "purge-personal-data",
 		Every: 24 * time.Hour,
 		Run: func(ctx context.Context) error {
@@ -25,7 +25,8 @@ func privacyJobs(deps Deps) []jobs.Job {
 			if n != (service.Purged{}) {
 				deps.Logger.InfoContext(ctx, "personal data purged", slog.Int("guests", n.Guests),
 					slog.Int("auditEvents", n.AuditEvents), slog.Int("importRuns", n.ImportRuns),
-					slog.Int("pushSubscriptions", n.PushSubscriptions), slog.Int("pushMessages", n.PushMessages))
+					slog.Int("pushSubscriptions", n.PushSubscriptions), slog.Int("pushMessages", n.PushMessages),
+					slog.Int("jobRuns", n.JobRuns))
 			}
 
 			return err

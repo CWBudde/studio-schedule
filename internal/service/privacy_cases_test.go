@@ -10,6 +10,7 @@ import (
 
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/store"
 )
 
@@ -203,22 +204,64 @@ func TestExportAccountData(t *testing.T) {
 }
 
 // TestRetentionStoreFaults: a store failure in the purge is returned and
-// rolls back what the purge deleted before it.
+// rolls back what the purge deleted before it. The snapshot leaves the job
+// runs out, so the check reads the old run itself: a failure keeps it.
 func TestRetentionStoreFaults(t *testing.T) {
 	t.Parallel()
 
-	SweepFaults(t, FaultSweep{Setup: func(t *testing.T) (*FaultStore, func() error) {
-		f := newPrivacyFaults(t)
-		fs := NewFaultStore(f.st)
-		svc := NewRetentionService(fs, clock.NewFixed(f.now.AddDate(4, 0, 0)))
+	jobRunsOf := func(t *testing.T, fs *FaultStore) []domain.JobRun {
+		t.Helper()
 
-		return fs, func() error {
-			got, err := svc.Purge(t.Context())
-			if err == nil && got.PushSubscriptions != 1 {
-				return errors.New("the unused push subscription stayed")
-			}
+		var runs []domain.JobRun
+
+		err := fs.inner.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+			var err error
+
+			runs, err = tx.JobRuns().Latest(ctx)
 
 			return err
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
-	}})
+
+		return runs
+	}
+
+	SweepFaults(t, FaultSweep{
+		Setup: func(t *testing.T) (*FaultStore, func() error) {
+			f := newPrivacyFaults(t)
+			oldRun := domain.JobRun{
+				ID: ids.New[domain.JobRunID](f.seq), Job: "generate-lessons", StartedAt: f.now, EndedAt: f.now,
+				Result: domain.JobOK,
+			}
+			f.write(t, func(ctx context.Context, tx store.Tx) error { return tx.JobRuns().Create(ctx, oldRun) })
+
+			fs := NewFaultStore(f.st)
+			svc := NewRetentionService(fs, clock.NewFixed(f.now.AddDate(4, 0, 0)))
+
+			return fs, func() error {
+				got, err := svc.Purge(t.Context())
+				switch {
+				case err != nil:
+					return err
+				case got.PushSubscriptions != 1:
+					return errors.New("the unused push subscription stayed")
+				case got.JobRuns != 1 || len(jobRunsOf(t, fs)) != 0:
+					return errors.New("the old job run stayed")
+				}
+
+				return nil
+			}
+		},
+		Check: func(t *testing.T, fs *FaultStore, before StoreData, call FaultCall) {
+			if changed := before.Changed(fs.Snapshot(t)); len(changed) > 0 {
+				t.Errorf("with %s failing, the store changed: %v", call, changed)
+			}
+
+			if runs := jobRunsOf(t, fs); len(runs) != 1 {
+				t.Errorf("with %s failing, job runs %+v, want the old one kept", call, runs)
+			}
+		},
+	})
 }

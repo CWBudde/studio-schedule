@@ -57,7 +57,8 @@ func logHas(logs, msg, attr string) bool {
 // TestJobsPurgesLogged: the purge jobs log only when they removed
 // something. A day after a week's session, a sent mail and the demo's
 // guest bookings, nothing is due; 400 days later the session has expired,
-// the mail is past the mail retention and the guests past theirs.
+// the mail is past the mail retention, the guests past theirs and the job
+// runs of the first startup past the job run retention.
 func TestJobsPurgesLogged(t *testing.T) {
 	t.Parallel()
 
@@ -105,7 +106,7 @@ func TestJobsPurgesLogged(t *testing.T) {
 
 	out := logs.String()
 	if !logHas(out, purges[0], "deleted") || !logHas(out, purges[1], "deleted") ||
-		!logHas(out, purges[2], "guests") {
+		!logHas(out, purges[2], "guests") || !logHas(out, purges[2], "jobRuns") {
 		t.Errorf("want the three purges logged with what they removed:\n%s", out)
 	}
 

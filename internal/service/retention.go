@@ -11,8 +11,10 @@ import (
 // Retention periods of personal data (ADR 0016). Guests have no person
 // record; their name and email on a booking serve the lesson and its
 // follow-up, not more. The audit log and the import history serve
-// security and support questions for a while. Months and years are
-// calendar months and years back from now (time.AddDate in UTC).
+// security and support questions for a while. The job runs (ADR 0020)
+// hold no personal data; they only serve operations, and the jobs add
+// many a day. Days, months and years are calendar days, months and years
+// back from now (time.AddDate in UTC).
 const (
 	// GuestRetentionMonths: a guest's name, email and trial note are
 	// anonymized this many months after the lesson ended.
@@ -23,10 +25,13 @@ const (
 	// ImportRetentionYears: import runs are deleted this many years after
 	// they started.
 	ImportRetentionYears = 1
+	// JobRunRetentionDays: job runs are deleted this many days after they
+	// started (ADR 0020).
+	JobRunRetentionDays = 30
 )
 
 // RetentionService deletes or anonymizes personal data after its retention
-// period: the daily purge-personal-data job.
+// period, and the job runs after theirs: the daily purge-personal-data job.
 type RetentionService struct {
 	store store.Store
 	clock clock.Clock
@@ -43,13 +48,16 @@ type Purged struct {
 	// PushSubscriptions and PushMessages count the web push subscriptions
 	// and messages deleted (ADR 0017).
 	PushSubscriptions, PushMessages int
+	// JobRuns counts the job runs deleted (ADR 0020).
+	JobRuns int
 }
 
 // Purge anonymizes the guests of the bookings of lessons that ended more
 // than GuestRetentionMonths ago, and deletes the audit events and import
-// runs older than their retention periods, the push subscriptions unused
-// for PushSubscriptionRetentionMonths and the push messages older than
-// PushRetention, in one transaction.
+// runs older than their retention periods, the push messages older than
+// PushRetention, the job runs that started more than JobRunRetentionDays
+// ago and the push subscriptions unused for
+// PushSubscriptionRetentionMonths, in one transaction.
 func (s *RetentionService) Purge(ctx context.Context) (Purged, error) {
 	var out Purged
 
@@ -70,6 +78,10 @@ func (s *RetentionService) Purge(ctx context.Context) (Purged, error) {
 		}
 
 		if out.PushMessages, err = tx.PushOutbox().DeleteCreatedBefore(ctx, now.Add(-PushRetention)); err != nil {
+			return err
+		}
+
+		if out.JobRuns, err = tx.JobRuns().DeleteStartedBefore(ctx, now.AddDate(0, 0, -JobRunRetentionDays)); err != nil {
 			return err
 		}
 

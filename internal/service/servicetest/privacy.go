@@ -1006,13 +1006,33 @@ func retention(t *testing.T, w *world) {
 	messageAt(now.Add(-service.PushRetention).Add(-time.Microsecond))
 	messageAt(now.Add(-service.PushRetention))
 
+	// Job runs of 30 days ago (ADR 0020), of two jobs: the latest run of
+	// each is the one left.
+	jobRunAt := func(job string, at time.Time) domain.JobRun {
+		run := domain.JobRun{
+			ID: newID[domain.JobRunID](w), Job: job, StartedAt: at, EndedAt: at.Add(time.Second), Result: domain.JobOK,
+		}
+		w.write(func(ctx context.Context, tx store.Tx) error { return tx.JobRuns().Create(ctx, run) })
+
+		return run
+	}
+	jobRunCutoff := now.AddDate(0, 0, -service.JobRunRetentionDays)
+	jobRunAt("generate-lessons", jobRunCutoff.Add(-time.Microsecond))
+	keptRun := jobRunAt("generate-lessons", jobRunCutoff)
+	jobRunAt("purge-sessions", jobRunCutoff.Add(-time.Hour))
+
 	svc := service.NewRetentionService(w.st, clock.NewFixed(now))
 
 	n, err := svc.Purge(ctx)
 	if err != nil || n != (service.Purged{
-		Guests: 1, AuditEvents: 1, ImportRuns: 1, PushSubscriptions: 1, PushMessages: 1,
+		Guests: 1, AuditEvents: 1, ImportRuns: 1, PushSubscriptions: 1, PushMessages: 1, JobRuns: 2,
 	}) {
 		t.Fatalf("purge: %+v, %v", n, err)
+	}
+
+	runs := read(w, func(ctx context.Context, tx store.Tx) ([]domain.JobRun, error) { return tx.JobRuns().Latest(ctx) })
+	if len(runs) != 1 || runs[0].ID != keptRun.ID || !runs[0].StartedAt.Equal(keptRun.StartedAt) {
+		t.Errorf("job runs left %+v, want only the one that started at the cutoff", runs)
 	}
 
 	got := w.bookingsByID(gone, kept)
