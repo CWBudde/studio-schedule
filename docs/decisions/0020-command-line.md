@@ -221,13 +221,35 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
   JSON in either output format; with `--file`, stdout gets one line of text, or nothing with
   `--output json`. A command whose operation answers without a body
   (`persons duplicates dismiss`) prints nothing with `--output json`. `persons merge --apply`
+  ones. Its link is valid for an hour (`ResetTokenTTL`). Not audited yet: issuing a reset link and
+  ending sessions have no audit action of their own. A new action needs a migration
+  (`audit_actions`), the domain constant, the audit page's strings and the description of
+  `listAuditEvents`, so it waits for a change of its own. The impersonations that end are audited,
+  as before. The `last-admin` guard cannot be reached from the command line alone: `--as` needs an
+  admin who can sign in, and an admin's own account is refused as `own-account` first.
+- **`settings`: the areas include receipts and passes.** Besides the cards of ADR 0013 (`school`,
+  `branding`, `regional`, `booking-rules`), the receipt settings (`receipts`) and the redemption
+  mode (`passes`) are areas too: each is a pair of API operations whose request body is flat
+  `key=value` data. The export is `{"version": 1, …}` with every area's request body; an area in it
+  replaces the whole area on import, in one transaction (`SettingsService.Import`), and a key the
+  API requires is required there too. `settings set` is not destructive: it changes only the values
+  it names.
+- **`persons`: a body-less answer prints nothing.** A command whose operation answers without a
+  body (`persons duplicates dismiss`) prints nothing with `--output json`. `persons merge --apply`
   runs the preview first, so it asks with both names and refuses a conflict before the question.
-- **Receipts write files with `--file` and know one format.** `receipts pdf` writes its PDF with
-  `--file`/`-f` (mode 0600, an existing file only with `--force`), since `-o` is `--output`'s
-  short flag. `receipts export` writes CSV only: it has no `--format` and refuses
-  `--output json`. `receipts verify` does not look for duplicate numbers or a receipt canceled
-  twice, which both stores refuse with unique constraints; it checks instead that a number ends in
-  its year and sequence and that a Storno negates its original.
+- **Receipts know one format.** `receipts export` writes CSV only: it has no `--format` and
+  refuses `--output json`. `receipts verify` does not look for duplicate numbers or a receipt
+  canceled twice, which both stores refuse with unique constraints; it checks instead that a
+  number ends in its year and sequence and that a Storno negates its original.
+- **A command writes a file with `--file`, never `-o`.** `-o` is the global `--output`'s short
+  flag, and cobra panics on a command's flag that reuses it. So `persons export`,
+  `settings export`, `receipts pdf` and `receipts export` take `--file`/`-f`: the file is created
+  with mode 0600 (it holds personal data, payments or the school's settings), an existing file is
+  refused (exit 2) unless `--force`, which replaces it and resets its mode, and `--force` without
+  `--file` is a usage error. Where the file is optional, the document goes to stdout without it,
+  with nothing else (the exports' JSON in either output format); with `--file`, stdout gets one
+  line of text, or nothing with `--output json`. A file a command reads is an argument (`settings import <file>`,
+  `import <file>`).
 - **A report that says it failed gets no problem document.** `db check` and `receipts verify`
   with findings, `doctor` with a failed check and `import` with failed rows print their report on
   stdout and exit with status 1. In text, stderr gets the line `error: …` as before; with

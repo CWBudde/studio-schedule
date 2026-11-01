@@ -993,7 +993,10 @@ command groups by need: recovery and diagnosis first, then data, then reports.
       is destructive (`--yes`, `--dry-run`) and writes every area of the file in one transaction
       (`SettingsService.Import`, the setters' rules through shared `apply` functions), printing the
       changes. Deviations, amended in the ADR: the file of `export` is an argument (`-o` is
-      `--output`), and `set` is not destructive
+      `--output`), and `set` is not destructive. Since then (2026-11-01) `settings export` writes
+      its file with `--file`/`-f` and `--force` like `persons export` and the receipt commands
+      (mode 0600, an existing file refused without `--force`; it used to be overwritten), one
+      convention in the ADR amendment
 - [x] Jobs: `jobs list` (name, interval, last run and result) and `jobs run <name>` (one job now,
       e.g. `generate-lessons`, `purge-personal-data`, `deliver-mail`). A database lock keeps a
       serving instance and the command from running the same job at once (2026-11-01)

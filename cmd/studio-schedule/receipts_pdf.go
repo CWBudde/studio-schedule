@@ -10,10 +10,7 @@ import (
 )
 
 func newReceiptsPDFCmd(app *cli.App) *cobra.Command {
-	var (
-		file  string
-		force bool
-	)
+	var file outputFile
 
 	return app.Command(cli.Spec{
 		Use:   "pdf <number>",
@@ -27,7 +24,7 @@ func newReceiptsPDFCmd(app *cli.App) *cobra.Command {
 		Access:  httpapi.AccessOffice,
 		JSON:    "nothing: the PDF goes into the file of --file (the operation getReceiptPdf answers with it)",
 		Flags: func(cmd *cobra.Command) {
-			receiptFileFlags(cmd, &file, &force, "the PDF")
+			file.bind(cmd, "the PDF", "")
 			_ = cmd.MarkFlagRequired("file") // the flag exists
 		},
 		Run: func(ctx context.Context, env *cli.Env, args []string) error {
@@ -43,7 +40,7 @@ func newReceiptsPDFCmd(app *cli.App) *cobra.Command {
 				return err
 			}
 
-			if err := receiptWriteFile(file, pdf.PDF, force); err != nil {
+			if err := file.writeBytes(pdf.PDF); err != nil {
 				return err
 			}
 
@@ -52,7 +49,7 @@ func newReceiptsPDFCmd(app *cli.App) *cobra.Command {
 			}
 
 			return env.Out.Print(nil, func(t *cli.Text) {
-				t.Line("wrote %s (%d bytes) to %s", v.Receipt.Number, len(pdf.PDF), file)
+				t.Line("wrote %s (%d bytes) to %s", v.Receipt.Number, len(pdf.PDF), file.name)
 			})
 		},
 	})

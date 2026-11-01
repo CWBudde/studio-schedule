@@ -407,7 +407,8 @@ func TestSettingsExportImport(t *testing.T) {
 		}
 
 		file := filepath.Join(t.TempDir(), "studio.json")
-		if f := demo.exec(t, "settings", "export", "--as", demoOffice, file); f.code != 0 || f.stdout != "" {
+		if f := demo.exec(t, "settings", "export", "--as", demoOffice, "--file", file); f.code != 0 ||
+			f.stdout != "exported the settings of 6 areas to "+file+"\n" || f.stderr != "" {
 			t.Fatalf("export to a file: exit %d, stdout %q, stderr %q", f.code, f.stdout, f.stderr)
 		}
 
@@ -706,10 +707,62 @@ func TestSettingsExportFails(t *testing.T) {
 
 	file := filepath.Join(t.TempDir(), "missing", "settings.json")
 
-	got := cliRun{st: demoStore(t)}.exec(t, "settings", "export", "--as", demoOffice, file)
-	if got.code != 1 || !strings.Contains(got.stderr, "no such file or directory") {
-		t.Errorf("exit %d, stderr %q", got.code, got.stderr)
+	got := cliRun{st: demoStore(t)}.exec(t, "settings", "export", "--as", demoOffice, "--file", file)
+	if got.code != 1 || got.stdout != "" || !strings.Contains(got.stderr, "no such file or directory") {
+		t.Errorf("exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
 	}
+}
+
+// TestSettingsExportFile writes the file of --file (-f) with mode 0600 and
+// nothing on stdout with --output json; an existing file is refused unless
+// --force, which replaces it and resets its mode. --force without --file
+// and the file as an argument are usage errors.
+func TestSettingsExportFile(t *testing.T) {
+	t.Parallel()
+
+	stores(t, func(t *testing.T, r cliRun) {
+		doc := r.exec(t, "settings", "export", "--as", demoOffice).stdout
+
+		file := filepath.Join(t.TempDir(), "settings.json")
+		if err := os.WriteFile(file, []byte("keep me"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.Chmod(file, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		got := r.exec(t, "settings", "export", "--as", demoOffice, "--file", file)
+		if want := "error: --file " + file + " exists; give --force to overwrite it\n"; got.code != 2 ||
+			got.stdout != "" || got.stderr != want {
+			t.Errorf("existing file: exit %d, stdout %q, stderr %q; want 2, %q", got.code, got.stdout, got.stderr, want)
+		}
+
+		if data, _ := os.ReadFile(file); string(data) != "keep me" {
+			t.Errorf("the refused export changed the file: %q", data)
+		}
+
+		got = r.exec(t, "settings", "export", "--as", demoOffice, "-f", file, "--force", "--output", "json")
+		if got.code != 0 || got.stdout != "" || got.stderr != "" {
+			t.Errorf("--force: exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
+		}
+
+		info, err := os.Stat(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if data, _ := os.ReadFile(file); string(data) != doc || info.Mode().Perm() != outputFileMode {
+			t.Errorf("--force wrote %q with mode %v, want the export with mode 0600", data, info.Mode().Perm())
+		}
+
+		for _, args := range [][]string{{"--force"}, {file}} {
+			got := r.exec(t, append([]string{"settings", "export", "--as", demoOffice}, args...)...)
+			if got.code != 2 || got.stdout != "" {
+				t.Errorf("%v: exit %d, stdout %q, stderr %q; want 2", args, got.code, got.stdout, got.stderr)
+			}
+		}
+	})
 }
 
 // TestSettingsKeysDistinct: an import's field errors are named by their

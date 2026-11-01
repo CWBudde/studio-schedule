@@ -1290,7 +1290,7 @@ studio-schedule receipts export --as office@example.org --year 2026 --file recei
 
 Flags:
 
-- `--file`, `-f` (string): write the CSV into this file (mode 0600)
+- `--file`, `-f` (string): write the CSV into this file (mode 0600) instead of stdout
 - `--force` (bool): overwrite the file of `--file` if it exists
 - `--year` (int, default `0`): the year of the receipts
 
@@ -1439,20 +1439,26 @@ Commands:
 Write every area's settings as one JSON document.
 
 ```text
-studio-schedule settings export [file] [flags]
+studio-schedule settings export [flags]
 ```
 
-Write the settings of every area as one JSON document, to the file or else to stdout, acting as the office account of `--as`: the document settings import reads, to set up a second school the same way. Each area is its API request body, so the read-only fields are left out, and so are the logo and the background image: set them on the settings page. The receipt settings name the school as the issuer; edit them for another school. It prints JSON with either `--output`.
+Write the settings of every area as one JSON document, acting as the office account of `--as`: the document settings import reads, to set up a second school the same way. Each area is its API request body, so the read-only fields are left out, and so are the logo and the background image: set them on the settings page. The receipt settings name the school as the issuer; edit them for another school. The document goes to stdout, with nothing else, in either output format; with `--file` it goes into that file, created with mode 0600, and an existing file is refused unless `--force`.
 
 Examples:
 
 ```sh
-studio-schedule settings export --as office@example.org settings.json
+studio-schedule settings export --as office@example.org --file settings.json
+studio-schedule settings export --as office@example.org > settings.json
 ```
+
+Flags:
+
+- `--file`, `-f` (string): write the settings into this file (mode 0600) instead of stdout
+- `--force` (bool): overwrite the file of `--file` if it exists
 
 Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
 
-Output with `--output json`: the settings document, always JSON: version (number, 1), then every area's request body by area: school (updateSchoolSettings), branding (updateBrandingSettings), regional (updateRegionalSettings), bookingRules (updateBookingRules), receipts (updateReceiptSettings), passes (updatePassSettings).
+Output with `--output json`: the settings document, always JSON: version (number, 1), then every area's request body by area: school (updateSchoolSettings), branding (updateBrandingSettings), regional (updateRegionalSettings), bookingRules (updateBookingRules), receipts (updateReceiptSettings), passes (updatePassSettings); with `--file` it goes into the file, and stdout stays empty.
 
 #### `studio-schedule settings get`
 

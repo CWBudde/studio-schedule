@@ -31,7 +31,7 @@ const (
 	settingsExportJSON = "the settings document, always JSON: version (number, 1), then every area's request " +
 		"body by area: school (updateSchoolSettings), branding (updateBrandingSettings), regional " +
 		"(updateRegionalSettings), bookingRules (updateBookingRules), receipts (updateReceiptSettings), passes " +
-		"(updatePassSettings)"
+		"(updatePassSettings); with --file it goes into the file, and stdout stays empty"
 	settingsImportJSON = "one object: dryRun (bool), changes (array of {area, key, from, to}: the area as the " +
 		"commands name it, the key of its request body, and the values before and after in the request body's " +
 		"form, null for none), generatedLessons (number: lessons a wider release window generated at once)"
@@ -150,19 +150,28 @@ func newSettingsSetCmd(app *cli.App) *cobra.Command {
 }
 
 func newSettingsExportCmd(app *cli.App) *cobra.Command {
+	var file outputFile
+
 	return app.Command(cli.Spec{
-		Use:   "export [file]",
+		Use:   "export",
 		Short: "Write every area's settings as one JSON document",
-		Long: "Write the settings of every area as one JSON document, to the file or else to stdout, acting as " +
-			"the office account of --as: the document settings import reads, to set up a second school the " +
-			"same way. Each area is its API request body, so the read-only fields are left out, and so are the " +
-			"logo and the background image: set them on the settings page. The receipt settings name the " +
-			"school as the issuer; edit them for another school. It prints JSON with either --output.",
-		Example: "  studio-schedule settings export --as office@example.org settings.json",
-		Args:    cobra.MaximumNArgs(1),
-		Access:  httpapi.AccessOffice,
-		JSON:    settingsExportJSON,
-		Run: func(ctx context.Context, env *cli.Env, args []string) error {
+		Long: "Write the settings of every area as one JSON document, acting as the office account of --as: the " +
+			"document settings import reads, to set up a second school the same way. Each area is its API " +
+			"request body, so the read-only fields are left out, and so are the logo and the background image: " +
+			"set them on the settings page. The receipt settings name the school as the issuer; edit them for " +
+			"another school. The document goes to stdout, with nothing else, in either output format; with " +
+			"--file it goes into that file, created with mode 0600, and an existing file is refused unless " +
+			"--force.",
+		Example: "  studio-schedule settings export --as office@example.org --file settings.json\n" +
+			"  studio-schedule settings export --as office@example.org > settings.json",
+		Access: httpapi.AccessOffice,
+		JSON:   settingsExportJSON,
+		Flags:  func(cmd *cobra.Command) { file.bind(cmd, "the settings", " instead of stdout") },
+		Run: func(ctx context.Context, env *cli.Env, _ []string) error {
+			if err := file.check(); err != nil {
+				return err
+			}
+
 			s, err := env.Services.Settings.Export(ctx)
 			if err != nil {
 				return err
@@ -175,11 +184,21 @@ func newSettingsExportCmd(app *cli.App) *cobra.Command {
 
 			doc := settingsDocument{areas: byArea(settingsAreas, data)}
 
-			if len(args) == 1 {
-				return os.WriteFile(args[0], encodeJSON(doc), 0o600)
+			if file.name == "" {
+				return env.Out.Print(doc, func(t *cli.Text) { t.Line("%s", bytes.TrimSuffix(encodeJSON(doc), []byte("\n"))) })
 			}
 
-			return env.Out.Print(doc, func(t *cli.Text) { t.Line("%s", bytes.TrimSuffix(encodeJSON(doc), []byte("\n"))) })
+			if err := file.writeBytes(encodeJSON(doc)); err != nil {
+				return err
+			}
+
+			if env.Out.JSON() {
+				return nil
+			}
+
+			return env.Out.Print(nil, func(t *cli.Text) {
+				t.Line("exported the settings of %d areas to %s", len(settingsAreas), file.name)
+			})
 		},
 	})
 }

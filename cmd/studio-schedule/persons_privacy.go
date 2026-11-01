@@ -3,10 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
-	"io/fs"
-	"os"
 	"strconv"
 	"strings"
 
@@ -16,14 +13,8 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/httpapi"
 )
 
-// exportFileMode is the mode of an export file: it holds personal data.
-const exportFileMode = 0o600
-
 func newPersonsExportCmd(app *cli.App) *cobra.Command {
-	var (
-		file  string
-		force bool
-	)
+	var file outputFile
 
 	return app.Command(cli.Spec{
 		Use:   "export <person-id>",
@@ -41,9 +32,7 @@ func newPersonsExportCmd(app *cli.App) *cobra.Command {
 		JSON: "the response body of the operation exportPerson, also without --output json; with --file it " +
 			"goes into the file, and stdout stays empty",
 		Flags: func(cmd *cobra.Command) {
-			cmd.Flags().StringVarP(&file, "file", "f", "",
-				"write the export into this file (mode 0600) instead of stdout")
-			cmd.Flags().BoolVar(&force, "force", false, "overwrite the file of --file if it exists")
+			file.bind(cmd, "the export", " instead of stdout")
 		},
 		Run: func(ctx context.Context, env *cli.Env, args []string) error {
 			id, err := personArg(args[0])
@@ -51,8 +40,8 @@ func newPersonsExportCmd(app *cli.App) *cobra.Command {
 				return err
 			}
 
-			if force && file == "" {
-				return cli.Usagef("--force: give --file too")
+			if err := file.check(); err != nil {
+				return err
 			}
 
 			x, err := env.Services.Persons.Export(ctx, id)
@@ -62,7 +51,7 @@ func newPersonsExportCmd(app *cli.App) *cobra.Command {
 
 			body := httpapi.NewPersonExport(x)
 
-			if file == "" {
+			if file.name == "" {
 				return env.Out.Print(body, func(t *cli.Text) {
 					var doc strings.Builder
 
@@ -74,7 +63,7 @@ func newPersonsExportCmd(app *cli.App) *cobra.Command {
 				})
 			}
 
-			if err := writeExport(file, body, force); err != nil {
+			if err := file.write(func(w io.Writer) error { return encodeExport(w, body) }); err != nil {
 				return err
 			}
 
@@ -83,7 +72,7 @@ func newPersonsExportCmd(app *cli.App) *cobra.Command {
 			}
 
 			return env.Out.Print(nil, func(t *cli.Text) {
-				t.Line("exported %s (%s) to %s", personName(x.Person), x.Person.ID, file)
+				t.Line("exported %s (%s) to %s", personName(x.Person), x.Person.ID, file.name)
 			})
 		},
 	})
@@ -97,27 +86,6 @@ func encodeExport(w io.Writer, body httpapi.PersonExport) error {
 	enc.SetEscapeHTML(false)
 
 	return enc.Encode(body)
-}
-
-// writeExport writes body into the file name with exportFileMode. An
-// existing file is a usage error unless force; then it is replaced, and its
-// mode becomes exportFileMode.
-func writeExport(name string, body httpapi.PersonExport, force bool) error {
-	flags := os.O_WRONLY | os.O_CREATE | os.O_EXCL
-	if force {
-		flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-	}
-
-	f, err := os.OpenFile(name, flags, exportFileMode) //nolint:gosec // G304: the operator names the file
-	if errors.Is(err, fs.ErrExist) {
-		return cli.Usagef("--file %s exists; give --force to overwrite it", name)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return errors.Join(encodeExport(f, body), f.Chmod(exportFileMode), f.Close())
 }
 
 func newPersonsAnonymizeCmd(app *cli.App) *cobra.Command {

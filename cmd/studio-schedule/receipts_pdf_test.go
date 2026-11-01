@@ -118,7 +118,7 @@ func TestReceiptsPDFStored(t *testing.T) {
 			t.Fatalf("exit %d, stdout %q, stderr %q; want %q", got.code, got.stdout, got.stderr, want)
 		}
 
-		if data, mode := rpdfTFile(t, file); !bytes.Equal(data, stored) || mode != receiptFileMode {
+		if data, mode := rpdfTFile(t, file); !bytes.Equal(data, stored) || mode != outputFileMode {
 			t.Errorf("wrote %q with mode %v, want the stored PDF with mode 0600", data, mode)
 		}
 
@@ -187,7 +187,7 @@ func TestReceiptsPDFRendered(t *testing.T) {
 			t.Fatalf("rendered: exit %d, stdout %q, stderr %q; want %q", got.code, got.stdout, got.stderr, want)
 		}
 
-		if data, mode := rpdfTFile(t, file); string(data) != rpdfTRendered || mode != receiptFileMode {
+		if data, mode := rpdfTFile(t, file); string(data) != rpdfTRendered || mode != outputFileMode {
 			t.Errorf("wrote %q with mode %v, want the rendered PDF with mode 0600", data, mode)
 		}
 
@@ -247,7 +247,7 @@ func TestReceiptsPDFFile(t *testing.T) {
 			t.Fatalf("--force: exit %d, stderr %q", got.code, got.stderr)
 		}
 
-		if data, mode := rpdfTFile(t, file); !bytes.Equal(data, stored) || mode != receiptFileMode {
+		if data, mode := rpdfTFile(t, file); !bytes.Equal(data, stored) || mode != outputFileMode {
 			t.Errorf("--force wrote %q with mode %v, want the PDF with mode 0600", data, mode)
 		}
 

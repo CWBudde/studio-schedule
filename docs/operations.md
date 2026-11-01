@@ -160,9 +160,11 @@ sign in.
 
 ### Commands and flags: settings
 
-| Command           | Flag        | Meaning                                                                    |
-| ----------------- | ----------- | -------------------------------------------------------------------------- |
-| `settings import` | `--dry-run` | check the document and print the settings that would change; write nothing |
+| Command           | Flag        | Meaning                                                                              |
+| ----------------- | ----------- | ------------------------------------------------------------------------------------ |
+| `settings export` | `--file`    | `-f`: write the settings document into this file, created with mode 0600, not stdout |
+| `settings export` | `--force`   | overwrite the file of `--file` if it exists; without it, an existing file is refused |
+| `settings import` | `--dry-run` | check the document and print the settings that would change; write nothing           |
 
 ### Commands and flags: persons
 

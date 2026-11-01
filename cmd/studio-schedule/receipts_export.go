@@ -33,9 +33,8 @@ const receiptCSVColumns = "number (the printed number), issue_date (the school d
 
 func newReceiptsExportCmd(app *cli.App) *cobra.Command {
 	var (
-		year  int
-		file  string
-		force bool
+		year int
+		file outputFile
 	)
 
 	return app.Command(cli.Spec{
@@ -53,7 +52,7 @@ func newReceiptsExportCmd(app *cli.App) *cobra.Command {
 		Flags: func(cmd *cobra.Command) {
 			cmd.Flags().IntVar(&year, "year", 0, "the year of the receipts")
 			_ = cmd.MarkFlagRequired("year") // the flag exists
-			receiptFileFlags(cmd, &file, &force, "the CSV")
+			file.bind(cmd, "the CSV", " instead of stdout")
 		},
 		Fields: map[string]string{"year": "--year"},
 		Run: func(ctx context.Context, env *cli.Env, _ []string) error {
@@ -61,8 +60,8 @@ func newReceiptsExportCmd(app *cli.App) *cobra.Command {
 				return cli.Usagef("--output json: receipts export writes CSV only")
 			}
 
-			if force && file == "" {
-				return cli.Usagef("--force: give --file too")
+			if err := file.check(); err != nil {
+				return err
 			}
 
 			views, err := env.Services.Receipts.OfYear(ctx, year)
@@ -72,16 +71,16 @@ func newReceiptsExportCmd(app *cli.App) *cobra.Command {
 
 			data, lines := receiptCSV(views)
 
-			if file == "" {
+			if file.name == "" {
 				return env.Out.Print(nil, func(t *cli.Text) { t.Line("%s", strings.TrimSuffix(string(data), "\n")) })
 			}
 
-			if err := receiptWriteFile(file, data, force); err != nil {
+			if err := file.writeBytes(data); err != nil {
 				return err
 			}
 
 			return env.Out.Print(nil, func(t *cli.Text) {
-				t.Line("wrote %d lines of %d receipts of %d to %s", lines, len(views), year, file)
+				t.Line("wrote %d lines of %d receipts of %d to %s", lines, len(views), year, file.name)
 			})
 		},
 	})
