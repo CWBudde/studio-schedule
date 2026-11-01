@@ -97,7 +97,28 @@ react-i18next, Vitest, Playwright.
   (regenerated here). A refused order shows a translated toast (stale, gone, failed), not the
   server's text, like the delete dialogs.
 
-- [ ] 2.1 `levels` Levels as records of the school: migration 00034, `LevelRepo`, `listLevels` and the four office writes, the admin Levels page, the programme seed's levels, ADR 0021 (levels part) — see "Task 2.1" below.
+- [x] 2.1 `levels` Levels as records of the school: migration 00034, `LevelRepo`, `listLevels` and the four office writes, the admin Levels page, the programme seed's levels, ADR 0021 (levels part) — see "Task 2.1" below.
+
+  Done: `domain.SkillLevel` (the renamed enum), `domain.Level` with rune limits, migration 00034,
+  `LevelRepo` with contract cases on both stores (CRUD, duplicate name/code in other case, codeless
+  levels, order, `SetOrder` set rule), `CreateLevel`/`UpdateLevel`/`DeleteLevel`/`SetLevelOrder`
+  (stale-order test for review focus 1, fault sweep), the five operations (`listLevels` public, the
+  writes office, all pinned), the seed's Beginner B, Intermediate I, Advanced A, Professional P,
+  the Levels page with `LevelSheet` (13 tests, among them the 422 that refetches), the nav link
+  (de "Level"), `levels.spec.ts` on both projects, ADR 0021 with "Class audience" left to 3.1.
+  Coverage 99.0 % total; every new function at 100 % (sqlc's generated scan loops aside). Vitest
+  1369, e2e 237 passed. Deviations and discoveries: the columns are `COLLATE "C"` like every name
+  column since 00001, so `lower()` folds ASCII only and both stores sort alike; `LevelRepo.Update`
+  writes name and code only and never the position, so it needs no row lock against a concurrent
+  reorder (1.1 had to add `RoomRepo.Lock` for that); the 409 `duplicate` does not say whether the
+  name or the code is taken, so the sheet marks the name field "name or code is already taken";
+  `domain.LevelID` must be listed in `internal/httpapi/ids.go` (or `TestIDTypesListsEveryDomainID`
+  fails and the schema loses `format: uuid`); the levels table has no column sorting or search, so
+  the move buttons are always shown. Notes for later tasks: the seed's levels shifted every later
+  demo ID by 4 (CLI goldens and the pinned IDs in `cmd/studio-schedule/*_test.go` moved, nothing
+  else); `TestMigrationsRoundTrip` counts tables (now 42); the demo loader's `checkEmpty` counts
+  levels; the rename left gci misalignment in two httpapi files (fixed in a `style` commit). The
+  level mutations only refresh `levelsQuery`; 3.1 adds the classes and schedule queries.
 
 - [ ] 3.1 `class-audience` Classes state a level span or all levels, a stage and an age range: migration 00035 (moves `classes.level` onto level rows), service `Audience`, API fields, the level filter by level ID, statistics, CLI, `formatAudience` on every card and table, the class sheet's new fields, ADR 0021 completed — see "Task 3.1" below.
 
