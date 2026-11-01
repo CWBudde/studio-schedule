@@ -9,14 +9,14 @@ The Werkstatt demo ("Tanzhaus am Lindenhof") should be comparable with the previ
 modelled on: the same kinds of courses, the same way of stating levels, a weekly plan of the same
 density and shape, and the rooms in the order that school shows them. Today both demo schools
 share every person, class and lesson, the Werkstatt catalogue is the programme school's English
-one, levels are one of five fixed values, and room columns sort alphabetically
-(Oben, Trainingsraum, Unten).
+one, levels are one of five fixed values (the previous app had free text), and room columns sort
+alphabetically (Oben, Trainingsraum, Unten).
 
 Three changes get there:
 
 1. **Room order.** A room has a position; lists and the Werkstatt room columns follow it.
-2. **Class audience.** A class states a level range, a stage and an age range instead of one
-   level.
+2. **Class audience.** Levels become a list the school manages. A class states a level range,
+   a stage and an age range instead of one fixed level.
 3. **A school of its own.** The Werkstatt demo school gets its own people, staff, accounts,
    catalogue, weekly plan, workshops and passes, and a fourth room, "Online".
 
@@ -39,9 +39,10 @@ Three changes get there:
 **Domain.** `domain.Room` gets `Position int` (1-based within its location). `Validate` requires
 `Position > 0`.
 
-**Store.** Migration `00028_room_position.sql`: `rooms.position integer NOT NULL CHECK
-(position > 0)`, backfilled per location in the current name order, so nothing visible changes
-for an existing school. No unique constraint (a reorder writes all positions in one transaction).
+**Store.** Migration `00031_room_position.sql` (the next free number at the time of writing):
+`rooms.position integer NOT NULL CHECK (position > 0)`, backfilled per location in the current
+name order, so nothing visible changes for an existing school. No unique constraint (a reorder
+writes all positions in one transaction).
 `RoomRepo` lists rooms ordered by location, then position, then name, then id. A new
 `RoomRepo.SetOrder(ctx, locationID, []RoomID)` writes positions 1..n; it fails with
 `domain.ErrValidation` unless the IDs are exactly that location's rooms.
@@ -65,22 +66,27 @@ for an existing school. No unique constraint (a reorder writes all positions in 
 
 ## 2. Class audience
 
-A class says who it is for with three optional parts, and the cards show them.
+A class says who it is for with three optional parts, and the cards show them. Levels are no
+longer a fixed list: each school keeps its own, in its own words, and the office manages them.
 
-**Level range.** The scale gains a first step, **entry**:
+**Levels.** The previous app stored a class level as free text. Here a level is a record of the
+school, like a course type:
 
-| value | en | de | Werkstatt code |
-|---|---|---|---|
-| entry | Entry | Einsteiger | E |
-| beginner | Beginner | Anfänger | A |
-| intermediate | Intermediate | Mittelstufe | M |
-| advanced | Advanced | Fortgeschritten | F |
-| professional | Professional | Profi | P |
-| open | All levels | Alle Level | alle Level |
+- `domain.Level{ID LevelID, Name, Code string, Position int}`, with a new typed ID
+  `domain.LevelID`.
+- `Name` is required, 1–60 characters, trimmed, and unique per school ignoring case (a duplicate
+  is `domain.ErrDuplicate`, a 409 `duplicate`).
+- `Code` is an optional short label of at most 8 characters ("A", "M"), unique when set.
+- `Position` is 1-based and orders the scale, from least to most advanced.
+- Names are data, not locale strings, with one name per level. The programme school's levels
+  are English, Werkstatt's German.
 
-A class has a range `From`–`To` on the ordered scale (equal for one level), or "open" (for
-everyone), or no level at all (common for children's classes, which state a stage and an age
-instead).
+A class has a level **range**, or is for **all levels**, or states no level at all (common for
+children's classes, which state a stage and an age instead). The range is the span between two
+levels, `From` and `To`, equal for one level. The two ends may be stored in either order: the span
+covers every level whose position lies between theirs. Reordering the levels therefore never
+makes a stored class invalid, and the web always shows the range from the lower level to the
+higher one.
 
 **Stage.** An optional whole number from 1 to 9, the step within a course's progression
 ("Stufe 2"; children's ballet runs Stufe 1–3, youth ballet 1–4).
@@ -90,49 +96,94 @@ instead).
 "from 3 yrs", "4–6 yrs".
 
 **Domain.** In `internal/domain/timetable.go`, `Class.Level` becomes
-`Levels LevelRange{From, To Level}` (zero = no level), `Stage int` and
-`AgeFrom, AgeTo AgeMonths`. `Validate`:
+`Levels LevelRange{From, To LevelID}` (zero = no level), `AllLevels bool`, `Stage int` and
+`AgeFrom, AgeTo AgeMonths`. The `domain.Level` enum and its `Levels()`/`Valid()` go away.
+`Validate`:
 
-- `From` and `To` are both empty or both valid.
-- `open` only as `From == To == open`.
-- `From <= To` on the scale.
+- `From` and `To` are both set or both zero.
+- `AllLevels` is not combined with a range.
 - `Stage` is 0 or 1–9.
 - Ages are 0 or 1–1200, and `AgeTo` is 0 or ≥ `AgeFrom`.
 
-Errors are field errors (`levelFrom`, `levelTo`, `stage`, `ageFromMonths`, `ageToMonths`).
+The class service checks that both level IDs exist. Errors are field errors (`levelFrom`,
+`levelTo`, `allLevels`, `stage`, `ageFromMonths`, `ageToMonths`).
 
-**Store.** Migration `00029_class_audience.sql` replaces `classes.level` with `level_from`,
-`level_to` (nullable text with the scale CHECK), `stage smallint`, `age_from_months smallint` and
-`age_to_months smallint` (nullable, CHECKs as above). Existing rows get `level_from = level_to =`
-their level.
+**Store.**
 
-**Schedule filter.** `level=X` keeps lessons of classes whose range contains X, and open
-classes. Classes without a level and one-off lessons don't match a level filter, as one-off
-lessons don't today. The query parameter's enum gains `entry`.
+- A new `LevelRepo` on `store.Tx` (`Levels()`): `List` (by position, then name, then id), `Get`,
+  `Create`, `Update`, `Delete` and `SetOrder(ctx, []LevelID)`. Each method gets a `storetest`
+  case on both stores.
+- `SetOrder` writes positions 1..n. It fails with `domain.ErrValidation` unless the IDs are
+  exactly the school's levels, the same rule as `RoomRepo.SetOrder`.
+- `Delete` of a level a class uses fails with `domain.ErrInUse` (FK `ON DELETE RESTRICT`).
+- Migration `00032_class_audience.sql` (the next free number at the time of writing):
+  - creates `levels` (uuid id, name, code, position; unique on `lower(name)` and on `code`);
+  - inserts a row for each old enum value an existing class uses, named and coded in English
+    (Beginner B, Intermediate I, Advanced A, Professional P), in scale order;
+  - replaces `classes.level` with `level_from_id` and `level_to_id` (nullable, both or neither),
+    `all_levels boolean NOT NULL DEFAULT false` (not with a range), `stage smallint` and
+    `age_from_months`/`age_to_months smallint` (nullable, CHECKs as above);
+  - points each existing class at its row (`level_from_id = level_to_id`) and turns `open`
+    into `all_levels = true`.
+
+  A fresh database has no levels, and `init` creates none: the office adds the school's own.
 
 **API.**
 
-- Class bodies and responses, the schedule lesson and the statistics row replace `level` with
-  `levelFrom` and `levelTo`, plus `stage`, `ageFromMonths` and `ageToMonths`, each omitted when
-  absent.
+- Public `listLevels`, `GET /api/v1/levels`: the schedule filter needs it when nobody is signed
+  in.
+- Office writes, registered `withConflict` and pinned in `internal/app/access_test.go`:
+  - `createLevel` `POST /api/v1/admin/levels` → 201;
+  - `updateLevel` `PUT /api/v1/admin/levels/{id}`;
+  - `deleteLevel` `DELETE /api/v1/admin/levels/{id}` → 204, or 409 `in-use`;
+  - `setLevelOrder` `PUT /api/v1/admin/level-order` with `{"levelIds": [...]}` → 204. A list
+    that misses a level, repeats one or names an unknown one is a 422 on `body.levelIds`.
+- Class bodies replace `level` with `levelFromId`, `levelToId` and `allLevels`, plus `stage`,
+  `ageFromMonths` and `ageToMonths`.
+- Class responses, the schedule lesson and the statistics row carry `levelFrom` and `levelTo` as
+  a `LevelRef{id, name, code}` (the same pattern as `CourseTypeRef`), ordered lower first, plus
+  `allLevels`, `stage`, `ageFromMonths` and `ageToMonths`. Each is omitted when absent. A
+  service reads the level list once per request, not once per lesson.
 - One-off lessons have none of them.
+
+**Schedule filter.** `level=<levelId>` replaces the enum. It keeps lessons of classes whose span
+covers that level's position, and of all-levels classes. Classes without a level and one-off
+lessons don't match a level filter, as one-off lessons don't today. An unknown ID matches nothing.
+The filter's options come from `listLevels`, and the web's filter parsing drops an old enum value
+from a bookmark.
 
 **Web.**
 
+- A new office page **Levels**, next to Course types in the admin navigation, built like
+  `CourseTypesPage` and `CourseTypeSheet`:
+  - the levels in position order, with name and code;
+  - a sheet to create and edit one (name, code);
+  - "move up" and "move down" buttons (accessible names "Move <level> up/down"; the first has
+    no up, the last no down), each move sending the whole new order;
+  - delete with a confirmation. A level in use is refused with the in-use message.
 - One formatter, `formatAudience` in `web/src/lib/audience.ts`, renders the parts in the user's
   language:
-  - the long form for the programme theme, e.g. "Beginner–Intermediate · Stage 2 · 4–6 yrs";
-  - the short form for Werkstatt, e.g. "A/M · Stufe 2 · 4–6 J.".
+  - the long form for the programme theme uses level names, e.g.
+    "Beginner–Intermediate · Stage 2 · 4–6 yrs";
+  - the short form for Werkstatt uses codes and falls back to the name, e.g.
+    "A/M · Stufe 2 · 4–6 J.".
 
-  The cards, the lesson sheet, the timetable week list and the statistics table use it.
+  "All levels" / "alle Level" is a locale string. The cards, the lesson sheet, the timetable
+  week list and the statistics table use the formatter.
 - The admin class sheet edits the parts:
-  - two level selects, "from" and "to" ("to" defaults to "from"), plus an "All levels" choice;
+  - "from" and "to" selects with the school's levels ("to" defaults to "from"), and "All
+    levels" as the alternative to a range. With no levels defined, the selects are replaced by
+    a link to the Levels page;
   - a stage number;
   - two age fields in years, half years allowed.
 
   It validates with zod against the same rules, and the server's 422s land on the fields.
-- CSV import, if it reads a class level, maps one level to `From == To`.
-- ADR 0019 "Class audience" records the model, the scale and the filter rule.
+
+**Command line.** The `classes` and `stats` tables print the range by level name, lower first,
+or "all levels". There are no `levels` commands.
+
+**ADR 0019** "Class audience" records the levels table, the span rule, all levels, stage and age,
+the filter rule and the migration.
 
 ## 3. A school of its own
 
@@ -167,6 +218,19 @@ lessons don't today. The query parameter's enum gains `entry`.
 | 3 | Online | 40 |
 | 4 | Trainingsraum | 8 |
 
+**Levels.** Each school's seed creates its own levels:
+
+| position | programme | code | Werkstatt | code |
+|---|---|---|---|---|
+| 1 | Beginner | B | Einsteiger | E |
+| 2 | Intermediate | I | Anfänger | A |
+| 3 | Advanced | A | Mittelstufe | M |
+| 4 | Professional | P | Fortgeschritten | F |
+| 5 | | | Profi | P |
+
+The programme classes keep their levels (`open` becomes all levels). The Werkstatt plan below
+names levels by code.
+
 **Werkstatt course types** (each with a short, newly written German description):
 
 Tanzzwerge, Tänzerische Früherziehung, Kinderballett Vorstufe, Kinderballett, Ballett Jugend,
@@ -178,8 +242,9 @@ Morning Workout.
 **Werkstatt weekly plan**: 70 classes from Monday to Saturday, with Sunday free.
 
 Each row gives the room, the time, the course type, the audience and the capacity. Audience
-codes: E/A/M/F level ranges, "alle" = open, "St." = stage, ages in years. Instructors are
-assigned from the Werkstatt staff so that no instructor teaches two classes at once.
+codes: E/A/M/F level ranges by the codes above, "alle" = all levels, "St." = stage, ages in
+years. Instructors are assigned from the Werkstatt staff so that no instructor teaches two
+classes at once.
 
 *Montag*
 
@@ -291,6 +356,16 @@ are German (e.g. Floor Barre, Pas de deux, Yoga für Tänzerinnen und Tänzer).
 
 ## Review focus
 
+- Reordering levels after classes use them: every class's span stays valid and is shown lower
+  level first; a span's members follow the new order (a level moved between the two ends now
+  belongs to it).
+- Deleting a level a class uses: a 409 `in-use`, the Levels page shows the in-use message, and
+  nothing is deleted.
+- A level filter on a level strictly between a class's two ends: the class is in the result.
+- The admin class sheet on a school without levels: no empty selects, a link to the Levels page,
+  and saving a class without a level works.
+- Two levels whose names differ only in case, or a code used twice: a 409 `duplicate` on create
+  and on rename.
 - A level filter on a school whose classes mostly state only a stage or age: the children's
   classes drop out of the filtered schedule. Expected, and the filter's label says "Level".
 - An office that reorders rooms while another office user creates one: the reorder lists the old
@@ -304,6 +379,8 @@ are German (e.g. Floor Barre, Pas de deux, Yoga für Tänzerinnen und Tänzer).
 
 ## Out of scope
 
+- Level lists per course type, translated level names, and `levels` commands on the command
+  line.
 - Booking rules by age or level (who may book): the audience is shown and filtered, not
   enforced.
 - Real teachers or participants of the previous app: not now, possibly later with consent.
