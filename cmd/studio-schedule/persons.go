@@ -52,7 +52,7 @@ func newPersonsSearchCmd(app *cli.App) *cobra.Command {
 				t.Table("ID", "Name", "Member no.", "Email")
 
 				for _, p := range body.Items {
-					t.Row(p.ID.String(), matchName(p), p.MemberNo, p.Email)
+					t.Row(p.ID.String(), shownName(p.GivenName+" "+p.FamilyName, p.Anonymized), p.MemberNo, p.Email)
 				}
 			})
 		},
@@ -91,10 +91,7 @@ func newPersonsShowCmd(app *cli.App) *cobra.Command {
 // showPerson writes the detail of a person: its fields, then a table for
 // each of its links that is not empty.
 func showPerson(t *cli.Text, d httpapi.PersonDetail) {
-	name := d.GivenName + " " + d.FamilyName
-	if !d.AnonymizedAt.IsZero() {
-		name = deletedPersonName
-	}
+	name := shownName(d.GivenName+" "+d.FamilyName, !d.AnonymizedAt.IsZero())
 
 	t.Table("Field", "Value")
 	t.Row("ID", d.ID.String())
@@ -113,7 +110,7 @@ func showPerson(t *cli.Text, d httpapi.PersonDetail) {
 	t.Row("Account", account)
 
 	if m := d.MergedInto; m != nil {
-		t.Row("Merged into", matchName(*m)+" ("+m.ID.String()+")")
+		t.Row("Merged into", shownName(m.GivenName+" "+m.FamilyName, m.Anonymized)+" ("+m.ID.String()+")")
 	}
 
 	if !d.AnonymizedAt.IsZero() {
@@ -129,7 +126,7 @@ func showPerson(t *cli.Text, d httpapi.PersonDetail) {
 		t.Table("ID", "Name", "Member no.", "Email")
 
 		for _, p := range persons {
-			t.Row(p.ID.String(), matchName(p), p.MemberNo, p.Email)
+			t.Row(p.ID.String(), shownName(p.GivenName+" "+p.FamilyName, p.Anonymized), p.MemberNo, p.Email)
 		}
 	}
 
@@ -158,29 +155,6 @@ func showPerson(t *cli.Text, d httpapi.PersonDetail) {
 	matches("Merged", d.Merged)
 }
 
-// deletedPersonName is the name of an anonymized person, as the web shows
-// it (web/src/lib/personName.ts).
-const deletedPersonName = "Deleted person"
-
-// matchName is the name of a person the way the web shows it: "Given
-// Family", or "Deleted person" for an anonymized one.
-func matchName(p httpapi.PersonMatch) string {
-	if p.Anonymized {
-		return deletedPersonName
-	}
-
-	return p.GivenName + " " + p.FamilyName
-}
-
-// personName is matchName of a person.
-func personName(p domain.Person) string {
-	if p.Anonymized() {
-		return deletedPersonName
-	}
-
-	return p.GivenName + " " + p.FamilyName
-}
-
 // personArg parses the person ID of an argument; an invalid one is a
 // usage error (domain.ErrValidation).
 func personArg(s string) (domain.PersonID, error) {
@@ -190,11 +164,3 @@ func personArg(s string) (domain.PersonID, error) {
 // oneLine is s with its lines and runs of spaces joined by single spaces,
 // for a table cell.
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
-
-func yesNo(b bool) string {
-	if b {
-		return "yes"
-	}
-
-	return "no"
-}

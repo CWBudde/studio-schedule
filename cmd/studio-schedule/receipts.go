@@ -21,20 +21,6 @@ func newReceiptsCmd(app *cli.App) *cobra.Command {
 // receipts name persons and their payments.
 const receiptFileMode = 0o600
 
-// receiptDeletedPerson is the name of an anonymized person, as the web
-// shows it (web/src/lib/personName.ts).
-const receiptDeletedPerson = "Deleted person"
-
-// receiptShownName is a name the API put together, or "Deleted person" for
-// an anonymized person, like the web's shownName.
-func receiptShownName(name string, anonymized bool) string {
-	if anonymized {
-		return receiptDeletedPerson
-	}
-
-	return name
-}
-
 // receiptKind is the kind of a receipt in the commands' words: "receipt"
 // for a sale, "storno" for a cancellation.
 func receiptKind(k string) string {

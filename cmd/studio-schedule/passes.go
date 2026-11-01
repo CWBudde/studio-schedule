@@ -26,7 +26,7 @@ func newPassesListCmd(app *cli.App) *cobra.Command {
 			"first, then the others, each newest sale first. Each line shows the pass, its type, the visits " +
 			"used (for a time pass: the bookings it paid for) and left, the school dates it is valid from and " +
 			"until, its status (active or voided), whether it pays for a visit today, and who paid for it if " +
-			"not the owner (an anonymized person as \"" + receiptDeletedPerson + "\"). An unknown person exits " +
+			"not the owner (an anonymized person as \"" + deletedPersonName + "\"). An unknown person exits " +
 			"with status 3.",
 		Example: "  studio-schedule passes list --as office@example.org --person <person-id>",
 		Access:  httpapi.AccessOffice,
@@ -65,21 +65,13 @@ func newPassesListCmd(app *cli.App) *cobra.Command {
 
 					payer := ""
 					if p.Payer != nil {
-						payer = receiptShownName(p.Payer.Name, p.Payer.Anonymized)
+						payer = shownName(p.Payer.Name, p.Payer.Anonymized)
 					}
 
 					t.Row(p.ID.String(), p.PassType.Name, used, left, t.Date(p.ValidFrom), t.Date(p.ValidUntil),
-						p.Status, passYesNo(p.Usable), payer)
+						p.Status, yesNo(p.Usable), payer)
 				}
 			})
 		},
 	})
-}
-
-func passYesNo(b bool) string {
-	if b {
-		return "yes"
-	}
-
-	return "no"
 }
