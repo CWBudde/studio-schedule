@@ -29,8 +29,8 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/mail"
 )
 
-// DefaultTimeout bounds one Send, from dialing to the end of DATA, unless
-// the context ends earlier.
+// DefaultTimeout bounds one Send, from dialing to the end of DATA, and one
+// Verify, unless the context ends earlier.
 const DefaultTimeout = 30 * time.Second
 
 // Sender sends mail over SMTP, one connection per message. It implements
@@ -96,6 +96,30 @@ func (s *Sender) send(ctx context.Context, m mail.Message) error {
 		return err
 	}
 
+	// The server has accepted the message once transfer returns nil; a
+	// failing QUIT must not make the caller send it again.
+	return s.converse(ctx, "send", func(c *netsmtp.Client) error {
+		if err := s.hello(c); err != nil {
+			return err
+		}
+
+		return s.transfer(c, m.To, raw)
+	})
+}
+
+// Verify checks that the server accepts the Sender's connection and login
+// without sending anything: it connects, reads the greeting, upgrades with
+// STARTTLS in that TLS mode, logs in when a user name is set, and quits; no
+// MAIL, RCPT or DATA. It fails as Send would, within the same timeout and
+// with the same errors.
+func (s *Sender) Verify(ctx context.Context) error {
+	return s.converse(ctx, "verify", s.hello)
+}
+
+// converse connects to the server, reads its greeting, runs the dialog,
+// and quits. A failing dialog is reported as step; a failing QUIT is
+// ignored, because the dialog has done its work.
+func (s *Sender) converse(ctx context.Context, step string, dialog func(c *netsmtp.Client) error) error {
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
@@ -125,19 +149,18 @@ func (s *Sender) send(ctx context.Context, m mail.Message) error {
 	}
 	defer func() { _ = c.Close() }()
 
-	if err := s.session(c, m.To, raw); err != nil {
-		return s.fail(ctx, "send", err)
+	if err := dialog(c); err != nil {
+		return s.fail(ctx, step, err)
 	}
 
-	// The server has accepted the message. A failing QUIT must not make the
-	// caller send it again.
 	_ = c.Quit()
 
 	return nil
 }
 
-// session runs the SMTP dialog from STARTTLS to the end of DATA.
-func (s *Sender) session(c *netsmtp.Client, to string, raw []byte) error {
+// hello runs STARTTLS (in that TLS mode) and AUTH (with a user name), the
+// dialog before a mail transaction.
+func (s *Sender) hello(c *netsmtp.Client) error {
 	if s.cfg.TLS == TLSStartTLS {
 		if ok, _ := c.Extension("STARTTLS"); !ok {
 			return errors.New("server does not offer STARTTLS")
@@ -160,6 +183,11 @@ func (s *Sender) session(c *netsmtp.Client, to string, raw []byte) error {
 		}
 	}
 
+	return nil
+}
+
+// transfer runs the mail transaction, from MAIL FROM to the end of DATA.
+func (s *Sender) transfer(c *netsmtp.Client, to string, raw []byte) error {
 	if err := c.Mail(s.from.Address); err != nil {
 		return fmt.Errorf("MAIL FROM: %w", err)
 	}
