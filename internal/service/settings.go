@@ -397,11 +397,16 @@ type SchoolProfile struct {
 // SetSchool changes the school's name and legal notice; both are trimmed.
 func (s *SettingsService) SetSchool(ctx context.Context, p SchoolProfile) (SettingsView, error) {
 	return s.update(ctx, "school profile", 0, func(settings *domain.Settings, _ store.SettingsUsage) error {
-		settings.SchoolName = strings.TrimSpace(p.Name)
-		settings.LegalNotice = strings.TrimSpace(p.LegalNotice)
+		p.apply(settings)
 
 		return nil
 	})
+}
+
+// apply writes the profile into settings.
+func (p SchoolProfile) apply(settings *domain.Settings) {
+	settings.SchoolName = strings.TrimSpace(p.Name)
+	settings.LegalNotice = strings.TrimSpace(p.LegalNotice)
 }
 
 // Branding is what the branding card edits. The logo is the receipts'
@@ -420,13 +425,18 @@ type Branding struct {
 // theme.
 func (s *SettingsService) SetBranding(ctx context.Context, b Branding) (SettingsView, error) {
 	return s.update(ctx, "branding", viewLogo|viewBackground, func(settings *domain.Settings, _ store.SettingsUsage) error {
-		settings.AccentColor = strings.ToLower(strings.TrimSpace(b.AccentColor))
-		if b.Theme != nil {
-			settings.Theme = *b.Theme
-		}
+		b.apply(settings)
 
 		return nil
 	})
+}
+
+// apply writes the branding into settings.
+func (b Branding) apply(settings *domain.Settings) {
+	settings.AccentColor = strings.ToLower(strings.TrimSpace(b.AccentColor))
+	if b.Theme != nil {
+		settings.Theme = *b.Theme
+	}
 }
 
 // Regional are the time zone, the default language and the currency.
@@ -444,19 +454,25 @@ type Regional struct {
 // locked setting is no change.
 func (s *SettingsService) SetRegional(ctx context.Context, r Regional) (SettingsView, error) {
 	return s.update(ctx, "time and language", viewUsage, func(settings *domain.Settings, usage store.SettingsUsage) error {
-		tz, currency := strings.TrimSpace(r.Timezone), strings.TrimSpace(r.Currency)
-
-		switch {
-		case tz != settings.Timezone && usage.Lessons:
-			return ErrTimezoneLocked
-		case currency != settings.Currency && (usage.Prices || usage.Receipts):
-			return ErrCurrencyLocked
-		}
-
-		settings.Timezone, settings.DefaultLocale, settings.Currency = tz, matchLocale(r.DefaultLocale), currency
-
-		return nil
+		return r.apply(settings, usage)
 	})
+}
+
+// apply writes the regional settings into settings, refusing a new time
+// zone or currency that usage fixes.
+func (r Regional) apply(settings *domain.Settings, usage store.SettingsUsage) error {
+	tz, currency := strings.TrimSpace(r.Timezone), strings.TrimSpace(r.Currency)
+
+	switch {
+	case tz != settings.Timezone && usage.Lessons:
+		return ErrTimezoneLocked
+	case currency != settings.Currency && (usage.Prices || usage.Receipts):
+		return ErrCurrencyLocked
+	}
+
+	settings.Timezone, settings.DefaultLocale, settings.Currency = tz, matchLocale(r.DefaultLocale), currency
+
+	return nil
 }
 
 // BookingRules are the release rule, the cutoffs, how long a waiting-list
@@ -489,42 +505,62 @@ func (s *SettingsService) SetBookingRules(ctx context.Context, r BookingRules) (
 	var widened bool
 
 	out, err := s.update(ctx, "booking rules", viewWindow, func(settings *domain.Settings, _ store.SettingsUsage) error {
-		// Valid settings name a known zone.
-		loc, err := time.LoadLocation(settings.Timezone)
-		if err != nil {
-			return fmt.Errorf("school time zone %q: %w", settings.Timezone, err)
-		}
+		var err error
 
-		if err := domain.ValidateReleasedThrough(r.ReleasedThrough, domain.DateOf(s.clock.Now(), loc)); err != nil {
-			return err
-		}
+		widened, err = r.apply(settings, s.clock.Now())
 
-		// A later released-through date widens the horizon only where it
-		// reaches past what the weekly rule generates anyway (generate.go
-		// horizon); a date the rule covers generates nothing new.
-		today := domain.DateOf(s.clock.Now(), loc)
-		throughWider := r.ReleasedThrough.Compare(settings.ReleasedThrough) > 0 &&
-			today.DaysUntil(r.ReleasedThrough) > 7*(r.ReleaseWeeksAhead+2)
-		widened = r.ReleaseWeeksAhead > settings.ReleaseWeeksAhead || r.DefaultVisibleDays > settings.DefaultVisibleDays ||
-			throughWider
-		settings.ReleaseWeekday, settings.ReleaseTime, settings.ReleaseWeeksAhead = r.ReleaseWeekday, r.ReleaseTime,
-			r.ReleaseWeeksAhead
-		settings.BookingCutoff, settings.CancellationCutoff = r.BookingCutoff, r.CancellationCutoff
-		settings.WaitlistInviteExpiry, settings.DefaultVisibleDays = r.WaitlistInviteExpiry, r.DefaultVisibleDays
-		settings.ReleasedThrough = r.ReleasedThrough
-
-		return nil
+		return err
 	})
 	if err != nil || !widened {
 		return out, err
 	}
 
-	// Its own transaction: InTx never nests.
-	if out.Generated, err = s.gen.GenerateAhead(ctx); err != nil {
-		out.Generated, out.GenerateErr = 0, fmt.Errorf("generate lessons for the wider window: %w", err)
-	}
+	out.Generated, out.GenerateErr = s.generateAhead(ctx)
 
 	return out, nil
+}
+
+// apply writes the booking rules into settings at the instant now and
+// reports whether they widen the window, which then generates lessons. A
+// released-through date more than 52 weeks after today is a FieldError.
+func (r BookingRules) apply(settings *domain.Settings, now time.Time) (widened bool, err error) {
+	// Valid settings name a known zone.
+	loc, err := time.LoadLocation(settings.Timezone)
+	if err != nil {
+		return false, fmt.Errorf("school time zone %q: %w", settings.Timezone, err)
+	}
+
+	today := domain.DateOf(now, loc)
+	if err := domain.ValidateReleasedThrough(r.ReleasedThrough, today); err != nil {
+		return false, err
+	}
+
+	// A later released-through date widens the horizon only where it
+	// reaches past what the weekly rule generates anyway (generate.go
+	// horizon); a date the rule covers generates nothing new.
+	throughWider := r.ReleasedThrough.Compare(settings.ReleasedThrough) > 0 &&
+		today.DaysUntil(r.ReleasedThrough) > 7*(r.ReleaseWeeksAhead+2)
+	widened = r.ReleaseWeeksAhead > settings.ReleaseWeeksAhead || r.DefaultVisibleDays > settings.DefaultVisibleDays ||
+		throughWider
+	settings.ReleaseWeekday, settings.ReleaseTime, settings.ReleaseWeeksAhead = r.ReleaseWeekday, r.ReleaseTime,
+		r.ReleaseWeeksAhead
+	settings.BookingCutoff, settings.CancellationCutoff = r.BookingCutoff, r.CancellationCutoff
+	settings.WaitlistInviteExpiry, settings.DefaultVisibleDays = r.WaitlistInviteExpiry, r.DefaultVisibleDays
+	settings.ReleasedThrough = r.ReleasedThrough
+
+	return widened, nil
+}
+
+// generateAhead generates the lessons of a wider window after the change
+// is stored, in its own transaction (InTx never nests). A failure is no
+// error of the change: the hourly job generates them.
+func (s *SettingsService) generateAhead(ctx context.Context) (int, error) {
+	n, err := s.gen.GenerateAhead(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("generate lessons for the wider window: %w", err)
+	}
+
+	return n, nil
 }
 
 // ReleasePreview is the release window a release rule would have now.
