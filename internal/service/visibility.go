@@ -1,9 +1,13 @@
 package service
 
 import (
+	"context"
+	"fmt"
+	"slices"
 	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/store"
 )
 
 // viewer is who reads the schedule (ADR 0003): a guest (zero value), a
@@ -91,4 +95,77 @@ func visibleToGuest(l domain.Lesson, w ReleaseWindow) bool {
 // 2026-10-24). A regular one-off lesson follows the window.
 func publishedEarly(l domain.Lesson) bool {
 	return l.Kind != domain.LessonRegular
+}
+
+// draftEvents returns which of the events of the sessions among lessons
+// are drafts (ADR 0019): only staff see a draft event and its sessions, so
+// for staff none is, and lessons without a session cost no read.
+func draftEvents(ctx context.Context, tx store.Tx, v viewer, lessons []domain.Lesson) (map[domain.EventID]bool, error) {
+	if v.role.Staff() {
+		return nil, nil
+	}
+
+	var events []domain.EventID
+
+	for _, l := range lessons {
+		if !l.EventID.IsZero() && !slices.Contains(events, l.EventID) {
+			events = append(events, l.EventID)
+		}
+	}
+
+	if len(events) == 0 {
+		return nil, nil
+	}
+
+	found, err := tx.Events().ListByIDs(ctx, events)
+	if err != nil {
+		return nil, fmt.Errorf("events: %w", err)
+	}
+
+	out := map[domain.EventID]bool{}
+
+	for _, e := range found {
+		if e.Status == domain.EventDraft {
+			out[e.ID] = true
+		}
+	}
+
+	return out, nil
+}
+
+// withoutDraftSessions returns lessons without the sessions of draft
+// events, unless v is staff (draftEvents). It may reuse the backing array.
+func withoutDraftSessions(ctx context.Context, tx store.Tx, v viewer, lessons []domain.Lesson) ([]domain.Lesson, error) {
+	drafts, err := draftEvents(ctx, tx, v, lessons)
+	if err != nil || len(drafts) == 0 {
+		return lessons, err
+	}
+
+	return slices.DeleteFunc(lessons, func(l domain.Lesson) bool { return drafts[l.EventID] }), nil
+}
+
+// notSession refuses to book lesson l, or to put someone on its waiting
+// list, as p at now if it is an event's session: domain.ErrNotFound if p
+// may not see it (a session of a draft event, or any lesson p may not see,
+// like bookable), ErrEventSession otherwise (ADR 0019).
+func notSession(
+	ctx context.Context, tx store.Tx, p Principal, settings domain.Settings, loc *time.Location, now time.Time,
+	l domain.Lesson,
+) error {
+	if l.EventID.IsZero() {
+		return nil
+	}
+
+	v := viewerOf(p, settings, loc, now)
+
+	seen, err := withoutDraftSessions(ctx, tx, v, []domain.Lesson{l})
+	if err != nil {
+		return err
+	}
+
+	if len(seen) == 0 || !v.sees(l, ComputeReleaseWindow(settings, loc, now)) {
+		return fmt.Errorf("%w: lesson %v", domain.ErrNotFound, l.ID)
+	}
+
+	return ErrEventSession
 }

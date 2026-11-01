@@ -55,7 +55,8 @@ type CloneRequest struct {
 
 // CloneResult lists, in the order of the source lessons, the copies a clone
 // creates (or would create, in a preview) and the source lessons it skips.
-// Canceled source lessons are left out of both.
+// Canceled source lessons and the sessions of events (ADR 0019) are left
+// out of both.
 type CloneResult struct {
 	Created []LessonCopy
 	Skipped []SkippedLesson
@@ -214,7 +215,10 @@ func (c *cloner) run(ctx context.Context, r CloneRequest) (CloneResult, error) {
 		return CloneResult{}, err
 	}
 
-	lessons = slices.DeleteFunc(lessons, func(l domain.Lesson) bool { return l.Status != domain.LessonScheduled })
+	// A session belongs to its event (ADR 0019) and is never copied.
+	lessons = slices.DeleteFunc(lessons, func(l domain.Lesson) bool {
+		return l.Status != domain.LessonScheduled || !l.EventID.IsZero()
+	})
 	for _, l := range lessons {
 		if err := c.refs.loadClass(ctx, c.tx, l.ClassID); err != nil {
 			return CloneResult{}, err

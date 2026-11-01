@@ -210,6 +210,19 @@ func (r personRepo) Delete(_ context.Context, id domain.PersonID) error {
 	return nil
 }
 
+func (r lessonRepo) ListByEvents(_ context.Context, events []domain.EventID) ([]domain.Lesson, error) {
+	wanted := setOf(events)
+	lessons := r.tx.state.lessons.filter(func(l domain.Lesson) bool {
+		_, ok := wanted[l.EventID]
+
+		return ok && !l.EventID.IsZero()
+	})
+
+	return sorted(lessons, func(a, b domain.Lesson) int {
+		return cmp.Or(a.StartsAt.Compare(b.StartsAt), compareID(a.ID, b.ID))
+	}), nil
+}
+
 // Lock needs no lock of its own: the store mutex already serialises every
 // transaction.
 func (r personRepo) Lock(_ context.Context, ids ...domain.PersonID) error {

@@ -870,13 +870,23 @@ last.
 - [ ] Office administration (`/api/v1/admin/events`, `office`): create/edit/delete events, add,
       move and remove sessions (lessons) under the class/lesson rules of ADR 0007, list
       registrations, add a registration for a person or guest, mark paid, cancel; `withConflict`
-      409s and 422 field errors as elsewhere; audited
+      409s and 422 field errors as elsewhere; audited (2026-11-01) — partial: the API and service
+      are done, `service.EventService` and `httpapi/event_admin.go`: events as drafts with a slug from the title, publish and take
+      back, cancel with sessions, registrations and refunds (one `event-canceled` mail each), the
+      image like the background, sessions added there and then edited as lessons (capacity kept
+      the event's); registrations at the desk, mark paid and cancel with or without refund under
+      `/api/v1/admin/event-registrations`; sessions refuse bookings (409 `event-session`), a
+      draft's sessions are staff's only; four audit actions (migration 00032); ADR 0019,
+      amendment "office administration"; the office pages (Web item) remain
 - [ ] Public API: `listEvents` (upcoming, published; free places, price, sessions) and `getEvent`
       by slug (`public`); `registerForEvent` and `cancelEventRegistration` (`signedIn`, and for
-      guests if the ADR allows it); confirmation and cancellation mails (EN/DE, golden files)
+      guests if the ADR allows it); confirmation and cancellation mails (EN/DE, golden files).
+      The event waiting list (offering freed places to those waiting) lands here too
 - [ ] Payment and receipts: marking a registration paid issues a receipt in the same transaction
       (`ReceiptService`, the PDF template gets an event line), Storno on refund; "My events" with
-      the registrations of the family and their receipts
+      the registrations of the family and their receipts (2026-11-01) — partial: the server side is
+      done (mark paid issues the receipt with an event line, refunds by Storno, event-attended);
+      "My events" and the web remain
 - [ ] Web: `/events` list and `/events/$slug` detail page (dates, sessions, instructor, location,
       price, places left, register/cancel, waitlist), a nav entry, event sessions in the schedule
       linking to their event; office pages for events, sessions and registrations; every string in

@@ -822,7 +822,7 @@ func TestLessonRecipientsGuests(t *testing.T) {
 
 	err := f.st.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 		var err error
-		recipients, err = lessonRecipients(ctx, tx, l.ID)
+		recipients, err = lessonRecipients(ctx, tx, l)
 
 		return err
 	})

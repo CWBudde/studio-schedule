@@ -682,6 +682,7 @@ func TestRenderAllTemplates(t *testing.T) {
 		mail.TemplateAnnouncement:     announcementData(),
 		mail.TemplateAccountDeleted:   accountDeletedData(),
 		mail.TemplatePasswordChanged:  passwordChangedData(),
+		mail.TemplateEventCanceled:    eventCanceledData(t),
 		mail.TemplateTest:             testData(),
 	}
 

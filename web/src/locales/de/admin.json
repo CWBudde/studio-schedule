@@ -511,7 +511,11 @@
       "account-deleted": "Konto gelöscht",
       "password-reset-issued": "Link zum Zurücksetzen des Passworts ausgestellt",
       "sessions-revoked": "Sitzungen beendet",
-      "setup-link-issued": "Einrichtungslink ausgestellt"
+      "setup-link-issued": "Einrichtungslink ausgestellt",
+      "event-registration-added": "Für eine Veranstaltung angemeldet",
+      "event-registration-canceled": "Anmeldung zu einer Veranstaltung storniert",
+      "event-registration-paid": "Veranstaltungsgebühr bezahlt",
+      "event-canceled": "Veranstaltung abgesagt"
     },
     "merged": "zusammengeführt: {{name}}",
     "unknownAccount": "Unbekanntes Konto",

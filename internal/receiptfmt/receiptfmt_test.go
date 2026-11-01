@@ -27,3 +27,25 @@ func TestPassLine(t *testing.T) {
 		}
 	}
 }
+
+func TestEventLine(t *testing.T) {
+	t.Parallel()
+
+	first, last := domain.Date{Year: 2026, Month: 7, Day: 3}, domain.Date{Year: 2026, Month: 7, Day: 5}
+
+	for _, c := range []struct {
+		locale      string
+		first, last domain.Date
+		want        string
+	}{
+		{"en", first, last, "Ballet intensive for Mia Example, 3 Jul 2026 – 5 Jul 2026"},
+		{"de-DE", first, last, "Ballet intensive für Mia Example, 03.07.2026 – 05.07.2026"},
+		{"en", first, first, "Ballet intensive for Mia Example, 3 Jul 2026"},
+		{"de", first, domain.Date{}, "Ballet intensive für Mia Example, 03.07.2026"},
+		{"fr", domain.Date{}, domain.Date{}, "Ballet intensive for Mia Example"},
+	} {
+		if got := receiptfmt.EventLine(c.locale, "Ballet intensive", "Mia Example", c.first, c.last); got != c.want {
+			t.Errorf("%s %v–%v: %q, want %q", c.locale, c.first, c.last, got, c.want)
+		}
+	}
+}

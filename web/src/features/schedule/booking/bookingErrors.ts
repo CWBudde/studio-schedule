@@ -14,6 +14,7 @@ export function useBookingErrorText(): (error: unknown, name: string) => string 
     if (why) return t(`booking.errors.closed.${why}`);
     const reason = conflictReason(error);
     if (reason === 'already-booked') return t('booking.errors.alreadyBooked', { name });
+    if (reason === 'event-session') return t('booking.errors.eventSession');
     if (reason === 'full') return t('booking.errors.full');
     if (reason === 'closed') return t('booking.errors.closed.cutoff');
     if (reason === 'already-canceled') return t('booking.errors.alreadyCanceled');

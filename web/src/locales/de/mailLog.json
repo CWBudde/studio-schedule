@@ -45,7 +45,8 @@
     "receipt": "Beleg",
     "announcement": "Mitteilung",
     "account-deleted": "Konto gelöscht",
-    "password-changed": "Passwort geändert"
+    "password-changed": "Passwort geändert",
+    "event-canceled": "Veranstaltung abgesagt"
   },
   "attempts_one": "{{count}} Versuch",
   "attempts_other": "{{count}} Versuche",

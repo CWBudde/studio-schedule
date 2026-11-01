@@ -126,6 +126,12 @@ func (r eventRepo) List(ctx context.Context) ([]domain.Event, error) {
 	return convertRows(rows, err, toEvent)
 }
 
+func (r eventRepo) ListByIDs(ctx context.Context, ids []domain.EventID) ([]domain.Event, error) {
+	rows, err := r.q.ListEventsByIDs(ctx, pgIDs(ids))
+
+	return convertRows(rows, err, toEvent)
+}
+
 // Lock reads the event with SELECT … FOR UPDATE. In a read-only transaction
 // PostgreSQL rejects the statement (SQLSTATE 25006, store.ErrReadOnly).
 func (r eventRepo) Lock(ctx context.Context, id domain.EventID) (domain.Event, error) {
@@ -306,6 +312,14 @@ func (r eventRegistrationRepo) ListByPersons(
 	ctx context.Context, persons []domain.PersonID,
 ) ([]domain.EventRegistration, error) {
 	rows, err := r.q.ListEventRegistrationsByPersons(ctx, pgIDs(persons))
+
+	return convertRows(rows, err, toEventRegistration)
+}
+
+func (r eventRegistrationRepo) ListByReceipts(
+	ctx context.Context, receipts []domain.ReceiptID,
+) ([]domain.EventRegistration, error) {
+	rows, err := r.q.ListEventRegistrationsByReceipts(ctx, pgIDs(receipts))
 
 	return convertRows(rows, err, toEventRegistration)
 }

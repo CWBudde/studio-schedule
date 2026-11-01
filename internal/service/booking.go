@@ -36,6 +36,10 @@ var (
 	// for a one-off lesson, which has no following weeks. Like
 	// ErrLessonStarted, the booking itself is the problem, not a field.
 	ErrNotClassBooking = fmt.Errorf("%w: the booking is not for a lesson of a class", domain.ErrValidation)
+	// ErrEventSession refuses to book a session of an event, to add a
+	// participant to one, or to put someone on its waiting list: people
+	// register for the whole event (ADR 0019; ADR 0009, amendment).
+	ErrEventSession = fmt.Errorf("%w: the lesson is a session of an event", domain.ErrConflict)
 )
 
 // ClosedReason says why a lesson cannot be booked although the caller may
@@ -98,6 +102,7 @@ func NewBookingService(st store.Store, clk clock.Clock, src ids.Source, mails Ma
 
 // Book books lesson for person, who must be p's own person or one of p's
 // dependents (domain.ErrNotFound otherwise, like a lesson p may not see).
+// An event's session is ErrEventSession (notSession).
 // Staff book under member rules: a lesson members may not book yet, or
 // not at all, is a *BookingClosedError with ClosedRelease. A canceled,
 // started or past lesson, or one whose booking cutoff has passed, is a
@@ -139,6 +144,10 @@ func (s *BookingService) Book(
 		}
 
 		now := s.clock.Now()
+		if err := notSession(ctx, tx, p, settings, loc, now, l); err != nil {
+			return err
+		}
+
 		if err := bookable(p, settings, loc, now, l); err != nil {
 			return err
 		}

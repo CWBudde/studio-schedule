@@ -171,3 +171,85 @@ These choices were made while building the domain and both stores (migration 000
     0013).
 - **Receipts.** The schema keeps a receipt unique among registrations, but not between a pass and
   a registration. The payment service keeps those apart.
+
+## Amendment (2026-11-01): office administration
+
+These choices were made while building the office's administration (`service.EventService`,
+`httpapi/event_admin.go`, migration 00032).
+
+**Operations.** All are `office`.
+
+- Under `/api/v1/admin/events`: `listAdminEvents`, `getAdminEvent`, `createEvent`, `updateEvent`,
+  `deleteEvent`, `publishEvent`, `unpublishEvent` and `cancelEvent` (with an optional note).
+- The image: `getAdminEventImage`, `putEventImage` and `deleteEventImage`, as for the school's
+  background.
+- Sessions and registrations: `addEventSession`, `listEventRegistrations` and
+  `addEventRegistration`.
+- Under `/api/v1/admin/event-registrations/{registrationId}`: `markEventRegistrationPaid` (`/pay`)
+  and `officeCancelEventRegistration` (`/cancel`, with `refund`).
+
+**Events.**
+
+- A new event is a draft. Without a slug, the title gives one: lowercase, ä, ö, ü and ß spelled
+  ae, oe, ue and ss, other accents dropped, every other run of characters one hyphen, cut at a
+  hyphen to 80 characters. While another event has it, `-2`, `-3` and so on are tried (at most 50),
+  each with a lookup by slug: a failed insert would end a PostgreSQL transaction. A title that
+  gives no slug is a 422 on `slug`; a slug that is given and taken is a 409 `duplicate`.
+- A new capacity goes to every session that has not started, canceled ones included, since they
+  may be restored. A session's capacity is always its event's: `updateLesson` refuses another one
+  (422 on `capacity`). A session is always public, since its event's status decides who sees it:
+  `updateLesson` refuses another visibility (422 on `visibility`).
+- Only lowering the capacity below the registrations and open invites is refused, so an event the
+  office registered beyond its capacity stays editable.
+- The course type of an event with sessions stays.
+- Deleting is refused (`in-use`) once the event has a registration, canceled ones included, or a
+  started session. It deletes the sessions with the event.
+- Publishing needs a scheduled session (409 `no-sessions`) and a draft (409 `not-draft`). Taking an
+  event back needs a published event (409 `not-published`) without open registrations (`in-use`).
+- A draft takes no registrations (409 `closed`), so a draft never has open registrations. A
+  canceled event takes neither registrations nor sessions (409 `closed`).
+
+**Sessions.**
+
+- `addEventSession` creates a public `workshop` lesson with the event's course type and capacity,
+  under the checks of `createLesson`. Moving, canceling, restoring and deleting it are the lesson
+  operations; deleting is refused (`in-use`) while the event has open registrations. Restoring a
+  session of a canceled event is a 409 `closed`; it takes the event's lock first.
+- A session of a draft event is staff's only: the schedule, `getLesson` and the schedule feed hide
+  it from everyone else, with one read of the sessions' events.
+- Booking a session, adding a participant to it and joining its waiting list are a 409
+  `event-session`. The server has no `closed` reason for it: lessons carry `eventId`, so the web
+  can tell a session.
+- A clone never copies a session.
+- The lesson mails of a session (moved, canceled, restored, a notice) go to the event's registered
+  persons and guests, by the recipient chain of lessons.
+
+**Cancellation and refunds.**
+
+- `cancelEvent` cancels the sessions that have not started without their own mails, cancels every
+  open registration, refunds every paid one by a Storno, and mails one `event-canceled` (EN/DE) per
+  recipient, saying whether this cancellation refunded a fee. The refunds are in the same
+  transaction, so an event with paid registrations is canceled only with complete receipt settings
+  (409 `receipt-settings-incomplete` otherwise).
+- `officeCancelEventRegistration` refunds only with `refund`; without it the payment stays.
+- `cancelReceipt` on an event fee's receipt is a 409 `registration-open` while its registration is
+  open: the office cancels the registration with a refund instead, which frees the place with the
+  money. A registration canceled with its fee kept is refunded there, which marks it `refunded`.
+  Once a scheduled session has started it is a 409 `event-attended`; canceling the registration or
+  the event refunds even then.
+- `markEventRegistrationPaid` is refused for a paid, free or refunded registration (409
+  `already-paid`), a canceled one (409 `already-canceled`) and one on the waiting list (409
+  `not-registered`). The payer defaults to the
+  registered person; a guest pays for themself.
+
+**Audit.** Four actions: `event-registration-added`, `event-registration-canceled` and
+`event-registration-paid` target the registered person (nothing for a guest) and name the event
+and the registration; the canceled one records `refund`, whether that cancellation refunded the fee. `event-canceled` has no target and names
+the event.
+
+**Receipt views.** A receipt names the event of its fee (`eventId`, `eventTitle`), a Storno the
+event of the receipt it cancels. A receipt whose registration is open or whose event has started is
+not `cancelable`.
+
+**Not yet.** The event waiting list, which offers freed places (the Public API item), the
+registration confirmation mails, and moving registrations when persons are merged (ADR 0015).

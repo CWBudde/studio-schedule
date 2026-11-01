@@ -205,8 +205,11 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `Events()` (slug, `Lock` before any lesson lock, the image like the background) and
   `EventRegistrations()` (one open registration per person and event, `CountsByEvents(at)` for free
   places, `AnonymizeGuests`); memory `internal/store/memory/events.go`, PostgreSQL
-  `internal/store/postgres/events.go` (migration 00031), contracts `storetest/events.go`. Services,
-  API and web follow in Phase 10.
+  `internal/store/postgres/events.go` (migration 00031), contracts `storetest/events.go`. The
+  office's administration is `service.EventService` (`service/events.go`, `event_registrations.go`,
+  `event_payment.go`; fees through `ReceiptService.issueEventFee`, refunds through its `storno`) and
+  `httpapi/event_admin.go` (`/api/v1/admin/events`, `/api/v1/admin/event-registrations`); a session
+  refuses bookings with `ErrEventSession`. The public API and web follow.
 - **PWA & web push:** ADR 0017. The service worker is `web/src/sw.ts` (vite-plugin-pwa
   `injectManifest`; precaches the shell, never `*.wasm`, never the API), registered with the update
   toast in `web/src/pwa.ts`; offline the allow-listed query cache comes from IndexedDB

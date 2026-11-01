@@ -206,6 +206,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 		MailLog:        svc.MailLog,
 		Imports:        svc.Imports,
 		Push:           svc.Push,
+		Events:         svc.Events,
 	})
 
 	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
@@ -269,6 +270,8 @@ type Services struct {
 	// Integrity checks the data for inconsistencies the database cannot
 	// rule out: `db check` on the command line.
 	Integrity *service.IntegrityService
+	// Events is the office's event administration (ADR 0019).
+	Events *service.EventService
 }
 
 // NewServices builds the services of deps exactly as New does. It panics
@@ -299,6 +302,7 @@ func newServices(deps Deps, renderer *mail.Renderer) Services {
 		Feeds:      service.NewCalendarFeedService(deps.Store, deps.Clock, deps.IDs, deps.AppURL, !deps.Demo),
 		Passes:     service.NewPassService(deps.Store, deps.Clock, deps.IDs, receipts),
 		Receipts:   receipts,
+		Events:     service.NewEventService(deps.Store, deps.Clock, deps.IDs, mails, receipts),
 		Auth:       newAuthService(deps, renderer),
 		Family:     service.NewFamilyService(deps.Store, deps.Clock, deps.IDs, mails),
 		Persons:    service.NewPersonService(deps.Store, deps.Clock, deps.IDs, mails),

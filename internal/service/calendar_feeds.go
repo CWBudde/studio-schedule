@@ -525,8 +525,8 @@ func teachingEvents(
 }
 
 // scheduleEvents returns the lessons in the school dates [from, until) that
-// p may see in the schedule at now (ADR 0003), of the location unless it is
-// zero.
+// p may see in the schedule at now (ADR 0003, and ADR 0019 for the sessions
+// of draft events), of the location unless it is zero.
 func scheduleEvents(
 	ctx context.Context, tx store.Tx, settings domain.Settings, p Principal, location domain.LocationID,
 	from, until domain.Date, loc *time.Location, now time.Time,
@@ -540,6 +540,11 @@ func scheduleEvents(
 	}
 
 	lessons = slices.DeleteFunc(lessons, func(l domain.Lesson) bool { return !v.sees(l, w) })
+
+	// A session of a draft event is staff's only (ADR 0019).
+	if lessons, err = withoutDraftSessions(ctx, tx, v, lessons); err != nil {
+		return nil, err
+	}
 
 	return resolveEvents(ctx, tx, from, until, lessons, func(_ domain.Lesson, room domain.Room) bool {
 		return location.IsZero() || room.LocationID == location

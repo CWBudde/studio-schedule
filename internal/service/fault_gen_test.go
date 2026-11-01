@@ -1001,6 +1001,14 @@ func (r *faultLessonRepo) ListByEvent(a0 context.Context, a1 domain.EventID) (r0
 	return r.LessonRepo.ListByEvent(a0, a1)
 }
 
+func (r *faultLessonRepo) ListByEvents(a0 context.Context, a1 []domain.EventID) (r0 []domain.Lesson, err error) {
+	if err = r.f.hit("Lessons.ListByEvents"); err != nil {
+		return r0, err
+	}
+
+	return r.LessonRepo.ListByEvents(a0, a1)
+}
+
 func (r *faultLessonRepo) ListByStaff(a0 context.Context, a1 []domain.StaffID, a2 time.Time, a3 time.Time) (r0 []domain.Lesson, err error) {
 	if err = r.f.hit("Lessons.ListByStaff"); err != nil {
 		return r0, err
@@ -2163,6 +2171,14 @@ func (r *faultEventRepo) List(a0 context.Context) (r0 []domain.Event, err error)
 	return r.EventRepo.List(a0)
 }
 
+func (r *faultEventRepo) ListByIDs(a0 context.Context, a1 []domain.EventID) (r0 []domain.Event, err error) {
+	if err = r.f.hit("Events.ListByIDs"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRepo.ListByIDs(a0, a1)
+}
+
 func (r *faultEventRepo) Lock(a0 context.Context, a1 domain.EventID) (r0 domain.Event, err error) {
 	if err = r.f.hit("Events.Lock"); err != nil {
 		return r0, err
@@ -2254,6 +2270,14 @@ func (r *faultEventRegistrationRepo) ListByPersons(a0 context.Context, a1 []doma
 	}
 
 	return r.EventRegistrationRepo.ListByPersons(a0, a1)
+}
+
+func (r *faultEventRegistrationRepo) ListByReceipts(a0 context.Context, a1 []domain.ReceiptID) (r0 []domain.EventRegistration, err error) {
+	if err = r.f.hit("EventRegistrations.ListByReceipts"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRegistrationRepo.ListByReceipts(a0, a1)
 }
 
 func (r *faultEventRegistrationRepo) CountsByEvents(a0 context.Context, a1 []domain.EventID, a2 time.Time) (r0 map[domain.EventID]store.EventRegistrationCounts, err error) {

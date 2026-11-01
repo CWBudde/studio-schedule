@@ -12,6 +12,7 @@ export function useParticipantErrorText(): (error: unknown, { name }: { name: st
     if (closedWhy(error) === 'canceled') return t('participants.errors.canceledLesson');
     const reason = conflictReason(error);
     if (reason === 'already-booked') return t('participants.errors.alreadyBooked', { name });
+    if (reason === 'event-session') return t('participants.errors.eventSession');
     if (reason === 'already-canceled') return t('participants.errors.alreadyCanceled');
     if (reason === 'full') return t('participants.errors.full');
     if (error instanceof ApiError && error.status === 404) return t('participants.errors.notFound');

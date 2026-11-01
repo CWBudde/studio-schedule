@@ -11,40 +11,48 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/requestid"
 )
 
-// Reasons of a Conflict (ADR 0007, ADR 0008, ADR 0009, ADR 0010, ADR 0012, ADR 0014, ADR 0015, ADR 0016;
+// Reasons of a Conflict (ADR 0007, ADR 0008, ADR 0009, ADR 0010, ADR 0012, ADR 0014, ADR 0015, ADR 0016, ADR 0019;
 // those of ADR 0013 are in settings.go).
 const (
-	reasonInUse           = "in-use"
-	reasonDuplicate       = "duplicate"
-	reasonManaged         = "managed"
-	reasonHasAccount      = "has-account"
-	reasonRoomTaken       = "room-taken"
-	reasonPast            = "past"
-	reasonGenerated       = "generated"
-	reasonAlreadyBooked   = "already-booked"
-	reasonFull            = "full"
-	reasonClosed          = "closed"
-	reasonAlreadyCanceled = "already-canceled"
-	reasonNotFull         = "not-full"
-	reasonAlreadyWaiting  = "already-waiting"
-	reasonNotInvited      = "not-invited"
-	reasonInviteExpired   = "invite-expired"
-	reasonInviteUsed      = "invite-used"
-	reasonNotWaiting      = "not-waiting"
-	reasonAlreadyVoided   = "already-voided"
-	reasonReceiptSettings = "receipt-settings-incomplete"
-	reasonPassUsed        = "pass-used"
-	reasonCancellation    = "cancellation"
-	reasonMailLimit       = "mail-limit"
-	reasonExpired         = "expired"
-	reasonNotFailed       = "not-failed"
-	reasonSecretLink      = "secret-link"
-	reasonTwoAccounts     = "two-accounts"
-	reasonGuardianCycle   = "guardian-cycle"
-	reasonAnonymized      = "anonymized"
-	reasonSoleGuardian    = "sole-guardian"
-	reasonLastAdmin       = "last-admin"
-	reasonOwnAccount      = "own-account"
+	reasonInUse            = "in-use"
+	reasonDuplicate        = "duplicate"
+	reasonManaged          = "managed"
+	reasonHasAccount       = "has-account"
+	reasonRoomTaken        = "room-taken"
+	reasonPast             = "past"
+	reasonGenerated        = "generated"
+	reasonAlreadyBooked    = "already-booked"
+	reasonFull             = "full"
+	reasonClosed           = "closed"
+	reasonAlreadyCanceled  = "already-canceled"
+	reasonNotFull          = "not-full"
+	reasonAlreadyWaiting   = "already-waiting"
+	reasonNotInvited       = "not-invited"
+	reasonInviteExpired    = "invite-expired"
+	reasonInviteUsed       = "invite-used"
+	reasonNotWaiting       = "not-waiting"
+	reasonAlreadyVoided    = "already-voided"
+	reasonReceiptSettings  = "receipt-settings-incomplete"
+	reasonPassUsed         = "pass-used"
+	reasonCancellation     = "cancellation"
+	reasonMailLimit        = "mail-limit"
+	reasonExpired          = "expired"
+	reasonNotFailed        = "not-failed"
+	reasonSecretLink       = "secret-link"
+	reasonTwoAccounts      = "two-accounts"
+	reasonGuardianCycle    = "guardian-cycle"
+	reasonAnonymized       = "anonymized"
+	reasonSoleGuardian     = "sole-guardian"
+	reasonLastAdmin        = "last-admin"
+	reasonOwnAccount       = "own-account"
+	reasonEventSession     = "event-session"
+	reasonNoSessions       = "no-sessions"
+	reasonNotDraft         = "not-draft"
+	reasonNotPublished     = "not-published"
+	reasonAlreadyPaid      = "already-paid"
+	reasonEventAttended    = "event-attended"
+	reasonRegistrationOpen = "registration-open"
+	reasonNotRegistered    = "not-registered"
 )
 
 // ErrorModel is the problem document (RFC 9457) of every error response:
@@ -127,7 +135,7 @@ func finishProblem(ctx huma.Context, _ string, v any) (any, error) {
 type Conflict struct {
 	ErrorModel
 
-	Reason string          `doc:"in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead; two-accounts: both persons of a merge have an account, so one is disabled first; guardian-cycle: after the merge a guardian of the survivor would also be its dependent; anonymized: the person is anonymized already; sole-guardian: the person is the only guardian of a dependent, so another guardian is linked or the link removed first; last-admin: the account is the last admin who can sign in (enabled and confirmed), which is not disabled, demoted or deleted; own-account: an admin does not disable, demote or delete their own account (another admin does)." enum:"in-use,duplicate,managed,has-account,room-taken,past,generated,already-booked,full,closed,already-canceled,not-full,already-waiting,not-invited,invite-expired,invite-used,not-waiting,already-voided,receipt-settings-incomplete,pass-used,cancellation,timezone-locked,currency-locked,mail-limit,expired,not-failed,secret-link,two-accounts,guardian-cycle,anonymized,sole-guardian,last-admin,own-account" json:"reason"`
+	Reason string          `doc:"in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, the members fill the class's capacity, or the registrations and open invites fill the event's capacity; closed: the lesson cannot be booked (see why), or the event takes no registrations or sessions (a draft or canceled event, without why); already-canceled: the booking, the receipt, or the event registration is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead; two-accounts: both persons of a merge have an account, so one is disabled first; guardian-cycle: after the merge a guardian of the survivor would also be its dependent; anonymized: the person is anonymized already; sole-guardian: the person is the only guardian of a dependent, so another guardian is linked or the link removed first; last-admin: the account is the last admin who can sign in (enabled and confirmed), which is not disabled, demoted or deleted; own-account: an admin does not disable, demote or delete their own account (another admin does); event-session: the lesson is a session of an event, for which people register as a whole, so it is not booked and has no waiting list of its own; no-sessions: the event has no scheduled session, so it is not published; not-draft: the event is published or canceled already; not-published: the event is not published, so it is not taken back; already-paid: the registration is paid already (a free one from the start) or refunded; event-attended: a session of the event has started, so the receipt of its fee is canceled only with the registration (with a refund); registration-open: the registration of the fee is open, so the office cancels it with a refund (officeCancelEventRegistration) instead of its receipt; not-registered: the registration is on the waiting list, so it has no place whose fee could be taken yet." enum:"in-use,duplicate,managed,has-account,room-taken,past,generated,already-booked,full,closed,already-canceled,not-full,already-waiting,not-invited,invite-expired,invite-used,not-waiting,already-voided,receipt-settings-incomplete,pass-used,cancellation,timezone-locked,currency-locked,mail-limit,expired,not-failed,secret-link,two-accounts,guardian-cycle,anonymized,sole-guardian,last-admin,own-account,event-session,no-sessions,not-draft,not-published,already-paid,event-attended,registration-open,not-registered" json:"reason"`
 	Lesson *ConflictLesson `doc:"The lesson that uses the room; only with reason room-taken." json:"lesson,omitempty"`
 	Why    string          `doc:"Why the lesson cannot be booked; only with reason closed. cutoff: the booking cutoff before the start has passed; release: members may not book the lesson yet, or at all (staff book under member rules); canceled: the school canceled the lesson; started: the lesson has started or is over; rental: the lesson is a room rental, which takes no bookings." enum:"cutoff,release,canceled,started,rental" json:"why,omitempty"`
 }

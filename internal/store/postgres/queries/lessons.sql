@@ -34,6 +34,9 @@ SELECT * FROM lessons WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY starts_at, 
 -- name: ListLessonsByEvent :many
 SELECT * FROM lessons WHERE event_id = $1 ORDER BY starts_at, id;
 
+-- name: ListLessonsByEvents :many
+SELECT * FROM lessons WHERE event_id = ANY(sqlc.arg(events)::uuid[]) ORDER BY starts_at, id;
+
 -- name: ListLessonsByStaff :many
 SELECT * FROM lessons
 WHERE (instructor_id = ANY(sqlc.arg(staff)::uuid[]) OR accompanist_id = ANY(sqlc.arg(staff)::uuid[]))

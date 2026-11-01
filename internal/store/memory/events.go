@@ -138,6 +138,16 @@ func (r eventRepo) List(context.Context) ([]domain.Event, error) {
 	}), nil
 }
 
+func (r eventRepo) ListByIDs(_ context.Context, ids []domain.EventID) ([]domain.Event, error) {
+	wanted := setOf(ids)
+
+	return sorted(r.tx.state.events.filter(func(e domain.Event) bool {
+		_, ok := wanted[e.ID]
+
+		return ok
+	}), func(a, b domain.Event) int { return compareID(a.ID, b.ID) }), nil
+}
+
 // Lock needs no lock of its own: the store mutex already serialises every
 // transaction.
 func (r eventRepo) Lock(ctx context.Context, id domain.EventID) (domain.Event, error) {
@@ -321,6 +331,18 @@ func (r eventRegistrationRepo) ListByPersons(
 		_, ok := wanted[reg.PersonID]
 
 		return ok && !reg.PersonID.IsZero()
+	}), byCreated), nil
+}
+
+func (r eventRegistrationRepo) ListByReceipts(
+	_ context.Context, receipts []domain.ReceiptID,
+) ([]domain.EventRegistration, error) {
+	wanted := setOf(receipts)
+
+	return sorted(r.tx.state.eventRegistrations.filter(func(reg domain.EventRegistration) bool {
+		_, ok := wanted[reg.ReceiptID]
+
+		return ok && !reg.ReceiptID.IsZero()
 	}), byCreated), nil
 }
 

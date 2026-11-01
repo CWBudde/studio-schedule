@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -228,6 +229,10 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 			return err
 		}
 
+		if err := sessionFields(ctx, tx, l); err != nil {
+			return err
+		}
+
 		// Only a lower capacity can conflict with the bookings and held
 		// places: a lesson booked beyond its capacity already (a member's
 		// override, ADR 0009) stays editable otherwise.
@@ -252,8 +257,9 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 			return err
 		}
 
+		// A session's registrants are mailed like bookings (ADR 0019).
 		changed := !l.StartsAt.Equal(old.StartsAt) || l.RoomID != old.RoomID
-		if changed && l.Status == domain.LessonScheduled && active > 0 {
+		if changed && l.Status == domain.LessonScheduled && (active > 0 || !l.EventID.IsZero()) {
 			if err := s.mailChange(ctx, tx, settings, loc, old, l); err != nil {
 				return err
 			}
@@ -293,19 +299,29 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 func (s *LessonService) CancelLesson(
 	ctx context.Context, p Principal, id domain.LessonID, note string,
 ) (ScheduledLesson, error) {
+	return s.setStatus(ctx, id, domain.LessonCanceled, s.cancellation(p, note), mail.TemplateLessonCanceled)
+}
+
+// statusChange records on lesson l what goes with a new status at now.
+type statusChange func(ctx context.Context, tx store.Tx, l *domain.Lesson, now time.Time) error
+
+// cancellation records a cancellation by p with an optional note and voids
+// the invites of the lesson's waiting list (CancelLesson).
+func (s *LessonService) cancellation(p Principal, note string) statusChange {
 	by := cmp.Or(p.ImpersonatorID, p.AccountID)
 
-	return s.setStatus(ctx, id, domain.LessonCanceled, func(ctx context.Context, tx store.Tx, l *domain.Lesson, now time.Time) error {
+	return func(ctx context.Context, tx store.Tx, l *domain.Lesson, now time.Time) error {
 		l.CancelNote, l.CanceledAt, l.CanceledBy = strings.TrimSpace(note), now, by
 
 		return s.w.void(ctx, tx, l.ID)
-	}, mail.TemplateLessonCanceled)
+	}
 }
 
 // RestoreLesson lets a canceled lesson that has not started take place
 // after all (ErrLessonStarted otherwise): it clears the cancellation, keeps
 // the lesson detached and mails everyone with an active booking its current
-// time and room. Its bookings that are due use passes again (ADR 0012). Its free places go to the waiting list. Another lesson in the room at that time is a
+// time and room. A session of a canceled event is ErrEventClosed (ADR
+// 0019). Its bookings that are due use passes again (ADR 0012). Its free places go to the waiting list. Another lesson in the room at that time is a
 // *RoomTakenError unless confirmRoomOverlap is set. A scheduled lesson stays
 // as it is, started or not.
 func (s *LessonService) RestoreLesson(
@@ -327,7 +343,7 @@ func (s *LessonService) RestoreLesson(
 // bookings with template.
 func (s *LessonService) setStatus(
 	ctx context.Context, id domain.LessonID, status domain.LessonStatus,
-	change func(ctx context.Context, tx store.Tx, l *domain.Lesson, now time.Time) error, template string,
+	change statusChange, template string,
 ) (ScheduledLesson, error) {
 	var out ScheduledLesson
 
@@ -337,7 +353,7 @@ func (s *LessonService) setStatus(
 			return err
 		}
 
-		l, err := tx.Lessons().Lock(ctx, id)
+		l, e, err := lockWithEvent(ctx, tx, id)
 		if err != nil {
 			return err
 		}
@@ -348,19 +364,12 @@ func (s *LessonService) setStatus(
 				return ErrLessonStarted
 			}
 
-			old := l
-			l.Status, l.Detached = status, !l.ClassID.IsZero()
-			if err := change(ctx, tx, &l, now); err != nil {
-				return err
+			// A canceled event's sessions stay canceled (ADR 0019).
+			if status == domain.LessonScheduled && e.Status == domain.EventCanceled {
+				return ErrEventClosed
 			}
 
-			if err := l.Validate(); err != nil {
-				return err
-			}
-
-			// The ledger settles the passes of its bookings: a canceled
-			// lesson costs nothing (ADR 0012).
-			if err := updateLesson(ctx, tx, chargesOf(settings, loc), now, old, l); err != nil {
+			if err := changeStatus(ctx, tx, settings, loc, now, &l, status, change); err != nil {
 				return err
 			}
 
@@ -391,13 +400,36 @@ func (s *LessonService) setStatus(
 	return out, nil
 }
 
+// changeStatus gives the locked lesson l status at now, lets change record
+// the rest, validates and stores it and settles its bookings: the ledger
+// settles their passes, so a canceled lesson costs nothing (ADR 0012). It
+// mails nobody.
+func changeStatus(
+	ctx context.Context, tx store.Tx, settings domain.Settings, loc *time.Location, now time.Time, l *domain.Lesson,
+	status domain.LessonStatus, change statusChange,
+) error {
+	old := *l
+	l.Status, l.Detached = status, !l.ClassID.IsZero()
+
+	if err := change(ctx, tx, l, now); err != nil {
+		return err
+	}
+
+	if err := l.Validate(); err != nil {
+		return err
+	}
+
+	return updateLesson(ctx, tx, chargesOf(settings, loc), now, old, *l)
+}
+
 // DeleteLesson deletes a one-off lesson that has not started
 // (ErrLessonStarted otherwise) and that no booking refers to, canceled ones
-// included (domain.ErrInUse otherwise). A lesson of a class is
+// included (domain.ErrInUse otherwise), nor, for an event's session, an
+// open registration of its event (domain.ErrInUse). A lesson of a class is
 // ErrGeneratedLesson: it is canceled instead.
 func (s *LessonService) DeleteLesson(ctx context.Context, id domain.LessonID) error {
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		l, err := tx.Lessons().Lock(ctx, id)
+		l, _, err := lockWithEvent(ctx, tx, id)
 		if err != nil {
 			return err
 		}
@@ -419,6 +451,10 @@ func (s *LessonService) DeleteLesson(ctx context.Context, id domain.LessonID) er
 			return fmt.Errorf("%w: the lesson has bookings", domain.ErrInUse)
 		}
 
+		if err := sessionInUse(ctx, tx, l); err != nil {
+			return err
+		}
+
 		return tx.Lessons().Delete(ctx, id)
 	})
 	// A booking added in the meantime makes the delete fail on its
@@ -429,6 +465,50 @@ func (s *LessonService) DeleteLesson(ctx context.Context, id domain.LessonID) er
 
 	if err != nil {
 		return fmt.Errorf("delete lesson %s: %w", id, err)
+	}
+
+	return nil
+}
+
+// lockWithEvent locks lesson id and, first, the event whose session it is
+// (lock order event → lessons, ADR 0019), and returns both: a lesson's
+// event never changes, so it is read before. A lesson of no event is only
+// locked, with the zero event.
+func lockWithEvent(ctx context.Context, tx store.Tx, id domain.LessonID) (domain.Lesson, domain.Event, error) {
+	l, err := tx.Lessons().Get(ctx, id)
+	if err != nil {
+		return domain.Lesson{}, domain.Event{}, err
+	}
+
+	var e domain.Event
+
+	if !l.EventID.IsZero() {
+		if e, err = tx.Events().Lock(ctx, l.EventID); err != nil {
+			return domain.Lesson{}, domain.Event{}, fmt.Errorf("event %v: %w", l.EventID, refErr(err))
+		}
+	}
+
+	l, err = tx.Lessons().Lock(ctx, id)
+
+	return l, e, err
+}
+
+// sessionInUse refuses to delete lesson l, an event's session, while its
+// event has open registrations: they registered for its dates (ADR 0019).
+// The caller holds the event's lock (lockWithEvent), so none is added
+// meanwhile.
+func sessionInUse(ctx context.Context, tx store.Tx, l domain.Lesson) error {
+	if l.EventID.IsZero() {
+		return nil
+	}
+
+	regs, err := tx.EventRegistrations().ListByEvent(ctx, l.EventID)
+	if err != nil {
+		return err
+	}
+
+	if slices.ContainsFunc(regs, domain.EventRegistration.Open) {
+		return fmt.Errorf("%w: the event of the session has registrations", domain.ErrInUse)
 	}
 
 	return nil
@@ -455,6 +535,33 @@ func (s *LessonService) apply(l *domain.Lesson, d LessonData, loc *time.Location
 	l.Detached = !l.ClassID.IsZero()
 
 	return l.Validate()
+}
+
+// sessionFields refuses a capacity of lesson l, an event's session, other
+// than its event's, and a visibility other than public: an event's places
+// are counted for the whole event, which EventService.Update keeps its
+// sessions' capacity, and who sees a session is its event's status (ADR
+// 0019). A validation error on capacity or visibility.
+func sessionFields(ctx context.Context, tx store.Tx, l domain.Lesson) error {
+	if l.EventID.IsZero() {
+		return nil
+	}
+
+	e, err := tx.Events().Get(ctx, l.EventID)
+	if err != nil {
+		return fmt.Errorf("event %v: %w", l.EventID, refErr(err))
+	}
+
+	switch {
+	case l.Capacity != e.Capacity:
+		return &domain.FieldError{
+			Field: "capacity", Msg: fmt.Sprintf("a session has its event's capacity, %d", e.Capacity),
+		}
+	case l.Visibility != domain.VisibilityPublic:
+		return &domain.FieldError{Field: "visibility", Msg: "a session is public; its event's status decides who sees it"}
+	}
+
+	return nil
 }
 
 // becomesRental refuses to make old, which is no room rental, the rental

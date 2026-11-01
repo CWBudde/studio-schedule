@@ -292,7 +292,7 @@ theme's room columns. A room now has a **position** within its location.
 
 - **What it is.** `domain.Room.Position`, 1-based within the location (`Validate`: a 422 on
   `position` below 1). Lists order rooms by location (name, then ID), then position, then name and
-  ID; the API's `Room` and the schedule's `RoomRef` carry `position`. Migration 00032 numbers the
+  ID; the API's `Room` and the schedule's `RoomRef` carry `position`. Migration 00033 numbers the
   existing rooms of each location in their old name order, so nothing visible changes.
 - **Appended, never chosen.** The create and update bodies take no position. `createRoom` puts the
   room after the location's last one (its highest position + 1), `updateRoom` keeps the position

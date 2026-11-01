@@ -415,6 +415,19 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantSlice(e.t, list(other.ID), []domain.Lesson{theirs})
 			wantSlice(e.t, list(empty.ID), nil)
 			wantSlice(e.t, list(newID[domain.EventID](e)), nil)
+
+			many := func(ids ...domain.EventID) []domain.Lesson {
+				e.t.Helper()
+
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+					return tx.Lessons().ListByEvents(ctx, ids)
+				})
+			}
+
+			wantSlice(e.t, many(other.ID, ev.ID, empty.ID), []domain.Lesson{tie1, tie2, theirs, canceled, late})
+			wantSlice(e.t, many(other.ID, newID[domain.EventID](e)), []domain.Lesson{theirs})
+			wantSlice(e.t, many(domain.EventID{}), nil)
+			wantSlice(e.t, many(), nil)
 		},
 		"MissingReferenceIsConflict": func(e *env) {
 			s := e.setting()

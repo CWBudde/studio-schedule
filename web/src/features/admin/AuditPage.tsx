@@ -32,6 +32,10 @@ const actionKeys: ReadonlyMap<string, `audit.actions.${KnownAction}`> = new Map(
   ['password-reset-issued', 'audit.actions.password-reset-issued'],
   ['sessions-revoked', 'audit.actions.sessions-revoked'],
   ['setup-link-issued', 'audit.actions.setup-link-issued'],
+  ['event-registration-added', 'audit.actions.event-registration-added'],
+  ['event-registration-canceled', 'audit.actions.event-registration-canceled'],
+  ['event-registration-paid', 'audit.actions.event-registration-paid'],
+  ['event-canceled', 'audit.actions.event-canceled'],
 ]);
 
 type KnownAction =
@@ -46,7 +50,11 @@ type KnownAction =
   | 'account-deleted'
   | 'password-reset-issued'
   | 'sessions-revoked'
-  | 'setup-link-issued';
+  | 'setup-link-issued'
+  | 'event-registration-added'
+  | 'event-registration-canceled'
+  | 'event-registration-paid'
+  | 'event-canceled';
 
 type AuditAccount = NonNullable<AuditEventEntry['actor']>;
 type AuditPerson = NonNullable<AuditEventEntry['targetPerson']>;

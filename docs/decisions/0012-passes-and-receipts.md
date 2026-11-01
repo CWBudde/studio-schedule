@@ -299,3 +299,8 @@ canceled) marks the registration `refunded`. It is refused with a 409 `event-att
 event's first session has started, unless the office cancels the event or the registration with a
 refund. The other Storno rules stay as they are: the same series, the negated lines, and
 `already-canceled`.
+
+As built (2026-11-01): the receipt mail goes to the payer as for a pass sale, to the payer's
+account or else the address typed at the desk, not along the person's recipient chain; a guest's
+goes to the guest's email. A session the school canceled does not count as started for
+`event-attended`.

@@ -179,7 +179,7 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 }
 
-// TestRoomPositionBackfill checks that 00032_room_position.sql numbers the
+// TestRoomPositionBackfill checks that 00033_room_position.sql numbers the
 // existing rooms of each location in today's order, by name and ID.
 func TestRoomPositionBackfill(t *testing.T) {
 	t.Parallel()
@@ -200,7 +200,7 @@ func TestRoomPositionBackfill(t *testing.T) {
 			t.Fatalf("down: %v", err)
 		}
 
-		if res.Version == 32 {
+		if res.Version == 33 {
 			break
 		}
 	}
@@ -533,7 +533,7 @@ func TestUniqueNamesMigration(t *testing.T) {
 	t.Cleanup(func() { _ = m.Close() })
 
 	for _, want := range []string{
-		"00032_room_position.sql", "00031_events.sql", "00030_lesson_rental_course_type.sql", "00029_audit_command_line.sql", "00028_job_runs.sql", "00027_settings_released_through.sql", "00026_lesson_rental.sql", "00025_settings_theme_background.sql", "00024_push.sql", "00023_privacy_accounts.sql", "00022_outbox_failed_index.sql", "00021_import_merge.sql", "00020_mail_log_audit.sql", "00019_announcements.sql",
+		"00033_room_position.sql", "00032_event_audit.sql", "00031_events.sql", "00030_lesson_rental_course_type.sql", "00029_audit_command_line.sql", "00028_job_runs.sql", "00027_settings_released_through.sql", "00026_lesson_rental.sql", "00025_settings_theme_background.sql", "00024_push.sql", "00023_privacy_accounts.sql", "00022_outbox_failed_index.sql", "00021_import_merge.sql", "00020_mail_log_audit.sql", "00019_announcements.sql",
 		"00018_settings_accent.sql", "00017_receipts.sql", "00016_passes.sql", "00015_calendar_feeds.sql", "00014_lesson_notices.sql", "00013_staff_bookings.sql", "00012_waitlist.sql", "00011_class_member_bookings.sql",
 		"00010_booking_rules.sql", "00009_lesson_admin.sql",
 		"00008_lesson_slots.sql", "00007_course_type_unique_names.sql",
@@ -603,7 +603,7 @@ func TestLessonSlotsMigration(t *testing.T) {
 	t.Cleanup(func() { _ = m.Close() })
 
 	for _, want := range []string{
-		"00032_room_position.sql", "00031_events.sql", "00030_lesson_rental_course_type.sql", "00029_audit_command_line.sql", "00028_job_runs.sql", "00027_settings_released_through.sql", "00026_lesson_rental.sql", "00025_settings_theme_background.sql", "00024_push.sql", "00023_privacy_accounts.sql", "00022_outbox_failed_index.sql", "00021_import_merge.sql", "00020_mail_log_audit.sql", "00019_announcements.sql",
+		"00033_room_position.sql", "00032_event_audit.sql", "00031_events.sql", "00030_lesson_rental_course_type.sql", "00029_audit_command_line.sql", "00028_job_runs.sql", "00027_settings_released_through.sql", "00026_lesson_rental.sql", "00025_settings_theme_background.sql", "00024_push.sql", "00023_privacy_accounts.sql", "00022_outbox_failed_index.sql", "00021_import_merge.sql", "00020_mail_log_audit.sql", "00019_announcements.sql",
 		"00018_settings_accent.sql", "00017_receipts.sql", "00016_passes.sql", "00015_calendar_feeds.sql", "00014_lesson_notices.sql", "00013_staff_bookings.sql", "00012_waitlist.sql", "00011_class_member_bookings.sql",
 		"00010_booking_rules.sql", "00009_lesson_admin.sql",
 		"00008_lesson_slots.sql",
@@ -688,7 +688,7 @@ func TestSettingsMigration(t *testing.T) {
 			t.Cleanup(func() { _ = m.Close() })
 
 			for _, want := range []string{
-				"00032_room_position.sql", "00031_events.sql", "00030_lesson_rental_course_type.sql", "00029_audit_command_line.sql", "00028_job_runs.sql", "00027_settings_released_through.sql", "00026_lesson_rental.sql", "00025_settings_theme_background.sql", "00024_push.sql", "00023_privacy_accounts.sql", "00022_outbox_failed_index.sql", "00021_import_merge.sql", "00020_mail_log_audit.sql", "00019_announcements.sql", "00018_settings_accent.sql",
+				"00033_room_position.sql", "00032_event_audit.sql", "00031_events.sql", "00030_lesson_rental_course_type.sql", "00029_audit_command_line.sql", "00028_job_runs.sql", "00027_settings_released_through.sql", "00026_lesson_rental.sql", "00025_settings_theme_background.sql", "00024_push.sql", "00023_privacy_accounts.sql", "00022_outbox_failed_index.sql", "00021_import_merge.sql", "00020_mail_log_audit.sql", "00019_announcements.sql", "00018_settings_accent.sql",
 			} {
 				if res, err := m.Down(ctx); err != nil || res.Name != want {
 					t.Fatalf("down = %+v, %v; want %s rolled back", res, err, want)

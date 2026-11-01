@@ -1,0 +1,12 @@
+{{define "content" -}}
+<p>Hello{{with .GivenName}} {{.}}{{end}},</p>
+<p>unfortunately, {{.SchoolName}} has canceled this event:</p>
+<p><strong>{{.Title}}</strong>{{if .SeveralDays}}<br>{{date .FirstDay}} – {{date .LastDay}}{{else if .HasDates}}<br>{{date .FirstDay}}{{end}}<br>Registered: {{join .Participants}}</p>
+{{- with .Note}}
+<p>Note from {{$.SchoolName}}: {{.}}</p>
+{{- end}}
+{{- if .Refunded}}
+<p>The fee you paid is refunded. You get the cancellation receipt in a separate email.</p>
+{{- end}}
+<p>Kind regards,<br>{{.SchoolName}}</p>
+{{- end}}

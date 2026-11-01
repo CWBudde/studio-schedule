@@ -42,3 +42,8 @@ func TestIntegrityScenarios(t *testing.T) {
 	t.Parallel()
 	servicetest.Integrity(t, func(t *testing.T) store.Store { return newTestStore(t) })
 }
+
+func TestEventScenarios(t *testing.T) {
+	t.Parallel()
+	servicetest.Events(t, func(t *testing.T) store.Store { return newTestStore(t) })
+}

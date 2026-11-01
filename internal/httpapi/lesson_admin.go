@@ -66,7 +66,8 @@ func registerLessonAdmin(api huma.API, h *handlers) {
 		Description: "Lets a canceled lesson that has not started take place after all (422 on " +
 			"`path.lessonId` otherwise) and mails everyone with an active booking its current time and room. " +
 			"Another lesson in the room at an overlapping time is a 409 `room-taken` naming it, unless " +
-			"`confirmRoomOverlap` is set; the body is optional. The lesson stays detached from its class. " +
+			"`confirmRoomOverlap` is set; the body is optional. A session of a canceled event is a 409 `closed`. " +
+			"The lesson stays detached from its class. " +
 			"A scheduled lesson stays as it is, started or not.",
 	}), h.restoreLesson)
 
@@ -296,6 +297,8 @@ func (h *handlers) lessonError(ctx context.Context, err error) error {
 		return conflict(reasonPast, "the lesson would start in the past")
 	case errors.Is(err, service.ErrGeneratedLesson):
 		return conflict(reasonGenerated, "a lesson of a class is canceled, not deleted")
+	case errors.Is(err, service.ErrEventClosed):
+		return conflict(reasonClosed, "the event of the session is canceled")
 	}
 
 	return h.toHTTPError(ctx, err)

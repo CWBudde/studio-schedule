@@ -493,6 +493,51 @@ func (q *Queries) ListEventRegistrationsByPersons(ctx context.Context, persons [
 	return items, nil
 }
 
+const listEventRegistrationsByReceipts = `-- name: ListEventRegistrationsByReceipts :many
+SELECT id, event_id, person_id, guest_name, guest_email, status, payment, price, vat_rate_bp, receipt_id, cancellation_receipt_id, invite_token_hash, invited_at, expires_at, registered_by, created_at, updated_at, canceled_at FROM event_registrations
+WHERE receipt_id = ANY($1::uuid[])
+ORDER BY created_at, id
+`
+
+func (q *Queries) ListEventRegistrationsByReceipts(ctx context.Context, receipts []pgtype.UUID) ([]EventRegistration, error) {
+	rows, err := q.db.Query(ctx, listEventRegistrationsByReceipts, receipts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EventRegistration
+	for rows.Next() {
+		var i EventRegistration
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
+			&i.PersonID,
+			&i.GuestName,
+			&i.GuestEmail,
+			&i.Status,
+			&i.Payment,
+			&i.Price,
+			&i.VatRateBp,
+			&i.ReceiptID,
+			&i.CancellationReceiptID,
+			&i.InviteTokenHash,
+			&i.InvitedAt,
+			&i.ExpiresAt,
+			&i.RegisteredBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CanceledAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEvents = `-- name: ListEvents :many
 SELECT e.id, e.slug, e.title, e.description, e.course_type_id, e.capacity, e.price, e.vat_rate_bp, e.status, e.signup_opens_at, e.signup_closes_at, e.cancel_until, e.created_at, e.updated_at, e.created_by FROM events e
 ORDER BY (SELECT min(l.starts_at) FROM lessons l WHERE l.event_id = e.id) ASC NULLS LAST, e.id
@@ -502,6 +547,46 @@ ORDER BY (SELECT min(l.starts_at) FROM lessons l WHERE l.event_id = e.id) ASC NU
 // a session last.
 func (q *Queries) ListEvents(ctx context.Context) ([]Event, error) {
 	rows, err := q.db.Query(ctx, listEvents)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Event
+	for rows.Next() {
+		var i Event
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Title,
+			&i.Description,
+			&i.CourseTypeID,
+			&i.Capacity,
+			&i.Price,
+			&i.VatRateBp,
+			&i.Status,
+			&i.SignupOpensAt,
+			&i.SignupClosesAt,
+			&i.CancelUntil,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEventsByIDs = `-- name: ListEventsByIDs :many
+SELECT id, slug, title, description, course_type_id, capacity, price, vat_rate_bp, status, signup_opens_at, signup_closes_at, cancel_until, created_at, updated_at, created_by FROM events WHERE id = ANY($1::uuid[]) ORDER BY id
+`
+
+func (q *Queries) ListEventsByIDs(ctx context.Context, ids []pgtype.UUID) ([]Event, error) {
+	rows, err := q.db.Query(ctx, listEventsByIDs, ids)
 	if err != nil {
 		return nil, err
 	}

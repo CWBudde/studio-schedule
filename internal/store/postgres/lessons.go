@@ -151,6 +151,12 @@ func (r lessonRepo) ListByEvent(ctx context.Context, event domain.EventID) ([]do
 	return convertRows(rows, err, toLesson)
 }
 
+func (r lessonRepo) ListByEvents(ctx context.Context, events []domain.EventID) ([]domain.Lesson, error) {
+	rows, err := r.q.ListLessonsByEvents(ctx, pgIDs(events))
+
+	return convertRows(rows, err, toLesson)
+}
+
 func (r lessonRepo) ListByStaff(
 	ctx context.Context, staff []domain.StaffID, from, to time.Time,
 ) ([]domain.Lesson, error) {
