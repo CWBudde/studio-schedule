@@ -664,20 +664,34 @@ func TestSessionLessonOps(t *testing.T) {
 	_, err := lessons.UpdateLesson(ctx, sessions[0].ID, d)
 	wantFieldError(t, err, "capacity")
 
-	d.Capacity, d.StartTime = 2, domain.TimeOfDay{Hour: 19}
+	d.Capacity, d.Visibility = 2, domain.VisibilityMembers
+	_, err = lessons.UpdateLesson(ctx, sessions[0].ID, d)
+	wantFieldError(t, err, "visibility")
+
+	r := f.register(t, e, NewRegistration{PersonID: f.mia.ID})
+	f.register(t, e, NewRegistration{GuestName: "Gina Guest", GuestEmail: "gina@example.org"})
+
+	// Moving a session mails its registered person (Mia's guardian) and
+	// guest.
+	before := len(f.mails(t))
+	d.Visibility, d.StartTime = domain.VisibilityPublic, domain.TimeOfDay{Hour: 19}
+
 	if _, err := lessons.UpdateLesson(ctx, sessions[0].ID, d); err != nil {
 		t.Errorf("moved session: %v", err)
 	}
 
-	r := f.register(t, e, NewRegistration{PersonID: f.mia.ID})
-	f.register(t, e, NewRegistration{GuestName: "Gina Guest", GuestEmail: "gina@example.org"})
+	if mails := f.mails(t)[before:]; len(mails) != 2 || mails[0].To != "anna@example.org" ||
+		mails[1].To != "gina@example.org" || mails[0].Template != "lesson-changed" {
+		t.Errorf("move mailed %+v", mails)
+	}
+
 	f.register(t, e, NewRegistration{PersonID: f.tom.ID, ConfirmOverCapacity: true})
 
 	if err := lessons.DeleteLesson(ctx, sessions[1].ID); !errors.Is(err, domain.ErrInUse) {
 		t.Errorf("delete with registrations: %v, want ErrInUse", err)
 	}
 
-	before := len(f.mails(t))
+	before = len(f.mails(t))
 
 	if _, err := lessons.CancelLesson(ctx, f.office, sessions[1].ID, "The studio is closed."); err != nil {
 		t.Fatal(err)

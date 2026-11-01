@@ -19,6 +19,10 @@ import (
 // (a free one from the start) or refunded.
 var ErrAlreadyPaid = fmt.Errorf("%w: the registration is paid already", domain.ErrConflict)
 
+// ErrNotRegistered refuses to take the fee of a registration on the
+// waiting list (waiting or invited): it has no place to pay for yet.
+var ErrNotRegistered = fmt.Errorf("%w: the registration has no place", domain.ErrConflict)
+
 // EventPayment is how a registration's fee was paid: the method (cash if
 // zero), the paying person (the registered person if zero; a guest pays
 // for themself) and whom the receipt names and mails.
@@ -41,7 +45,8 @@ type PaidRegistration struct {
 // and issues its receipt in the same transaction: one line for the event
 // and its dates at the registration's price, mailed to the payer, or to a
 // guest's email in the school's language. A paid or refunded registration
-// is ErrAlreadyPaid, a canceled one ErrRegistrationCanceled, an unknown or
+// is ErrAlreadyPaid, a canceled one ErrRegistrationCanceled, one on the
+// waiting list ErrNotRegistered, an unknown or
 // merged payer a validation error on payerId, incomplete receipt settings
 // ErrReceiptSettingsIncomplete. It is audited.
 func (s *EventService) MarkPaid(
@@ -67,8 +72,10 @@ func (s *EventService) MarkPaid(
 		}
 
 		switch {
-		case !r.Open():
+		case r.Status == domain.EventRegistrationCanceled:
 			return ErrRegistrationCanceled
+		case r.Status != domain.EventRegistered:
+			return ErrNotRegistered
 		case r.Payment != domain.EventUnpaid:
 			return ErrAlreadyPaid
 		}

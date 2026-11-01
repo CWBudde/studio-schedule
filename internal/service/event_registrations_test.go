@@ -319,6 +319,15 @@ func TestMarkPaid(t *testing.T) {
 		t.Errorf("canceled: %v", err)
 	}
 
+	// A registration on the waiting list has no place to pay for.
+	waiting := f.register(t, e, NewRegistration{PersonID: f.anna.ID, ConfirmOverCapacity: true})
+	waiting.Status = domain.EventWaiting
+	f.write(t, func(ctx context.Context, tx store.Tx) error { return tx.EventRegistrations().Update(ctx, waiting) })
+
+	if _, err := svc.MarkPaid(ctx, f.office, waiting.ID, EventPayment{}); !errors.Is(err, ErrNotRegistered) {
+		t.Errorf("waiting: %v, want ErrNotRegistered", err)
+	}
+
 	if _, err := svc.MarkPaid(ctx, f.office, ids.New[domain.EventRegistrationID](f.seq), EventPayment{}); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("unknown: %v", err)
 	}
@@ -424,9 +433,26 @@ func TestCancelEventFeeReceipt(t *testing.T) {
 	r := f.paid(t, f.register(t, e, NewRegistration{PersonID: f.mia.ID}))
 	late := f.paid(t, f.register(t, e, NewRegistration{PersonID: f.tom.ID}))
 
+	// While the registration is open, the office cancels it with a refund
+	// instead (officeCancelEventRegistration).
 	view, err := f.receiptService(t, bookingNow).Get(ctx, r.ReceiptID)
-	if err != nil || view.EventID != e.ID || view.EventTitle != e.Title || view.EventStarted || !view.Cancelable() {
+	if err != nil || view.EventID != e.ID || view.EventTitle != e.Title || view.EventStarted || view.Cancelable() {
 		t.Errorf("view %+v, %v", view, err)
+	}
+
+	if _, err := f.receiptService(t, bookingNow).Cancel(ctx, f.office, r.ReceiptID, ""); !errors.Is(err, ErrRegistrationOpen) {
+		t.Errorf("open registration: %v, want ErrRegistrationOpen", err)
+	}
+
+	// Canceled and kept paid, it is refunded from the receipts.
+	for _, reg := range []domain.EventRegistration{r, late} {
+		if _, err := f.events(t).CancelRegistration(ctx, f.office, reg.ID, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if view, err = f.receiptService(t, bookingNow).Get(ctx, r.ReceiptID); err != nil || !view.Cancelable() {
+		t.Errorf("view of a canceled registration %+v, %v", view, err)
 	}
 
 	storno, err := f.receiptService(t, bookingNow).Cancel(ctx, f.office, r.ReceiptID, "Paid twice")
@@ -440,7 +466,7 @@ func TestCancelEventFeeReceipt(t *testing.T) {
 
 	got := f.registration(t, r.ID)
 	if got.Payment != domain.EventRefunded || got.CancellationReceiptID != storno.Receipt.ID ||
-		got.Status != domain.EventRegistered {
+		got.Status != domain.EventRegistrationCanceled {
 		t.Errorf("refunded registration %+v", got)
 	}
 
@@ -548,6 +574,11 @@ func TestCancelEvent(t *testing.T) {
 
 	_, err = f.events(t).Cancel(ctx, f.office, e.ID, strings.Repeat("ä", domain.MaxCancelNoteLength+1))
 	wantFieldError(t, err, "note")
+
+	// Its sessions stay canceled.
+	if _, err := f.eventsAt(t, now).lessons.RestoreLesson(ctx, sessions[1].ID, false); !errors.Is(err, ErrEventClosed) {
+		t.Errorf("restore a session of a canceled event: %v, want ErrEventClosed", err)
+	}
 
 	if _, err := f.events(t).Cancel(ctx, f.office, e.ID, ""); !errors.Is(err, ErrEventClosed) {
 		t.Errorf("twice: %v", err)

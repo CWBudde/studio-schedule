@@ -857,30 +857,38 @@ func (s *EventService) cancelSessions(
 	return sessions, nil
 }
 
+// canceledRegistration is a registration the event's cancellation
+// canceled, and whether it refunded its fee.
+type canceledRegistration struct {
+	domain.EventRegistration
+
+	refunded bool
+}
+
 // cancelRegistrations cancels the event's open registrations at now and
 // refunds the paid ones, and returns them as they are then.
 func (s *EventService) cancelRegistrations(
 	ctx context.Context, tx store.Tx, settings domain.Settings, loc *time.Location, p Principal, now time.Time,
 	id domain.EventID,
-) ([]domain.EventRegistration, error) {
+) ([]canceledRegistration, error) {
 	regs, err := tx.EventRegistrations().ListByEvent(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	var out []domain.EventRegistration
+	var out []canceledRegistration
 
 	for _, r := range regs {
 		if !r.Open() {
 			continue
 		}
 
-		r, err := s.cancelRegistration(ctx, tx, settings, loc, p, now, r, true)
+		r, refunded, err := s.cancelRegistration(ctx, tx, settings, loc, p, now, r, true)
 		if err != nil {
 			return nil, err
 		}
 
-		out = append(out, r)
+		out = append(out, canceledRegistration{EventRegistration: r, refunded: refunded})
 	}
 
 	return out, nil
@@ -888,10 +896,11 @@ func (s *EventService) cancelRegistrations(
 
 // mailCanceled queues the event-canceled mail about event e, with its
 // sessions, for the canceled registrations: one mail per recipient, naming
-// every participant it is for and whether one of their fees is refunded.
+// every participant it is for and whether this cancellation refunded one
+// of their fees.
 func (s *EventService) mailCanceled(
 	ctx context.Context, tx store.Tx, settings domain.Settings, loc *time.Location, now time.Time, e domain.Event,
-	sessions []domain.Lesson, regs []domain.EventRegistration, note string,
+	sessions []domain.Lesson, regs []canceledRegistration, note string,
 ) error {
 	persons := []domain.PersonID{}
 
@@ -914,8 +923,8 @@ func (s *EventService) mailCanceled(
 	for _, r := range regs {
 		set.addPerson(chains, r.PersonID, r.GuestName, r.GuestEmail)
 
-		if r.Payment == domain.EventRefunded {
-			for _, a := range addressesOf(chains, r) {
+		if r.refunded {
+			for _, a := range addressesOf(chains, r.EventRegistration) {
 				refunded[strings.ToLower(a)] = true
 			}
 		}

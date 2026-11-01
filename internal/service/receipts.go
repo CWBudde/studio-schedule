@@ -40,6 +40,11 @@ var (
 	// registration or the event with a refund instead (ADR 0012,
 	// amendment).
 	ErrEventAttended = fmt.Errorf("%w: the event has started", domain.ErrConflict)
+	// ErrRegistrationOpen refuses to cancel the receipt of an event fee
+	// while its registration is open: the office cancels the registration
+	// with a refund instead, so the place is freed with the money (ADR 0019,
+	// amendment).
+	ErrRegistrationOpen = fmt.Errorf("%w: the registration of the fee is open", domain.ErrConflict)
 	// ErrNoPDFRenderer reports an installation without a PDF renderer: it
 	// cannot issue receipts.
 	ErrNoPDFRenderer = errors.New("no PDF renderer configured")
@@ -420,12 +425,12 @@ func (s *ReceiptService) Cancel(ctx context.Context, p Principal, id domain.Rece
 
 // storno issues, in tx, the cancellation receipt of orig as p with an
 // optional reason (see Cancel) and voids its pass or refunds its
-// registration; attended lets it refund the fee of an event that has
-// started, which only the cancellation of the registration or of the event
-// does.
+// registration; forced lets it refund the fee of an open registration or
+// an event that has started, which only the cancellation of the
+// registration or of the event does.
 func (s *ReceiptService) storno(
 	ctx context.Context, tx store.Tx, settings domain.Settings, loc *time.Location, p Principal, orig domain.Receipt,
-	reason string, attended bool,
+	reason string, forced bool,
 ) (domain.Receipt, error) {
 	if orig.Kind == domain.ReceiptCancellation {
 		return domain.Receipt{}, ErrCancelCancellation
@@ -441,7 +446,7 @@ func (s *ReceiptService) storno(
 		return domain.Receipt{}, err
 	}
 
-	reg, refunds, err := s.refundable(ctx, tx, orig.ID, attended)
+	reg, refunds, err := s.refundable(ctx, tx, orig.ID, forced)
 	if err != nil {
 		return domain.Receipt{}, err
 	}
@@ -491,10 +496,12 @@ func (s *ReceiptService) storno(
 }
 
 // refundable returns the registration whose fee the receipt confirms, read
-// under its event's lock, and whether there is one. Unless attended, an
-// event whose first scheduled session has started is ErrEventAttended.
+// under its event's lock, and whether there is one. Unless forced (by the
+// cancellation of the registration or the event), an open registration is
+// ErrRegistrationOpen and an event whose first scheduled session has
+// started ErrEventAttended.
 func (s *ReceiptService) refundable(
-	ctx context.Context, tx store.Tx, receipt domain.ReceiptID, attended bool,
+	ctx context.Context, tx store.Tx, receipt domain.ReceiptID, forced bool,
 ) (domain.EventRegistration, bool, error) {
 	reg, err := tx.EventRegistrations().GetByReceipt(ctx, receipt)
 	if errors.Is(err, domain.ErrNotFound) {
@@ -513,8 +520,11 @@ func (s *ReceiptService) refundable(
 		return domain.EventRegistration{}, false, err
 	}
 
-	if attended {
+	switch {
+	case forced:
 		return reg, true, nil
+	case reg.Open():
+		return domain.EventRegistration{}, false, ErrRegistrationOpen
 	}
 
 	sessions, err := tx.Lessons().ListByEvent(ctx, reg.EventID)
@@ -602,15 +612,18 @@ type ReceiptView struct {
 	// EventID and EventTitle name the event whose fee a sale receipt, or
 	// the receipt a cancellation cancels, confirms (ADR 0019); zero and
 	// empty for a pass. EventStarted tells that one of the event's sessions
-	// has started, so the receipt is canceled only with its registration.
-	EventID      domain.EventID
-	EventTitle   string
-	EventStarted bool
+	// has started, RegistrationOpen that the fee's registration is open:
+	// either way the receipt is canceled only with its registration.
+	EventID          domain.EventID
+	EventTitle       string
+	EventStarted     bool
+	RegistrationOpen bool
 }
 
 // Cancelable reports whether the office can cancel the receipt now.
 func (v ReceiptView) Cancelable() bool {
-	return v.Receipt.Kind == domain.ReceiptSale && v.CanceledBy == nil && !v.PassUsed && !v.EventStarted
+	return v.Receipt.Kind == domain.ReceiptSale && v.CanceledBy == nil && !v.PassUsed && !v.EventStarted &&
+		!v.RegistrationOpen
 }
 
 // view returns the ReceiptView of r.
@@ -693,6 +706,7 @@ func (s *ReceiptService) views(ctx context.Context, tx store.Tx, receipts []doma
 		v := ReceiptView{Receipt: r, Pass: byReceipt[r.ID]}
 		if fee, ok := events[cmp.Or(r.CancelsReceiptID, r.ID)]; ok {
 			v.EventID, v.EventTitle, v.EventStarted = fee.event.ID, fee.event.Title, fee.started
+			v.RegistrationOpen = fee.open
 		}
 
 		if c, ok := byCanceled[r.ID]; ok {
@@ -713,11 +727,12 @@ func (s *ReceiptService) views(ctx context.Context, tx store.Tx, receipts []doma
 	return s.withUses(ctx, tx, out)
 }
 
-// eventFee is the event whose fee a receipt confirms, and whether it has
-// started.
+// eventFee is the event whose fee a receipt confirms, whether it has
+// started, and whether the fee's registration is open.
 type eventFee struct {
 	event   domain.Event
 	started bool
+	open    bool
 }
 
 // eventsOf returns, by receipt, the events whose fees the sale receipts
@@ -751,17 +766,25 @@ func (s *ReceiptService) eventsOf(
 		return nil, fmt.Errorf("sessions: %w", err)
 	}
 
+	// One pass over the sessions: the events one of whose scheduled
+	// sessions has started (started).
 	now := s.clock.Now()
-	byEvent := make(map[domain.EventID]eventFee, len(events))
+	begun := map[domain.EventID]bool{}
 
+	for _, l := range sessions {
+		if l.Status == domain.LessonScheduled && !l.StartsAt.After(now) {
+			begun[l.EventID] = true
+		}
+	}
+
+	byEvent := make(map[domain.EventID]domain.Event, len(events))
 	for _, e := range events {
-		byEvent[e.ID] = eventFee{event: e, started: started(slices.DeleteFunc(slices.Clone(sessions),
-			func(l domain.Lesson) bool { return l.EventID != e.ID }), now)}
+		byEvent[e.ID] = e
 	}
 
 	out := make(map[domain.ReceiptID]eventFee, len(regs))
 	for _, r := range regs {
-		out[r.ReceiptID] = byEvent[r.EventID]
+		out[r.ReceiptID] = eventFee{event: byEvent[r.EventID], started: begun[r.EventID], open: r.Open()}
 	}
 
 	return out, nil

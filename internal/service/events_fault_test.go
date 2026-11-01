@@ -21,8 +21,9 @@ func (f *eventFixture) faultyEvents(t *testing.T, now string) (*FaultStore, *Eve
 }
 
 // eventScene is a published priced event with two sessions ahead, Mia
-// registered and paid, the guest and Tom registered and unpaid, and an
-// image; another published event without registrations; and a draft with
+// registered and paid, the guest and Tom registered and unpaid, an image,
+// and Anna's canceled registration that kept its fee; another
+// published event without registrations; and a draft with
 // a session.
 type eventScene struct {
 	event    domain.Event
@@ -30,6 +31,7 @@ type eventScene struct {
 	mia      domain.EventRegistration
 	guest    domain.EventRegistration
 	tom      domain.EventRegistration
+	kept     domain.EventRegistration
 	bare     domain.Event
 	draft    domain.Event
 }
@@ -43,6 +45,12 @@ func (f *eventFixture) newEventScene(t *testing.T) eventScene {
 	s.mia = f.paid(t, f.register(t, s.event, NewRegistration{PersonID: f.mia.ID}))
 	s.guest = f.register(t, s.event, NewRegistration{GuestName: "Gina Guest", GuestEmail: "gina@example.org"})
 	s.tom = f.register(t, s.event, NewRegistration{PersonID: f.tom.ID, ConfirmOverCapacity: true})
+
+	// Anna canceled, and kept her fee paid.
+	s.kept = f.paid(t, f.register(t, s.event, NewRegistration{PersonID: f.anna.ID, ConfirmOverCapacity: true}))
+	if _, err := f.events(t).CancelRegistration(t.Context(), f.office, s.kept.ID, false); err != nil {
+		t.Fatal(err)
+	}
 	s.bare, _ = f.publishedAt(t, f.eventData(), 10)
 
 	img := domain.Background{ContentType: domain.BackgroundPNG, Data: []byte("\x89PNG\r\n\x1a\nimage")}
@@ -157,7 +165,7 @@ func TestEventStoreFaults(t *testing.T) {
 			return err
 		},
 		"CancelReceipt": func(t *testing.T, f *eventFixture, s eventScene, _ *EventService, receipts *ReceiptService) error {
-			_, err := receipts.Cancel(t.Context(), f.office, s.mia.ReceiptID, "")
+			_, err := receipts.Cancel(t.Context(), f.office, s.kept.ReceiptID, "")
 
 			return err
 		},

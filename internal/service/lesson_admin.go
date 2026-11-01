@@ -229,7 +229,7 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 			return err
 		}
 
-		if err := sessionCapacity(ctx, tx, l); err != nil {
+		if err := sessionFields(ctx, tx, l); err != nil {
 			return err
 		}
 
@@ -257,8 +257,9 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 			return err
 		}
 
+		// A session's registrants are mailed like bookings (ADR 0019).
 		changed := !l.StartsAt.Equal(old.StartsAt) || l.RoomID != old.RoomID
-		if changed && l.Status == domain.LessonScheduled && active > 0 {
+		if changed && l.Status == domain.LessonScheduled && (active > 0 || !l.EventID.IsZero()) {
 			if err := s.mailChange(ctx, tx, settings, loc, old, l); err != nil {
 				return err
 			}
@@ -319,7 +320,8 @@ func (s *LessonService) cancellation(p Principal, note string) statusChange {
 // RestoreLesson lets a canceled lesson that has not started take place
 // after all (ErrLessonStarted otherwise): it clears the cancellation, keeps
 // the lesson detached and mails everyone with an active booking its current
-// time and room. Its bookings that are due use passes again (ADR 0012). Its free places go to the waiting list. Another lesson in the room at that time is a
+// time and room. A session of a canceled event is ErrEventClosed (ADR
+// 0019). Its bookings that are due use passes again (ADR 0012). Its free places go to the waiting list. Another lesson in the room at that time is a
 // *RoomTakenError unless confirmRoomOverlap is set. A scheduled lesson stays
 // as it is, started or not.
 func (s *LessonService) RestoreLesson(
@@ -351,7 +353,7 @@ func (s *LessonService) setStatus(
 			return err
 		}
 
-		l, err := tx.Lessons().Lock(ctx, id)
+		l, e, err := lockWithEvent(ctx, tx, id)
 		if err != nil {
 			return err
 		}
@@ -360,6 +362,11 @@ func (s *LessonService) setStatus(
 			now := s.clock.Now()
 			if !l.StartsAt.After(now) {
 				return ErrLessonStarted
+			}
+
+			// A canceled event's sessions stay canceled (ADR 0019).
+			if status == domain.LessonScheduled && e.Status == domain.EventCanceled {
+				return ErrEventClosed
 			}
 
 			if err := changeStatus(ctx, tx, settings, loc, now, &l, status, change); err != nil {
@@ -422,7 +429,7 @@ func changeStatus(
 // ErrGeneratedLesson: it is canceled instead.
 func (s *LessonService) DeleteLesson(ctx context.Context, id domain.LessonID) error {
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		l, err := lockWithEvent(ctx, tx, id)
+		l, _, err := lockWithEvent(ctx, tx, id)
 		if err != nil {
 			return err
 		}
@@ -464,21 +471,26 @@ func (s *LessonService) DeleteLesson(ctx context.Context, id domain.LessonID) er
 }
 
 // lockWithEvent locks lesson id and, first, the event whose session it is
-// (lock order event → lessons, ADR 0019): a lesson's event never changes,
-// so it is read before. A lesson of no event is only locked.
-func lockWithEvent(ctx context.Context, tx store.Tx, id domain.LessonID) (domain.Lesson, error) {
+// (lock order event → lessons, ADR 0019), and returns both: a lesson's
+// event never changes, so it is read before. A lesson of no event is only
+// locked, with the zero event.
+func lockWithEvent(ctx context.Context, tx store.Tx, id domain.LessonID) (domain.Lesson, domain.Event, error) {
 	l, err := tx.Lessons().Get(ctx, id)
 	if err != nil {
-		return domain.Lesson{}, err
+		return domain.Lesson{}, domain.Event{}, err
 	}
 
+	var e domain.Event
+
 	if !l.EventID.IsZero() {
-		if _, err := tx.Events().Lock(ctx, l.EventID); err != nil {
-			return domain.Lesson{}, fmt.Errorf("event %v: %w", l.EventID, refErr(err))
+		if e, err = tx.Events().Lock(ctx, l.EventID); err != nil {
+			return domain.Lesson{}, domain.Event{}, fmt.Errorf("event %v: %w", l.EventID, refErr(err))
 		}
 	}
 
-	return tx.Lessons().Lock(ctx, id)
+	l, err = tx.Lessons().Lock(ctx, id)
+
+	return l, e, err
 }
 
 // sessionInUse refuses to delete lesson l, an event's session, while its
@@ -525,11 +537,12 @@ func (s *LessonService) apply(l *domain.Lesson, d LessonData, loc *time.Location
 	return l.Validate()
 }
 
-// sessionCapacity refuses a capacity of lesson l, an event's session,
-// other than its event's: an event's places are counted for the whole
-// event (ADR 0019), and EventService.Update keeps its sessions' capacity
-// the same. A validation error on capacity.
-func sessionCapacity(ctx context.Context, tx store.Tx, l domain.Lesson) error {
+// sessionFields refuses a capacity of lesson l, an event's session, other
+// than its event's, and a visibility other than public: an event's places
+// are counted for the whole event, which EventService.Update keeps its
+// sessions' capacity, and who sees a session is its event's status (ADR
+// 0019). A validation error on capacity or visibility.
+func sessionFields(ctx context.Context, tx store.Tx, l domain.Lesson) error {
 	if l.EventID.IsZero() {
 		return nil
 	}
@@ -539,10 +552,13 @@ func sessionCapacity(ctx context.Context, tx store.Tx, l domain.Lesson) error {
 		return fmt.Errorf("event %v: %w", l.EventID, refErr(err))
 	}
 
-	if l.Capacity != e.Capacity {
+	switch {
+	case l.Capacity != e.Capacity:
 		return &domain.FieldError{
 			Field: "capacity", Msg: fmt.Sprintf("a session has its event's capacity, %d", e.Capacity),
 		}
+	case l.Visibility != domain.VisibilityPublic:
+		return &domain.FieldError{Field: "visibility", Msg: "a session is public; its event's status decides who sees it"}
 	}
 
 	return nil

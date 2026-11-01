@@ -225,11 +225,12 @@ func (s *EventService) CancelRegistration(
 		}
 
 		now := s.clock.Now()
-		if r, err = s.cancelRegistration(ctx, tx, settings, loc, p, now, r, refund); err != nil {
+
+		var refunded bool
+		if r, refunded, err = s.cancelRegistration(ctx, tx, settings, loc, p, now, r, refund); err != nil {
 			return err
 		}
 
-		refunded := r.Payment == domain.EventRefunded
 		if err := s.audit(ctx, tx, p, now, domain.AuditEventRegistrationCanceled, r.EventID, &r, refunded); err != nil {
 			return err
 		}
@@ -267,31 +268,34 @@ func lockRegistration(ctx context.Context, tx store.Tx, id domain.EventRegistrat
 // cancelRegistration cancels the open registration r at now as p and, with
 // refund, refunds a fee paid with a receipt by a Storno of the receipt
 // (ReceiptService.storno, the event's start notwithstanding). It returns
-// the registration as stored. The caller holds the event's lock.
+// the registration as stored and whether this call refunded it. The caller
+// holds the event's lock.
 func (s *EventService) cancelRegistration(
 	ctx context.Context, tx store.Tx, settings domain.Settings, loc *time.Location, p Principal, now time.Time,
 	r domain.EventRegistration, refund bool,
-) (domain.EventRegistration, error) {
+) (domain.EventRegistration, bool, error) {
 	r.Status, r.CanceledAt, r.UpdatedAt = domain.EventRegistrationCanceled, now, now
 	r.InviteTokenHash, r.InvitedAt, r.ExpiresAt = [32]byte{}, time.Time{}, time.Time{}
 
 	if err := tx.EventRegistrations().Update(ctx, r); err != nil {
-		return domain.EventRegistration{}, err
+		return domain.EventRegistration{}, false, err
 	}
 
 	if !refund || r.Payment != domain.EventPaid || r.ReceiptID.IsZero() {
-		return r, nil
+		return r, false, nil
 	}
 
 	orig, err := tx.Receipts().Get(ctx, r.ReceiptID)
 	if err != nil {
-		return domain.EventRegistration{}, fmt.Errorf("receipt %v: %w", r.ReceiptID, refErr(err))
+		return domain.EventRegistration{}, false, fmt.Errorf("receipt %v: %w", r.ReceiptID, refErr(err))
 	}
 
 	if _, err := s.receipts.storno(ctx, tx, settings, loc, p, orig, "", true); err != nil {
-		return domain.EventRegistration{}, err
+		return domain.EventRegistration{}, false, err
 	}
 
 	// The Storno refunded it.
-	return tx.EventRegistrations().Get(ctx, r.ID)
+	r, err = tx.EventRegistrations().Get(ctx, r.ID)
+
+	return r, true, err
 }
