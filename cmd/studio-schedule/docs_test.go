@@ -109,7 +109,7 @@ func TestConfigurationReference(t *testing.T) {
 
 	// Flags: the command (its first word) and the flag, as `--name`.
 	flags := map[string]bool{}
-	for _, row := range tableRows(t, string(doc), "Commands and flags") {
+	for _, row := range commandRows(t, string(doc)) {
 		if len(row) < 2 {
 			t.Fatalf("%s: row %q has no flag column", operationsDoc, row)
 		}
@@ -129,6 +129,53 @@ func TestConfigurationReference(t *testing.T) {
 	for f := range flags {
 		t.Errorf("%s: the table \"Commands and flags\" names %s, which no command has", operationsDoc, f)
 	}
+}
+
+// commandsHeading is the heading of the table of the commands' flags. A
+// command group may document its flags in a table of its own under a
+// heading "Commands and flags: <group>".
+const commandsHeading = "Commands and flags"
+
+// commandRows returns the body rows of the table "Commands and flags" and
+// of every table under a heading "Commands and flags: <group>".
+func commandRows(t *testing.T, doc string) [][]string {
+	t.Helper()
+
+	var rows [][]string
+
+	for _, heading := range headings(doc) {
+		if heading == commandsHeading || strings.HasPrefix(heading, commandsHeading+": ") {
+			rows = append(rows, tableRows(t, doc, heading)...)
+		}
+	}
+
+	return rows
+}
+
+// headings returns the text of the Markdown headings of doc, outside fenced
+// code blocks.
+func headings(doc string) []string {
+	var (
+		out    []string
+		inCode bool
+		fence  string
+	)
+
+	for line := range strings.Lines(doc) {
+		line = strings.TrimSpace(line)
+
+		if marker := codeFence(line); marker != "" && (!inCode || strings.HasPrefix(line, fence)) {
+			inCode, fence = !inCode, marker
+
+			continue
+		}
+
+		if !inCode && strings.HasPrefix(line, "#") {
+			out = append(out, strings.TrimSpace(strings.TrimLeft(line, "#")))
+		}
+	}
+
+	return out
 }
 
 // tableRows returns the cells of the body rows of the first Markdown table
