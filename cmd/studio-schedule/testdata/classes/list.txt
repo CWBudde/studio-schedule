@@ -1,27 +1,27 @@
 School Year 2026/27: 2026-09-01 to 2027-07-31
-00000000-0000-7000-8000-00000000005f  Mon  15:30-16:15  Creative Dance    open          Studio C  Sofia Quillon    -                10  -
-00000000-0000-7000-8000-000000000060  Mon  16:30-17:30  Classical Ballet  beginner      Studio A  Alina Starling   Felix Keysworth  16  -
-00000000-0000-7000-8000-000000000061  Mon  17:45-19:00  Classical Ballet  intermediate  Studio A  Alina Starling   Felix Keysworth  16  -
-00000000-0000-7000-8000-000000000062  Mon  18:00-19:00  Hip-Hop           beginner      Hall 1    Jonas Featherby  -                20  -
-00000000-0000-7000-8000-000000000063  Mon  19:15-20:45  Classical Ballet  advanced      Studio A  Alina Starling   Felix Keysworth  16  -
-00000000-0000-7000-8000-000000000064  Tue  16:00-16:45  Pre-Ballet        beginner      Studio B  Sofia Quillon    -                12  -
-00000000-0000-7000-8000-000000000065  Tue  17:00-18:00  Jazz Dance        beginner      Hall 1    Nina Tapworth    -                20  -
-00000000-0000-7000-8000-000000000066  Tue  18:30-19:45  Contemporary      intermediate  Studio A  Marco Wrenfield  -                18  -
-00000000-0000-7000-8000-000000000067  Tue  19:00-20:00  Barre Fitness     open          Hall 2    Nina Tapworth    -                12  -
-00000000-0000-7000-8000-000000000068  Wed  15:30-16:15  Creative Dance    open          Studio C  Sofia Quillon    -                10  -
-00000000-0000-7000-8000-000000000069  Wed  16:30-17:45  Classical Ballet  intermediate  Studio A  Lea Moonfield    Greta Ivorylane  16  -
-00000000-0000-7000-8000-00000000006a  Wed  18:00-18:45  Pointe Work       advanced      Studio B  Lea Moonfield    Greta Ivorylane  12  -
-00000000-0000-7000-8000-00000000006b  Wed  18:30-19:30  Hip-Hop           intermediate  Hall 1    Jonas Featherby  -                20  -
-00000000-0000-7000-8000-00000000006c  Wed  19:00-20:30  Classical Ballet  professional  Studio A  Lea Moonfield    Greta Ivorylane  16  -
-00000000-0000-7000-8000-00000000006d  Thu  16:00-17:00  Tap               beginner      Hall 2    Nina Tapworth    -                12  -
-00000000-0000-7000-8000-00000000006e  Thu  17:00-18:00  Contemporary      beginner      Studio A  Marco Wrenfield  -                18  -
-00000000-0000-7000-8000-00000000006f  Thu  18:30-20:00  Classical Ballet  beginner      Studio A  Alina Starling   Felix Keysworth  16  -
-00000000-0000-7000-8000-000000000070  Thu  19:30-20:30  Jazz Dance        intermediate  Hall 1    Marco Wrenfield  -                20  -
-00000000-0000-7000-8000-000000000071  Fri  15:30-16:15  Pre-Ballet        beginner      Studio B  Sofia Quillon    -                12  -
-00000000-0000-7000-8000-000000000072  Fri  16:30-17:30  Classical Ballet  beginner      Studio A  Lea Moonfield    Greta Ivorylane  16  -
-00000000-0000-7000-8000-000000000073  Fri  17:45-18:45  Hip-Hop           open          Hall 1    Jonas Featherby  -                24  -
-00000000-0000-7000-8000-000000000074  Fri  18:00-19:15  Pointe Work       advanced      Studio B  Lea Moonfield    -                12  -
-00000000-0000-7000-8000-000000000075  Sat  10:00-10:45  Creative Dance    open          Studio C  Sofia Quillon    -                10  -
-00000000-0000-7000-8000-000000000076  Sat  10:00-11:30  Classical Ballet  advanced      Studio A  Alina Starling   Felix Keysworth  16  -
-00000000-0000-7000-8000-000000000077  Sat  11:00-12:00  Tap               open          Hall 2    Nina Tapworth    -                12  -
-00000000-0000-7000-8000-000000000078  Sat  12:00-13:15  Contemporary      open          Studio A  Marco Wrenfield  -                18  retired
+00000000-0000-7000-8000-00000000005f  Mon  15:30-16:15  Creative Dance    4–6 yrs                Studio C  Sofia Quillon    -                10  -
+00000000-0000-7000-8000-000000000060  Mon  16:30-17:30  Classical Ballet  Beginner               Studio A  Alina Starling   Felix Keysworth  16  -
+00000000-0000-7000-8000-000000000061  Mon  17:45-19:00  Classical Ballet  Intermediate           Studio A  Alina Starling   Felix Keysworth  16  -
+00000000-0000-7000-8000-000000000062  Mon  18:00-19:00  Hip-Hop           Beginner               Hall 1    Jonas Featherby  -                20  -
+00000000-0000-7000-8000-000000000063  Mon  19:15-20:45  Classical Ballet  Advanced               Studio A  Alina Starling   Felix Keysworth  16  -
+00000000-0000-7000-8000-000000000064  Tue  16:00-16:45  Pre-Ballet        6–8 yrs                Studio B  Sofia Quillon    -                12  -
+00000000-0000-7000-8000-000000000065  Tue  17:00-18:00  Jazz Dance        Beginner               Hall 1    Nina Tapworth    -                20  -
+00000000-0000-7000-8000-000000000066  Tue  18:30-19:45  Contemporary      Intermediate           Studio A  Marco Wrenfield  -                18  -
+00000000-0000-7000-8000-000000000067  Tue  19:00-20:00  Barre Fitness     all levels             Hall 2    Nina Tapworth    -                12  -
+00000000-0000-7000-8000-000000000068  Wed  15:30-16:15  Creative Dance    4–6 yrs                Studio C  Sofia Quillon    -                10  -
+00000000-0000-7000-8000-000000000069  Wed  16:30-17:45  Classical Ballet  Intermediate           Studio A  Lea Moonfield    Greta Ivorylane  16  -
+00000000-0000-7000-8000-00000000006a  Wed  18:00-18:45  Pointe Work       Advanced               Studio B  Lea Moonfield    Greta Ivorylane  12  -
+00000000-0000-7000-8000-00000000006b  Wed  18:30-19:30  Hip-Hop           Intermediate           Hall 1    Jonas Featherby  -                20  -
+00000000-0000-7000-8000-00000000006c  Wed  19:00-20:30  Classical Ballet  Professional           Studio A  Lea Moonfield    Greta Ivorylane  16  -
+00000000-0000-7000-8000-00000000006d  Thu  16:00-17:00  Tap               Beginner               Hall 2    Nina Tapworth    -                12  -
+00000000-0000-7000-8000-00000000006e  Thu  17:00-18:00  Contemporary      Beginner               Studio A  Marco Wrenfield  -                18  -
+00000000-0000-7000-8000-00000000006f  Thu  18:30-20:00  Classical Ballet  Beginner–Intermediate  Studio A  Alina Starling   Felix Keysworth  16  -
+00000000-0000-7000-8000-000000000070  Thu  19:30-20:30  Jazz Dance        Intermediate           Hall 1    Marco Wrenfield  -                20  -
+00000000-0000-7000-8000-000000000071  Fri  15:30-16:15  Pre-Ballet        6–8 yrs                Studio B  Sofia Quillon    -                12  -
+00000000-0000-7000-8000-000000000072  Fri  16:30-17:30  Classical Ballet  Beginner               Studio A  Lea Moonfield    Greta Ivorylane  16  -
+00000000-0000-7000-8000-000000000073  Fri  17:45-18:45  Hip-Hop           all levels             Hall 1    Jonas Featherby  -                24  -
+00000000-0000-7000-8000-000000000074  Fri  18:00-19:15  Pointe Work       Advanced               Studio B  Lea Moonfield    -                12  -
+00000000-0000-7000-8000-000000000075  Sat  10:00-10:45  Creative Dance    4–6 yrs                Studio C  Sofia Quillon    -                10  -
+00000000-0000-7000-8000-000000000076  Sat  10:00-11:30  Classical Ballet  Advanced               Studio A  Alina Starling   Felix Keysworth  16  -
+00000000-0000-7000-8000-000000000077  Sat  11:00-12:00  Tap               all levels             Hall 2    Nina Tapworth    -                12  -
+00000000-0000-7000-8000-000000000078  Sat  12:00-13:15  Contemporary      all levels             Studio A  Marco Wrenfield  -                18  retired

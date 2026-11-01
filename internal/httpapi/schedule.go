@@ -43,7 +43,7 @@ type ScheduleInput struct {
 	Location   domain.LocationID   `doc:"Only lessons at this location." query:"location"`
 	Instructor domain.StaffID      `doc:"Only lessons with this staff member as instructor or accompanist." query:"instructor"`
 	CourseType domain.CourseTypeID `doc:"Only lessons of this course type." query:"courseType"`
-	Level      string              `doc:"Only lessons of classes at this level; excludes one-off lessons." enum:"beginner,intermediate,advanced,professional,open" query:"level"`
+	Level      domain.LevelID      `doc:"Only lessons of classes for this level: a span of levels that includes it, or all levels. Classes without a level, one-off lessons and an unknown level match nothing." query:"level"`
 }
 
 // Schedule is the response body of getSchedule.
@@ -85,22 +85,22 @@ type BookedFor struct {
 
 // LessonSummary is a lesson in the schedule.
 type LessonSummary struct {
-	ID          domain.LessonID `doc:"Lesson ID." json:"id"`
-	ClassID     domain.ClassID  `doc:"Weekly class the lesson belongs to; absent for one-off lessons." json:"classId,omitzero"`
-	StartsAt    time.Time       `doc:"Start instant (UTC)."                                              json:"startsAt"`
-	EndsAt      time.Time       `doc:"End instant (UTC)."                                                json:"endsAt"`
-	Status      string          `doc:"Whether the lesson takes place."  enum:"scheduled,canceled"         json:"status"`
-	Kind        string          `doc:"Regular lesson or special format; a room rental (only staff see one) takes no bookings." enum:"regular,workshop,private,rental" json:"kind"`
-	Visibility  string          `doc:"Who may see the lesson: everyone, signed-in members, or staff only." enum:"public,members,hidden" json:"visibility"`
-	Level       string          `doc:"Level of the class; absent for one-off lessons." enum:"beginner,intermediate,advanced,professional,open" json:"level,omitempty"`
-	Capacity    int             `doc:"Maximum number of participants; 0 for a room rental." minimum:"0"   json:"capacity"`
-	CourseType  *CourseTypeRef  `doc:"Course type; absent for a room rental without one." json:"courseType,omitempty"`
-	Room        RoomRef         `json:"room"`
-	Location    LocationRef     `json:"location"`
-	Instructor  *StaffRef       `doc:"Instructor; absent for a room rental." json:"instructor,omitempty"`
-	Accompanist *StaffRef       `doc:"Accompanist; absent if the lesson has none." json:"accompanist,omitempty"`
-	Renter      string          `doc:"Who rents the room; only for a room rental." json:"renter,omitempty"`
-	EventID     domain.EventID  `doc:"The event whose session the lesson is (ADR 0019): it is not booked one by one; absent otherwise." json:"eventId,omitzero"`
+	ID         domain.LessonID `doc:"Lesson ID." json:"id"`
+	ClassID    domain.ClassID  `doc:"Weekly class the lesson belongs to; absent for one-off lessons." json:"classId,omitzero"`
+	StartsAt   time.Time       `doc:"Start instant (UTC)."                                              json:"startsAt"`
+	EndsAt     time.Time       `doc:"End instant (UTC)."                                                json:"endsAt"`
+	Status     string          `doc:"Whether the lesson takes place."  enum:"scheduled,canceled"         json:"status"`
+	Kind       string          `doc:"Regular lesson or special format; a room rental (only staff see one) takes no bookings." enum:"regular,workshop,private,rental" json:"kind"`
+	Visibility string          `doc:"Who may see the lesson: everyone, signed-in members, or staff only." enum:"public,members,hidden" json:"visibility"`
+	Audience
+	Capacity    int            `doc:"Maximum number of participants; 0 for a room rental." minimum:"0"   json:"capacity"`
+	CourseType  *CourseTypeRef `doc:"Course type; absent for a room rental without one." json:"courseType,omitempty"`
+	Room        RoomRef        `json:"room"`
+	Location    LocationRef    `json:"location"`
+	Instructor  *StaffRef      `doc:"Instructor; absent for a room rental." json:"instructor,omitempty"`
+	Accompanist *StaffRef      `doc:"Accompanist; absent if the lesson has none." json:"accompanist,omitempty"`
+	Renter      string         `doc:"Who rents the room; only for a room rental." json:"renter,omitempty"`
+	EventID     domain.EventID `doc:"The event whose session the lesson is (ADR 0019): it is not booked one by one; absent otherwise." json:"eventId,omitzero"`
 }
 
 // LessonDetail is the response body of getLesson and of the lesson writes.
@@ -271,7 +271,7 @@ func (in *ScheduleInput) query() service.ScheduleQuery {
 	return service.ScheduleQuery{
 		From: in.From, To: in.To,
 		Location: in.Location, Instructor: in.Instructor, CourseType: in.CourseType,
-		Level: domain.SkillLevel(in.Level),
+		Level: in.Level,
 	}
 }
 
@@ -285,7 +285,7 @@ func lessonSummary(sl service.ScheduledLesson) LessonSummary {
 		Status:     string(l.Status),
 		Kind:       string(l.Kind),
 		Visibility: string(l.Visibility),
-		Level:      string(sl.Level),
+		Audience:   NewAudience(sl.Audience),
 		Capacity:   l.Capacity,
 		CourseType: courseTypeRef(sl.CourseType),
 		Room:       RoomRef{ID: sl.Room.ID, Name: sl.Room.Name, Position: sl.Room.Position},

@@ -46,7 +46,8 @@
     {
       "classId": "00000000-0000-7000-8000-00000000005f",
       "courseTypeName": "Creative Dance",
-      "level": "open",
+      "ageFromMonths": 48,
+      "ageToMonths": 72,
       "weekday": 1,
       "startTime": "15:30",
       "lessons": 1,
@@ -64,7 +65,16 @@
     {
       "classId": "00000000-0000-7000-8000-000000000060",
       "courseTypeName": "Classical Ballet",
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
       "weekday": 1,
       "startTime": "16:30",
       "lessons": 1,
@@ -81,7 +91,16 @@
     {
       "classId": "00000000-0000-7000-8000-000000000061",
       "courseTypeName": "Classical Ballet",
-      "level": "intermediate",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
       "weekday": 1,
       "startTime": "17:45",
       "lessons": 1,
@@ -98,7 +117,16 @@
     {
       "classId": "00000000-0000-7000-8000-000000000062",
       "courseTypeName": "Hip-Hop",
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
       "weekday": 1,
       "startTime": "18:00",
       "lessons": 1,
@@ -116,7 +144,16 @@
     {
       "classId": "00000000-0000-7000-8000-000000000063",
       "courseTypeName": "Classical Ballet",
-      "level": "advanced",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
       "weekday": 1,
       "startTime": "19:15",
       "lessons": 1,
@@ -133,7 +170,8 @@
     {
       "classId": "00000000-0000-7000-8000-000000000064",
       "courseTypeName": "Pre-Ballet",
-      "level": "beginner",
+      "ageFromMonths": 72,
+      "ageToMonths": 96,
       "weekday": 2,
       "startTime": "16:00",
       "lessons": 1,
@@ -151,7 +189,16 @@
     {
       "classId": "00000000-0000-7000-8000-000000000065",
       "courseTypeName": "Jazz Dance",
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
       "weekday": 2,
       "startTime": "17:00",
       "lessons": 1,
@@ -169,7 +216,16 @@
     {
       "classId": "00000000-0000-7000-8000-000000000066",
       "courseTypeName": "Contemporary",
-      "level": "intermediate",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
       "weekday": 2,
       "startTime": "18:30",
       "lessons": 1,
@@ -187,7 +243,7 @@
     {
       "classId": "00000000-0000-7000-8000-000000000067",
       "courseTypeName": "Barre Fitness",
-      "level": "open",
+      "allLevels": true,
       "weekday": 2,
       "startTime": "19:00",
       "lessons": 1,
@@ -205,7 +261,8 @@
     {
       "classId": "00000000-0000-7000-8000-000000000068",
       "courseTypeName": "Creative Dance",
-      "level": "open",
+      "ageFromMonths": 48,
+      "ageToMonths": 72,
       "weekday": 3,
       "startTime": "15:30",
       "lessons": 1,
@@ -223,7 +280,16 @@
     {
       "classId": "00000000-0000-7000-8000-000000000069",
       "courseTypeName": "Classical Ballet",
-      "level": "intermediate",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
       "weekday": 3,
       "startTime": "16:30",
       "lessons": 1,
@@ -240,7 +306,16 @@
     {
       "classId": "00000000-0000-7000-8000-00000000006a",
       "courseTypeName": "Pointe Work",
-      "level": "advanced",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
       "weekday": 3,
       "startTime": "18:00",
       "lessons": 1,
@@ -258,7 +333,16 @@
     {
       "classId": "00000000-0000-7000-8000-00000000006b",
       "courseTypeName": "Hip-Hop",
-      "level": "intermediate",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
       "weekday": 3,
       "startTime": "18:30",
       "lessons": 1,
@@ -276,7 +360,16 @@
     {
       "classId": "00000000-0000-7000-8000-00000000006c",
       "courseTypeName": "Classical Ballet",
-      "level": "professional",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005d",
+        "name": "Professional",
+        "code": "P"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005d",
+        "name": "Professional",
+        "code": "P"
+      },
       "weekday": 3,
       "startTime": "19:00",
       "lessons": 1,
@@ -293,7 +386,16 @@
     {
       "classId": "00000000-0000-7000-8000-00000000006d",
       "courseTypeName": "Tap",
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
       "weekday": 4,
       "startTime": "16:00",
       "lessons": 1,
@@ -311,7 +413,16 @@
     {
       "classId": "00000000-0000-7000-8000-00000000006e",
       "courseTypeName": "Contemporary",
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
       "weekday": 4,
       "startTime": "17:00",
       "lessons": 1,
@@ -329,7 +440,16 @@
     {
       "classId": "00000000-0000-7000-8000-00000000006f",
       "courseTypeName": "Classical Ballet",
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
       "weekday": 4,
       "startTime": "18:30",
       "lessons": 1,
@@ -346,7 +466,16 @@
     {
       "classId": "00000000-0000-7000-8000-000000000070",
       "courseTypeName": "Jazz Dance",
-      "level": "intermediate",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
       "weekday": 4,
       "startTime": "19:30",
       "lessons": 1,
@@ -364,7 +493,8 @@
     {
       "classId": "00000000-0000-7000-8000-000000000071",
       "courseTypeName": "Pre-Ballet",
-      "level": "beginner",
+      "ageFromMonths": 72,
+      "ageToMonths": 96,
       "weekday": 5,
       "startTime": "15:30",
       "lessons": 1,
@@ -382,7 +512,16 @@
     {
       "classId": "00000000-0000-7000-8000-000000000072",
       "courseTypeName": "Classical Ballet",
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
       "weekday": 5,
       "startTime": "16:30",
       "lessons": 1,
@@ -399,7 +538,7 @@
     {
       "classId": "00000000-0000-7000-8000-000000000073",
       "courseTypeName": "Hip-Hop",
-      "level": "open",
+      "allLevels": true,
       "weekday": 5,
       "startTime": "17:45",
       "lessons": 1,
@@ -417,7 +556,16 @@
     {
       "classId": "00000000-0000-7000-8000-000000000074",
       "courseTypeName": "Pointe Work",
-      "level": "advanced",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
       "weekday": 5,
       "startTime": "18:00",
       "lessons": 1,
@@ -435,7 +583,16 @@
     {
       "classId": "00000000-0000-7000-8000-000000000076",
       "courseTypeName": "Classical Ballet",
-      "level": "advanced",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
       "weekday": 6,
       "startTime": "10:00",
       "lessons": 1,
@@ -452,7 +609,8 @@
     {
       "classId": "00000000-0000-7000-8000-000000000075",
       "courseTypeName": "Creative Dance",
-      "level": "open",
+      "ageFromMonths": 48,
+      "ageToMonths": 72,
       "weekday": 6,
       "startTime": "10:00",
       "lessons": 1,
@@ -470,7 +628,7 @@
     {
       "classId": "00000000-0000-7000-8000-000000000077",
       "courseTypeName": "Tap",
-      "level": "open",
+      "allLevels": true,
       "weekday": 6,
       "startTime": "11:00",
       "lessons": 1,
@@ -488,7 +646,7 @@
     {
       "classId": "00000000-0000-7000-8000-000000000078",
       "courseTypeName": "Contemporary",
-      "level": "open",
+      "allLevels": true,
       "weekday": 6,
       "startTime": "12:00",
       "lessons": 1,

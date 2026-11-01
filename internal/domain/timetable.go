@@ -30,11 +30,18 @@ type Class struct {
 	RoomID        RoomID
 	InstructorID  StaffID
 	AccompanistID StaffID // optional
-	Level         SkillLevel
-	Weekday       time.Weekday
-	StartTime     TimeOfDay // school time
-	Duration      time.Duration
-	Capacity      int
+	// Who the class is for (ADR 0021): a span of the school's levels or all
+	// levels (never both), a stage (0 for none, else 1–MaxStage) and an age
+	// range in months (either end 0 for none).
+	Levels    LevelRange
+	AllLevels bool
+	Stage     int
+	AgeFrom   AgeMonths
+	AgeTo     AgeMonths
+	Weekday   time.Weekday
+	StartTime TimeOfDay // school time
+	Duration  time.Duration
+	Capacity  int
 	// Retired classes generate no more lessons and leave the public
 	// timetable; their lessons stay (ADR 0007).
 	Retired bool
@@ -50,7 +57,12 @@ func (c Class) Validate() error {
 		on("instructorId", !c.InstructorID.IsZero(), "class instructor must be set"),
 		on("accompanistId", c.AccompanistID.IsZero() || c.AccompanistID != c.InstructorID,
 			"accompanist must differ from the instructor"),
-		on("level", c.Level.Valid(), "invalid class level"),
+		on("levelToId", c.Levels.From.IsZero() == c.Levels.To.IsZero(), "a level range needs both ends"),
+		on("allLevels", !c.AllLevels || c.Levels.IsZero(), "all levels excludes a level range"),
+		on("stage", c.Stage == 0 || 1 <= c.Stage && c.Stage <= MaxStage, "stage must be between 1 and 9"),
+		on("ageFromMonths", 0 <= c.AgeFrom && c.AgeFrom <= MaxAgeMonths, "age must be between 1 and 1200 months"),
+		on("ageToMonths", 0 <= c.AgeTo && c.AgeTo <= MaxAgeMonths, "age must be between 1 and 1200 months"),
+		on("ageToMonths", c.AgeTo == 0 || c.AgeTo >= c.AgeFrom, "the age range ends before it starts"),
 		on("weekday", validWeekday(c.Weekday), "invalid class weekday"),
 		on("startTime", c.StartTime.Valid(), "invalid class start time"),
 		on("durationMinutes", c.Duration > 0 && c.Duration%time.Minute == 0,

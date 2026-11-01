@@ -28,7 +28,7 @@ func (f *genFixture) timetable(t *testing.T, now string) *TimetableService {
 // classData is a Tuesday class at 18:00 for 60 minutes.
 func (f *genFixture) classData() ClassData {
 	return ClassData{
-		CourseTypeID: f.courseType, RoomID: f.room, InstructorID: f.instructor, Level: domain.LevelOpen,
+		CourseTypeID: f.courseType, RoomID: f.room, InstructorID: f.instructor, AllLevels: true,
 		Weekday: time.Tuesday, StartTime: domain.TimeOfDay{Hour: 18}, Duration: time.Hour, Capacity: 10,
 	}
 }

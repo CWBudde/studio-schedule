@@ -24,9 +24,10 @@ type ScheduleQuery struct {
 	// Instructor matches the instructor or the accompanist of a lesson.
 	Instructor domain.StaffID
 	CourseType domain.CourseTypeID
-	// Level matches the level of the lesson's class; one-off lessons have
-	// none and never match.
-	Level domain.SkillLevel
+	// Level matches the lessons of classes whose audience covers the level
+	// (Audience.Covers): a span that includes it or all levels. A class
+	// without a level, a one-off lesson and an unknown level never match.
+	Level domain.LevelID
 }
 
 func (q ScheduleQuery) validate() error {
@@ -39,14 +40,14 @@ func (q ScheduleQuery) validate() error {
 		return fmt.Errorf("%w: to must be after from", domain.ErrValidation)
 	case q.To.Compare(q.From.AddDays(MaxScheduleDays)) > 0:
 		return fmt.Errorf("%w: the range must not exceed %d days", domain.ErrValidation, MaxScheduleDays)
-	case q.Level != "" && !q.Level.Valid():
-		return fmt.Errorf("%w: invalid level %q", domain.ErrValidation, q.Level)
 	}
 
 	return nil
 }
 
-func (q ScheduleQuery) matches(sl ScheduledLesson) bool {
+// matches reports whether sl passes the filters of q; levels are the
+// school's, by ID.
+func (q ScheduleQuery) matches(sl ScheduledLesson, levels map[domain.LevelID]domain.Level) bool {
 	l := sl.Lesson
 
 	switch {
@@ -56,19 +57,27 @@ func (q ScheduleQuery) matches(sl ScheduledLesson) bool {
 		return false
 	case !q.CourseType.IsZero() && l.CourseTypeID != q.CourseType:
 		return false
-	case q.Level != "" && sl.Level != q.Level:
+	case !q.Level.IsZero() && !coversLevel(sl, levels, q.Level):
 		return false
 	}
 
 	return true
 }
 
-// ScheduledLesson is a lesson with the records it references. Level is
-// the level of its class (zero for one-off lessons); Instructor is zero for
-// a room rental, Accompanist if the lesson has none.
+// coversLevel reports whether sl's class is for the level id, which must be
+// one of levels; a one-off lesson has the zero audience, which covers none.
+func coversLevel(sl ScheduledLesson, levels map[domain.LevelID]domain.Level, id domain.LevelID) bool {
+	level, ok := levels[id]
+
+	return ok && sl.Audience.Covers(level)
+}
+
+// ScheduledLesson is a lesson with the records it references. Audience is
+// its class's (zero for one-off lessons); Instructor is zero for a room
+// rental, Accompanist if the lesson has none.
 type ScheduledLesson struct {
 	Lesson                  domain.Lesson
-	Level                   domain.SkillLevel
+	Audience                Audience
 	CourseType              domain.CourseType
 	Room                    domain.Room
 	Location                domain.Location
@@ -201,7 +210,7 @@ func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQ
 				return err
 			}
 
-			if q.matches(sl) {
+			if q.matches(sl, refs.levels) {
 				out.Lessons = append(out.Lessons, sl)
 			}
 		}
@@ -487,6 +496,7 @@ type lessonRefs struct {
 	staff       map[domain.StaffID]domain.Staff
 	courseTypes map[domain.CourseTypeID]domain.CourseType
 	classes     map[domain.ClassID]domain.Class
+	levels      map[domain.LevelID]domain.Level
 }
 
 func newLessonRefs() lessonRefs {
@@ -496,6 +506,7 @@ func newLessonRefs() lessonRefs {
 		staff:       map[domain.StaffID]domain.Staff{},
 		courseTypes: map[domain.CourseTypeID]domain.CourseType{},
 		classes:     map[domain.ClassID]domain.Class{},
+		levels:      map[domain.LevelID]domain.Level{},
 	}
 }
 
@@ -530,8 +541,8 @@ func loadRangeRefs(ctx context.Context, tx store.Tx, from, to domain.Date) (less
 	return refs, nil
 }
 
-// loadCatalogRefs loads the locations, rooms, staff and course types, the
-// records that lessons reference besides their classes.
+// loadCatalogRefs loads the locations, rooms, staff, course types and
+// levels, the records that lessons reference besides their classes.
 func loadCatalogRefs(ctx context.Context, tx store.Tx) (lessonRefs, error) {
 	refs := newLessonRefs()
 
@@ -571,7 +582,25 @@ func loadCatalogRefs(ctx context.Context, tx store.Tx) (lessonRefs, error) {
 		refs.courseTypes[c.ID] = c
 	}
 
+	if err := refs.loadLevels(ctx, tx); err != nil {
+		return refs, err
+	}
+
 	return refs, nil
+}
+
+// loadLevels adds the school's levels.
+func (r lessonRefs) loadLevels(ctx context.Context, tx store.Tx) error {
+	levels, err := tx.Levels().List(ctx)
+	if err != nil {
+		return fmt.Errorf("levels: %w", err)
+	}
+
+	for _, l := range levels {
+		r.levels[l.ID] = l
+	}
+
+	return nil
 }
 
 // loadClass adds the class with the given ID unless it is zero (a one-off
@@ -640,6 +669,12 @@ func loadRefsOf(ctx context.Context, tx store.Tx, l domain.Lesson) (lessonRefs, 
 		}
 
 		refs.classes[c.ID] = c
+
+		if !c.Levels.IsZero() {
+			if err := refs.loadLevels(ctx, tx); err != nil {
+				return refs, err
+			}
+		}
 	}
 
 	return refs, nil
@@ -716,7 +751,12 @@ func (r lessonRefs) resolve(l domain.Lesson) (ScheduledLesson, error) {
 			return sl, fmt.Errorf("lesson %v: class %v: %w", l.ID, l.ClassID, errBrokenReference)
 		}
 
-		sl.Level = c.Level
+		a, err := audienceOf(c, r.levels)
+		if err != nil {
+			return sl, fmt.Errorf("lesson %v: %w", l.ID, err)
+		}
+
+		sl.Audience = a
 	}
 
 	return sl, nil

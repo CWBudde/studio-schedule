@@ -35,7 +35,7 @@ func TestAdminClasses(t *testing.T) {
 		}
 
 		return `{"courseTypeId":"` + existing["courseTypeId"].(string) + `","roomId":"` + roomID +
-			`","instructorId":"` + instructor + `","level":"open","weekday":3,"startTime":"20:15",` +
+			`","instructorId":"` + instructor + `","allLevels":true,"weekday":3,"startTime":"20:15",` +
 			`"durationMinutes":45,"capacity":6,"retired":` + r + `}`
 	}
 	room, _ := existing["roomId"].(string)
@@ -81,6 +81,85 @@ func TestAdminClasses(t *testing.T) {
 	used := decode(t, a.expect(http.StatusConflict, http.MethodDelete, "/api/v1/classes/"+existing["id"].(string), "", office))
 	if used["reason"] != "in-use" {
 		t.Errorf("409 %v, want reason in-use", used)
+	}
+}
+
+// TestAdminClassAudience writes a class's audience over HTTP (ADR 0021): a
+// span named the other way round is answered lower level first, and an
+// audience the rules refuse is a 422 on its field.
+func TestAdminClassAudience(t *testing.T) {
+	t.Parallel()
+
+	a := newAuthApp(t, app.Deps{})
+	office := a.login("olga.ledgerby@example.net")
+	member := a.login("clara.amberly@example.org")
+
+	terms := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/terms", "", member))
+	termID, _ := terms["items"].([]any)[0].(map[string]any)["id"].(string)
+	classes := "/api/v1/terms/" + termID + "/classes"
+
+	existing, _ := decode(t, a.expect(http.StatusOK, http.MethodGet, classes, "", member))["items"].([]any)[0].(map[string]any)
+	instructor, _ := existing["instructor"].(map[string]any)["id"].(string)
+
+	levels := map[string]map[string]any{}
+	for _, l := range decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/levels", "", member))["items"].([]any) {
+		m, _ := l.(map[string]any)
+		levels[m["name"].(string)] = m
+	}
+
+	beginner, advanced := levels["Beginner"]["id"].(string), levels["Advanced"]["id"].(string)
+	body := func(audience string) string {
+		return `{"courseTypeId":"` + existing["courseTypeId"].(string) + `","roomId":"` + existing["roomId"].(string) +
+			`","instructorId":"` + instructor + `",` + audience + `"weekday":3,"startTime":"20:15",` +
+			`"durationMinutes":45,"capacity":6}`
+	}
+
+	created := decode(t, a.expect(http.StatusCreated, http.MethodPost, classes, body(
+		`"levelFromId":"`+advanced+`","levelToId":"`+beginner+`","stage":2,"ageFromMonths":120,"ageToMonths":216,`), office))
+
+	from, _ := created["levelFrom"].(map[string]any)
+	to, _ := created["levelTo"].(map[string]any)
+
+	if from["id"] != beginner || from["name"] != "Beginner" || from["code"] != "B" || to["id"] != advanced ||
+		created["stage"] != float64(2) || created["ageFromMonths"] != float64(120) || created["ageToMonths"] != float64(216) {
+		t.Errorf("created %v, want Beginner to Advanced, stage 2, 120 to 216 months", created)
+	}
+
+	if _, ok := created["allLevels"]; ok {
+		t.Errorf("created %v: allLevels must be absent", created)
+	}
+
+	id, _ := created["id"].(string)
+
+	listed := decode(t, a.expect(http.StatusOK, http.MethodGet, classes, "", member))
+	for _, item := range listed["items"].([]any) {
+		if c, _ := item.(map[string]any); c["id"] == id && c["levelFrom"].(map[string]any)["id"] != beginner {
+			t.Errorf("listed %v, want Beginner first", c)
+		}
+	}
+
+	// All levels and nothing else: every other audience field is absent.
+	updated := decode(t, a.expect(http.StatusOK, http.MethodPut, "/api/v1/classes/"+id, body(`"allLevels":true,`), office))
+	for _, absent := range []string{"levelFrom", "levelTo", "stage", "ageFromMonths", "ageToMonths"} {
+		if _, ok := updated[absent]; ok || updated["allLevels"] != true {
+			t.Errorf("updated %v, want only allLevels", updated)
+		}
+	}
+
+	for name, tt := range map[string]struct{ audience, location string }{
+		"all levels with a span": {
+			`"allLevels":true,"levelFromId":"` + beginner + `","levelToId":"` + beginner + `",`, "body.allLevels",
+		},
+		"one end only":   {`"levelFromId":"` + beginner + `",`, "body.levelToId"},
+		"unknown level":  {`"levelFromId":"ffffffff-ffff-7fff-bfff-ffffffffffff","levelToId":"` + beginner + `",`, "body.levelFromId"},
+		"stage 10":       {`"stage":10,`, "body.stage"},
+		"age 1201":       {`"ageToMonths":1201,`, "body.ageToMonths"},
+		"ages backwards": {`"ageFromMonths":72,"ageToMonths":48,`, "body.ageToMonths"},
+	} {
+		got := decode(t, a.expect(http.StatusUnprocessableEntity, http.MethodPost, classes, body(tt.audience), office))
+		if errs, _ := got["errors"].([]any); len(errs) != 1 || errs[0].(map[string]any)["location"] != tt.location {
+			t.Errorf("%s: 422 errors %v, want %s", name, got["errors"], tt.location)
+		}
 	}
 }
 
@@ -218,7 +297,7 @@ func TestAdminClassMembers(t *testing.T) {
 	instructor, _ := demo["instructor"].(map[string]any)["id"].(string)
 	classBody := func(capacity string) string {
 		return `{"courseTypeId":"` + demo["courseTypeId"].(string) + `","roomId":"` + demo["roomId"].(string) +
-			`","instructorId":"` + instructor + `","level":"open","weekday":3,"startTime":"20:15",` +
+			`","instructorId":"` + instructor + `","allLevels":true,"weekday":3,"startTime":"20:15",` +
 			`"durationMinutes":45,"capacity":` + capacity + `,"retired":false}`
 	}
 	small := decode(t, a.expect(http.StatusCreated, http.MethodPost, "/api/v1/terms/"+termID+"/classes", classBody("1"), office))

@@ -37,7 +37,7 @@ func TestBookings(t *testing.T) {
 	instructor, _ := existing["instructor"].(map[string]any)["id"].(string)
 
 	class := decode(t, a.expect(http.StatusCreated, http.MethodPost, "/api/v1/terms/"+termID+"/classes",
-		fmt.Sprintf(`{"courseTypeId":%q,"roomId":%q,"instructorId":%q,"level":"open","weekday":3,`+
+		fmt.Sprintf(`{"courseTypeId":%q,"roomId":%q,"instructorId":%q,"allLevels":true,"weekday":3,`+
 			`"startTime":"21:15","durationMinutes":45,"capacity":2}`, courseType, room, instructor), office))
 
 	schedule := func(cookie *http.Cookie) []map[string]any {

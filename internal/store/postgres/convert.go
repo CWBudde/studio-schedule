@@ -126,6 +126,29 @@ func int4Opt(n int) (pgtype.Int4, error) {
 	return pgtype.Int4{Int32: v, Valid: err == nil}, err
 }
 
+// int2Opt converts an optional number for a smallint column; 0 is NULL.
+// Validate keeps the numbers small, so an overflow is a bug and fails the
+// write.
+func int2Opt(n int) (pgtype.Int2, error) {
+	switch {
+	case n == 0:
+		return pgtype.Int2{}, nil
+	case n < math.MinInt16 || n > math.MaxInt16:
+		return pgtype.Int2{}, fmt.Errorf("postgres: %d does not fit a smallint column: %w", n, domain.ErrValidation)
+	}
+
+	return pgtype.Int2{Int16: int16(n), Valid: true}, nil
+}
+
+// fromPgInt2 maps an optional smallint; NULL is 0.
+func fromPgInt2(n pgtype.Int2) int {
+	if !n.Valid {
+		return 0
+	}
+
+	return int(n.Int16)
+}
+
 // weekday converts d for a smallint column.
 func weekday(d time.Weekday) (int16, error) {
 	if d < 0 || d > time.Saturday {

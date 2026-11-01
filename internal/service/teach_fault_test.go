@@ -50,7 +50,7 @@ func TestTeachLessonsStoreFaults(t *testing.T) {
 					// Without a fault, the stray class's lesson is resolved
 					// with its class too.
 					for _, l := range got.Lessons {
-						if l.Lesson.ID == s.stray.ID && l.Level == domain.LevelAdvanced {
+						if l.Lesson.ID == s.stray.ID && l.Audience.High.Name == "Advanced" {
 							return nil
 						}
 					}

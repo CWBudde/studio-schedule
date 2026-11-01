@@ -47,6 +47,8 @@ func (r levelRepo) Update(ctx context.Context, l domain.Level) error {
 	return affected("level", n, err)
 }
 
+// Delete deletes the level. A class using it as either end of its span fails
+// the statement (ON DELETE RESTRICT), which mapErr reports as ErrConflict.
 func (r levelRepo) Delete(ctx context.Context, id domain.LevelID) error {
 	n, err := r.q.DeleteLevel(ctx, pgID(id))
 

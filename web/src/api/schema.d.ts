@@ -1746,7 +1746,7 @@ export interface paths {
         get?: never;
         /**
          * Update a class
-         * @description Replaces the fields of a class; its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the class's member count or the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons that still follow it and have no bookings but the automatic ones of class members are deleted with those.
+         * @description Replaces the fields of a class, its audience included (see `createClass`); its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the class's member count or the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons that still follow it and have no bookings but the automatic ones of class members are deleted with those.
          */
         put: operations["updateClass"];
         post?: never;
@@ -2851,7 +2851,7 @@ export interface paths {
         put?: never;
         /**
          * Create a class
-         * @description Adds a weekly class to a term and generates its lessons that lie ahead. An unknown course type, room or staff member is a 422 on the field that names it.
+         * @description Adds a weekly class to a term and generates its lessons that lie ahead. An unknown course type, room, staff member or level is a 422 on the field that names it. The class is for the levels from `levelFromId` to `levelToId` (either way round, both or neither), for all levels, or for no level (ADR 0021); `allLevels` with a span is a 422 on `allLevels`.
          */
         post: operations["createClass"];
         delete?: never;
@@ -3939,6 +3939,18 @@ export interface components {
             accompanist?: components["schemas"]["StaffRef"];
             /**
              * Format: int64
+             * @description Youngest age the class is for, in months.
+             */
+            ageFromMonths?: number;
+            /**
+             * Format: int64
+             * @description Oldest age the class is for, in months.
+             */
+            ageToMonths?: number;
+            /** @description Whether the class is for every level; never with levelFrom. */
+            allLevels?: boolean;
+            /**
+             * Format: int64
              * @description Maximum number of participants per lesson.
              */
             capacity: number;
@@ -3959,16 +3971,20 @@ export interface components {
             id: string;
             /** @description Instructor, also when no longer active. */
             instructor: components["schemas"]["StaffRef"];
-            /**
-             * @description Skill level the class is aimed at.
-             * @enum {string}
-             */
-            level: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            /** @description Lower end (by position) of the levels the class is for; absent without a level. */
+            levelFrom?: components["schemas"]["LevelRef"];
+            /** @description Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level. */
+            levelTo?: components["schemas"]["LevelRef"];
             /**
              * Format: uuid
              * @description Room the class takes place in.
              */
             roomId: string;
+            /**
+             * Format: int64
+             * @description Stage of the class, from 1.
+             */
+            stage?: number;
             /**
              * @description Start time (HH:MM) in the school time zone.
              * @example 18:00
@@ -3993,6 +4009,18 @@ export interface components {
             accompanistId?: string;
             /**
              * Format: int64
+             * @description Youngest age the class is for, in months, if any.
+             */
+            ageFromMonths?: number;
+            /**
+             * Format: int64
+             * @description Oldest age the class is for, in months, if any; not below ageFromMonths.
+             */
+            ageToMonths?: number;
+            /** @description Whether the class is for every level; not with a level span. */
+            allLevels?: boolean;
+            /**
+             * Format: int64
              * @description Maximum number of participants per lesson.
              */
             capacity: number;
@@ -4012,10 +4040,15 @@ export interface components {
              */
             instructorId: string;
             /**
-             * @description Skill level the class is aimed at.
-             * @enum {string}
+             * Format: uuid
+             * @description One end of the levels the class is for, in either order with levelToId; with levelToId or not at all.
              */
-            level: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            levelFromId?: string;
+            /**
+             * Format: uuid
+             * @description The other end of the levels the class is for, the same as levelFromId for one level.
+             */
+            levelToId?: string;
             /** @description Whether the class is retired: it generates no more lessons and leaves the public timetable. */
             retired?: boolean;
             /**
@@ -4023,6 +4056,11 @@ export interface components {
              * @description Room the class takes place in.
              */
             roomId: string;
+            /**
+             * Format: int64
+             * @description Stage of the class, if any.
+             */
+            stage?: number;
             /**
              * @description Start time (HH:MM) in the school time zone.
              * @example 18:00
@@ -4037,6 +4075,18 @@ export interface components {
         ClassEntry: {
             /** @description Accompanist, if any. */
             accompanist?: components["schemas"]["StaffRef"];
+            /**
+             * Format: int64
+             * @description Youngest age the class is for, in months.
+             */
+            ageFromMonths?: number;
+            /**
+             * Format: int64
+             * @description Oldest age the class is for, in months.
+             */
+            ageToMonths?: number;
+            /** @description Whether the class is for every level; never with levelFrom. */
+            allLevels?: boolean;
             /**
              * Format: int64
              * @description Maximum number of participants per lesson.
@@ -4059,11 +4109,10 @@ export interface components {
             id: string;
             /** @description Instructor, also when no longer active. */
             instructor: components["schemas"]["StaffRef"];
-            /**
-             * @description Skill level the class is aimed at.
-             * @enum {string}
-             */
-            level: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            /** @description Lower end (by position) of the levels the class is for; absent without a level. */
+            levelFrom?: components["schemas"]["LevelRef"];
+            /** @description Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level. */
+            levelTo?: components["schemas"]["LevelRef"];
             /** @description Whether the class is retired. */
             retired: boolean;
             /**
@@ -4071,6 +4120,11 @@ export interface components {
              * @description Room the class takes place in.
              */
             roomId: string;
+            /**
+             * Format: int64
+             * @description Stage of the class, from 1.
+             */
+            stage?: number;
             /**
              * @description Start time (HH:MM) in the school time zone.
              * @example 18:00
@@ -4140,6 +4194,18 @@ export interface components {
         ClassStatistics: {
             /**
              * Format: int64
+             * @description Youngest age the class is for, in months.
+             */
+            ageFromMonths?: number;
+            /**
+             * Format: int64
+             * @description Oldest age the class is for, in months.
+             */
+            ageToMonths?: number;
+            /** @description Whether the class is for every level; never with levelFrom. */
+            allLevels?: boolean;
+            /**
+             * Format: int64
              * @description Bookings marked as attended.
              */
             attended: number;
@@ -4180,11 +4246,10 @@ export interface components {
              * @description Lessons held or scheduled (canceled ones left out).
              */
             lessons: number;
-            /**
-             * @description Level of the class; absent for a one-off lesson.
-             * @enum {string}
-             */
-            level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            /** @description Lower end (by position) of the levels the class is for; absent without a level. */
+            levelFrom?: components["schemas"]["LevelRef"];
+            /** @description Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level. */
+            levelTo?: components["schemas"]["LevelRef"];
             /**
              * Format: double
              * @description No-shows per booking whose attendance was taken; absent if none was.
@@ -4195,6 +4260,11 @@ export interface components {
              * @description Bookings marked as not attended.
              */
             noShows: number;
+            /**
+             * Format: int64
+             * @description Stage of the class, from 1.
+             */
+            stage?: number;
             /** @description Start time (HH:MM) of the class in the school time zone; absent for a one-off lesson. */
             startTime?: string;
             /**
@@ -5731,6 +5801,18 @@ export interface components {
             accompanist?: components["schemas"]["StaffRef"];
             /** @description What the office sees beyond the schedule; only for office and admin accounts. */
             admin?: components["schemas"]["LessonAdmin"];
+            /**
+             * Format: int64
+             * @description Youngest age the class is for, in months.
+             */
+            ageFromMonths?: number;
+            /**
+             * Format: int64
+             * @description Oldest age the class is for, in months.
+             */
+            ageToMonths?: number;
+            /** @description Whether the class is for every level; never with levelFrom. */
+            allLevels?: boolean;
             /** @description The signed-in person and their dependents with an active booking for the lesson, the signed-in person first; absent if there is none or the caller is not signed in (and in the responses of the lesson writes). */
             bookedFor?: components["schemas"]["BookedFor"][];
             /**
@@ -5784,17 +5866,21 @@ export interface components {
              * @description From this instant on a cancellation is late: the cancellation cutoff before the start (UTC); absent for a lesson the school canceled, which is never canceled late.
              */
             lateCancelFrom?: string;
-            /**
-             * @description Level of the class; absent for one-off lessons.
-             * @enum {string}
-             */
-            level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            /** @description Lower end (by position) of the levels the class is for; absent without a level. */
+            levelFrom?: components["schemas"]["LevelRef"];
+            /** @description Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level. */
+            levelTo?: components["schemas"]["LevelRef"];
             location: components["schemas"]["LocationRef"];
             /** @description Postal address of the location. */
             locationAddress?: string;
             /** @description Who rents the room; only for a room rental. */
             renter?: string;
             room: components["schemas"]["RoomRef"];
+            /**
+             * Format: int64
+             * @description Stage of the class, from 1.
+             */
+            stage?: number;
             /**
              * Format: date-time
              * @description Start instant (UTC).
@@ -5913,6 +5999,18 @@ export interface components {
             accompanist?: components["schemas"]["StaffRef"];
             /**
              * Format: int64
+             * @description Youngest age the class is for, in months.
+             */
+            ageFromMonths?: number;
+            /**
+             * Format: int64
+             * @description Oldest age the class is for, in months.
+             */
+            ageToMonths?: number;
+            /** @description Whether the class is for every level; never with levelFrom. */
+            allLevels?: boolean;
+            /**
+             * Format: int64
              * @description Maximum number of participants; 0 for a room rental.
              */
             capacity: number;
@@ -5945,15 +6043,19 @@ export interface components {
              * @enum {string}
              */
             kind: "regular" | "workshop" | "private" | "rental";
-            /**
-             * @description Level of the class; absent for one-off lessons.
-             * @enum {string}
-             */
-            level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            /** @description Lower end (by position) of the levels the class is for; absent without a level. */
+            levelFrom?: components["schemas"]["LevelRef"];
+            /** @description Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level. */
+            levelTo?: components["schemas"]["LevelRef"];
             location: components["schemas"]["LocationRef"];
             /** @description Who rents the room; only for a room rental. */
             renter?: string;
             room: components["schemas"]["RoomRef"];
+            /**
+             * Format: int64
+             * @description Stage of the class, from 1.
+             */
+            stage?: number;
             /**
              * Format: date-time
              * @description Start instant (UTC).
@@ -6037,6 +6139,13 @@ export interface components {
         LevelOrder: {
             /** @description Every level, each once, in their new order. */
             levelIds: string[];
+        };
+        LevelRef: {
+            /** @description Short label, if any. */
+            code?: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
         };
         Location: {
             /** @description Postal address, if known. */
@@ -7514,6 +7623,18 @@ export interface components {
         ScheduleLesson: {
             /** @description Accompanist; absent if the lesson has none. */
             accompanist?: components["schemas"]["StaffRef"];
+            /**
+             * Format: int64
+             * @description Youngest age the class is for, in months.
+             */
+            ageFromMonths?: number;
+            /**
+             * Format: int64
+             * @description Oldest age the class is for, in months.
+             */
+            ageToMonths?: number;
+            /** @description Whether the class is for every level; never with levelFrom. */
+            allLevels?: boolean;
             /** @description The signed-in person and their dependents with an active booking for the lesson, the signed-in person first; absent if there is none or the caller is not signed in (and in the responses of the lesson writes). */
             bookedFor?: components["schemas"]["BookedFor"][];
             /**
@@ -7565,15 +7686,19 @@ export interface components {
              * @description From this instant on a cancellation is late: the cancellation cutoff before the start (UTC); absent for a lesson the school canceled, which is never canceled late.
              */
             lateCancelFrom?: string;
-            /**
-             * @description Level of the class; absent for one-off lessons.
-             * @enum {string}
-             */
-            level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            /** @description Lower end (by position) of the levels the class is for; absent without a level. */
+            levelFrom?: components["schemas"]["LevelRef"];
+            /** @description Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level. */
+            levelTo?: components["schemas"]["LevelRef"];
             location: components["schemas"]["LocationRef"];
             /** @description Who rents the room; only for a room rental. */
             renter?: string;
             room: components["schemas"]["RoomRef"];
+            /**
+             * Format: int64
+             * @description Stage of the class, from 1.
+             */
+            stage?: number;
             /**
              * Format: date-time
              * @description Start instant (UTC).
@@ -8006,6 +8131,18 @@ export interface components {
              * @description Active (not canceled) bookings; more than the capacity after an override.
              */
             active: number;
+            /**
+             * Format: int64
+             * @description Youngest age the class is for, in months.
+             */
+            ageFromMonths?: number;
+            /**
+             * Format: int64
+             * @description Oldest age the class is for, in months.
+             */
+            ageToMonths?: number;
+            /** @description Whether the class is for every level; never with levelFrom. */
+            allLevels?: boolean;
             /** @description Whether the caller may take attendance now: the lesson takes place and has started, and for instructors and accompanists its day is not over. */
             attendanceOpen: boolean;
             /** @description Whether the lesson takes place, has started and has no active booking whose attendance is unknown (booked). */
@@ -8064,11 +8201,10 @@ export interface components {
              * @enum {string}
              */
             kind: "regular" | "workshop" | "private" | "rental";
-            /**
-             * @description Level of the class; absent for one-off lessons.
-             * @enum {string}
-             */
-            level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+            /** @description Lower end (by position) of the levels the class is for; absent without a level. */
+            levelFrom?: components["schemas"]["LevelRef"];
+            /** @description Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level. */
+            levelTo?: components["schemas"]["LevelRef"];
             location: components["schemas"]["LocationRef"];
             /** @description Who rents the room; only for a room rental. */
             renter?: string;
@@ -8078,6 +8214,11 @@ export interface components {
              */
             role: "instructor" | "accompanist" | "office";
             room: components["schemas"]["RoomRef"];
+            /**
+             * Format: int64
+             * @description Stage of the class, from 1.
+             */
+            stage?: number;
             /**
              * Format: date-time
              * @description Start instant (UTC).
@@ -14235,8 +14376,8 @@ export interface operations {
                 instructor?: string;
                 /** @description Only lessons of this course type. */
                 courseType?: string;
-                /** @description Only lessons of classes at this level; excludes one-off lessons. */
-                level?: "beginner" | "intermediate" | "advanced" | "professional" | "open";
+                /** @description Only lessons of classes for this level: a span of levels that includes it, or all levels. Classes without a level, one-off lessons and an unknown level match nothing. */
+                level?: string;
             };
             header?: never;
             path?: never;

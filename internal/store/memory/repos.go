@@ -1030,7 +1030,8 @@ func (r classRepo) Update(_ context.Context, c domain.Class) error {
 func (r classRepo) put(c domain.Class) error {
 	s := &r.tx.state
 	if !s.terms.has(c.TermID) || !s.courseTypes.has(c.CourseTypeID) || !s.rooms.has(c.RoomID) ||
-		!s.staff.has(c.InstructorID) || (!c.AccompanistID.IsZero() && !s.staff.has(c.AccompanistID)) {
+		!s.staff.has(c.InstructorID) || (!c.AccompanistID.IsZero() && !s.staff.has(c.AccompanistID)) ||
+		(!c.Levels.From.IsZero() && !s.levels.has(c.Levels.From)) || (!c.Levels.To.IsZero() && !s.levels.has(c.Levels.To)) {
 		return conflict("class references a missing record")
 	}
 

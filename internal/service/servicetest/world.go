@@ -70,7 +70,7 @@ func newWorld(t *testing.T, st store.Store) *world {
 	for i := range w.classes {
 		c := domain.Class{
 			ID: ids.New[domain.ClassID](w.seq), TermID: term.ID, CourseTypeID: courseType.ID, RoomID: room.ID,
-			InstructorID: staff.ID, Level: domain.LevelOpen, Weekday: time.Weekday(i + 1),
+			InstructorID: staff.ID, AllLevels: true, Weekday: time.Weekday(i + 1),
 			StartTime: domain.TimeOfDay{Hour: 17}, Duration: time.Hour, Capacity: 10,
 		}
 		w.classes[i] = c.ID
