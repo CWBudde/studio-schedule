@@ -105,3 +105,95 @@ func TestAuditCommandLineActions(t *testing.T) {
 		t.Error("a requeued mail with a link's delivery")
 	}
 }
+
+// TestAuditEventActions: the office's event actions (ADR 0019) name the
+// event; the registration actions also the registration and target the
+// person, or nothing for a guest; a canceled event has no target; only a
+// canceled registration records a refund, and no other action names an
+// event or a registration.
+func TestAuditEventActions(t *testing.T) {
+	t.Parallel()
+
+	registration := func(a domain.AuditAction) func() domain.AuditEvent {
+		return func() domain.AuditEvent {
+			return domain.AuditEvent{
+				ID: newID[domain.AuditEventID](), At: t0, ActorID: newID[domain.AccountID](), Action: a,
+				TargetKind: domain.AuditTargetPerson, TargetPersonID: newID[domain.PersonID](),
+				Details: domain.AuditDetails{
+					EventID: newID[domain.EventID](), RegistrationID: newID[domain.EventRegistrationID](),
+				},
+			}
+		}
+	}
+
+	for _, a := range []domain.AuditAction{
+		domain.AuditEventRegistrationAdded, domain.AuditEventRegistrationCanceled, domain.AuditEventRegistrationPaid,
+	} {
+		t.Run(string(a), func(t *testing.T) {
+			t.Parallel()
+
+			cases := map[string]func(*domain.AuditEvent){
+				"no event":        func(e *domain.AuditEvent) { e.Details.EventID = domain.EventID{} },
+				"no registration": func(e *domain.AuditEvent) { e.Details.RegistrationID = domain.EventRegistrationID{} },
+				"an account": func(e *domain.AuditEvent) {
+					e.TargetKind, e.TargetPersonID, e.TargetID = domain.AuditTargetAccount, domain.PersonID{},
+						newID[domain.AccountID]()
+				},
+				"no actor": func(e *domain.AuditEvent) { e.ActorID = domain.AccountID{} },
+			}
+			if a != domain.AuditEventRegistrationCanceled {
+				cases["a refund"] = func(e *domain.AuditEvent) { e.Details.Refund = true }
+			}
+
+			checkValidate(t, registration(a), cases)
+
+			// A guest's registration has no target.
+			guest := registration(a)()
+			guest.TargetKind, guest.TargetPersonID = "", domain.PersonID{}
+
+			if err := guest.Validate(); err != nil {
+				t.Errorf("a guest's registration: %v", err)
+			}
+		})
+	}
+
+	refunded := registration(domain.AuditEventRegistrationCanceled)()
+	refunded.Details.Refund = true
+
+	if err := refunded.Validate(); err != nil {
+		t.Errorf("a refunded registration: %v", err)
+	}
+
+	t.Run("EventCanceled", func(t *testing.T) {
+		t.Parallel()
+		checkValidate(t, func() domain.AuditEvent {
+			return domain.AuditEvent{
+				ID: newID[domain.AuditEventID](), At: t0, ActorID: newID[domain.AccountID](),
+				Action: domain.AuditEventCanceled, Details: domain.AuditDetails{EventID: newID[domain.EventID]()},
+			}
+		}, map[string]func(*domain.AuditEvent){
+			"no event": func(e *domain.AuditEvent) { e.Details.EventID = domain.EventID{} },
+			"a registration": func(e *domain.AuditEvent) {
+				e.Details.RegistrationID = newID[domain.EventRegistrationID]()
+			},
+			"a target": func(e *domain.AuditEvent) {
+				e.TargetKind, e.TargetPersonID = domain.AuditTargetPerson, newID[domain.PersonID]()
+			},
+			"a refund": func(e *domain.AuditEvent) { e.Details.Refund = true },
+		})
+	})
+
+	t.Run("OtherActions", func(t *testing.T) {
+		t.Parallel()
+		checkValidate(t, func() domain.AuditEvent {
+			return domain.AuditEvent{
+				ID: newID[domain.AuditEventID](), At: t0, ActorID: newID[domain.AccountID](),
+				Action: domain.AuditSessionsRevoked,
+			}
+		}, map[string]func(*domain.AuditEvent){
+			"an event":       func(e *domain.AuditEvent) { e.Details.EventID = newID[domain.EventID]() },
+			"a registration": func(e *domain.AuditEvent) { e.Details.RegistrationID = newID[domain.EventRegistrationID]() },
+			"a refund":       func(e *domain.AuditEvent) { e.Details.Refund = true },
+		})
+	})
+}

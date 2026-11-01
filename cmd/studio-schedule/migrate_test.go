@@ -316,21 +316,21 @@ func TestMigrateDownWithoutMigrations(t *testing.T) {
 }
 
 // migrateFailNewest rolls back the two newest migrations of a new database,
-// breaks the newest one (00031 creates the table events, which then exists
-// already) and runs migrate up, which must fail. It returns the
+// breaks the newest one (00032 adds the event audit actions, one of which
+// then exists already) and runs migrate up, which must fail. It returns the
 // database, the embedded migrations, and the output and error of up.
 func migrateFailNewest(t *testing.T) (url string, embedded []string, out string, err error) {
 	t.Helper()
 
 	embedded = migrateEmbedded(t)
-	if last := embedded[len(embedded)-1]; last != "00031_events.sql" {
-		t.Fatalf("the newest migration is %s; migrateFailNewest breaks 00031 on purpose and needs updating", last)
+	if last := embedded[len(embedded)-1]; last != "00032_event_audit.sql" {
+		t.Fatalf("the newest migration is %s; migrateFailNewest breaks 00032 on purpose and needs updating", last)
 	}
 
 	url = newTestDatabase(t)
 	migrateRun(t, url, "down")
 	migrateRun(t, url, "down")
-	execSQL(t, url, "CREATE TABLE events (id uuid PRIMARY KEY)")
+	execSQL(t, url, "INSERT INTO audit_actions (action) VALUES ('event-canceled')")
 
 	out, err = execute(map[string]string{"DATABASE_URL": url}, "migrate", "up")
 	if err == nil {

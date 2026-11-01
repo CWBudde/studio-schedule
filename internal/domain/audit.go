@@ -52,6 +52,23 @@ const (
 	// (ADR 0020, `accounts setup-link`). It has no actor: the details name
 	// the command line and the OS user (Via), and the delivery (printed).
 	AuditSetupLinkIssued AuditAction = "setup-link-issued"
+	// AuditEventRegistrationAdded: the office registered the target person,
+	// or without a target a guest, for an event (ADR 0019). The details
+	// name the event and the registration.
+	AuditEventRegistrationAdded AuditAction = "event-registration-added"
+	// AuditEventRegistrationCanceled: the office canceled the registration
+	// of the target person, or without a target of a guest; the details
+	// name the event, the registration and whether the fee was refunded
+	// (Refund).
+	AuditEventRegistrationCanceled AuditAction = "event-registration-canceled"
+	// AuditEventRegistrationPaid: the office marked the registration of the
+	// target person, or without a target of a guest, paid, which issued its
+	// receipt; the details name the event and the registration.
+	AuditEventRegistrationPaid AuditAction = "event-registration-paid"
+	// AuditEventCanceled: the office canceled an event with its
+	// registrations and sessions. It has no target; the details name the
+	// event.
+	AuditEventCanceled AuditAction = "event-canceled"
 )
 
 // AuditActions returns all audit actions.
@@ -59,7 +76,8 @@ func AuditActions() []AuditAction {
 	return []AuditAction{
 		AuditImpersonationStarted, AuditImpersonationEnded, AuditMailRequeued, AuditPersonMerged,
 		AuditPersonAnonymized, AuditAccountDisabled, AuditAccountEnabled, AuditAccountRoleChanged, AuditAccountDeleted,
-		AuditPasswordResetIssued, AuditSessionsRevoked, AuditSetupLinkIssued,
+		AuditPasswordResetIssued, AuditSessionsRevoked, AuditSetupLinkIssued, AuditEventRegistrationAdded,
+		AuditEventRegistrationCanceled, AuditEventRegistrationPaid, AuditEventCanceled,
 	}
 }
 
@@ -74,6 +92,24 @@ func (a AuditAction) targetsAccount() bool {
 	switch a {
 	case AuditImpersonationStarted, AuditImpersonationEnded, AuditAccountDisabled, AuditAccountEnabled,
 		AuditAccountRoleChanged, AuditPasswordResetIssued, AuditSetupLinkIssued:
+		return true
+	default:
+		return false
+	}
+}
+
+// namesEvent reports whether an event of a names an event in its details
+// (AuditDetails.EventID): the event actions of ADR 0019.
+func (a AuditAction) namesEvent() bool {
+	return a == AuditEventCanceled || a.namesRegistration()
+}
+
+// namesRegistration reports whether an event of a names a registration for
+// an event in its details (AuditDetails.RegistrationID). Its target is the
+// registered person, or nothing for a guest.
+func (a AuditAction) namesRegistration() bool {
+	switch a {
+	case AuditEventRegistrationAdded, AuditEventRegistrationCanceled, AuditEventRegistrationPaid:
 		return true
 	default:
 		return false
@@ -167,6 +203,13 @@ type AuditDetails struct {
 	Delivery LinkDelivery `json:"delivery,omitempty"`
 	// Sessions is how many running sessions AuditSessionsRevoked ended.
 	Sessions int `json:"sessions,omitempty"`
+	// EventID names the event of the event actions (ADR 0019),
+	// RegistrationID the registration of the registration actions.
+	EventID        EventID             `json:"eventId,omitzero"`
+	RegistrationID EventRegistrationID `json:"registrationId,omitzero"`
+	// Refund tells that AuditEventRegistrationCanceled refunded the fee by
+	// a Storno of its receipt.
+	Refund bool `json:"refund,omitempty"`
 	// Via is the channel the actor acted through, for any action; zero for
 	// the API.
 	Via AuditVia `json:"via,omitzero"`
@@ -249,6 +292,23 @@ func (e AuditEvent) Validate() error {
 		rule{
 			e.Details.Sessions >= 0 && (e.Details.Sessions == 0 || e.Action == AuditSessionsRevoked),
 			"only revoked sessions are counted, and not below zero",
+		},
+		rule{
+			e.Action.namesEvent() == !e.Details.EventID.IsZero(),
+			"an event action names the event, and only an event action does",
+		},
+		rule{
+			e.Action.namesRegistration() == !e.Details.RegistrationID.IsZero(),
+			"a registration action names the registration, and only a registration action does",
+		},
+		rule{
+			!e.Action.namesRegistration() || e.TargetKind == "" || e.TargetKind == AuditTargetPerson,
+			"a registration action targets the registered person, or nothing for a guest",
+		},
+		rule{e.Action != AuditEventCanceled || e.TargetKind == "", "a canceled event has no target"},
+		rule{
+			!e.Details.Refund || e.Action == AuditEventRegistrationCanceled,
+			"only a canceled registration records a refund",
 		},
 	)
 }
