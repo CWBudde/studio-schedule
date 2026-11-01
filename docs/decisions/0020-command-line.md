@@ -196,3 +196,10 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
   `{"version": 1, …}` with every area's request body; an area in it replaces the whole area on
   import, in one transaction (`SettingsService.Import`), and a key the API requires is required
   there too. `settings set` is not destructive: it changes only the values it names.
+- **`persons export` writes a file with `--file`, not `-o`.** `-o` is the global `--output`'s
+  short flag, and cobra panics on a command's flag that reuses it, so the export takes
+  `--file`/`-f` (mode 0600, an existing file only with `--force`). Its document is the export's
+  JSON in either output format; with `--file`, stdout gets one line of text, or nothing with
+  `--output json`. A command whose operation answers without a body
+  (`persons duplicates dismiss`) prints nothing with `--output json`. `persons merge --apply`
+  runs the preview first, so it asks with both names and refuses a conflict before the question.

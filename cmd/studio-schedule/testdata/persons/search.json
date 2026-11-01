@@ -1,0 +1,22 @@
+{
+  "items": [
+    {
+      "id": "00000000-0000-7000-8000-000000000326",
+      "givenName": "Lena",
+      "familyName": "Quillfeather",
+      "email": "lena.quillfeather@example.com",
+      "memberNo": "M-1042"
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000327",
+      "givenName": "Lena",
+      "familyName": "Quillfeather",
+      "email": "LENA.Quillfeather@example.com"
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000003a",
+      "givenName": "Sofia",
+      "familyName": "Quillon"
+    }
+  ]
+}

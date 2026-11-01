@@ -1,0 +1,7 @@
+anonymized Ella Amberly (00000000-0000-7000-8000-000000000005)
+bookings canceled               1
+waiting-list entries withdrawn  0
+class memberships ended         2
+guardian links removed          2
+staff records unlinked          0
+account deleted                 no

@@ -1,0 +1,9 @@
+ID          00000000-0000-7000-8000-000000000005
+Name        Deleted person
+Email       -
+Phone       -
+Birth date  -
+Member no.  -
+Notes       -
+Account     -
+Anonymized  2026-09-22 10:00

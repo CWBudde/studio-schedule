@@ -1,0 +1,27 @@
+{
+  "applied": false,
+  "survivor": {
+    "id": "00000000-0000-7000-8000-000000000326",
+    "givenName": "Lena",
+    "familyName": "Quillfeather",
+    "email": "LENA.Quillfeather@example.com",
+    "phone": "+49 000 0000201",
+    "birthDate": "1994-08-17",
+    "notes": "Registered at the front desk.",
+    "memberNo": "M-1042"
+  },
+  "bookingsMoved": 0,
+  "canceled": [],
+  "history": 0,
+  "waitlistMoved": 0,
+  "waitlistWithdrawn": 0,
+  "membershipsMoved": 0,
+  "membershipsDropped": [],
+  "passesMoved": 0,
+  "paidPassesMoved": 0,
+  "linksMoved": 0,
+  "linksDropped": 0,
+  "staffMoved": 0,
+  "accountMoved": false,
+  "receipts": 0
+}

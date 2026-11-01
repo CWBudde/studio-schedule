@@ -1,0 +1,13 @@
+{
+  "person": {
+    "id": "00000000-0000-7000-8000-000000000006",
+    "givenName": "Deleted",
+    "familyName": "person"
+  },
+  "bookingsCanceled": 0,
+  "waitlistWithdrawn": 0,
+  "membershipsEnded": 2,
+  "linksRemoved": 2,
+  "staffUnlinked": 0,
+  "accountDeleted": false
+}

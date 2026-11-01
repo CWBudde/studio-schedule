@@ -61,6 +61,7 @@ A command that deletes, anonymizes, mails, cancels or merges asks for confirmati
 - [`studio-schedule mail`](#studio-schedule-mail): Test the mail server, list the mail log and queue failed mails again
 - [`studio-schedule migrate`](#studio-schedule-migrate): Manage the database schema
 - [`studio-schedule openapi`](#studio-schedule-openapi): Print the OpenAPI 3.1 specification as JSON
+- [`studio-schedule persons`](#studio-schedule-persons): Find, export, anonymize and merge persons
 - [`studio-schedule seed`](#studio-schedule-seed): Load the fictional demo data set into an empty database
 - [`studio-schedule serve`](#studio-schedule-serve): Run the HTTP server (API and web UI)
 - [`studio-schedule settings`](#studio-schedule-settings): Read and change the school settings
@@ -821,6 +822,181 @@ Print the OpenAPI 3.1 specification of the HTTP API to stdout. The output is det
 Access: an operator command. It acts as no account and refuses `--as`.
 
 Output: text only; `--output json` is refused.
+
+### `studio-schedule persons`
+
+Find, export, anonymize and merge persons.
+
+```text
+studio-schedule persons <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule persons anonymize`](#studio-schedule-persons-anonymize): Erase a person's personal data, keeping their history anonymous (asks first)
+- [`studio-schedule persons duplicates`](#studio-schedule-persons-duplicates): List pairs of persons that may be the same
+- [`studio-schedule persons export`](#studio-schedule-persons-export): Export everything the school stores about a person as JSON (GDPR)
+- [`studio-schedule persons merge`](#studio-schedule-persons-merge): Merge a duplicate person into another (a dry run unless `--apply`)
+- [`studio-schedule persons search`](#studio-schedule-persons-search): Search persons by name, email or member number (the term from stdin)
+- [`studio-schedule persons show`](#studio-schedule-persons-show): Show a person with their family, account, staff links and classes
+
+#### `studio-schedule persons anonymize`
+
+Erase a person's personal data, keeping their history anonymous (asks first).
+
+```text
+studio-schedule persons anonymize <person-id> [flags]
+```
+
+Anonymize a person as the office's privacy page does (ADR 0016): the name becomes "Deleted person", and email, phone, birth date, notes and member number are cleared. Guardian links in both directions, class memberships, open waiting-list entries and staff links are removed, bookings of lessons that have not started are canceled on time, and the account is deleted with its sessions, links and calendar feeds. Past bookings, passes and receipts stay. It cannot be undone: it asks on a terminal and needs `--yes` otherwise. Recorded in the audit log under the account of `--as`. Refused: an unknown or merged person (exit 3), an anonymized one, the only guardian of a dependent, a person whose account receipts, the audit log, announcements or duplicate dismissals name, the person of `--as`, that of an admin account unless `--as` is an admin, and that of the last admin who can sign in (exit 4).
+
+Examples:
+
+```sh
+studio-schedule persons anonymize --as office@example.org <person-id>
+studio-schedule persons anonymize --as office@example.org --yes <person-id>
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the response body of the operation anonymizePerson.
+
+#### `studio-schedule persons duplicates`
+
+List pairs of persons that may be the same.
+
+```text
+studio-schedule persons duplicates <command> [flags]
+```
+
+List the pairs of persons that may be the same, as the office's duplicates page does (ADR 0015), at most 200: strong ones (the same email, a person's or its account's, ignoring case; or the same name and birth date) first, then weak ones (the same name, a birth date unknown). A guardian and its dependent, or two dependents of one guardian, do not match by the email alone. Dismissed pairs and merged persons are left out. Merge a pair with persons merge, or dismiss it with persons duplicates dismiss.
+
+Examples:
+
+```sh
+studio-schedule persons duplicates --as office@example.org
+```
+
+Commands:
+
+- [`studio-schedule persons duplicates dismiss`](#studio-schedule-persons-duplicates-dismiss): Record that two persons are not the same, so the pair is no longer listed
+
+##### `studio-schedule persons duplicates dismiss`
+
+Record that two persons are not the same, so the pair is no longer listed.
+
+```text
+studio-schedule persons duplicates dismiss <person-a> <person-b> [flags]
+```
+
+Dismiss a pair of persons persons duplicates lists, as the office's duplicates page does (ADR 0015): it records that the two are not the same, so the pair is no longer listed. Dismissing a pair again changes nothing; an unknown or merged person exits with status 3.
+
+Examples:
+
+```sh
+studio-schedule persons duplicates dismiss --as office@example.org <person-a> <person-b>
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: nothing: the operation dismissDuplicate answers without a body.
+
+#### `studio-schedule persons export`
+
+Export everything the school stores about a person as JSON (GDPR).
+
+```text
+studio-schedule persons export <person-id> [flags]
+```
+
+Export the data of a person as one JSON document, as the office's export does (ADR 0016): the person, their family links (names only), account, bookings, waiting-list entries, passes with their redemptions, receipts (no PDFs), calendar feeds, push devices, dismissed announcements and class memberships, without secrets. A merged or anonymized person is exported too. The document goes to stdout, with nothing else, in either output format; with `--file` it goes into that file, created with mode 0600, and an existing file is refused unless `--force`.
+
+Examples:
+
+```sh
+studio-schedule persons export --as office@example.org <person-id> --file erika.json
+studio-schedule persons export --as office@example.org <person-id> > erika.json
+```
+
+Flags:
+
+- `--file`, `-f` (string): write the export into this file (mode 0600) instead of stdout
+- `--force` (bool): overwrite the file of `--file` if it exists
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation exportPerson, also without `--output json`; with `--file` it goes into the file, and stdout stays empty.
+
+#### `studio-schedule persons merge`
+
+Merge a duplicate person into another (a dry run unless `--apply`).
+
+```text
+studio-schedule persons merge <survivor> <duplicate> [flags]
+```
+
+Merge the duplicate person into the survivor, as the office's duplicates page does (ADR 0015): its bookings, waiting-list entries, class memberships, passes (owned and paid for), guardian links, staff links and account move to the survivor. Where both have a booking of the same lesson that has not started, the duplicate's is canceled (a visit it cost comes back); of a lesson that has started, both stay as history. Where both are members of a class, the survivor's membership stays. The survivor keeps its fields but those of `--take`, and the notes of both; the duplicate stays as a hidden record for its receipts. Without `--apply` it is a dry run that prints what would happen and writes nothing; with it, it asks on a terminal and needs `--yes` otherwise, and the merge is recorded in the audit log under the account of `--as`. Refused: an unknown, merged or anonymized person (exit 3), both with an account, and a merge after which a guardian would also be a dependent of the survivor (exit 4).
+
+Examples:
+
+```sh
+studio-schedule persons merge --as office@example.org <survivor> <duplicate>
+studio-schedule persons merge --as office@example.org --take email,phone --apply <survivor> <duplicate>
+```
+
+Flags:
+
+- `--apply` (bool): merge; without it, a dry run that writes nothing
+- `--take` (stringSlice): the fields the survivor takes from the duplicate: name, email, phone, birthDate, memberNo (comma-separated or repeatable)
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the response body of the operation mergePersons.
+
+#### `studio-schedule persons search`
+
+Search persons by name, email or member number (the term from stdin).
+
+```text
+studio-schedule persons search [flags]
+```
+
+Search the persons whose given name, family name, email or member number contains every word of the search term, ignoring case, as the office's person search does; at most 50, ordered by family and given name; merged and anonymized persons are left out. The term is read from stdin, after a prompt on a terminal, never from an argument, so it stays out of the shell history and the process list (ASVS 8.3.1). It prints each person's ID, name, member number and email.
+
+Examples:
+
+```sh
+studio-schedule persons search --as office@example.org
+echo 'erika example' | studio-schedule persons search --as office@example.org --output json
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation searchPersons.
+
+#### `studio-schedule persons show`
+
+Show a person with their family, account, staff links and classes.
+
+```text
+studio-schedule persons show <person-id> [flags]
+```
+
+Show every field of a person with their guardians, dependents, account, linked staff members, class memberships and the persons merged into them, as the office's person page does. A merged or anonymized person is shown too, with the person it was merged into or when it was anonymized.
+
+Examples:
+
+```sh
+studio-schedule persons show --as office@example.org 01890a5d-ac96-774b-bcce-b302099a8057
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation getPerson.
 
 ### `studio-schedule seed`
 

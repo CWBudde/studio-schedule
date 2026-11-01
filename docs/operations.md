@@ -160,6 +160,20 @@ These go before or after the command, as `studio-schedule --output json doctor` 
 | ----------------- | ----------- | -------------------------------------------------------------------------- |
 | `settings import` | `--dry-run` | check the document and print the settings that would change; write nothing |
 
+### Commands and flags: persons
+
+| Command          | Flag      | Meaning                                                                                                |
+| ---------------- | --------- | ------------------------------------------------------------------------------------------------------ |
+| `persons export` | `--file`  | `-f`: write the export into this file, created with mode 0600, instead of stdout                       |
+| `persons export` | `--force` | overwrite the file of `--file` if it exists; without it, an existing file is refused                   |
+| `persons merge`  | `--take`  | the fields the survivor takes from the duplicate: `name`, `email`, `phone`, `birthDate`, `memberNo`    |
+| `persons merge`  | `--apply` | merge (asks first, or `--yes`); without it, a dry run that prints what would happen and writes nothing |
+
+`persons search` reads its search term from stdin (after a prompt on a terminal), never from an
+argument, so a name stays out of the shell history and the process list. To answer a GDPR request
+for access, `persons search`, then `persons export <id> --file <name>.json`; for erasure,
+`persons anonymize <id>` ([ADR 0016](decisions/0016-privacy-and-account-administration.md)).
+
 `migrate up` applies every pending migration, `migrate down` rolls back the latest one and
 `migrate status` lists them all; `seed` loads the fictional demo data into an empty, migrated
 database. `openapi` prints the OpenAPI document, `version` the build version and `vapid-keys` a new

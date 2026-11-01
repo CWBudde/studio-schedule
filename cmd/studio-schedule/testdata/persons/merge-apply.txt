@@ -1,0 +1,15 @@
+merged Lena Quillfeather (00000000-0000-7000-8000-000000000327) into Lena Quillfeather (00000000-0000-7000-8000-000000000326)
+bookings moved                      0
+bookings canceled                   0
+bookings kept as history            0
+waiting-list entries moved          0
+waiting-list entries withdrawn      0
+class memberships moved             0
+class memberships ended             0
+passes moved                        0
+paid passes moved                   0
+guardian links moved                0
+guardian links dropped              0
+staff links moved                   0
+account moved                       no
+receipts listed under the survivor  0

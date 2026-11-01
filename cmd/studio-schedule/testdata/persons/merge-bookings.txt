@@ -1,0 +1,19 @@
+merged Ella Amberly (00000000-0000-7000-8000-000000000005) into Emil Elderwick (00000000-0000-7000-8000-000000000015)
+bookings moved                      8
+bookings canceled                   1
+bookings kept as history            3
+waiting-list entries moved          0
+waiting-list entries withdrawn      0
+class memberships moved             1
+class memberships ended             1
+passes moved                        1
+paid passes moved                   0
+guardian links moved                2
+guardian links dropped              0
+staff links moved                   0
+account moved                       no
+receipts listed under the survivor  0
+Canceled bookings:
+00000000-0000-7000-8000-0000000000c9  2026-09-22 17:00  Jazz Dance  booked
+Ended class memberships:
+00000000-0000-7000-8000-000000000061  School Year 2026/27  Jazz Dance  Tuesday  17:00

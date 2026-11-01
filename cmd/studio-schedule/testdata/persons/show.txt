@@ -1,0 +1,14 @@
+ID          00000000-0000-7000-8000-000000000005
+Name        Ella Amberly
+Email       -
+Phone       -
+Birth date  2016-04-12
+Member no.  -
+Notes       -
+Account     -
+Guardians:
+00000000-0000-7000-8000-000000000001  Clara Amberly  -  clara.amberly@example.org
+00000000-0000-7000-8000-000000000003  Tom Amberly    -  tom.amberly@example.org
+Classes:
+00000000-0000-7000-8000-00000000005c  School Year 2026/27  Classical Ballet  Monday   16:30  2026-09-01  no
+00000000-0000-7000-8000-000000000061  School Year 2026/27  Jazz Dance        Tuesday  17:00  2026-09-01  no

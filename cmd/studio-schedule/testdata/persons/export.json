@@ -1,0 +1,181 @@
+{
+  "format": "studio-schedule.person-export",
+  "version": 1,
+  "exportedAt": "2026-09-22T08:00:00Z",
+  "person": {
+    "id": "00000000-0000-7000-8000-000000000001",
+    "givenName": "Clara",
+    "familyName": "Amberly",
+    "email": "clara.amberly@example.org",
+    "phone": "+49 000 0000101"
+  },
+  "guardians": [],
+  "dependents": [
+    {
+      "id": "00000000-0000-7000-8000-000000000005",
+      "givenName": "Ella",
+      "familyName": "Amberly"
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000006",
+      "givenName": "Finn",
+      "familyName": "Amberly"
+    }
+  ],
+  "mergedPersons": [],
+  "account": {
+    "id": "00000000-0000-7000-8000-000000000002",
+    "email": "clara.amberly@example.org",
+    "role": "member",
+    "confirmedAt": "2026-09-01T07:00:00Z"
+  },
+  "calendarFeeds": [],
+  "pushDevices": [],
+  "dismissedAnnouncements": [],
+  "classMemberships": [
+    {
+      "classId": "00000000-0000-7000-8000-000000000063",
+      "termId": "00000000-0000-7000-8000-00000000005a",
+      "termName": "School Year 2026/27",
+      "courseTypeName": "Barre Fitness",
+      "weekday": 2,
+      "startTime": "19:00",
+      "retired": false,
+      "since": "2026-09-01"
+    }
+  ],
+  "bookings": [
+    {
+      "id": "00000000-0000-7000-8000-0000000000dc",
+      "lesson": {
+        "id": "00000000-0000-7000-8000-00000000007d",
+        "startsAt": "2026-09-01T17:00:00Z",
+        "endsAt": "2026-09-01T18:00:00Z",
+        "courseType": "Barre Fitness"
+      },
+      "status": "attended",
+      "source": "member",
+      "trial": false,
+      "bookedAt": "2026-09-01T07:00:00Z",
+      "late": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000150",
+      "lesson": {
+        "id": "00000000-0000-7000-8000-000000000097",
+        "startsAt": "2026-09-08T17:00:00Z",
+        "endsAt": "2026-09-08T18:00:00Z",
+        "courseType": "Barre Fitness"
+      },
+      "status": "no_show",
+      "source": "member",
+      "trial": false,
+      "bookedAt": "2026-09-01T07:00:00Z",
+      "late": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000255",
+      "lesson": {
+        "id": "00000000-0000-7000-8000-0000000000b0",
+        "startsAt": "2026-09-15T16:30:00Z",
+        "endsAt": "2026-09-15T17:45:00Z",
+        "courseType": "Contemporary"
+      },
+      "status": "attended",
+      "source": "self",
+      "trial": false,
+      "bookedAt": "2026-09-14T20:30:00Z",
+      "late": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-0000000001c4",
+      "lesson": {
+        "id": "00000000-0000-7000-8000-0000000000b1",
+        "startsAt": "2026-09-15T17:00:00Z",
+        "endsAt": "2026-09-15T18:00:00Z",
+        "courseType": "Barre Fitness"
+      },
+      "status": "canceled",
+      "source": "member",
+      "trial": false,
+      "bookedAt": "2026-09-01T07:00:00Z",
+      "canceledAt": "2026-09-15T15:00:00Z",
+      "late": true
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000258",
+      "lesson": {
+        "id": "00000000-0000-7000-8000-0000000000b8",
+        "startsAt": "2026-09-17T15:00:00Z",
+        "endsAt": "2026-09-17T16:00:00Z",
+        "courseType": "Contemporary"
+      },
+      "status": "attended",
+      "source": "self",
+      "trial": false,
+      "bookedAt": "2026-09-16T19:00:00Z",
+      "late": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000238",
+      "lesson": {
+        "id": "00000000-0000-7000-8000-0000000000cb",
+        "startsAt": "2026-09-22T17:00:00Z",
+        "endsAt": "2026-09-22T18:00:00Z",
+        "courseType": "Barre Fitness"
+      },
+      "status": "booked",
+      "source": "member",
+      "trial": false,
+      "bookedAt": "2026-09-01T07:00:00Z",
+      "late": false
+    }
+  ],
+  "waitlistEntries": [],
+  "passes": [
+    {
+      "id": "00000000-0000-7000-8000-000000000254",
+      "type": "10-visit pass",
+      "kind": "visits",
+      "visitsTotal": 10,
+      "visitsRemaining": 8,
+      "validFrom": "2026-09-08",
+      "validUntil": "2027-03-06",
+      "status": "active",
+      "soldAt": "2026-09-08T08:00:00Z",
+      "pricePaid": 15000,
+      "redemptions": [
+        {
+          "bookingId": "00000000-0000-7000-8000-000000000255",
+          "at": "2026-09-15T17:45:00Z"
+        },
+        {
+          "bookingId": "00000000-0000-7000-8000-000000000258",
+          "at": "2026-09-17T16:00:00Z"
+        }
+      ]
+    }
+  ],
+  "receipts": [
+    {
+      "id": "00000000-0000-7000-8000-000000000268",
+      "number": "SD-2026-0004",
+      "kind": "sale",
+      "issueDate": "2026-09-12",
+      "recipientName": "Clara Amberly",
+      "currency": "EUR",
+      "gross": 15000,
+      "canceled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000267",
+      "number": "SD-2026-0003",
+      "kind": "sale",
+      "issueDate": "2026-09-08",
+      "recipientName": "Clara Amberly",
+      "currency": "EUR",
+      "gross": 15000,
+      "canceled": false
+    }
+  ]
+}

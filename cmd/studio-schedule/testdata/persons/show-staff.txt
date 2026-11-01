@@ -1,0 +1,10 @@
+ID          00000000-0000-7000-8000-000000000038
+Name        Alina Starling
+Email       alina.starling@example.net
+Phone       -
+Birth date  -
+Member no.  -
+Notes       -
+Account     alina.starling@example.net (instructor, active)
+Staff:
+00000000-0000-7000-8000-000000000048  Alina Starling  instructor  yes

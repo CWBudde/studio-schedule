@@ -1,0 +1,47 @@
+{
+  "items": [
+    {
+      "a": {
+        "id": "00000000-0000-7000-8000-000000000326",
+        "givenName": "Lena",
+        "familyName": "Quillfeather",
+        "email": "lena.quillfeather@example.com",
+        "phone": "+49 000 0000201",
+        "memberNo": "M-1042"
+      },
+      "b": {
+        "id": "00000000-0000-7000-8000-000000000327",
+        "givenName": "Lena",
+        "familyName": "Quillfeather",
+        "email": "LENA.Quillfeather@example.com",
+        "birthDate": "1994-08-17",
+        "notes": "Registered at the front desk."
+      },
+      "strength": "strong",
+      "reasons": [
+        "email",
+        "name"
+      ]
+    },
+    {
+      "a": {
+        "id": "00000000-0000-7000-8000-000000000328",
+        "givenName": "Jonas",
+        "familyName": "Brightwater",
+        "birthDate": "2014-05-12",
+        "memberNo": "M-1077"
+      },
+      "b": {
+        "id": "00000000-0000-7000-8000-000000000329",
+        "givenName": "Jonas",
+        "familyName": "Brightwater",
+        "phone": "+49 000 0000202",
+        "notes": "Walk-in, trial lesson."
+      },
+      "strength": "weak",
+      "reasons": [
+        "name"
+      ]
+    }
+  ]
+}

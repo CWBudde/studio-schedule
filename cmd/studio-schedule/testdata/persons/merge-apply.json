@@ -1,0 +1,25 @@
+{
+  "applied": true,
+  "survivor": {
+    "id": "00000000-0000-7000-8000-000000000328",
+    "givenName": "Jonas",
+    "familyName": "Brightwater",
+    "birthDate": "2014-05-12",
+    "notes": "Walk-in, trial lesson.",
+    "memberNo": "M-1077"
+  },
+  "bookingsMoved": 0,
+  "canceled": [],
+  "history": 0,
+  "waitlistMoved": 0,
+  "waitlistWithdrawn": 0,
+  "membershipsMoved": 0,
+  "membershipsDropped": [],
+  "passesMoved": 0,
+  "paidPassesMoved": 0,
+  "linksMoved": 0,
+  "linksDropped": 0,
+  "staffMoved": 0,
+  "accountMoved": false,
+  "receipts": 0
+}

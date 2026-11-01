@@ -1,0 +1,45 @@
+{
+  "id": "00000000-0000-7000-8000-000000000005",
+  "givenName": "Ella",
+  "familyName": "Amberly",
+  "birthDate": "2016-04-12",
+  "guardians": [
+    {
+      "id": "00000000-0000-7000-8000-000000000001",
+      "givenName": "Clara",
+      "familyName": "Amberly",
+      "email": "clara.amberly@example.org"
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000003",
+      "givenName": "Tom",
+      "familyName": "Amberly",
+      "email": "tom.amberly@example.org"
+    }
+  ],
+  "dependents": [],
+  "staff": [],
+  "classes": [
+    {
+      "classId": "00000000-0000-7000-8000-00000000005c",
+      "termId": "00000000-0000-7000-8000-00000000005a",
+      "termName": "School Year 2026/27",
+      "courseTypeName": "Classical Ballet",
+      "weekday": 1,
+      "startTime": "16:30",
+      "retired": false,
+      "since": "2026-09-01"
+    },
+    {
+      "classId": "00000000-0000-7000-8000-000000000061",
+      "termId": "00000000-0000-7000-8000-00000000005a",
+      "termName": "School Year 2026/27",
+      "courseTypeName": "Jazz Dance",
+      "weekday": 2,
+      "startTime": "17:00",
+      "retired": false,
+      "since": "2026-09-01"
+    }
+  ],
+  "merged": []
+}
