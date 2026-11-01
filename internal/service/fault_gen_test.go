@@ -56,6 +56,10 @@ func (t *faultTx) CourseTypes() store.CourseTypeRepo {
 	return &faultCourseTypeRepo{CourseTypeRepo: t.Tx.CourseTypes(), f: t.f}
 }
 
+func (t *faultTx) Levels() store.LevelRepo {
+	return &faultLevelRepo{LevelRepo: t.Tx.Levels(), f: t.f}
+}
+
 func (t *faultTx) Terms() store.TermRepo {
 	return &faultTermRepo{TermRepo: t.Tx.Terms(), f: t.f}
 }
@@ -760,6 +764,59 @@ func (r *faultCourseTypeRepo) List(a0 context.Context) (r0 []domain.CourseType, 
 	}
 
 	return r.CourseTypeRepo.List(a0)
+}
+
+type faultLevelRepo struct {
+	store.LevelRepo
+	f *FaultStore
+}
+
+func (r *faultLevelRepo) Get(a0 context.Context, a1 domain.LevelID) (r0 domain.Level, err error) {
+	if err = r.f.hit("Levels.Get"); err != nil {
+		return r0, err
+	}
+
+	return r.LevelRepo.Get(a0, a1)
+}
+
+func (r *faultLevelRepo) Create(a0 context.Context, a1 domain.Level) (err error) {
+	if err = r.f.hit("Levels.Create"); err != nil {
+		return err
+	}
+
+	return r.LevelRepo.Create(a0, a1)
+}
+
+func (r *faultLevelRepo) Update(a0 context.Context, a1 domain.Level) (err error) {
+	if err = r.f.hit("Levels.Update"); err != nil {
+		return err
+	}
+
+	return r.LevelRepo.Update(a0, a1)
+}
+
+func (r *faultLevelRepo) Delete(a0 context.Context, a1 domain.LevelID) (err error) {
+	if err = r.f.hit("Levels.Delete"); err != nil {
+		return err
+	}
+
+	return r.LevelRepo.Delete(a0, a1)
+}
+
+func (r *faultLevelRepo) List(a0 context.Context) (r0 []domain.Level, err error) {
+	if err = r.f.hit("Levels.List"); err != nil {
+		return r0, err
+	}
+
+	return r.LevelRepo.List(a0)
+}
+
+func (r *faultLevelRepo) SetOrder(a0 context.Context, a1 []domain.LevelID) (err error) {
+	if err = r.f.hit("Levels.SetOrder"); err != nil {
+		return err
+	}
+
+	return r.LevelRepo.SetOrder(a0, a1)
 }
 
 type faultTermRepo struct {
