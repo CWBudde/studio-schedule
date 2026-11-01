@@ -436,8 +436,9 @@ func (c *cloner) roomTaker(ctx context.Context, cp domain.Lesson) (*RoomTaker, e
 
 // taker returns l, a copy of copyOf unless that is zero, as a RoomTaker.
 func (c *cloner) taker(l domain.Lesson, copyOf domain.LessonID) (*RoomTaker, error) {
+	// A room rental may have no course type; CourseType stays zero then.
 	ct, ok := c.refs.courseTypes[l.CourseTypeID]
-	if !ok {
+	if !ok && !l.CourseTypeID.IsZero() {
 		return nil, fmt.Errorf("lesson %v: course type %v: %w", l.ID, l.CourseTypeID, errBrokenReference)
 	}
 

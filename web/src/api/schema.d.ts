@@ -3814,7 +3814,8 @@ export interface components {
              * @description Set when the lesson is a copy of the same clone: the lesson it copies.
              */
             copyOf?: string;
-            courseType: components["schemas"]["CourseTypeRef"];
+            /** @description Course type; absent for a room rental without one. */
+            courseType?: components["schemas"]["CourseTypeRef"];
             /**
              * Format: date-time
              * @description End instant (UTC).
@@ -3891,7 +3892,8 @@ export interface components {
             why?: "cutoff" | "release" | "canceled" | "started" | "rental";
         };
         ConflictLesson: {
-            courseType: components["schemas"]["CourseTypeRef"];
+            /** @description Course type; absent for a room rental without one. */
+            courseType?: components["schemas"]["CourseTypeRef"];
             /**
              * Format: date-time
              * @description End instant (UTC).
@@ -5016,9 +5018,9 @@ export interface components {
             confirmRoomOverlap?: boolean;
             /**
              * Format: uuid
-             * @description Course type taught.
+             * @description Course type taught; required unless the lesson is a room rental, for which it is optional. It cannot change later.
              */
-            courseTypeId: string;
+            courseTypeId?: string;
             /**
              * Format: date
              * @description School date of the lesson.
@@ -5132,7 +5134,8 @@ export interface components {
              * @description Weekly class the lesson belongs to; absent for one-off lessons.
              */
             classId?: string;
-            courseType: components["schemas"]["CourseTypeRef"];
+            /** @description Course type; absent for a room rental without one. */
+            courseType?: components["schemas"]["CourseTypeRef"];
             /** @description Description of the course type. */
             courseTypeDescription?: string;
             /**
@@ -5299,7 +5302,8 @@ export interface components {
              * @description Weekly class the lesson belongs to; absent for one-off lessons.
              */
             classId?: string;
-            courseType: components["schemas"]["CourseTypeRef"];
+            /** @description Course type; absent for a room rental without one. */
+            courseType?: components["schemas"]["CourseTypeRef"];
             /**
              * Format: date-time
              * @description End instant (UTC).
@@ -6852,7 +6856,8 @@ export interface components {
              * @description Weekly class the lesson belongs to; absent for one-off lessons.
              */
             classId?: string;
-            courseType: components["schemas"]["CourseTypeRef"];
+            /** @description Course type; absent for a room rental without one. */
+            courseType?: components["schemas"]["CourseTypeRef"];
             /**
              * Format: date-time
              * @description End instant (UTC).
@@ -7335,7 +7340,8 @@ export interface components {
              * @description Weekly class the lesson belongs to; absent for one-off lessons.
              */
             classId?: string;
-            courseType: components["schemas"]["CourseTypeRef"];
+            /** @description Course type; absent for a room rental without one. */
+            courseType?: components["schemas"]["CourseTypeRef"];
             /**
              * Format: date-time
              * @description When the attendance window of instructors and accompanists ends (see listLessonParticipants).

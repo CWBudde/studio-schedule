@@ -94,7 +94,7 @@ type LessonSummary struct {
 	Visibility  string          `doc:"Who may see the lesson: everyone, signed-in members, or staff only." enum:"public,members,hidden" json:"visibility"`
 	Level       string          `doc:"Level of the class; absent for one-off lessons." enum:"beginner,intermediate,advanced,professional,open" json:"level,omitempty"`
 	Capacity    int             `doc:"Maximum number of participants; 0 for a room rental." minimum:"0"   json:"capacity"`
-	CourseType  CourseTypeRef   `json:"courseType"`
+	CourseType  *CourseTypeRef  `doc:"Course type; absent for a room rental without one." json:"courseType,omitempty"`
 	Room        RoomRef         `json:"room"`
 	Location    LocationRef     `json:"location"`
 	Instructor  *StaffRef       `doc:"Instructor; absent for a room rental." json:"instructor,omitempty"`
@@ -132,6 +132,16 @@ type AccountRef struct {
 type CourseTypeRef struct {
 	ID   domain.CourseTypeID `json:"id"`
 	Name string              `json:"name"`
+}
+
+// courseTypeRef names ct, nil for the zero course type of a room rental
+// without one.
+func courseTypeRef(ct domain.CourseType) *CourseTypeRef {
+	if ct.ID.IsZero() {
+		return nil
+	}
+
+	return &CourseTypeRef{ID: ct.ID, Name: ct.Name}
 }
 
 // RoomRef names a room.
@@ -275,7 +285,7 @@ func lessonSummary(sl service.ScheduledLesson) LessonSummary {
 		Visibility: string(l.Visibility),
 		Level:      string(sl.Level),
 		Capacity:   l.Capacity,
-		CourseType: CourseTypeRef{ID: sl.CourseType.ID, Name: sl.CourseType.Name},
+		CourseType: courseTypeRef(sl.CourseType),
 		Room:       RoomRef{ID: sl.Room.ID, Name: sl.Room.Name},
 		Location:   LocationRef{ID: sl.Location.ID, Name: sl.Location.Name},
 		Renter:     l.Renter,

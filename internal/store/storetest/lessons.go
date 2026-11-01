@@ -312,8 +312,8 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 		},
 		"Rental": func(e *env) {
 			// A room rental (ADR 0007, amendment) has no instructor and no
-			// capacity, keeps its renter, takes its room like any lesson
-			// and is no staff member's lesson.
+			// capacity, keeps its renter, may go without a course type, takes
+			// its room like any lesson and is no staff member's lesson.
 			s := e.setting()
 			rental := e.newLesson(s, t0, 5)
 			rental.Kind, rental.InstructorID, rental.Capacity = domain.LessonRental, domain.StaffID{}, 0
@@ -326,7 +326,7 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			wantEqual(e.t, got, rental)
 
-			rental.Renter = "Maplewood Choir"
+			rental.Renter, rental.CourseTypeID = "Maplewood Choir", domain.CourseTypeID{}
 			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Update(ctx, rental) })
 
 			got = mustQuery(e, func(ctx context.Context, tx store.Tx) (domain.Lesson, error) {

@@ -15,6 +15,7 @@ import {
 import { useServerNow } from '@/lib/useNow';
 import { cn } from '@/lib/utils';
 import { AvailabilityBadges, hasAvailabilityBadges } from '../booking/AvailabilityBadges';
+import { useLessonTitle } from '../lessonLabel';
 import { useScheduleSearch } from '../useScheduleSearch';
 import { VisibilityBadge } from '../visibility/VisibilityBadge';
 import { layoutWeek, MIN_BLOCK_MINUTES, type Placement, type TimeAxis } from './layout';
@@ -258,13 +259,14 @@ function LessonBlock({
 }) {
   const { t } = useTranslation('schedule');
   const availabilityId = useId();
+  const title = useLessonTitle()(placement.item);
   const { item: lesson, start, end, lane, lanes } = placement;
   const canceled = lesson.status === 'canceled';
   const workshop = lesson.kind === 'workshop';
   const showFree = !canceled && !ended;
   const time = formatTimeRange(lesson.startsAt, lesson.endsAt, timeZone, lang);
   const label = [
-    lesson.courseType.name,
+    title,
     formatDayHeading(date, lang),
     time,
     lesson.room.name,
@@ -302,9 +304,7 @@ function LessonBlock({
       }}
     >
       <span className={cn('tabular-nums', canceled && 'line-through')}>{time}</span>
-      <span className={cn('w-full truncate font-medium', canceled && 'line-through')}>
-        {lesson.courseType.name}
-      </span>
+      <span className={cn('w-full truncate font-medium', canceled && 'line-through')}>{title}</span>
       <span className="w-full truncate text-muted-foreground">{lesson.room.name}</span>
       {canceled && <Badge variant="destructive">{t('status.canceled')}</Badge>}
       {workshop && <Badge variant="outline">{t('kind.workshop')}</Badge>}

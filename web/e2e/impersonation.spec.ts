@@ -2,12 +2,13 @@ import { demoName, expect, gotoDemo, lessons, type Page, signIn, test } from './
 
 /*
  * The demo seed has a workshop for members only 5 days after the visit date
- * and a hidden one 6 days after it, and a room rental (hidden too) 4 days
- * after it, all within the 14 days the schedule list shows by default.
+ * and a hidden one 6 days after it, and a room rental (hidden too, without
+ * a course type, so titled "Room rental") 4 days after it, all within the 14
+ * days the schedule list shows by default.
  */
 const membersOnly = /, Members only$/;
 const hidden = /, Workshop, Hidden – staff only$/;
-const rental = /, Room rental, Copperleaf Theater Group, Hidden – staff only$/;
+const rental = /^Room rental, .+, Copperleaf Theater Group, Hidden – staff only$/;
 
 /** Opens the schedule from the main navigation and waits for its lessons. */
 async function openSchedule(page: Page): Promise<void> {

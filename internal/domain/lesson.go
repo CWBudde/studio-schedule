@@ -49,7 +49,8 @@ const (
 	LessonPrivate  LessonKind = "private"
 	// LessonRental blocks a room for an outside renter (ADR 0007,
 	// amendment 2026-10-31): a one-off, hidden lesson without instructor,
-	// accompanist, capacity or bookings, named by its Renter.
+	// accompanist, capacity or bookings, named by its Renter; its course
+	// type is optional.
 	LessonRental LessonKind = "rental"
 )
 
@@ -74,7 +75,7 @@ type Lesson struct {
 	// generated for, set exactly when ClassID is. It stays when the lesson
 	// moves, so generation does not create the slot again (ADR 0003).
 	SlotDate      Date
-	CourseTypeID  CourseTypeID
+	CourseTypeID  CourseTypeID // optional only for a room rental
 	RoomID        RoomID
 	InstructorID  StaffID
 	AccompanistID StaffID // optional
@@ -107,8 +108,9 @@ const MaxRenterLength = 100
 
 // Validate checks the lesson for consistency. All errors wrap ErrValidation.
 // A room rental has no instructor, accompanist or capacity, is hidden, is
-// one-off and names its renter; every other kind needs an instructor and a
-// positive capacity and has no renter.
+// one-off and names its renter, and its course type is optional; every other
+// kind needs a course type, an instructor and a positive capacity and has no
+// renter.
 func (l Lesson) Validate() error {
 	if err := l.validateKind(); err != nil {
 		return err
@@ -118,7 +120,6 @@ func (l Lesson) Validate() error {
 		rule{!l.ID.IsZero(), "lesson id must be set"},
 		rule{l.ClassID.IsZero() == l.SlotDate.IsZero(), "a lesson has a slot date exactly when it has a class"},
 		rule{optionalDate(l.SlotDate), "invalid lesson slot date"},
-		on("courseTypeId", !l.CourseTypeID.IsZero(), "lesson course type must be set"),
 		on("roomId", !l.RoomID.IsZero(), "lesson room must be set"),
 		on("accompanistId", l.AccompanistID.IsZero() || l.AccompanistID != l.InstructorID,
 			"accompanist must differ from the instructor"),
@@ -141,6 +142,7 @@ func (l Lesson) validateKind() error {
 	if l.Kind != LessonRental {
 		return validate(
 			on("kind", l.Kind.Valid(), "invalid lesson kind"),
+			on("courseTypeId", !l.CourseTypeID.IsZero(), "lesson course type must be set"),
 			on("instructorId", !l.InstructorID.IsZero(), "lesson instructor must be set"),
 			on("capacity", l.Capacity > 0, "lesson capacity must be positive"),
 			on("renter", l.Renter == "", "only a room rental has a renter"),

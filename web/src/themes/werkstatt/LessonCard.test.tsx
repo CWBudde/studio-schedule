@@ -178,6 +178,33 @@ describe('Werkstatt LessonCard', () => {
     expect(card.getAllByRole('button')).toEqual([card.getByRole('button', { name })]);
   });
 
+  it('titles a room rental without a course type "Room rental", untinted', () => {
+    const name =
+      'Room rental, Monday, October 26, 18:00–19:30, Copperleaf Theater Group, Hidden – staff only';
+    const { card } = renderCard({
+      lesson: {
+        ...ballet,
+        classId: undefined,
+        courseType: undefined,
+        level: undefined,
+        kind: 'rental',
+        visibility: 'hidden',
+        instructor: undefined,
+        accompanist: undefined,
+        renter: 'Copperleaf Theater Group',
+        capacity: 0,
+        freePlaces: 0,
+      },
+      name,
+    });
+
+    // The title is the kind: no second "Room rental" badge.
+    expect(card.getAllByText('Room rental')).toHaveLength(1);
+    expect(card.getByText('Copperleaf Theater Group')).toBeInTheDocument();
+    const group = screen.getByRole('group', { name });
+    expect(group.style.getPropertyValue('--course-tint')).toBe('');
+  });
+
   it('opens the sheet from the card body', async () => {
     const user = userEvent.setup();
     const { onOpen, card } = renderCard();

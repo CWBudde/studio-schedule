@@ -238,8 +238,12 @@ func checkReferences(ctx context.Context, tx store.Tx, r references) (instructor
 		return err
 	}
 
-	if _, err := tx.CourseTypes().Get(ctx, r.CourseTypeID); err != nil {
-		return domain.Staff{}, domain.Staff{}, known(err, errUnknownCourseType)
+	// A room rental may have no course type (ADR 0007, amendment); a class
+	// always has one.
+	if !r.CourseTypeID.IsZero() {
+		if _, err := tx.CourseTypes().Get(ctx, r.CourseTypeID); err != nil {
+			return domain.Staff{}, domain.Staff{}, known(err, errUnknownCourseType)
+		}
 	}
 
 	if _, err := tx.Rooms().Get(ctx, r.RoomID); err != nil {

@@ -24,7 +24,7 @@ function lesson(
   return {
     ...lessonBallet,
     id: name,
-    courseType: { id: lessonBallet.courseType.id, name },
+    courseType: { id: lessonBallet.courseType!.id, name },
     room,
     location,
     startsAt,
@@ -36,7 +36,7 @@ function day(date: string, lessons: ScheduleLesson[]): ScheduleDay {
   return { date, tone: 'later', headingId: `day-${date}`, lessons };
 }
 
-const renderLesson = (l: ScheduleLesson) => <p>{l.courseType.name}</p>;
+const renderLesson = (l: ScheduleLesson) => <p>{l.courseType?.name}</p>;
 
 function renderList(days: ScheduleDay[], props: Partial<ScheduleListProps> = {}) {
   return render(

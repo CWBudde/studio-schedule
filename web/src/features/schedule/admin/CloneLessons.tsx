@@ -38,6 +38,7 @@ import {
   earliestTarget,
   switchUnit,
 } from './cloneForms';
+import { type Titled, useLessonTitle } from '../lessonLabel';
 
 /** What the schedule shows: its first day, whether as a list or a week, and today. */
 export type CloneContext = {
@@ -92,10 +93,11 @@ const sameRequest = (request: LessonCloneData | undefined, values: CloneInput) =
  * Who takes the room of a skip, the same in a preview and its clone: a copy
  * of the clone by the lesson it copies (only the clone gives it an id), any
  * other lesson by its id, and a lesson without one (e.g. a class lesson not
- * generated yet) by its course type and start.
+ * generated yet, which always has a course type) by its course type and
+ * start.
  */
 const takerOf = (lesson: LessonClone['skipped'][number]['lesson']) =>
-  lesson && (lesson.copyOf ?? lesson.id ?? `${lesson.courseType.id}@${lesson.startsAt}`);
+  lesson && (lesson.copyOf ?? lesson.id ?? `${lesson.courseType?.id ?? ''}@${lesson.startsAt}`);
 
 /** The source lessons a clone creates and skips, with the reason of each skip. */
 const outline = (clone: LessonClone) =>
@@ -364,13 +366,14 @@ function CloneItem({
 }) {
   const { t, i18n } = useTranslation('admin');
   const lang = i18n.resolvedLanguage ?? 'en';
+  const title = useLessonTitle();
   // A room rental names its renter instead of staff.
   const staff = [lesson.instructor?.displayName ?? lesson.renter, lesson.accompanist?.displayName]
     .filter(Boolean)
     .join(', ');
   return (
     <li className="grid gap-0.5 rounded-md border px-3 py-2 text-sm break-words">
-      <span className="font-medium">{lesson.courseType.name}</span>
+      <span className="font-medium">{title(lesson)}</span>
       <span>
         {formatDayHeading(schoolDateOf(startsAt, timeZone), lang)},{' '}
         <span className="tabular-nums">{formatTimeRange(startsAt, endsAt, timeZone, lang)}</span>
@@ -400,11 +403,12 @@ function SkipReason({
 }) {
   const { t, i18n } = useTranslation('admin');
   const lang = i18n.resolvedLanguage ?? 'en';
-  const label = (courseType: string, startsAt: string, endsAt: string) =>
+  const title = useLessonTitle();
+  const label = (lesson: Titled & { startsAt: string; endsAt: string }) =>
     t('lessons.label', {
-      courseType,
-      day: formatDayHeading(schoolDateOf(startsAt, timeZone), lang),
-      time: formatTimeRange(startsAt, endsAt, timeZone, lang),
+      courseType: title(lesson),
+      day: formatDayHeading(schoolDateOf(lesson.startsAt, timeZone), lang),
+      time: formatTimeRange(lesson.startsAt, lesson.endsAt, timeZone, lang),
     });
 
   const roomTaken = (): string => {
@@ -417,7 +421,7 @@ function SkipReason({
       return original
         ? t('clone.reasons.roomTakenByCopy', {
             room,
-            lesson: label(original.courseType.name, original.startsAt, original.endsAt),
+            lesson: label(original),
           })
         : t('clone.reasons.roomTakenByAnyCopy', { room });
     }
@@ -425,7 +429,7 @@ function SkipReason({
     // yet has none): name its course type and time.
     return t('clone.reasons.roomTaken', {
       room,
-      lesson: label(taker.courseType.name, taker.startsAt, taker.endsAt),
+      lesson: label(taker),
     });
   };
 

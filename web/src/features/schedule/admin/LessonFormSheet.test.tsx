@@ -426,6 +426,111 @@ describe('LessonFormSheet', () => {
     });
   });
 
+  it('adds a room rental without a course type', async () => {
+    const post = mockApiPost({ '/api/v1/lessons': { status: 201, body: lessonWorkshopOffice } });
+    const user = userEvent.setup();
+    const { onClose } = renderSheet({ mode: 'add' });
+
+    const sheet = within(await screen.findByRole('dialog', { name: 'New one-off lesson' }));
+    await sheet.findByRole('combobox', { name: 'Course type' });
+    await pick(user, sheet, 'Course type', 'Jazz');
+    await pick(user, sheet, 'Kind', 'Room rental');
+    // For a room rental the course type is optional, and can be cleared.
+    expect(sheet.getByText('Optional for a room rental.')).toBeInTheDocument();
+    expect(sheet.getByRole('combobox', { name: 'Course type' })).toHaveTextContent('Jazz');
+    await pick(user, sheet, 'Course type', 'None');
+    expect(sheet.getByRole('combobox', { name: 'Course type' })).toHaveTextContent('None');
+
+    await fill(user, sheet, 'Rented by', 'Copperleaf Theater Group');
+    await fill(user, sheet, 'Date', '2026-11-07');
+    await fill(user, sheet, 'Start time', '14:00');
+    await fill(user, sheet, 'Duration (minutes)', '120');
+    await pick(user, sheet, 'Room', 'North Studio · Room A');
+    await user.click(sheet.getByRole('button', { name: 'Add lesson' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(post).toHaveBeenCalledWith('/api/v1/lessons', {
+      body: {
+        date: '2026-11-07',
+        startTime: '14:00',
+        durationMinutes: 120,
+        roomId: ids.roomA,
+        capacity: 0,
+        visibility: 'hidden',
+        kind: 'rental',
+        renter: 'Copperleaf Theater Group',
+      },
+    });
+  });
+
+  it('requires a course type for any kind but a room rental', async () => {
+    const post = mockApiPost({});
+    const user = userEvent.setup();
+    renderSheet({ mode: 'add' });
+
+    const sheet = within(await screen.findByRole('dialog', { name: 'New one-off lesson' }));
+    await sheet.findByRole('combobox', { name: 'Course type' });
+    await pick(user, sheet, 'Kind', 'Room rental');
+    await pick(user, sheet, 'Kind', 'Workshop');
+    expect(sheet.queryByText('Optional for a room rental.')).toBeNull();
+    await fill(user, sheet, 'Date', '2026-11-07');
+    await fill(user, sheet, 'Start time', '14:00');
+    await fill(user, sheet, 'Duration (minutes)', '120');
+    await pick(user, sheet, 'Room', 'North Studio · Room A');
+    await pick(user, sheet, 'Instructor', 'Riley Sample');
+    await user.click(sheet.getByRole('button', { name: 'Add lesson' }));
+
+    const courseType = sheet.getByRole('combobox', { name: 'Course type' });
+    await waitFor(() => expect(courseType).toHaveAccessibleDescription('Please choose one.'));
+    expect(sheet.getAllByText('Please choose one.')).toHaveLength(1);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('keeps a room rental without a course type a room rental', async () => {
+    const rental = {
+      ...lessonWorkshopOffice,
+      courseType: undefined,
+      kind: 'rental' as const,
+      visibility: 'hidden' as const,
+      instructor: undefined,
+      renter: 'Copperleaf Theater Group',
+      capacity: 0,
+      freePlaces: 0,
+    };
+    const put = mockApiPut({ '/api/v1/lessons/{lessonId}': { body: rental } });
+    const user = userEvent.setup();
+    const { onClose } = renderSheet({ mode: 'edit', lesson: rental });
+
+    const sheet = within(await screen.findByRole('dialog', { name: 'Edit lesson' }));
+    expect(await sheet.findByLabelText('Rented by')).toHaveValue('Copperleaf Theater Group');
+    expect(sheet.getByText('Course type:').parentElement).toHaveTextContent('Course type: None');
+    expect(sheet.queryByRole('combobox', { name: 'Course type' })).toBeNull();
+    expect(
+      sheet.getByText('A room rental without a course type stays a room rental.'),
+    ).toBeInTheDocument();
+    await user.click(sheet.getByRole('combobox', { name: 'Kind' }));
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Room rental']);
+    await user.keyboard('{Escape}');
+
+    await fill(user, sheet, 'Rented by', 'Bramble Choir');
+    await user.click(sheet.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(put).toHaveBeenCalledWith('/api/v1/lessons/{lessonId}', {
+      params: { path: { lessonId: ids.lessonWorkshop } },
+      body: {
+        date: '2026-11-07',
+        startTime: '14:00',
+        durationMinutes: 180,
+        roomId: ids.roomA,
+        capacity: 0,
+        visibility: 'hidden',
+        kind: 'rental',
+        renter: 'Bramble Choir',
+      },
+    });
+  });
+
   it('offers no room rental for a lesson of a class', async () => {
     const user = userEvent.setup();
     renderSheet({ mode: 'edit', lesson: lessonBalletOffice });

@@ -24,12 +24,13 @@ export const isRental = (kind: string) => kind === 'rental';
  * empty `accompanistId` for none. An edit keeps the lesson's course type.
  * The lesson must end on its day, and its accompanist cannot be its
  * instructor. A room rental needs a renter instead of an instructor and a
- * capacity: its output has neither, no accompanist, a capacity of 0, and
- * it is hidden; the output of any other kind has no renter.
+ * capacity, and may go without a course type (an empty `courseTypeId`): its
+ * output has neither, no accompanist, a capacity of 0, and it is hidden; the
+ * output of any other kind has a course type and no renter.
  */
 export const lessonSchema = z
   .object({
-    courseTypeId: chosen,
+    courseTypeId: z.string(),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date'),
     startTime,
     durationMinutes,
@@ -52,6 +53,9 @@ export const lessonSchema = z
         ctx.addIssue({ code: 'custom', path: ['renter'], message: 'tooLong' });
       }
       return;
+    }
+    if (!v.courseTypeId) {
+      ctx.addIssue({ code: 'custom', path: ['courseTypeId'], message: 'choose' });
     }
     if (!v.instructorId) {
       ctx.addIssue({ code: 'custom', path: ['instructorId'], message: 'choose' });
@@ -141,7 +145,8 @@ export function lessonValues(lesson: LessonDetail | undefined, timeZone: string)
     };
   }
   return {
-    courseTypeId: lesson.courseType.id,
+    // Only a room rental may have none.
+    courseTypeId: lesson.courseType?.id ?? '',
     date: schoolDateOf(lesson.startsAt, timeZone),
     startTime: timeOf(lesson.startsAt, timeZone),
     durationMinutes: String(durationOf(lesson)),
@@ -173,9 +178,9 @@ export const lessonData = ({
   ...(renter ? { renter } : {}),
 });
 
-/** The request body of a new one-off lesson. */
+/** The request body of a new one-off lesson: without a course type, a room rental's is left out. */
 export const newLessonData = (values: LessonOutput): LessonCreateData => ({
-  courseTypeId: values.courseTypeId,
+  ...(values.courseTypeId ? { courseTypeId: values.courseTypeId } : {}),
   ...lessonData(values),
 });
 

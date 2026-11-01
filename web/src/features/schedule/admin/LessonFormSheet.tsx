@@ -196,6 +196,8 @@ function LessonForm({
   });
   const { errors } = form.formState;
   const rental = isRental(useWatch({ control: form.control, name: 'kind' }));
+  // A room rental without a course type cannot become another kind (the server refuses it).
+  const rentalOnly = editing !== undefined && !editing.courseType;
   // The confirmations and the room of the last try.
   const [confirmed, setConfirmed] = useState<Confirmations>({});
   const [sentRoomId, setSentRoomId] = useState('');
@@ -211,6 +213,11 @@ function LessonForm({
     const inactive = (name: string) => t('classes.inactiveStaff', { name });
     return {
       courseTypes: choices.courseTypes.map((c) => ({ value: c.id, label: c.name })),
+      // A room rental may go without a course type.
+      rentalCourseTypes: [
+        { value: none, label: t('lessons.noCourseType') },
+        ...choices.courseTypes.map((c) => ({ value: c.id, label: c.name })),
+      ],
       rooms: roomOptions(choices.rooms, choices.locations, lang, t('classes.unknown')),
       instructors: staffOptions(choices.staff, 'instructor', editing?.instructor, inactive),
       accompanists: [
@@ -218,12 +225,14 @@ function LessonForm({
         ...staffOptions(choices.staff, 'accompanist', editing?.accompanist, inactive),
       ],
       visibilities: visibilities.map((v) => ({ value: v, label: tSchedule(`visibility.${v}`) })),
-      // A lesson of a class cannot be a rental (the server refuses it).
+      // A lesson of a class cannot be a rental, a rental without a course
+      // type nothing else (the server refuses both).
       kinds: kinds
         .filter((k) => k !== 'rental' || !editing?.classId)
+        .filter((k) => k === 'rental' || !rentalOnly)
         .map((k) => ({ value: k, label: t(`lessons.kinds.${k}`) })),
     };
-  }, [choices, editing, lang, t, tSchedule]);
+  }, [choices, editing, lang, rentalOnly, t, tSchedule]);
 
   /** A new lesson gets the capacity of its room, unless the capacity was typed. */
   const pickRoom = (roomId: string) => {
@@ -336,23 +345,38 @@ function LessonForm({
         {editing ? (
           <p className="text-sm">
             <span className="text-muted-foreground">{t('lessons.courseType')}: </span>
-            <span className="font-medium">{editing.courseType.name}</span>
+            <span className="font-medium">
+              {editing.courseType?.name ?? t('lessons.noCourseType')}
+            </span>
           </p>
         ) : (
           <Controller
             control={form.control}
             name="courseTypeId"
-            render={({ field }) => (
-              <SelectField
-                label={t('lessons.courseType')}
-                placeholder={t('lessons.choose')}
-                options={options.courseTypes}
-                value={field.value}
-                onChange={field.onChange}
-                onBlur={field.onBlur}
-                error={errorText(errors.courseTypeId)}
-              />
-            )}
+            render={({ field }) =>
+              rental ? (
+                <SelectField
+                  label={t('lessons.courseType')}
+                  placeholder={t('lessons.noCourseType')}
+                  hint={t('lessons.courseTypeOptional')}
+                  options={options.rentalCourseTypes}
+                  value={field.value || none}
+                  onChange={(value) => field.onChange(value === none ? '' : value)}
+                  onBlur={field.onBlur}
+                  error={errorText(errors.courseTypeId)}
+                />
+              ) : (
+                <SelectField
+                  label={t('lessons.courseType')}
+                  placeholder={t('lessons.choose')}
+                  options={options.courseTypes}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  error={errorText(errors.courseTypeId)}
+                />
+              )
+            }
           />
         )}
         <Controller
@@ -362,6 +386,7 @@ function LessonForm({
             <SelectField
               label={t('lessons.kind')}
               placeholder={t('lessons.choose')}
+              hint={rentalOnly ? t('lessons.rentalOnly') : undefined}
               options={options.kinds}
               value={field.value}
               onChange={field.onChange}

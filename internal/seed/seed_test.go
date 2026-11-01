@@ -296,6 +296,12 @@ func TestDemoRental(t *testing.T) {
 		r := rentals[0]
 		validAll(t, rentals)
 
+		// The demo shows a rental without a course type, which only a rental
+		// may lack.
+		if !r.CourseTypeID.IsZero() {
+			t.Errorf("%v: rental has course type %v, want none", anchor, r.CourseTypeID)
+		}
+
 		day := domain.DateOf(r.StartsAt, loc)
 		if day.Compare(anchor) <= 0 || day.Compare(d.Terms[0].EndsOn) > 0 {
 			t.Errorf("%v: rental on %v, want after the anchor in the term", anchor, day)

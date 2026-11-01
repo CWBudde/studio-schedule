@@ -351,6 +351,15 @@ func TestLessonValidateRental(t *testing.T) {
 		t.Errorf("rental: %v", err)
 	}
 
+	// A rental may go without a course type; every other kind needs one
+	// (TestLessonValidate).
+	untyped := rentalFixture()
+	untyped.CourseTypeID = domain.CourseTypeID{}
+
+	if err := untyped.Validate(); err != nil {
+		t.Errorf("rental without a course type: %v", err)
+	}
+
 	long := rentalFixture()
 	long.Renter = strings.Repeat("ä", domain.MaxRenterLength)
 

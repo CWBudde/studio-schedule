@@ -10,6 +10,7 @@ import {
   yearUnlessIn,
 } from '@/lib/schoolTime';
 import { cn } from '@/lib/utils';
+import { showsKind, useLessonTitle } from '../lessonLabel';
 import { VisibilityBadge } from '../visibility/VisibilityBadge';
 import type { CardLesson } from './cardParts';
 
@@ -46,6 +47,7 @@ export function LessonCardBody({
 }) {
   const { t, i18n } = useTranslation('schedule');
   const lang = i18n.resolvedLanguage ?? 'en';
+  const title = useLessonTitle();
   const canceled = lesson.status === 'canceled';
   const date = schoolDateOf(lesson.startsAt, timeZone);
 
@@ -58,7 +60,7 @@ export function LessonCardBody({
             canceled && 'line-through decoration-1',
           )}
         >
-          {lesson.courseType.name}
+          {title(lesson)}
         </span>
         {lesson.level && (
           <span className="shrink-0 text-right eyebrow text-muted-foreground">
@@ -90,7 +92,7 @@ export function LessonCardBody({
           {formatTimeRange(lesson.startsAt, lesson.endsAt, timeZone, lang)}
         </span>
         {canceled && <Badge variant="destructive">{canceledLabel ?? t('status.canceled')}</Badge>}
-        {lesson.kind !== 'regular' && <Badge variant="outline">{t(`kind.${lesson.kind}`)}</Badge>}
+        {showsKind(lesson) && <Badge variant="outline">{t(`kind.${lesson.kind}`)}</Badge>}
         <VisibilityBadge visibility={lesson.visibility} />
         {badges}
       </span>

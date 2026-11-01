@@ -164,7 +164,7 @@ type ConflictLesson struct {
 	ID         domain.LessonID `doc:"Lesson ID."          json:"id"`
 	StartsAt   time.Time       `doc:"Start instant (UTC)." json:"startsAt"`
 	EndsAt     time.Time       `doc:"End instant (UTC)."   json:"endsAt"`
-	CourseType CourseTypeRef   `json:"courseType"`
+	CourseType *CourseTypeRef  `doc:"Course type; absent for a room rental without one." json:"courseType,omitempty"`
 }
 
 func conflict(reason, detail string) *Conflict {

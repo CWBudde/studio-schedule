@@ -134,7 +134,7 @@ type LessonData struct {
 type LessonCreateData struct {
 	LessonData
 
-	CourseTypeID domain.CourseTypeID `doc:"Course type taught." json:"courseTypeId"`
+	CourseTypeID domain.CourseTypeID `doc:"Course type taught; required unless the lesson is a room rental, for which it is optional. It cannot change later." json:"courseTypeId,omitzero" required:"false"`
 }
 
 // LessonCreateInput is the request of createLesson.
@@ -224,7 +224,7 @@ type CloneConflictLesson struct {
 	CopyOf     domain.LessonID `doc:"Set when the lesson is a copy of the same clone: the lesson it copies." json:"copyOf,omitzero" required:"false"`
 	StartsAt   time.Time       `doc:"Start instant (UTC)." json:"startsAt"`
 	EndsAt     time.Time       `doc:"End instant (UTC)."   json:"endsAt"`
-	CourseType CourseTypeRef   `json:"courseType"`
+	CourseType *CourseTypeRef  `doc:"Course type; absent for a room rental without one." json:"courseType,omitempty"`
 }
 
 // LessonCloneOutput is the response of previewLessonClone and cloneLessons.
@@ -282,7 +282,7 @@ func (h *handlers) lessonError(ctx context.Context, err error) error {
 		c := conflict(reasonRoomTaken, "another lesson uses the room at that time")
 		c.Lesson = &ConflictLesson{
 			ID: taken.Lesson.ID, StartsAt: taken.Lesson.StartsAt.UTC(), EndsAt: taken.Lesson.EndsAt.UTC(),
-			CourseType: CourseTypeRef{ID: taken.CourseType.ID, Name: taken.CourseType.Name},
+			CourseType: courseTypeRef(taken.CourseType),
 		}
 
 		return c
@@ -345,7 +345,7 @@ func (h *handlers) cloneOutput(ctx context.Context) func(service.CloneResult, er
 				skip.Lesson = &CloneConflictLesson{
 					ID: by.Lesson.ID, ClassID: by.Lesson.ClassID, CopyOf: by.CopyOf, StartsAt: by.Lesson.StartsAt.UTC(),
 					EndsAt:     by.Lesson.EndsAt.UTC(),
-					CourseType: CourseTypeRef{ID: by.CourseType.ID, Name: by.CourseType.Name},
+					CourseType: courseTypeRef(by.CourseType),
 				}
 			}
 

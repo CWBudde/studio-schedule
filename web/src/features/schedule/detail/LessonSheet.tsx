@@ -22,7 +22,7 @@ import { formatDayHeading, formatTimeRange, formatTimestamp, schoolDateOf } from
 import { LessonActions } from '../admin/LessonActions';
 import { BookingSection } from '../booking/BookingSection';
 import { ParticipantsSection } from '../participants/ParticipantsSection';
-import { useLessonLabel } from '../lessonLabel';
+import { showsKind, useLessonLabel, useLessonTitle } from '../lessonLabel';
 import { useScheduleSearch } from '../useScheduleSearch';
 import { VisibilityBadge } from '../visibility/VisibilityBadge';
 
@@ -179,6 +179,7 @@ function LessonDetails({
   const lang = i18n.resolvedLanguage ?? 'en';
   const me = useQuery(meQuery);
   const label = useLessonLabel()(lesson, timeZone);
+  const title = useLessonTitle();
   const canceled = lesson.status === 'canceled';
   const rental = lesson.kind === 'rental';
   // What the office sees of the cancellation (ADR 0007).
@@ -189,7 +190,7 @@ function LessonDetails({
     <>
       <SheetHeader className="gap-1 pr-12">
         <SheetTitle className={canceled ? 'text-lg line-through' : 'text-lg'}>
-          {lesson.courseType.name}
+          {title(lesson)}
         </SheetTitle>
         <SheetDescription>
           <span>{formatDayHeading(schoolDateOf(lesson.startsAt, timeZone), lang)}</span>
@@ -198,15 +199,10 @@ function LessonDetails({
             {formatTimeRange(lesson.startsAt, lesson.endsAt, timeZone, lang)}
           </span>
         </SheetDescription>
-        {(canceled ||
-          lesson.kind !== 'regular' ||
-          lesson.level ||
-          lesson.visibility !== 'public') && (
+        {(canceled || showsKind(lesson) || lesson.level || lesson.visibility !== 'public') && (
           <div className="flex flex-wrap gap-1.5 pt-1">
             {canceled && <Badge variant="destructive">{t('status.canceled')}</Badge>}
-            {lesson.kind !== 'regular' && (
-              <Badge variant="secondary">{t(`kind.${lesson.kind}`)}</Badge>
-            )}
+            {showsKind(lesson) && <Badge variant="secondary">{t(`kind.${lesson.kind}`)}</Badge>}
             {lesson.level && <Badge variant="outline">{t(`level.${lesson.level}`)}</Badge>}
             <VisibilityBadge visibility={lesson.visibility} />
           </div>

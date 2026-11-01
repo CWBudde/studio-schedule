@@ -2065,7 +2065,8 @@
             "type": "string"
           },
           "courseType": {
-            "$ref": "#/components/schemas/CourseTypeRef"
+            "$ref": "#/components/schemas/CourseTypeRef",
+            "description": "Course type; absent for a room rental without one."
           },
           "endsAt": {
             "description": "End instant (UTC).",
@@ -2085,8 +2086,7 @@
         },
         "required": [
           "startsAt",
-          "endsAt",
-          "courseType"
+          "endsAt"
         ],
         "type": "object"
       },
@@ -2252,7 +2252,8 @@
         "additionalProperties": false,
         "properties": {
           "courseType": {
-            "$ref": "#/components/schemas/CourseTypeRef"
+            "$ref": "#/components/schemas/CourseTypeRef",
+            "description": "Course type; absent for a room rental without one."
           },
           "endsAt": {
             "description": "End instant (UTC).",
@@ -2273,8 +2274,7 @@
         "required": [
           "id",
           "startsAt",
-          "endsAt",
-          "courseType"
+          "endsAt"
         ],
         "type": "object"
       },
@@ -4465,7 +4465,7 @@
             "type": "boolean"
           },
           "courseTypeId": {
-            "description": "Course type taught.",
+            "description": "Course type taught; required unless the lesson is a room rental, for which it is optional. It cannot change later.",
             "format": "uuid",
             "type": "string"
           },
@@ -4525,7 +4525,6 @@
           }
         },
         "required": [
-          "courseTypeId",
           "date",
           "startTime",
           "durationMinutes",
@@ -4660,7 +4659,8 @@
             "type": "string"
           },
           "courseType": {
-            "$ref": "#/components/schemas/CourseTypeRef"
+            "$ref": "#/components/schemas/CourseTypeRef",
+            "description": "Course type; absent for a room rental without one."
           },
           "courseTypeDescription": {
             "description": "Description of the course type.",
@@ -4764,7 +4764,6 @@
           "kind",
           "visibility",
           "capacity",
-          "courseType",
           "room",
           "location",
           "freePlaces",
@@ -4959,7 +4958,8 @@
             "type": "string"
           },
           "courseType": {
-            "$ref": "#/components/schemas/CourseTypeRef"
+            "$ref": "#/components/schemas/CourseTypeRef",
+            "description": "Course type; absent for a room rental without one."
           },
           "endsAt": {
             "description": "End instant (UTC).",
@@ -5037,7 +5037,6 @@
           "kind",
           "visibility",
           "capacity",
-          "courseType",
           "room",
           "location"
         ],
@@ -8167,7 +8166,8 @@
             "type": "string"
           },
           "courseType": {
-            "$ref": "#/components/schemas/CourseTypeRef"
+            "$ref": "#/components/schemas/CourseTypeRef",
+            "description": "Course type; absent for a room rental without one."
           },
           "endsAt": {
             "description": "End instant (UTC).",
@@ -8263,7 +8263,6 @@
           "kind",
           "visibility",
           "capacity",
-          "courseType",
           "room",
           "location",
           "freePlaces",
@@ -9040,7 +9039,8 @@
             "type": "string"
           },
           "courseType": {
-            "$ref": "#/components/schemas/CourseTypeRef"
+            "$ref": "#/components/schemas/CourseTypeRef",
+            "description": "Course type; absent for a room rental without one."
           },
           "dayOverAt": {
             "description": "When the attendance window of instructors and accompanists ends (see listLessonParticipants).",
@@ -9167,7 +9167,6 @@
           "kind",
           "visibility",
           "capacity",
-          "courseType",
           "room",
           "location"
         ],

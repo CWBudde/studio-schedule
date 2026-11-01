@@ -247,8 +247,8 @@ regular, workshop and private.
 - **No instructor, no places, no price.** A rental has no instructor and no accompanist
   (forbidden, not optional: the room is the only resource it holds, and no staff member's teaching
   view, feed or participant rights reach it), a capacity of 0, and is always `hidden`. Lessons
-  carry no price (passes do, ADR 0012), so there is none to drop. It keeps a course type, which
-  every lesson needs; the office picks the closest one. Instead of staff it names its **renter**
+  carry no price (passes do, ADR 0012), so there is none to drop. Its course type is optional
+  (amendment 2026-11-01 below). Instead of staff it names its **renter**
   (`lessons.renter`, 1–100 characters, only on a rental), free text for staff such as a group's
   name. Each rule is a 422 on its field; migration 00026 mirrors them as CHECK constraints
   (`instructor_id` becomes nullable).
@@ -264,3 +264,22 @@ regular, workshop and private.
   or free places; a staff member's schedule feed shows it with the renter in place of the
   instructor. The instructor view (`/teach`) leaves it out (it has no participants), and so do the
   statistics, which therefore never see its zero capacity.
+
+## Amendment (2026-11-01): a rental's course type is optional
+
+A rental is no course, so the course type it had to carry only got in the way: staff feeds read
+"Contemporary – Copperleaf Theater Group", the schedule's course-type filter matched it, and it kept
+its course type from being deleted. The course type of a rental is now **optional**; every other
+kind still needs one (422 on `courseTypeId`).
+
+- **Optional, not forbidden.** The office may still give a rental a course type (for example a
+  rehearsal of a piece the school teaches); without one, nothing about the rental refers to the
+  catalogue. Migration 00030 makes `lessons.course_type_id` nullable with a CHECK that only a
+  rental may lack it; its down migration deletes the rentals without one.
+- **Fixed after creation, as before.** `updateLesson` has no course type, so a rental without one
+  cannot become another kind (422 on `kind`); the web offers it only the rental kind. A rental
+  with a course type can, as before.
+- **Shown as "Room rental".** The API leaves `courseType` out of a lesson without one (the
+  schedule, the lesson detail, the `room-taken` conflict and the clone preview). The web titles
+  such a lesson "Room rental" and its schedule feed event reads "Room rental – renter". The demo's
+  rental has no course type.

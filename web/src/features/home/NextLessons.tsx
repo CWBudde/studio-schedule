@@ -7,6 +7,7 @@ import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useLessonTitle } from '@/features/schedule/lessonLabel';
 import { addDays, formatDateTime, schoolDateOf, todayIn } from '@/lib/schoolTime';
 
 /** How many upcoming lessons the home page shows. */
@@ -48,6 +49,7 @@ export function NextLessons({ className }: { className?: string }) {
 
 function Upcoming({ timeZone }: { timeZone: string }) {
   const { t, i18n } = useTranslation();
+  const title = useLessonTitle();
   const lang = i18n.resolvedLanguage ?? 'en';
   const today = todayIn(timeZone);
   const schedule = useQuery(scheduleQuery({ from: today, to: addDays(today, 7) }));
@@ -74,7 +76,7 @@ function Upcoming({ timeZone }: { timeZone: string }) {
             className="group flex items-baseline gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
           >
             <span className="font-heading text-lg font-medium group-hover:text-accent-foreground">
-              {l.courseType.name}
+              {title(l)}
             </span>
             <span
               aria-hidden="true"

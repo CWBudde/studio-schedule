@@ -47,4 +47,24 @@ describe('Programme LessonCard', () => {
     expect(card.queryByText('Full')).not.toBeInTheDocument();
     expect(card.queryByText(/free/)).not.toBeInTheDocument();
   });
+
+  it('titles a room rental without a course type "Room rental", once', () => {
+    mockApiGet({ '/api/v1/auth/me': { body: meOffice } });
+    renderWithQuery(
+      <LessonCard
+        lesson={{ ...rental, courseType: undefined }}
+        timeZone="Europe/Berlin"
+        now={now}
+        past={false}
+        quickAction={{ kind: 'none' }}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    // Neither the card nor its name repeats the kind as a badge.
+    const button = screen.getByRole('button', {
+      name: 'Room rental, Monday, October 26, 18:00–19:30, Copperleaf Theater Group, Hidden – staff only',
+    });
+    expect(within(button).getAllByText('Room rental')).toHaveLength(1);
+  });
 });

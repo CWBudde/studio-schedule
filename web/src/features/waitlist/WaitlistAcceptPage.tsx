@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { FormError } from '@/features/auth/FormError';
 import { statusOf } from '@/features/auth/form';
 import { useBookingErrorText } from '@/features/schedule/booking/bookingErrors';
+import { useLessonTitle } from '@/features/schedule/lessonLabel';
 import { formatDateTime, formatDayHeading, formatTimeRange, schoolDateOf } from '@/lib/schoolTime';
 
 /**
@@ -216,10 +217,11 @@ function InviteCard({
 function LessonFacts({ invite, timeZone }: { invite: WaitlistInvite; timeZone: string }) {
   const { t, i18n } = useTranslation('schedule');
   const lang = i18n.resolvedLanguage ?? 'en';
+  const title = useLessonTitle();
   const { lesson } = invite;
   return (
     <div className="space-y-1 rounded-lg border p-3">
-      <h2 className="font-medium">{lesson.courseType.name}</h2>
+      <h2 className="font-medium">{title(lesson)}</h2>
       <p className="flex items-center gap-1.5 text-sm">
         <Clock className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         {t('invite.when', {

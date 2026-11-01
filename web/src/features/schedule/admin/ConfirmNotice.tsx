@@ -5,6 +5,7 @@ import type { ConflictLesson } from '@/api/conflict';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { formatDayHeading, formatTimeRange, schoolDateOf } from '@/lib/schoolTime';
+import { useLessonTitle } from '../lessonLabel';
 
 /**
  * A write the API refused until it is confirmed (a 409 `room-taken` or
@@ -62,6 +63,7 @@ export function RoomTakenNotice({
 }) {
   const { t, i18n } = useTranslation('admin');
   const lang = i18n.resolvedLanguage ?? 'en';
+  const title = useLessonTitle();
   return (
     <ConfirmNotice
       title={t('lessons.roomTaken', { room })}
@@ -71,7 +73,7 @@ export function RoomTakenNotice({
     >
       {t('lessons.roomTakenBy', {
         lesson: t('lessons.label', {
-          courseType: lesson.courseType.name,
+          courseType: title(lesson),
           day: formatDayHeading(schoolDateOf(lesson.startsAt, timeZone), lang),
           time: formatTimeRange(lesson.startsAt, lesson.endsAt, timeZone, lang),
         }),

@@ -31,6 +31,7 @@ import { showServerErrors, useAdminErrorText } from '@/features/admin/crud/form'
 import { invalidFields } from '@/features/auth/form';
 import { formatDayHeading, formatTimeRange, schoolDateOf } from '@/lib/schoolTime';
 import { useNow } from '@/lib/useNow';
+import { useLessonTitle } from '../lessonLabel';
 import { RoomTakenNotice } from './ConfirmNotice';
 import { cancelSchema, type CancelValues, lessonDataOf } from './lessonForms';
 import { LessonFormSheet } from './LessonFormSheet';
@@ -60,6 +61,7 @@ export function LessonActions({
   const [open, setOpen] = useState<Open>(null);
   const visibility = useMutation(updateLessonMutation(queryClient));
   const headingId = useId();
+  const title = useLessonTitle();
 
   const started = useNow() >= Date.parse(lesson.startsAt);
   const canceled = lesson.status === 'canceled';
@@ -67,7 +69,7 @@ export function LessonActions({
   const rental = lesson.kind === 'rental';
   const bookings = lesson.admin?.activeBookings ?? 0;
   const label = t('lessons.label', {
-    courseType: lesson.courseType.name,
+    courseType: title(lesson),
     day: formatDayHeading(schoolDateOf(lesson.startsAt, timeZone), lang),
     time: formatTimeRange(lesson.startsAt, lesson.endsAt, timeZone, lang),
   });

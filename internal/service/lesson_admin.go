@@ -202,6 +202,12 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 			return ErrLessonStarted
 		}
 
+		// The course type cannot change, so a room rental without one cannot
+		// become another kind, which needs one (ADR 0007, amendment).
+		if old.CourseTypeID.IsZero() && d.Kind != domain.LessonRental {
+			return &domain.FieldError{Field: "kind", Msg: "a room rental without a course type cannot become another kind"}
+		}
+
 		l := old
 		if err := s.apply(&l, d, loc); err != nil {
 			return err
@@ -505,9 +511,13 @@ func roomFree(ctx context.Context, tx store.Tx, l domain.Lesson) error {
 		return err
 	}
 
-	ct, err := tx.CourseTypes().Get(ctx, other.CourseTypeID)
-	if err != nil {
-		return fmt.Errorf("course type %v: %w", other.CourseTypeID, refErr(err))
+	// A room rental may have no course type; CourseType stays zero then.
+	var ct domain.CourseType
+
+	if !other.CourseTypeID.IsZero() {
+		if ct, err = tx.CourseTypes().Get(ctx, other.CourseTypeID); err != nil {
+			return fmt.Errorf("course type %v: %w", other.CourseTypeID, refErr(err))
+		}
 	}
 
 	return &RoomTakenError{Lesson: other, CourseType: ct}

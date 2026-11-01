@@ -316,21 +316,21 @@ func TestMigrateDownWithoutMigrations(t *testing.T) {
 }
 
 // migrateFailNewest rolls back the two newest migrations of a new database,
-// breaks the newest one (00029 adds the audit action setup-link-issued,
+// breaks the newest one (00030 adds the constraint lessons_course_type,
 // which then exists already) and runs migrate up, which must fail. It returns the
 // database, the embedded migrations, and the output and error of up.
 func migrateFailNewest(t *testing.T) (url string, embedded []string, out string, err error) {
 	t.Helper()
 
 	embedded = migrateEmbedded(t)
-	if last := embedded[len(embedded)-1]; last != "00029_audit_command_line.sql" {
-		t.Fatalf("the newest migration is %s; migrateFailNewest breaks 00029 on purpose and needs updating", last)
+	if last := embedded[len(embedded)-1]; last != "00030_lesson_rental_course_type.sql" {
+		t.Fatalf("the newest migration is %s; migrateFailNewest breaks 00030 on purpose and needs updating", last)
 	}
 
 	url = newTestDatabase(t)
 	migrateRun(t, url, "down")
 	migrateRun(t, url, "down")
-	execSQL(t, url, "INSERT INTO audit_actions (action) VALUES ('setup-link-issued')")
+	execSQL(t, url, "ALTER TABLE lessons ADD CONSTRAINT lessons_course_type CHECK (true)")
 
 	out, err = execute(map[string]string{"DATABASE_URL": url}, "migrate", "up")
 	if err == nil {

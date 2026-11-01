@@ -7,6 +7,7 @@ import {
   hasAvailabilityBadges,
 } from '@/features/schedule/booking/AvailabilityBadges';
 import type { QuickAction } from '@/features/schedule/booking/quickAction';
+import { showsKind, useLessonTitle } from '@/features/schedule/lessonLabel';
 import { useLessonCardLabel } from '@/features/schedule/list/cardParts';
 import { VisibilityBadge } from '@/features/schedule/visibility/VisibilityBadge';
 import { formatTimeRange } from '@/lib/schoolTime';
@@ -21,7 +22,7 @@ const focusRing = 'outline-none focus-visible:ring-[3px] focus-visible:ring-ring
  * beside it a square button for the quick action (book, cancel, waiting
  * list; "Details" where the sheet must choose the person; "Full"
  * disabled; none for a room rental, which shows its renter instead of
- * staff and places). Tinted by course type (werkstatt.css); a booked lesson gets a
+ * staff and places). Tinted by course type (werkstatt.css; none without one); a booked lesson gets a
  * primary frame and a star; ended lessons are dimmed by colour (not by
  * opacity, which would break the text contrast), canceled ones checkered.
  * The card is a group named like its button, so its quick action can be
@@ -33,6 +34,7 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
   const detailsId = useId();
   const availabilityId = useId();
   const label = useLessonCardLabel()(lesson, timeZone);
+  const title = useLessonTitle();
   const canceled = lesson.status === 'canceled';
   const quiet = canceled || past;
   // A room rental has no places and no quick action (quickAction answers none).
@@ -54,8 +56,11 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
       data-canceled={canceled || undefined}
       data-past={past || undefined}
       data-booked={booked || undefined}
+      // A lesson without a course type (a room rental) has no tint: the card's own colour.
       style={
-        quiet ? undefined : ({ '--course-tint': courseTint(lesson.courseType.id) } as CSSProperties)
+        quiet || !lesson.courseType
+          ? undefined
+          : ({ '--course-tint': courseTint(lesson.courseType.id) } as CSSProperties)
       }
       className={cn(
         'werkstatt-card relative flex w-full rounded-[4px] border text-sm text-card-foreground',
@@ -88,7 +93,7 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
               canceled && 'line-through decoration-1',
             )}
           >
-            {lesson.courseType.name}
+            {title(lesson)}
           </span>
           {lesson.level && (
             <span className="shrink-0 text-right text-xs text-muted-foreground">
@@ -107,7 +112,7 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
             {formatTimeRange(lesson.startsAt, lesson.endsAt, timeZone, lang)}
           </span>
           {canceled && <Badge variant="destructive">{t('status.canceled')}</Badge>}
-          {lesson.kind !== 'regular' && <Badge variant="outline">{t(`kind.${lesson.kind}`)}</Badge>}
+          {showsKind(lesson) && <Badge variant="outline">{t(`kind.${lesson.kind}`)}</Badge>}
           <VisibilityBadge visibility={lesson.visibility} />
         </span>
         {/* The API has no course description: the muted line names the place, which the room column shows only from 768px. */}

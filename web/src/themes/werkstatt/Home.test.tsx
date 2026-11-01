@@ -16,7 +16,9 @@ const okStatus: HomeStatus = {
 };
 
 /** A stand-in for a connected lesson card. */
-const renderLesson = (lesson: ScheduleLesson) => <p data-testid="card">{lesson.courseType.name}</p>;
+const renderLesson = (lesson: ScheduleLesson) => (
+  <p data-testid="card">{lesson.courseType?.name}</p>
+);
 
 const twoDays: HomeMyLessons = {
   state: 'ready',

@@ -18,10 +18,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** A room rental without a course type. */
+const rentalId = '0190a000-0000-7000-8000-000000000199';
+
 const details: Record<string, object> = {
   [ids.lessonBallet]: lessonBalletDetail,
   [ids.lessonContemporary]: { ...lessonContemporary, visibility: 'members' },
   [ids.lessonWorkshop]: { ...lessonWorkshop, visibility: 'hidden' },
+  [rentalId]: {
+    ...lessonWorkshop,
+    id: rentalId,
+    courseType: undefined,
+    kind: 'rental',
+    visibility: 'hidden',
+    instructor: undefined,
+    renter: 'Copperleaf Theater Group',
+    capacity: 0,
+    freePlaces: 0,
+  },
 };
 
 function mockLessons() {
@@ -97,6 +111,16 @@ describe('LessonSheet', () => {
     expect(within(dialog).getByText('Saturday, November 7')).toBeInTheDocument();
     expect(within(dialog).getByText('14:00–17:00')).toBeInTheDocument();
     expect(within(dialog).queryByText('All levels')).not.toBeInTheDocument();
+  });
+
+  it('titles a room rental without a course type "Room rental", without a kind badge', async () => {
+    mockLessons();
+
+    renderAtSchedule(<LessonSheet />, { lesson: rentalId });
+
+    const dialog = await screen.findByRole('dialog', { name: 'Room rental' });
+    expect(within(dialog).getAllByText('Room rental')).toHaveLength(1);
+    expect(within(dialog).getByText('Copperleaf Theater Group')).toBeInTheDocument();
   });
 
   it('stays closed without a lesson param', async () => {

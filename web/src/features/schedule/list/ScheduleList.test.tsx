@@ -400,7 +400,7 @@ describe('ScheduleList', () => {
         ),
         LessonCard: ({ lesson, quickAction, onOpen }: LessonCardProps) => (
           <button type="button" onClick={onOpen}>
-            {lesson.courseType.name}: {quickAction.kind}
+            {lesson.courseType?.name}: {quickAction.kind}
           </button>
         ),
       },

@@ -220,3 +220,55 @@ func berlinTime(t *testing.T, v any) time.Time {
 
 	return ts.In(loc)
 }
+
+// TestAdminRentalWithoutCourseType runs a room rental without a course type
+// over HTTP (ADR 0007, amendment 2026-11-01): created without courseTypeId,
+// shown and named in a room-taken conflict without courseType, and kept a
+// rental; every other kind still needs one.
+func TestAdminRentalWithoutCourseType(t *testing.T) {
+	t.Parallel()
+
+	a := newAuthApp(t, app.Deps{Demo: true})
+	office := a.login("olga.ledgerby@example.net")
+
+	rooms := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/rooms", "", office))
+	room, _ := rooms["items"].([]any)[0].(map[string]any)["id"].(string)
+
+	rental := `{"date":"2026-12-02","startTime":"10:00","durationMinutes":60,"roomId":%q,"capacity":0,` +
+		`"visibility":"hidden","kind":%q%s}`
+
+	created := decode(t, a.expect(http.StatusCreated, http.MethodPost, "/api/v1/lessons",
+		fmt.Sprintf(rental, room, "rental", `,"renter":"Juniper Players"`), office))
+	id, _ := created["id"].(string)
+
+	if _, ok := created["courseType"]; ok || created["renter"] != "Juniper Players" {
+		t.Errorf("created %v, want a rental without courseType", created)
+	}
+
+	if got := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/lessons/"+id, "", office)); got["courseType"] != nil {
+		t.Errorf("getLesson %v, want no courseType", got)
+	}
+
+	// Another rental in the room at that time: the conflict names the first.
+	taken := decode(t, a.expect(http.StatusConflict, http.MethodPost, "/api/v1/lessons",
+		fmt.Sprintf(rental, room, "rental", `,"renter":"Maplewood Choir","startTime":"10:30"`), office))
+	if other, _ := taken["lesson"].(map[string]any); taken["reason"] != "room-taken" || other["id"] != id ||
+		other["courseType"] != nil {
+		t.Errorf("409 %v, want room-taken naming %s without courseType", taken, id)
+	}
+
+	// Every other kind needs a course type, and the rental cannot become one.
+	for path, method := range map[string]string{"/api/v1/lessons": http.MethodPost, "/api/v1/lessons/" + id: http.MethodPut} {
+		got := decode(t, a.expect(http.StatusUnprocessableEntity, method, path,
+			fmt.Sprintf(rental, room, "workshop", `,"capacity":5,"visibility":"public","confirmRoomOverlap":true`), office))
+
+		want := "body.courseTypeId"
+		if method == http.MethodPut {
+			want = "body.kind"
+		}
+
+		if errs, _ := got["errors"].([]any); len(errs) == 0 || errs[0].(map[string]any)["location"] != want {
+			t.Errorf("%s %s: 422 %v, want %s", method, path, got, want)
+		}
+	}
+}

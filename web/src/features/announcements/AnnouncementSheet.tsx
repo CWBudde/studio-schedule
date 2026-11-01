@@ -33,6 +33,7 @@ import { showServerErrors, useAdminErrorText } from '@/features/admin/crud/form'
 import { FormSheet, FormSheetActions, FormSheetHeader } from '@/features/admin/crud/FormSheet';
 import { useClassLabel } from '@/features/admin/useClassLabel';
 import { invalidFields } from '@/features/auth/form';
+import { useLessonTitle } from '@/features/schedule/lessonLabel';
 import { addDays, formatTimestamp, formatTime } from '@/lib/schoolTime';
 import {
   announcementFields,
@@ -387,6 +388,7 @@ function LessonFields({
   errorText,
 }: FormProps & { date: string; timeZone: string; lang: string }) {
   const { t } = useTranslation('announcements');
+  const title = useLessonTitle();
   const valid = /^\d{4}-\d{2}-\d{2}$/.test(date);
   const schedule = useQuery({
     ...scheduleQuery({ from: date, to: valid ? addDays(date, 1) : date }),
@@ -414,7 +416,7 @@ function LessonFields({
             }
             options={lessons.map((l) => ({
               value: l.id,
-              label: `${formatTime(l.startsAt, timeZone, lang)} ${l.courseType.name} (${l.room.name})`,
+              label: `${formatTime(l.startsAt, timeZone, lang)} ${title(l)} (${l.room.name})`,
             }))}
             value={field.value}
             onChange={field.onChange}

@@ -1086,7 +1086,8 @@ func (r lessonRepo) put(l domain.Lesson) error {
 	l.StartsAt, l.EndsAt, l.CanceledAt = instant(l.StartsAt), instant(l.EndsAt), instant(l.CanceledAt)
 
 	switch {
-	case (!l.ClassID.IsZero() && !s.classes.has(l.ClassID)) || !s.courseTypes.has(l.CourseTypeID) ||
+	case (!l.ClassID.IsZero() && !s.classes.has(l.ClassID)) ||
+		(!l.CourseTypeID.IsZero() && !s.courseTypes.has(l.CourseTypeID)) ||
 		!s.rooms.has(l.RoomID) || (!l.InstructorID.IsZero() && !s.staff.has(l.InstructorID)) ||
 		(!l.AccompanistID.IsZero() && !s.staff.has(l.AccompanistID)) ||
 		(!l.CanceledBy.IsZero() && !s.accounts.has(l.CanceledBy)):

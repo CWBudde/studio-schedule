@@ -7,6 +7,7 @@ import { LoadError } from '@/features/admin/crud/LoadError';
 import { PassStateBadge } from '@/features/passes/PassBits';
 import { usePassText } from '@/features/passes/passText';
 import { passState } from '@/features/passes/passes';
+import { useLessonTitle } from '@/features/schedule/lessonLabel';
 import { shownName } from '@/lib/personName';
 import {
   formatDate,
@@ -137,6 +138,7 @@ function Uses({ pass, today, timeZone }: { pass: Pass; today: SchoolDate; timeZo
 function UseRow({ use, today, timeZone }: { use: PassUse; today: SchoolDate; timeZone: string }) {
   const { t, i18n } = useTranslation('passes');
   const lang = i18n.resolvedLanguage ?? 'en';
+  const title = useLessonTitle();
   const date = schoolDateOf(use.lesson.startsAt, timeZone);
   const when = `${formatDate(date, lang, {
     weekday: 'short',
@@ -152,7 +154,7 @@ function UseRow({ use, today, timeZone }: { use: PassUse; today: SchoolDate; tim
         : undefined;
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-      <span className="font-medium">{use.lesson.courseType.name}</span>
+      <span className="font-medium">{title(use.lesson)}</span>
       <span className="text-muted-foreground tabular-nums">{when}</span>
       <span className="text-muted-foreground">· {use.personName}</span>
       {status && <Badge variant="outline">{status}</Badge>}

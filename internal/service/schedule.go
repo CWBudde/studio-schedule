@@ -599,12 +599,15 @@ func loadRefsOf(ctx context.Context, tx store.Tx, l domain.Lesson) (lessonRefs, 
 
 	refs.locations[location.ID] = location
 
-	courseType, err := tx.CourseTypes().Get(ctx, l.CourseTypeID)
-	if err != nil {
-		return refs, fmt.Errorf("course type %v: %w", l.CourseTypeID, refErr(err))
-	}
+	// A room rental may have no course type.
+	if !l.CourseTypeID.IsZero() {
+		courseType, err := tx.CourseTypes().Get(ctx, l.CourseTypeID)
+		if err != nil {
+			return refs, fmt.Errorf("course type %v: %w", l.CourseTypeID, refErr(err))
+		}
 
-	refs.courseTypes[courseType.ID] = courseType
+		refs.courseTypes[courseType.ID] = courseType
+	}
 
 	for _, id := range []domain.StaffID{l.InstructorID, l.AccompanistID} {
 		if id.IsZero() {
@@ -660,8 +663,11 @@ func (r lessonRefs) resolve(l domain.Lesson) (ScheduledLesson, error) {
 		return sl, fmt.Errorf("lesson %v: location %v: %w", l.ID, sl.Room.LocationID, errBrokenReference)
 	}
 
-	if sl.CourseType, ok = r.courseTypes[l.CourseTypeID]; !ok {
-		return sl, fmt.Errorf("lesson %v: course type %v: %w", l.ID, l.CourseTypeID, errBrokenReference)
+	// A room rental may have no course type; CourseType stays zero then.
+	if !l.CourseTypeID.IsZero() {
+		if sl.CourseType, ok = r.courseTypes[l.CourseTypeID]; !ok {
+			return sl, fmt.Errorf("lesson %v: course type %v: %w", l.ID, l.CourseTypeID, errBrokenReference)
+		}
 	}
 
 	// A room rental has no instructor; Instructor stays zero.

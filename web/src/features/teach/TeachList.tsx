@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { TeachLesson, TeachLessons } from '@/api/queries';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useLessonLabel } from '@/features/schedule/lessonLabel';
+import { useLessonLabel, useLessonTitle } from '@/features/schedule/lessonLabel';
 import {
   type Day as DayOf,
   type DayTone,
@@ -208,6 +208,7 @@ function LessonRow({
   const { t: tSchedule } = useTranslation('schedule');
   const detailsId = useId();
   const lessonLabel = useLessonLabel()(lesson, timeZone);
+  const title = useLessonTitle();
   const canceled = lesson.status === 'canceled';
   const quiet = canceled || past;
   const special = lesson.kind !== 'regular';
@@ -258,7 +259,7 @@ function LessonRow({
               canceled && 'text-muted-foreground line-through decoration-1',
             )}
           >
-            {lesson.courseType.name}
+            {title(lesson)}
           </span>
         </span>
         <span id={detailsId} className="flex flex-col gap-1.5">

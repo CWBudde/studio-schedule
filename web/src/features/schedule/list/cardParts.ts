@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { components } from '@/api/schema';
-import { useLessonLabel } from '../lessonLabel';
+import { showsKind, useLessonLabel } from '../lessonLabel';
 
 /** What a lesson card shows of a lesson (the schedule's lessons and "My lessons" have it). */
 export type CardLesson = Pick<
@@ -33,7 +33,8 @@ export const lessonCardButton =
 /**
  * The accessible name of a lesson card: "Ballet, Monday, October 26,
  * 18:00–19:30", then whether it is canceled (`canceledLabel`, by default
- * "Canceled"), its kind unless a regular class, a room rental's renter, and
+ * "Canceled"), its kind unless a regular class or already its title, a room
+ * rental's renter, and
  * its visibility unless public.
  */
 export function useLessonCardLabel(): (
@@ -47,7 +48,7 @@ export function useLessonCardLabel(): (
     [
       lessonLabel(lesson, timeZone),
       lesson.status === 'canceled' && (canceledLabel ?? t('status.canceled')),
-      lesson.kind !== 'regular' && t(`kind.${lesson.kind}`),
+      showsKind(lesson) && t(`kind.${lesson.kind}`),
       lesson.renter,
       lesson.visibility !== 'public' && t(`visibility.${lesson.visibility}`),
     ]

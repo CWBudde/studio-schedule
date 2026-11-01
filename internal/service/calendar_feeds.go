@@ -604,7 +604,13 @@ func (s *CalendarFeedService) event(
 		who = l.Renter
 	}
 
-	summary := e.CourseType.Name + " – " + who
+	// A room rental may have no course type: the kind names it then.
+	name := e.CourseType.Name
+	if name == "" {
+		name = labels.rental
+	}
+
+	summary := name + " – " + who
 	if e.role == TeachInstructor || e.role == TeachAccompanist {
 		summary += " (" + labels.role(e.role) + ")"
 	}

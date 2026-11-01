@@ -271,7 +271,102 @@ func TestRentalFeedEvent(t *testing.T) {
 		t.Errorf("summary %q", ev.Summary)
 	}
 
+	// Without a course type, the kind names it.
+	e.CourseType = domain.CourseType{}
+	if ev := (&CalendarFeedService{}).event(e, domain.FeedSchedule, "-schedule@example.org", feedLabelsFor("de"), time.UTC); ev.Summary != "Raumvermietung – Copperleaf Theater Group" {
+		t.Errorf("summary without a course type %q", ev.Summary)
+	}
+
 	if want := "Room rental\nRented by: Copperleaf Theater Group\nRoom: Studio Nowhere, Room One"; ev.Description != want {
 		t.Errorf("description %q, want %q", ev.Description, want)
 	}
+}
+
+// A room rental may go without a course type (ADR 0007, amendment
+// 2026-11-01): it is created, shown, named in a room-taken conflict and
+// skipped by a clone without one, and it cannot become another kind.
+func TestRentalWithoutCourseType(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newBookingFixture(t)
+	svc := f.lessonService(t, lessonNow)
+
+	rental, err := svc.CreateLesson(ctx, NewLesson{LessonData: f.rentalData()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := f.lesson(t, rental.Lesson.ID); !got.CourseTypeID.IsZero() || !rental.CourseType.ID.IsZero() {
+		t.Fatalf("created %+v as %+v, want no course type", got, rental.CourseType)
+	}
+
+	schedule, err := NewScheduleService(f.st, clock.NewFixed(mustInstant(t, bookingNow))).
+		Schedule(ctx, f.principal(t, f.olga), ScheduleQuery{From: mustDate(t, "2026-10-23"), To: mustDate(t, "2026-10-24")})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(schedule.Lessons) != 1 || schedule.Lessons[0].Lesson.ID != rental.Lesson.ID ||
+		!schedule.Lessons[0].CourseType.ID.IsZero() {
+		t.Errorf("office schedule %+v, want the rental without a course type", schedule.Lessons)
+	}
+
+	t.Run("every other kind needs one", func(t *testing.T) {
+		d := f.lessonData()
+		d.ConfirmRoomOverlap = true
+
+		_, err := svc.CreateLesson(ctx, NewLesson{LessonData: d})
+		wantFieldError(t, err, "courseTypeId")
+	})
+
+	t.Run("a lesson in the rented room", func(t *testing.T) {
+		d := f.lessonData()
+		d.Date, d.StartTime = domain.Date{Year: 2026, Month: time.October, Day: 23}, domain.TimeOfDay{Hour: 17}
+
+		_, err := svc.CreateLesson(ctx, NewLesson{LessonData: d, CourseTypeID: f.courseType})
+
+		var taken *RoomTakenError
+		if !errors.As(err, &taken) || taken.Lesson.ID != rental.Lesson.ID || !taken.CourseType.ID.IsZero() {
+			t.Fatalf("want RoomTakenError naming the rental without a course type, got %v", err)
+		}
+	})
+
+	t.Run("a clone into the rented room", func(t *testing.T) {
+		// A Thursday workshop at the rental's time, copied to the Friday.
+		f.oneOff(t, "2026-10-22T14:00:00Z", 5, domain.VisibilityPublic, domain.LessonWorkshop)
+
+		preview, err := svc.PreviewClone(ctx, CloneRequest{
+			Unit: CloneDay, Source: mustDate(t, "2026-10-22"), Target: mustDate(t, "2026-10-23"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(preview.Skipped) != 1 || preview.Skipped[0].TakenBy == nil ||
+			preview.Skipped[0].TakenBy.Lesson.ID != rental.Lesson.ID ||
+			!preview.Skipped[0].TakenBy.CourseType.ID.IsZero() {
+			t.Fatalf("preview %+v, want the workshop skipped for the rental", preview)
+		}
+	})
+
+	t.Run("stays a rental", func(t *testing.T) {
+		d := f.rentalData()
+		d.Kind, d.InstructorID, d.Capacity = domain.LessonWorkshop, f.instructor, 5
+		d.Visibility, d.Renter = domain.VisibilityPublic, ""
+
+		_, err := svc.UpdateLesson(ctx, rental.Lesson.ID, d)
+		wantFieldError(t, err, "kind")
+
+		d = f.rentalData()
+		d.Renter = "Juniper Players"
+
+		if _, err := svc.UpdateLesson(ctx, rental.Lesson.ID, d); err != nil {
+			t.Fatal(err)
+		}
+
+		if got := f.lesson(t, rental.Lesson.ID); got.Renter != "Juniper Players" || !got.CourseTypeID.IsZero() {
+			t.Errorf("updated %+v", got)
+		}
+	})
 }
