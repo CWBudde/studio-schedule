@@ -217,9 +217,17 @@ func TestAdminEvents(t *testing.T) {
 
 	receiptPath := "/api/v1/admin/receipts/" + receipt["id"].(string)
 	if got := decode(t, a.expect(http.StatusOK, http.MethodGet, receiptPath, "", a.office)); got["eventId"] != id ||
-		got["eventTitle"] != "Imaginary Intensive" || got["cancelable"] != true {
+		got["eventTitle"] != "Imaginary Intensive" || got["cancelable"] != false {
 		t.Errorf("receipt %v", got)
 	}
+
+	// While the registration is open, the office cancels it, not its receipt.
+	wantReason(t, a.expect(http.StatusConflict, http.MethodPost, receiptPath+"/cancel", `{}`, a.office),
+		"registration-open")
+
+	// A second session ahead, which the event's cancellation cancels.
+	ahead := decode(t, a.expect(http.StatusCreated, http.MethodPost, path+"/sessions",
+		a.session("2026-10-26", "07:00", ""), a.office))
 
 	// Taking an event back that has registrations.
 	wantReason(t, a.expect(http.StatusConflict, http.MethodPost, path+"/unpublish", "", a.office), "in-use")
@@ -257,14 +265,22 @@ func TestAdminEvents(t *testing.T) {
 	a.expect(http.StatusNotFound, http.MethodGet, path+"/image", "", a.office)
 	a.expect(http.StatusNotFound, http.MethodDelete, events+unknown+"/image", "", a.office)
 
-	// Once the session has started, the fee's receipt is canceled only with
-	// the registration.
+	// Once the session has started, a fee kept at the cancellation is
+	// refunded only with the registration's cancellation.
 	a.clock.advance(14 * time.Hour)
+
+	kept := decode(t, a.expect(http.StatusOK, http.MethodPost, registrations+regID+"/cancel", `{}`, a.office))
+	if kept["status"] != "canceled" || kept["payment"] != "paid" {
+		t.Errorf("canceled and kept %v", kept)
+	}
 
 	wantReason(t, a.expect(http.StatusConflict, http.MethodPost, receiptPath+"/cancel", `{}`, a.office),
 		"event-attended")
 
-	canceled := decode(t, a.expect(http.StatusOK, http.MethodPost, registrations+regID+"/cancel",
+	guestID, _ := guest["id"].(string)
+	a.expect(http.StatusOK, http.MethodPost, registrations+guestID+"/pay", `{}`, a.office)
+
+	canceled := decode(t, a.expect(http.StatusOK, http.MethodPost, registrations+guestID+"/cancel",
 		`{"refund":true}`, a.office))
 	if canceled["status"] != "canceled" || canceled["payment"] != "refunded" || canceled["cancellationReceiptId"] == nil {
 		t.Errorf("canceled %v", canceled)
@@ -283,6 +299,8 @@ func TestAdminEvents(t *testing.T) {
 	}
 
 	wantReason(t, a.expect(http.StatusConflict, http.MethodPost, path+"/cancel", `{}`, a.office), "closed")
+	wantReason(t, a.expect(http.StatusConflict, http.MethodPost, "/api/v1/lessons/"+ahead["id"].(string)+"/restore",
+		"", a.office), "closed")
 	a.expect(http.StatusNotFound, http.MethodPost, events+unknown+"/cancel", `{}`, a.office)
 
 	// Deleting: an event with registrations is canceled instead; a draft
@@ -315,12 +333,14 @@ func TestAdminEvents(t *testing.T) {
 
 	for _, item := range audit["items"].([]any) {
 		e, _ := item.(map[string]any)
-		if d, ok := e["details"].(map[string]any); ok && d["eventId"] != nil {
-			actions[e["action"].(string)] = d
+		// Newest first: the latest of each action.
+		action, _ := e["action"].(string)
+		if d, ok := e["details"].(map[string]any); ok && d["eventId"] != nil && actions[action] == nil {
+			actions[action] = d
 		}
 	}
 
-	if d := actions["event-registration-canceled"]; d["eventId"] != id || d["registrationId"] != regID || d["refund"] != true {
+	if d := actions["event-registration-canceled"]; d["eventId"] != id || d["registrationId"] != guestID || d["refund"] != true {
 		t.Errorf("audited cancellation %v", d)
 	}
 

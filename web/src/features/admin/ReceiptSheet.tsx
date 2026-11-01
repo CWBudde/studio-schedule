@@ -335,6 +335,7 @@ function CancelReceiptDialog({
               'already-canceled': t('cancel.alreadyCanceled'),
               cancellation: t('cancel.isCancellation'),
               'event-attended': t('cancel.eventAttended'),
+              'registration-open': t('cancel.registrationOpen'),
             }}
             messages={{ 404: t('detail.notFound') }}
           />

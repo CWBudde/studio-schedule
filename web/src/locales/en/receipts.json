@@ -127,6 +127,7 @@
     "reason": "Reason (optional, printed)",
     "passUsed": "The pass has paid for visits, so its receipt cannot be canceled. Void the pass on the person's page instead.",
     "eventAttended": "A session of the event has started, so this receipt is canceled only with the registration, with a refund.",
+    "registrationOpen": "The registration of this fee is still open. Cancel the registration with a refund instead.",
     "alreadyCanceled": "This receipt has been canceled already.",
     "isCancellation": "A cancellation cannot be canceled.",
     "keep": "Keep",

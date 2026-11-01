@@ -198,7 +198,8 @@ func registerEventAdmin(api huma.API, h *handlers) {
 		Description: "Records that the fee of an open, unpaid registration was paid at the desk and issues its " +
 			"receipt in the same transaction: one line naming the event and its dates, mailed to the payer " +
 			"(default: the registered person), or to a guest's email. A paid, free or refunded registration " +
-			"is a 409 `already-paid`, a canceled one a 409 `already-canceled`; an unknown payer, or one for a " +
+			"is a 409 `already-paid`, a canceled one a 409 `already-canceled`, one on the waiting list a 409 " +
+			"`not-registered`; an unknown payer, or one for a " +
 			"guest, a 422 on `body.payerId`; incomplete receipt settings a 409 `receipt-settings-incomplete`.",
 	}), h.markEventRegistrationPaid)
 
@@ -665,6 +666,8 @@ func (h *handlers) eventError(ctx context.Context, err error) error {
 		return conflict(reasonAlreadyCanceled, "the registration is canceled already")
 	case errors.Is(err, service.ErrAlreadyPaid):
 		return conflict(reasonAlreadyPaid, "the registration is paid already")
+	case errors.Is(err, service.ErrNotRegistered):
+		return conflict(reasonNotRegistered, "the registration is on the waiting list")
 	case errors.Is(err, service.ErrReceiptSettingsIncomplete):
 		return h.receiptError(ctx, err)
 	}

@@ -69,7 +69,10 @@ func registerReceipts(api huma.API, h *handlers) {
 		Summary:     "Cancel a receipt",
 		Description: "Issues the cancellation receipt (Storno) of a sale: the next number, every line negated, the " +
 			"same payer, recipient and payment method, mailed to the payer like the receipt. It voids the pass " +
-			"the receipt confirms. A pass that paid for visits is a 409 `pass-used` (void the pass instead); a " +
+			"the receipt confirms, or refunds the event registration whose fee it confirms. A pass that paid " +
+			"for visits is a 409 `pass-used` (void the pass instead); an event fee whose registration is open a " +
+			"409 `registration-open` (officeCancelEventRegistration with refund instead), one whose event has " +
+			"started a 409 `event-attended`; a " +
 			"receipt canceled before a 409 `already-canceled`, a cancellation a 409 `cancellation`, incomplete " +
 			"receipt settings a 409 `receipt-settings-incomplete`. An unknown receipt is a 404.",
 		Tags:          tags,
@@ -409,6 +412,8 @@ func (h *handlers) receiptError(ctx context.Context, err error) error {
 		return conflict(reasonAlreadyCanceled, "the receipt is canceled already")
 	case errors.Is(err, service.ErrCancelCancellation):
 		return conflict(reasonCancellation, "a cancellation cannot be canceled")
+	case errors.Is(err, service.ErrRegistrationOpen):
+		return conflict(reasonRegistrationOpen, "the registration is open; cancel it with a refund instead")
 	case errors.Is(err, service.ErrEventAttended):
 		return conflict(reasonEventAttended, "the event has started; cancel the registration with a refund instead")
 	default:

@@ -21,7 +21,8 @@ import type { components } from './schema';
  * without an enabled admin or concerns the admin's own account (ADR 0016);
  * or an event write is refused (ADR 0019): the lesson is an event's
  * session, the event has no session to publish, is not a draft or not
- * published, the registration is paid already, or the event has started.
+ * published, the registration is paid already or on the waiting list, its
+ * receipt is canceled while it is open, or the event has started.
  */
 export type ConflictReason = components['schemas']['Conflict']['reason'];
 
@@ -65,6 +66,8 @@ const conflictReasons: readonly ConflictReason[] = [
   'not-published',
   'already-paid',
   'event-attended',
+  'registration-open',
+  'not-registered',
 ];
 
 /** The lesson that uses the room, named by a 409 `room-taken`. */
