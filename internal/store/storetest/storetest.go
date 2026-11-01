@@ -61,6 +61,8 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 	t.Run("JobRuns", func(t *testing.T) { testJobRuns(t, newStore) })
 	t.Run("JobLocks", func(t *testing.T) { testJobLocks(t, newStore) })
 	t.Run("Integrity", func(t *testing.T) { testIntegrity(t, newStore) })
+	t.Run("Events", func(t *testing.T) { testEvents(t, newStore) })
+	t.Run("EventRegistrations", func(t *testing.T) { testEventRegistrations(t, newStore) })
 }
 
 // env is one test case's store plus an ID source for its fixtures.

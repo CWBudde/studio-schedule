@@ -239,6 +239,13 @@ func testPersons(t *testing.T, newStore func(*testing.T) store.Store) {
 			survivor := e.person("Sue", "Survivor")
 			e.merged(e.person("Sue", "Survivor"), survivor)
 			deleteFails(survivor.ID)
+
+			// An event registration, a canceled one too.
+			ev := e.event(s.courseType, "summer-intensive")
+			registered, canceled := e.person("Reg", "Registered"), e.person("Cora", "Canceled")
+			e.createRegistrations(e.newRegistration(ev, registered, t0), canceledReg(e.newRegistration(ev, canceled, t0)))
+			deleteFails(registered.ID)
+			deleteFails(canceled.ID)
 		},
 		"MemberNo": func(e *env) {
 			a := e.person("Ada", "Member")

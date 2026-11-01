@@ -352,6 +352,70 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			wantSlice(e.t, taught, []domain.Lesson{own})
 		},
+		"EventSession": func(e *env) {
+			s := e.setting()
+			ev := e.event(s.courseType, "summer-intensive")
+			other := e.event(s.courseType, "winter-intensive")
+
+			l := e.eventSession(s, ev, t0)
+			get := func() domain.Lesson {
+				e.t.Helper()
+
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) (domain.Lesson, error) {
+					return tx.Lessons().Get(ctx, l.ID)
+				})
+			}
+			wantEqual(e.t, get(), l)
+
+			// Moved to another event, then to none.
+			l.EventID = other.ID
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Update(ctx, l) })
+			wantEqual(e.t, get(), l)
+
+			l.EventID = domain.EventID{}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Update(ctx, l) })
+			wantEqual(e.t, get(), l)
+
+			// An unknown event is a conflict, and changes nothing.
+			moved := l
+			moved.EventID = newID[domain.EventID](e)
+			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Update(ctx, moved) })
+			wantErr(e.t, err, domain.ErrConflict)
+			wantEqual(e.t, get(), l)
+		},
+		"ListByEvent": func(e *env) {
+			s := e.setting()
+			ev := e.event(s.courseType, "summer-intensive")
+			other := e.event(s.courseType, "winter-intensive")
+			empty := e.event(s.courseType, "spring-intensive")
+
+			late := e.eventSession(s, ev, t0.Add(48*time.Hour))
+			tie1 := e.newEventSession(s, ev, t0)
+			tie2 := e.newEventSession(s, ev, t0)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				if err := tx.Lessons().Create(ctx, tie2); err != nil {
+					return err
+				}
+
+				return tx.Lessons().Create(ctx, tie1)
+			})
+			canceled := e.canceledEventSession(s, ev, t0.Add(24*time.Hour))
+			theirs := e.eventSession(s, other, t0.Add(time.Hour))
+			e.lesson(s, t0.Add(time.Hour), 5) // a lesson of no event
+
+			list := func(id domain.EventID) []domain.Lesson {
+				e.t.Helper()
+
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {
+					return tx.Lessons().ListByEvent(ctx, id)
+				})
+			}
+
+			wantSlice(e.t, list(ev.ID), []domain.Lesson{tie1, tie2, canceled, late})
+			wantSlice(e.t, list(other.ID), []domain.Lesson{theirs})
+			wantSlice(e.t, list(empty.ID), nil)
+			wantSlice(e.t, list(newID[domain.EventID](e)), nil)
+		},
 		"MissingReferenceIsConflict": func(e *env) {
 			s := e.setting()
 			for name, mutate := range map[string]func(*domain.Lesson){
@@ -363,6 +427,7 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 				"canceler": func(l *domain.Lesson) {
 					l.Status, l.CanceledAt, l.CanceledBy = domain.LessonCanceled, t0, newID[domain.AccountID](e)
 				},
+				"event": func(l *domain.Lesson) { l.Kind, l.EventID = domain.LessonWorkshop, newID[domain.EventID](e) },
 			} {
 				l := e.newLesson(s, t0, 5)
 				mutate(&l)

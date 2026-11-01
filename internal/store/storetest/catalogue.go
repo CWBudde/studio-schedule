@@ -238,5 +238,12 @@ func testCatalogue(t *testing.T, newStore func(*testing.T) store.Store) {
 				}
 			}
 		},
+		"DeleteCourseTypeOfEventIsConflict": func(e *env) {
+			ct := e.courseType("Intensive")
+			e.event(ct, "summer-intensive")
+
+			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.CourseTypes().Delete(ctx, ct.ID) })
+			wantErr(e.t, err, domain.ErrConflict)
+		},
 	})
 }

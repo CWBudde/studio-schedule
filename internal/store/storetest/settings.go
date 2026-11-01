@@ -328,6 +328,11 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 			e.pass(free, e.person("Ada", "Example"), 1, t0)
 			wantEqual(e.t, usage(), store.SettingsUsage{})
 
+			// So do a free event and a free registration for it.
+			freeEvent := e.event(e.courseType("Workshops"), "free-workshop")
+			e.createRegistrations(e.newRegistration(freeEvent, e.person("Fia", "Free"), t0))
+			wantEqual(e.t, usage(), store.SettingsUsage{})
+
 			e.passType("10 visits")
 			wantEqual(e.t, usage(), store.SettingsUsage{Prices: true})
 
@@ -336,6 +341,25 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			e.receipt(e.newReceipt(2026, 1, e.person("Ben", "Example")))
 			wantEqual(e.t, usage(), store.SettingsUsage{Lessons: true, Prices: true, Receipts: true})
+		},
+		"UsageEventPrice": func(e *env) {
+			ev := e.newEvent(e.courseType("Workshops"), "paid-workshop")
+			ev.Price, ev.VATRate = 4500, 1900
+			valid(e.t, ev)
+			e.createEvents(ev)
+			wantEqual(e.t, mustQuery(e, func(ctx context.Context, tx store.Tx) (store.SettingsUsage, error) {
+				return tx.Settings().Usage(ctx)
+			}), store.SettingsUsage{Prices: true})
+		},
+		"UsageEventRegistrationPrice": func(e *env) {
+			// The event is free now; the registration kept its old price.
+			ev := e.event(e.courseType("Workshops"), "once-paid-workshop")
+			r := e.newRegistration(ev, e.person("Una", "Unpaid"), t0)
+			r.Price, r.VATRate, r.Payment = 4500, 1900, domain.EventUnpaid
+			e.createRegistrations(r)
+			wantEqual(e.t, mustQuery(e, func(ctx context.Context, tx store.Tx) (store.SettingsUsage, error) {
+				return tx.Settings().Usage(ctx)
+			}), store.SettingsUsage{Prices: true})
 		},
 		"ReadOnlyRejectsWrites": func(e *env) {
 			err := e.read(func(ctx context.Context, tx store.Tx) error { return tx.Settings().Put(ctx, want) })

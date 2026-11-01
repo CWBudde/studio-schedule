@@ -387,6 +387,10 @@ func testDeleteAccount(e *env) {
 		TargetKind: domain.AuditTargetAccount, TargetID: acc.ID,
 	}
 	token := e.accountToken(acc, "link", t0.Add(time.Hour))
+	event := e.newEvent(s.courseType, "summer-intensive")
+	event.CreatedBy = acc.ID
+	registration := e.newRegistration(event, e.person("Rhea", "Registered"), t0)
+	registration.RegisteredBy = acc.ID
 
 	e.mustWrite(func(ctx context.Context, tx store.Tx) error {
 		for _, write := range []func() error{
@@ -404,6 +408,8 @@ func testDeleteAccount(e *env) {
 				})
 			},
 			func() error { return tx.Audit().Create(ctx, impersonated) },
+			func() error { return tx.Events().Create(ctx, event) },
+			func() error { return tx.EventRegistrations().Create(ctx, registration) },
 			func() error {
 				return tx.Credentials().Put(ctx, domain.Credential{AccountID: acc.ID, PasswordHash: "h", ChangedAt: t0})
 			},
@@ -476,6 +482,16 @@ func testDeleteAccount(e *env) {
 
 		if got, err := tx.Passes().Get(ctx, pass.ID); err != nil || !got.SoldBy.IsZero() {
 			e.t.Errorf("pass: %v, %v", got, err)
+		}
+
+		event.CreatedBy = domain.AccountID{}
+		if got, err := tx.Events().Get(ctx, event.ID); err != nil || got != event {
+			e.t.Errorf("event: %+v, %v", got, err)
+		}
+
+		registration.RegisteredBy = domain.AccountID{}
+		if got, err := tx.EventRegistrations().Get(ctx, registration.ID); err != nil || got != registration {
+			e.t.Errorf("event registration: %+v, %v", got, err)
 		}
 
 		runs, err := tx.Imports().List(ctx, 10)
