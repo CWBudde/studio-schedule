@@ -150,7 +150,8 @@ func NewScheduleService(st store.Store, clk clock.Clock) *ScheduleService {
 }
 
 // Schedule returns the lessons p may see that start in the school dates
-// [q.From, q.To) and match the filters of q; a zero p is a guest. An
+// [q.From, q.To) and match the filters of q; a zero p is a guest. The
+// sessions of a draft event are staff's only (ADR 0019). An
 // invalid query fails with an error wrapping domain.ErrValidation.
 func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQuery) (Schedule, error) {
 	if err := q.validate(); err != nil {
@@ -175,6 +176,10 @@ func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQ
 		lessons, err := tx.Lessons().ListRange(ctx, q.From.At(domain.TimeOfDay{}, loc), q.To.At(domain.TimeOfDay{}, loc))
 		if err != nil {
 			return fmt.Errorf("lessons: %w", err)
+		}
+
+		if lessons, err = withoutDraftSessions(ctx, tx, v, lessons); err != nil {
+			return err
 		}
 
 		refs, err := loadRangeRefs(ctx, tx, q.From, q.To)
@@ -211,7 +216,8 @@ func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQ
 }
 
 // Lesson returns one lesson p may see; a zero p is a guest. A lesson that
-// does not exist or is not visible fails alike with domain.ErrNotFound, so
+// does not exist or is not visible (a session of a draft event for anyone
+// but staff, too) fails alike with domain.ErrNotFound, so
 // the response does not reveal hidden or unreleased lessons. Office and
 // admin accounts also get the lesson's Admin details.
 func (s *ScheduleService) Lesson(ctx context.Context, p Principal, id domain.LessonID) (ScheduledLesson, error) {
@@ -230,7 +236,15 @@ func (s *ScheduleService) Lesson(ctx context.Context, p Principal, id domain.Les
 			return err
 		}
 
-		if !viewerOf(p, settings, loc, now).sees(l, ComputeReleaseWindow(settings, loc, now)) {
+		v := viewerOf(p, settings, loc, now)
+		if !v.sees(l, ComputeReleaseWindow(settings, loc, now)) {
+			return domain.ErrNotFound
+		}
+
+		// A session of a draft event is staff's only (ADR 0019).
+		if seen, err := withoutDraftSessions(ctx, tx, v, []domain.Lesson{l}); err != nil {
+			return err
+		} else if len(seen) == 0 {
 			return domain.ErrNotFound
 		}
 

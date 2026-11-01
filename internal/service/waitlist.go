@@ -176,7 +176,7 @@ func NewWaitlistService(st store.Store, clk clock.Clock, src ids.Source, mails M
 // Join puts person, who must be p's own person or one of p's dependents
 // (domain.ErrNotFound otherwise), on the waiting list of lesson, at its
 // end. The lesson must be one p may book under member rules (see Book):
-// domain.ErrNotFound or a *BookingClosedError otherwise. A person booked
+// domain.ErrNotFound, ErrEventSession or a *BookingClosedError otherwise. A person booked
 // for the lesson is ErrAlreadyBooked, one on its list already
 // ErrAlreadyWaiting, and a lesson with a free place (the capacity minus
 // the active bookings and the places held by invites) ErrNotFull. With
@@ -210,6 +210,10 @@ func (s *WaitlistService) Join(
 		}
 
 		now := s.clock.Now()
+		if err := notSession(ctx, tx, p, settings, loc, now, l); err != nil {
+			return err
+		}
+
 		if err := bookable(p, settings, loc, now, l); err != nil {
 			return err
 		}
