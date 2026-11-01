@@ -173,31 +173,27 @@ func New(deps Deps) (http.Handler, huma.API) {
 	cfg.Transformers = append(cfg.Transformers, maskServerErrors(deps.Logger))
 	api := humachi.New(router, cfg)
 
-	renderer := newRenderer()
-	mails := mailsOf(deps, renderer)
-	receipts := service.NewReceiptService(deps.Store, deps.Clock, deps.IDs, mails, deps.PDF)
+	svc := newServices(deps, newRenderer())
 
 	httpapi.Register(api, httpapi.Deps{
-		Settings:     service.NewSettingsService(deps.Store, deps.Clock, deps.IDs),
-		Catalog:      service.NewCatalogService(deps.Store, deps.IDs),
-		Timetable:    service.NewTimetableService(deps.Store, deps.Clock, deps.IDs, mails),
-		Schedule:     service.NewScheduleService(deps.Store, deps.Clock),
-		Lessons:      service.NewLessonService(deps.Store, deps.Clock, deps.IDs, mails),
-		Bookings:     service.NewBookingService(deps.Store, deps.Clock, deps.IDs, mails),
-		Waitlist:     service.NewWaitlistService(deps.Store, deps.Clock, deps.IDs, mails),
-		Participants: service.NewParticipantService(deps.Store, deps.Clock, deps.IDs, mails),
-		Teach:        service.NewTeachService(deps.Store, deps.Clock, deps.IDs, renderer),
-		MyLessons:    service.NewMyLessonsService(deps.Store, deps.Clock),
-		// A demo installation's feeds have no URL: calendars cannot reach the
-		// web demo, and the demo server is for trying the app out.
-		Feeds:          service.NewCalendarFeedService(deps.Store, deps.Clock, deps.IDs, deps.AppURL, !deps.Demo),
-		Passes:         service.NewPassService(deps.Store, deps.Clock, deps.IDs, receipts),
-		Receipts:       receipts,
-		Auth:           newAuthService(deps, renderer),
-		Family:         service.NewFamilyService(deps.Store, deps.Clock, deps.IDs, mails),
-		Persons:        service.NewPersonService(deps.Store, deps.Clock, deps.IDs, mails),
-		Outbox:         service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer, receipts),
-		Statistics:     service.NewStatisticsService(deps.Store, deps.Clock),
+		Settings:       svc.Settings,
+		Catalog:        svc.Catalog,
+		Timetable:      svc.Timetable,
+		Schedule:       svc.Schedule,
+		Lessons:        svc.Lessons,
+		Bookings:       svc.Bookings,
+		Waitlist:       svc.Waitlist,
+		Participants:   svc.Participants,
+		Teach:          svc.Teach,
+		MyLessons:      svc.MyLessons,
+		Feeds:          svc.Feeds,
+		Passes:         svc.Passes,
+		Receipts:       svc.Receipts,
+		Auth:           svc.Auth,
+		Family:         svc.Family,
+		Persons:        svc.Persons,
+		Outbox:         svc.Outbox,
+		Statistics:     svc.Statistics,
 		Version:        deps.Version,
 		Logger:         deps.Logger,
 		SecureCookies:  !deps.InsecureCookies,
@@ -206,11 +202,10 @@ func New(deps Deps) (http.Handler, huma.API) {
 		DemoLogins:     demoLogins(deps.DemoLogins),
 		TrustedProxies: deps.TrustedProxies,
 		RateLimits:     httpapi.DefaultRateLimits(deps.Clock),
-		Announcements: service.NewAnnouncementService(deps.Store, deps.Clock, deps.IDs, renderer,
-			func() { deps.Wake.Wake(announcementsJob) }),
-		MailLog: service.NewMailLogService(deps.Store, deps.Clock, deps.IDs),
-		Imports: service.NewImportService(deps.Store, deps.Clock, deps.IDs),
-		Push:    service.NewPushService(deps.Store, deps.Clock, deps.IDs, deps.Pusher),
+		Announcements:  svc.Announcements,
+		MailLog:        svc.MailLog,
+		Imports:        svc.Imports,
+		Push:           svc.Push,
 	})
 
 	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
@@ -237,6 +232,78 @@ func New(deps Deps) (http.Handler, huma.API) {
 	h = securityHeaders(h, hstsHeader(deps.HSTS, deps.HSTSIncludeSubdomains))
 
 	return h, api
+}
+
+// Services are the application's services. New builds them for the HTTP
+// API and the command line gets them from NewServices, so a command and the
+// HTTP operation it mirrors share their rules, validation and audit (ADR
+// 0020).
+type Services struct {
+	Settings     *service.SettingsService
+	Catalog      *service.CatalogService
+	Timetable    *service.TimetableService
+	Schedule     *service.ScheduleService
+	Lessons      *service.LessonService
+	Bookings     *service.BookingService
+	Waitlist     *service.WaitlistService
+	Participants *service.ParticipantService
+	Teach        *service.TeachService
+	MyLessons    *service.MyLessonsService
+	Feeds        *service.CalendarFeedService
+	Passes       *service.PassService
+	Receipts     *service.ReceiptService
+	Auth         *service.AuthService
+	Family       *service.FamilyService
+	Persons      *service.PersonService
+	Outbox       *service.OutboxService
+	Statistics   *service.StatisticsService
+	// Announcements wake the announcements job through Deps.Wake when one
+	// is due now; without a Waker they wait for the job's next tick.
+	Announcements *service.AnnouncementService
+	MailLog       *service.MailLogService
+	Imports       *service.ImportService
+	Push          *service.PushService
+}
+
+// NewServices builds the services of deps exactly as New does. It panics
+// without a store.
+func NewServices(deps Deps) Services {
+	return newServices(deps.withDefaults(), newRenderer())
+}
+
+// newServices builds the services of deps, which has its defaults, with
+// the mail templates of renderer.
+func newServices(deps Deps, renderer *mail.Renderer) Services {
+	mails := mailsOf(deps, renderer)
+	receipts := service.NewReceiptService(deps.Store, deps.Clock, deps.IDs, mails, deps.PDF)
+
+	return Services{
+		Settings:     service.NewSettingsService(deps.Store, deps.Clock, deps.IDs),
+		Catalog:      service.NewCatalogService(deps.Store, deps.IDs),
+		Timetable:    service.NewTimetableService(deps.Store, deps.Clock, deps.IDs, mails),
+		Schedule:     service.NewScheduleService(deps.Store, deps.Clock),
+		Lessons:      service.NewLessonService(deps.Store, deps.Clock, deps.IDs, mails),
+		Bookings:     service.NewBookingService(deps.Store, deps.Clock, deps.IDs, mails),
+		Waitlist:     service.NewWaitlistService(deps.Store, deps.Clock, deps.IDs, mails),
+		Participants: service.NewParticipantService(deps.Store, deps.Clock, deps.IDs, mails),
+		Teach:        service.NewTeachService(deps.Store, deps.Clock, deps.IDs, renderer),
+		MyLessons:    service.NewMyLessonsService(deps.Store, deps.Clock),
+		// A demo installation's feeds have no URL: calendars cannot reach the
+		// web demo, and the demo server is for trying the app out.
+		Feeds:      service.NewCalendarFeedService(deps.Store, deps.Clock, deps.IDs, deps.AppURL, !deps.Demo),
+		Passes:     service.NewPassService(deps.Store, deps.Clock, deps.IDs, receipts),
+		Receipts:   receipts,
+		Auth:       newAuthService(deps, renderer),
+		Family:     service.NewFamilyService(deps.Store, deps.Clock, deps.IDs, mails),
+		Persons:    service.NewPersonService(deps.Store, deps.Clock, deps.IDs, mails),
+		Outbox:     service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer, receipts),
+		Statistics: service.NewStatisticsService(deps.Store, deps.Clock),
+		Announcements: service.NewAnnouncementService(deps.Store, deps.Clock, deps.IDs, renderer,
+			func() { deps.Wake.Wake(announcementsJob) }),
+		MailLog: service.NewMailLogService(deps.Store, deps.Clock, deps.IDs),
+		Imports: service.NewImportService(deps.Store, deps.Clock, deps.IDs),
+		Push:    service.NewPushService(deps.Store, deps.Clock, deps.IDs, deps.Pusher),
+	}
 }
 
 // contentSecurityPolicy allows only the app's own scripts, styles, images and
