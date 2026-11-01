@@ -61,7 +61,8 @@ account.
 ### Output and exit codes
 
 - **Text by default:** aligned tables, one record per line, with a header line only on a
-  terminal (see the amendment on `text/tabwriter`). Dates and times are in the school's time zone, never the machine's.
+  terminal (see the amendment on `text/tabwriter`). Dates and times are in the school's time
+  zone, never the machine's.
 - **`--output json`:** one JSON document on stdout. Where a command mirrors an API operation, the
   document is the operation's response body, with the field names and types of the OpenAPI schema
   (the generated `api/openapi.json` is the contract). A command without an operation documents its
@@ -95,19 +96,11 @@ The Runner records every run in `job_runs`: the job, the start and end, the resu
 The daily `purge-personal-data` job (`service/retention.go`) prunes runs older than 30 days.
 
 Each run takes a per-job lock beside the transactions, so the job's own transactions run while
-it is held: on PostgreSQL a session-level advisory lock on a connection of its own, released when
-the run ends or the connection drops, and on the memory store a mutex per job name. A run whose lock another process holds (a second
-`serve`, or `jobs run`) is skipped and recorded as `skipped`. `jobs list` shows each job's interval
-and its last run with its result. `jobs run <name>` runs one job now, under the same lock, and
-waits for it.
-
-Amendment (2026-11-01, while building it): on PostgreSQL one dedicated connection holds all of a
-process's job locks, not one connection per lock. With the pool's default size, jobs whose tickers
-coincide would each hold a lock connection while waiting for one for their transaction, and block
-the jobs and every request. Advisory locks are re-entrant within a session, so the store refuses a
-job name it already holds before asking the server. The demo's saved snapshot leaves `job_runs`
-out: its jobs run every minute, so saving them would save the demo every minute and let its saved
-data grow by thousands of rows a day.
+it is held: on PostgreSQL a session-level advisory lock on a connection of its own (see the
+amendment), released when the run ends or the connection drops, and on the memory store a mutex
+per job name. A run whose lock another process holds (a second `serve`, or `jobs run`) is skipped
+and recorded as `skipped`. `jobs list` shows each job's interval and its last run with its result.
+`jobs run <name>` runs one job now, under the same lock, and waits for it.
 
 ### The command layer
 
@@ -137,7 +130,7 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
   instances no longer runs the same job twice at once.
 - A remote mode with tokens and an HTTP client stays possible, and stays unbuilt.
 
-## Amendment (2026-11-01, the command layer)
+## Amendment (2026-11-01, while building it)
 
 - **Tables are aligned by the layer, not `text/tabwriter`.** `tabwriter` counts the bytes of a
   color's escape sequence as width, so on a color terminal a bold header or a colored cell
@@ -147,3 +140,11 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
   `healthcheck`, `openapi`, `version`, `vapid-keys` and `completion` refuse `--as`, `--yes` and
   `--output json` with exit code 2 rather than ignoring them. `--database-url` is a global flag
   that every command reads.
+- **One connection holds a process's job locks.** On PostgreSQL one dedicated connection holds
+  all of a process's job locks, not one connection per lock. With the pool's default size, jobs
+  whose tickers coincide would each hold a lock connection while waiting for one for their
+  transaction, and block the jobs and every request. Advisory locks are re-entrant within a
+  session, so the store refuses a job name it already holds before asking the server.
+- **The demo does not save job runs.** Its saved snapshot leaves `job_runs` out: its jobs run
+  every minute, so saving them would save the demo every minute and let its saved data grow by
+  thousands of rows a day.
