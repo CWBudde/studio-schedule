@@ -27,7 +27,7 @@ Prefer the environment for secrets: flags are visible in the process list.
 
 | Variable                  | Flag             | Default                       | Meaning                                                                                                                                                                                                                                                                                                                             |
 | ------------------------- | ---------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`            | `--database-url` | empty                         | PostgreSQL connection (below); the flag is the global `--database-url` ([Global flags](#global-flags)). Empty: `serve` refuses to start unless `DEMO_MODE=true`. `migrate`, `seed`, `init`, `import` and the commands that act as an account need it.                                                                               |
+| `DATABASE_URL`            | `--database-url` | empty                         | PostgreSQL connection (below); the flag is the global `--database-url` ([Global flags](#global-flags)). Empty: `serve` refuses to start unless `DEMO_MODE=true`. `migrate`, `seed`, `init`, `import`, `doctor` and the commands that act as an account need it.                                                                     |
 | `DEMO_MODE`               | –                | `false`                       | `true` or `false`. Explicit opt-in to run `serve` without a database, on an in-memory store with the fictional demo data and its published demo logins; changes are lost on exit. Never set it in production: a missing `DATABASE_URL` must fail loudly instead of silently becoming the public demo.                               |
 | `HTTP_ADDR`               | `--addr`         | `:8080`                       | Listen address `host:port` of the app (API, web UI, `/healthz`, `/readyz`). `healthcheck` requests this port on the local host.                                                                                                                                                                                                     |
 | `BASE_URL`                | `--base-url`     | `http://localhost:<port>`     | The public origin `scheme://host[:port]`, without path. Links in mails, calendar feed URLs and the link `init` prints point to it. With `https://` the session cookie is `Secure` and every answer carries `Strict-Transport-Security`; with `http://` or unset, `serve` warns at startup.                                          |
@@ -64,8 +64,8 @@ private network such as the one of Docker Compose.
 
 ### Global flags
 
-These go before or after the command, as `studio-schedule --output json import members.csv` or
-`studio-schedule import -o json members.csv`; [cli.md](cli.md#global-flags) has their details.
+These go before or after the command, as `studio-schedule --output json doctor` or
+`studio-schedule doctor -o json`; [cli.md](cli.md#global-flags) has their details.
 
 | Flag             | Variable       | Meaning                                                                                                  |
 | ---------------- | -------------- | -------------------------------------------------------------------------------------------------------- |
@@ -97,6 +97,16 @@ These go before or after the command, as `studio-schedule --output json import m
 | `import`                              | `--notes`             | a further column whose values go into the notes (repeatable)                                                                                                                                                            |
 | `import`                              | `--apply`             | import; without it, a dry run that writes nothing                                                                                                                                                                       |
 | `healthcheck`                         | `--addr`              | as `HTTP_ADDR`: the port to request `/healthz` at                                                                                                                                                                       |
+| `config check`                        | `--addr`              | as for `serve`: the value to check instead of `HTTP_ADDR`                                                                                                                                                               |
+| `config check`                        | `--base-url`          | as for `serve`, instead of `BASE_URL`                                                                                                                                                                                   |
+| `config check`                        | `--metrics-addr`      | as for `serve`, instead of `METRICS_ADDR`                                                                                                                                                                               |
+| `config check`                        | `--log-format`        | as for `serve`, instead of `LOG_FORMAT`                                                                                                                                                                                 |
+| `config check`                        | `--log-level`         | as for `serve`, instead of `LOG_LEVEL`                                                                                                                                                                                  |
+| `doctor`                              | `--addr`              | as for `serve`: the configuration to check, instead of `HTTP_ADDR`                                                                                                                                                      |
+| `doctor`                              | `--base-url`          | as for `serve`, instead of `BASE_URL`                                                                                                                                                                                   |
+| `doctor`                              | `--metrics-addr`      | as for `serve`, instead of `METRICS_ADDR`                                                                                                                                                                               |
+| `doctor`                              | `--log-format`        | as for `serve`, instead of `LOG_FORMAT`                                                                                                                                                                                 |
+| `doctor`                              | `--log-level`         | as for `serve`, instead of `LOG_LEVEL`                                                                                                                                                                                  |
 | `completion bash/zsh/fish/powershell` | `--no-descriptions`   | leave the commands' descriptions out of the completions                                                                                                                                                                 |
 
 `migrate up` applies every pending migration, `migrate down` rolls back the latest one and
@@ -108,7 +118,9 @@ lines and a `VAPID_SUBJECT` into the environment and restart; keep the keys like
 server then sends notifications to the browser vendors' push services over HTTPS (outbound port
 443 to public addresses).
 `init` asks for every value no flag gives; without a terminal, give them all as flags.
-Every command explains itself with `--help`, and [cli.md](cli.md) is the reference of
+`config check` prints the effective configuration with the secrets redacted, and `doctor` checks a
+deployment (configuration, database, schema, settings, mail server, push keys, `BASE_URL`,
+receipts). Every command explains itself with `--help`, and [cli.md](cli.md) is the reference of
 all of them. A test (`cmd/studio-schedule/docs_test.go`) fails when a variable or flag of the code,
 global or a command's, is missing from these tables, or a table names one the code doesn't have.
 
@@ -124,7 +136,7 @@ Compose, run a command as `docker compose run --rm app <command>`.
   account whose role reaches the command's access level. No password is asked, since whoever can
   run the binary with the database's credentials can change the database anyway. The audit log
   records the change as made via the command line, with the OS user. Operator commands (`serve`,
-  `migrate`, `seed`, `init`, …) act as no account and refuse `--as`.
+  `migrate`, `seed`, `init`, `config check`, `doctor`, …) act as no account and refuse `--as`.
 - **Exit codes:** `0` ok; `1` failed, including a check with findings and an import with failed
   rows; `2` usage (an unknown flag, a missing argument, invalid input before anything ran, a refused
   confirmation); `3` not found, also an unknown `--as`; `4` conflict, also a role too low for the

@@ -51,6 +51,8 @@ A command that deletes, anonymizes, mails, cancels or merges asks for confirmati
 ## Commands
 
 - [`studio-schedule completion`](#studio-schedule-completion): Generate the autocompletion script for the specified shell
+- [`studio-schedule config`](#studio-schedule-config): Inspect the configuration
+- [`studio-schedule doctor`](#studio-schedule-doctor): Check the configuration, the database, the mail server and the receipt module
 - [`studio-schedule healthcheck`](#studio-schedule-healthcheck): Check that the local server answers (for container health checks)
 - [`studio-schedule import`](#studio-schedule-import): Import members from a CSV file (a dry run unless `--apply`)
 - [`studio-schedule init`](#studio-schedule-init): Set up a new school: its settings and the first admin
@@ -223,6 +225,76 @@ Flags:
 Access: an operator command. It acts as no account and refuses `--as`.
 
 Output: text only; `--output json` is refused.
+
+### `studio-schedule config`
+
+Inspect the configuration.
+
+```text
+studio-schedule config <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule config check`](#studio-schedule-config-check): Validate the configuration and print it with the secrets redacted
+
+#### `studio-schedule config check`
+
+Validate the configuration and print it with the secrets redacted.
+
+```text
+studio-schedule config check [flags]
+```
+
+Load the configuration as serve does, from the environment and serve's flags, without starting anything: no database, no mail server. An invalid value exits with status 2 and names the variable or flag. Otherwise it prints every effective setting by its environment variable, with the secrets redacted (the database password, `SMTP_PASSWORD`, `VAPID_PRIVATE_KEY`). `DEMO_MODE` is the effective mode: true only without a database. With `--output json` it prints one object: databaseUrl, httpAddr, baseUrl (strings), demoMode (bool), smtp {host, port (number, 0: the default of the TLS mode), tls (empty: starttls), username, password, from}, trustedProxies (array of strings), hstsIncludeSubdomains (bool), metricsAddr, log {format, level}, push {publicKey, privateKey, subject}, as; an empty string is an unset setting, and the secrets (the database password, smtp.password, push.privateKey) are xxxxx when set.
+
+Examples:
+
+```sh
+studio-schedule config check
+studio-schedule config check --base-url https://schedule.example.org --output json
+```
+
+Flags:
+
+- `--addr` (string, default `:8080`): listen address host:port (env `HTTP_ADDR`)
+- `--base-url` (string): public origin of the app, e.g. https://schedule.example.org (env `BASE_URL`)
+- `--log-format` (string, default `text`): log format: text or json (env `LOG_FORMAT`)
+- `--log-level` (string, default `info`): log level: debug, info, warn or error (env `LOG_LEVEL`)
+- `--metrics-addr` (string): listen address host:port of the Prometheus metrics (/metrics); empty: no metrics (env `METRICS_ADDR`)
+
+Access: an operator command. It acts as no account and refuses `--as`.
+
+Output with `--output json`: one object: databaseUrl, httpAddr, baseUrl (strings), demoMode (bool), smtp {host, port (number, 0: the default of the TLS mode), tls (empty: starttls), username, password, from}, trustedProxies (array of strings), hstsIncludeSubdomains (bool), metricsAddr, log {format, level}, push {publicKey, privateKey, subject}, as; an empty string is an unset setting, and the secrets (the database password, smtp.password, push.privateKey) are xxxxx when set.
+
+### `studio-schedule doctor`
+
+Check the configuration, the database, the mail server and the receipt module.
+
+```text
+studio-schedule doctor [flags]
+```
+
+Run every check of a deployment and print one line per check with its result (ok, fail, warn or skip) and a detail: config (the configuration as serve loads it, from the environment and serve's flags), database (it connects), schema (exactly the binary's migrations are applied), settings (the school settings exist, with a time zone and currency the app accepts), smtp (a connection and login to `SMTP_HOST`, nothing is sent; skipped without it), vapid (the web push key pair; skipped without it), base-url (https; plain http on localhost or no `BASE_URL` is a warning, for local development only, elsewhere a failure) and receipts (a fictional sample receipt renders as a PDF; skipped in a build without the receipt renderer). A check that needs a failed one is skipped. It exits with status 1 when a check fails; warnings and skipped checks do not fail. With `--output json` it prints one object: ok (bool, false when a check failed) and checks, an array of {name, result, detail} in the order config, database, schema, settings, smtp, vapid, base-url, receipts, where result is ok, fail, warn or skip.
+
+Examples:
+
+```sh
+studio-schedule doctor
+studio-schedule doctor --output json
+```
+
+Flags:
+
+- `--addr` (string, default `:8080`): listen address host:port (env `HTTP_ADDR`)
+- `--base-url` (string): public origin of the app, e.g. https://schedule.example.org (env `BASE_URL`)
+- `--log-format` (string, default `text`): log format: text or json (env `LOG_FORMAT`)
+- `--log-level` (string, default `info`): log level: debug, info, warn or error (env `LOG_LEVEL`)
+- `--metrics-addr` (string): listen address host:port of the Prometheus metrics (/metrics); empty: no metrics (env `METRICS_ADDR`)
+
+Access: an operator command. It acts as no account and refuses `--as`.
+
+Output with `--output json`: one object: ok (bool, false when a check failed) and checks, an array of {name, result, detail} in the order config, database, schema, settings, smtp, vapid, base-url, receipts, where result is ok, fail, warn or skip.
 
 ### `studio-schedule healthcheck`
 

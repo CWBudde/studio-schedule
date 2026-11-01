@@ -24,6 +24,7 @@ just web-install # once: pnpm install for web/
 just serve       # API server on :8080 (PostgreSQL if DATABASE_URL is set; the recipe else sets DEMO_MODE=true for memory + demo data — the binary alone refuses to start without a database)
 just migrate up  # apply migrations to DATABASE_URL (also: down, status); just seed loads demo data
 go run ./cmd/studio-schedule init  # new school: settings + first admin (prints a setup link)
+go run ./cmd/studio-schedule doctor  # check a deployment (config check: the effective configuration)
 just test-pg     # PostgreSQL store tests only (Docker via testcontainers, or STUDIO_TEST_DATABASE_URL)
 just typst-wasm  # after changing tools/receipt-pdf: rebuild receipt.wasm reproducibly (Docker; Git LFS)
 just sqlc        # after changing internal/store/postgres/{migrations,queries}: regenerate sqlc code

@@ -36,6 +36,7 @@ func newRoot(sys cli.System) *cobra.Command {
 	root.AddCommand(newImportCmd(app))
 	root.AddCommand(newHealthcheckCmd(env))
 	root.AddCommand(newVAPIDKeysCmd())
+	root.AddCommand(newConfigCmd(app), newDoctorCmd(app))
 
 	return app.Wire(root)
 }

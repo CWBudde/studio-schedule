@@ -1,0 +1,19 @@
+DATABASE_URL             postgres://studio:xxxxx@db.example.test:5432/studio
+HTTP_ADDR                127.0.0.1:8082
+BASE_URL                 https://schedule.example.org
+DEMO_MODE                false
+SMTP_HOST                mail.example.test
+SMTP_PORT                2525
+SMTP_TLS                 starttls
+SMTP_USERNAME            mailer
+SMTP_PASSWORD            xxxxx
+SMTP_FROM                Example Dance School <noreply@example.org>
+TRUSTED_PROXIES          10.0.0.0/8,192.0.2.1/32
+HSTS_INCLUDE_SUBDOMAINS  false
+METRICS_ADDR             127.0.0.1:9090
+LOG_FORMAT               json
+LOG_LEVEL                debug
+VAPID_PUBLIC_KEY         <public key>
+VAPID_PRIVATE_KEY        xxxxx
+VAPID_SUBJECT            mailto:office@example.org
+STUDIO_AS                office@example.org

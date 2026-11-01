@@ -1,0 +1,30 @@
+{
+  "databaseUrl": "postgres://studio:xxxxx@db.example.test:5432/studio",
+  "httpAddr": "127.0.0.1:8082",
+  "baseUrl": "https://schedule.example.org",
+  "demoMode": false,
+  "smtp": {
+    "host": "mail.example.test",
+    "port": 2525,
+    "tls": "starttls",
+    "username": "mailer",
+    "password": "xxxxx",
+    "from": "Example Dance School <noreply@example.org>"
+  },
+  "trustedProxies": [
+    "10.0.0.0/8",
+    "192.0.2.1/32"
+  ],
+  "hstsIncludeSubdomains": false,
+  "metricsAddr": "127.0.0.1:9090",
+  "log": {
+    "format": "json",
+    "level": "debug"
+  },
+  "push": {
+    "publicKey": "<public key>",
+    "privateKey": "xxxxx",
+    "subject": "mailto:office@example.org"
+  },
+  "as": "office@example.org"
+}

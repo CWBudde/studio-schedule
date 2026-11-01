@@ -1,0 +1,45 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "name": "config",
+      "result": "ok",
+      "detail": "valid"
+    },
+    {
+      "name": "database",
+      "result": "ok",
+      "detail": "connected"
+    },
+    {
+      "name": "schema",
+      "result": "ok",
+      "detail": "up to date"
+    },
+    {
+      "name": "settings",
+      "result": "ok",
+      "detail": "Europe/Berlin, EUR"
+    },
+    {
+      "name": "smtp",
+      "result": "skip",
+      "detail": "SMTP_HOST is not set: mails stay in the outbox"
+    },
+    {
+      "name": "vapid",
+      "result": "skip",
+      "detail": "the VAPID_* variables are not set: web push is off"
+    },
+    {
+      "name": "base-url",
+      "result": "ok",
+      "detail": "https://schedule.example.org"
+    },
+    {
+      "name": "receipts",
+      "result": "ok",
+      "detail": "a sample receipt renders as PDF"
+    }
+  ]
+}

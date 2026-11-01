@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
@@ -343,4 +344,30 @@ func lines(s string) []string {
 	}
 
 	return out
+}
+
+// SampleReceiptInput is the renderer's input for a fictional receipt, sold
+// in cash with the VAT shown, for a check that the receipt module renders
+// (`studio-schedule doctor`) without touching a real one.
+func SampleReceiptInput() []byte {
+	r := domain.Receipt{
+		Number: "SAMPLE-2026-0001", Kind: domain.ReceiptSale, IssueDate: domain.Date{Year: 2026, Month: time.September, Day: 22},
+		Locale: "en", Currency: "EUR", TaxMode: domain.TaxStandard, PaymentMethod: domain.PaymentCash,
+		Issuer: domain.ReceiptIssuer{
+			Name: "Example Dance School", Address: "1 Example Street\n12345 Example Town", TaxID: "00/000/00000",
+			Email: "office@example.org",
+		},
+		RecipientName: "Erika Example", Net: 8403, VAT: 1597, Gross: 10000,
+		Lines: []domain.ReceiptLine{{
+			Position: 1, Description: "10-class pass", Quantity: 1, UnitPrice: 10000, VATRate: 1900,
+			Net: 8403, VAT: 1597, Gross: 10000,
+		}},
+	}
+
+	// The document is strings and numbers, which always marshal, and far
+	// below the size limit of the input format.
+	data, _ := json.Marshal(receiptDocument(r, nil, domain.Logo{}))
+	input, _ := pdf.Input(data, nil)
+
+	return input
 }

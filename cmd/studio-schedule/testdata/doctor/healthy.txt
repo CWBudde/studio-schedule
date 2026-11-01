@@ -1,0 +1,8 @@
+config    ok    valid
+database  ok    connected
+schema    ok    up to date
+settings  ok    Europe/Berlin, EUR
+smtp      skip  SMTP_HOST is not set: mails stay in the outbox
+vapid     skip  the VAPID_* variables are not set: web push is off
+base-url  ok    https://schedule.example.org
+receipts  ok    a sample receipt renders as PDF
