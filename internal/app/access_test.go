@@ -41,6 +41,7 @@ var accessLevels = map[string]string{
 	"createRoom":                  "office",
 	"updateRoom":                  "office",
 	"deleteRoom":                  "office",
+	"setRoomOrder":                "office",
 	"createCourseType":            "office",
 	"updateCourseType":            "office",
 	"deleteCourseType":            "office",

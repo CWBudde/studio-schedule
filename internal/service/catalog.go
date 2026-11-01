@@ -41,7 +41,8 @@ func (s *CatalogService) Locations(ctx context.Context) ([]domain.Location, erro
 }
 
 // Rooms returns the rooms of a location, or all rooms if location is zero,
-// ordered by name. An unknown location is domain.ErrNotFound.
+// ordered by location name, then by position and name. An unknown location
+// is domain.ErrNotFound.
 func (s *CatalogService) Rooms(ctx context.Context, location domain.LocationID) ([]domain.Room, error) {
 	var rooms []domain.Room
 

@@ -146,8 +146,9 @@ func courseTypeRef(ct domain.CourseType) *CourseTypeRef {
 
 // RoomRef names a room.
 type RoomRef struct {
-	ID   domain.RoomID `json:"id"`
-	Name string        `json:"name"`
+	ID       domain.RoomID `json:"id"`
+	Name     string        `json:"name"`
+	Position int           `doc:"Place among the rooms of its location, from 1." json:"position" minimum:"1"`
 }
 
 // LocationRef names a location.
@@ -286,7 +287,7 @@ func lessonSummary(sl service.ScheduledLesson) LessonSummary {
 		Level:      string(sl.Level),
 		Capacity:   l.Capacity,
 		CourseType: courseTypeRef(sl.CourseType),
-		Room:       RoomRef{ID: sl.Room.ID, Name: sl.Room.Name},
+		Room:       RoomRef{ID: sl.Room.ID, Name: sl.Room.Name, Position: sl.Room.Position},
 		Location:   LocationRef{ID: sl.Location.ID, Name: sl.Location.Name},
 		Renter:     l.Renter,
 	}

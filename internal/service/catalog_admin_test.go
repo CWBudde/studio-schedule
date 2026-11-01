@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -156,6 +157,204 @@ func TestRoomAdmin(t *testing.T) {
 	}
 
 	wantIs(t, svc.DeleteRoom(ctx, room.ID), domain.ErrNotFound)
+}
+
+// roomNames returns the names and positions of the location's rooms in the
+// catalog's order.
+func roomNames(t *testing.T, svc *service.CatalogService, location domain.LocationID) []string {
+	t.Helper()
+
+	rooms, err := svc.Rooms(t.Context(), location)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	names := make([]string, len(rooms))
+	for i, r := range rooms {
+		names[i] = fmt.Sprintf("%d %s", r.Position, r.Name)
+	}
+
+	return names
+}
+
+func wantRooms(t *testing.T, svc *service.CatalogService, location domain.LocationID, want ...string) {
+	t.Helper()
+
+	if got := roomNames(t, svc, location); !slices.Equal(got, want) {
+		t.Fatalf("rooms %q, want %q", got, want)
+	}
+}
+
+// TestRoomPositions: a new room goes after the location's last one, an edit
+// keeps the place unless the room moves to another location, at whose end
+// it goes.
+func TestRoomPositions(t *testing.T) {
+	t.Parallel()
+
+	svc := service.NewCatalogService(memory.New(), ids.V7{})
+	ctx := t.Context()
+
+	north, err := svc.CreateLocation(ctx, service.LocationData{Name: "North Studio"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	south, err := svc.CreateLocation(ctx, service.LocationData{Name: "South Studio"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	create := func(location domain.LocationID, name string) domain.Room {
+		t.Helper()
+
+		r, err := svc.CreateRoom(ctx, service.RoomData{LocationID: location, Name: name, Capacity: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return r
+	}
+
+	// Appended in the order of creation, not by name.
+	zeta, alpha := create(north.ID, "Zeta"), create(north.ID, "Alpha")
+	mid := create(north.ID, "Mid")
+
+	if zeta.Position != 1 || alpha.Position != 2 || mid.Position != 3 {
+		t.Fatalf("positions %d, %d, %d; want 1, 2, 3", zeta.Position, alpha.Position, mid.Position)
+	}
+
+	wantRooms(t, svc, north.ID, "1 Zeta", "2 Alpha", "3 Mid")
+
+	// Each location counts on its own.
+	create(south.ID, "Hall")
+	wantRooms(t, svc, south.ID, "1 Hall")
+
+	// An edit at the same location keeps the place.
+	renamed, err := svc.UpdateRoom(ctx, alpha.ID, service.RoomData{LocationID: north.ID, Name: "Aleph", Capacity: 12})
+	if err != nil || renamed.Position != 2 {
+		t.Fatalf("rename: %+v, %v; want position 2", renamed, err)
+	}
+
+	// A move appends the room to its new location; the old one keeps a gap.
+	moved, err := svc.UpdateRoom(ctx, zeta.ID, service.RoomData{LocationID: south.ID, Name: "Zeta", Capacity: 10})
+	if err != nil || moved.Position != 2 {
+		t.Fatalf("move: %+v, %v; want position 2", moved, err)
+	}
+
+	wantRooms(t, svc, north.ID, "2 Aleph", "3 Mid")
+	wantRooms(t, svc, south.ID, "1 Hall", "2 Zeta")
+
+	// After the highest position, not after the number of rooms.
+	create(north.ID, "New")
+	wantRooms(t, svc, north.ID, "2 Aleph", "3 Mid", "4 New")
+}
+
+// TestSetRoomOrder: the order lists each room of the location once and
+// numbers them from 1; anything else is a field error on roomIds.
+func TestSetRoomOrder(t *testing.T) {
+	t.Parallel()
+
+	svc := service.NewCatalogService(memory.New(), ids.V7{})
+	ctx := t.Context()
+
+	north, err := svc.CreateLocation(ctx, service.LocationData{Name: "North Studio"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	south, err := svc.CreateLocation(ctx, service.LocationData{Name: "South Studio"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	create := func(location domain.LocationID, name string) domain.RoomID {
+		t.Helper()
+
+		r, err := svc.CreateRoom(ctx, service.RoomData{LocationID: location, Name: name, Capacity: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return r.ID
+	}
+
+	a, b, c := create(north.ID, "Room A"), create(north.ID, "Room B"), create(north.ID, "Room C")
+	hall := create(south.ID, "Hall")
+
+	if err := svc.SetRoomOrder(ctx, north.ID, []domain.RoomID{c, a, b}); err != nil {
+		t.Fatal(err)
+	}
+
+	wantRooms(t, svc, north.ID, "1 Room C", "2 Room A", "3 Room B")
+
+	for name, order := range map[string][]domain.RoomID{
+		"missing room":            {c, a},
+		"repeated room":           {c, a, a},
+		"another location's room": {c, a, b, hall},
+		"empty":                   nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := svc.SetRoomOrder(ctx, north.ID, order)
+			wantField(t, err, "roomIds")
+
+			var fe *domain.FieldError
+			if errors.As(err, &fe) && fe.Msg != "must list each room of the location exactly once" {
+				t.Errorf("message %q", fe.Msg)
+			}
+		})
+	}
+
+	wantRooms(t, svc, north.ID, "1 Room C", "2 Room A", "3 Room B")
+	wantRooms(t, svc, south.ID, "1 Hall")
+
+	// An unknown location is a 404, whatever the order.
+	wantIs(t, svc.SetRoomOrder(ctx, ids.New[domain.LocationID](ids.V7{}), nil), domain.ErrNotFound)
+
+	// A location without rooms takes the empty order.
+	empty, err := svc.CreateLocation(ctx, service.LocationData{Name: "Empty Annex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.SetRoomOrder(ctx, empty.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestSetRoomOrderStale: an order sent from a list read before someone
+// added a room misses that room and is refused, so the new room is never
+// silently given a place by the old list.
+func TestSetRoomOrderStale(t *testing.T) {
+	t.Parallel()
+
+	svc := service.NewCatalogService(memory.New(), ids.V7{})
+	ctx := t.Context()
+
+	loc, err := svc.CreateLocation(ctx, service.LocationData{Name: "North Studio"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{"Room A", "Room B"} {
+		if _, err := svc.CreateRoom(ctx, service.RoomData{LocationID: loc.ID, Name: name, Capacity: 10}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// The office reads the list…
+	read, err := svc.Rooms(ctx, loc.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// …someone else adds a room…
+	if _, err := svc.CreateRoom(ctx, service.RoomData{LocationID: loc.ID, Name: "Room C", Capacity: 10}); err != nil {
+		t.Fatal(err)
+	}
+
+	// …and the office sends the read list swapped.
+	wantField(t, svc.SetRoomOrder(ctx, loc.ID, []domain.RoomID{read[1].ID, read[0].ID}), "roomIds")
+	wantRooms(t, svc, loc.ID, "1 Room A", "2 Room B", "3 Room C")
 }
 
 func TestCourseTypeAdmin(t *testing.T) {

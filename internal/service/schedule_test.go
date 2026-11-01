@@ -505,7 +505,7 @@ func TestScheduleLessonOutsideItsTerm(t *testing.T) {
 	now := time.Date(2026, time.October, 21, 12, 0, 0, 0, loc)
 
 	location := domain.Location{ID: ids.New[domain.LocationID](seq), Name: "Example Hall"}
-	room := domain.Room{ID: ids.New[domain.RoomID](seq), LocationID: location.ID, Name: "Room 1", Capacity: 10}
+	room := domain.Room{ID: ids.New[domain.RoomID](seq), LocationID: location.ID, Name: "Room 1", Capacity: 10, Position: 1}
 	staff := domain.Staff{ID: ids.New[domain.StaffID](seq), DisplayName: "Instructor Example", Kind: domain.StaffInstructor, Active: true}
 	courseType := domain.CourseType{ID: ids.New[domain.CourseTypeID](seq), Name: "Ballet"}
 	term := domain.Term{

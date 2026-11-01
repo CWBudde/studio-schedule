@@ -51,8 +51,8 @@ func registerCatalogAdmin(api huma.API, h *handlers) {
 		Method:      http.MethodPost,
 		Path:        BasePath + "/rooms",
 		Summary:     "Create a room",
-		Description: "Adds a room to a location. A name another room of the location has (ignoring case) is a " +
-			"409 `duplicate`; an unknown location is a 422 on `locationId`.",
+		Description: "Adds a room to a location, after its last room. A name another room of the location has " +
+			"(ignoring case) is a 409 `duplicate`; an unknown location is a 422 on `locationId`.",
 		DefaultStatus: http.StatusCreated,
 	}), h.createRoom)
 
@@ -61,9 +61,22 @@ func registerCatalogAdmin(api huma.API, h *handlers) {
 		Method:      http.MethodPut,
 		Path:        BasePath + "/rooms/{roomId}",
 		Summary:     "Update a room",
-		Description: "Replaces the location, name and capacity of a room. Existing lessons keep their " +
-			"capacity. A name another room of the location has is a 409 `duplicate`.",
+		Description: "Replaces the location, name and capacity of a room. The room keeps its place, or goes " +
+			"after the last room of its new location. Existing lessons keep their capacity. A name another " +
+			"room of the location has is a 409 `duplicate`.",
 	}), h.updateRoom)
+
+	register(api, AccessOffice, write(huma.Operation{
+		OperationID: "setRoomOrder",
+		Method:      http.MethodPut,
+		Path:        BasePath + "/locations/{locationId}/room-order",
+		Summary:     "Set the order of a location's rooms",
+		Description: "Numbers the rooms of a location from 1 in the order given; lists and the schedule show " +
+			"them in this order. The list must name every room of the location exactly once and no other " +
+			"room, else it is a 422 on `roomIds`, also when a room was added or removed meanwhile. A new " +
+			"room goes after the last one, as does a room moved to the location.",
+		DefaultStatus: http.StatusNoContent,
+	}), h.setRoomOrder)
 
 	register(api, AccessOffice, write(huma.Operation{
 		OperationID:   "deleteRoom",
@@ -225,6 +238,17 @@ type RoomRefInput struct {
 	RoomID domain.RoomID `doc:"The room." path:"roomId"`
 }
 
+// RoomOrder is the request body of setRoomOrder.
+type RoomOrder struct {
+	RoomIDs []domain.RoomID `doc:"Every room of the location, each once, in their new order." json:"roomIds" maxItems:"1000" nullable:"false"`
+}
+
+// RoomOrderInput is the request of setRoomOrder.
+type RoomOrderInput struct {
+	LocationID domain.LocationID `doc:"The location." path:"locationId"`
+	Body       RoomOrder
+}
+
 // RoomOutput is the response of createRoom and updateRoom.
 type RoomOutput struct {
 	Body Room
@@ -294,6 +318,14 @@ func (h *handlers) createRoom(ctx context.Context, in *RoomDataInput) (*RoomOutp
 
 func (h *handlers) updateRoom(ctx context.Context, in *RoomUpdateInput) (*RoomOutput, error) {
 	return h.roomOutput(ctx)(h.deps.Catalog.UpdateRoom(ctx, in.RoomID, in.Body.service()))
+}
+
+func (h *handlers) setRoomOrder(ctx context.Context, in *RoomOrderInput) (*struct{}, error) {
+	if err := h.deps.Catalog.SetRoomOrder(ctx, in.LocationID, in.Body.RoomIDs); err != nil {
+		return nil, h.toHTTPError(ctx, err)
+	}
+
+	return &struct{}{}, nil
 }
 
 func (h *handlers) deleteRoom(ctx context.Context, in *RoomRefInput) (*struct{}, error) {
@@ -366,7 +398,7 @@ func (h *handlers) roomOutput(ctx context.Context) func(domain.Room, error) (*Ro
 			return nil, h.toHTTPError(ctx, err)
 		}
 
-		return &RoomOutput{Body: Room{ID: r.ID, LocationID: r.LocationID, Name: r.Name, Capacity: r.Capacity}}, nil
+		return &RoomOutput{Body: newRoom(r)}, nil
 	}
 }
 

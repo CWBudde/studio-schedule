@@ -235,7 +235,7 @@ func noSchoolFixture(t *testing.T) *genFixture {
 	f.write(t, func(ctx context.Context, tx store.Tx) error {
 		return errors.Join(
 			tx.Locations().Create(ctx, domain.Location{ID: location, Name: "Studio Nowhere"}),
-			tx.Rooms().Create(ctx, domain.Room{ID: f.room, LocationID: location, Name: "Room One", Capacity: 12}),
+			tx.Rooms().Create(ctx, domain.Room{ID: f.room, LocationID: location, Name: "Room One", Capacity: 12, Position: 1}),
 			tx.CourseTypes().Create(ctx, domain.CourseType{ID: f.courseType, Name: "Imaginary Ballet"}),
 			tx.Staff().Create(ctx, domain.Staff{
 				ID: f.instructor, DisplayName: "Ada Example", Kind: domain.StaffInstructor, Active: true,

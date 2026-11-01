@@ -189,3 +189,68 @@ func TestCatalogReadStoreFaults(t *testing.T) {
 		}
 	}})
 }
+
+// TestRoomWriteStoreFaults: a store failure in a room write or the room
+// order fails the operation and writes nothing.
+func TestRoomWriteStoreFaults(t *testing.T) {
+	t.Parallel()
+
+	// withSecondLocation adds a location with a room, written past the
+	// FaultStore, and returns its ID.
+	withSecondLocation := func(t *testing.T, c catalogFixture) domain.LocationID {
+		t.Helper()
+
+		l := domain.Location{ID: ids.New[domain.LocationID](c.seq), Name: "Annex"}
+		r := domain.Room{ID: ids.New[domain.RoomID](c.seq), LocationID: l.ID, Name: "Annex Hall", Capacity: 8, Position: 1}
+		c.write(t, func(ctx context.Context, tx store.Tx) error {
+			return errors.Join(tx.Locations().Create(ctx, l), tx.Rooms().Create(ctx, r))
+		})
+
+		return l.ID
+	}
+
+	tests := map[string]func(t *testing.T, c catalogFixture) func() error{
+		"create": func(t *testing.T, c catalogFixture) func() error {
+			return func() error {
+				r, err := c.svc.CreateRoom(t.Context(), RoomData{LocationID: c.location, Name: "Room Two", Capacity: 8})
+				if err == nil && r.Position != 2 {
+					t.Fatalf("created at %d, want 2", r.Position)
+				}
+
+				return err
+			}
+		},
+		"move": func(t *testing.T, c catalogFixture) func() error {
+			annex := withSecondLocation(t, c)
+
+			return func() error {
+				r, err := c.svc.UpdateRoom(t.Context(), c.room, RoomData{LocationID: annex, Name: "Room One", Capacity: 8})
+				if err == nil && r.Position != 2 {
+					t.Fatalf("moved to %d, want 2", r.Position)
+				}
+
+				return err
+			}
+		},
+		"order": func(t *testing.T, c catalogFixture) func() error {
+			second := domain.Room{ID: ids.New[domain.RoomID](c.seq), LocationID: c.location, Name: "Room Two", Capacity: 8, Position: 2}
+			c.write(t, func(ctx context.Context, tx store.Tx) error { return tx.Rooms().Create(ctx, second) })
+
+			return func() error {
+				return c.svc.SetRoomOrder(t.Context(), c.location, []domain.RoomID{second.ID, c.room})
+			}
+		},
+	}
+
+	for name, op := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			SweepFaults(t, FaultSweep{Setup: func(t *testing.T) (*FaultStore, func() error) {
+				c := newCatalogFixture(t)
+
+				return c.fs, op(t, c)
+			}})
+		})
+	}
+}

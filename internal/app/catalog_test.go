@@ -125,18 +125,30 @@ func TestListRooms(t *testing.T) {
 
 	h, _ := newApp(t, nil)
 	demo := seed.Demo()
+	locationName := map[domain.LocationID]string{}
+	for _, l := range demo.Locations {
+		locationName[l.ID] = l.Name
+	}
+	// The store's order: by location name and ID, then position, name, ID.
+	inListOrder := slices.SortedFunc(slices.Values(demo.Rooms), func(a, b domain.Room) int {
+		return cmp.Or(
+			cmp.Compare(locationName[a.LocationID], locationName[b.LocationID]),
+			slices.Compare(a.LocationID[:], b.LocationID[:]),
+			cmp.Compare(a.Position, b.Position),
+			cmp.Compare(a.Name, b.Name),
+			slices.Compare(a.ID[:], b.ID[:]),
+		)
+	})
 	want := func(location domain.LocationID) []map[string]any {
 		var items []map[string]any
 
-		for _, r := range byNameThenID(demo.Rooms,
-			func(r domain.Room) string { return r.Name },
-			func(r domain.Room) [16]byte { return [16]byte(r.ID) }) {
+		for _, r := range inListOrder {
 			if !location.IsZero() && r.LocationID != location {
 				continue
 			}
 
 			items = append(items, map[string]any{
-				"id": r.ID, "locationId": r.LocationID, "name": r.Name, "capacity": r.Capacity,
+				"id": r.ID, "locationId": r.LocationID, "name": r.Name, "capacity": r.Capacity, "position": r.Position,
 			})
 		}
 
