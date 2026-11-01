@@ -916,15 +916,32 @@ command groups by need: recovery and diagnosis first, then data, then reports.
         show them from another process, or keep them in memory and offer `jobs run` only
         (2026-11-01) — stored in `job_runs` (both stores, pruned after 30 days), a per-job lock
         (advisory on PostgreSQL), a run that loses the lock is `skipped`
-- [ ] Command layer: `cmd/studio-schedule/cli` (command → service call → presenter), no SQL in
+- [x] Command layer: `cmd/studio-schedule/cli` (command → service call → presenter), no SQL in
       `cmd`. The services' validation and field errors are printed with the field's name. Global
       flags `--database-url`, `--output`, `--yes` (and `--server`, `--token` if the ADR chooses
       remote). `completion` for bash, zsh, fish and PowerShell. docs/cli.md is generated from
       cobra and CI checks it like `api/openapi.json`; `docs_test.go` covers the new flags
-- [ ] Diagnosis: `config check` validates the environment and flags without starting and prints
+      (2026-11-01): `cli.Spec` (use, flags, access level, destructive, its JSON), `cli.Env`
+      (services from the new `app.NewServices`, which `app.New` uses too; the `--as` principal;
+      `Confirm`, `ReadLine`), the presenter and one error mapping (`ExitCode`, `Report`); a group
+      is one file and one line in `root.go`. Global flags `--database-url` (no command has its
+      own any more), `--output`, `--yes`, `--as` (env `STUDIO_AS`, `AuthService.Actor`,
+      `Principal.Via` → `AuditDetails.Via`, shown as "via command line (<os user>)" in the audit
+      view). `import` is on the layer and acts as the office account of `--as`. docs/cli.md comes
+      from `TestCLIReference` (`just cli-docs`, in `check-generated`). Deviations, amended in the
+      ADR: the layer aligns tables itself (`tabwriter` counts colour escapes as width), and the
+      commands not on the layer refuse `--as`, `--yes` and `--output json`. Terminals are told by
+      `os.ModeCharDevice` (no `x/term`), so `/dev/null` counts as one: a destructive command then
+      prompts, reads nothing and refuses with exit 2 all the same
+- [x] Diagnosis: `config check` validates the environment and flags without starting and prints
       the effective configuration with secrets redacted. `doctor` checks the database, the schema
       version, time zone and currency, the SMTP login, the VAPID keys, an https `BASE_URL` and the
-      receipt module: one line per check, exit 1 if one fails
+      receipt module: one line per check, exit 1 if one fails (2026-11-01): both take serve's
+      flags; `config check` exits 2 on an invalid value. `doctor` checks config, database,
+      schema, settings (the domain's rules), smtp (`smtp.Sender.Verify`: STARTTLS and AUTH, no
+      MAIL; skipped without `SMTP_HOST`), vapid (skipped without keys), base-url (http on
+      localhost or unset is a warning) and receipts (`service.SampleReceiptInput` rendered by
+      typstwasm), as ok/fail/warn/skip lines or JSON `{ok, checks}`
 - [ ] Accounts and access: `accounts list|show`, `accounts create --role`, `accounts set-role`,
       `accounts reset-password` (prints a setup link like `init`, or mails it with `--mail`),
       `accounts sessions revoke` (one account or all), `accounts delete`. The guards of ADR 0016
