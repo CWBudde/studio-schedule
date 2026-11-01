@@ -19,7 +19,7 @@ import (
 // (Runner.RunNow).
 func Jobs(deps Deps) *jobs.Runner {
 	deps = deps.withDefaults()
-	lessons := service.NewLessonGenerator(deps.Store, deps.Clock, deps.IDs)
+	lessons := newLessonGenerator(deps)
 	renderer := newRenderer()
 	auth := newAuthService(deps, renderer)
 	waitlist := service.NewWaitlistService(deps.Store, deps.Clock, deps.IDs, mailsOf(deps, renderer))

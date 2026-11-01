@@ -301,13 +301,19 @@ func newServices(deps Deps, renderer *mail.Renderer) Services {
 		Persons:    service.NewPersonService(deps.Store, deps.Clock, deps.IDs, mails),
 		Outbox:     service.NewOutboxService(deps.Store, deps.Clock, deps.Mailer, receipts),
 		Statistics: service.NewStatisticsService(deps.Store, deps.Clock),
-		Generator:  service.NewLessonGenerator(deps.Store, deps.Clock, deps.IDs),
+		Generator:  newLessonGenerator(deps),
 		Announcements: service.NewAnnouncementService(deps.Store, deps.Clock, deps.IDs, renderer,
 			func() { deps.Wake.Wake(announcementsJob) }),
 		MailLog: service.NewMailLogService(deps.Store, deps.Clock, deps.IDs),
 		Imports: service.NewImportService(deps.Store, deps.Clock, deps.IDs),
 		Push:    service.NewPushService(deps.Store, deps.Clock, deps.IDs, deps.Pusher),
 	}
+}
+
+// newLessonGenerator is the LessonGenerator of deps: Services.Generator and
+// the generate-lessons job's.
+func newLessonGenerator(deps Deps) *service.LessonGenerator {
+	return service.NewLessonGenerator(deps.Store, deps.Clock, deps.IDs)
 }
 
 // contentSecurityPolicy allows only the app's own scripts, styles, images and
