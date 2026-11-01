@@ -15,6 +15,7 @@ manages itself, classes that state a level range, a stage and an age, and its ow
 catalogue and weekly plan.
 
 **Architecture:**
+
 - Rooms get a position within their location.
 - Levels become records of the school (name, optional code, position), maintained by the office
   like course types.
@@ -216,11 +217,12 @@ export const setRoomOrderMutation: (queryClient: QueryClient) => /* useMutation 
    - `CreateRoom` and `UpdateRoom` write `position`.
    - `ListRoomsByLocation` orders by `position, name, id`.
    - `ListRooms` joins `locations` and orders by `locations.name, locations.id, rooms.position,
-     rooms.name, rooms.id`.
+rooms.name, rooms.id`.
    - New `LockRoomsByLocation :many` (`SELECT … WHERE location_id = $1 ORDER BY id FOR UPDATE`)
      and `SetRoomPosition :execrows` (`UPDATE rooms SET position = $2 WHERE id = $1`).
 
    Then `just sqlc`.
+
 3. storetest cases in `internal/store/storetest/catalogue.go`, next to the room CRUD:
    - `Rooms/Position` round-trips;
    - `List` orders by position before name, within a location and across locations (the
@@ -233,6 +235,7 @@ export const setRoomOrderMutation: (queryClient: QueryClient) => /* useMutation 
    Implement in memory (`repos.go`; sort with the same comparison as the other memory lists) and
    PostgreSQL (`catalog.go`: lock the location's rooms, compare the sets, update each). Run
    `go test ./internal/store/...` and `just test-pg`.
+
 4. Service (`catalog_admin.go`) with tests in its test file:
    - `CreateRoom` appends: position = the location's highest + 1, or 1 for the first room. The
      body doesn't take a position.
@@ -246,6 +249,7 @@ export const setRoomOrderMutation: (queryClient: QueryClient) => /* useMutation 
 
    Add the store failure paths to the `FaultStore` sweep the file's neighbours use
    (`internal/service/fault_test.go`).
+
 5. HTTP: `position` in `Room` and `RoomRef`, and the `setRoomOrder` operation. In
    `internal/app/access_test.go`, pin `setRoomOrder` as office. httpapi/app tests: 204 and the
    new order in `listRooms`; 422 on `body.roomIds`; 404 for an unknown location; 403 for a
@@ -428,6 +432,7 @@ export const createLevelMutation, updateLevelMutation, deleteLevelMutation, setL
    `ListLevels` (`ORDER BY position, name, id`), `LockLevels` (`… ORDER BY id FOR UPDATE`) and
    `SetLevelPosition :execrows`. Map both unique indexes to `domain.ErrDuplicate` in `errors.go`,
    as `course_types_name_key` is. Then `just sqlc`.
+
 4. storetest `levels.go`. Reuse the generic CRUD cases of `crud.go` as `catalogue.go` does for
    course types, and add:
    - a duplicate name in other case ("beginner" vs "Beginner") → `ErrDuplicate` on create and on
@@ -441,6 +446,7 @@ export const createLevelMutation, updateLevelMutation, deleteLevelMutation, setL
 
    Implement memory (state + snapshot: `TestSnapshotCoversEveryTable` and `TestSnapshotRoundTrip`
    must pass) and PostgreSQL. Run `go test ./internal/store/...` and `just test-pg`.
+
 5. Service with tests:
    - `CreateLevel` trims, validates and appends (highest position + 1).
    - `UpdateLevel` returns 404 for an unknown ID before any field check (like `UpdateCourseType`)
@@ -462,6 +468,7 @@ export const createLevelMutation, updateLevelMutation, deleteLevelMutation, setL
    - signed out, `listLevels` → 200.
 
    Then `just gen-api`.
+
 7. Seed: `demoLevels` (Beginner B, Intermediate I, Advanced A, Professional P) in
    `demo.go`, built by `builder.level` right after the course types, into `Dataset.Levels`, and
    loaded by `LoadDemo…` before the classes. The new IDs shift every later entity's ID. Update
@@ -507,7 +514,7 @@ export const createLevelMutation, updateLevelMutation, deleteLevelMutation, setL
   `internal/store/postgres/migration_audience_test.go`
 - Modify: `internal/store/postgres/queries/timetable.sql`, `internal/store/postgres/timetable.go`,
   `internal/store/memory` (classes; `levelRepo.Delete` checks classes), `internal/store/storetest/
-  timetable.go` and `levels.go`
+timetable.go` and `levels.go`
 - Create: `internal/service/audience.go` (+ test); modify `internal/service/class_admin.go`,
   `internal/service/timetable.go`, `internal/service/schedule.go`, `internal/service/statistics.go`,
   `internal/service/servicetest/world.go`, and their tests
@@ -599,11 +606,21 @@ HTTP:
 ```ts
 // web/src/lib/audience.ts
 export type AudienceFields = Pick<
-  LessonSummary, 'levelFrom' | 'levelTo' | 'allLevels' | 'stage' | 'ageFromMonths' | 'ageToMonths'
+  LessonSummary,
+  | "levelFrom"
+  | "levelTo"
+  | "allLevels"
+  | "stage"
+  | "ageFromMonths"
+  | "ageToMonths"
 >;
 /** The audience in the user's language: 'long' with level names (Programme), 'short' with codes,
  * falling back to the name (Werkstatt). '' when nothing is stated. */
-export function formatAudience(a: AudienceFields, t: TFunction, style: 'long' | 'short'): string;
+export function formatAudience(
+  a: AudienceFields,
+  t: TFunction,
+  style: "long" | "short",
+): string;
 /** Years with halves: 42 → "3½", 48 → "4"; months that are not a half year round down to one. */
 export function formatAgeYears(months: number): string;
 ```
@@ -620,6 +637,7 @@ export function formatAgeYears(months: number): string;
    - `AgeTo` without `AgeFrom` ("up to 6") is fine.
 
    Delete `SkillLevel`; let the compiler list its users. Commit.
+
 2. `service/audience_test.go`:
    - `audienceOf` orders the ends by position whichever way they are stored;
    - an unknown level → `errBrokenReference`;
@@ -691,6 +709,7 @@ export function formatAgeYears(months: number): string;
      - no "Intermediate" or "Professional" row was created;
      - the open class has `all_levels` and no range.
    - `Down` once, and assert the classes have their old `level` values back.
+
 4. Store: `timetable.sql` and `timetable.go` read and write the new columns. Memory classes the
    same; memory `levelRepo.Delete` refuses a level a class uses as either end
    (`domain.ErrConflict`). storetest:
@@ -699,6 +718,7 @@ export function formatAgeYears(months: number): string;
    - unused → fine.
 
    Run `just test-pg`.
+
 5. Service:
    - `ClassData` gets the new fields.
    - `CreateClass`/`UpdateClass` check that both levels exist (field errors) inside the
@@ -734,6 +754,7 @@ export function formatAgeYears(months: number): string;
    - `stats.go` line 143, likewise.
 
    Then `-update` the goldens and run `just cli-docs` if a help text changed.
+
 8. Seed:
    - `classSpec.level` becomes `audience audienceSpec` with
      `type audienceSpec struct{ from, to string; all bool; stage int; ageFrom, ageTo domain.AgeMonths }`
@@ -758,6 +779,7 @@ export function formatAgeYears(months: number): string;
      Then implement. Keys in `schedule.json`: `audience.allLevels`, `audience.stage`
      ("Stage {{stage}}" / "Stufe {{stage}}"), `audience.ageFrom`, `audience.ageTo`,
      `audience.ageRange`. Remove `level.*`, and `LessonLevel` from `client.ts`.
+
    - Cards (`cardParts.ts` part `'level'` → `'audience'`): programme card long form, Werkstatt
      card short form; `LessonSheet` long form; `WeekList` badge; the statistics table column.
      Update their tests and `mockApi.ts` fixtures.
@@ -781,8 +803,10 @@ export function formatAgeYears(months: number): string;
      - ages 3.5 → `ageFromMonths: 42`;
      - a 422 on `body.levelToId` shows on "up to";
      - the no-levels case.
+
    - The level mutations from 2.1 also invalidate the classes and schedule queries (names show
      there).
+
 10. e2e:
     - `schedule.spec.ts`: filter by "Intermediate" shows the Classical Ballet span class and an
       all-levels class and hides a Creative Dance class (find days with the seed's schedule, as
@@ -873,6 +897,7 @@ and the `placeIDs` ID padding for now; 5.1 removes them.
 
    Tests that check programme-only facts (names, counts, specific scenarios) stay programme-only.
    Delete `TestDemoSchoolSameData`. For now, `TestWerkstattPlaces` stays as it is.
+
 3. Refactor `demo.go` into `schoolSpec`, `programme()` and `werkstatt()`. The builder takes the
    spec; `DemoAt`/`DemoSchoolAt` build `schoolOf(school)`. `go test ./internal/seed` must stay
    green at every commit, `TestProgrammeDatasetUnchanged` included.
@@ -883,7 +908,7 @@ and the `placeIDs` ID padding for now; 5.1 removes them.
    `SchoolLogins(SchoolWerkstatt)`).
 5. `just test`, lint, `just check-wasm-deps`, `just wasm-smoke`, `just e2e`,
    `just test-cover && just coverage`. Commit `refactor(seed): build each demo school from its own
-   tables`.
+tables`.
 
 ## Task 5.1: werkstatt-data
 
@@ -913,6 +938,7 @@ and the `placeIDs` ID padding for now; 5.1 removes them.
   family/guardian links mirror the programme record at the same index, so the scenarios
   (managed dependent, guardian with several children, former instructor, accompanist with a
   person record) all exist.
+
 - **Staff:** about seven instructors (one former) and two accompanists, German names. There must
   be enough for the 70 classes, so that `TestDemoInstructorsNeverDoubleBooked` passes. Give
   instructors a profile of course kinds: ballet, contemporary, jazz/modern, hip-hop/step/Irish,
@@ -952,6 +978,7 @@ and the `placeIDs` ID padding for now; 5.1 removes them.
    - `TestWerkstattWorkshopsOnSunday`: every workshop is on a Sunday.
 
    Rewrite `TestWerkstattPlaces` for the new rooms. Run them and see them fail.
+
 2. Write the tables in `werkstatt.go`. Remove `holds` and `placeIDs` from `demo.go` (each school
    has its own rooms now). Run until the whole seed suite passes; `TestProgrammeDatasetUnchanged`
    must still pass.
@@ -963,6 +990,7 @@ and the `placeIDs` ID padding for now; 5.1 removes them.
    - on the phone project, the four-room day falls back to one list.
 
    Fix any Werkstatt e2e case that pinned a programme name.
+
 4. Docs:
    - ADR 0018 amendment "The demo schools have their own data" (what each school has, the
      programme digest test, why the Werkstatt catalogue is shaped like the previous app's but

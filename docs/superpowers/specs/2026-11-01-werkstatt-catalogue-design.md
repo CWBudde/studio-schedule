@@ -171,6 +171,7 @@ from a bookmark.
 
   "All levels" / "alle Level" is a locale string. The cards, the lesson sheet, the timetable
   week list and the statistics table use the formatter.
+
 - The admin class sheet edits the parts:
   - "from" and "to" selects with the school's levels ("to" defaults to "from"), and "All
     levels" as the alternative to a range. With no levels defined, the selects are replaced by
@@ -212,22 +213,22 @@ the filter rule and the migration.
 
 **Werkstatt rooms**, one location "Tanzhaus am Lindenhof":
 
-| position | room | capacity |
-|---|---|---|
-| 1 | Oben | 24 |
-| 2 | Unten | 18 |
-| 3 | Online | 40 |
-| 4 | Trainingsraum | 8 |
+| position | room          | capacity |
+| -------- | ------------- | -------- |
+| 1        | Oben          | 24       |
+| 2        | Unten         | 18       |
+| 3        | Online        | 40       |
+| 4        | Trainingsraum | 8        |
 
 **Levels.** Each school's seed creates its own levels:
 
-| position | programme | code | Werkstatt | code |
-|---|---|---|---|---|
-| 1 | Beginner | B | Einsteiger | E |
-| 2 | Intermediate | I | Anfänger | A |
-| 3 | Advanced | A | Mittelstufe | M |
-| 4 | Professional | P | Fortgeschritten | F |
-| 5 | | | Profi | P |
+| position | programme    | code | Werkstatt       | code |
+| -------- | ------------ | ---- | --------------- | ---- |
+| 1        | Beginner     | B    | Einsteiger      | E    |
+| 2        | Intermediate | I    | Anfänger        | A    |
+| 3        | Advanced     | A    | Mittelstufe     | M    |
+| 4        | Professional | P    | Fortgeschritten | F    |
+| 5        |              |      | Profi           | P    |
 
 The programme classes keep their levels (`open` becomes all levels). The Werkstatt plan below
 names levels by code.
@@ -247,105 +248,105 @@ codes: E/A/M/F level ranges by the codes above, "alle" = all levels, "St." = sta
 years. Instructors are assigned from the Werkstatt staff so that no instructor teaches two
 classes at once.
 
-*Montag*
+_Montag_
 
-| Raum | Zeit | Kurs | Zielgruppe | Plätze |
-|---|---|---|---|---|
-| Online | 10:15–11:15 | Qigong | alle | 40 |
-| Oben | 14:55–15:45 | Tanzzwerge | ab 3 J. | 12 |
-| Oben | 15:45–16:35 | Tänzerische Früherziehung | St. 2, 4–6 J. | 14 |
-| Unten | 15:45–16:45 | Ballett Jugend | St. 2 | 18 |
-| Oben | 16:45–18:00 | Ballett Jugend & Spitze | St. 1 | 18 |
-| Unten | 16:45–17:45 | Contemporary Kids | A, 8–12 J. | 16 |
-| Online | 17:45–18:45 | Taiji | alle | 40 |
-| Unten | 17:45–19:15 | Irish Dance | F | 18 |
-| Oben | 18:00–19:10 | Contemporary | A/M | 18 |
-| Oben | 19:15–20:15 | Stretch & Strength | alle | 16 |
-| Unten | 19:15–20:15 | Stepptanz | E/A | 16 |
-| Oben | 20:15–21:45 | Ballett Erwachsene | M/F | 18 |
-| Unten | 20:15–21:45 | Ballett 45+ | M | 16 |
+| Raum   | Zeit        | Kurs                      | Zielgruppe    | Plätze |
+| ------ | ----------- | ------------------------- | ------------- | ------ |
+| Online | 10:15–11:15 | Qigong                    | alle          | 40     |
+| Oben   | 14:55–15:45 | Tanzzwerge                | ab 3 J.       | 12     |
+| Oben   | 15:45–16:35 | Tänzerische Früherziehung | St. 2, 4–6 J. | 14     |
+| Unten  | 15:45–16:45 | Ballett Jugend            | St. 2         | 18     |
+| Oben   | 16:45–18:00 | Ballett Jugend & Spitze   | St. 1         | 18     |
+| Unten  | 16:45–17:45 | Contemporary Kids         | A, 8–12 J.    | 16     |
+| Online | 17:45–18:45 | Taiji                     | alle          | 40     |
+| Unten  | 17:45–19:15 | Irish Dance               | F             | 18     |
+| Oben   | 18:00–19:10 | Contemporary              | A/M           | 18     |
+| Oben   | 19:15–20:15 | Stretch & Strength        | alle          | 16     |
+| Unten  | 19:15–20:15 | Stepptanz                 | E/A           | 16     |
+| Oben   | 20:15–21:45 | Ballett Erwachsene        | M/F           | 18     |
+| Unten  | 20:15–21:45 | Ballett 45+               | M             | 16     |
 
-*Dienstag*
+_Dienstag_
 
-| Raum | Zeit | Kurs | Zielgruppe | Plätze |
-|---|---|---|---|---|
-| Online | 08:45–09:15 | Morning Workout | alle | 40 |
-| Unten | 10:30–11:45 | Contemporary | E/A | 18 |
-| Unten | 12:00–13:15 | Ballett Erwachsene | A/M | 18 |
-| Oben | 15:00–16:00 | Kinderballett Vorstufe | St. 1 | 14 |
-| Unten | 15:00–16:00 | Kinderballett Vorstufe | St. 3 | 14 |
-| Oben | 16:00–17:00 | Ballett Jugend | St. 1 | 18 |
-| Unten | 16:00–17:00 | Ballett Jugend | St. 3 | 18 |
-| Trainingsraum | 17:00–17:30 | Spitze | E, ab 12 J. | 8 |
-| Oben | 17:30–18:45 | Tanz für Einsteiger | E | 18 |
-| Unten | 17:30–18:30 | Stepptanz | E/A | 16 |
-| Oben | 18:45–20:00 | Tanzen 50+ | alle | 18 |
-| Unten | 18:45–20:00 | Ballett Jugend & Spitze | St. 3 | 18 |
-| Oben | 20:00–21:30 | Contemporary | F | 18 |
-| Unten | 20:00–21:30 | Tanz für Einsteiger | A | 18 |
+| Raum          | Zeit        | Kurs                    | Zielgruppe  | Plätze |
+| ------------- | ----------- | ----------------------- | ----------- | ------ |
+| Online        | 08:45–09:15 | Morning Workout         | alle        | 40     |
+| Unten         | 10:30–11:45 | Contemporary            | E/A         | 18     |
+| Unten         | 12:00–13:15 | Ballett Erwachsene      | A/M         | 18     |
+| Oben          | 15:00–16:00 | Kinderballett Vorstufe  | St. 1       | 14     |
+| Unten         | 15:00–16:00 | Kinderballett Vorstufe  | St. 3       | 14     |
+| Oben          | 16:00–17:00 | Ballett Jugend          | St. 1       | 18     |
+| Unten         | 16:00–17:00 | Ballett Jugend          | St. 3       | 18     |
+| Trainingsraum | 17:00–17:30 | Spitze                  | E, ab 12 J. | 8      |
+| Oben          | 17:30–18:45 | Tanz für Einsteiger     | E           | 18     |
+| Unten         | 17:30–18:30 | Stepptanz               | E/A         | 16     |
+| Oben          | 18:45–20:00 | Tanzen 50+              | alle        | 18     |
+| Unten         | 18:45–20:00 | Ballett Jugend & Spitze | St. 3       | 18     |
+| Oben          | 20:00–21:30 | Contemporary            | F           | 18     |
+| Unten         | 20:00–21:30 | Tanz für Einsteiger     | A           | 18     |
 
-*Mittwoch*
+_Mittwoch_
 
-| Raum | Zeit | Kurs | Zielgruppe | Plätze |
-|---|---|---|---|---|
-| Online | 09:45–10:45 | Qigong | alle | 40 |
-| Oben | 11:00–12:15 | Qigong | alle | 16 |
-| Unten | 11:00–12:15 | Ballett Erwachsene | M | 18 |
-| Oben | 14:25–15:25 | Kinderballett | St. 1 | 14 |
-| Unten | 14:25–15:15 | Tänzerische Früherziehung | St. 1, 4–6 J. | 14 |
-| Unten | 15:15–16:15 | Kinderballett Vorstufe | St. 2 | 14 |
-| Oben | 15:25–16:25 | Ballett Jugend | St. 2 | 18 |
-| Unten | 16:15–17:15 | Hip-Hop & Contemporary Kids | alle, 8–12 J. | 16 |
-| Trainingsraum | 16:25–16:55 | Spitze | A, ab 12 J. | 8 |
-| Oben | 17:00–18:15 | Ballett Erwachsene | A/M | 18 |
-| Unten | 17:25–18:40 | Ballett Jugend & Spitze | St. 2 | 18 |
-| Trainingsraum | 18:20–18:50 | Spitze | E/A, ab 12 J. | 8 |
-| Unten | 18:45–19:45 | Modern Jazz | alle | 18 |
-| Oben | 18:55–19:55 | Hip-Hop & Contemporary Teens | alle, 12–17 J. | 16 |
-| Oben | 20:00–21:15 | Ballett Erwachsene | A/M | 18 |
+| Raum          | Zeit        | Kurs                         | Zielgruppe     | Plätze |
+| ------------- | ----------- | ---------------------------- | -------------- | ------ |
+| Online        | 09:45–10:45 | Qigong                       | alle           | 40     |
+| Oben          | 11:00–12:15 | Qigong                       | alle           | 16     |
+| Unten         | 11:00–12:15 | Ballett Erwachsene           | M              | 18     |
+| Oben          | 14:25–15:25 | Kinderballett                | St. 1          | 14     |
+| Unten         | 14:25–15:15 | Tänzerische Früherziehung    | St. 1, 4–6 J.  | 14     |
+| Unten         | 15:15–16:15 | Kinderballett Vorstufe       | St. 2          | 14     |
+| Oben          | 15:25–16:25 | Ballett Jugend               | St. 2          | 18     |
+| Unten         | 16:15–17:15 | Hip-Hop & Contemporary Kids  | alle, 8–12 J.  | 16     |
+| Trainingsraum | 16:25–16:55 | Spitze                       | A, ab 12 J.    | 8      |
+| Oben          | 17:00–18:15 | Ballett Erwachsene           | A/M            | 18     |
+| Unten         | 17:25–18:40 | Ballett Jugend & Spitze      | St. 2          | 18     |
+| Trainingsraum | 18:20–18:50 | Spitze                       | E/A, ab 12 J.  | 8      |
+| Unten         | 18:45–19:45 | Modern Jazz                  | alle           | 18     |
+| Oben          | 18:55–19:55 | Hip-Hop & Contemporary Teens | alle, 12–17 J. | 16     |
+| Oben          | 20:00–21:15 | Ballett Erwachsene           | A/M            | 18     |
 
-*Donnerstag*
+_Donnerstag_
 
-| Raum | Zeit | Kurs | Zielgruppe | Plätze |
-|---|---|---|---|---|
-| Unten | 14:40–15:30 | Tanzzwerge | ab 3 J. | 12 |
-| Oben | 15:30–16:20 | Tänzerische Früherziehung | St. 3 | 14 |
-| Unten | 15:30–16:30 | Kinderballett Vorstufe | St. 1 | 14 |
-| Unten | 16:30–17:30 | Kinderballett | St. 2 | 14 |
-| Oben | 16:30–17:45 | Ballett Jugend | St. 4 | 18 |
-| Unten | 17:30–18:40 | Taiji | M/F | 16 |
-| Oben | 17:45–19:10 | Ballett Erwachsene | A/M | 18 |
-| Unten | 18:45–20:00 | Contemporary | E/A | 18 |
-| Oben | 19:15–20:30 | Irish Dance | M | 18 |
-| Unten | 20:00–21:30 | Contemporary | M | 18 |
+| Raum  | Zeit        | Kurs                      | Zielgruppe | Plätze |
+| ----- | ----------- | ------------------------- | ---------- | ------ |
+| Unten | 14:40–15:30 | Tanzzwerge                | ab 3 J.    | 12     |
+| Oben  | 15:30–16:20 | Tänzerische Früherziehung | St. 3      | 14     |
+| Unten | 15:30–16:30 | Kinderballett Vorstufe    | St. 1      | 14     |
+| Unten | 16:30–17:30 | Kinderballett             | St. 2      | 14     |
+| Oben  | 16:30–17:45 | Ballett Jugend            | St. 4      | 18     |
+| Unten | 17:30–18:40 | Taiji                     | M/F        | 16     |
+| Oben  | 17:45–19:10 | Ballett Erwachsene        | A/M        | 18     |
+| Unten | 18:45–20:00 | Contemporary              | E/A        | 18     |
+| Oben  | 19:15–20:30 | Irish Dance               | M          | 18     |
+| Unten | 20:00–21:30 | Contemporary              | M          | 18     |
 
-*Freitag*
+_Freitag_
 
-| Raum | Zeit | Kurs | Zielgruppe | Plätze |
-|---|---|---|---|---|
-| Oben | 10:15–11:30 | Tanzen 50+ | alle | 18 |
-| Oben | 12:30–13:45 | Tanz für Einsteiger | E/A | 18 |
-| Oben | 15:25–16:15 | Tänzerische Früherziehung | St. 1, 4–6 J. | 14 |
-| Unten | 15:50–16:40 | Tänzerische Früherziehung | St. 2, 4–6 J. | 14 |
-| Oben | 16:20–17:20 | Kinderballett | St. 1 | 14 |
-| Unten | 16:45–17:45 | Kinderballett | St. 3 | 14 |
-| Oben | 17:25–18:40 | Tanz für Einsteiger | E | 18 |
-| Unten | 17:45–19:15 | Ballett Jugend & Spitze | St. 1 | 18 |
-| Online | 18:45–19:45 | Taiji | alle | 40 |
-| Oben | 18:45–20:00 | Ballett Erwachsene | A/M | 18 |
-| Unten | 19:15–20:30 | Jazz Dance | alle | 18 |
-| Oben | 20:15–21:45 | Tanz für Einsteiger | A | 18 |
+| Raum   | Zeit        | Kurs                      | Zielgruppe    | Plätze |
+| ------ | ----------- | ------------------------- | ------------- | ------ |
+| Oben   | 10:15–11:30 | Tanzen 50+                | alle          | 18     |
+| Oben   | 12:30–13:45 | Tanz für Einsteiger       | E/A           | 18     |
+| Oben   | 15:25–16:15 | Tänzerische Früherziehung | St. 1, 4–6 J. | 14     |
+| Unten  | 15:50–16:40 | Tänzerische Früherziehung | St. 2, 4–6 J. | 14     |
+| Oben   | 16:20–17:20 | Kinderballett             | St. 1         | 14     |
+| Unten  | 16:45–17:45 | Kinderballett             | St. 3         | 14     |
+| Oben   | 17:25–18:40 | Tanz für Einsteiger       | E             | 18     |
+| Unten  | 17:45–19:15 | Ballett Jugend & Spitze   | St. 1         | 18     |
+| Online | 18:45–19:45 | Taiji                     | alle          | 40     |
+| Oben   | 18:45–20:00 | Ballett Erwachsene        | A/M           | 18     |
+| Unten  | 19:15–20:30 | Jazz Dance                | alle          | 18     |
+| Oben   | 20:15–21:45 | Tanz für Einsteiger       | A             | 18     |
 
-*Samstag*
+_Samstag_
 
-| Raum | Zeit | Kurs | Zielgruppe | Plätze |
-|---|---|---|---|---|
-| Online | 10:00–11:30 | Qigong | M/F | 40 |
-| Oben | 10:15–11:45 | Tanz für Einsteiger | A | 18 |
-| Unten | 11:00–12:30 | Irish Dance | E/A | 18 |
-| Oben | 12:00–13:15 | Ballett Erwachsene | A/M | 18 |
-| Unten | 13:15–14:30 | Modern Jazz | alle | 18 |
-| Oben | 13:30–14:45 | Contemporary | M/F | 18 |
+| Raum   | Zeit        | Kurs                | Zielgruppe | Plätze |
+| ------ | ----------- | ------------------- | ---------- | ------ |
+| Online | 10:00–11:30 | Qigong              | M/F        | 40     |
+| Oben   | 10:15–11:45 | Tanz für Einsteiger | A          | 18     |
+| Unten  | 11:00–12:30 | Irish Dance         | E/A        | 18     |
+| Oben   | 12:00–13:15 | Ballett Erwachsene  | A/M        | 18     |
+| Unten  | 13:15–14:30 | Modern Jazz         | alle       | 18     |
+| Oben   | 13:30–14:45 | Contemporary        | M/F        | 18     |
 
 **Werkstatt workshops.** They take Sunday, the one day without classes: the Sunday on or after
 each workshop's day offset. They play the same roles as the programme school's: one full with a
