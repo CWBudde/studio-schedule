@@ -89,6 +89,8 @@ type (
 	pushSubKind       struct{}
 	pushMessageKind   struct{}
 	jobRunKind        struct{}
+	eventKind         struct{}
+	eventRegKind      struct{}
 
 	announcementMailingKind struct{}
 )
@@ -172,4 +174,10 @@ type (
 
 	// JobRunID identifies a run of a background job.
 	JobRunID = ID[jobRunKind]
+
+	// EventID identifies an event (ADR 0019).
+	EventID = ID[eventKind]
+
+	// EventRegistrationID identifies a registration for an event.
+	EventRegistrationID = ID[eventRegKind]
 )

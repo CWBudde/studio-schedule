@@ -98,6 +98,9 @@ type Lesson struct {
 	CancelNote string
 	CanceledAt time.Time
 	CanceledBy AccountID
+	// EventID names the event whose session the lesson is (ADR 0019); zero
+	// for a lesson of no event. A session is a one-off workshop.
+	EventID EventID
 }
 
 // MaxCancelNoteLength is the longest cancellation note, in characters.
@@ -134,6 +137,8 @@ func (l Lesson) Validate() error {
 		},
 		on("note", l.CancelNote == "" || !blank(l.CancelNote), "the note must not be blank"),
 		on("note", utf8.RuneCountInString(l.CancelNote) <= MaxCancelNoteLength, "the note is too long"),
+		on("kind", l.EventID.IsZero() || l.Kind == LessonWorkshop, "an event's session is a workshop"),
+		on("eventId", l.EventID.IsZero() || l.ClassID.IsZero(), "an event's session belongs to no class"),
 	)
 }
 

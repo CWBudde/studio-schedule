@@ -33,6 +33,12 @@ func TestEnums(t *testing.T) {
 	t.Run("MailStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.MailStatuses()) })
 	t.Run("AuditAction", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.AuditActions()) })
 	t.Run("AuditTargetKind", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.AuditTargetKinds()) })
+	t.Run("EventStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.EventStatuses()) })
+	t.Run("EventRegistrationStatus", func(t *testing.T) {
+		t.Parallel()
+		checkEnum(t, domain.EventRegistrationStatuses())
+	})
+	t.Run("EventPayment", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.EventPayments()) })
 }
 
 func TestPersonValidate(t *testing.T) {
@@ -300,6 +306,11 @@ func TestLessonValidate(t *testing.T) {
 		"long note": func(l *domain.Lesson) {
 			l.Status, l.CancelNote = domain.LessonCanceled, strings.Repeat("ä", domain.MaxCancelNoteLength+1)
 		},
+		"session not a workshop": func(l *domain.Lesson) { l.EventID = newID[domain.EventID]() },
+		"session of a class": func(l *domain.Lesson) {
+			l.Kind, l.EventID = domain.LessonWorkshop, newID[domain.EventID]()
+			l.ClassID, l.SlotDate = newID[domain.ClassID](), domain.Date{Year: 2026, Month: time.September, Day: 7}
+		},
 	})
 
 	// A detached lesson of a class, and a canceled lesson with or without
@@ -312,6 +323,12 @@ func TestLessonValidate(t *testing.T) {
 			return l
 		}(),
 		"canceled": func() domain.Lesson { l := lessonFixture(); l.Status = domain.LessonCanceled; return l }(),
+		"an event's session": func() domain.Lesson {
+			l := lessonFixture()
+			l.Kind, l.EventID = domain.LessonWorkshop, newID[domain.EventID]()
+
+			return l
+		}(),
 		"canceled with details": func() domain.Lesson {
 			l := lessonFixture()
 			l.Status, l.CancelNote = domain.LessonCanceled, strings.Repeat("ä", domain.MaxCancelNoteLength)
