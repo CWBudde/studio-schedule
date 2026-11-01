@@ -1,0 +1,43 @@
+{
+  "ok": false,
+  "years": [
+    2026
+  ],
+  "receipts": 9,
+  "findings": [
+    {
+      "year": 2026,
+      "number": "SD-2026-0006",
+      "check": "cancellation",
+      "message": "the cancellation cancels no sale receipt"
+    },
+    {
+      "year": 2026,
+      "number": "SD-2026-0099",
+      "check": "number",
+      "message": "the number does not end in its year 2026 and sequence 7"
+    },
+    {
+      "year": 2026,
+      "check": "sequence",
+      "message": "the number with sequence 8 is missing"
+    },
+    {
+      "year": 2026,
+      "number": "SD-2026-0009",
+      "check": "cancellation",
+      "message": "the cancellation does not negate SD-2026-0003: net, VAT and gross -840, -160, -1000 EUR against 12605, 2395, 15000 EUR"
+    },
+    {
+      "year": 2026,
+      "check": "sequence",
+      "message": "the numbers with sequences 10 to 11 are missing"
+    },
+    {
+      "year": 2026,
+      "number": "SD-2026-0012",
+      "check": "totals",
+      "message": "net, VAT and gross are 1008, 192, 1200; the lines sum to 840, 160, 1000"
+    }
+  ]
+}

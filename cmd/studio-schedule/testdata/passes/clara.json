@@ -1,0 +1,97 @@
+{
+  "items": [
+    {
+      "id": "00000000-0000-7000-8000-000000000254",
+      "passType": {
+        "id": "00000000-0000-7000-8000-000000000252",
+        "name": "10-visit pass"
+      },
+      "owner": {
+        "id": "00000000-0000-7000-8000-000000000001",
+        "name": "Clara Amberly"
+      },
+      "kind": "visits",
+      "visitsTotal": 10,
+      "visitsRemaining": 8,
+      "validFrom": "2026-09-08",
+      "validUntil": "2027-03-06",
+      "status": "active",
+      "usable": true,
+      "origin": "sale",
+      "soldAt": "2026-09-08T08:00:00Z",
+      "pricePaid": 15000,
+      "receiptId": "00000000-0000-7000-8000-000000000267",
+      "uses": [
+        {
+          "bookingId": "00000000-0000-7000-8000-000000000258",
+          "personName": "Clara Amberly",
+          "bookingStatus": "attended",
+          "late": false,
+          "redeemedAt": "2026-09-17T16:00:00Z",
+          "lesson": {
+            "id": "00000000-0000-7000-8000-0000000000b8",
+            "classId": "00000000-0000-7000-8000-00000000006a",
+            "startsAt": "2026-09-17T15:00:00Z",
+            "endsAt": "2026-09-17T16:00:00Z",
+            "status": "scheduled",
+            "kind": "regular",
+            "visibility": "public",
+            "level": "beginner",
+            "capacity": 18,
+            "courseType": {
+              "id": "00000000-0000-7000-8000-000000000055",
+              "name": "Contemporary"
+            },
+            "room": {
+              "id": "00000000-0000-7000-8000-000000000042",
+              "name": "Studio A"
+            },
+            "location": {
+              "id": "00000000-0000-7000-8000-000000000041",
+              "name": "Studio North"
+            },
+            "instructor": {
+              "id": "00000000-0000-7000-8000-00000000004a",
+              "displayName": "Marco Wrenfield"
+            }
+          }
+        },
+        {
+          "bookingId": "00000000-0000-7000-8000-000000000255",
+          "personName": "Clara Amberly",
+          "bookingStatus": "attended",
+          "late": false,
+          "redeemedAt": "2026-09-15T17:45:00Z",
+          "lesson": {
+            "id": "00000000-0000-7000-8000-0000000000b0",
+            "classId": "00000000-0000-7000-8000-000000000062",
+            "startsAt": "2026-09-15T16:30:00Z",
+            "endsAt": "2026-09-15T17:45:00Z",
+            "status": "scheduled",
+            "kind": "regular",
+            "visibility": "public",
+            "level": "intermediate",
+            "capacity": 18,
+            "courseType": {
+              "id": "00000000-0000-7000-8000-000000000055",
+              "name": "Contemporary"
+            },
+            "room": {
+              "id": "00000000-0000-7000-8000-000000000042",
+              "name": "Studio A"
+            },
+            "location": {
+              "id": "00000000-0000-7000-8000-000000000041",
+              "name": "Studio North"
+            },
+            "instructor": {
+              "id": "00000000-0000-7000-8000-00000000004a",
+              "displayName": "Marco Wrenfield"
+            }
+          }
+        }
+      ],
+      "useCount": 2
+    }
+  ]
+}

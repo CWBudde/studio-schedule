@@ -1,0 +1,5 @@
+SD-2026-0005  2026-09-15  receipt  Kai Lanternby  89.00 EUR   cash      -
+SD-2026-0004  2026-09-12  receipt  Clara Amberly  150.00 EUR  transfer  -
+SD-2026-0003  2026-09-08  receipt  Clara Amberly  150.00 EUR  card      -
+SD-2026-0002  2026-09-03  storno   Vera Rushwick  -18.00 EUR  cash      cancels SD-2026-0001
+SD-2026-0001  2026-09-02  receipt  Vera Rushwick  18.00 EUR   cash      canceled by SD-2026-0002

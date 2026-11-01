@@ -174,6 +174,25 @@ argument, so a name stays out of the shell history and the process list. To answ
 for access, `persons search`, then `persons export <id> --file <name>.json`; for erasure,
 `persons anonymize <id>` ([ADR 0016](decisions/0016-privacy-and-account-administration.md)).
 
+### Commands and flags: passes and receipts
+
+| Command           | Flag       | Meaning                                                                              |
+| ----------------- | ---------- | ------------------------------------------------------------------------------------ |
+| `passes list`     | `--person` | the ID of the person whose passes to list (required)                                 |
+| `receipts list`   | `--from`   | first issue date, `YYYY-MM-DD`; default: January 1 of the year of `--to`             |
+| `receipts list`   | `--to`     | last issue date, `YYYY-MM-DD`; default: today in the school's time zone              |
+| `receipts pdf`    | `--file`   | `-f`: the file to write the PDF into, created with mode 0600 (required)              |
+| `receipts pdf`    | `--force`  | overwrite the file of `--file` if it exists; without it, an existing file is refused |
+| `receipts export` | `--year`   | the year whose receipts to export (required)                                         |
+| `receipts export` | `--file`   | `-f`: write the CSV into this file, created with mode 0600, instead of stdout        |
+| `receipts export` | `--force`  | overwrite the file of `--file` if it exists                                          |
+| `receipts verify` | `--year`   | check only this year; default: every year                                            |
+
+`receipts export --year <year> --file receipts-<year>.csv` is the export for the tax adviser: one
+line per line item, with the columns listed in [docs/cli.md](cli.md). `receipts verify` is an
+operator command without `--as`. It exits with status 1 on a finding, so a cron job can run it,
+e.g. `studio-schedule receipts verify --year "$(date +%Y)" || mail -s receipts ops@example.org`.
+
 `migrate up` applies every pending migration, `migrate down` rolls back the latest one and
 `migrate status` lists them all; `seed` loads the fictional demo data into an empty, migrated
 database. `openapi` prints the OpenAPI document, `version` the build version and `vapid-keys` a new

@@ -1,0 +1,213 @@
+{
+  "items": [
+    {
+      "id": "00000000-0000-7000-8000-000000000269",
+      "number": "SD-2026-0005",
+      "kind": "sale",
+      "issuedAt": "2026-09-15T08:00:00Z",
+      "issueDate": "2026-09-15",
+      "issuer": {
+        "name": "Studio Demo Dance School",
+        "address": "Pirouette Lane 7\n10999 Exampletown",
+        "taxNumber": "99/999/99999",
+        "email": "office@studio-demo.example",
+        "phone": "+49 000 0000000"
+      },
+      "taxMode": "standard",
+      "payer": {
+        "id": "00000000-0000-7000-8000-000000000029",
+        "name": "Kai Lanternby"
+      },
+      "recipientName": "Kai Lanternby",
+      "paymentMethod": "cash",
+      "currency": "EUR",
+      "net": 7479,
+      "vat": 1421,
+      "gross": 8900,
+      "lines": [
+        {
+          "position": 1,
+          "description": "30-day pass for Kai Lanternby, valid 15 Sep 2026 – 14 Oct 2026",
+          "quantity": 1,
+          "unitPrice": 8900,
+          "vatRate": 1900,
+          "net": 7479,
+          "vat": 1421,
+          "gross": 8900
+        }
+      ],
+      "passId": "00000000-0000-7000-8000-00000000025f",
+      "cancelable": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000268",
+      "number": "SD-2026-0004",
+      "kind": "sale",
+      "issuedAt": "2026-09-12T08:00:00Z",
+      "issueDate": "2026-09-12",
+      "issuer": {
+        "name": "Studio Demo Dance School",
+        "address": "Pirouette Lane 7\n10999 Exampletown",
+        "taxNumber": "99/999/99999",
+        "email": "office@studio-demo.example",
+        "phone": "+49 000 0000000"
+      },
+      "taxMode": "standard",
+      "payer": {
+        "id": "00000000-0000-7000-8000-000000000001",
+        "name": "Clara Amberly"
+      },
+      "recipientName": "Clara Amberly",
+      "paymentMethod": "transfer",
+      "currency": "EUR",
+      "net": 12605,
+      "vat": 2395,
+      "gross": 15000,
+      "lines": [
+        {
+          "position": 1,
+          "description": "10-visit pass for Ella Amberly, valid 12 Sep 2026 – 10 Mar 2027",
+          "quantity": 1,
+          "unitPrice": 15000,
+          "vatRate": 1900,
+          "net": 12605,
+          "vat": 2395,
+          "gross": 15000
+        }
+      ],
+      "passId": "00000000-0000-7000-8000-00000000025b",
+      "cancelable": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000267",
+      "number": "SD-2026-0003",
+      "kind": "sale",
+      "issuedAt": "2026-09-08T08:00:00Z",
+      "issueDate": "2026-09-08",
+      "issuer": {
+        "name": "Studio Demo Dance School",
+        "address": "Pirouette Lane 7\n10999 Exampletown",
+        "taxNumber": "99/999/99999",
+        "email": "office@studio-demo.example",
+        "phone": "+49 000 0000000"
+      },
+      "taxMode": "standard",
+      "payer": {
+        "id": "00000000-0000-7000-8000-000000000001",
+        "name": "Clara Amberly"
+      },
+      "recipientName": "Clara Amberly",
+      "paymentMethod": "card",
+      "currency": "EUR",
+      "net": 12605,
+      "vat": 2395,
+      "gross": 15000,
+      "lines": [
+        {
+          "position": 1,
+          "description": "10-visit pass for Clara Amberly, valid 8 Sep 2026 – 6 Mar 2027",
+          "quantity": 1,
+          "unitPrice": 15000,
+          "vatRate": 1900,
+          "net": 12605,
+          "vat": 2395,
+          "gross": 15000
+        }
+      ],
+      "passId": "00000000-0000-7000-8000-000000000254",
+      "cancelable": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000266",
+      "number": "SD-2026-0002",
+      "kind": "cancellation",
+      "issuedAt": "2026-09-03T08:00:00Z",
+      "issueDate": "2026-09-03",
+      "issuer": {
+        "name": "Studio Demo Dance School",
+        "address": "Pirouette Lane 7\n10999 Exampletown",
+        "taxNumber": "99/999/99999",
+        "email": "office@studio-demo.example",
+        "phone": "+49 000 0000000"
+      },
+      "taxMode": "standard",
+      "payer": {
+        "id": "00000000-0000-7000-8000-000000000033",
+        "name": "Vera Rushwick"
+      },
+      "recipientName": "Vera Rushwick",
+      "paymentMethod": "cash",
+      "currency": "EUR",
+      "net": -1513,
+      "vat": -287,
+      "gross": -1800,
+      "reason": "Sold to the wrong person",
+      "lines": [
+        {
+          "position": 1,
+          "description": "Single visit for Vera Rushwick, valid 2 Sep 2026 – 30 Nov 2026",
+          "quantity": 1,
+          "unitPrice": -1800,
+          "vatRate": 1900,
+          "net": -1513,
+          "vat": -287,
+          "gross": -1800
+        }
+      ],
+      "cancels": {
+        "id": "00000000-0000-7000-8000-000000000265",
+        "number": "SD-2026-0001",
+        "issueDate": "2026-09-02"
+      },
+      "cancelable": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000265",
+      "number": "SD-2026-0001",
+      "kind": "sale",
+      "issuedAt": "2026-09-02T08:00:00Z",
+      "issueDate": "2026-09-02",
+      "issuer": {
+        "name": "Studio Demo Dance School",
+        "address": "Pirouette Lane 7\n10999 Exampletown",
+        "taxNumber": "99/999/99999",
+        "email": "office@studio-demo.example",
+        "phone": "+49 000 0000000"
+      },
+      "taxMode": "standard",
+      "payer": {
+        "id": "00000000-0000-7000-8000-000000000033",
+        "name": "Vera Rushwick"
+      },
+      "recipientName": "Vera Rushwick",
+      "paymentMethod": "cash",
+      "currency": "EUR",
+      "net": 1513,
+      "vat": 287,
+      "gross": 1800,
+      "lines": [
+        {
+          "position": 1,
+          "description": "Single visit for Vera Rushwick, valid 2 Sep 2026 – 30 Nov 2026",
+          "quantity": 1,
+          "unitPrice": 1800,
+          "vatRate": 1900,
+          "net": 1513,
+          "vat": 287,
+          "gross": 1800
+        }
+      ],
+      "canceledBy": {
+        "id": "00000000-0000-7000-8000-000000000266",
+        "number": "SD-2026-0002",
+        "issueDate": "2026-09-03"
+      },
+      "passId": "00000000-0000-7000-8000-000000000264",
+      "cancelable": false
+    }
+  ],
+  "total": 5,
+  "years": [
+    2026
+  ]
+}

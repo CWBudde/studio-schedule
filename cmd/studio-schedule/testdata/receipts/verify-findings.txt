@@ -1,0 +1,7 @@
+2026  SD-2026-0006  cancellation  the cancellation cancels no sale receipt
+2026  SD-2026-0099  number        the number does not end in its year 2026 and sequence 7
+2026  -             sequence      the number with sequence 8 is missing
+2026  SD-2026-0009  cancellation  the cancellation does not negate SD-2026-0003: net, VAT and gross -840, -160, -1000 EUR against 12605, 2395, 15000 EUR
+2026  -             sequence      the numbers with sequences 10 to 11 are missing
+2026  SD-2026-0012  totals        net, VAT and gross are 1008, 192, 1200; the lines sum to 840, 160, 1000
+9 receipts of 2026 checked: 6 findings
