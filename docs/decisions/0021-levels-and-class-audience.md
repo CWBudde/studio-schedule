@@ -1,6 +1,6 @@
 # 0021 — Levels and class audience
 
-- Status: accepted (levels); the class audience follows
+- Status: accepted
 - Date: 2026-11-01
 - Amends: [0007](0007-timetable-administration.md) (a new catalogue record the office maintains)
 
@@ -15,8 +15,8 @@ that span two levels. The school decided (2026-11-01) that levels become records
 like course types: the office names them, orders them and gives them a code; a class then states a
 span of them, or all levels, plus a stage and an age range.
 
-This record is written in two steps. The levels themselves (this step) come first; the class
-audience, which moves `classes.level` onto level rows, follows in the next one.
+This record was written in two steps: the levels themselves first (migration 00034), then the
+class audience, which moved `classes.level` onto level rows (migration 00035).
 
 ## Decision
 
@@ -59,8 +59,9 @@ types:
   Concurrent creates therefore take positions one after another, and a create during a reorder
   waits and goes after the reordered levels, so the reorder cannot commit an order that misses it.
   There is still no unique constraint on the position; the lock keeps the positions apart.
-- Deleting a level that classes use will be a 409 `in-use` (`domain.ErrInUse`) once classes refer
-  to levels; until then nothing refers to them.
+- Deleting a level that a class uses as either end of its span is a 409 `in-use`
+  (`domain.ErrInUse`): `LevelRepo.Delete` refuses it in both stores (in PostgreSQL the foreign keys
+  are `ON DELETE RESTRICT`). The office first changes or retires the classes.
 
 **A fresh school has none.** Neither the migration nor `init` creates levels: the office adds the
 school's own on the Levels page (Admin → Levels, after Course types). The demo seed creates the
@@ -73,15 +74,66 @@ column sorting or search, so it always shows the order the buttons change.
 
 ## Class audience
 
-Follows with the next step of the Werkstatt catalogue plan: a class states a level span
-(`levelFromId`, `levelToId`, the ends in either order), or all levels, or no level; plus a stage
-and an age range in months. The fixed enum (now `domain.SkillLevel`) and `classes.level` give way
-to level rows then, and this section records the span rule, the level filter and the migration.
+**A class states who it is for** (`internal/domain/audience.go`, `domain.Class`), each part
+optional:
+
+- **A level span** `Levels domain.LevelRange{From, To}`: two levels of the school's scale, both or
+  neither (a 422 on `levelToId` otherwise). A class for one level names it twice. The ends may be
+  stored in either order, because the office can reorder the scale after the class was saved: the
+  span is always read lower level first (`service.Audience.Low`/`High`, by position, then ID), and
+  a level moved between the two ends now belongs to the span. An unknown level on a create or an
+  update is a 422 on `levelFromId` or `levelToId` ("level does not exist").
+- **All levels** `AllLevels`: the class is for everyone, whatever their level. It excludes a span
+  (a 422 on `allLevels`). It replaces the old `open`.
+- **A stage** `Stage` 1–9 (a 422 on `stage` otherwise): the step within a course's progression
+  (children's ballet runs stages 1–3), shown as "Stage 2" / "Stufe 2". It is a number, not a
+  record.
+- **An age range** `AgeFrom`, `AgeTo` in months (`domain.AgeMonths`, 1–1200, a 422 on
+  `ageFromMonths`/`ageToMonths`); either end alone is fine ("from 3½", "up to 6"), and when both
+  are given the range must not end before it starts. Months because children's classes go by
+  half years; the web enters and shows years with halves ("3½").
+
+A class with none of them states nothing, which is fine: a school without levels keeps working,
+and the children's classes of the programme demo state only an age.
+
+**The service resolves it.** `service.Audience` holds the span's levels resolved (`audienceOf`, a
+class pointing at a missing level is a broken reference) plus the other parts.
+`TimetableService`, the admin class list, the schedule (`ScheduledLesson.Audience`, from one
+`Levels().List` per call) and the statistics' class rows carry it. The API embeds it in `Class`,
+`LessonSummary` and the statistics row as `levelFrom`/`levelTo` (`LevelRef{id, name, code?}`, lower
+first), `allLevels`, `stage`, `ageFromMonths` and `ageToMonths`, each omitted when absent. The class
+bodies take `levelFromId`, `levelToId`, `allLevels`, `stage`, `ageFromMonths` and
+`ageToMonths`.
+
+**The level filter.** `getSchedule`'s `level` is a level ID. A lesson matches when its class is for
+all levels or the level's position lies between the span's ends (inclusive,
+`Audience.Covers`); a class without a level, a one-off lesson without a class and an unknown level
+ID match nothing. The web offers the school's levels in their order and hides the filter while the
+school has none; an old bookmark with an enum value (`?level=beginner`) is dropped.
+
+**The web shows it** with `formatAudience` (`web/src/lib/audience.ts`): the long form with level
+names ("Beginner–Intermediate · Stage 2 · 4–6 yrs") on the Programme card, the lesson sheet, the
+timetable and the statistics; the short form with codes, falling back to the name ("A/M · Stufe 2
+· 4–6 J."), on the Werkstatt card. The class sheet picks "No level", "All levels" or a level, then
+"up to" a second one, a stage and the ages in years; a school without levels sees a link to the
+Levels page instead of the selects.
+
+**The migration** (00035) moves the old fixed value onto level rows. For each of `beginner`,
+`intermediate`, `advanced` and `professional` that a class uses, it uses a level the school already
+has by that English name (ignoring case) or else creates one ("Beginner" B, …, after the school's
+own levels in the old order, without the code if another level has it); the class then spans that
+level to itself. `open` becomes all levels. `classes.level` is dropped; `level_from_id` and
+`level_to_id` reference `levels` `ON DELETE RESTRICT`, and CHECKs mirror the domain rules (both
+ends or none, all levels without a span, stage 1–9, ages 1–1200 and in order). Down is lossy: it
+restores `level` from the name of the span's lower end (by position, then ID) if it is one of the
+four (ignoring case), else `open`, and leaves the level rows.
 
 ## Consequences
 
 - Level names are not translated. A school that teaches in two languages picks the names it wants
   to show, possibly with both words ("Anfänger / Beginner").
-- Until the class audience lands, levels exist beside the fixed class level: the Levels page edits
-  a scale that no class uses yet.
+- Renaming a level renames it on every class at once; reordering the scale can widen or narrow a
+  span, which is what a school that reorders means.
+- The filter compares positions only, so a level filter cannot express "exactly this level"; a
+  class for one level and a span through it both match.
 - Codes are unique, so the short form of a span ("A/M") is never ambiguous.

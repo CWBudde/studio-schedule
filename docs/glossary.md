@@ -10,7 +10,8 @@ where it differs.
 | `ClassMember`      | Class member        | Kursmitglied           | Fixed enrolment in a class, "since" a date; auto-booked from Phase 4     |
 | `Term`             | Term                | Zeitraum / Saison      | Date range for a timetable, e.g. a summer timetable ("Sommertanzplan")   |
 | `CourseType`       | Course type / style | Stilrichtung           | Catalogue entry with description; name unique (ADR 0007)                 |
-| `Level`            | Level               | Niveau                 | e.g. beginner, intermediate, advanced, professional, open                |
+| `Level`            | Level               | Level                  | A school's level record: name, optional code, position (ADR 0021)        |
+| `Audience`         | Audience            | Zielgruppe             | Who a class is for: a level span or all levels, a stage, an age range    |
 | `Location`, `Room` | Location, room      | Standort, Raum         | Rooms have a capacity; names unique (rooms per location; ADR 0007)       |
 | `Staff`            | Instructor          | Lehrkraft              | Kind `instructor` or `accompanist` ("Korrepetition"); may be inactive    |
 | `Person`           | Person              | Person                 | Any human: member, child, guest                                          |
