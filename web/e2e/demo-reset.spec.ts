@@ -1,49 +1,10 @@
-import { expect, gotoDemo, hashSearch, type Page, signIn, test } from './fixtures';
+import { expect, gotoDemo, hashSearch, type Page, signIn, test, waitForSaved } from './fixtures';
 
 /** Opens the administration from the account menu; it starts with the locations. */
 async function openAdministration(page: Page, name: string): Promise<void> {
   await page.getByRole('banner').getByRole('button', { name }).click();
   await page.getByRole('menuitem', { name: 'Administration' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Locations and rooms' })).toBeVisible();
-}
-
-/**
- * The saved store as text (JSON), or '' if nothing is saved yet. See
- * web/src/api/wasm/persistence.ts.
- */
-function savedStore(page: Page): Promise<string> {
-  return page.evaluate(async () => {
-    // Opening a database that does not exist would create it empty.
-    const dbs = await indexedDB.databases();
-    if (!dbs.some((db) => db.name === 'studio-schedule-demo')) return '';
-    return new Promise<string>((resolve) => {
-      const open = indexedDB.open('studio-schedule-demo');
-      open.onerror = () => resolve('');
-      open.onsuccess = () => {
-        const db = open.result;
-        if (!db.objectStoreNames.contains('snapshot')) {
-          db.close();
-          resolve('');
-          return;
-        }
-        const get = db.transaction('snapshot').objectStore('snapshot').get('current');
-        get.onsuccess = () => {
-          db.close();
-          const store = (get.result as { store?: Uint8Array } | undefined)?.store;
-          resolve(store ? new TextDecoder().decode(store) : '');
-        };
-        get.onerror = () => {
-          db.close();
-          resolve('');
-        };
-      };
-    });
-  });
-}
-
-/** Waits until the saved data contains `text`, i.e. a change has been saved. */
-async function waitForSaved(page: Page, text: string): Promise<void> {
-  await expect.poll(() => savedStore(page), { timeout: 10_000 }).toContain(text);
 }
 
 async function waitForBackend(page: Page): Promise<void> {

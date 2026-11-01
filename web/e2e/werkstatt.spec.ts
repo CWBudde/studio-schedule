@@ -152,6 +152,36 @@ test.describe('the schedule', () => {
     }
   });
 
+  test('desktop: the columns follow the order of the rooms, not their names', async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'phones get one column');
+    await gotoDemo(page, '/schedule');
+    const days = page.getByRole('main').getByRole('region');
+    await expect(lessons(days.first()).first()).toBeVisible();
+
+    // The rooms' positions (internal/seed/demo.go); a day shows the rooms it uses.
+    const order = ['Oben', 'Unten', 'Trainingsraum'];
+    const count = await days.count();
+    expect(count).toBeGreaterThan(0);
+    for (let i = 0; i < count; i++) {
+      const names = await days
+        .nth(i)
+        .getByRole('list', { name: rooms })
+        .evaluateAll((lists) =>
+          lists.map(
+            (list) =>
+              document.getElementById(list.getAttribute('aria-labelledby') ?? '')?.textContent ??
+              '',
+          ),
+        );
+      const places = names.map((name) => order.indexOf(name));
+      expect(places).not.toContain(-1);
+      expect(places).toEqual([...places].sort((a, b) => a - b));
+    }
+  });
+
   test('phone: one column of cards, no room columns', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'wider screens get room columns');
     await gotoDemo(page, '/schedule');
