@@ -313,17 +313,35 @@ func lastAdmin(acc domain.Account, admins []domain.Account) bool {
 func endSessions(
 	ctx context.Context, tx store.Tx, src ids.Source, now time.Time, id domain.AccountID, keep domain.SessionID,
 ) error {
+	_, err := endSessionsCounted(ctx, tx, src, now, id, keep)
+
+	return err
+}
+
+// endSessionsCounted is endSessions, and returns how many of the sessions
+// it deleted had not ended yet.
+func endSessionsCounted(
+	ctx context.Context, tx store.Tx, src ids.Source, now time.Time, id domain.AccountID, keep domain.SessionID,
+) (int, error) {
 	ended, err := tx.Sessions().DeleteByAccount(ctx, id, keep)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if _, err := tx.PushSubscriptions().DeleteByAccount(ctx, id); err != nil {
-		return err
+		return 0, err
 	}
 
+	running := 0
+
 	for _, sess := range ended {
-		if sess.ImpersonatorID.IsZero() || !now.Before(sessionEnd(sess)) {
+		if !now.Before(sessionEnd(sess)) {
+			continue
+		}
+
+		running++
+
+		if sess.ImpersonatorID.IsZero() {
 			continue
 		}
 
@@ -332,15 +350,15 @@ func endSessions(
 			Action: domain.AuditImpersonationEnded, TargetKind: domain.AuditTargetAccount, TargetID: sess.AccountID,
 		}
 		if err := e.Validate(); err != nil {
-			return err
+			return 0, err
 		}
 
 		if err := tx.Audit().Create(ctx, e); err != nil {
-			return err
+			return 0, err
 		}
 	}
 
-	return nil
+	return running, nil
 }
 
 // deleteAccount ends the sessions of the account id (endSessions) and

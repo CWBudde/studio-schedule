@@ -14,13 +14,18 @@ import (
 )
 
 // Credentials runs the scenarios of the password rules (ADR 0004,
-// amendment) on fresh stores from newStore.
+// amendment) and of the command line's account administration (ADR 0020:
+// finding an account, reset links, ending sessions) on fresh stores from
+// newStore.
 func Credentials(t *testing.T, newStore func(t *testing.T) store.Store) {
 	t.Helper()
 
 	for name, fn := range map[string]func(t *testing.T, w *world){
 		"PasswordChangedMail": passwordChangedMail,
 		"CommonPasswords":     commonPasswords,
+		"AccountByRef":        accountByRef,
+		"PasswordResetLink":   passwordResetLink,
+		"RevokeSessions":      revokeSessions,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

@@ -434,23 +434,11 @@ func (s *AuthService) sendLink(ctx context.Context, tx store.Tx, acc domain.Acco
 		return err
 	}
 
-	if err := tx.AccountTokens().DeleteByAccount(ctx, acc.ID, m.purpose); err != nil {
+	if _, err := s.storeLink(ctx, tx, acc, token, m); err != nil {
 		return err
 	}
 
 	now := s.clock.Now()
-	t := domain.AccountToken{
-		Hash: domain.HashToken(token), AccountID: acc.ID, Purpose: m.purpose,
-		Email: m.to, CreatedAt: now, ExpiresAt: now.Add(m.ttl),
-	}
-
-	if err := t.Validate(); err != nil {
-		return err
-	}
-
-	if err := tx.AccountTokens().Create(ctx, t); err != nil {
-		return err
-	}
 
 	rendered, err := s.mails.Render(cmp.Or(acc.Locale, m.locale, settings.DefaultLocale), m.template, mail.LinkData{
 		SchoolName:   settings.SchoolName,
@@ -465,6 +453,28 @@ func (s *AuthService) sendLink(ctx context.Context, tx store.Tx, acc domain.Acco
 	}
 
 	return enqueueMail(ctx, tx, s.ids, now, m.to, m.template, mailOpts{}, rendered)
+}
+
+// storeLink replaces the account's links of m.purpose with token, valid
+// for m.ttl, and returns it.
+func (s *AuthService) storeLink(
+	ctx context.Context, tx store.Tx, acc domain.Account, token string, m linkMail,
+) (domain.AccountToken, error) {
+	if err := tx.AccountTokens().DeleteByAccount(ctx, acc.ID, m.purpose); err != nil {
+		return domain.AccountToken{}, err
+	}
+
+	now := s.clock.Now()
+	t := domain.AccountToken{
+		Hash: domain.HashToken(token), AccountID: acc.ID, Purpose: m.purpose,
+		Email: m.to, CreatedAt: now, ExpiresAt: now.Add(m.ttl),
+	}
+
+	if err := t.Validate(); err != nil {
+		return domain.AccountToken{}, err
+	}
+
+	return t, tx.AccountTokens().Create(ctx, t)
 }
 
 // linkToken returns a valid, unexpired token of purpose and its account. A

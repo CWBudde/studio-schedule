@@ -228,7 +228,7 @@ func (h *handlers) setDisabled(ctx context.Context, id domain.AccountID, disable
 		return nil, h.privacyError(ctx, err)
 	}
 
-	return &AccountEntryOutput{Body: accountEntry(a)}, nil
+	return &AccountEntryOutput{Body: NewAccountEntry(a)}, nil
 }
 
 func (h *handlers) setAccountRole(ctx context.Context, in *AccountRoleInput) (*AccountEntryOutput, error) {
@@ -239,7 +239,7 @@ func (h *handlers) setAccountRole(ctx context.Context, in *AccountRoleInput) (*A
 		return nil, h.privacyError(ctx, err)
 	}
 
-	return &AccountEntryOutput{Body: accountEntry(a)}, nil
+	return &AccountEntryOutput{Body: NewAccountEntry(a)}, nil
 }
 
 func (h *handlers) deleteAccount(ctx context.Context, in *AccountRefInput) (*struct{}, error) {
@@ -297,14 +297,28 @@ func (h *handlers) privacyError(ctx context.Context, err error) error {
 	}
 }
 
-// accountEntry is the API form of an account with its person.
-func accountEntry(a service.AccountEntry) AccountEntry {
+// NewAccountEntry is the API form of an account with its person: the
+// response body of the account administration, an item of listAccounts.
+func NewAccountEntry(a service.AccountEntry) AccountEntry {
 	return AccountEntry{
 		ID: a.Account.ID, Email: a.Account.Email, Role: string(a.Account.Role),
 		GivenName: a.Person.GivenName, FamilyName: a.Person.FamilyName,
 		Confirmed: !a.Account.ConfirmedAt.IsZero(), Disabled: !a.Account.DisabledAt.IsZero(),
 	}
 }
+
+// NewAccountList is the response body of listAccounts.
+func NewAccountList(accounts []service.AccountEntry) AccountList {
+	items := make([]AccountEntry, 0, len(accounts))
+	for _, a := range accounts {
+		items = append(items, NewAccountEntry(a))
+	}
+
+	return AccountList{Items: items}
+}
+
+// NewPersonAccount is the response body of createPersonAccount.
+func NewPersonAccount(a domain.Account) PersonAccount { return personAccount(a) }
 
 // ---------------------------------------------------------------- export
 
