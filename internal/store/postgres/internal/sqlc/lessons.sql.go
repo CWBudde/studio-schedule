@@ -304,6 +304,50 @@ func (q *Queries) ListLessonsByEvent(ctx context.Context, eventID pgtype.UUID) (
 	return items, nil
 }
 
+const listLessonsByEvents = `-- name: ListLessonsByEvents :many
+SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date, detached, cancel_note, canceled_at, canceled_by, renter, event_id FROM lessons WHERE event_id = ANY($1::uuid[]) ORDER BY starts_at, id
+`
+
+func (q *Queries) ListLessonsByEvents(ctx context.Context, events []pgtype.UUID) ([]Lesson, error) {
+	rows, err := q.db.Query(ctx, listLessonsByEvents, events)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Lesson
+	for rows.Next() {
+		var i Lesson
+		if err := rows.Scan(
+			&i.ID,
+			&i.ClassID,
+			&i.CourseTypeID,
+			&i.RoomID,
+			&i.InstructorID,
+			&i.AccompanistID,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.Status,
+			&i.Visibility,
+			&i.Kind,
+			&i.Capacity,
+			&i.SlotDate,
+			&i.Detached,
+			&i.CancelNote,
+			&i.CanceledAt,
+			&i.CanceledBy,
+			&i.Renter,
+			&i.EventID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLessonsByIDs = `-- name: ListLessonsByIDs :many
 SELECT id, class_id, course_type_id, room_id, instructor_id, accompanist_id, starts_at, ends_at, status, visibility, kind, capacity, slot_date, detached, cancel_note, canceled_at, canceled_by, renter, event_id FROM lessons WHERE id = ANY($1::uuid[]) ORDER BY starts_at, id
 `

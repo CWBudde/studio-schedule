@@ -556,6 +556,9 @@ type LessonRepo interface {
 	// ListByEvent returns the sessions of an event (the lessons whose
 	// EventID it is), canceled ones included, ordered by StartsAt and ID.
 	ListByEvent(ctx context.Context, event domain.EventID) ([]domain.Lesson, error)
+	// ListByEvents returns the sessions of the given events, canceled ones
+	// included, ordered by StartsAt and ID.
+	ListByEvents(ctx context.Context, events []domain.EventID) ([]domain.Lesson, error)
 	// ListByStaff returns the lessons with from <= StartsAt < to whose
 	// instructor or accompanist is one of the staff members, ordered by
 	// StartsAt and ID.

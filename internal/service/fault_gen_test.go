@@ -985,6 +985,14 @@ func (r *faultLessonRepo) ListByEvent(a0 context.Context, a1 domain.EventID) (r0
 	return r.LessonRepo.ListByEvent(a0, a1)
 }
 
+func (r *faultLessonRepo) ListByEvents(a0 context.Context, a1 []domain.EventID) (r0 []domain.Lesson, err error) {
+	if err = r.f.hit("Lessons.ListByEvents"); err != nil {
+		return r0, err
+	}
+
+	return r.LessonRepo.ListByEvents(a0, a1)
+}
+
 func (r *faultLessonRepo) ListByStaff(a0 context.Context, a1 []domain.StaffID, a2 time.Time, a3 time.Time) (r0 []domain.Lesson, err error) {
 	if err = r.f.hit("Lessons.ListByStaff"); err != nil {
 		return r0, err
