@@ -599,15 +599,12 @@ func loadRefsOf(ctx context.Context, tx store.Tx, l domain.Lesson) (lessonRefs, 
 
 	refs.locations[location.ID] = location
 
-	// A room rental may have no course type.
-	if !l.CourseTypeID.IsZero() {
-		courseType, err := tx.CourseTypes().Get(ctx, l.CourseTypeID)
-		if err != nil {
-			return refs, fmt.Errorf("course type %v: %w", l.CourseTypeID, refErr(err))
-		}
-
-		refs.courseTypes[courseType.ID] = courseType
+	courseType, err := courseTypeOf(ctx, tx, l.CourseTypeID)
+	if err != nil {
+		return refs, err
 	}
+
+	refs.courseTypes[courseType.ID] = courseType
 
 	for _, id := range []domain.StaffID{l.InstructorID, l.AccompanistID} {
 		if id.IsZero() {
@@ -632,6 +629,22 @@ func loadRefsOf(ctx context.Context, tx store.Tx, l domain.Lesson) (lessonRefs, 
 	}
 
 	return refs, nil
+}
+
+// courseTypeOf returns the course type id names, and the zero course type
+// for the zero id of a room rental without one (ADR 0007, amendment). A
+// missing one is errBrokenReference.
+func courseTypeOf(ctx context.Context, tx store.Tx, id domain.CourseTypeID) (domain.CourseType, error) {
+	if id.IsZero() {
+		return domain.CourseType{}, nil
+	}
+
+	ct, err := tx.CourseTypes().Get(ctx, id)
+	if err != nil {
+		return ct, fmt.Errorf("course type %v: %w", id, refErr(err))
+	}
+
+	return ct, nil
 }
 
 // errBrokenReference reports a lesson that references a missing record.

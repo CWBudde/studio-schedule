@@ -606,7 +606,7 @@ func (s *CalendarFeedService) event(
 
 	// A room rental may have no course type: the kind names it then.
 	name := e.CourseType.Name
-	if name == "" {
+	if e.CourseType.ID.IsZero() {
 		name = labels.rental
 	}
 

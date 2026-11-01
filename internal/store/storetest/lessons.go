@@ -334,6 +334,12 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 			})
 			wantEqual(e.t, got, rental)
 
+			// Only a rental may go without a course type.
+			untyped := e.newLesson(s, t0.Add(2*time.Hour), 5)
+			untyped.CourseTypeID = domain.CourseTypeID{}
+			wantErr(e.t, e.write(func(ctx context.Context, tx store.Tx) error { return tx.Lessons().Create(ctx, untyped) }),
+				domain.ErrValidation)
+
 			own := e.lesson(s, t0.Add(30*time.Minute), 5)
 
 			overlaps := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Lesson, error) {

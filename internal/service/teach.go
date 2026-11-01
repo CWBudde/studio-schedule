@@ -382,9 +382,9 @@ func (s *TeachService) Notify(ctx context.Context, p Principal, lesson domain.Le
 			return err
 		}
 
-		ct, err := tx.CourseTypes().Get(ctx, l.CourseTypeID)
+		ct, err := courseTypeOf(ctx, tx, l.CourseTypeID)
 		if err != nil {
-			return fmt.Errorf("course type %v: %w", l.CourseTypeID, refErr(err))
+			return err
 		}
 
 		room, location, err := place(ctx, tx, l.RoomID)

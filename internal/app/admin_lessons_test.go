@@ -234,11 +234,13 @@ func TestAdminRentalWithoutCourseType(t *testing.T) {
 	rooms := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/rooms", "", office))
 	room, _ := rooms["items"].([]any)[0].(map[string]any)["id"].(string)
 
-	rental := `{"date":"2026-12-02","startTime":"10:00","durationMinutes":60,"roomId":%q,"capacity":0,` +
+	rental := `{"date":"2026-12-02","startTime":%q,"durationMinutes":60,"roomId":%q,"capacity":0,` +
 		`"visibility":"hidden","kind":%q%s}`
+	workshop := `{"date":"2026-12-02","startTime":"10:00","durationMinutes":60,"roomId":%q,"capacity":5,` +
+		`"visibility":"public","kind":"workshop","confirmRoomOverlap":true}`
 
 	created := decode(t, a.expect(http.StatusCreated, http.MethodPost, "/api/v1/lessons",
-		fmt.Sprintf(rental, room, "rental", `,"renter":"Juniper Players"`), office))
+		fmt.Sprintf(rental, "10:00", room, "rental", `,"renter":"Juniper Players"`), office))
 	id, _ := created["id"].(string)
 
 	if _, ok := created["courseType"]; ok || created["renter"] != "Juniper Players" {
@@ -251,7 +253,7 @@ func TestAdminRentalWithoutCourseType(t *testing.T) {
 
 	// Another rental in the room at that time: the conflict names the first.
 	taken := decode(t, a.expect(http.StatusConflict, http.MethodPost, "/api/v1/lessons",
-		fmt.Sprintf(rental, room, "rental", `,"renter":"Maplewood Choir","startTime":"10:30"`), office))
+		fmt.Sprintf(rental, "10:30", room, "rental", `,"renter":"Maplewood Choir"`), office))
 	if other, _ := taken["lesson"].(map[string]any); taken["reason"] != "room-taken" || other["id"] != id ||
 		other["courseType"] != nil {
 		t.Errorf("409 %v, want room-taken naming %s without courseType", taken, id)
@@ -260,7 +262,7 @@ func TestAdminRentalWithoutCourseType(t *testing.T) {
 	// Every other kind needs a course type, and the rental cannot become one.
 	for path, method := range map[string]string{"/api/v1/lessons": http.MethodPost, "/api/v1/lessons/" + id: http.MethodPut} {
 		got := decode(t, a.expect(http.StatusUnprocessableEntity, method, path,
-			fmt.Sprintf(rental, room, "workshop", `,"capacity":5,"visibility":"public","confirmRoomOverlap":true`), office))
+			fmt.Sprintf(workshop, room), office))
 
 		want := "body.courseTypeId"
 		if method == http.MethodPut {

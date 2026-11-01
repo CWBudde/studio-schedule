@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"net/url"
 	"slices"
 	"time"
@@ -515,9 +514,9 @@ type lessonPlace struct {
 }
 
 func loadLessonPlace(ctx context.Context, tx store.Tx, l domain.Lesson) (lessonPlace, error) {
-	ct, err := tx.CourseTypes().Get(ctx, l.CourseTypeID)
+	ct, err := courseTypeOf(ctx, tx, l.CourseTypeID)
 	if err != nil {
-		return lessonPlace{}, fmt.Errorf("course type %v: %w", l.CourseTypeID, refErr(err))
+		return lessonPlace{}, err
 	}
 
 	room, location, err := place(ctx, tx, l.RoomID)

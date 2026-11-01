@@ -15,7 +15,7 @@ import {
 import { useServerNow } from '@/lib/useNow';
 import { cn } from '@/lib/utils';
 import { AvailabilityBadges, hasAvailabilityBadges } from '../booking/AvailabilityBadges';
-import { useLessonTitle } from '../lessonLabel';
+import { showsKind, useLessonTitle } from '../lessonLabel';
 import { useScheduleSearch } from '../useScheduleSearch';
 import { VisibilityBadge } from '../visibility/VisibilityBadge';
 import { layoutWeek, MIN_BLOCK_MINUTES, type Placement, type TimeAxis } from './layout';
@@ -263,6 +263,9 @@ function LessonBlock({
   const { item: lesson, start, end, lane, lanes } = placement;
   const canceled = lesson.status === 'canceled';
   const workshop = lesson.kind === 'workshop';
+  // A room rental titled by its course type says what it is; one without is
+  // titled "Room rental" already.
+  const rentalKind = lesson.kind === 'rental' && showsKind(lesson);
   const showFree = !canceled && !ended;
   const time = formatTimeRange(lesson.startsAt, lesson.endsAt, timeZone, lang);
   const label = [
@@ -272,6 +275,7 @@ function LessonBlock({
     lesson.room.name,
     canceled && t('status.canceled'),
     workshop && t('kind.workshop'),
+    rentalKind && t('kind.rental'),
     lesson.visibility !== 'public' && t(`visibility.${lesson.visibility}`),
   ]
     .filter(Boolean)
@@ -308,6 +312,7 @@ function LessonBlock({
       <span className="w-full truncate text-muted-foreground">{lesson.room.name}</span>
       {canceled && <Badge variant="destructive">{t('status.canceled')}</Badge>}
       {workshop && <Badge variant="outline">{t('kind.workshop')}</Badge>}
+      {rentalKind && <Badge variant="outline">{t('kind.rental')}</Badge>}
       <VisibilityBadge visibility={lesson.visibility} />
       <AvailabilityBadges id={availabilityId} lesson={lesson} showFree={showFree} now={now} />
     </button>

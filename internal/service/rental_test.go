@@ -260,7 +260,7 @@ func TestRentalFeedEvent(t *testing.T) {
 			Status: domain.LessonScheduled, Visibility: domain.VisibilityHidden, Kind: domain.LessonRental,
 			Renter: "Copperleaf Theater Group",
 		},
-		CourseType: domain.CourseType{Name: "Imaginary Ballet"},
+		CourseType: domain.CourseType{ID: ids.New[domain.CourseTypeID](ids.NewSequence()), Name: "Imaginary Ballet"},
 		Room:       domain.Room{Name: "Room One"},
 		Location:   domain.Location{Name: "Studio Nowhere"},
 	}}

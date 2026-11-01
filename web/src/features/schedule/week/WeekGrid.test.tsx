@@ -273,6 +273,47 @@ describe('WeekGrid', () => {
     expect(block).toHaveAccessibleName(/, Workshop$/);
   });
 
+  it('marks a room rental, once', async () => {
+    const rental = {
+      ...lessonContemporary,
+      kind: 'rental',
+      visibility: 'hidden',
+      capacity: 0,
+      instructor: undefined,
+      renter: 'Copperleaf Theater Group',
+    } satisfies ScheduleLesson;
+    const rentals: Schedule = {
+      ...schedule,
+      lessons: [
+        rental,
+        {
+          ...rental,
+          id: lessonBallet.id,
+          courseType: undefined,
+          startsAt: lessonBallet.startsAt,
+          endsAt: lessonBallet.endsAt,
+        },
+      ],
+    };
+    renderAtSchedule(
+      <WeekGrid
+        schedule={rentals}
+        today={todayIn('Europe/Berlin', rentals.now)}
+        receivedAt={Date.now()}
+        weekStart="2026-10-26"
+      />,
+    );
+
+    // With a course type, the block says it is a rental.
+    const typed = await blockIn('Tue 27', /Contemporary/);
+    expect(within(typed).getByText('Room rental')).toBeInTheDocument();
+    expect(typed).toHaveAccessibleName(/, Room rental, Hidden – staff only$/);
+    // Without one, its title says so, once.
+    const untyped = await blockIn('Mon 26', /^Room rental/);
+    expect(within(untyped).getAllByText('Room rental')).toHaveLength(1);
+    expect(untyped).not.toHaveAccessibleName(/Room rental.*Room rental/);
+  });
+
   it('marks lessons for members and hidden lessons', async () => {
     const restricted: Schedule = {
       ...schedule,

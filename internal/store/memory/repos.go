@@ -1086,6 +1086,9 @@ func (r lessonRepo) put(l domain.Lesson) error {
 	l.StartsAt, l.EndsAt, l.CanceledAt = instant(l.StartsAt), instant(l.EndsAt), instant(l.CanceledAt)
 
 	switch {
+	case l.CourseTypeID.IsZero() && l.Kind != domain.LessonRental:
+		// PostgreSQL's CHECK lessons_course_type (migration 00030).
+		return fmt.Errorf("lesson without a course type: %w", domain.ErrValidation)
 	case (!l.ClassID.IsZero() && !s.classes.has(l.ClassID)) ||
 		(!l.CourseTypeID.IsZero() && !s.courseTypes.has(l.CourseTypeID)) ||
 		!s.rooms.has(l.RoomID) || (!l.InstructorID.IsZero() && !s.staff.has(l.InstructorID)) ||

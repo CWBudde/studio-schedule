@@ -511,13 +511,9 @@ func roomFree(ctx context.Context, tx store.Tx, l domain.Lesson) error {
 		return err
 	}
 
-	// A room rental may have no course type; CourseType stays zero then.
-	var ct domain.CourseType
-
-	if !other.CourseTypeID.IsZero() {
-		if ct, err = tx.CourseTypes().Get(ctx, other.CourseTypeID); err != nil {
-			return fmt.Errorf("course type %v: %w", other.CourseTypeID, refErr(err))
-		}
+	ct, err := courseTypeOf(ctx, tx, other.CourseTypeID)
+	if err != nil {
+		return err
 	}
 
 	return &RoomTakenError{Lesson: other, CourseType: ct}

@@ -213,11 +213,6 @@ function LessonForm({
     const inactive = (name: string) => t('classes.inactiveStaff', { name });
     return {
       courseTypes: choices.courseTypes.map((c) => ({ value: c.id, label: c.name })),
-      // A room rental may go without a course type.
-      rentalCourseTypes: [
-        { value: none, label: t('lessons.noCourseType') },
-        ...choices.courseTypes.map((c) => ({ value: c.id, label: c.name })),
-      ],
       rooms: roomOptions(choices.rooms, choices.locations, lang, t('classes.unknown')),
       instructors: staffOptions(choices.staff, 'instructor', editing?.instructor, inactive),
       accompanists: [
@@ -353,30 +348,24 @@ function LessonForm({
           <Controller
             control={form.control}
             name="courseTypeId"
-            render={({ field }) =>
-              rental ? (
-                <SelectField
-                  label={t('lessons.courseType')}
-                  placeholder={t('lessons.noCourseType')}
-                  hint={t('lessons.courseTypeOptional')}
-                  options={options.rentalCourseTypes}
-                  value={field.value || none}
-                  onChange={(value) => field.onChange(value === none ? '' : value)}
-                  onBlur={field.onBlur}
-                  error={errorText(errors.courseTypeId)}
-                />
-              ) : (
-                <SelectField
-                  label={t('lessons.courseType')}
-                  placeholder={t('lessons.choose')}
-                  options={options.courseTypes}
-                  value={field.value}
-                  onChange={field.onChange}
-                  onBlur={field.onBlur}
-                  error={errorText(errors.courseTypeId)}
-                />
-              )
-            }
+            render={({ field }) => (
+              // A room rental may go without a course type: "None" leads its
+              // options and stands for the empty value.
+              <SelectField
+                label={t('lessons.courseType')}
+                placeholder={t(rental ? 'lessons.noCourseType' : 'lessons.choose')}
+                hint={rental ? t('lessons.courseTypeOptional') : undefined}
+                options={
+                  rental
+                    ? [{ value: none, label: t('lessons.noCourseType') }, ...options.courseTypes]
+                    : options.courseTypes
+                }
+                value={rental ? field.value || none : field.value}
+                onChange={(value) => field.onChange(value === none ? '' : value)}
+                onBlur={field.onBlur}
+                error={errorText(errors.courseTypeId)}
+              />
+            )}
           />
         )}
         <Controller
