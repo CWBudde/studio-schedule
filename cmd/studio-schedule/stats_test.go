@@ -115,7 +115,11 @@ func TestStatsRanges(t *testing.T) {
 		}
 	}
 
-	// The term range needs a term that includes today.
-	wantExitCode(t, cliRun{st: pastDemoStore(t)}.exec(t, "stats", "--as", demoOffice, "--range", "term"), 3,
-		"no term includes today")
+	// The term range needs a term that includes today, on both stores.
+	pastStores(t, func(t *testing.T, past cliRun) {
+		got := past.exec(t, "stats", "--as", demoOffice, "--range", "term")
+		if got.code != 3 || !strings.Contains(got.stderr, "no term includes today") || got.stdout != "" {
+			t.Errorf("no current term: exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
+		}
+	})
 }

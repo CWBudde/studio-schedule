@@ -74,6 +74,63 @@ func TestRunMainExitStatus(t *testing.T) {
 	}
 }
 
+// TestCommandsOffTheLayerRefuseGlobals: the commands not built on the
+// command layer refuse --as, --yes and --output json as a usage error
+// (exit 2, ADR 0020) before they run, so nothing reaches stdout.
+func TestCommandsOffTheLayerRefuseGlobals(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		args   []string
+		stderr string
+	}{
+		{[]string{"version", "--yes"}, "--yes: studio-schedule version does not take it"},
+		{[]string{"openapi", "--output", "json"}, "--output json: studio-schedule openapi prints text only"},
+		{
+			[]string{"migrate", "status", "--as", "x@example.org"},
+			"--as: studio-schedule migrate status does not take it",
+		},
+		{[]string{"vapid-keys", "-o", "json"}, "--output json: studio-schedule vapid-keys prints text only"},
+		{[]string{"completion", "bash", "--yes"}, "--yes: studio-schedule completion bash does not take it"},
+	} {
+		t.Run(strings.Join(c.args, " "), func(t *testing.T) {
+			t.Parallel()
+
+			got := cliRun{}.exec(t, c.args...)
+			if got.code != 2 || got.stdout != "" || !strings.Contains(got.stderr, c.stderr) {
+				t.Errorf("exit %d, stdout %q, stderr %q; want exit 2 with %q", got.code, got.stdout, got.stderr,
+					c.stderr)
+			}
+		})
+	}
+}
+
+// TestCompletion prints the completion script of each shell cobra knows,
+// in the real process: cobra's completion commands write to the stdout of
+// the moment Wire adds them, the process's, not to the buffers of an
+// in-process run.
+func TestCompletion(t *testing.T) {
+	t.Parallel()
+
+	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
+		t.Run(shell, func(t *testing.T) {
+			t.Parallel()
+
+			code, stdout, stderr := mainProcess(t, "completion\n"+shell)
+			if code != 0 || stderr != "" || !strings.Contains(stdout, "studio-schedule") {
+				t.Errorf("exit %d, stderr %q, stdout of %d bytes; want a script for studio-schedule", code, stderr,
+					len(stdout))
+			}
+		})
+	}
+
+	// --yes is refused before the script is written, on the real stdout too.
+	code, stdout, stderr := mainProcess(t, "completion\nbash\n--yes")
+	if code != 2 || stdout != "" || stderr != "error: --yes: studio-schedule completion bash does not take it\n" {
+		t.Errorf("--yes: exit %d, stdout of %d bytes, stderr %q", code, len(stdout), stderr)
+	}
+}
+
 // envMainArgs makes TestMainProcess run main() with these arguments
 // (separated by newlines) instead of testing.
 const envMainArgs = "STUDIO_SCHEDULE_TEST_MAIN_ARGS"
@@ -109,34 +166,43 @@ func TestMainProcess(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestMainProcess$")
-			// Only the variable that selects main(), no DATABASE_URL of the
-			// developer's shell; under -cover, a directory for the child's
-			// coverage data, or it warns on stderr.
-			cmd.Env = []string{envMainArgs + "=" + tc.args, "GOCOVERDIR=" + t.TempDir()}
+			code, stdout, stderr := mainProcess(t, tc.args)
 
-			var stdout, stderr bytes.Buffer
-
-			cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-			err := cmd.Run()
-
-			code := 0
-			if exit, ok := errors.AsType[*exec.ExitError](err); ok {
-				code = exit.ExitCode()
-			} else if err != nil {
-				t.Fatal(err)
-			}
-
-			stderrOK := stderr.String() == tc.stderr
+			stderrOK := stderr == tc.stderr
 			if tc.prefix {
-				stderrOK = strings.HasPrefix(stderr.String(), tc.stderr)
+				stderrOK = strings.HasPrefix(stderr, tc.stderr)
 			}
 
-			if code != tc.code || stdout.String() != tc.stdout || !stderrOK {
+			if code != tc.code || stdout != tc.stdout || !stderrOK {
 				t.Errorf("studio-schedule %s: exit %d, stdout %q, stderr %q; want exit %d, stdout %q, stderr %q",
-					tc.args, code, stdout.String(), stderr.String(), tc.code, tc.stdout, tc.stderr)
+					tc.args, code, stdout, stderr, tc.code, tc.stdout, tc.stderr)
 			}
 		})
 	}
+}
+
+// mainProcess runs the test binary again as the real command with args
+// (separated by newlines; TestMainProcess) and returns its exit status and
+// output.
+func mainProcess(t *testing.T, args string) (code int, stdout, stderr string) {
+	t.Helper()
+
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestMainProcess$")
+	// Only the variable that selects main(), no DATABASE_URL of the
+	// developer's shell; under -cover, a directory for the child's
+	// coverage data, or it warns on stderr.
+	cmd.Env = []string{envMainArgs + "=" + args, "GOCOVERDIR=" + t.TempDir()}
+
+	var out, errOut bytes.Buffer
+
+	cmd.Stdout, cmd.Stderr = &out, &errOut
+
+	err := cmd.Run()
+	if exit, ok := errors.AsType[*exec.ExitError](err); ok {
+		code = exit.ExitCode()
+	} else if err != nil {
+		t.Fatal(err)
+	}
+
+	return code, out.String(), errOut.String()
 }

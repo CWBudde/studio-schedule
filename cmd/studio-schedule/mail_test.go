@@ -295,6 +295,21 @@ func TestMailRequeue(t *testing.T) {
 		if m := logMailOf(t, st, failedInvite.ID); m.Status() != domain.MailFailed {
 			t.Errorf("the invite is %s, want failed", m.Status())
 		}
+
+		// Another failed mail, requeued as text.
+		second := logMail(5, "hugo.example@example.org", mail.TemplateLessonCanceled, 1, domain.MailFailed)
+		addLogMails(t, st, second)
+
+		got = r.exec(t, "mail", "requeue", "--as", demoAdmin, "--yes", second.ID.String())
+		if got.code != 0 || got.stderr != "" {
+			t.Fatalf("requeue as text: exit %d, stderr %q", got.code, got.stderr)
+		}
+
+		golden(t, "mail/requeue.txt", got.stdout)
+
+		if m := logMailOf(t, st, second.ID); m.Status() != domain.MailPending || len(requeueEvents(t, st)) != 2 {
+			t.Errorf("requeued mail %+v, %d mail-requeued events; want pending and 2", m, len(requeueEvents(t, st)))
+		}
 	})
 }
 

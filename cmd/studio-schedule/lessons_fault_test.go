@@ -49,25 +49,32 @@ func TestTimetableCommandsStoreFailure(t *testing.T) {
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			t.Parallel()
-
-			for n := int64(1); ; n++ {
-				st := failingStore{Store: demoStore(t), failFrom: n, calls: new(atomic.Int64)}
-
-				got := cliRun{st: st}.exec(t, args...)
-				if got.code == 0 {
-					if n == 1 {
-						t.Fatal("the command ran without a transaction")
-					}
-
-					break
-				}
-
-				if got.code != 1 || !strings.Contains(got.stderr, errStoreDown.Error()) || got.stdout != "" {
-					t.Fatalf("transaction %d failing: exit %d, stdout %q, stderr %q", n, got.code, got.stdout,
-						got.stderr)
-				}
-			}
+			wantStoreFailures(t, args...)
 		})
+	}
+}
+
+// wantStoreFailures fails the n-th transaction of the command args on
+// fresh demo data, for every n until the command runs through: each
+// failure must exit 1 with the error on stderr and nothing on stdout.
+func wantStoreFailures(t *testing.T, args ...string) {
+	t.Helper()
+
+	for n := int64(1); ; n++ {
+		st := failingStore{Store: demoStore(t), failFrom: n, calls: new(atomic.Int64)}
+
+		got := cliRun{st: st}.exec(t, args...)
+		if got.code == 0 {
+			if n == 1 {
+				t.Fatal("the command ran without a transaction")
+			}
+
+			return
+		}
+
+		if got.code != 1 || !strings.Contains(got.stderr, errStoreDown.Error()) || got.stdout != "" {
+			t.Fatalf("transaction %d failing: exit %d, stdout %q, stderr %q", n, got.code, got.stdout, got.stderr)
+		}
 	}
 }
 

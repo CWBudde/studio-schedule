@@ -58,6 +58,18 @@ func storeOf(t *testing.T, r cliRun) store.Store {
 	return openTestStore(t, r.env["DATABASE_URL"])
 }
 
+// freshDemo is a run on fresh demo data of the same store as r: a new
+// memory store, or a new PostgreSQL test database.
+func freshDemo(t *testing.T, r cliRun) cliRun {
+	t.Helper()
+
+	if r.st != nil {
+		return cliRun{st: demoStore(t)}
+	}
+
+	return cliRun{}.with("DATABASE_URL", demoDatabase(t))
+}
+
 // importRuns returns the recorded import runs of st, the latest first.
 func importRuns(t *testing.T, st store.Store) []domain.ImportRun {
 	t.Helper()
@@ -194,6 +206,26 @@ func TestImportCommand(t *testing.T) {
 		}
 
 		golden(t, "import/apply.txt", got.stdout)
+
+		// The same apply on fresh demo data, as runImport's body: the report
+		// says the row failed, so stderr gets no problem document.
+		fresh := freshDemo(t, r)
+
+		got = fresh.exec(t, "import", "--apply", "--as", demoOffice, "--notes", "Kurs", file, "--output", "json")
+		if got.code != 1 || got.stderr != "" {
+			t.Fatalf("apply, JSON: exit %d, stderr %q; want 1 and no problem document", got.code, got.stderr)
+		}
+
+		golden(t, "import/apply.json", got.stdout)
+
+		if err := json.Unmarshal([]byte(got.stdout), &body); err != nil || !body.Applied || body.Counts.Rows != 6 ||
+			body.Counts.Failed != 1 {
+			t.Errorf("JSON body %+v, %v", body, err)
+		}
+
+		if runs := importRuns(t, storeOf(t, fresh)); len(runs) != 1 || runs[0].Counts.Created != 4 {
+			t.Errorf("import runs of the JSON apply = %+v, want one that created 4", runs)
+		}
 
 		runs := importRuns(t, st)
 		if len(runs) != 1 || runs[0].ActorID != accountID(t, st, demoOffice) || runs[0].FileName != "members.csv" ||

@@ -175,6 +175,20 @@ func TestLessonsGenerate(t *testing.T) {
 			lessonCount(t, st) != before+created {
 			t.Errorf("again: exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
 		}
+
+		// A run that creates lessons, as JSON.
+		got = r.exec(t, "lessons", "generate", "--as", demoOffice, "--until", "2027-01-31", "--output", "json")
+		wantExitCode(t, got, 0, "")
+		golden(t, "lessons/generate.json", got.stdout)
+
+		var body struct {
+			Created int    `json:"created"`
+			Until   string `json:"until"`
+		}
+		if err := json.Unmarshal([]byte(got.stdout), &body); err != nil || body.Created == 0 ||
+			body.Until != "2027-01-31" || lessonCount(t, st) != before+created+body.Created {
+			t.Errorf("JSON run %+v, %v", body, err)
+		}
 	})
 }
 
@@ -328,44 +342,57 @@ func TestLessonsCancelRestore(t *testing.T) {
 		got = r.exec(t, "lessons", "cancel", "--as", demoOffice, "--yes", "--output", "json", demoJazz)
 		wantExitCode(t, got, 0, "")
 		golden(t, "lessons/cancel.json", got.stdout)
+
+		// The restore as text, mirroring cancel.txt: the lesson and what was
+		// queued; the four mails again.
+		got = r.exec(t, "lessons", "restore", "--as", demoOffice, "--yes", demoJazz)
+		wantExitCode(t, got, 0, "")
+		golden(t, "lessons/restore.txt", got.stdout)
+
+		if l := lessonOf(t, st, demoJazz); l.Status != domain.LessonScheduled || restored() != 8 {
+			t.Errorf("restored lesson %+v, %d mails", l, restored())
+		}
 	})
 }
 
 // TestLessonsRestoreRoomTaken restores a lesson whose room another lesson
-// took meanwhile: a conflict, unless --confirm-room-overlap.
+// took meanwhile: a conflict, unless --confirm-room-overlap, on both stores.
 func TestLessonsRestoreRoomTaken(t *testing.T) {
 	t.Parallel()
 
-	st := demoStore(t)
-	r := cliRun{st: st}
+	stores(t, func(t *testing.T, r cliRun) {
+		st := storeOf(t, r)
 
-	if got := r.exec(t, "lessons", "cancel", "--as", demoOffice, "--yes", demoJazz); got.code != 0 {
-		t.Fatalf("cancel: exit %d, stderr %q", got.code, got.stderr)
-	}
+		if got := r.exec(t, "lessons", "cancel", "--as", demoOffice, "--yes", demoJazz); got.code != 0 {
+			t.Fatalf("cancel: exit %d, stderr %q", got.code, got.stderr)
+		}
 
-	jazz := lessonOf(t, st, demoJazz)
-	_, err := servicesOf(t, st).Lessons.CreateLesson(t.Context(), service.NewLesson{
-		CourseTypeID: jazz.CourseTypeID,
-		LessonData: service.LessonData{
-			Date: domain.Date{Year: 2026, Month: time.September, Day: 22}, StartTime: domain.TimeOfDay{Hour: 17},
-			Duration: time.Hour, RoomID: jazz.RoomID, InstructorID: jazz.InstructorID, Capacity: 10,
-			Visibility: domain.VisibilityPublic, Kind: domain.LessonWorkshop,
-		},
+		jazz := lessonOf(t, st, demoJazz)
+		_, err := servicesOf(t, st).Lessons.CreateLesson(t.Context(), service.NewLesson{
+			CourseTypeID: jazz.CourseTypeID,
+			LessonData: service.LessonData{
+				Date: domain.Date{Year: 2026, Month: time.September, Day: 22}, StartTime: domain.TimeOfDay{Hour: 17},
+				Duration: time.Hour, RoomID: jazz.RoomID, InstructorID: jazz.InstructorID, Capacity: 10,
+				Visibility: domain.VisibilityPublic, Kind: domain.LessonWorkshop,
+			},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		wantExitCode(t, r.exec(t, "lessons", "restore", "--as", demoOffice, "--yes", demoJazz), 4,
+			"the room is taken by lesson")
+
+		if lessonOf(t, st, demoJazz).Status != domain.LessonCanceled {
+			t.Fatal("the refused restore changed the lesson")
+		}
+
+		got := r.exec(t, "lessons", "restore", "--as", demoOffice, "--yes", "--confirm-room-overlap", demoJazz)
+		if got.code != 0 ||
+			!strings.Contains(got.stdout, "restored; mails to those booked on it (3 active bookings) are queued") {
+			t.Errorf("restore with overlap: exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
+		}
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	wantExitCode(t, r.exec(t, "lessons", "restore", "--as", demoOffice, "--yes", demoJazz), 4, "the room is taken by lesson")
-
-	if lessonOf(t, st, demoJazz).Status != domain.LessonCanceled {
-		t.Fatal("the refused restore changed the lesson")
-	}
-
-	got := r.exec(t, "lessons", "restore", "--as", demoOffice, "--yes", "--confirm-room-overlap", demoJazz)
-	if got.code != 0 || !strings.Contains(got.stdout, "restored; mails to those booked on it (3 active bookings) are queued") {
-		t.Errorf("restore with overlap: exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
-	}
 }
 
 // TestLessonsCancelRefusals covers what cancel and restore refuse: nothing
@@ -393,6 +420,7 @@ func TestLessonsCancelRefusals(t *testing.T) {
 		{"instructor", []string{"cancel", "--as", demoInstructor, "--yes", demoJazz}, 4, "below office"},
 		{"restore member", []string{"restore", "--as", demoMember, "--yes", demoJazz}, 4, "below office"},
 		{"restore bad ID", []string{"restore", "--as", demoOffice, "--yes", "x"}, 2, "is not a lesson ID"},
+		{"restore unknown lesson", []string{"restore", "--as", demoOffice, "--yes", demoUnknown}, 3, "not found"},
 	} {
 		got := r.exec(t, append([]string{"lessons"}, c.args...)...)
 		if got.code != c.code || !strings.Contains(got.stderr, c.stderr) {

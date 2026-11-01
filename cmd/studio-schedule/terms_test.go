@@ -37,11 +37,35 @@ func pastDemoStore(t *testing.T) *memory.Store {
 	t.Helper()
 
 	st := memory.New()
-	if err := seed.LoadDemoAt(t.Context(), st, domain.Date{Year: 2025, Month: time.September, Day: 22}); err != nil {
+	if err := seed.LoadDemoAt(t.Context(), st, pastDemoDate); err != nil {
 		t.Fatal(err)
 	}
 
 	return st
+}
+
+// pastDemoDate is the first day of pastDemoStore's demo data.
+var pastDemoDate = domain.Date{Year: 2025, Month: time.September, Day: 22}
+
+// pastStores runs fn on pastDemoStore and on a PostgreSQL test database
+// with the same data, the demo data of an earlier school year.
+func pastStores(t *testing.T, fn func(t *testing.T, r cliRun)) {
+	t.Helper()
+
+	t.Run("memory", func(t *testing.T) {
+		t.Parallel()
+		fn(t, cliRun{st: pastDemoStore(t)})
+	})
+	t.Run("postgres", func(t *testing.T) {
+		t.Parallel()
+
+		url := newTestDatabase(t)
+		if err := seed.LoadDemoAt(t.Context(), openTestStore(t, url), pastDemoDate); err != nil {
+			t.Fatal(err)
+		}
+
+		fn(t, cliRun{}.with("DATABASE_URL", url))
+	})
 }
 
 // newSchoolStore is a memory store with a school that was just set up:
@@ -99,6 +123,7 @@ func TestTermsListRefusals(t *testing.T) {
 	r := cliRun{st: demoStore(t)}
 	wantExitCode(t, r.exec(t, "terms", "list", "--as", demoMember), 4, "below office")
 	wantExitCode(t, r.exec(t, "terms", "list", "--as", demoInstructor), 4, "below office")
+	wantExitCode(t, r.exec(t, "terms", "list", "--as", "nobody@example.org"), 3, "--as nobody@example.org")
 	wantExitCode(t, r.exec(t, "terms", "list"), 2, "give --as <email>")
 
 	// The term of an earlier school year is not current.
@@ -207,17 +232,18 @@ func TestClassesListRefusals(t *testing.T) {
 		t.Errorf("new term: exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
 	}
 
-	// Without a current term, --term is needed.
-	past := cliRun{st: pastDemoStore(t)}
-	wantExitCode(t, past.exec(t, "classes", "list", "--as", demoOffice), 3,
-		"no term includes today; give --term (see terms list)")
-
-	got = past.exec(t, "classes", "list", "--as", demoOffice, "--term", demoTerm)
-	if got.code != 0 || !strings.HasPrefix(got.stdout, "School Year 2025/26: 2025-09-01 to 2026-07-31\n") {
-		t.Errorf("past term: exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
-	}
-
 	if got := (cliRun{}).exec(t, "classes"); got.code != 0 || !strings.Contains(got.stdout, "list") {
 		t.Errorf("group help: exit %d, stdout %q", got.code, got.stdout)
 	}
+
+	// Without a current term, --term is needed, on both stores.
+	pastStores(t, func(t *testing.T, past cliRun) {
+		wantExitCode(t, past.exec(t, "classes", "list", "--as", demoOffice), 3,
+			"no term includes today; give --term (see terms list)")
+
+		got := past.exec(t, "classes", "list", "--as", demoOffice, "--term", demoTerm)
+		if got.code != 0 || !strings.HasPrefix(got.stdout, "School Year 2025/26: 2025-09-01 to 2026-07-31\n") {
+			t.Errorf("past term: exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
+		}
+	})
 }

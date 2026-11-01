@@ -292,18 +292,30 @@ func TestSettingsSetRefusals(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			st := demoStore(t)
-			before := schoolSettings(t, st)
+			run := func(t *testing.T, r cliRun) {
+				st := storeOf(t, r)
+				before := schoolSettings(t, st)
 
-			got := cliRun{st: st}.exec(t, append([]string{"settings", "set", "--as", demoAdmin}, tc.args...)...)
-			if got.code != tc.code || got.stdout != "" || (tc.stderr != "" && got.stderr != tc.stderr) {
-				t.Errorf("set %v: exit %d, stdout %q, stderr %q; want exit %d, stderr %q", tc.args, got.code,
-					got.stdout, got.stderr, tc.code, tc.stderr)
+				got := r.exec(t, append([]string{"settings", "set", "--as", demoAdmin}, tc.args...)...)
+				if got.code != tc.code || got.stdout != "" || (tc.stderr != "" && got.stderr != tc.stderr) {
+					t.Errorf("set %v: exit %d, stdout %q, stderr %q; want exit %d, stderr %q", tc.args, got.code,
+						got.stdout, got.stderr, tc.code, tc.stderr)
+				}
+
+				if after := schoolSettings(t, st); after != before {
+					t.Errorf("set %v changed the settings:\n%+v", tc.args, after)
+				}
 			}
 
-			if after := schoolSettings(t, st); after != before {
-				t.Errorf("set %v changed the settings:\n%+v", tc.args, after)
+			// A lock comes from what the store holds (SettingsRepo.Usage):
+			// on both stores.
+			if tc.code == 4 {
+				stores(t, run)
+
+				return
 			}
+
+			run(t, cliRun{st: demoStore(t)})
 		})
 	}
 }
@@ -589,25 +601,37 @@ func TestSettingsImportRefusals(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			st := demoStore(t)
-			before := schoolSettings(t, st)
+			run := func(t *testing.T, r cliRun) {
+				st := storeOf(t, r)
+				before := schoolSettings(t, st)
 
-			for _, dryRun := range []bool{true, false} {
-				args := []string{"settings", "import", "--as", demoAdmin, "--yes", tc.file}
-				if dryRun {
-					args = append(args, "--dry-run")
+				for _, dryRun := range []bool{true, false} {
+					args := []string{"settings", "import", "--as", demoAdmin, "--yes", tc.file}
+					if dryRun {
+						args = append(args, "--dry-run")
+					}
+
+					got := r.exec(t, args...)
+					if got.code != tc.code || got.stdout != "" || (tc.stderr != "" && got.stderr != tc.stderr) {
+						t.Errorf("import (dry run %t): exit %d, stdout %q, stderr %q; want exit %d, stderr %q",
+							dryRun, got.code, got.stdout, got.stderr, tc.code, tc.stderr)
+					}
 				}
 
-				got := cliRun{st: st}.exec(t, args...)
-				if got.code != tc.code || got.stdout != "" || (tc.stderr != "" && got.stderr != tc.stderr) {
-					t.Errorf("import (dry run %t): exit %d, stdout %q, stderr %q; want exit %d, stderr %q", dryRun,
-						got.code, got.stdout, got.stderr, tc.code, tc.stderr)
+				if after := schoolSettings(t, st); after != before {
+					t.Errorf("the import changed the settings:\n%+v", after)
 				}
 			}
 
-			if after := schoolSettings(t, st); after != before {
-				t.Errorf("the import changed the settings:\n%+v", after)
+			// A lock comes from what the store holds (SettingsRepo.Usage):
+			// on both stores.
+			if tc.code == 4 {
+				stores(t, run)
+
+				return
 			}
+
+			run(t, cliRun{st: demoStore(t)})
 		})
 	}
 }

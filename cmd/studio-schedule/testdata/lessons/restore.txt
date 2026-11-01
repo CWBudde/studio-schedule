@@ -1,0 +1,2 @@
+00000000-0000-7000-8000-0000000000c9  2026-09-22  17:00-18:00  Jazz Dance (beginner)  Nina Tapworth  Hall 1  3/20  scheduled
+restored; mails to those booked on it (3 active bookings) are queued
