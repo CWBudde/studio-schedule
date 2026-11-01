@@ -45,6 +45,15 @@ func registerCatalog(api huma.API, h *handlers) {
 		Description: "Returns all course types (dance styles) ordered by name.",
 		Tags:        []string{"catalog"},
 	}, h.listCourseTypes)
+
+	register(api, AccessPublic, huma.Operation{
+		OperationID: "listLevels",
+		Method:      "GET",
+		Path:        BasePath + "/levels",
+		Summary:     "List levels",
+		Description: "Returns the school's levels ordered by position.",
+		Tags:        []string{"catalog"},
+	}, h.listLevels)
 }
 
 // Location is a site of the school.
@@ -181,4 +190,40 @@ func (h *handlers) listCourseTypes(ctx context.Context, _ *struct{}) (*CourseTyp
 	}
 
 	return &CourseTypeListOutput{Body: CourseTypeList{Items: items}}, nil
+}
+
+// Level is a step on the school's level scale (ADR 0021).
+type Level struct {
+	ID       domain.LevelID `doc:"Level ID."                                                   json:"id"`
+	Name     string         `doc:"Display name."                                               json:"name"`
+	Code     string         `doc:"Short label, if any."                                        json:"code,omitempty"`
+	Position int            `doc:"Place on the school's level scale, from 1 (least advanced)." json:"position" minimum:"1"`
+}
+
+// LevelList is the response body of listLevels.
+type LevelList struct {
+	Items []Level `doc:"Levels ordered by position." json:"items" nullable:"false"`
+}
+
+// LevelListOutput is the response of listLevels.
+type LevelListOutput struct {
+	Body LevelList
+}
+
+func (h *handlers) listLevels(ctx context.Context, _ *struct{}) (*LevelListOutput, error) {
+	levels, err := h.deps.Catalog.Levels(ctx)
+	if err != nil {
+		return nil, h.toHTTPError(ctx, err)
+	}
+
+	items := make([]Level, 0, len(levels))
+	for _, l := range levels {
+		items = append(items, newLevel(l))
+	}
+
+	return &LevelListOutput{Body: LevelList{Items: items}}, nil
+}
+
+func newLevel(l domain.Level) Level {
+	return Level{ID: l.ID, Name: l.Name, Code: l.Code, Position: l.Position}
 }

@@ -114,6 +114,45 @@ func registerCatalogAdmin(api huma.API, h *handlers) {
 		DefaultStatus: http.StatusNoContent,
 	}), h.deleteCourseType)
 
+	register(api, AccessOffice, write(huma.Operation{
+		OperationID: "createLevel",
+		Method:      http.MethodPost,
+		Path:        BasePath + "/levels",
+		Summary:     "Create a level",
+		Description: "Adds a level after the last one. A name or code another level has (ignoring case) is a " +
+			"409 `duplicate`.",
+		DefaultStatus: http.StatusCreated,
+	}), h.createLevel)
+
+	register(api, AccessOffice, write(huma.Operation{
+		OperationID: "updateLevel",
+		Method:      http.MethodPut,
+		Path:        BasePath + "/levels/{levelId}",
+		Summary:     "Update a level",
+		Description: "Replaces the name and code of a level; it keeps its position. A name or code another " +
+			"level has is a 409 `duplicate`.",
+	}), h.updateLevel)
+
+	register(api, AccessOffice, write(huma.Operation{
+		OperationID:   "deleteLevel",
+		Method:        http.MethodDelete,
+		Path:          BasePath + "/levels/{levelId}",
+		Summary:       "Delete a level",
+		Description:   "Deletes a level that no class uses; a used one is a 409 `in-use`.",
+		DefaultStatus: http.StatusNoContent,
+	}), h.deleteLevel)
+
+	register(api, AccessOffice, write(huma.Operation{
+		OperationID: "setLevelOrder",
+		Method:      http.MethodPut,
+		Path:        BasePath + "/level-order",
+		Summary:     "Set the order of the levels",
+		Description: "Numbers the levels from 1 in the order given, from least to most advanced. The list " +
+			"must name every level exactly once, else it is a 422 on `levelIds`, also when a level was " +
+			"added or removed meanwhile.",
+		DefaultStatus: http.StatusNoContent,
+	}), h.setLevelOrder)
+
 	register(api, AccessOffice, huma.Operation{
 		OperationID: "listAllStaff",
 		Method:      http.MethodGet,
@@ -171,6 +210,12 @@ type RoomData struct {
 type CourseTypeData struct {
 	Name        string `doc:"Display name, unique (ignoring case)." json:"name"                  maxLength:"100"  minLength:"1"`
 	Description string `doc:"Description, if any."                  json:"description,omitempty" maxLength:"2000"`
+}
+
+// LevelData is the editable part of a level.
+type LevelData struct {
+	Name string `doc:"Display name, unique (ignoring case)."              json:"name"           maxLength:"60" minLength:"1"`
+	Code string `doc:"Short label, if any; unique (ignoring case)."       json:"code,omitempty" maxLength:"8"`
 }
 
 // StaffData is the editable part of a staff member.
@@ -275,6 +320,37 @@ type CourseTypeOutput struct {
 	Body CourseType
 }
 
+// LevelDataInput is the request of createLevel.
+type LevelDataInput struct {
+	Body LevelData
+}
+
+// LevelUpdateInput is the request of updateLevel.
+type LevelUpdateInput struct {
+	LevelID domain.LevelID `doc:"The level." path:"levelId"`
+	Body    LevelData
+}
+
+// LevelRefInput is the request of deleteLevel.
+type LevelRefInput struct {
+	LevelID domain.LevelID `doc:"The level." path:"levelId"`
+}
+
+// LevelOrder is the request body of setLevelOrder.
+type LevelOrder struct {
+	LevelIDs []domain.LevelID `doc:"Every level, each once, in their new order." json:"levelIds" maxItems:"1000" nullable:"false"`
+}
+
+// LevelOrderInput is the request of setLevelOrder.
+type LevelOrderInput struct {
+	Body LevelOrder
+}
+
+// LevelOutput is the response of createLevel and updateLevel.
+type LevelOutput struct {
+	Body Level
+}
+
 // StaffDataInput is the request of createStaff.
 type StaffDataInput struct {
 	Body StaffData
@@ -352,6 +428,30 @@ func (h *handlers) deleteCourseType(ctx context.Context, in *CourseTypeRefInput)
 	return &struct{}{}, nil
 }
 
+func (h *handlers) createLevel(ctx context.Context, in *LevelDataInput) (*LevelOutput, error) {
+	return h.levelOutput(ctx)(h.deps.Catalog.CreateLevel(ctx, in.Body.service()))
+}
+
+func (h *handlers) updateLevel(ctx context.Context, in *LevelUpdateInput) (*LevelOutput, error) {
+	return h.levelOutput(ctx)(h.deps.Catalog.UpdateLevel(ctx, in.LevelID, in.Body.service()))
+}
+
+func (h *handlers) deleteLevel(ctx context.Context, in *LevelRefInput) (*struct{}, error) {
+	if err := h.deps.Catalog.DeleteLevel(ctx, in.LevelID); err != nil {
+		return nil, h.toHTTPError(ctx, err)
+	}
+
+	return &struct{}{}, nil
+}
+
+func (h *handlers) setLevelOrder(ctx context.Context, in *LevelOrderInput) (*struct{}, error) {
+	if err := h.deps.Catalog.SetLevelOrder(ctx, in.Body.LevelIDs); err != nil {
+		return nil, h.toHTTPError(ctx, err)
+	}
+
+	return &struct{}{}, nil
+}
+
 func (h *handlers) listAllStaff(ctx context.Context, _ *struct{}) (*StaffEntryListOutput, error) {
 	staff, err := h.deps.Catalog.AllStaff(ctx)
 	if err != nil {
@@ -418,6 +518,20 @@ func (h *handlers) courseTypeOutput(ctx context.Context) func(domain.CourseType,
 
 		return &CourseTypeOutput{Body: CourseType{ID: c.ID, Name: c.Name, Description: c.Description}}, nil
 	}
+}
+
+func (h *handlers) levelOutput(ctx context.Context) func(domain.Level, error) (*LevelOutput, error) {
+	return func(l domain.Level, err error) (*LevelOutput, error) {
+		if err != nil {
+			return nil, h.toHTTPError(ctx, err)
+		}
+
+		return &LevelOutput{Body: newLevel(l)}, nil
+	}
+}
+
+func (d LevelData) service() service.LevelData {
+	return service.LevelData{Name: d.Name, Code: d.Code}
 }
 
 func (h *handlers) staffOutput(ctx context.Context) func(service.StaffEntry, error) (*StaffOutput, error) {

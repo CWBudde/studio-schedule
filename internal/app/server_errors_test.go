@@ -254,6 +254,7 @@ func TestServerErrors(t *testing.T) {
 		{name: "locations", method: http.MethodGet, path: "/api/v1/locations", poison: []string{"Locations"}},
 		{name: "staff", method: http.MethodGet, path: "/api/v1/staff", poison: []string{"Staff"}},
 		{name: "course types", method: http.MethodGet, path: "/api/v1/course-types", poison: []string{"CourseTypes"}},
+		{name: "levels", method: http.MethodGet, path: "/api/v1/levels", poison: []string{"Levels"}},
 		{
 			name: "all staff", role: domain.RoleOffice, method: http.MethodGet, path: "/api/v1/admin/staff",
 			poison: []string{"Staff"},

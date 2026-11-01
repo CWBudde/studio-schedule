@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/cwbudde/studio-schedule/internal/app"
@@ -317,4 +318,123 @@ func hasItem(list map[string]any, field, value string) bool {
 	}
 
 	return false
+}
+
+// TestAdminLevels runs the office's level writes and the level order over
+// HTTP (ADR 0021). It finds the demo's levels, if any, through listLevels,
+// so it holds whether the seed has levels or not.
+func TestAdminLevels(t *testing.T) {
+	t.Parallel()
+
+	a := newAuthApp(t, app.Deps{})
+	office := a.login("olga.ledgerby@example.net")
+	member := a.login("clara.amberly@example.org")
+
+	// listed returns the levels as "position name" and their IDs, in the
+	// order of listLevels, read signed out.
+	listed := func() ([]string, []string) {
+		t.Helper()
+
+		res, body := a.call(http.MethodGet, "/api/v1/levels", "")
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("listLevels signed out: %d %s", res.StatusCode, body)
+		}
+
+		var names, levelIDs []string
+
+		for _, item := range decode(t, body)["items"].([]any) {
+			l, _ := item.(map[string]any)
+			names = append(names, fmt.Sprintf("%v %v", l["position"], l["name"]))
+			levelIDs = append(levelIDs, l["id"].(string))
+		}
+
+		return names, levelIDs
+	}
+	order := func(ids ...string) string {
+		body, err := json.Marshal(map[string][]string{"levelIds": ids})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return string(body)
+	}
+	wantField := func(what string, body []byte, field string) {
+		t.Helper()
+
+		invalid := decode(t, body)
+		if errs, _ := invalid["errors"].([]any); len(errs) != 1 || errs[0].(map[string]any)["location"] != field {
+			t.Errorf("%s: 422 errors %v, want %s", what, invalid["errors"], field)
+		}
+	}
+
+	_, before := listed()
+
+	a.expect(http.StatusForbidden, http.MethodPost, "/api/v1/levels", `{"name":"Nope"}`, member)
+
+	created := decode(t, a.expect(http.StatusCreated, http.MethodPost, "/api/v1/levels",
+		`{"name":" Masterclass ","code":"MC"}`, office))
+	id, _ := created["id"].(string)
+
+	if created["name"] != "Masterclass" || created["code"] != "MC" || created["position"] != float64(len(before)+1) || id == "" {
+		t.Fatalf("created %v, want Masterclass, MC after the %d levels", created, len(before))
+	}
+
+	plain := decode(t, a.expect(http.StatusCreated, http.MethodPost, "/api/v1/levels", `{"name":"Showcase"}`, office))
+	if _, ok := plain["code"]; ok {
+		t.Errorf("created %v, want no code", plain)
+	}
+
+	dup := decode(t, a.expect(http.StatusConflict, http.MethodPost, "/api/v1/levels", `{"name":"MASTERCLASS"}`, office))
+	if dup["reason"] != "duplicate" {
+		t.Errorf("409 %v, want reason duplicate", dup)
+	}
+
+	wantField("long name", a.expect(http.StatusUnprocessableEntity, http.MethodPost, "/api/v1/levels",
+		`{"name":"`+strings.Repeat("x", 61)+`"}`, office), "body.name")
+	wantField("blank name", a.expect(http.StatusUnprocessableEntity, http.MethodPut, "/api/v1/levels/"+id,
+		`{"name":" "}`, office), "body.name")
+
+	updated := decode(t, a.expect(http.StatusOK, http.MethodPut, "/api/v1/levels/"+id, `{"name":"Master Class","code":"MC"}`, office))
+	if updated["name"] != "Master Class" || updated["position"] != created["position"] {
+		t.Errorf("updated %v, want the new name at position %v", updated, created["position"])
+	}
+
+	a.expect(http.StatusNotFound, http.MethodPut, "/api/v1/levels/ffffffff-ffff-7fff-bfff-ffffffffffff", `{"name":"Gone"}`, office)
+
+	// Move the new level to the front.
+	names, all := listed()
+	if got := names[len(names)-2:]; !slices.Equal(got, []string{
+		fmt.Sprintf("%d Master Class", len(before)+1), fmt.Sprintf("%d Showcase", len(before)+2),
+	}) {
+		t.Fatalf("levels %q, want Master Class and Showcase last", names)
+	}
+
+	moved := append([]string{id}, slices.DeleteFunc(slices.Clone(all), func(s string) bool { return s == id })...)
+	a.expect(http.StatusForbidden, http.MethodPut, "/api/v1/level-order", order(moved...), member)
+	a.expect(http.StatusNoContent, http.MethodPut, "/api/v1/level-order", order(moved...), office)
+
+	names, after := listed()
+	if !slices.Equal(after, moved) || names[0] != "1 Master Class" {
+		t.Fatalf("levels %q after the reorder, want Master Class first", names)
+	}
+
+	for name, body := range map[string]string{
+		"missing level":  order(moved[1:]...),
+		"repeated level": order(append(slices.Clone(moved), id)...),
+		"null":           `{"levelIds":null}`,
+	} {
+		wantField(name, a.expect(http.StatusUnprocessableEntity, http.MethodPut, "/api/v1/level-order", body, office), "body.levelIds")
+	}
+
+	if names, _ := listed(); names[0] != "1 Master Class" {
+		t.Fatalf("levels %q after the refused orders", names)
+	}
+
+	a.expect(http.StatusForbidden, http.MethodDelete, "/api/v1/levels/"+id, "", member)
+	a.expect(http.StatusNoContent, http.MethodDelete, "/api/v1/levels/"+id, "", office)
+	a.expect(http.StatusNotFound, http.MethodDelete, "/api/v1/levels/"+id, "", office)
+
+	if _, left := listed(); slices.Contains(left, id) || len(left) != len(before)+1 {
+		t.Fatalf("levels %v after the delete", left)
+	}
 }

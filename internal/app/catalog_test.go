@@ -320,6 +320,7 @@ func TestCatalogEmptyStore(t *testing.T) {
 		"/api/v1/rooms",
 		"/api/v1/staff",
 		"/api/v1/course-types",
+		"/api/v1/levels",
 		"/api/v1/terms",
 	} {
 		res, body := do(t, h, httptest.NewRequest(http.MethodGet, path, nil))
@@ -343,6 +344,7 @@ func TestCatalogOpenAPI(t *testing.T) {
 		"listRooms":       "/api/v1/rooms",
 		"listStaff":       "/api/v1/staff",
 		"listCourseTypes": "/api/v1/course-types",
+		"listLevels":      "/api/v1/levels",
 		"listTerms":       "/api/v1/terms",
 		"listClasses":     "/api/v1/terms/{termId}/classes",
 	}
