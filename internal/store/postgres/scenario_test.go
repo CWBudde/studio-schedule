@@ -7,9 +7,11 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/store"
 )
 
-// The merge and import scenarios of ADR 0015 and the privacy scenarios of
-// ADR 0016 and the credential scenarios of ADR 0004 under PostgreSQL's constraints
-// and locks; the memory store's run is in package service.
+// The merge and import scenarios of ADR 0015, the privacy scenarios of
+// ADR 0016, the credential scenarios of ADR 0004, the push scenarios and
+// the integrity scenarios of ADR 0020 (db check) under PostgreSQL's
+// constraints, locks and queries; the memory store's run is in package
+// service.
 
 func TestMergeScenarios(t *testing.T) {
 	t.Parallel()
@@ -34,4 +36,9 @@ func TestCredentialScenarios(t *testing.T) {
 func TestPushScenarios(t *testing.T) {
 	t.Parallel()
 	servicetest.Push(t, func(t *testing.T) store.Store { return newTestStore(t) })
+}
+
+func TestIntegrityScenarios(t *testing.T) {
+	t.Parallel()
+	servicetest.Integrity(t, func(t *testing.T) store.Store { return newTestStore(t) })
 }
