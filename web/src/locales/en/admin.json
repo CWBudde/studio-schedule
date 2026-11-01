@@ -502,7 +502,11 @@
       "account-deleted": "Account deleted",
       "password-reset-issued": "Password-reset link issued",
       "sessions-revoked": "Sessions ended",
-      "setup-link-issued": "Setup link issued"
+      "setup-link-issued": "Setup link issued",
+      "event-registration-added": "Registered for an event",
+      "event-registration-canceled": "Event registration canceled",
+      "event-registration-paid": "Event fee paid",
+      "event-canceled": "Event canceled"
     },
     "merged": "merged: {{name}}",
     "unknownAccount": "Unknown account",

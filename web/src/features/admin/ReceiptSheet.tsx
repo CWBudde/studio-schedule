@@ -334,6 +334,7 @@ function CancelReceiptDialog({
               'pass-used': t('cancel.passUsed'),
               'already-canceled': t('cancel.alreadyCanceled'),
               cancellation: t('cancel.isCancellation'),
+              'event-attended': t('cancel.eventAttended'),
             }}
             messages={{ 404: t('detail.notFound') }}
           />

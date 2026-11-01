@@ -18,7 +18,10 @@ import type { components } from './schema';
  * of two persons is refused (both have an account, or a guardian would
  * become a dependent); or a person is anonymized already or is the only
  * guardian of a dependent, or an account change would leave the school
- * without an enabled admin or concerns the admin's own account (ADR 0016).
+ * without an enabled admin or concerns the admin's own account (ADR 0016);
+ * or an event write is refused (ADR 0019): the lesson is an event's
+ * session, the event has no session to publish, is not a draft or not
+ * published, the registration is paid already, or the event has started.
  */
 export type ConflictReason = components['schemas']['Conflict']['reason'];
 
@@ -56,6 +59,12 @@ const conflictReasons: readonly ConflictReason[] = [
   'sole-guardian',
   'last-admin',
   'own-account',
+  'event-session',
+  'no-sessions',
+  'not-draft',
+  'not-published',
+  'already-paid',
+  'event-attended',
 ];
 
 /** The lesson that uses the room, named by a 409 `room-taken`. */

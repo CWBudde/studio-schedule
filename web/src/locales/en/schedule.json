@@ -189,7 +189,8 @@
       "notInvited": "{{name}} has no invite to answer yet.",
       "inviteExpired": "The invite has run out.",
       "inviteUsed": "This invite has been used already.",
-      "notWaiting": "{{name}} is no longer on the waiting list."
+      "notWaiting": "{{name}} is no longer on the waiting list.",
+      "eventSession": "This lesson belongs to an event: register for the event instead."
     },
     "badge": {
       "free_one": "{{count}} free",
@@ -386,6 +387,7 @@
     "errors": {
       "alreadyBooked": "{{name}} is booked for this lesson already.",
       "canceledLesson": "This lesson is canceled: nobody can be added and no attendance taken.",
+      "eventSession": "This lesson belongs to an event: its participants are the event’s registrations.",
       "alreadyCanceled": "This booking was canceled already.",
       "full": "This lesson is full.",
       "dayOver": "The day of this lesson is over: the office can make the change.",

@@ -45,7 +45,8 @@
     "receipt": "Receipt",
     "announcement": "Announcement",
     "account-deleted": "Account deleted",
-    "password-changed": "Password changed"
+    "password-changed": "Password changed",
+    "event-canceled": "Event canceled"
   },
   "attempts_one": "{{count}} attempt",
   "attempts_other": "{{count}} attempts",

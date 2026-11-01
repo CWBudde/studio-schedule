@@ -126,6 +126,7 @@
     "description": "Ein Stornobeleg mit der nächsten Nummer wird ausgestellt und an die zahlende Person geschickt, und die Karte wird storniert. Das lässt sich nicht rückgängig machen.",
     "reason": "Grund (optional, wird gedruckt)",
     "passUsed": "Die Karte hat schon Besuche bezahlt, daher kann ihr Beleg nicht storniert werden. Storniere stattdessen die Karte auf der Seite der Person.",
+    "eventAttended": "Ein Termin der Veranstaltung hat schon begonnen, daher wird dieser Beleg nur mit der Anmeldung storniert, mit Erstattung.",
     "alreadyCanceled": "Dieser Beleg ist bereits storniert.",
     "isCancellation": "Ein Storno kann nicht storniert werden.",
     "keep": "Behalten",

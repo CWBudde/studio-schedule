@@ -126,6 +126,7 @@
     "description": "A cancellation receipt with the next number is issued and mailed to the payer, and the pass is voided. This cannot be undone.",
     "reason": "Reason (optional, printed)",
     "passUsed": "The pass has paid for visits, so its receipt cannot be canceled. Void the pass on the person's page instead.",
+    "eventAttended": "A session of the event has started, so this receipt is canceled only with the registration, with a refund.",
     "alreadyCanceled": "This receipt has been canceled already.",
     "isCancellation": "A cancellation cannot be canceled.",
     "keep": "Keep",

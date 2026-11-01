@@ -189,7 +189,8 @@
       "notInvited": "{{name}} hat noch keine Einladung, auf die du antworten kannst.",
       "inviteExpired": "Die Einladung ist abgelaufen.",
       "inviteUsed": "Diese Einladung wurde schon genutzt.",
-      "notWaiting": "{{name}} steht nicht mehr auf der Warteliste."
+      "notWaiting": "{{name}} steht nicht mehr auf der Warteliste.",
+      "eventSession": "Diese Stunde gehört zu einer Veranstaltung: Melde dich stattdessen für die Veranstaltung an."
     },
     "badge": {
       "free_one": "{{count}} frei",
@@ -386,6 +387,7 @@
     "errors": {
       "alreadyBooked": "{{name}} ist für diese Stunde schon gebucht.",
       "canceledLesson": "Diese Stunde ist abgesagt: Niemand kann hinzugefügt und keine Anwesenheit erfasst werden.",
+      "eventSession": "Diese Stunde gehört zu einer Veranstaltung: Ihre Teilnehmenden sind die Anmeldungen der Veranstaltung.",
       "alreadyCanceled": "Diese Buchung wurde schon storniert.",
       "full": "Diese Stunde ist voll.",
       "dayOver": "Der Tag dieser Stunde ist vorbei: Das Büro kann die Änderung vornehmen.",

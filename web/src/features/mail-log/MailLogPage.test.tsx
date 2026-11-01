@@ -256,7 +256,7 @@ describe('MailLogPage', () => {
 
 describe('mailTemplates', () => {
   it('has a label for every template of the API in every language', () => {
-    expect(mailTemplates).toHaveLength(17);
+    expect(mailTemplates).toHaveLength(18);
     for (const lng of ['en', 'de']) {
       for (const name of mailTemplates) {
         expect(i18n.exists(`mailLog:templates.${name}`, { lng }), `${lng}: ${name}`).toBe(true);
