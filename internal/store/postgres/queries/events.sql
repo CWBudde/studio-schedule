@@ -32,6 +32,9 @@ DELETE FROM events WHERE id = $1;
 SELECT e.* FROM events e
 ORDER BY (SELECT min(l.starts_at) FROM lessons l WHERE l.event_id = e.id) ASC NULLS LAST, e.id;
 
+-- name: ListEventsByIDs :many
+SELECT * FROM events WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY id;
+
 -- name: GetEventImage :one
 -- A row for every existing event, NULLs if it has no image.
 SELECT i.image, i.image_type
@@ -92,6 +95,11 @@ SELECT * FROM event_registrations WHERE event_id = $1 ORDER BY created_at, id;
 -- name: ListEventRegistrationsByPersons :many
 SELECT * FROM event_registrations
 WHERE person_id = ANY(sqlc.arg(persons)::uuid[])
+ORDER BY created_at, id;
+
+-- name: ListEventRegistrationsByReceipts :many
+SELECT * FROM event_registrations
+WHERE receipt_id = ANY(sqlc.arg(receipts)::uuid[])
 ORDER BY created_at, id;
 
 -- name: CountEventRegistrationsByEvents :many

@@ -1230,6 +1230,9 @@ type EventRepo interface {
 	// (canceled sessions included), events without a session last, then by
 	// ID.
 	List(ctx context.Context) ([]domain.Event, error)
+	// ListByIDs returns the events with the given IDs, each once and
+	// ordered by ID. IDs that do not exist are left out.
+	ListByIDs(ctx context.Context, ids []domain.EventID) ([]domain.Event, error)
 	// Lock returns the event and locks it until the transaction ends (in
 	// PostgreSQL: SELECT … FOR UPDATE). Every capacity check and
 	// registration change of an event runs under this lock, before any lock
@@ -1278,6 +1281,9 @@ type EventRegistrationRepo interface {
 	// ListByPersons returns the registrations of the given persons, canceled
 	// ones included, ordered by CreatedAt and ID.
 	ListByPersons(ctx context.Context, persons []domain.PersonID) ([]domain.EventRegistration, error)
+	// ListByReceipts returns the registrations whose payment one of the
+	// receipts confirms (ReceiptID), ordered by CreatedAt and ID.
+	ListByReceipts(ctx context.Context, receipts []domain.ReceiptID) ([]domain.EventRegistration, error)
 	// CountsByEvents returns, by event, the open registrations of each of
 	// the given events at the instant; events whose counts are all zero
 	// are left out.

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -418,6 +420,28 @@ func testEvents(t *testing.T, newStore func(*testing.T) store.Store) {
 				return tx.Events().List(ctx)
 			})
 			wantSlice(e.t, got, nil)
+		},
+		"ListByIDs": func(e *env) {
+			ct := e.courseType("Ballet Basics")
+			evs := []domain.Event{e.newEvent(ct, "one"), e.newEvent(ct, "two"), e.newEvent(ct, "three")}
+			e.createEvents(evs[2], evs[0], evs[1])
+
+			byID := slices.Clone(evs)
+			slices.SortFunc(byID, func(a, b domain.Event) int { return strings.Compare(a.ID.String(), b.ID.String()) })
+
+			list := func(ids ...domain.EventID) []domain.Event {
+				e.t.Helper()
+
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Event, error) {
+					return tx.Events().ListByIDs(ctx, ids)
+				})
+			}
+
+			// Each once, ordered by ID; unknown IDs are left out.
+			wantSlice(e.t, list(evs[2].ID, evs[0].ID, evs[1].ID, evs[0].ID, newID[domain.EventID](e)), byID)
+			wantSlice(e.t, list(evs[1].ID), []domain.Event{evs[1]})
+			wantSlice(e.t, list(newID[domain.EventID](e)), nil)
+			wantSlice(e.t, list(), nil)
 		},
 		"Lock": func(e *env) {
 			ev := e.event(e.courseType("Ballet Basics"), "summer-intensive")
@@ -1016,6 +1040,36 @@ func testEventRegistrations(t *testing.T, newStore func(*testing.T) store.Store)
 			wantSlice(e.t, list(ada.ID), []domain.EventRegistration{adaTie, adaLate})
 			wantSlice(e.t, list(cid.ID), []domain.EventRegistration{cids})
 			wantSlice(e.t, list(newID[domain.PersonID](e)), nil)
+			wantSlice(e.t, list(), nil)
+		},
+		"ListByReceipts": func(e *env) {
+			ct := e.courseType("Ballet Basics")
+			ev, other := e.event(ct, "summer-intensive"), e.event(ct, "winter-intensive")
+			ada, ben := e.person("Ada", "Dancer"), e.person("Ben", "Dancer")
+			first := e.receipt(e.newReceipt(2026, 1, ada))
+			second := e.receipt(e.newReceipt(2026, 2, ben))
+			storno := e.receipt(e.cancellationOf(first, 3))
+			unrelated := e.receipt(e.newReceipt(2026, 4, ada))
+
+			late := paidWith(e.newRegistration(ev, ben, t0.Add(time.Minute)), second)
+			early := paidWith(e.newRegistration(other, ada, t0), first)
+			early.Payment, early.CancellationReceiptID = domain.EventRefunded, storno.ID
+			early = canceledReg(early)
+			free := e.newRegistration(ev, ada, t0)
+			e.createRegistrations(late, free, early)
+
+			list := func(receipts ...domain.ReceiptID) []domain.EventRegistration {
+				e.t.Helper()
+
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.EventRegistration, error) {
+					return tx.EventRegistrations().ListByReceipts(ctx, receipts)
+				})
+			}
+
+			// By the receipt of the payment, not by the Storno; the zero ID
+			// finds no free registration.
+			wantSlice(e.t, list(second.ID, first.ID, unrelated.ID), []domain.EventRegistration{early, late})
+			wantSlice(e.t, list(storno.ID, domain.ReceiptID{}), nil)
 			wantSlice(e.t, list(), nil)
 		},
 		"CountsByEvents": func(e *env) {

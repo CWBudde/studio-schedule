@@ -136,6 +136,14 @@ func (t *faultTx) JobRuns() store.JobRunRepo {
 	return &faultJobRunRepo{JobRunRepo: t.Tx.JobRuns(), f: t.f}
 }
 
+func (t *faultTx) Events() store.EventRepo {
+	return &faultEventRepo{EventRepo: t.Tx.Events(), f: t.f}
+}
+
+func (t *faultTx) EventRegistrations() store.EventRegistrationRepo {
+	return &faultEventRegistrationRepo{EventRegistrationRepo: t.Tx.EventRegistrations(), f: t.f}
+}
+
 type faultSettingsRepo struct {
 	store.SettingsRepo
 	f *FaultStore
@@ -967,6 +975,14 @@ func (r *faultLessonRepo) ListByIDs(a0 context.Context, a1 []domain.LessonID) (r
 	}
 
 	return r.LessonRepo.ListByIDs(a0, a1)
+}
+
+func (r *faultLessonRepo) ListByEvent(a0 context.Context, a1 domain.EventID) (r0 []domain.Lesson, err error) {
+	if err = r.f.hit("Lessons.ListByEvent"); err != nil {
+		return r0, err
+	}
+
+	return r.LessonRepo.ListByEvent(a0, a1)
 }
 
 func (r *faultLessonRepo) ListByStaff(a0 context.Context, a1 []domain.StaffID, a2 time.Time, a3 time.Time) (r0 []domain.Lesson, err error) {
@@ -2076,4 +2092,182 @@ func (r *faultJobRunRepo) DeleteStartedBefore(a0 context.Context, a1 time.Time) 
 	}
 
 	return r.JobRunRepo.DeleteStartedBefore(a0, a1)
+}
+
+type faultEventRepo struct {
+	store.EventRepo
+	f *FaultStore
+}
+
+func (r *faultEventRepo) Get(a0 context.Context, a1 domain.EventID) (r0 domain.Event, err error) {
+	if err = r.f.hit("Events.Get"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRepo.Get(a0, a1)
+}
+
+func (r *faultEventRepo) BySlug(a0 context.Context, a1 string) (r0 domain.Event, err error) {
+	if err = r.f.hit("Events.BySlug"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRepo.BySlug(a0, a1)
+}
+
+func (r *faultEventRepo) Create(a0 context.Context, a1 domain.Event) (err error) {
+	if err = r.f.hit("Events.Create"); err != nil {
+		return err
+	}
+
+	return r.EventRepo.Create(a0, a1)
+}
+
+func (r *faultEventRepo) Update(a0 context.Context, a1 domain.Event) (err error) {
+	if err = r.f.hit("Events.Update"); err != nil {
+		return err
+	}
+
+	return r.EventRepo.Update(a0, a1)
+}
+
+func (r *faultEventRepo) Delete(a0 context.Context, a1 domain.EventID) (err error) {
+	if err = r.f.hit("Events.Delete"); err != nil {
+		return err
+	}
+
+	return r.EventRepo.Delete(a0, a1)
+}
+
+func (r *faultEventRepo) List(a0 context.Context) (r0 []domain.Event, err error) {
+	if err = r.f.hit("Events.List"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRepo.List(a0)
+}
+
+func (r *faultEventRepo) ListByIDs(a0 context.Context, a1 []domain.EventID) (r0 []domain.Event, err error) {
+	if err = r.f.hit("Events.ListByIDs"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRepo.ListByIDs(a0, a1)
+}
+
+func (r *faultEventRepo) Lock(a0 context.Context, a1 domain.EventID) (r0 domain.Event, err error) {
+	if err = r.f.hit("Events.Lock"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRepo.Lock(a0, a1)
+}
+
+func (r *faultEventRepo) Image(a0 context.Context, a1 domain.EventID) (r0 domain.Background, err error) {
+	if err = r.f.hit("Events.Image"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRepo.Image(a0, a1)
+}
+
+func (r *faultEventRepo) PutImage(a0 context.Context, a1 domain.EventID, a2 domain.Background) (err error) {
+	if err = r.f.hit("Events.PutImage"); err != nil {
+		return err
+	}
+
+	return r.EventRepo.PutImage(a0, a1, a2)
+}
+
+func (r *faultEventRepo) ImageInfo(a0 context.Context, a1 domain.EventID) (r0 domain.BackgroundInfo, err error) {
+	if err = r.f.hit("Events.ImageInfo"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRepo.ImageInfo(a0, a1)
+}
+
+type faultEventRegistrationRepo struct {
+	store.EventRegistrationRepo
+	f *FaultStore
+}
+
+func (r *faultEventRegistrationRepo) Get(a0 context.Context, a1 domain.EventRegistrationID) (r0 domain.EventRegistration, err error) {
+	if err = r.f.hit("EventRegistrations.Get"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRegistrationRepo.Get(a0, a1)
+}
+
+func (r *faultEventRegistrationRepo) GetByInviteTokenHash(a0 context.Context, a1 [32]byte) (r0 domain.EventRegistration, err error) {
+	if err = r.f.hit("EventRegistrations.GetByInviteTokenHash"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRegistrationRepo.GetByInviteTokenHash(a0, a1)
+}
+
+func (r *faultEventRegistrationRepo) GetByReceipt(a0 context.Context, a1 domain.ReceiptID) (r0 domain.EventRegistration, err error) {
+	if err = r.f.hit("EventRegistrations.GetByReceipt"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRegistrationRepo.GetByReceipt(a0, a1)
+}
+
+func (r *faultEventRegistrationRepo) Create(a0 context.Context, a1 domain.EventRegistration) (err error) {
+	if err = r.f.hit("EventRegistrations.Create"); err != nil {
+		return err
+	}
+
+	return r.EventRegistrationRepo.Create(a0, a1)
+}
+
+func (r *faultEventRegistrationRepo) Update(a0 context.Context, a1 domain.EventRegistration) (err error) {
+	if err = r.f.hit("EventRegistrations.Update"); err != nil {
+		return err
+	}
+
+	return r.EventRegistrationRepo.Update(a0, a1)
+}
+
+func (r *faultEventRegistrationRepo) ListByEvent(a0 context.Context, a1 domain.EventID) (r0 []domain.EventRegistration, err error) {
+	if err = r.f.hit("EventRegistrations.ListByEvent"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRegistrationRepo.ListByEvent(a0, a1)
+}
+
+func (r *faultEventRegistrationRepo) ListByPersons(a0 context.Context, a1 []domain.PersonID) (r0 []domain.EventRegistration, err error) {
+	if err = r.f.hit("EventRegistrations.ListByPersons"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRegistrationRepo.ListByPersons(a0, a1)
+}
+
+func (r *faultEventRegistrationRepo) ListByReceipts(a0 context.Context, a1 []domain.ReceiptID) (r0 []domain.EventRegistration, err error) {
+	if err = r.f.hit("EventRegistrations.ListByReceipts"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRegistrationRepo.ListByReceipts(a0, a1)
+}
+
+func (r *faultEventRegistrationRepo) CountsByEvents(a0 context.Context, a1 []domain.EventID, a2 time.Time) (r0 map[domain.EventID]store.EventRegistrationCounts, err error) {
+	if err = r.f.hit("EventRegistrations.CountsByEvents"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRegistrationRepo.CountsByEvents(a0, a1, a2)
+}
+
+func (r *faultEventRegistrationRepo) AnonymizeGuests(a0 context.Context, a1 time.Time) (r0 int, err error) {
+	if err = r.f.hit("EventRegistrations.AnonymizeGuests"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRegistrationRepo.AnonymizeGuests(a0, a1)
 }
