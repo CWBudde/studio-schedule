@@ -369,7 +369,7 @@ func TestCatalogOpenAPI(t *testing.T) {
 		t.Errorf("StaffMember.kind enum = %v, want %v", got, want)
 	}
 
-	if got, want := enum("Class", "level"), jsonValue(t, domain.Levels()); !reflect.DeepEqual(any(got), want) {
+	if got, want := enum("Class", "level"), jsonValue(t, domain.SkillLevels()); !reflect.DeepEqual(any(got), want) {
 		t.Errorf("Class.level enum = %v, want %v", got, want)
 	}
 

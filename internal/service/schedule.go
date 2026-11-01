@@ -26,7 +26,7 @@ type ScheduleQuery struct {
 	CourseType domain.CourseTypeID
 	// Level matches the level of the lesson's class; one-off lessons have
 	// none and never match.
-	Level domain.Level
+	Level domain.SkillLevel
 }
 
 func (q ScheduleQuery) validate() error {
@@ -68,7 +68,7 @@ func (q ScheduleQuery) matches(sl ScheduledLesson) bool {
 // a room rental, Accompanist if the lesson has none.
 type ScheduledLesson struct {
 	Lesson                  domain.Lesson
-	Level                   domain.Level
+	Level                   domain.SkillLevel
 	CourseType              domain.CourseType
 	Room                    domain.Room
 	Location                domain.Location

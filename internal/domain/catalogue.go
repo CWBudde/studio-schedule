@@ -72,25 +72,25 @@ func (s Staff) Validate() error {
 	)
 }
 
-// Level is the skill level a class is aimed at.
-type Level string
+// SkillLevel is the skill level a class is aimed at.
+type SkillLevel string
 
 // Known levels, from least to most advanced; LevelOpen is for everyone.
 const (
-	LevelBeginner     Level = "beginner"
-	LevelIntermediate Level = "intermediate"
-	LevelAdvanced     Level = "advanced"
-	LevelProfessional Level = "professional"
-	LevelOpen         Level = "open"
+	LevelBeginner     SkillLevel = "beginner"
+	LevelIntermediate SkillLevel = "intermediate"
+	LevelAdvanced     SkillLevel = "advanced"
+	LevelProfessional SkillLevel = "professional"
+	LevelOpen         SkillLevel = "open"
 )
 
-// Levels returns all levels.
-func Levels() []Level {
-	return []Level{LevelBeginner, LevelIntermediate, LevelAdvanced, LevelProfessional, LevelOpen}
+// SkillLevels returns all levels.
+func SkillLevels() []SkillLevel {
+	return []SkillLevel{LevelBeginner, LevelIntermediate, LevelAdvanced, LevelProfessional, LevelOpen}
 }
 
 // Valid reports whether l is a known level.
-func (l Level) Valid() bool { return slices.Contains(Levels(), l) }
+func (l SkillLevel) Valid() bool { return slices.Contains(SkillLevels(), l) }
 
 // CourseType is a catalog entry (dance style) with a description.
 type CourseType struct {

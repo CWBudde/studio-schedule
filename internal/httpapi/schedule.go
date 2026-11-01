@@ -271,7 +271,7 @@ func (in *ScheduleInput) query() service.ScheduleQuery {
 	return service.ScheduleQuery{
 		From: in.From, To: in.To,
 		Location: in.Location, Instructor: in.Instructor, CourseType: in.CourseType,
-		Level: domain.Level(in.Level),
+		Level: domain.SkillLevel(in.Level),
 	}
 }
 

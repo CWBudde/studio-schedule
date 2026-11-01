@@ -81,7 +81,7 @@ type Class struct {
 	RoomID          domain.RoomID       `doc:"Room the class takes place in."               json:"roomId"`
 	Instructor      StaffRef            `doc:"Instructor, also when no longer active."     json:"instructor"`
 	Accompanist     *StaffRef           `doc:"Accompanist, if any."                         json:"accompanist,omitempty"`
-	Level           domain.Level        `doc:"Skill level the class is aimed at."           enum:"beginner,intermediate,advanced,professional,open" json:"level"`
+	Level           domain.SkillLevel        `doc:"Skill level the class is aimed at."           enum:"beginner,intermediate,advanced,professional,open" json:"level"`
 	Weekday         int                 `doc:"Day of the week, 0 = Sunday to 6 = Saturday." json:"weekday"                                          maximum:"6"      minimum:"0"`
 	StartTime       domain.TimeOfDay    `doc:"Start time (HH:MM) in the school time zone."  example:"18:00"                                         json:"startTime" pattern:"^[0-2][0-9]:[0-5][0-9]$"`
 	DurationMinutes int                 `doc:"Length of each lesson in minutes."            json:"durationMinutes"                                  minimum:"1"`

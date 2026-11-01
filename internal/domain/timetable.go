@@ -30,7 +30,7 @@ type Class struct {
 	RoomID        RoomID
 	InstructorID  StaffID
 	AccompanistID StaffID // optional
-	Level         Level
+	Level         SkillLevel
 	Weekday       time.Weekday
 	StartTime     TimeOfDay // school time
 	Duration      time.Duration

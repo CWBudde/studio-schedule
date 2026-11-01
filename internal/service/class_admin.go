@@ -23,7 +23,7 @@ type ClassData struct {
 	RoomID        domain.RoomID
 	InstructorID  domain.StaffID
 	AccompanistID domain.StaffID
-	Level         domain.Level
+	Level         domain.SkillLevel
 	Weekday       time.Weekday
 	StartTime     domain.TimeOfDay
 	Duration      time.Duration

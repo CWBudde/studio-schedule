@@ -615,7 +615,7 @@ func TestScheduleEnums(t *testing.T) {
 		}
 	}
 
-	levels := enumStrings(domain.Levels())
+	levels := enumStrings(domain.SkillLevels())
 	summary := spec.Components.Schemas["LessonSummary"].Properties
 	booking := spec.Components.Schemas["Booking"].Properties
 

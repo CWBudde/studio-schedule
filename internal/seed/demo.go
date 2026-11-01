@@ -367,7 +367,7 @@ type classSpec struct {
 	courseType  string
 	instructor  string
 	accompanist string
-	level       domain.Level
+	level       domain.SkillLevel
 	capacity    int
 	members     []string
 }
