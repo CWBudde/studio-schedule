@@ -82,7 +82,19 @@ react-i18next, Vitest, Playwright.
 
 ## Checklist (one ccbatch session each)
 
-- [ ] 1.1 `room-order` Rooms get a position: migration 00032, `RoomRepo.SetOrder`, `setRoomOrder`, `position` in the API, move up/down on the locations page, Werkstatt room columns by position, ADR 0007 amendment — see "Task 1.1" below.
+- [x] 1.1 `room-order` Rooms get a position: migration 00032, `RoomRepo.SetOrder`, `setRoomOrder`, `position` in the API, move up/down on the locations page, Werkstatt room columns by position, ADR 0007 amendment — see "Task 1.1" below.
+
+  Done: migration 00032 (backfill tested by `TestRoomPositionBackfill`), `RoomRepo.SetOrder` with
+  four contract cases on both stores, `SetRoomOrder` (stale-order test for review focus 1, fault
+  sweep), `setRoomOrder` pinned as office, seed positions (`TestDemoRoomPositions`), move buttons
+  in an "Order" column of the locations page (shown only while the table is in API order, not
+  sorted by another column or searched), `roomColumns` by position, `roomOptions` no longer sorts
+  by name, two e2e tests. Coverage 98.9 % total; every new function at 100 %. Notes for later
+  tasks: adding a migration means extending the migration lists in `TestUniqueNamesMigration`,
+  `TestLessonSlotsMigration`, `TestSettingsMigration` and `migrateFailNewest`;
+  `internal/service/fault_gen_test.go` had fallen behind the events repos and nothing checks it
+  (regenerated here). A refused order shows a translated toast (stale, gone, failed), not the
+  server's text, like the delete dialogs.
 
 - [ ] 2.1 `levels` Levels as records of the school: migration 00033, `LevelRepo`, `listLevels` and the four office writes, the admin Levels page, the programme seed's levels, ADR 0021 (levels part) — see "Task 2.1" below.
 
