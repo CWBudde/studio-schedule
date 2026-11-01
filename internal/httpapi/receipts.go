@@ -359,14 +359,20 @@ func (h *handlers) searchReceipts(ctx context.Context, in *SearchReceiptsInput) 
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	out := &ReceiptListOutput{Body: ReceiptList{
+	return &ReceiptListOutput{Body: NewReceiptList(page)}, nil
+}
+
+// NewReceiptList is the response body of searchReceipts for page; the
+// command line prints it too (ADR 0020).
+func NewReceiptList(page service.ReceiptPage) ReceiptList {
+	out := ReceiptList{
 		Items: make([]Receipt, len(page.Items)), Total: page.Total, Years: append([]int{}, page.Years...),
-	}}
+	}
 	for i, v := range page.Items {
-		out.Body.Items[i] = receiptBody(v)
+		out.Items[i] = receiptBody(v)
 	}
 
-	return out, nil
+	return out
 }
 
 func (h *handlers) getReceipt(ctx context.Context, in *ReceiptRefInput) (*ReceiptOutput, error) {

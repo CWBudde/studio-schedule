@@ -389,12 +389,18 @@ func (h *handlers) listPersonPasses(ctx context.Context, in *PersonPassesInput) 
 		return nil, h.toHTTPError(ctx, err)
 	}
 
+	return &AdminPassListOutput{Body: NewAdminPassList(views)}, nil
+}
+
+// NewAdminPassList is the response body of listPersonPasses for a person's
+// passes; the command line prints it too (ADR 0020).
+func NewAdminPassList(views []service.PassView) AdminPassList {
 	items := make([]AdminPass, 0, len(views))
 	for _, v := range views {
 		items = append(items, adminPassBody(v))
 	}
 
-	return &AdminPassListOutput{Body: AdminPassList{Items: items}}, nil
+	return AdminPassList{Items: items}
 }
 
 func (h *handlers) sellPass(ctx context.Context, in *SellPassInput) (*AdminPassOutput, error) {
