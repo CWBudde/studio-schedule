@@ -417,6 +417,8 @@ func TestAccountsResetPassword(t *testing.T) {
 			t.Errorf("%d reset mails, want none without --mail", n)
 		}
 
+		wantResetAudit(t, st, admin.ID, admin.ID, domain.LinkPrinted)
+
 		// JSON; the new link replaces the one before.
 		res = r.exec(t, "accounts", "reset-password", "--as", demoAdmin, "--yes", "-o", "json", demoAdmin)
 		wantOK(t, "print, JSON", res)
@@ -440,10 +442,45 @@ func TestAccountsResetPassword(t *testing.T) {
 			t.Errorf("reset mails %+v, stdout %q: want one to the member and no link printed", mails, res.stdout)
 		}
 
+		member, _ := accountOf(t, st, demoMember)
+		wantResetAudit(t, st, admin.ID, member.ID, domain.LinkMailed)
+
 		wantOK(t, "disable", r.exec(t, "accounts", "disable", "--as", demoAdmin, "--yes", demoMember))
 		wantExit(t, "disabled", r.exec(t, "accounts", "reset-password", "--as", demoAdmin, "--yes", demoMember),
 			cli.ExitConflict, "the account may not set a password")
 	})
+}
+
+// wantResetAudit fails unless the newest audit event of st is a reset link
+// issued by actor via the command line for target, delivered as delivery.
+func wantResetAudit(t *testing.T, st store.Store, actor, target domain.AccountID, delivery domain.LinkDelivery) {
+	t.Helper()
+
+	e := accountsAudit(t, st)
+	if e.Action != domain.AuditPasswordResetIssued || e.ActorID != actor || e.TargetKind != domain.AuditTargetAccount ||
+		e.TargetID != target || e.Details.Delivery != delivery ||
+		e.Details.Via != (domain.AuditVia{Channel: domain.ChannelCLI, OSUser: testOSUser}) {
+		t.Errorf("audit event %+v, want a reset link for %s %s by %s via the command line", e, target, delivery, actor)
+	}
+}
+
+// wantRevokeAudit fails unless the newest audit event of st is the end of
+// n sessions of target (of every account if zero) by actor via the command
+// line.
+func wantRevokeAudit(t *testing.T, st store.Store, actor, target domain.AccountID, n int) {
+	t.Helper()
+
+	kind := domain.AuditTargetAccount
+	if target.IsZero() {
+		kind = ""
+	}
+
+	e := accountsAudit(t, st)
+	if e.Action != domain.AuditSessionsRevoked || e.ActorID != actor || e.TargetKind != kind ||
+		e.TargetID != target || e.Details.Sessions != n ||
+		e.Details.Via != (domain.AuditVia{Channel: domain.ChannelCLI, OSUser: testOSUser}) {
+		t.Errorf("audit event %+v, want %d sessions of %s revoked by %s via the command line", e, n, target, actor)
+	}
 }
 
 // TestAccountsSessionsRevoke ends the running sessions of one account, and
@@ -486,8 +523,14 @@ func TestAccountsSessionsRevoke(t *testing.T) {
 			t.Error("the member's session lives, or the office's ended")
 		}
 
-		if e := accountsAudit(t, st); e.Action != domain.AuditImpersonationEnded || e.ActorID != admin.ID ||
-			e.TargetID != member.ID {
+		// The revoke is audited after the impersonation it ended.
+		wantRevokeAudit(t, st, admin.ID, member.ID, 2)
+
+		events := accountsRead(t, st, func(ctx context.Context, tx store.Tx) ([]domain.AuditEvent, error) {
+			return tx.Audit().List(ctx, 2)
+		})
+		if e := events[len(events)-1]; len(events) != 2 || e.Action != domain.AuditImpersonationEnded ||
+			e.ActorID != admin.ID || e.TargetID != member.ID {
 			t.Errorf("audit event %+v, want the impersonation ended", e)
 		}
 
@@ -497,6 +540,8 @@ func TestAccountsSessionsRevoke(t *testing.T) {
 		if !strings.HasPrefix(res.stdout, "Ended 1 session of ") || accountsSessionLive(t, st, other) {
 			t.Errorf("revoke --all: %q; want the office's session ended", res.stdout)
 		}
+
+		wantRevokeAudit(t, st, admin.ID, domain.AccountID{}, 1)
 
 		res = r.exec(t, "accounts", "sessions", "revoke", "--as", demoAdmin, "--yes", "--all", "-o", "json")
 		wantOK(t, "revoke --all again", res)
@@ -509,6 +554,8 @@ func TestAccountsSessionsRevoke(t *testing.T) {
 			body.Accounts < 4 {
 			t.Errorf("revoke --all again: %q, %v; want no session ended, of every account", res.stdout, err)
 		}
+
+		wantRevokeAudit(t, st, admin.ID, domain.AccountID{}, 0)
 	})
 }
 

@@ -61,12 +61,17 @@ func passwordResetLink(t *testing.T, w *world) {
 	f := newAdminFixture(w)
 	svc := w.auth()
 
-	first, err := svc.IssuePasswordReset(ctx, f.admin.AccountID, false)
+	cliOther, err := svc.Actor(ctx, f.other.Email, cli)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	second, err := svc.IssuePasswordReset(ctx, f.admin.AccountID, false)
+	first, err := svc.IssuePasswordReset(ctx, f.other, f.admin.AccountID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := svc.IssuePasswordReset(ctx, f.other, f.admin.AccountID, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,6 +80,20 @@ func passwordResetLink(t *testing.T, w *world) {
 		second.Account.Account.ID != f.admin.AccountID || second.Account.Person.GivenName != "Ada" {
 		t.Errorf("reset %+v, want a link of Ada's account for an hour", second)
 	}
+
+	// Each link is audited by its issuer, as printed; never the link.
+	wantIssued := func(target domain.AccountID, delivery domain.LinkDelivery, via domain.AuditVia) {
+		t.Helper()
+
+		e := w.audit()[0]
+		if e.Action != domain.AuditPasswordResetIssued || e.ActorID != f.other.AccountID ||
+			e.TargetKind != domain.AuditTargetAccount || e.TargetID != target ||
+			e.Details != (domain.AuditDetails{Delivery: delivery, Via: via}) {
+			t.Errorf("newest audit event %+v, want the %s link issued by Abe", e, delivery)
+		}
+	}
+
+	wantIssued(f.admin.AccountID, domain.LinkPrinted, domain.AuditVia{})
 
 	err = svc.ResetPassword(ctx, tokenOf(t, first.Link), "a new fictional secret")
 	if !errors.Is(err, service.ErrInvalidToken) {
@@ -95,7 +114,7 @@ func passwordResetLink(t *testing.T, w *world) {
 		t.Errorf("%d reset mails, want none without mailIt", n)
 	}
 
-	mailed, err := svc.IssuePasswordReset(ctx, f.member.ID, true)
+	mailed, err := svc.IssuePasswordReset(ctx, cliOther, f.member.ID, true)
 	if err != nil || !mailed.Mailed || mailed.Link != "" || !mailed.ExpiresAt.Equal(now.Add(service.ResetTokenTTL)) {
 		t.Errorf("mailed reset %+v, %v", mailed, err)
 	}
@@ -104,6 +123,8 @@ func passwordResetLink(t *testing.T, w *world) {
 		!strings.Contains(m[0].Text, "https://school.example.org/reset-password?token=") {
 		t.Errorf("reset mails %+v, want one with the link to Mia", m)
 	}
+
+	wantIssued(f.member.ID, domain.LinkMailed, cli)
 
 	invited := w.account(w.person("Ivo", "Invited", ""), "ivo@example.org")
 	invited.ConfirmedAt = time.Time{}
@@ -121,13 +142,15 @@ func passwordResetLink(t *testing.T, w *world) {
 		return tx.Credentials().Put(ctx, domain.Credential{AccountID: registered.ID, PasswordHash: "x", ChangedAt: now})
 	})
 
-	if _, err := svc.IssuePasswordReset(ctx, invited.ID, false); err != nil {
+	if _, err := svc.IssuePasswordReset(ctx, f.other, invited.ID, false); err != nil {
 		t.Errorf("invited: %v", err)
 	}
 
 	if _, err := svc.SetAccountDisabled(ctx, f.admin, f.member.ID, true); err != nil {
 		t.Fatal(err)
 	}
+
+	events := len(w.audit())
 
 	for what, c := range map[string]struct {
 		id   domain.AccountID
@@ -137,9 +160,13 @@ func passwordResetLink(t *testing.T, w *world) {
 		"registered": {registered.ID, service.ErrNoPasswordReset},
 		"unknown":    {newID[domain.AccountID](w), domain.ErrNotFound},
 	} {
-		if _, err := svc.IssuePasswordReset(ctx, c.id, false); !errors.Is(err, c.want) {
+		if _, err := svc.IssuePasswordReset(ctx, f.other, c.id, false); !errors.Is(err, c.want) {
 			t.Errorf("%s: %v, want %v", what, err, c.want)
 		}
+	}
+
+	if n := len(w.audit()); n != events {
+		t.Errorf("%d audit events after the refusals, want %d", n, events)
 	}
 }
 
@@ -172,12 +199,17 @@ func revokeSessions(t *testing.T, w *world) {
 		})
 	}
 
+	cliAdmin, err := svc.Actor(ctx, f.admin.Email, cli)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	session(f.member.ID, domain.AccountID{}, "expired", now.Add(-time.Hour))
 	session(f.member.ID, f.admin.AccountID, "impersonation", now.Add(time.Hour))
 
 	other := session(f.other.AccountID, domain.AccountID{}, "other", now.Add(time.Hour))
 
-	n, err := svc.RevokeSessions(ctx, f.member.ID)
+	n, err := svc.RevokeSessions(ctx, cliAdmin, f.member.ID)
 	if err != nil || n != 2 {
 		t.Errorf("RevokeSessions = %d, %v; want the session and the impersonation", n, err)
 	}
@@ -186,21 +218,48 @@ func revokeSessions(t *testing.T, w *world) {
 		t.Error("the member's session lives, or another account's ended")
 	}
 
-	if e := w.audit()[0]; e.Action != domain.AuditImpersonationEnded || e.ActorID != f.admin.AccountID ||
-		e.TargetID != f.member.ID {
-		t.Errorf("newest audit event %+v, want the impersonation ended", e)
+	// The revocation is audited through the admin's channel, with the
+	// count, after the impersonation it ended.
+	revoked := w.audit()
+	if e := revoked[0]; e.Action != domain.AuditSessionsRevoked || e.ActorID != f.admin.AccountID ||
+		e.TargetKind != domain.AuditTargetAccount || e.TargetID != f.member.ID ||
+		e.Details != (domain.AuditDetails{Sessions: 2, Via: cli}) {
+		t.Errorf("newest audit event %+v, want the member's two sessions revoked", e)
 	}
 
-	if _, err := svc.RevokeSessions(ctx, newID[domain.AccountID](w)); !errors.Is(err, domain.ErrNotFound) {
+	if e := revoked[1]; e.Action != domain.AuditImpersonationEnded || e.ActorID != f.admin.AccountID ||
+		e.TargetID != f.member.ID {
+		t.Errorf("second newest audit event %+v, want the impersonation ended", e)
+	}
+
+	if _, err := svc.RevokeSessions(ctx, cliAdmin, newID[domain.AccountID](w)); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("unknown account: %v", err)
 	}
 
-	sessions, accounts, err := svc.RevokeAllSessions(ctx)
+	if n := len(w.audit()); n != len(revoked) {
+		t.Errorf("%d audit events after an unknown account, want %d", n, len(revoked))
+	}
+
+	// Every account's: no target.
+	wantAll := func(sessions int) {
+		t.Helper()
+
+		if e := w.audit()[0]; e.Action != domain.AuditSessionsRevoked || e.ActorID != f.admin.AccountID ||
+			e.TargetKind != "" || !e.TargetID.IsZero() || e.Details != (domain.AuditDetails{Sessions: sessions}) {
+			t.Errorf("newest audit event %+v, want %d sessions of every account revoked", e, sessions)
+		}
+	}
+
+	sessions, accounts, err := svc.RevokeAllSessions(ctx, f.admin)
 	if err != nil || sessions != 1 || accounts < 3 || live(other) {
 		t.Errorf("RevokeAllSessions = %d of %d, %v; want the other admin's session", sessions, accounts, err)
 	}
 
-	if sessions, _, err := svc.RevokeAllSessions(ctx); err != nil || sessions != 0 {
+	wantAll(1)
+
+	if sessions, _, err := svc.RevokeAllSessions(ctx, f.admin); err != nil || sessions != 0 {
 		t.Errorf("RevokeAllSessions again = %d, %v; want none", sessions, err)
 	}
+
+	wantAll(0)
 }

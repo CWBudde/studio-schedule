@@ -246,7 +246,8 @@ func newAccountsResetPasswordCmd(app *cli.App) *cobra.Command {
 			"--mail the link is mailed to the account, as \"forgot password\" does, and not printed; the " +
 			"deliver-mail job sends it. The link sets the password once; keep it secret. It works for an " +
 			"account that may sign in and for an invited one; a disabled account or an unconfirmed " +
-			"registration is refused with exit status 4. " + accountRefHelp,
+			"registration is refused with exit status 4. Recorded in the audit log, with whether the link was " +
+			"mailed or printed, never the link. " + accountRefHelp,
 		Example: "  studio-schedule accounts reset-password --as admin@example.org admin@example.org\n" +
 			"  studio-schedule accounts reset-password --as admin@example.org --mail --yes member@example.org",
 		Args:        cobra.ExactArgs(1),
@@ -271,7 +272,7 @@ func newAccountsResetPasswordCmd(app *cli.App) *cobra.Command {
 				return err
 			}
 
-			r, err := env.Services.Auth.IssuePasswordReset(ctx, a.Account.ID, mailIt)
+			r, err := env.Services.Auth.IssuePasswordReset(ctx, env.Principal, a.Account.ID, mailIt)
 			if err != nil {
 				return err
 			}
@@ -313,7 +314,7 @@ func newAccountsRevokeCmd(app *cli.App) *cobra.Command {
 		Long: "Sign an account out everywhere: end its sessions and the impersonations it started, as " +
 			"disabling it does, and remove its devices' push subscriptions. It may sign in again. With " +
 			"--all, every account is signed out (after a leak, say). It prints how many sessions ended. " +
-			accountRefHelp,
+			"Recorded in the audit log with the count. " + accountRefHelp,
 		Example: "  studio-schedule accounts sessions revoke --as admin@example.org --yes member@example.org\n" +
 			"  studio-schedule accounts sessions revoke --as admin@example.org --all",
 		Args:        cobra.MaximumNArgs(1),
@@ -334,7 +335,7 @@ func newAccountsRevokeCmd(app *cli.App) *cobra.Command {
 					return err
 				}
 
-				n, accounts, err := env.Services.Auth.RevokeAllSessions(ctx)
+				n, accounts, err := env.Services.Auth.RevokeAllSessions(ctx, env.Principal)
 				if err != nil {
 					return err
 				}
@@ -353,7 +354,7 @@ func newAccountsRevokeCmd(app *cli.App) *cobra.Command {
 				return err
 			}
 
-			n, err := env.Services.Auth.RevokeSessions(ctx, a.Account.ID)
+			n, err := env.Services.Auth.RevokeSessions(ctx, env.Principal, a.Account.ID)
 			if err != nil {
 				return err
 			}

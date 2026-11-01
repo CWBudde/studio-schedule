@@ -34,19 +34,21 @@ func TestAccountsRecoveryStoreFaults(t *testing.T) {
 			}
 		},
 		"IssuePasswordReset": func(t *testing.T, f *authFixture) func(*service.AuthService) error {
+			ada := f.signedUp("ada@example.org", domain.RoleAdmin)
 			bea := f.signedUp("bea@example.org", domain.RoleMember)
 
 			return func(svc *service.AuthService) error {
-				_, err := svc.IssuePasswordReset(t.Context(), bea.Principal.AccountID, false)
+				_, err := svc.IssuePasswordReset(t.Context(), ada.Principal, bea.Principal.AccountID, false)
 
 				return err
 			}
 		},
 		"MailPasswordReset": func(t *testing.T, f *authFixture) func(*service.AuthService) error {
+			ada := f.signedUp("ada@example.org", domain.RoleAdmin)
 			bea := f.signedUp("bea@example.org", domain.RoleMember)
 
 			return func(svc *service.AuthService) error {
-				_, err := svc.IssuePasswordReset(t.Context(), bea.Principal.AccountID, true)
+				_, err := svc.IssuePasswordReset(t.Context(), ada.Principal, bea.Principal.AccountID, true)
 
 				return err
 			}
@@ -54,6 +56,7 @@ func TestAccountsRecoveryStoreFaults(t *testing.T) {
 		// An invited account may set a password only without one: the
 		// credentials are read.
 		"IssuePasswordResetInvited": func(t *testing.T, f *authFixture) func(*service.AuthService) error {
+			ada := f.signedUp("ada@example.org", domain.RoleAdmin)
 			acc, err := f.svc.CreateAccount(t.Context(), officePrincipal, f.newPerson("Kim"), service.NewAccount{
 				Email: "kim@example.org", Role: domain.RoleMember,
 			})
@@ -62,7 +65,7 @@ func TestAccountsRecoveryStoreFaults(t *testing.T) {
 			}
 
 			return func(svc *service.AuthService) error {
-				_, err := svc.IssuePasswordReset(t.Context(), acc.ID, false)
+				_, err := svc.IssuePasswordReset(t.Context(), ada.Principal, acc.ID, false)
 
 				return err
 			}
@@ -70,19 +73,19 @@ func TestAccountsRecoveryStoreFaults(t *testing.T) {
 		// Ending the sessions of the impersonated account audits the
 		// running impersonation.
 		"RevokeSessions": func(t *testing.T, f *authFixture) func(*service.AuthService) error {
-			_, imp := f.impersonating()
+			admin, imp := f.impersonating()
 
 			return func(svc *service.AuthService) error {
-				_, err := svc.RevokeSessions(t.Context(), imp.Principal.AccountID)
+				_, err := svc.RevokeSessions(t.Context(), admin.Principal, imp.Principal.AccountID)
 
 				return err
 			}
 		},
 		"RevokeAllSessions": func(t *testing.T, f *authFixture) func(*service.AuthService) error {
-			f.impersonating()
+			admin, _ := f.impersonating()
 
 			return func(svc *service.AuthService) error {
-				_, _, err := svc.RevokeAllSessions(t.Context())
+				_, _, err := svc.RevokeAllSessions(t.Context(), admin.Principal)
 
 				return err
 			}

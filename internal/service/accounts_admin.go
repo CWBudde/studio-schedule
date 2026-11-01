@@ -394,15 +394,9 @@ func (s *AuthService) auditAccount(
 ) error {
 	details.Via = p.Via
 
-	e := domain.AuditEvent{
-		ID: ids.New[domain.AuditEventID](s.ids), At: s.clock.Now(), ActorID: actorOf(p), Action: action,
-		TargetKind: domain.AuditTargetAccount, TargetID: target, Details: details,
-	}
-	if err := e.Validate(); err != nil {
-		return err
-	}
-
-	return tx.Audit().Create(ctx, e)
+	return s.auditEvent(ctx, tx, domain.AuditEvent{
+		ActorID: actorOf(p), Action: action, TargetKind: domain.AuditTargetAccount, TargetID: target, Details: details,
+	})
 }
 
 // auditDeleted records that actor (zero: its holder) deleted the account
