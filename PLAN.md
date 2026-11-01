@@ -942,7 +942,7 @@ command groups by need: recovery and diagnosis first, then data, then reports.
       MAIL; skipped without `SMTP_HOST`), vapid (skipped without keys), base-url (http on
       localhost or unset is a warning) and receipts (`service.SampleReceiptInput` rendered by
       typstwasm), as ok/fail/warn/skip lines or JSON `{ok, checks}`
-- [ ] Accounts and access: `accounts list|show`, `accounts create --role`, `accounts set-role`,
+- [x] Accounts and access: `accounts list|show`, `accounts create --role`, `accounts set-role`,
       `accounts reset-password` (prints a setup link like `init`, or mails it with `--mail`),
       `accounts sessions revoke` (one account or all), `accounts delete`. The guards of ADR 0016
       (`last-admin`, `own-account`) apply. This is the way back in when the last admin has
@@ -959,14 +959,28 @@ command groups by need: recovery and diagnosis first, then data, then reports.
         `reset-password`, `sessions revoke` and `delete` confirm. A refusal names its guard
         (`own-account`, `last-admin`, `in-use`; exit 4). The `last-admin` guard cannot be reached
         from the command line alone (amended in ADR 0020)
-  - [ ] Audit the reset link and the ended sessions: new audit actions need a migration
+  - [x] Audit the reset link and the ended sessions: new audit actions need a migration
         (`audit_actions`), the domain constants, the audit page's strings and the
-        `listAuditEvents` description. The round's lanes kept the store and the API out of reach.
-        The impersonations that end are audited already
-  - [ ] An admin whose `init` link expired before the admin was confirmed cannot act as
+        `listAuditEvents` description (2026-11-01): `password-reset-issued` (target the account,
+        `AuditDetails.Delivery` mailed or printed, never the link) and `sessions-revoked` (target
+        the account, none for `--all`; `AuditDetails.Sessions` counts the running sessions ended),
+        written in the transactions of `IssuePasswordReset`, `RevokeSessions` and
+        `RevokeAllSessions`, which now take the principal (actor and `Via`). Migration 00029, the
+        domain rules, `listAuditEvents`' fields and description, and the audit page's en/de
+        strings (delivery and session count under the target, "Every account" for `--all`).
+        Scenarios on both stores (`servicetest`), a store contract case and a component test
+  - [x] An admin whose `init` link expired before the admin was confirmed cannot act as
         themselves (`--as` needs a confirmed account), so `reset-password` does not reach them.
-        Without mail, nothing does. Decide whether `init` may issue a new link for the unconfirmed
-        first admin
+        Without mail, nothing does. Decided (asked 2026-11-01): an operator command
+        `accounts setup-link <email>` (2026-11-01): no `--as`; prints a new 72-hour setup link like
+        `init`'s for an account that has not confirmed (`AuthService.IssueSetupLink`, replacing the
+        pending link), only while no admin can sign in (the counting of `last-admin`); else
+        `admin-exists` (exit 4, checked first, nothing changes). `confirmed` is exit 4, an unknown
+        account exit 3; it confirms (`--yes`). Audited as `setup-link-issued` without an actor, with
+        `Via` naming the OS user (`AuditAction.ActorOptional`, the CHECK of migration 00029); the
+        audit view shows "An operator". Tested end to end on both stores: the expired init link,
+        the command, the link confirming the account, then `--as` works. Deviation: it takes
+        `<email|id>` like the group's other commands. Amended in ADR 0020
 - [x] Settings: `settings get [area]` and `settings set <area> key=value…` through
       `SettingsService` (same validation; time zone and currency stay locked once used).
       `settings export|import` as JSON, to set up a second school the same way (2026-11-01): the

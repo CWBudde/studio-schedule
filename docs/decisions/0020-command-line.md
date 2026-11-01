@@ -182,12 +182,31 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
   ID. `show` prints an item of `listAccounts`, and `delete` prints the account as it was, because
   `deleteAccount` answers without a body. `disable` and `create` ask for confirmation too (one ends
   sessions, the other mails), and `reset-password` always does, since a new link stops the older
-  ones. Its link is valid for an hour (`ResetTokenTTL`). Not audited yet: issuing a reset link and
-  ending sessions have no audit action of their own. A new action needs a migration
-  (`audit_actions`), the domain constant, the audit page's strings and the description of
-  `listAuditEvents`, so it waits for a change of its own. The impersonations that end are audited,
-  as before. The `last-admin` guard cannot be reached from the command line alone: `--as` needs an
-  admin who can sign in, and an admin's own account is refused as `own-account` first.
+  ones. Its link is valid for an hour (`ResetTokenTTL`). Issuing a reset link and ending sessions
+  are audited (see the next bullet); the impersonations that end are audited as before. The
+  `last-admin` guard cannot be reached from the command line alone: `--as` needs an admin who can
+  sign in, and an admin's own account is refused as `own-account` first.
+- **Reset links and ended sessions are audited (2026-11-01).** `password-reset-issued` targets the
+  account and records whether the link was mailed or printed (`AuditDetails.Delivery`), never the
+  link. `sessions-revoked` targets the account, or nothing for `--all`, and counts the sessions
+  that had not ended yet (`AuditDetails.Sessions`). Both record the `--as` account as the actor and
+  its `Via`. The actions are rows of `audit_actions` (migration 00029).
+- **`accounts setup-link <email|id>`, an operator command (2026-11-01).** A first admin whose
+  `init` link expired before they confirmed could not get back in: `--as` needs a confirmed
+  account, so `reset-password` did not reach them, and without mail nothing did. `setup-link`
+  prints a new setup link like `init`'s (`AuthService.IssueSetupLink`: valid for 72 hours,
+  `InviteTokenTTL`; it replaces the pending links) for an account that has not confirmed and has
+  no password of its own. It takes no `--as`, and works only while no admin can sign in, counted
+  as the `last-admin` guard counts (a confirmed, enabled admin; under the same person locks). Once
+  one can, it is refused as `admin-exists` (exit 4) before anything else is looked at, and changes
+  nothing, so it never gets round an admin, who uses `reset-password`. A confirmed account is
+  refused as `confirmed` (exit 4), an unknown one exits 3. It confirms like the other destructive
+  commands, since the new link stops the pending one. Its audit event, `setup-link-issued`, is the
+  second one without an actor (after an account its holder deleted): `AuditAction.ActorOptional`
+  and the CHECK `audit_events_actor` (migration 00029) admit it, the domain requires its `Via` to
+  be the command line, with the OS user, and the link as printed. The command gets the OS user
+  from `cli.System.OSUser` through `newAccountsCmd`, since `cli.Env` exposes only the principal's
+  `Via`. The audit view shows such an event as "An operator" with the via line.
 - **`settings`: the file is an argument, and the areas include receipts and passes.** `-o` is the
   global `--output`, so `settings export [file]` takes its file as an argument, like
   `settings import <file>`. Besides the cards of ADR 0013 (`school`, `branding`, `regional`,
