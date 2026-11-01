@@ -268,6 +268,104 @@ func (s *CatalogService) DeleteCourseType(ctx context.Context, id domain.CourseT
 	return nil
 }
 
+// LevelData are the fields the office edits on a level. Code is empty when
+// there is none.
+type LevelData struct {
+	Name string
+	Code string
+}
+
+// CreateLevel adds a level after the last one. A name or code another level
+// has is domain.ErrDuplicate.
+func (s *CatalogService) CreateLevel(ctx context.Context, d LevelData) (domain.Level, error) {
+	l := d.level(ids.New[domain.LevelID](s.ids))
+	l.Position = 1 // for Validate; the place comes from the list
+
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		if err := l.Validate(); err != nil {
+			return err
+		}
+
+		levels, err := tx.Levels().List(ctx)
+		if err != nil {
+			return err
+		}
+
+		for _, o := range levels {
+			l.Position = max(l.Position, o.Position+1)
+		}
+
+		return tx.Levels().Create(ctx, l)
+	})
+	if err != nil {
+		return domain.Level{}, fmt.Errorf("create level: %w", err)
+	}
+
+	return l, nil
+}
+
+// UpdateLevel replaces a level's name and code; it keeps its position,
+// which only SetLevelOrder changes. A name or code another level has is
+// domain.ErrDuplicate.
+func (s *CatalogService) UpdateLevel(ctx context.Context, id domain.LevelID, d LevelData) (domain.Level, error) {
+	l := d.level(id)
+
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		// An unknown level is a 404 before anything about its fields.
+		old, err := tx.Levels().Get(ctx, id)
+		if err != nil {
+			return err
+		}
+
+		l.Position = old.Position
+
+		if err := l.Validate(); err != nil {
+			return err
+		}
+
+		return tx.Levels().Update(ctx, l)
+	})
+	if err != nil {
+		return domain.Level{}, fmt.Errorf("update level: %w", err)
+	}
+
+	return l, nil
+}
+
+// DeleteLevel removes a level that no class uses; a used one is
+// domain.ErrInUse.
+func (s *CatalogService) DeleteLevel(ctx context.Context, id domain.LevelID) error {
+	err := s.remove(ctx, func(ctx context.Context, tx store.Tx) error { return tx.Levels().Delete(ctx, id) })
+	if err != nil {
+		return fmt.Errorf("delete level: %w", err)
+	}
+
+	return nil
+}
+
+// SetLevelOrder numbers the levels from 1 in the order given, from least
+// to most advanced. An order that is not exactly the levels, each once, is
+// a validation error on levelIds, also when a level was added or removed
+// since the caller read the list.
+func (s *CatalogService) SetLevelOrder(ctx context.Context, order []domain.LevelID) error {
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		err := tx.Levels().SetOrder(ctx, order)
+		if errors.Is(err, domain.ErrValidation) {
+			return fmt.Errorf("%w (%w)", errLevelOrder, err)
+		}
+
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("set level order: %w", err)
+	}
+
+	return nil
+}
+
+// errLevelOrder is a level order that is not exactly the levels.
+var errLevelOrder error = &domain.FieldError{Field: "levelIds", Msg: "must list each level exactly once"}
+
 // StaffData are the fields the office edits on a staff member. PersonID is
 // zero for staff without a person record.
 type StaffData struct {
@@ -477,6 +575,10 @@ func (d RoomData) room(id domain.RoomID) domain.Room {
 
 func (d CourseTypeData) courseType(id domain.CourseTypeID) domain.CourseType {
 	return domain.CourseType{ID: id, Name: strings.TrimSpace(d.Name), Description: strings.TrimSpace(d.Description)}
+}
+
+func (d LevelData) level(id domain.LevelID) domain.Level {
+	return domain.Level{ID: id, Name: strings.TrimSpace(d.Name), Code: strings.TrimSpace(d.Code)}
 }
 
 func (d StaffData) staff(id domain.StaffID) domain.Staff {

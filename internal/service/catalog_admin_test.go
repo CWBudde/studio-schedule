@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -398,6 +399,205 @@ func TestCourseTypeAdmin(t *testing.T) {
 	}
 
 	wantIs(t, svc.DeleteCourseType(ctx, salsa.ID), domain.ErrNotFound)
+}
+
+// levelNames returns the positions and names of the levels in the
+// catalog's order.
+func levelNames(t *testing.T, svc *service.CatalogService) []string {
+	t.Helper()
+
+	levels, err := svc.Levels(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	names := make([]string, len(levels))
+	for i, l := range levels {
+		names[i] = fmt.Sprintf("%d %s", l.Position, l.Name)
+	}
+
+	return names
+}
+
+func wantLevels(t *testing.T, svc *service.CatalogService, want ...string) {
+	t.Helper()
+
+	if got := levelNames(t, svc); !slices.Equal(got, want) {
+		t.Fatalf("levels %q, want %q", got, want)
+	}
+}
+
+// TestLevelAdmin: the office's level writes trim and check the fields,
+// append new levels, keep a level's position on an edit and refuse taken
+// names and codes, ignoring case.
+func TestLevelAdmin(t *testing.T) {
+	t.Parallel()
+
+	svc := service.NewCatalogService(memory.New(), ids.V7{})
+	ctx := t.Context()
+
+	// A fresh school has no levels.
+	wantLevels(t, svc)
+
+	foundation, err := svc.CreateLevel(ctx, service.LevelData{Name: " Foundation ", Code: " F "})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if foundation.ID.IsZero() || foundation.Name != "Foundation" || foundation.Code != "F" || foundation.Position != 1 {
+		t.Errorf("created %+v, want a new ID, trimmed fields and position 1", foundation)
+	}
+
+	// Appended in the order of creation, not by name.
+	advanced, err := svc.CreateLevel(ctx, service.LevelData{Name: "Advanced"})
+	if err != nil || advanced.Position != 2 || advanced.Code != "" {
+		t.Fatalf("second level: %+v, %v; want position 2 without a code", advanced, err)
+	}
+
+	wantLevels(t, svc, "1 Foundation", "2 Advanced")
+
+	for _, tc := range []struct {
+		data  service.LevelData
+		field string
+	}{
+		{service.LevelData{Name: "  "}, "name"},
+		{service.LevelData{Name: strings.Repeat("ä", domain.MaxLevelNameLen+1)}, "name"},
+		{service.LevelData{Name: "Masterclass", Code: "TOOLONGXX"}, "code"},
+	} {
+		_, err := svc.CreateLevel(ctx, tc.data)
+		wantField(t, err, tc.field)
+	}
+
+	// Exactly at the limits, umlauts counting as one character.
+	long, err := svc.CreateLevel(ctx, service.LevelData{
+		Name: strings.Repeat("ö", domain.MaxLevelNameLen), Code: strings.Repeat("ü", domain.MaxLevelCodeLen),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = svc.CreateLevel(ctx, service.LevelData{Name: "FOUNDATION"})
+	wantIs(t, err, domain.ErrDuplicate)
+
+	_, err = svc.CreateLevel(ctx, service.LevelData{Name: "Masterclass", Code: "f"})
+	wantIs(t, err, domain.ErrDuplicate)
+
+	_, err = svc.UpdateLevel(ctx, advanced.ID, service.LevelData{Name: "foundation"})
+	wantIs(t, err, domain.ErrDuplicate)
+
+	// An edit keeps the position, also after a reorder.
+	if err := svc.SetLevelOrder(ctx, []domain.LevelID{advanced.ID, foundation.ID, long.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	renamed, err := svc.UpdateLevel(ctx, foundation.ID, service.LevelData{Name: " Basics ", Code: " B "})
+	if err != nil || renamed.Name != "Basics" || renamed.Code != "B" || renamed.Position != 2 {
+		t.Fatalf("update: %+v, %v; want Basics, B at position 2", renamed, err)
+	}
+
+	_, err = svc.UpdateLevel(ctx, foundation.ID, service.LevelData{Name: "Basics", Code: "TOOLONGXX"})
+	wantField(t, err, "code")
+
+	// An unknown level is a 404 before anything about its fields.
+	_, err = svc.UpdateLevel(ctx, ids.New[domain.LevelID](ids.V7{}), service.LevelData{Name: " "})
+	wantIs(t, err, domain.ErrNotFound)
+
+	if err := svc.DeleteLevel(ctx, advanced.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	wantIs(t, svc.DeleteLevel(ctx, advanced.ID), domain.ErrNotFound)
+
+	// After the highest position, not after the number of levels.
+	if _, err := svc.CreateLevel(ctx, service.LevelData{Name: "Masterclass", Code: "MC"}); err != nil {
+		t.Fatal(err)
+	}
+
+	wantLevels(t, svc, "2 Basics", "3 "+long.Name, "4 Masterclass")
+}
+
+// TestSetLevelOrder: the order lists each level once and numbers them from
+// 1; anything else is a field error on levelIds and changes nothing.
+func TestSetLevelOrder(t *testing.T) {
+	t.Parallel()
+
+	svc := service.NewCatalogService(memory.New(), ids.V7{})
+	ctx := t.Context()
+
+	// No levels take the empty order.
+	if err := svc.SetLevelOrder(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	create := func(name string) domain.LevelID {
+		t.Helper()
+
+		l, err := svc.CreateLevel(ctx, service.LevelData{Name: name})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return l.ID
+	}
+
+	a, b, c := create("Level A"), create("Level B"), create("Level C")
+
+	if err := svc.SetLevelOrder(ctx, []domain.LevelID{c, a, b}); err != nil {
+		t.Fatal(err)
+	}
+
+	wantLevels(t, svc, "1 Level C", "2 Level A", "3 Level B")
+
+	for name, order := range map[string][]domain.LevelID{
+		"missing level":          {c, a},
+		"repeated level":         {c, a, a},
+		"repeated, none missing": {c, a, b, b},
+		"unknown level":          {c, a, b, ids.New[domain.LevelID](ids.V7{})},
+		"empty":                  nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := svc.SetLevelOrder(ctx, order)
+			wantField(t, err, "levelIds")
+
+			var fe *domain.FieldError
+			if errors.As(err, &fe) && fe.Msg != "must list each level exactly once" {
+				t.Errorf("message %q", fe.Msg)
+			}
+		})
+	}
+
+	wantLevels(t, svc, "1 Level C", "2 Level A", "3 Level B")
+}
+
+// TestSetLevelOrderStale (review focus 1): an order sent from a list read
+// before someone added a level misses that level and is refused, so the new
+// level is never silently given a place by the old list.
+func TestSetLevelOrderStale(t *testing.T) {
+	t.Parallel()
+
+	svc := service.NewCatalogService(memory.New(), ids.V7{})
+	ctx := t.Context()
+
+	for _, name := range []string{"Level A", "Level B"} {
+		if _, err := svc.CreateLevel(ctx, service.LevelData{Name: name}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// The office reads the list…
+	read, err := svc.Levels(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// …someone else adds a level…
+	if _, err := svc.CreateLevel(ctx, service.LevelData{Name: "Level C"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// …and the office sends the read list swapped.
+	wantField(t, svc.SetLevelOrder(ctx, []domain.LevelID{read[1].ID, read[0].ID}), "levelIds")
+	wantLevels(t, svc, "1 Level A", "2 Level B", "3 Level C")
 }
 
 func TestStaffAdmin(t *testing.T) {
