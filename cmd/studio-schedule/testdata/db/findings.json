@@ -1,0 +1,35 @@
+{
+  "ok": false,
+  "checks": [
+    "passes",
+    "capacity",
+    "tombstones",
+    "receipt-counters"
+  ],
+  "findings": [
+    {
+      "check": "passes",
+      "entity": "pass",
+      "id": "00000000-0000-7000-8000-000000000254",
+      "message": "3 of its visits are used, but it paid for 2 bookings"
+    },
+    {
+      "check": "capacity",
+      "entity": "lesson",
+      "id": "00000000-0000-7000-8000-000000000077",
+      "message": "3 active bookings for 2 places, and only 0 of them were booked beyond the capacity on purpose"
+    },
+    {
+      "check": "tombstones",
+      "entity": "person",
+      "id": "00000000-0000-7000-8000-000000000037",
+      "message": "the person is merged, but booking 00000000-0000-7000-8000-00000000024f still refers to it"
+    },
+    {
+      "check": "receipt-counters",
+      "entity": "receipt-year",
+      "id": "2026",
+      "message": "the counter is at 5, but receipt number 90 was issued: the next receipt would repeat a number"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+capacity  lesson  00000000-0000-7000-8000-000000000077  3 active bookings for 2 places, and only 0 of them were booked beyond the capacity on purpose

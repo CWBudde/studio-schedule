@@ -129,6 +129,20 @@ receipts). Every command explains itself with `--help`, and [cli.md](cli.md) is 
 all of them. A test (`cmd/studio-schedule/docs_test.go`) fails when a variable or flag of the code,
 global or a command's, is missing from these tables, or a table names one the code doesn't have.
 
+### Commands and flags: db
+
+| Command    | Flag     | Meaning                                                                                                       |
+| ---------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| `db check` | `--only` | run only these checks (repeatable or comma-separated): `passes`, `capacity`, `tombstones`, `receipt-counters` |
+
+`db check` looks for what the services keep consistent and the database cannot enforce: a visit
+pass's used visits against the bookings it paid for, each lesson's active bookings against its
+places, merged and anonymized persons against what still refers to them, and each year's receipt
+counter against the receipt numbers issued. It only reads, in one read-only transaction, so it is
+safe on a live database. Run it after a restore, before and after an upgrade, and from cron: it
+exits with status 1 on a finding (and prints the findings by record ID, never by personal data),
+with 0 when the data is consistent.
+
 ### The command line
 
 Every command runs locally on the server's shell, with the database's credentials; there is no

@@ -52,6 +52,7 @@ A command that deletes, anonymizes, mails, cancels or merges asks for confirmati
 
 - [`studio-schedule completion`](#studio-schedule-completion): Generate the autocompletion script for the specified shell
 - [`studio-schedule config`](#studio-schedule-config): Inspect the configuration
+- [`studio-schedule db`](#studio-schedule-db): Check the database
 - [`studio-schedule doctor`](#studio-schedule-doctor): Check the configuration, the database, the mail server and the receipt module
 - [`studio-schedule healthcheck`](#studio-schedule-healthcheck): Check that the local server answers (for container health checks)
 - [`studio-schedule import`](#studio-schedule-import): Import members from a CSV file (a dry run unless `--apply`)
@@ -266,6 +267,43 @@ Flags:
 Access: an operator command. It acts as no account and refuses `--as`.
 
 Output with `--output json`: one object: databaseUrl, httpAddr, baseUrl (strings), demoMode (bool), smtp {host, port (number, 0: the default of the TLS mode), tls (empty: starttls), username, password, from}, trustedProxies (array of strings), hstsIncludeSubdomains (bool), metricsAddr, log {format, level}, push {publicKey, privateKey, subject}, as; an empty string is an unset setting, and the secrets (the database password, smtp.password, push.privateKey) are xxxxx when set.
+
+### `studio-schedule db`
+
+Check the database.
+
+```text
+studio-schedule db <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule db check`](#studio-schedule-db-check): Check the data for inconsistencies the database cannot rule out
+
+#### `studio-schedule db check`
+
+Check the data for inconsistencies the database cannot rule out.
+
+```text
+studio-schedule db check [flags]
+```
+
+Run the integrity checks on the database from `DATABASE_URL` or `--database-url` and print one line per finding: passes (a visit pass's used visits equal the bookings it paid for, and no pass paid for a booking that costs no visit: one canceled in time, or one of a lesson the school canceled), capacity (no lesson has more active bookings than places, but for those booked beyond the capacity on purpose), tombstones (nothing still refers to a merged or anonymized person that the merge would have moved or anonymizing ended) and receipt-counters (each year's receipt counter is at least the highest receipt number issued that year). `--only` runs some of them. A finding names records by their IDs, never by personal data. The command only reads, in one read-only transaction, so it is safe on a live database. It exits with status 0 without a finding, 1 with findings or when the database cannot be opened, and 2 for an unknown check or without a database URL. With `--output json` it prints one object: ok (bool, false when a check found something), checks (an array of the names of the checks that ran, in their order) and findings (an array, empty without any, of {check, entity, id, message}: the check that found it; the entity pass, booking, lesson, person or receipt-year; the record's ID, or the year of a receipt counter; and what is inconsistent).
+
+Examples:
+
+```sh
+studio-schedule db check
+studio-schedule db check --only passes,capacity --output json
+```
+
+Flags:
+
+- `--only` (stringSlice): run only these checks (repeatable or comma-separated): passes, capacity, tombstones, receipt-counters
+
+Access: an operator command. It acts as no account and refuses `--as`.
+
+Output with `--output json`: one object: ok (bool, false when a check found something), checks (an array of the names of the checks that ran, in their order) and findings (an array, empty without any, of {check, entity, id, message}: the check that found it; the entity pass, booking, lesson, person or receipt-year; the record's ID, or the year of a receipt counter; and what is inconsistent).
 
 ### `studio-schedule doctor`
 

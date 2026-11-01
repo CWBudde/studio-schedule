@@ -976,9 +976,22 @@ command groups by need: recovery and diagnosis first, then data, then reports.
       `receipts pdf <number> -o file`, `receipts export --year --format csv` (for the tax
       adviser). `receipts verify` checks the numbers are gapless per year, every Storno names its
       original, and the totals match the lines
-- [ ] Integrity: `db check` compares pass visits with redemptions, bookings with capacity,
+- [x] Integrity: `db check` compares pass visits with redemptions, bookings with capacity,
       tombstones with what still references them, and the receipt counters. It is read-only and
-      exits 1 on a finding
+      exits 1 on a finding (2026-11-01): `service.IntegrityService.Check` (the MCP server's entry)
+      runs the named checks `passes`, `capacity`, `tombstones` and `receipt-counters` in one
+      read-only transaction over five aggregate store reads (`ListUnbalanced`, `ListStray`,
+      `ListOverCapacity`, `ListTombstoneReferences`, `ListStates`; one query each on PostgreSQL);
+      a finding names its check, the entity and its ID, never personal data. `db check [--only …]`
+      prints them as a table or `{ok, checks, findings}`, exit 1 on a finding, 2 for an unknown
+      check. The checks agree with the services, not a stricter reading: a redemption of a late
+      cancellation stays, a lesson over capacity is a finding only beyond the bookings whose
+      events record an override (ADR 0009), and an anonymized person's passes stay (ADR 0016), so
+      only a pass sold after the anonymization, and only an active booking of a lesson that starts
+      after it, is a finding. A clean demo school and data written only through the services
+      (merge, anonymize, cancellations, overrides) have none, on both stores. Deviation, amended in
+      ADR 0020: `app.Services` has no integrity service yet, so the command builds it on the store
+      it opens with the process's opener (`newDBCmd(app, sys.Open)`)
 - [ ] Reports: `stats --from --to` (the statistics service as a table or JSON);
       `events list|registrations <slug>|mark-paid` (Phase 10)
 - [ ] Tests: every command runs in-process (cobra `Execute` with buffers) on the memory store
