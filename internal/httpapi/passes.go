@@ -438,7 +438,7 @@ func (h *handlers) getPassSettings(ctx context.Context, _ *struct{}) (*PassSetti
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	return &PassSettingsOutput{Body: PassSettings{RedemptionMode: string(mode)}}, nil
+	return &PassSettingsOutput{Body: NewPassSettings(mode)}, nil
 }
 
 func (h *handlers) updatePassSettings(ctx context.Context, in *PassSettingsInput) (*PassSettingsOutput, error) {

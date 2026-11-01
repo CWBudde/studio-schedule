@@ -152,8 +152,8 @@ func (in SettingsImport) apply(settings *domain.Settings, usage store.SettingsUs
 	return in.BookingRules.apply(settings, now)
 }
 
-// apply writes the receipt settings into settings, trimmed as
-// ReceiptService.SetSettings trims them.
+// apply writes the receipt settings into settings, their texts trimmed: the
+// one rule of ReceiptService.SetSettings and SettingsService.Import.
 func (r ReceiptSettingsUpdate) apply(settings *domain.Settings) {
 	rs := r.Settings
 	rs.Issuer.Name, rs.Issuer.Address = strings.TrimSpace(rs.Issuer.Name), trimLines(rs.Issuer.Address)

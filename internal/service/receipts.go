@@ -858,21 +858,17 @@ func (s *ReceiptService) Settings(ctx context.Context) (ReceiptSettings, error) 
 }
 
 // SetSettings replaces the receipt settings and the receipt number prefix
-// (texts trimmed; invalid ones are validation errors on their fields).
-// Receipts issued before keep what they were issued with.
+// (texts trimmed as ReceiptSettingsUpdate.apply trims them; invalid ones are
+// validation errors on their fields). Receipts issued before keep what they
+// were issued with.
 func (s *ReceiptService) SetSettings(ctx context.Context, rs domain.ReceiptSettings, prefix string) (ReceiptSettings, error) {
-	rs.Issuer.Name, rs.Issuer.Address = strings.TrimSpace(rs.Issuer.Name), trimLines(rs.Issuer.Address)
-	rs.Issuer.TaxID, rs.Issuer.Email = strings.TrimSpace(rs.Issuer.TaxID), strings.TrimSpace(rs.Issuer.Email)
-	rs.Issuer.Phone, rs.TaxNote = strings.TrimSpace(rs.Issuer.Phone), strings.TrimSpace(rs.TaxNote)
-	rs.Footer = trimLines(rs.Footer)
-
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		settings, err := tx.Settings().Get(ctx)
 		if err != nil {
 			return err
 		}
 
-		settings.Receipts, settings.ReceiptPrefix = rs, strings.TrimSpace(prefix)
+		ReceiptSettingsUpdate{Settings: rs, Prefix: prefix}.apply(&settings)
 		if err := settings.Validate(); err != nil {
 			return err
 		}

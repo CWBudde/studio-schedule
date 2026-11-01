@@ -139,16 +139,7 @@ func (h *handlers) listAccounts(ctx context.Context, _ *struct{}) (*AccountListO
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	items := make([]AccountEntry, 0, len(accounts))
-	for _, a := range accounts {
-		items = append(items, AccountEntry{
-			ID: a.Account.ID, Email: a.Account.Email, Role: string(a.Account.Role),
-			GivenName: a.Person.GivenName, FamilyName: a.Person.FamilyName,
-			Confirmed: !a.Account.ConfirmedAt.IsZero(), Disabled: !a.Account.DisabledAt.IsZero(),
-		})
-	}
-
-	return &AccountListOutput{Body: AccountList{Items: items}}, nil
+	return &AccountListOutput{Body: NewAccountList(accounts)}, nil
 }
 
 func (h *handlers) listAuditEvents(ctx context.Context, _ *struct{}) (*AuditEventListOutput, error) {

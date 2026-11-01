@@ -489,14 +489,9 @@ func receiptSettingsBody(s service.ReceiptSettings) ReceiptSettingsBody {
 }
 
 func (h *handlers) updateReceiptSettings(ctx context.Context, in *ReceiptSettingsInput) (*ReceiptSettingsOutput, error) {
-	b := in.Body
+	u := in.Body.Update()
 
-	s, err := h.deps.Receipts.SetSettings(ctx, domain.ReceiptSettings{
-		Issuer: domain.ReceiptIssuer{
-			Name: b.IssuerName, Address: b.IssuerAddress, TaxID: b.TaxID, Email: b.Email, Phone: b.Phone,
-		},
-		TaxMode: domain.TaxMode(b.TaxMode), TaxNote: b.TaxNote, Footer: b.Footer,
-	}, b.ReceiptPrefix)
+	s, err := h.deps.Receipts.SetSettings(ctx, u.Settings, u.Prefix)
 	if err != nil {
 		return nil, h.toHTTPError(ctx, err)
 	}
