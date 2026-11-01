@@ -947,6 +947,26 @@ command groups by need: recovery and diagnosis first, then data, then reports.
       `accounts sessions revoke` (one account or all), `accounts delete`. The guards of ADR 0016
       (`last-admin`, `own-account`) apply. This is the way back in when the last admin has
       forgotten their password
+  - [x] The commands (2026-11-01): `accounts list|show|create|set-role|disable|enable|`
+        `reset-password|sessions revoke|delete` (`cmd/studio-schedule/accounts.go`). An account is
+        named by its email or ID (`AuthService.AccountByRef`). The JSON is the operations' bodies
+        (`httpapi.NewAccountEntry`, `NewAccountList`, `NewPersonAccount`). `create` (with
+        `--person <id>` and `--role`) is `office`, like `createPersonAccount`; the rest is `admin`.
+        `reset-password` prints a one-hour link (`AuthService.IssuePasswordReset`), or with
+        `--mail` mails it.
+        `sessions revoke <account>|--all` prints how many running sessions ended
+        (`RevokeSessions`, `RevokeAllSessions`, built on `endSessions`). `disable`, `create`,
+        `reset-password`, `sessions revoke` and `delete` confirm. A refusal names its guard
+        (`own-account`, `last-admin`, `in-use`; exit 4). The `last-admin` guard cannot be reached
+        from the command line alone (amended in ADR 0020)
+  - [ ] Audit the reset link and the ended sessions: new audit actions need a migration
+        (`audit_actions`), the domain constants, the audit page's strings and the
+        `listAuditEvents` description. The round's lanes kept the store and the API out of reach.
+        The impersonations that end are audited already
+  - [ ] An admin whose `init` link expired before the admin was confirmed cannot act as
+        themselves (`--as` needs a confirmed account), so `reset-password` does not reach them.
+        Without mail, nothing does. Decide whether `init` may issue a new link for the unconfirmed
+        first admin
 - [ ] Settings: `settings get [area]` and `settings set <area> key=value…` through
       `SettingsService` (same validation; time zone and currency stay locked once used).
       `settings export|import` as JSON, to set up a second school the same way

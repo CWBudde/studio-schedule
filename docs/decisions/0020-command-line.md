@@ -176,3 +176,15 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
 - **`mail requeue <id>` asks too, not only `--failed`.** Queuing a mail again mails it, so both
   forms confirm like every command that mails. `mail test` sends straight through the mail server,
   never through the outbox, so its template (`test`) is not one of the mail log's templates.
+- **The `accounts` group (2026-11-01).** `accounts list`, `show`, `set-role`, `disable`, `enable`,
+  `reset-password`, `sessions revoke` and `delete` need `admin`, `accounts create` needs `office`
+  like `createPersonAccount` (only an admin creates an admin). An account is named by its email or
+  ID. `show` prints an item of `listAccounts`, and `delete` prints the account as it was, because
+  `deleteAccount` answers without a body. `disable` and `create` ask for confirmation too (one ends
+  sessions, the other mails), and `reset-password` always does, since a new link stops the older
+  ones. Its link is valid for an hour (`ResetTokenTTL`). Not audited yet: issuing a reset link and
+  ending sessions have no audit action of their own. A new action needs a migration
+  (`audit_actions`), the domain constant, the audit page's strings and the description of
+  `listAuditEvents`, so it waits for a change of its own. The impersonations that end are audited,
+  as before. The `last-admin` guard cannot be reached from the command line alone: `--as` needs an
+  admin who can sign in, and an admin's own account is refused as `own-account` first.
