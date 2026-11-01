@@ -607,6 +607,14 @@ func (r roomRepo) Get(_ context.Context, id domain.RoomID) (domain.Room, error) 
 	return rm, nil
 }
 
+func (r roomRepo) Lock(ctx context.Context, id domain.RoomID) (domain.Room, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return domain.Room{}, err
+	}
+
+	return r.Get(ctx, id)
+}
+
 func (r roomRepo) Create(_ context.Context, rm domain.Room) error {
 	if err := r.tx.checkWritable(); err != nil {
 		return err

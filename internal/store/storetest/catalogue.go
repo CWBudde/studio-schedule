@@ -188,6 +188,33 @@ func testCatalogue(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			wantSlice(e.t, e.rooms(domain.LocationID{}), before)
 		},
+		"RoomLock": func(e *env) {
+			r := e.roomAt(e.location("Main Hall"), "Room A", 1)
+
+			var got domain.Room
+
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				var err error
+				got, err = tx.Rooms().Lock(ctx, r.ID)
+
+				return err
+			})
+			wantEqual(e.t, got, r)
+
+			err := e.read(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Rooms().Lock(ctx, r.ID)
+
+				return err
+			})
+			wantErr(e.t, err, store.ErrReadOnly)
+
+			err = e.write(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Rooms().Lock(ctx, newID[domain.RoomID](e))
+
+				return err
+			})
+			wantErr(e.t, err, domain.ErrNotFound)
+		},
 		"RoomSetOrderEmptyLocation": func(e *env) {
 			empty, l := e.location("Empty Hall"), e.location("Main Hall")
 			r := e.roomAt(l, "Room A", 1)

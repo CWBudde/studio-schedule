@@ -74,6 +74,15 @@ func (r roomRepo) Get(ctx context.Context, id domain.RoomID) (domain.Room, error
 	return toRoom(row), nil
 }
 
+func (r roomRepo) Lock(ctx context.Context, id domain.RoomID) (domain.Room, error) {
+	row, err := r.q.LockRoom(ctx, pgID(id))
+	if err != nil {
+		return domain.Room{}, notFound("room", err)
+	}
+
+	return toRoom(row), nil
+}
+
 func (r roomRepo) Create(ctx context.Context, rm domain.Room) error {
 	capacity, position, err := roomNumbers(rm)
 	if err != nil {

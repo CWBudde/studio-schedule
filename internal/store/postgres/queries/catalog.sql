@@ -16,6 +16,9 @@ SELECT * FROM locations ORDER BY name, id;
 -- name: GetRoom :one
 SELECT * FROM rooms WHERE id = $1;
 
+-- name: LockRoom :one
+SELECT * FROM rooms WHERE id = $1 FOR UPDATE;
+
 -- name: CreateRoom :exec
 INSERT INTO rooms (id, location_id, name, capacity, position) VALUES ($1, $2, $3, $4, $5);
 

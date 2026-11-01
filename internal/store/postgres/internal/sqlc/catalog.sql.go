@@ -360,6 +360,23 @@ func (q *Queries) ListStaffByPerson(ctx context.Context, personID pgtype.UUID) (
 	return items, nil
 }
 
+const lockRoom = `-- name: LockRoom :one
+SELECT id, location_id, name, capacity, position FROM rooms WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockRoom(ctx context.Context, id pgtype.UUID) (Room, error) {
+	row := q.db.QueryRow(ctx, lockRoom, id)
+	var i Room
+	err := row.Scan(
+		&i.ID,
+		&i.LocationID,
+		&i.Name,
+		&i.Capacity,
+		&i.Position,
+	)
+	return i, err
+}
+
 const lockRoomsByLocation = `-- name: LockRoomsByLocation :many
 SELECT id, location_id, name, capacity, position FROM rooms WHERE location_id = $1 ORDER BY id FOR UPDATE
 `

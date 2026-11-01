@@ -118,8 +118,11 @@ func (s *CatalogService) UpdateRoom(ctx context.Context, id domain.RoomID, d Roo
 	r := d.room(id)
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		// An unknown room is a 404 before anything about its fields.
-		old, err := tx.Rooms().Get(ctx, id)
+		// An unknown room is a 404 before anything about its fields. The
+		// lock makes a concurrent SetRoomOrder either finish first, so the
+		// position read here is its own, or wait for this write; an
+		// unlocked read would write a stale position back over it.
+		old, err := tx.Rooms().Lock(ctx, id)
 		if err != nil {
 			return err
 		}
