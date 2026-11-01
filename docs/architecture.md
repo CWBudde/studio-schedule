@@ -358,6 +358,23 @@ added with one line in `root.go`. Tests run the tree in-process (`cliRun`) on th
 PostgreSQL, with golden files for the output, and [cli.md](cli.md), the reference, is generated
 from the tree (`just cli-docs`); CI fails when it is stale, as for `api/openapi.json`.
 
+The groups mirror the office's and the admin's pages: `accounts`, `persons`, `passes`, `receipts`,
+`settings`, `lessons`, `terms`, `classes`, `stats`, `mail` and `import` act as the account of `--as`
+with the access level of the operation they mirror, and their JSON is that operation's response
+body through the converters `internal/httpapi` exports (`NewSchedule`, `NewPersonDetail`,
+`NewReceiptList`, …). The operator commands act as no account: `config check` and `doctor` check
+a deployment, `db check` the data (`app.Services.Integrity`), `receipts verify` the receipts, and
+`jobs list|run` the background jobs, built as `serve` builds them (`Env.Jobs`: `app.Jobs` with the
+senders of `serve`'s own constructor, `cli.System.Delivery`). Every command gets its services from
+`app.NewServices`, through `Env.Services`: none builds a service or reaches the store itself. The
+services' receipt renderer starts on the first receipt they render and stops with the command, so
+a command that renders nothing never compiles the typst module. A Spec's `Validate` checks the
+input before the database is opened. A command that writes a file takes `--file` and `--force`
+(`outputFile`: mode 0600, an existing file refused), and a report that says it failed (findings,
+failed rows) exits with status 1 without a problem document (`cli.Reported`). The text output
+shares its formatters: `cli.Money`/`cli.Decimal` for amounts, `Output.Location` for the school's
+time zone, and the names and yes/no cells of `cmd/studio-schedule/names.go`.
+
 ## Testing
 
 - **Layers:** each package tests its own code. The stores share the `storetest` contract suite

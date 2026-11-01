@@ -7,6 +7,8 @@ instance** (see [One instance](#one-instance)).
 - [Deployment guide](#deployment-guide)
 - [Container image](#container-image)
 - [Backups and restore](#backups-and-restore)
+- [Recovery](#recovery)
+- [Scripted tasks](#scripted-tasks)
 - [Upgrades](#upgrades)
 - [Upgrading PostgreSQL to a new major version](#upgrading-postgresql-to-a-new-major-version)
 - [Releases](#releases)
@@ -249,7 +251,8 @@ Compose, run a command as `docker compose run --rm app <command>`.
   operation the command mirrors, as in `api/openapi.json`, or the schema that cli.md gives. Fields
   are only added; a rename or a removal waits for a major release. An error goes to stderr as one
   line, `error: …`, and with `--output json` as a problem document (`title`, `status`, `detail`,
-  `errors`).
+  `errors`). A check with findings, a failed `doctor` check and an import with failed rows exit
+  with `1` and put no problem document on stderr: their report on stdout says what failed.
 - **Confirmation:** a command that deletes, anonymizes, mails, cancels or merges asks `[y/N]` when
   stdin is a terminal. In a script or a cron job, give `--yes`: without it and without a terminal,
   the command changes nothing and exits with `2`. Secrets and search terms come from stdin, never
@@ -612,6 +615,122 @@ accounts, purged guest data and mail bodies, see [docs/privacy.md](privacy.md)).
 long as you need them to recover, e.g. daily backups for 14 days and monthly ones for 6 months, and
 write the period into your privacy policy. A restore brings erased data back: anonymize those
 persons again after restoring an older backup.
+
+## Recovery
+
+What to run when something has gone wrong. Every command here runs on the server's shell with the
+database's `DATABASE_URL` (with Compose: `docker compose run --rm app <command>`); [cli.md](cli.md)
+has their flags and exit codes. A command that acts as someone takes the account of `--as` (or
+`STUDIO_AS`), which must be confirmed, enabled and of a role the command needs; the audit log
+records it as made via the command line, with the OS user.
+
+- **An admin has forgotten their password.** Run, as that admin, for that admin:
+
+  ```sh
+  studio-schedule accounts reset-password --as admin@example.org admin@example.org
+  ```
+
+  It asks first on a terminal (`--yes` in a script) and prints a reset link, valid for one hour;
+  open it and set a new password. The link replaces the account's older ones. With `--mail` it is
+  mailed instead of printed, as "forgot password" does. No password is asked: whoever can run the
+  binary with the database's credentials can change the database anyway.
+
+- **The first admin's setup link expired** before they used it. `init` prints a link that is valid
+  for 72 hours, and an admin who never confirmed cannot act as themselves (`--as` needs a confirmed
+  account). `accounts setup-link <email>` prints a new setup link for that admin, an operator
+  command that takes no `--as`.
+- **A leak: end every session.** After a password, a laptop or a database copy has leaked, sign
+  everyone out:
+
+  ```sh
+  studio-schedule accounts sessions revoke --all --as admin@example.org --yes
+  ```
+
+  It ends every running session and prints how many ended; everyone signs in again. One account
+  alone: `accounts sessions revoke <email|id>`. Then reset the passwords of the affected accounts
+  (`accounts reset-password … --mail`) and change the secrets that leaked (the database password,
+  `SMTP_PASSWORD`, `VAPID_PRIVATE_KEY`).
+
+- **Checking a deployment**, after a restore, an upgrade or a move to another server:
+  - `doctor` checks the configuration, the database and its schema, the settings, the mail server's
+    login, the push keys, `BASE_URL` and the receipt module, one line per check;
+  - `db check` checks the data for what the database cannot enforce (passes against their
+    bookings, bookings against the places, merged and anonymized persons, the receipt counters);
+  - `receipts verify` checks the receipts: gapless numbers per year, every Storno against its
+    original, totals against the lines.
+
+  Each exits with status 0 when everything is fine and 1 on a failed check or a finding, which it
+  names by record ID, never by personal data. They only read, so they are safe on a live database.
+
+## Scripted tasks
+
+The commands are made for scripts: text output has one record per line and no header off a
+terminal, `--output json` prints one document on stdout, the exit status says what happened (`0`
+ok, `1` failed or found something, `2` usage, `3` not found, `4` conflict), and a command that
+deletes, mails or cancels needs `--yes` without a terminal. Every command needs `DATABASE_URL`; one
+that acts as someone also needs `STUDIO_AS`, an office or admin account as the command's access
+level demands ([cli.md](cli.md) names it per command). Keep both in a file only the job's user can
+read, not in the crontab. The examples are for cron with the binary on the host; with Compose, call
+`docker compose run --rm app …` in their place.
+
+`/etc/studio-schedule/cron.env` (mode 0600), read by the scripts below:
+
+```sh
+DATABASE_URL=postgres://studio:secret@localhost:5432/studio
+STUDIO_AS=office@example.org   # only the commands that act as the office read it
+```
+
+`/usr/local/bin/studio-nightly`: check the data and the receipts every night, and mail the operator
+when either exits with status 1 (a finding) or worse:
+
+```sh
+#!/bin/sh
+set -a; . /etc/studio-schedule/cron.env; set +a
+
+for check in "db check" "receipts verify"; do
+  # Unquoted on purpose: "db check" is two words.
+  if ! out=$(studio-schedule $check 2>&1); then
+    printf '%s\n' "$out" | mail -s "studio-schedule: $check found something" ops@example.org
+  fi
+done
+```
+
+`/usr/local/bin/studio-receipts-export`: the receipts of the past year as CSV for the tax adviser,
+early in January. The file is created with mode 0600 and never overwritten (exit 2 if it exists):
+
+```sh
+#!/bin/sh
+set -a; . /etc/studio-schedule/cron.env; set +a
+
+year=$(($(date +%Y) - 1))
+studio-schedule receipts export --year "$year" --file "/var/backups/studio/receipts-$year.csv" ||
+  echo "receipts export $year failed" | mail -s "studio-schedule: receipts export" ops@example.org
+```
+
+A job that should not wait for `serve`'s next tick runs with `jobs run <name>` (`jobs list` names
+them, with their intervals and last runs), under the same lock as `serve`'s, so the two never run
+it at once. `serve` runs every job on its own interval anyway; a cron entry is for a job that must
+run at a fixed time, such as the daily privacy purge in the quiet of the night. By hand, after the
+mail server was down, `jobs run deliver-mail` sends the queued mail now.
+
+`/usr/local/bin/studio-purge`:
+
+```sh
+#!/bin/sh
+set -a; . /etc/studio-schedule/cron.env; set +a
+studio-schedule jobs run purge-personal-data ||
+  echo "purge-personal-data failed" | mail -s "studio-schedule: jobs run" ops@example.org
+```
+
+`jobs run` exits with status 1 when the job failed and 4 when another process holds its lock.
+
+The crontab (`crontab -e` as the user that may read `cron.env`):
+
+```text
+30 2 * * *  /usr/local/bin/studio-nightly
+0  3 * * *  /usr/local/bin/studio-purge
+0  6 2 1 *  /usr/local/bin/studio-receipts-export
+```
 
 ## Upgrades
 

@@ -25,6 +25,8 @@ just serve       # API server on :8080 (PostgreSQL if DATABASE_URL is set; the r
 just migrate up  # apply migrations to DATABASE_URL (also: down, status); just seed loads demo data
 go run ./cmd/studio-schedule init  # new school: settings + first admin (prints a setup link)
 go run ./cmd/studio-schedule doctor  # check a deployment (config check: the effective configuration)
+go run ./cmd/studio-schedule db check  # integrity of the data (also: receipts verify); exit 1 on a finding
+go run ./cmd/studio-schedule lessons list --as office@example.org  # an admin command acts as --as (env STUDIO_AS)
 just test-pg     # PostgreSQL store tests only (Docker via testcontainers, or STUDIO_TEST_DATABASE_URL)
 just typst-wasm  # after changing tools/receipt-pdf: rebuild receipt.wasm reproducibly (Docker; Git LFS)
 just sqlc        # after changing internal/store/postgres/{migrations,queries}: regenerate sqlc code
@@ -194,7 +196,10 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   a session advisory lock on one dedicated pool connection for all of a process's jobs; memory: a
   mutex per name), a held lock records the run as `skipped`, and every run ends in `Tx.JobRuns()`
   (`job_runs`; left out of the demo's snapshot, purged after 30 days by `purge-personal-data`).
-  `Runner.Jobs`/`Statuses`/`RunNow` are what the `jobs list|run` commands build on.
+  `Runner.Jobs`/`Statuses`/`RunNow` are what the `jobs list|run` commands build on; they get the
+  jobs from `Env.Jobs`, built like `serve`'s (the senders of `newDelivery` through
+  `cli.System.Delivery`). The generate-lessons job's generator is `Services.Generator`'s
+  (`newLessonGenerator`).
 - **PWA & web push:** ADR 0017. The service worker is `web/src/sw.ts` (vite-plugin-pwa
   `injectManifest`; precaches the shell, never `*.wasm`, never the API), registered with the update
   toast in `web/src/pwa.ts`; offline the allow-listed query cache comes from IndexedDB
@@ -210,9 +215,28 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `Env.Confirm` and `Env.ReadLine` (secrets and search terms from stdin, never arguments). Commands
   stay thin in `cmd/studio-schedule`, one file per group, registered with one line in `root.go`.
   `--as`/`STUDIO_AS` resolves through `service.AuthService.Actor`; the principal's `Via` lands in
-  `AuditDetails.Via`. The services come from `app.NewServices`, the same as `app.New`'s. Tests run
-  the tree in-process with `cliRun` (`clirun_test.go`) on both stores, goldens in `testdata/`
-  (`-update`). `docs/cli.md` is generated from the tree (`clidocs_test.go`, `just cli-docs`).
+  `AuditDetails.Via`. The services come from `app.NewServices`, the same as `app.New`'s, through
+  `Env.Services` (no command builds a service or opens the store itself); their receipt renderer
+  starts on its first render and stops with the command. `Spec.Validate` checks input before the
+  database opens. Tests run the tree in-process with `cliRun` (`clirun_test.go`) on both stores,
+  goldens in `testdata/` (`-update`). `docs/cli.md` is generated from the tree (`clidocs_test.go`,
+  `just cli-docs`). The groups, each mirroring an operation's access level and printing its
+  response body through converters exported from `internal/httpapi` (`New…`):
+  - `accounts` (`accounts.go`; `service/accounts_recovery.go`: `AccountByRef`,
+    `IssuePasswordReset`, `RevokeSessions`), `persons` (`persons*.go`: search via `Env.ReadLine`,
+    show, export, anonymize, duplicates, merge), `passes` and `receipts` (`receipts*.go`:
+    list, pdf, export as RFC 4180 CSV, verify; `ReceiptService.ByNumber`/`Issued`/`OfYear`/
+    `Verify`), `settings` (`settings.go`, areas in `settings_area.go`; `SettingsService.Export`/
+    `Import` in `service/settings_import.go`), `lessons`, `terms`, `classes`, `stats`, `mail`
+    (list, requeue, test), `import`.
+  - Operator commands (no `--as`): `config check`, `doctor`, `db check` (`db.go`;
+    `service.IntegrityService` in `service/integrity.go`, `app.Services.Integrity`: the checks
+    `passes`, `capacity`, `tombstones`, `receipt-counters` in one read-only transaction),
+    `receipts verify`, `jobs list|run`, `mail test`.
+  - Shared: `cli.Money`/`cli.Decimal` (amounts), `Output.Location` (the school's zone),
+    `names.go` (`deletedPersonName`, `shownName`, `personName`, `yesNo`), `files.go`
+    (`outputFile`: `--file`/`-f` and `--force`, mode 0600; `-o` is `--output`), and
+    `cli.Reported` (a report that says it failed: exit 1, no problem document).
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),
