@@ -22,8 +22,6 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/config"
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/jobs"
-	"github.com/cwbudde/studio-schedule/internal/mail"
-	"github.com/cwbudde/studio-schedule/internal/mail/smtp"
 	"github.com/cwbudde/studio-schedule/internal/pdf/typstwasm"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/service"
@@ -128,12 +126,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 
 	clk := clock.System{}
 
-	mailer, err := newMailer(cfg, clk, logger)
-	if err != nil {
-		return err
-	}
-
-	pusher, err := newPusher(cfg, clk, logger)
+	delivery, err := newDelivery(cfg, clk, logger)
 	if err != nil {
 		return err
 	}
@@ -152,8 +145,8 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		Logger:  logger,
 		UI:      webui.Handler(),
 		AppURL:  appURL(cfg),
-		Mailer:  mailer,
-		Pusher:  pusher,
+		Mailer:  delivery.Mailer,
+		Pusher:  delivery.Pusher,
 		PDF:     pdf,
 		Demo:    demo,
 		// Requests wake the background jobs started below.
@@ -324,29 +317,6 @@ func isHTTPS(baseURL string) bool {
 
 // appURL is the root of the web app for links in mails (cli.AppURL).
 func appURL(cfg config.Config) string { return cli.AppURL(cfg) }
-
-// newMailer returns the SMTP sender of cfg, or nil without SMTP_HOST: then
-// mails stay in the outbox.
-func newMailer(cfg config.Config, clk clock.Clock, logger *slog.Logger) (mail.Mailer, error) {
-	if cfg.SMTP.Host == "" {
-		if cfg.DatabaseURL != "" {
-			logger.Warn("no mail server configured: mails stay in the outbox and are never sent",
-				slog.String("hint", "set "+config.EnvSMTPHost+" and "+config.EnvSMTPFrom))
-		}
-
-		return nil, nil // no mailer is a valid configuration
-	}
-
-	sender, err := smtp.New(smtp.Config{
-		Host: cfg.SMTP.Host, Port: cfg.SMTP.Port, Username: cfg.SMTP.Username, Password: cfg.SMTP.Password,
-		From: cfg.SMTP.From, TLS: smtp.TLSMode(cfg.SMTP.TLS),
-	}, clk)
-	if err != nil {
-		return nil, fmt.Errorf("mail server: %w", err)
-	}
-
-	return sender, nil
-}
 
 // startJobs runs the background jobs once, so that lesson generation is
 // done before the server listens, and then on their intervals. A failed job

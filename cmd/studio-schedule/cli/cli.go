@@ -16,11 +16,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
 	"os/user"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -32,6 +34,8 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/httpapi"
 	"github.com/cwbudde/studio-schedule/internal/ids"
+	"github.com/cwbudde/studio-schedule/internal/jobs"
+	"github.com/cwbudde/studio-schedule/internal/mail"
 	"github.com/cwbudde/studio-schedule/internal/service"
 	"github.com/cwbudde/studio-schedule/internal/store"
 )
@@ -64,9 +68,20 @@ const (
 // serve does; release closes it.
 type Opener func(ctx context.Context, databaseURL string) (st store.Store, release func(), err error)
 
+// Delivery is how the process sends: the SMTP sender of the configuration
+// and its web push sender, as serve sets them up. A nil one is not
+// configured.
+type Delivery struct {
+	Mailer mail.Mailer
+	Pusher service.PushSender
+}
+
+// DeliveryFunc builds the Delivery of cfg; logger gets its warnings.
+type DeliveryFunc func(cfg config.Config, clk clock.Clock, logger *slog.Logger) (Delivery, error)
+
 // System is what a command needs of the process: the environment, whether
-// stdin and stdout are terminals, the OS user, the database, the clock and
-// the ID source. Tests fill it in; OS returns the process's.
+// stdin and stdout are terminals, the OS user, the database, the senders,
+// the clock and the ID source. Tests fill it in; OS returns the process's.
 type System struct {
 	// Lookup reads environment variables; nil is an empty environment.
 	Lookup config.LookupFunc
@@ -81,6 +96,9 @@ type System struct {
 	// PDF starts the receipt renderer (typstwasm on the server); release
 	// stops it. Nil: there is none.
 	PDF func() (r service.ReceiptRenderer, release func())
+	// Delivery builds the senders of a configuration the way serve does.
+	// Nil: there are none, so mail stays in the outbox.
+	Delivery DeliveryFunc
 	// Clock defaults to clock.System, IDs to ids.V7.
 	Clock clock.Clock
 	IDs   ids.Source
@@ -253,6 +271,10 @@ type Env struct {
 	app *App
 	cmd *cobra.Command
 	in  *bufio.Reader
+	// cfg and st are the configuration and the store of a Spec that opens
+	// the database.
+	cfg config.Config
+	st  store.Store
 }
 
 // Stderr is where prompts and messages beside the result go.
@@ -288,6 +310,81 @@ func (e *Env) PDF() (r service.ReceiptRenderer, release func(), ok bool) {
 	r, release = e.app.sys.PDF()
 
 	return r, release, true
+}
+
+// Delivery builds the senders of cfg (Env.Config) with the System's
+// Delivery, as serve does: a nil Mailer without SMTP_HOST, a nil Pusher
+// without the VAPID keys. The warnings about what is not configured are
+// left out: the command reports that itself.
+func (e *Env) Delivery(cfg config.Config) (Delivery, error) {
+	if e.app.sys.Delivery == nil {
+		return Delivery{}, nil
+	}
+
+	return e.app.sys.Delivery(cfg, e.Clock, slog.New(slog.DiscardHandler))
+}
+
+// Jobs returns the background jobs on the command's database, built as
+// serve builds them (app.Jobs): with the senders of the configuration
+// (Env.Delivery), so deliver-mail and deliver-push are there exactly when
+// serve has them, and with the System's receipt renderer, started on the
+// first receipt it renders. The jobs log their warnings and errors to
+// stderr. release stops the renderer. The Spec must open the database.
+func (e *Env) Jobs() (runner *jobs.Runner, release func(), err error) {
+	if e.st == nil {
+		return nil, nil, fmt.Errorf("cli: %s opens no database", e.cmd.CommandPath())
+	}
+
+	d, err := e.Delivery(e.cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pdf := &lazyPDF{start: e.app.sys.PDF}
+	logger := slog.New(slog.NewTextHandler(e.Stderr(), &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	runner = app.Jobs(app.Deps{
+		Store: e.st, Clock: e.app.sys.Clock, IDs: e.app.sys.IDs, Logger: logger, AppURL: AppURL(e.cfg),
+		Mailer: d.Mailer, Pusher: d.Pusher, PDF: pdf,
+	})
+
+	return runner, pdf.release, nil
+}
+
+// lazyPDF is a receipt renderer that starts the System's on its first
+// render, so a command whose jobs render no receipt never compiles one.
+type lazyPDF struct {
+	start func() (service.ReceiptRenderer, func())
+
+	once    sync.Once
+	r       service.ReceiptRenderer
+	stop    func()
+	started bool
+}
+
+// errNoRenderer is the render of a build without a receipt renderer.
+var errNoRenderer = errors.New("this build has no receipt renderer")
+
+func (l *lazyPDF) Render(ctx context.Context, input []byte) ([]byte, error) {
+	l.once.Do(func() {
+		if l.start != nil {
+			l.r, l.stop = l.start()
+			l.started = true
+		}
+	})
+
+	if !l.started {
+		return nil, errNoRenderer
+	}
+
+	return l.r.Render(ctx, input)
+}
+
+// release stops the renderer if it started.
+func (l *lazyPDF) release() {
+	if l.started {
+		l.stop()
+	}
 }
 
 // ErrNotConfirmed is the answer "no" to Env.Confirm.
@@ -410,7 +507,7 @@ func (a *App) open(ctx context.Context, cmd *cobra.Command, spec Spec, env *Env)
 		return nil, err
 	}
 
-	env.Services = a.services(st, cfg)
+	env.Services, env.cfg, env.st = a.services(st, cfg), cfg, st
 
 	if err := a.schoolTime(ctx, env); err != nil {
 		release()

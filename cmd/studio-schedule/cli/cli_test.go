@@ -51,6 +51,10 @@ type record struct {
 	cfg     config.Config
 	// services reports whether the command got services.
 	services bool
+	// jobs are the names of the jobs the command env built, delivery its
+	// senders.
+	jobs     []string
+	delivery Delivery
 }
 
 // testCommands are the commands of the test tree, built on a.
@@ -158,6 +162,45 @@ func testCommands(a *App, rec *record) []*cobra.Command {
 				return err
 			},
 		},
+		a.Command(Spec{
+			Use: "jobs", Short: "list the jobs and run one", Store: true, Args: cobra.MaximumNArgs(1),
+			Run: func(ctx context.Context, env *Env, args []string) error {
+				runner, release, err := env.Jobs()
+				if err != nil {
+					return err
+				}
+
+				defer release()
+
+				for _, j := range runner.Jobs() {
+					rec.jobs = append(rec.jobs, j.Name)
+				}
+
+				if len(args) == 1 {
+					_, err = runner.RunNow(ctx, args[0])
+				}
+
+				return err
+			},
+		}),
+		a.Command(Spec{
+			Use: "jobs-without-store", Short: "ask for the jobs without the database",
+			Run: func(_ context.Context, env *Env, _ []string) error {
+				_, _, err := env.Jobs()
+
+				return err
+			},
+		}),
+		a.Command(Spec{
+			Use: "delivery", Short: "build the senders",
+			Run: func(_ context.Context, env *Env, _ []string) error {
+				var err error
+
+				rec.delivery, err = env.Delivery(config.Config{})
+
+				return err
+			},
+		}),
 		Group("grp", "a group", a.Command(Spec{
 			Use: "sub", Short: "a subcommand",
 			Run: func(context.Context, *Env, []string) error { rec.ran = true; return nil },
@@ -173,9 +216,10 @@ type harness struct {
 	stdin    string
 	terminal bool
 	// st is the store every command opens; open replaces the opener.
-	st   store.Store
-	open Opener
-	pdf  func() (service.ReceiptRenderer, func())
+	st       store.Store
+	open     Opener
+	pdf      func() (service.ReceiptRenderer, func())
+	delivery DeliveryFunc
 }
 
 // outcome is what a run printed and its exit status.
@@ -209,6 +253,7 @@ func (h harness) run(t *testing.T, rec *record, args ...string) outcome {
 		OSUser:         "operator",
 		Open:           open,
 		PDF:            h.pdf,
+		Delivery:       h.delivery,
 		Clock:          clock.NewFixed(testNow),
 		IDs:            ids.NewSequence(),
 	})

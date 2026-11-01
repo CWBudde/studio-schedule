@@ -15,7 +15,7 @@ var version = "dev"
 
 func main() {
 	sys := cli.OS(openDatabase)
-	sys.PDF = startPDF
+	sys.PDF, sys.Delivery = startPDF, newDelivery
 
 	os.Exit(runMain(newRoot(sys), os.Stderr))
 }

@@ -55,6 +55,9 @@ type cliRun struct {
 	open cli.Opener
 	// pdf is the receipt renderer (cli.System.PDF); nil: none.
 	pdf func() (service.ReceiptRenderer, func())
+	// delivery builds the senders (cli.System.Delivery); nil: the binary's,
+	// newDelivery, from the environment.
+	delivery cli.DeliveryFunc
 }
 
 // result is what a run printed and its exit status.
@@ -86,6 +89,11 @@ func (r cliRun) exec(t *testing.T, args ...string) result {
 		open = r.open
 	}
 
+	delivery := r.delivery
+	if delivery == nil {
+		delivery = newDelivery
+	}
+
 	root := newRoot(cli.System{
 		Lookup:         func(key string) (string, bool) { v, ok := env[key]; return v, ok },
 		StdinTerminal:  r.terminal,
@@ -93,6 +101,7 @@ func (r cliRun) exec(t *testing.T, args ...string) result {
 		OSUser:         testOSUser,
 		Open:           open,
 		PDF:            r.pdf,
+		Delivery:       delivery,
 		Clock:          clock.NewFixed(testNow),
 		IDs:            idsOf(t),
 	})
