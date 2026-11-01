@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
 
@@ -727,13 +728,20 @@ func (s *EventService) AddSession(ctx context.Context, id domain.EventID, d Sess
 
 // Cancel cancels an event as the office account p, with an optional note
 // (domain.ErrNotFound for an unknown event, ErrEventClosed for one canceled
-// already), in one transaction under its lock (ADR 0019): its sessions
+// already; a note longer than domain.MaxCancelNoteLength is a validation
+// error on note), in one transaction under its lock (ADR 0019): its sessions
 // that have not started are canceled like lessons, without their own
 // mails; every open registration is canceled, and a paid one refunded by
 // a Storno of its receipt, even once the event has started; and everyone
 // registered gets one event-canceled mail. The cancellation is audited.
 func (s *EventService) Cancel(ctx context.Context, p Principal, id domain.EventID, note string) (EventAdmin, error) {
 	var out EventAdmin
+
+	// The note goes to the sessions it cancels (domain.Lesson) and the
+	// mail, so it is checked even when no session is ahead.
+	if utf8.RuneCountInString(strings.TrimSpace(note)) > domain.MaxCancelNoteLength {
+		return EventAdmin{}, &domain.FieldError{Field: "note", Msg: "the note is too long"}
+	}
 
 	if err := s.awaitRefunds(ctx, id); err != nil {
 		return EventAdmin{}, err

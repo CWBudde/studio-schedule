@@ -28,6 +28,14 @@ type EventPayment struct {
 	Recipient ReceiptRecipient
 }
 
+// PaidRegistration is a registration whose fee was just paid, with its
+// receipt.
+type PaidRegistration struct {
+	RegistrationView
+
+	Receipt domain.Receipt
+}
+
 // MarkPaid records that the fee of an open, unpaid registration was paid,
 // as the office account p (domain.ErrNotFound for an unknown registration),
 // and issues its receipt in the same transaction: one line for the event
@@ -38,13 +46,13 @@ type EventPayment struct {
 // ErrReceiptSettingsIncomplete. It is audited.
 func (s *EventService) MarkPaid(
 	ctx context.Context, p Principal, id domain.EventRegistrationID, d EventPayment,
-) (RegistrationView, error) {
-	var out RegistrationView
+) (PaidRegistration, error) {
+	var out PaidRegistration
 
 	// The receipt is rendered in the transaction: wait for the renderer
 	// first, as Sell does.
 	if err := s.receipts.awaitRenderer(ctx); err != nil {
-		return RegistrationView{}, err
+		return PaidRegistration{}, err
 	}
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
@@ -98,12 +106,12 @@ func (s *EventService) MarkPaid(
 			return err
 		}
 
-		out = RegistrationView{Registration: r, Name: participant}
+		out = PaidRegistration{RegistrationView: RegistrationView{Registration: r, Name: participant}, Receipt: receipt}
 
 		return nil
 	})
 	if err != nil {
-		return RegistrationView{}, fmt.Errorf("mark registration %v paid: %w", id, err)
+		return PaidRegistration{}, fmt.Errorf("mark registration %v paid: %w", id, err)
 	}
 
 	return out, nil

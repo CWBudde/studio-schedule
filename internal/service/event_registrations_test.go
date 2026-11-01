@@ -267,6 +267,10 @@ func TestMarkPaid(t *testing.T) {
 	}
 
 	receipt, pdf := f.receipt(t, paid.ReceiptID)
+	if got.Receipt.ID != receipt.ID || got.Receipt.Number != receipt.Number {
+		t.Errorf("paid with %+v, stored %+v", got.Receipt, receipt)
+	}
+
 	if receipt.PayerID != f.anna.ID || receipt.PaymentMethod != domain.PaymentCard || receipt.Gross != 4500 ||
 		receipt.RecipientName != "Anna Example" || len(receipt.Lines) != 1 || len(pdf) == 0 ||
 		receipt.Lines[0].Description != "Imaginary Intensive for Mia Example, 23 Oct 2026 – 24 Oct 2026" {
@@ -541,6 +545,9 @@ func TestCancelEvent(t *testing.T) {
 		last.TargetKind != "" {
 		t.Errorf("audit %+v", last)
 	}
+
+	_, err = f.events(t).Cancel(ctx, f.office, e.ID, strings.Repeat("ä", domain.MaxCancelNoteLength+1))
+	wantFieldError(t, err, "note")
 
 	if _, err := f.events(t).Cancel(ctx, f.office, e.ID, ""); !errors.Is(err, ErrEventClosed) {
 		t.Errorf("twice: %v", err)
