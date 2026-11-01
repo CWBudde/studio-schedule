@@ -70,6 +70,7 @@ type (
 	roomKind          struct{}
 	staffKind         struct{}
 	courseTypeKind    struct{}
+	levelKind         struct{}
 	termKind          struct{}
 	classKind         struct{}
 	lessonKind        struct{}
@@ -114,6 +115,9 @@ type (
 
 	// CourseTypeID identifies a course type.
 	CourseTypeID = ID[courseTypeKind]
+
+	// LevelID identifies a level of the school's level scale.
+	LevelID = ID[levelKind]
 
 	// TermID identifies a term.
 	TermID = ID[termKind]
