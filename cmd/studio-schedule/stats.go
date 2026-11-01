@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cwbudde/studio-schedule/cmd/studio-schedule/cli"
-	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/httpapi"
 	"github.com/cwbudde/studio-schedule/internal/service"
 )
@@ -124,14 +123,14 @@ func statsText(t *cli.Text, st service.Statistics, participants bool) {
 	t.Row("waiting-list entries", strconv.Itoa(totals.WaitlistEntries))
 	t.Row("active members", strconv.Itoa(totals.ActiveMembers))
 	t.Row("passes sold", strconv.Itoa(totals.PassesSold))
-	t.Row("sales", money(totals.Gross, st.Currency))
+	t.Row("sales", cli.Money(totals.Gross, st.Currency))
 
 	t.Line("by %s:", st.Granularity)
 	t.Table(append(append([]string{"Period"}, figureHeader...), "Passes sold", "Sales")...)
 
 	for _, p := range st.Periods {
 		t.Row(append(append([]string{t.Date(p.Start) + " to " + t.Date(p.End)}, figures(p.LessonCounts)...),
-			strconv.Itoa(p.PassesSold), money(p.Gross, st.Currency))...)
+			strconv.Itoa(p.PassesSold), cli.Money(p.Gross, st.Currency))...)
 	}
 
 	figureTable(t, "class", st.Classes, func(c service.ClassStatistics) (string, service.LessonCounts) {
@@ -215,22 +214,4 @@ func noShowRate(c service.LessonCounts) string {
 	}
 
 	return percent(rate)
-}
-
-// money formats an amount in minor units of currency, e.g. "1234.50 EUR":
-// the currency's decimals and no grouping, so a script can read it.
-func money(m domain.Money, currency string) string {
-	decimals, _ := domain.CurrencyExponent(currency) // the settings allow only known currencies
-
-	sign := ""
-	if m < 0 {
-		sign, m = "-", -m
-	}
-
-	digits := fmt.Sprintf("%0*d", decimals+1, int64(m))
-	if decimals > 0 {
-		digits = digits[:len(digits)-decimals] + "." + digits[len(digits)-decimals:]
-	}
-
-	return sign + digits + " " + currency
 }

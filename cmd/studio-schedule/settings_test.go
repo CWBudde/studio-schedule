@@ -739,19 +739,3 @@ func TestMinutesText(t *testing.T) {
 		}
 	}
 }
-
-func TestMoneyText(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		m        domain.Money
-		currency string
-		want     string
-	}{
-		{25_000, "EUR", "250.00 EUR"}, {5, "EUR", "0.05 EUR"}, {1200, "JPY", "1200 JPY"},
-	} {
-		if got := moneyText(tc.m, tc.currency); got != tc.want {
-			t.Errorf("moneyText(%d, %s) = %q, want %q", tc.m, tc.currency, got, tc.want)
-		}
-	}
-}

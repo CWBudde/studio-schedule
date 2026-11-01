@@ -69,7 +69,7 @@ func newReceiptsListCmd(app *cli.App) *cobra.Command {
 					}
 
 					t.Row(r.Number, t.Date(r.IssueDate), receiptKind(r.Kind), r.RecipientName,
-						receiptDecimal(domain.Money(r.Gross), r.Currency)+" "+r.Currency, r.PaymentMethod, note)
+						cli.Money(domain.Money(r.Gross), r.Currency), r.PaymentMethod, note)
 				}
 			})
 		},

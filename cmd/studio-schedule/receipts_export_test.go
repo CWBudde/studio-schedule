@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cwbudde/studio-schedule/cmd/studio-schedule/cli"
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/service"
 )
@@ -97,7 +98,7 @@ func TestReceiptsExportDemo(t *testing.T) {
 		// The storno's amounts are negative numbers, without the apostrophe
 		// of a text cell, and unquoted in the file.
 		minor, err := strconv.ParseInt(storno[grossMinor], 10, 64)
-		if err != nil || minor >= 0 || storno[gross] != receiptDecimal(domain.Money(minor), "EUR") ||
+		if err != nil || minor >= 0 || storno[gross] != cli.Decimal(domain.Money(minor), "EUR") ||
 			!strings.Contains(got.stdout, ","+storno[grossMinor]+",") || !strings.HasPrefix(storno[gross], "-") {
 			t.Errorf("storno amounts %q and %q, want negative numbers", storno[grossMinor], storno[gross])
 		}

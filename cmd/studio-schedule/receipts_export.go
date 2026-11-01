@@ -110,7 +110,7 @@ func receiptCSV(views []service.ReceiptView) ([]byte, int) {
 		}
 
 		money := func(m domain.Money) []string {
-			return []string{strconv.FormatInt(int64(m), 10), receiptDecimal(m, r.Currency)}
+			return []string{strconv.FormatInt(int64(m), 10), cli.Decimal(m, r.Currency)}
 		}
 
 		for _, l := range r.Lines {

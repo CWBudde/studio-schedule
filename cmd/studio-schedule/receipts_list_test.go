@@ -196,35 +196,3 @@ func TestReceiptsListRefusals(t *testing.T) {
 		})
 	}
 }
-
-// TestReceiptsListDecimal formats amounts with the currency's minor
-// digits: none (JPY), two (EUR, and an unknown currency), three (KWD), with
-// leading zeros below one unit and the sign before them.
-func TestReceiptsListDecimal(t *testing.T) {
-	t.Parallel()
-
-	for _, c := range []struct {
-		m        domain.Money
-		currency string
-		want     string
-	}{
-		{1800, "EUR", "18.00"},
-		{-1800, "EUR", "-18.00"},
-		{5, "EUR", "0.05"},
-		{-5, "EUR", "-0.05"},
-		{0, "EUR", "0.00"},
-		{123456789, "EUR", "1234567.89"},
-		{1500, "JPY", "1500"},
-		{-1500, "JPY", "-1500"},
-		{0, "JPY", "0"},
-		{1500, "KWD", "1.500"},
-		{5, "KWD", "0.005"},
-		{-5, "KWD", "-0.005"},
-		{1500, "ZZZ", "15.00"},
-		{-9223372036854775808, "EUR", "-92233720368547758.08"},
-	} {
-		if got := receiptDecimal(c.m, c.currency); got != c.want {
-			t.Errorf("receiptDecimal(%d, %s) = %q, want %q", c.m, c.currency, got, c.want)
-		}
-	}
-}

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"io/fs"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -45,31 +43,6 @@ func receiptKind(k string) string {
 	}
 
 	return "receipt"
-}
-
-// receiptDecimal is an amount in minor units as a decimal number with the
-// currency's minor digits and a point, e.g. "-15.00": no thousands
-// separator and no symbol, so a spreadsheet reads it in any language.
-func receiptDecimal(m domain.Money, currency string) string {
-	digits, ok := domain.CurrencyExponent(currency)
-	if !ok {
-		digits = 2 // Settings.Validate refuses unknown currencies
-	}
-
-	s := strconv.FormatInt(int64(m), 10)
-	sign := ""
-
-	if m < 0 {
-		sign, s = "-", s[1:]
-	}
-
-	if digits == 0 {
-		return sign + s
-	}
-
-	s = strings.Repeat("0", max(digits+1-len(s), 0)) + s
-
-	return sign + s[:len(s)-digits] + "." + s[len(s)-digits:]
 }
 
 // receiptWriteFile writes data into the file name with receiptFileMode. An

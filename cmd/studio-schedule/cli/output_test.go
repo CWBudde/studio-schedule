@@ -219,3 +219,55 @@ func TestPrintWriteFails(t *testing.T) {
 		})
 	}
 }
+
+// TestDecimal formats amounts in the minor digits of their currency, with
+// a point and no grouping.
+func TestDecimal(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		m        domain.Money
+		currency string
+		want     string
+	}{
+		{1800, "EUR", "18.00"},
+		{-1800, "EUR", "-18.00"},
+		{5, "EUR", "0.05"},
+		{-5, "EUR", "-0.05"},
+		{0, "EUR", "0.00"},
+		{123456789, "EUR", "1234567.89"},
+		{1500, "JPY", "1500"},
+		{-1500, "JPY", "-1500"},
+		{0, "JPY", "0"},
+		{1500, "KWD", "1.500"},
+		{5, "KWD", "0.005"},
+		{-5, "KWD", "-0.005"},
+		{1500, "ZZZ", "15.00"},
+		{-9223372036854775808, "EUR", "-92233720368547758.08"},
+	} {
+		if got := Decimal(c.m, c.currency); got != c.want {
+			t.Errorf("Decimal(%d, %s) = %q, want %q", c.m, c.currency, got, c.want)
+		}
+	}
+}
+
+// TestMoney adds the currency's code to the decimal number.
+func TestMoney(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		m        domain.Money
+		currency string
+		want     string
+	}{
+		{25_000, "EUR", "250.00 EUR"},
+		{5, "EUR", "0.05 EUR"},
+		{-1250, "EUR", "-12.50 EUR"},
+		{1200, "JPY", "1200 JPY"},
+		{12345, "KWD", "12.345 KWD"},
+	} {
+		if got := Money(c.m, c.currency); got != c.want {
+			t.Errorf("Money(%d, %s) = %q, want %q", c.m, c.currency, got, c.want)
+		}
+	}
+}

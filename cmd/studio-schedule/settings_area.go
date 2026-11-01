@@ -464,7 +464,7 @@ func settingText(t *cli.Text, currency, key string, raw json.RawMessage) string 
 	case key == "releaseWeekday":
 		return time.Weekday(n).String()
 	case key == "addressRequiredAbove":
-		return moneyText(domain.Money(n), currency)
+		return cli.Money(domain.Money(n), currency)
 	case key == "logoMaxBytes":
 		return strconv.Itoa(int(n)/1024) + " KiB"
 	case strings.HasPrefix(key, "window."):
@@ -507,22 +507,4 @@ func minutesText(minutes int) string {
 	}
 
 	return strings.Join(parts, " ")
-}
-
-// moneyText is an amount in minor units of currency, with the currency's
-// code: "250.00 EUR".
-func moneyText(m domain.Money, currency string) string {
-	decimals, _ := domain.CurrencyExponent(currency) // the school's currency is valid
-
-	digits := strconv.FormatInt(int64(m), 10)
-	for len(digits) <= decimals {
-		digits = "0" + digits
-	}
-
-	amount := digits[:len(digits)-decimals]
-	if decimals > 0 {
-		amount += "." + digits[len(digits)-decimals:]
-	}
-
-	return amount + " " + currency
 }

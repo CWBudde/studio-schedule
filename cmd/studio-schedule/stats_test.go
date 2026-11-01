@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-
-	"github.com/cwbudde/studio-schedule/internal/domain"
 )
 
 // TestStats prints the demo school's statistics as the office: the last
@@ -120,25 +118,4 @@ func TestStatsRanges(t *testing.T) {
 	// The term range needs a term that includes today.
 	wantExitCode(t, cliRun{st: pastDemoStore(t)}.exec(t, "stats", "--as", demoOffice, "--range", "term"), 3,
 		"no term includes today")
-}
-
-// TestMoney formats amounts in the decimals of their currency.
-func TestMoney(t *testing.T) {
-	t.Parallel()
-
-	for _, c := range []struct {
-		m        domain.Money
-		currency string
-		want     string
-	}{
-		{38900, "EUR", "389.00 EUR"},
-		{5, "EUR", "0.05 EUR"},
-		{-1250, "EUR", "-12.50 EUR"},
-		{1500, "JPY", "1500 JPY"},
-		{12345, "KWD", "12.345 KWD"},
-	} {
-		if got := money(c.m, c.currency); got != c.want {
-			t.Errorf("money(%d, %s) = %q, want %q", c.m, c.currency, got, c.want)
-		}
-	}
 }
