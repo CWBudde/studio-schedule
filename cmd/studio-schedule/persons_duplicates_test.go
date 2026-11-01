@@ -18,18 +18,18 @@ import (
 // strong pair Lena Quillfeather, the weak pair Jonas Brightwater, and
 // family members with bookings, class memberships and accounts.
 const (
-	pdLenaA    = "00000000-0000-7000-8000-000000000326"
-	pdLenaB    = "00000000-0000-7000-8000-000000000327"
-	pdJonasA   = "00000000-0000-7000-8000-000000000328"
-	pdJonasB   = "00000000-0000-7000-8000-000000000329"
+	pdLenaA    = "00000000-0000-7000-8000-00000000032a"
+	pdLenaB    = "00000000-0000-7000-8000-00000000032b"
+	pdJonasA   = "00000000-0000-7000-8000-00000000032c"
+	pdJonasB   = "00000000-0000-7000-8000-00000000032d"
 	pdClara    = "00000000-0000-7000-8000-000000000001" // the member account demoMember
 	pdTom      = "00000000-0000-7000-8000-000000000003" // a member account too
 	pdElla     = "00000000-0000-7000-8000-000000000005" // Clara's dependent
 	pdEmil     = "00000000-0000-7000-8000-000000000015" // in a class of Ella's, booked into its next lesson
 	pdUnknown  = "00000000-0000-7000-8000-000000000999"
-	pdEllaJazz = "00000000-0000-7000-8000-000000000061" // the class Ella and Emil are members of
-	pdLesson   = "00000000-0000-7000-8000-0000000000c9" // its next lesson, both booked
-	pdBallet   = "00000000-0000-7000-8000-00000000005c" // a class of Ella's only
+	pdEllaJazz = "00000000-0000-7000-8000-000000000065" // the class Ella and Emil are members of
+	pdLesson   = "00000000-0000-7000-8000-0000000000cd" // its next lesson, both booked
+	pdBallet   = "00000000-0000-7000-8000-000000000060" // a class of Ella's only
 )
 
 // pdWith is r with stdin, a terminal or not, and env added to r's.

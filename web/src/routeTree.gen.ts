@@ -30,6 +30,7 @@ import { Route as AdminAuditRouteImport } from './routes/admin.audit'
 import { Route as AdminCourseTypesRouteImport } from './routes/admin.course-types'
 import { Route as AdminDuplicatesRouteImport } from './routes/admin.duplicates'
 import { Route as AdminImportRouteImport } from './routes/admin.import'
+import { Route as AdminLevelsRouteImport } from './routes/admin.levels'
 import { Route as AdminLocationsRouteImport } from './routes/admin.locations'
 import { Route as AdminMailsRouteImport } from './routes/admin.mails'
 import { Route as AdminPassTypesRouteImport } from './routes/admin.pass-types'
@@ -148,6 +149,11 @@ const AdminImportRoute = AdminImportRouteImport.update({
   path: '/import',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminLevelsRoute = AdminLevelsRouteImport.update({
+  id: '/levels',
+  path: '/levels',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminLocationsRoute = AdminLocationsRouteImport.update({
   id: '/locations',
   path: '/locations',
@@ -230,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/duplicates': typeof AdminDuplicatesRoute
   '/admin/import': typeof AdminImportRoute
+  '/admin/levels': typeof AdminLevelsRoute
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/mails': typeof AdminMailsRoute
   '/admin/pass-types': typeof AdminPassTypesRoute
@@ -264,6 +271,7 @@ export interface FileRoutesByTo {
   '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/duplicates': typeof AdminDuplicatesRoute
   '/admin/import': typeof AdminImportRoute
+  '/admin/levels': typeof AdminLevelsRoute
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/mails': typeof AdminMailsRoute
   '/admin/pass-types': typeof AdminPassTypesRoute
@@ -300,6 +308,7 @@ export interface FileRoutesById {
   '/admin/course-types': typeof AdminCourseTypesRoute
   '/admin/duplicates': typeof AdminDuplicatesRoute
   '/admin/import': typeof AdminImportRoute
+  '/admin/levels': typeof AdminLevelsRoute
   '/admin/locations': typeof AdminLocationsRoute
   '/admin/mails': typeof AdminMailsRoute
   '/admin/pass-types': typeof AdminPassTypesRoute
@@ -337,6 +346,7 @@ export interface FileRouteTypes {
     | '/admin/course-types'
     | '/admin/duplicates'
     | '/admin/import'
+    | '/admin/levels'
     | '/admin/locations'
     | '/admin/mails'
     | '/admin/pass-types'
@@ -371,6 +381,7 @@ export interface FileRouteTypes {
     | '/admin/course-types'
     | '/admin/duplicates'
     | '/admin/import'
+    | '/admin/levels'
     | '/admin/locations'
     | '/admin/mails'
     | '/admin/pass-types'
@@ -406,6 +417,7 @@ export interface FileRouteTypes {
     | '/admin/course-types'
     | '/admin/duplicates'
     | '/admin/import'
+    | '/admin/levels'
     | '/admin/locations'
     | '/admin/mails'
     | '/admin/pass-types'
@@ -588,6 +600,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminImportRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/levels': {
+      id: '/admin/levels'
+      path: '/levels'
+      fullPath: '/admin/levels'
+      preLoaderRoute: typeof AdminLevelsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/locations': {
       id: '/admin/locations'
       path: '/locations'
@@ -682,6 +701,7 @@ interface AdminRouteChildren {
   AdminCourseTypesRoute: typeof AdminCourseTypesRoute
   AdminDuplicatesRoute: typeof AdminDuplicatesRoute
   AdminImportRoute: typeof AdminImportRoute
+  AdminLevelsRoute: typeof AdminLevelsRoute
   AdminLocationsRoute: typeof AdminLocationsRoute
   AdminMailsRoute: typeof AdminMailsRoute
   AdminPassTypesRoute: typeof AdminPassTypesRoute
@@ -703,6 +723,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCourseTypesRoute: AdminCourseTypesRoute,
   AdminDuplicatesRoute: AdminDuplicatesRoute,
   AdminImportRoute: AdminImportRoute,
+  AdminLevelsRoute: AdminLevelsRoute,
   AdminLocationsRoute: AdminLocationsRoute,
   AdminMailsRoute: AdminMailsRoute,
   AdminPassTypesRoute: AdminPassTypesRoute,

@@ -33,6 +33,7 @@ var idTypes = []reflect.Type{
 	reflect.TypeFor[domain.RoomID](),
 	reflect.TypeFor[domain.StaffID](),
 	reflect.TypeFor[domain.CourseTypeID](),
+	reflect.TypeFor[domain.LevelID](),
 	reflect.TypeFor[domain.TermID](),
 	reflect.TypeFor[domain.ClassID](),
 	reflect.TypeFor[domain.LessonID](),

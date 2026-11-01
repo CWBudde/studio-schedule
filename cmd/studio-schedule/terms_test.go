@@ -19,8 +19,8 @@ import (
 // The demo term and its Saturday Contemporary class (seed's deterministic
 // IDs).
 const (
-	demoTerm         = "00000000-0000-7000-8000-00000000005a"
-	demoContemporary = "00000000-0000-7000-8000-000000000074"
+	demoTerm         = "00000000-0000-7000-8000-00000000005e"
+	demoContemporary = "00000000-0000-7000-8000-000000000078"
 )
 
 // servicesOf are the application's services on st at testNow, for a test

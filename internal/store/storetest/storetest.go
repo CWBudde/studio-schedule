@@ -39,6 +39,7 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 	t.Run("Sessions", func(t *testing.T) { testSessions(t, newStore) })
 	t.Run("AccountTokens", func(t *testing.T) { testAccountTokens(t, newStore) })
 	t.Run("Catalog", func(t *testing.T) { testCatalogue(t, newStore) })
+	t.Run("Levels", func(t *testing.T) { testLevels(t, newStore) })
 	t.Run("Timetable", func(t *testing.T) { testTimetable(t, newStore) })
 	t.Run("Lessons", func(t *testing.T) { testLessons(t, newStore) })
 	t.Run("Bookings", func(t *testing.T) { testBookings(t, newStore) })

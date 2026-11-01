@@ -161,6 +161,12 @@ func (t *faultTx) CourseTypes() store.CourseTypeRepo {
 	return t.Tx.CourseTypes()
 }
 
+func (t *faultTx) Levels() store.LevelRepo {
+	t.touch("Levels")
+
+	return t.Tx.Levels()
+}
+
 func (t *faultTx) Terms() store.TermRepo {
 	t.touch("Terms")
 

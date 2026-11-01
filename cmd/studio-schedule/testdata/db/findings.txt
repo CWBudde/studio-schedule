@@ -1,4 +1,4 @@
-passes            pass          00000000-0000-7000-8000-000000000254  3 of its visits are used, but it paid for 2 bookings
-capacity          lesson        00000000-0000-7000-8000-000000000077  3 active bookings for 2 places, and only 0 of them were booked beyond the capacity on purpose
-tombstones        person        00000000-0000-7000-8000-000000000037  the person is merged, but booking 00000000-0000-7000-8000-00000000024f still refers to it
+passes            pass          00000000-0000-7000-8000-000000000258  3 of its visits are used, but it paid for 2 bookings
+capacity          lesson        00000000-0000-7000-8000-00000000007b  3 active bookings for 2 places, and only 0 of them were booked beyond the capacity on purpose
+tombstones        person        00000000-0000-7000-8000-000000000037  the person is merged, but booking 00000000-0000-7000-8000-000000000253 still refers to it
 receipt-counters  receipt-year  2026                                  the counter is at 5, but receipt number 90 was issued: the next receipt would repeat a number

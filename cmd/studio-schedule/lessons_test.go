@@ -17,9 +17,9 @@ import (
 const (
 	// demoJazz is today's Jazz Dance (beginner) at 17:00 in Hall 1, with
 	// three active bookings; it has not started at testNow.
-	demoJazz = "00000000-0000-7000-8000-0000000000c9"
+	demoJazz = "00000000-0000-7000-8000-0000000000cd"
 	// demoStarted is yesterday's Creative Dance, which has started.
-	demoStarted = "00000000-0000-7000-8000-0000000000c3"
+	demoStarted = "00000000-0000-7000-8000-0000000000c7"
 	// demoUnknown is a lesson ID no lesson has.
 	demoUnknown = "00000000-0000-7000-8000-00000000ffff"
 )

@@ -68,7 +68,7 @@ func toClass(row sqlc.Class) domain.Class {
 		RoomID:        fromPgID[domain.RoomID](row.RoomID),
 		InstructorID:  fromPgID[domain.StaffID](row.InstructorID),
 		AccompanistID: fromPgID[domain.StaffID](row.AccompanistID),
-		Level:         domain.Level(row.Level),
+		Level:         domain.SkillLevel(row.Level),
 		Weekday:       time.Weekday(row.Weekday),
 		StartTime:     fromPgTimeOfDay(row.StartTime),
 		Duration:      fromPgInterval(row.Duration),

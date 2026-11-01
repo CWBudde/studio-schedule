@@ -160,6 +160,11 @@ func TestCatalogReadStoreFaults(t *testing.T) {
 
 			return err
 		},
+		"Levels.List": func(svc *CatalogService) error {
+			_, err := svc.Levels(t.Context())
+
+			return err
+		},
 	}
 
 	for method, list := range lists {
@@ -252,5 +257,89 @@ func TestRoomWriteStoreFaults(t *testing.T) {
 				return c.fs, op(t, c)
 			}})
 		})
+	}
+}
+
+// TestLevelWriteStoreFaults: a store failure in a level write or the level
+// order fails the operation and writes nothing.
+func TestLevelWriteStoreFaults(t *testing.T) {
+	t.Parallel()
+
+	// withLevels adds two levels, written past the FaultStore.
+	withLevels := func(t *testing.T, c catalogFixture) (first, second domain.LevelID) {
+		t.Helper()
+
+		a := domain.Level{ID: ids.New[domain.LevelID](c.seq), Name: "Level A", Code: "A", Position: 1}
+		b := domain.Level{ID: ids.New[domain.LevelID](c.seq), Name: "Level B", Position: 2}
+		c.write(t, func(ctx context.Context, tx store.Tx) error {
+			return errors.Join(tx.Levels().Create(ctx, a), tx.Levels().Create(ctx, b))
+		})
+
+		return a.ID, b.ID
+	}
+
+	tests := map[string]func(t *testing.T, c catalogFixture) func() error{
+		"create": func(t *testing.T, c catalogFixture) func() error {
+			withLevels(t, c)
+
+			return func() error {
+				l, err := c.svc.CreateLevel(t.Context(), LevelData{Name: "Level C"})
+				if err == nil && l.Position != 3 {
+					t.Fatalf("created at %d, want 3", l.Position)
+				}
+
+				return err
+			}
+		},
+		"update": func(t *testing.T, c catalogFixture) func() error {
+			_, second := withLevels(t, c)
+
+			return func() error {
+				l, err := c.svc.UpdateLevel(t.Context(), second, LevelData{Name: "Level Two", Code: "2"})
+				if err == nil && l.Position != 2 {
+					t.Fatalf("updated at %d, want 2", l.Position)
+				}
+
+				return err
+			}
+		},
+		"delete": func(t *testing.T, c catalogFixture) func() error {
+			first, _ := withLevels(t, c)
+
+			return func() error { return c.svc.DeleteLevel(t.Context(), first) }
+		},
+		"order": func(t *testing.T, c catalogFixture) func() error {
+			first, second := withLevels(t, c)
+
+			return func() error { return c.svc.SetLevelOrder(t.Context(), []domain.LevelID{second, first}) }
+		},
+	}
+
+	for name, op := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			SweepFaults(t, FaultSweep{Setup: func(t *testing.T) (*FaultStore, func() error) {
+				c := newCatalogFixture(t)
+
+				return c.fs, op(t, c)
+			}})
+		})
+	}
+}
+
+// TestDeleteLevelInUse: the store's refusal to delete a level that classes
+// use is reported as in use.
+func TestDeleteLevelInUse(t *testing.T) {
+	t.Parallel()
+
+	c := newCatalogFixture(t)
+	l := domain.Level{ID: ids.New[domain.LevelID](c.seq), Name: "Level A", Position: 1}
+	c.write(t, func(ctx context.Context, tx store.Tx) error { return tx.Levels().Create(ctx, l) })
+
+	c.fs.FailWith("Levels.Delete", 1, domain.ErrConflict)
+
+	if err := c.svc.DeleteLevel(t.Context(), l.ID); !errors.Is(err, domain.ErrInUse) {
+		t.Fatalf("want ErrInUse, got %v", err)
 	}
 }

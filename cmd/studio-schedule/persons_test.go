@@ -22,8 +22,8 @@ const (
 	ppMia       = "00000000-0000-7000-8000-00000000000a" // dependent of Hanna
 	ppOlga      = "00000000-0000-7000-8000-00000000003d" // demoOffice
 	ppArno      = "00000000-0000-7000-8000-00000000003f" // demoAdmin
-	ppLena      = "00000000-0000-7000-8000-000000000326" // Lena Quillfeather, M-1042
-	ppLenaTwin  = "00000000-0000-7000-8000-000000000327" // her duplicate
+	ppLena      = "00000000-0000-7000-8000-00000000032a" // Lena Quillfeather, M-1042
+	ppLenaTwin  = "00000000-0000-7000-8000-00000000032b" // her duplicate
 	ppUnknownID = "00000000-0000-7000-8000-00000000ffff" // no person
 )
 

@@ -244,6 +244,7 @@ func (t *tx) Locations() store.LocationRepo     { return locationRepo{t.q} }
 func (t *tx) Rooms() store.RoomRepo             { return roomRepo{t.q} }
 func (t *tx) Staff() store.StaffRepo            { return staffRepo{t.q} }
 func (t *tx) CourseTypes() store.CourseTypeRepo { return courseTypeRepo{t.q} }
+func (t *tx) Levels() store.LevelRepo           { return levelRepo{t.q} }
 func (t *tx) Terms() store.TermRepo             { return termRepo{t.q} }
 func (t *tx) Classes() store.ClassRepo          { return classRepo{t.q} }
 func (t *tx) Lessons() store.LessonRepo         { return lessonRepo{t.q} }

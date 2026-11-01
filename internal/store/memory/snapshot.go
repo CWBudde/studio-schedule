@@ -329,6 +329,8 @@ var codecs = []codec{
 		func(v domain.Staff) domain.StaffID { return v.ID }),
 	rows("courseTypes", func(s *state) *table[domain.CourseTypeID, domain.CourseType] { return &s.courseTypes },
 		func(v domain.CourseType) domain.CourseTypeID { return v.ID }),
+	rows("levels", func(s *state) *table[domain.LevelID, domain.Level] { return &s.levels },
+		func(v domain.Level) domain.LevelID { return v.ID }),
 	rows("terms", func(s *state) *table[domain.TermID, domain.Term] { return &s.terms },
 		func(v domain.Term) domain.TermID { return v.ID }),
 	rows("classes", func(s *state) *table[domain.ClassID, domain.Class] { return &s.classes },

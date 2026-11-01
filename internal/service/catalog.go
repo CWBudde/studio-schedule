@@ -10,8 +10,8 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/store"
 )
 
-// CatalogService provides the catalog: locations, rooms, staff and course
-// types. Everyone reads it; the office writes it (catalog_admin.go).
+// CatalogService provides the catalog: locations, rooms, staff, course
+// types and levels. Everyone reads it; the office writes it (catalog_admin.go).
 type CatalogService struct {
 	store store.Store
 	ids   ids.Source
@@ -100,4 +100,22 @@ func (s *CatalogService) CourseTypes(ctx context.Context) ([]domain.CourseType, 
 	}
 
 	return courseTypes, nil
+}
+
+// Levels returns the school's level scale ordered by position, from least
+// to most advanced (ADR 0021).
+func (s *CatalogService) Levels(ctx context.Context) ([]domain.Level, error) {
+	var levels []domain.Level
+
+	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		levels, err = tx.Levels().List(ctx)
+
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list levels: %w", err)
+	}
+
+	return levels, nil
 }

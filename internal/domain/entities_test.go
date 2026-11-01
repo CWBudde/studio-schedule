@@ -13,7 +13,7 @@ func TestEnums(t *testing.T) {
 	t.Parallel()
 
 	t.Run("StaffKind", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.StaffKinds()) })
-	t.Run("Level", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.Levels()) })
+	t.Run("Level", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.SkillLevels()) })
 	t.Run("LessonStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.LessonStatuses()) })
 	t.Run("LessonVisibility", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.LessonVisibilities()) })
 	t.Run("LessonKind", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.LessonKinds()) })

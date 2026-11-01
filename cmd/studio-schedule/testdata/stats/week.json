@@ -44,7 +44,7 @@
   ],
   "classes": [
     {
-      "classId": "00000000-0000-7000-8000-00000000005b",
+      "classId": "00000000-0000-7000-8000-00000000005f",
       "courseTypeName": "Creative Dance",
       "level": "open",
       "weekday": 1,
@@ -62,7 +62,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-00000000005c",
+      "classId": "00000000-0000-7000-8000-000000000060",
       "courseTypeName": "Classical Ballet",
       "level": "beginner",
       "weekday": 1,
@@ -79,7 +79,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-00000000005d",
+      "classId": "00000000-0000-7000-8000-000000000061",
       "courseTypeName": "Classical Ballet",
       "level": "intermediate",
       "weekday": 1,
@@ -96,7 +96,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-00000000005e",
+      "classId": "00000000-0000-7000-8000-000000000062",
       "courseTypeName": "Hip-Hop",
       "level": "beginner",
       "weekday": 1,
@@ -114,7 +114,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-00000000005f",
+      "classId": "00000000-0000-7000-8000-000000000063",
       "courseTypeName": "Classical Ballet",
       "level": "advanced",
       "weekday": 1,
@@ -131,7 +131,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000060",
+      "classId": "00000000-0000-7000-8000-000000000064",
       "courseTypeName": "Pre-Ballet",
       "level": "beginner",
       "weekday": 2,
@@ -149,7 +149,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000061",
+      "classId": "00000000-0000-7000-8000-000000000065",
       "courseTypeName": "Jazz Dance",
       "level": "beginner",
       "weekday": 2,
@@ -167,7 +167,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000062",
+      "classId": "00000000-0000-7000-8000-000000000066",
       "courseTypeName": "Contemporary",
       "level": "intermediate",
       "weekday": 2,
@@ -185,7 +185,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000063",
+      "classId": "00000000-0000-7000-8000-000000000067",
       "courseTypeName": "Barre Fitness",
       "level": "open",
       "weekday": 2,
@@ -203,7 +203,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000064",
+      "classId": "00000000-0000-7000-8000-000000000068",
       "courseTypeName": "Creative Dance",
       "level": "open",
       "weekday": 3,
@@ -221,7 +221,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000065",
+      "classId": "00000000-0000-7000-8000-000000000069",
       "courseTypeName": "Classical Ballet",
       "level": "intermediate",
       "weekday": 3,
@@ -238,7 +238,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000066",
+      "classId": "00000000-0000-7000-8000-00000000006a",
       "courseTypeName": "Pointe Work",
       "level": "advanced",
       "weekday": 3,
@@ -256,7 +256,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000067",
+      "classId": "00000000-0000-7000-8000-00000000006b",
       "courseTypeName": "Hip-Hop",
       "level": "intermediate",
       "weekday": 3,
@@ -274,7 +274,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000068",
+      "classId": "00000000-0000-7000-8000-00000000006c",
       "courseTypeName": "Classical Ballet",
       "level": "professional",
       "weekday": 3,
@@ -291,7 +291,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000069",
+      "classId": "00000000-0000-7000-8000-00000000006d",
       "courseTypeName": "Tap",
       "level": "beginner",
       "weekday": 4,
@@ -309,7 +309,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-00000000006a",
+      "classId": "00000000-0000-7000-8000-00000000006e",
       "courseTypeName": "Contemporary",
       "level": "beginner",
       "weekday": 4,
@@ -327,7 +327,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-00000000006b",
+      "classId": "00000000-0000-7000-8000-00000000006f",
       "courseTypeName": "Classical Ballet",
       "level": "beginner",
       "weekday": 4,
@@ -344,7 +344,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-00000000006c",
+      "classId": "00000000-0000-7000-8000-000000000070",
       "courseTypeName": "Jazz Dance",
       "level": "intermediate",
       "weekday": 4,
@@ -362,7 +362,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-00000000006d",
+      "classId": "00000000-0000-7000-8000-000000000071",
       "courseTypeName": "Pre-Ballet",
       "level": "beginner",
       "weekday": 5,
@@ -380,7 +380,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-00000000006e",
+      "classId": "00000000-0000-7000-8000-000000000072",
       "courseTypeName": "Classical Ballet",
       "level": "beginner",
       "weekday": 5,
@@ -397,7 +397,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-00000000006f",
+      "classId": "00000000-0000-7000-8000-000000000073",
       "courseTypeName": "Hip-Hop",
       "level": "open",
       "weekday": 5,
@@ -415,7 +415,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000070",
+      "classId": "00000000-0000-7000-8000-000000000074",
       "courseTypeName": "Pointe Work",
       "level": "advanced",
       "weekday": 5,
@@ -433,7 +433,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000072",
+      "classId": "00000000-0000-7000-8000-000000000076",
       "courseTypeName": "Classical Ballet",
       "level": "advanced",
       "weekday": 6,
@@ -450,7 +450,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000071",
+      "classId": "00000000-0000-7000-8000-000000000075",
       "courseTypeName": "Creative Dance",
       "level": "open",
       "weekday": 6,
@@ -468,7 +468,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000073",
+      "classId": "00000000-0000-7000-8000-000000000077",
       "courseTypeName": "Tap",
       "level": "open",
       "weekday": 6,
@@ -486,7 +486,7 @@
       "waitlistEntries": 0
     },
     {
-      "classId": "00000000-0000-7000-8000-000000000074",
+      "classId": "00000000-0000-7000-8000-000000000078",
       "courseTypeName": "Contemporary",
       "level": "open",
       "weekday": 6,

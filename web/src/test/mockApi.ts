@@ -127,6 +127,10 @@ export const ids = {
   ballet: id(31),
   contemporary: id(32),
   jazz: id(33),
+  levelBeginner: id(41),
+  levelIntermediate: id(42),
+  levelAdvanced: id(43),
+  levelProfessional: id(44),
   lessonBallet: id(101),
   lessonContemporary: id(102),
   lessonWorkshop: id(103),
@@ -193,6 +197,16 @@ export const courseTypes = [
   { id: ids.ballet, name: 'Ballet', description: 'Classical ballet technique.' },
   { id: ids.contemporary, name: 'Contemporary' },
   { id: ids.jazz, name: 'Jazz' },
+];
+
+type Level = components['schemas']['Level'];
+
+/** A fictional level scale, in the API's order (by position). */
+export const levels: Level[] = [
+  { id: ids.levelBeginner, name: 'Beginner', code: 'B', position: 1 },
+  { id: ids.levelIntermediate, name: 'Intermediate', code: 'I', position: 2 },
+  { id: ids.levelAdvanced, name: 'Advanced', code: 'A', position: 3 },
+  { id: ids.levelProfessional, name: 'Professional', code: 'P', position: 4 },
 ];
 
 /**

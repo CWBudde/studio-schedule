@@ -148,6 +148,7 @@ type Dataset struct {
 	Rooms        []domain.Room
 	Staff        []domain.Staff
 	CourseTypes  []domain.CourseType
+	Levels       []domain.Level // the level scale, by position (ADR 0021)
 	Terms        []domain.Term
 	Classes      []domain.Class
 	Persons      []domain.Person
@@ -279,6 +280,12 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 		}
 	}
 
+	for _, l := range d.Levels {
+		if err := tx.Levels().Create(ctx, l); err != nil {
+			return fmt.Errorf("level %v: %w", l.ID, err)
+		}
+	}
+
 	for _, t := range d.Terms {
 		if err := tx.Terms().Create(ctx, t); err != nil {
 			return fmt.Errorf("term %v: %w", t.ID, err)
@@ -368,7 +375,7 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 // checkEmpty fails with domain.ErrConflict if the store has settings or any
 // root record: demo data is never mixed into a store that is in use. Every
 // other record references a person, location, staff member, course type,
-// term or pass type, so checking these covers the whole store.
+// level, term or pass type, so checking these covers the whole store.
 func checkEmpty(ctx context.Context, tx store.Tx) error {
 	switch _, err := tx.Settings().Get(ctx); {
 	case err == nil:
@@ -385,6 +392,7 @@ func checkEmpty(ctx context.Context, tx store.Tx) error {
 		{"locations", func() (int, error) { return count(tx.Locations().List(ctx)) }},
 		{"staff", func() (int, error) { return count(tx.Staff().List(ctx)) }},
 		{"course types", func() (int, error) { return count(tx.CourseTypes().List(ctx)) }},
+		{"levels", func() (int, error) { return count(tx.Levels().List(ctx)) }},
 		{"terms", func() (int, error) { return count(tx.Terms().List(ctx)) }},
 		{"pass types", func() (int, error) { return count(tx.PassTypes().List(ctx)) }},
 	}

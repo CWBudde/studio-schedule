@@ -188,6 +188,9 @@ func fullStore(t *testing.T) *Store {
 
 		return errors.Join(
 			tx.Receipts().Create(ctx, receipt),
+			tx.Levels().Create(ctx, domain.Level{
+				ID: ids.New[domain.LevelID](src), Name: "Snapshot level", Code: "SNAP", Position: 99,
+			}),
 			tx.Events().Create(ctx, event),
 			tx.Events().PutImage(ctx, event.ID, domain.Background{
 				ContentType: domain.BackgroundPNG, Data: []byte("\x89PNG\r\n\x1a\nevent"),

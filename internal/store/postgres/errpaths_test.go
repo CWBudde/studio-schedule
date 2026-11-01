@@ -58,6 +58,9 @@ func TestOutOfRangeValuesFailWrites(t *testing.T) {
 		"room position": func(ctx context.Context, tx store.Tx) error {
 			return tx.Rooms().Create(ctx, domain.Room{ID: ids.New[domain.RoomID](seq), Capacity: 1, Position: big})
 		},
+		"level position": func(ctx context.Context, tx store.Tx) error {
+			return tx.Levels().Create(ctx, domain.Level{ID: ids.New[domain.LevelID](seq), Name: "Level", Position: big})
+		},
 		"import run": func(ctx context.Context, tx store.Tx) error {
 			return tx.Imports().Create(ctx, domain.ImportRun{
 				ID: ids.New[domain.ImportRunID](seq), Counts: domain.ImportCounts{Rows: 1, LinksAdded: big},
@@ -315,6 +318,51 @@ func TestRoomOrderWriteFails(t *testing.T) {
 	}
 }
 
+// TestLevelOrderWriteFails checks that SetOrder fails as a whole when the
+// write of a position fails after others succeeded: a constraint added for
+// the test refuses the second position.
+func TestLevelOrderWriteFails(t *testing.T) {
+	t.Parallel()
+
+	st := newTestStore(t)
+	seq := ids.NewSequence()
+	a := domain.Level{ID: ids.New[domain.LevelID](seq), Name: "Beginner", Code: "B", Position: 1}
+	b := domain.Level{ID: ids.New[domain.LevelID](seq), Name: "Advanced", Position: 2}
+
+	err := st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return errors.Join(tx.Levels().Create(ctx, a), tx.Levels().Create(ctx, b))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := st.pool.Exec(t.Context(),
+		`ALTER TABLE levels ADD CONSTRAINT levels_position_test CHECK (position < 2) NOT VALID`); err != nil {
+		t.Fatal(err)
+	}
+
+	err = st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return tx.Levels().SetOrder(ctx, []domain.LevelID{b.ID, a.ID})
+	})
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("SetOrder = %v, want ErrValidation", err)
+	}
+
+	noDriverError(t, err)
+
+	var levels []domain.Level
+
+	err = st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		var listErr error
+		levels, listErr = tx.Levels().List(ctx)
+
+		return listErr
+	})
+	if err != nil || len(levels) != 2 || levels[0] != a || levels[1] != b {
+		t.Errorf("levels after the failed reorder: %+v, %v; want %+v and %+v unchanged", levels, err, a, b)
+	}
+}
+
 // TestEmptyReceiptPDF checks that PutPDF refuses an empty PDF.
 func TestEmptyReceiptPDF(t *testing.T) {
 	t.Parallel()
@@ -437,6 +485,9 @@ func TestCanceledQueryInTx(t *testing.T) {
 		}},
 		"room order lock": {store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 			return tx.Rooms().SetOrder(ctx, ids.New[domain.LocationID](seq), nil)
+		}},
+		"level order lock": {store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+			return tx.Levels().SetOrder(ctx, nil)
 		}},
 		"waiting list by lessons": {store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 			_, err := tx.Waitlist().CountByLessons(ctx, lessons)
