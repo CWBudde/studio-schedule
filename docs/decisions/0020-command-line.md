@@ -157,3 +157,12 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
   a lesson booked beyond its capacity is a finding only where the bookings' events record no
   override (ADR 0009), and an anonymized person keeps the passes it had (ADR 0016), so only a pass
   sold after the anonymization is a finding.
+- **The timetable commands need `office`, also where the operation is public.** `lessons list`,
+  `terms list` and `classes list` print what the office's pages show (hidden and canceled
+  lessons, retired classes), so they need `office` like those pages, although `getSchedule` and
+  `listTerms` are public; their JSON is still that operation's body (`listAllClasses` for the
+  classes). `lessons list` adds a column the body lacks, the active bookings beside the places,
+  from the same service read. `lessons cancel` has no `--notify`: `CancelLesson` always mails
+  everyone booked, so the flag could only lie; the help and the question say it mails.
+  `stats` leaves the top participants out of the text unless `--participants`, as they name
+  persons; the JSON is the operation's full body, as the API gives it to the office.

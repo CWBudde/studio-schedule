@@ -114,6 +114,24 @@ These go before or after the command, as `studio-schedule --output json doctor` 
 | ------------------------------------- | ------------------- | ------------------------------------------------------- |
 | `completion bash/zsh/fish/powershell` | `--no-descriptions` | leave the commands' descriptions out of the completions |
 
+### Commands and flags: lessons, classes, stats
+
+`terms list` takes no flag of its own; these commands act as the office account of `--as`.
+
+| Command            | Flag                     | Meaning                                                                        |
+| ------------------ | ------------------------ | ------------------------------------------------------------------------------ |
+| `lessons list`     | `--date`                 | the school date to list (`YYYY-MM-DD`); default today                          |
+| `lessons list`     | `--from`                 | the first school date of a range, with `--to`                                  |
+| `lessons list`     | `--to`                   | the last school date of a range (inclusive; at most 42 days), with `--from`    |
+| `lessons generate` | `--until`                | the last school date to generate the weekly classes' lessons for (required)    |
+| `lessons cancel`   | `--note`                 | a note for those booked, e.g. the reason, in their mail                        |
+| `lessons restore`  | `--confirm-room-overlap` | restore even if another lesson uses the room at an overlapping time            |
+| `classes list`     | `--term`                 | the term's ID (from `terms list`); default the term that includes today        |
+| `stats`            | `--range`                | `last4Weeks` (default), `last12Weeks`, `term` or `custom`                      |
+| `stats`            | `--from`                 | the first school date of a custom range, with `--to`                           |
+| `stats`            | `--to`                   | the last school date of a custom range (inclusive; at most 366 days)           |
+| `stats`            | `--participants`         | list the top participants in the text, with their names (JSON always has them) |
+
 `migrate up` applies every pending migration, `migrate down` rolls back the latest one and
 `migrate status` lists them all; `seed` loads the fictional demo data into an empty, migrated
 database. `openapi` prints the OpenAPI document, `version` the build version and `vapid-keys` a new

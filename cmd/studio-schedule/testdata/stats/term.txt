@@ -1,0 +1,93 @@
+statistics from 2026-09-01 to 2026-09-22 (term: School Year 2026/27), by week, in Europe/Berlin
+totals:
+lessons               82
+canceled lessons      0
+places                1262
+bookings              205
+utilization           16%
+attended              111
+no-shows              19
+no-show rate          15%
+late cancellations    10
+trials                11
+guests                14
+waiting-list entries  0
+active members        32
+passes sold           3
+sales                 389.00 EUR
+by week:
+2026-09-01 to 2026-09-06  21  322  50  16%  31  6  16%  3  3  4  0  0  0.00 EUR
+2026-09-07 to 2026-09-13  26  400  64  16%  37  6  14%  3  4  5  0  2  300.00 EUR
+2026-09-14 to 2026-09-20  26  400  65  16%  38  6  14%  4  3  4  0  1  89.00 EUR
+2026-09-21 to 2026-09-22  9   140  26  19%  5   1  17%  0  1  1  0  0  0.00 EUR
+by class:
+Mon 15:30 Creative Dance (open)            3  30  5   17%  4   1  20%  1  0  0  0
+Mon 16:30 Classical Ballet (beginner)      3  48  9   19%  0   0  -    0  0  0  0
+Mon 17:45 Classical Ballet (intermediate)  3  48  9   19%  0   0  -    0  0  0  0
+Mon 18:00 Hip-Hop (beginner)               3  60  9   15%  8   1  11%  0  1  2  0
+Mon 19:15 Classical Ballet (advanced)      3  48  6   12%  0   0  -    0  0  0  0
+Tue 16:00 Pre-Ballet (beginner)            4  48  8   17%  6   0  0%   1  1  0  0
+Tue 17:00 Jazz Dance (beginner)            4  80  14  18%  10  1  9%   0  0  2  0
+Tue 18:30 Contemporary (intermediate)      4  72  13  18%  9   1  10%  1  1  0  0
+Tue 19:00 Barre Fitness (open)             4  48  17  35%  10  3  23%  1  1  1  0
+Wed 15:30 Creative Dance (open)            3  30  2   7%   2   0  0%   1  0  0  0
+Wed 16:30 Classical Ballet (intermediate)  3  48  9   19%  0   0  -    0  0  0  0
+Wed 18:00 Pointe Work (advanced)           3  36  12  33%  10  2  17%  0  1  2  0
+Wed 18:30 Hip-Hop (intermediate)           3  60  5   8%   4   1  20%  1  0  0  0
+Wed 19:00 Classical Ballet (professional)  3  48  3   6%   0   0  -    0  0  0  0
+Thu 16:00 Tap (beginner)                   3  36  8   22%  8   0  0%   1  1  1  0
+Thu 17:00 Contemporary (beginner)          3  54  8   15%  7   1  12%  0  1  0  0
+Thu 18:30 Classical Ballet (beginner)      3  48  12  25%  0   0  -    0  0  0  0
+Thu 19:30 Jazz Dance (intermediate)        3  60  7   12%  4   3  43%  1  0  2  0
+Fri 15:30 Pre-Ballet (beginner)            3  36  4   11%  3   1  25%  0  1  0  0
+Fri 16:30 Classical Ballet (beginner)      3  48  6   12%  0   0  -    0  0  0  0
+Fri 17:45 Hip-Hop (open)                   3  72  8   11%  8   0  0%   0  0  1  0
+Fri 18:00 Pointe Work (advanced)           3  36  3   8%   2   1  33%  1  1  0  0
+Sat 10:00 Classical Ballet (advanced)      3  48  9   19%  0   0  -    0  0  0  0
+Sat 10:00 Creative Dance (open)            3  30  3   10%  3   0  0%   0  1  2  0
+Sat 11:00 Tap (open)                       3  36  8   22%  7   1  12%  1  0  0  0
+Sat 12:00 Contemporary (open)              3  54  8   15%  6   2  25%  0  1  1  0
+by room:
+Studio A (Studio North)  34  564  92  16%  22  4  15%  1  3  1  0
+Studio B (Studio North)  13  156  27  17%  21  4  16%  2  4  2  0
+Studio C (Studio North)  9   90   10  11%  9   1  10%  2  1  2  0
+Hall 1 (Studio South)    16  332  43  13%  34  6  15%  2  1  7  0
+Hall 2 (Studio South)    10  120  33  28%  25  4  14%  3  2  2  0
+by course type:
+Barre Fitness     4   48   17  35%  10  3  23%  1  1  1  0
+Classical Ballet  24  384  63  16%  0   0  -    0  0  0  0
+Contemporary      10  180  29  16%  22  4  15%  1  3  1  0
+Creative Dance    9   90   10  11%  9   1  10%  2  1  2  0
+Hip-Hop           9   192  22  11%  20  2  9%   1  1  3  0
+Jazz Dance        7   140  21  15%  14  4  22%  1  0  4  0
+Pointe Work       6   72   15  21%  12  3  20%  1  2  2  0
+Pre-Ballet        7   84   12  14%  9   1  10%  1  2  0  0
+Tap               6   72   16  22%  15  1  6%   2  1  1  0
+by instructor:
+Alina Starling   15  240  45  19%  0   0  -    0  0  0  0
+Jonas Featherby  9   192  22  11%  20  2  9%   1  1  3  0
+Lea Moonfield    15  216  33  15%  12  3  20%  1  2  2  0
+Marco Wrenfield  13  240  36  15%  26  7  21%  2  3  3  0
+Nina Tapworth    14  200  47  24%  35  5  12%  3  2  4  0
+Sofia Quillon    16  174  22  13%  18  2  10%  3  3  2  0
+top participants:
+Ida Elderwick      12  5  0
+Kira Gildenmoor    10  3  0
+Lotta Birchmoor    9   2  0
+Mia Birchmoor      9   8  1
+Leni Dunfield      9   3  0
+Ella Amberly       8   3  0
+Sophie Hollowmere  8   3  1
+Hanna Birchmoor    7   6  0
+Emil Elderwick     7   3  0
+Irene Inkwell      7   6  0
+Lina Mistlewood    7   4  0
+Rosa Elderwick     6   2  1
+Jona Fernwhistle   6   3  0
+Ben Gildenmoor     6   2  0
+Nora Ivorycombe    6   5  0
+Kai Lanternby      6   5  2
+Tilo Quarrystone   6   3  0
+Wanda Sparrowhill  6   0  0
+Clara Amberly      5   3  1
+Finn Amberly       5   3  1

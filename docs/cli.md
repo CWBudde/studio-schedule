@@ -50,6 +50,7 @@ A command that deletes, anonymizes, mails, cancels or merges asks for confirmati
 
 ## Commands
 
+- [`studio-schedule classes`](#studio-schedule-classes): List the weekly classes of a term
 - [`studio-schedule completion`](#studio-schedule-completion): Generate the autocompletion script for the specified shell
 - [`studio-schedule config`](#studio-schedule-config): Inspect the configuration
 - [`studio-schedule db`](#studio-schedule-db): Check the database
@@ -57,12 +58,52 @@ A command that deletes, anonymizes, mails, cancels or merges asks for confirmati
 - [`studio-schedule healthcheck`](#studio-schedule-healthcheck): Check that the local server answers (for container health checks)
 - [`studio-schedule import`](#studio-schedule-import): Import members from a CSV file (a dry run unless `--apply`)
 - [`studio-schedule init`](#studio-schedule-init): Set up a new school: its settings and the first admin
+- [`studio-schedule lessons`](#studio-schedule-lessons): List, generate, cancel and restore lessons
 - [`studio-schedule migrate`](#studio-schedule-migrate): Manage the database schema
 - [`studio-schedule openapi`](#studio-schedule-openapi): Print the OpenAPI 3.1 specification as JSON
 - [`studio-schedule seed`](#studio-schedule-seed): Load the fictional demo data set into an empty database
 - [`studio-schedule serve`](#studio-schedule-serve): Run the HTTP server (API and web UI)
+- [`studio-schedule stats`](#studio-schedule-stats): Print the statistics of a range of school dates
+- [`studio-schedule terms`](#studio-schedule-terms): List the terms of the timetable
 - [`studio-schedule vapid-keys`](#studio-schedule-vapid-keys): Print a new VAPID key pair for web push
 - [`studio-schedule version`](#studio-schedule-version): Print the version
+
+### `studio-schedule classes`
+
+List the weekly classes of a term.
+
+```text
+studio-schedule classes <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule classes list`](#studio-schedule-classes-list): List the weekly classes of a term
+
+#### `studio-schedule classes list`
+
+List the weekly classes of a term.
+
+```text
+studio-schedule classes list [flags]
+```
+
+List the weekly classes of the term of `--term` (an ID from `terms list`), by default the current term, as the office's class page does: retired classes included. After a line naming the term, each line names the class's ID, its weekday and time in the school's time zone, the course type, the level, the room, the instructor and accompanist, the places, and "retired" for a retired class. Without a term that includes today, give `--term`.
+
+Examples:
+
+```sh
+studio-schedule classes list --as office@example.org
+studio-schedule classes list --as office@example.org --term <term-id>
+```
+
+Flags:
+
+- `--term` (string): the term's ID; default the term that includes today
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation listAllClasses.
 
 ### `studio-schedule completion`
 
@@ -404,6 +445,124 @@ Access: an operator command. It acts as no account and refuses `--as`.
 
 Output: text only; `--output json` is refused.
 
+### `studio-schedule lessons`
+
+List, generate, cancel and restore lessons.
+
+```text
+studio-schedule lessons <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule lessons cancel`](#studio-schedule-lessons-cancel): Cancel a lesson and mail everyone booked on it
+- [`studio-schedule lessons generate`](#studio-schedule-lessons-generate): Generate the lessons of the weekly classes through a date
+- [`studio-schedule lessons list`](#studio-schedule-lessons-list): List the lessons of a day or a range of days
+- [`studio-schedule lessons restore`](#studio-schedule-lessons-restore): Restore a canceled lesson and mail everyone booked on it
+
+#### `studio-schedule lessons cancel`
+
+Cancel a lesson and mail everyone booked on it.
+
+```text
+studio-schedule lessons cancel <lesson-id> [flags]
+```
+
+Cancel a lesson that has not started, e.g. when its instructor is ill, as the office's lesson page does (ADR 0007): everyone with an active booking is mailed, with the `--note` if given (the mails wait in the outbox for the server's deliver-mail job). The bookings stay but cost nothing: their passes get the visits back. The waiting list's invites go back to waiting. A lesson canceled already stays as it is, and nobody is mailed again. It asks for confirmation (`--yes` without a terminal). There is no way to cancel without the mails.
+
+Examples:
+
+```sh
+studio-schedule lessons cancel --as office@example.org --note "The teacher is ill." <lesson-id>
+```
+
+Flags:
+
+- `--note` (string): a note for those booked, e.g. the reason (at most 500 characters)
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the response body of the operation cancelLesson.
+
+#### `studio-schedule lessons generate`
+
+Generate the lessons of the weekly classes through a date.
+
+```text
+studio-schedule lessons generate [flags]
+```
+
+Create the missing lessons of the weekly classes from today through `--until` (inclusive), as the hourly generate-lessons job does for its rolling horizon (ADR 0003): one lesson per class and week within the class's term, none that has started, none of a retired class, and the class members booked into each. A lesson that exists, was moved or canceled stays as it is, so running it again creates nothing. It prints how many lessons it created.
+
+Examples:
+
+```sh
+studio-schedule lessons generate --as office@example.org --until 2026-12-31
+```
+
+Flags:
+
+- `--until` (string): the last school date to generate lessons for (YYYY-MM-DD)
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: one object: created (number), the lessons created; until (date), the last school date.
+
+#### `studio-schedule lessons list`
+
+List the lessons of a day or a range of days.
+
+```text
+studio-schedule lessons list [flags]
+```
+
+List the lessons that start on a school date (`--date`, default today) or from `--from` through `--to` (both inclusive, at most 42 days), as the office sees the schedule: hidden, unreleased and canceled lessons included. Each line names the lesson's ID, its date and time in the school's time zone, the class (course type and level) or the kind of a one-off lesson, the instructor, the room, the active bookings and the places, and its status.
+
+Examples:
+
+```sh
+studio-schedule lessons list --as office@example.org
+studio-schedule lessons list --as office@example.org --from 2026-09-21 --to 2026-09-27
+```
+
+Flags:
+
+- `--date` (string): the school date (YYYY-MM-DD); default today
+- `--from` (string): the first school date of a range (YYYY-MM-DD), with `--to`
+- `--to` (string): the last school date of a range (inclusive), with `--from`
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation getSchedule.
+
+#### `studio-schedule lessons restore`
+
+Restore a canceled lesson and mail everyone booked on it.
+
+```text
+studio-schedule lessons restore <lesson-id> [flags]
+```
+
+Let a canceled lesson that has not started take place after all, as the office's lesson page does (ADR 0007): everyone with an active booking is mailed its time and room, its bookings use their passes again, and its free places go to the waiting list. Another lesson in the room at an overlapping time is a conflict (exit 4) unless `--confirm-room-overlap`. A scheduled lesson stays as it is. It asks for confirmation (`--yes` without a terminal).
+
+Examples:
+
+```sh
+studio-schedule lessons restore --as office@example.org <lesson-id>
+```
+
+Flags:
+
+- `--confirm-room-overlap` (bool): restore even if another lesson uses the room at an overlapping time
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the response body of the operation restoreLesson.
+
 ### `studio-schedule migrate`
 
 Manage the database schema.
@@ -514,6 +673,66 @@ Flags:
 Access: an operator command. It acts as no account and refuses `--as`.
 
 Output: text only; `--output json` is refused.
+
+### `studio-schedule stats`
+
+Print the statistics of a range of school dates.
+
+```text
+studio-schedule stats [flags]
+```
+
+Print the school's figures of a range of school dates, as the office's statistics page does: the totals, by week (by month beyond 26 weeks), by class, room, course type and instructor. `--range` picks the current week and the 3 or 11 before it (last4Weeks, the default; last12Weeks) or the current term up to today (term); `--from` and `--to` (both inclusive, at most 366 days) give a custom range. The text leaves the top 20 participants out, as they name persons, unless `--participants`; `--output json` prints the whole response body, as the API gives it to the office.
+
+Examples:
+
+```sh
+studio-schedule stats --as office@example.org
+studio-schedule stats --as office@example.org --from 2026-09-01 --to 2026-09-30 --participants
+```
+
+Flags:
+
+- `--from` (string): the first school date of a custom range (YYYY-MM-DD), with `--to`
+- `--participants` (bool): list the top participants in the text, with their names
+- `--range` (string): the range: last4Weeks, last12Weeks, term, custom; default last4Weeks, custom with `--from` and `--to`
+- `--to` (string): the last school date of a custom range (inclusive), with `--from`
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation getStatistics.
+
+### `studio-schedule terms`
+
+List the terms of the timetable.
+
+```text
+studio-schedule terms <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule terms list`](#studio-schedule-terms-list): List the terms
+
+#### `studio-schedule terms list`
+
+List the terms.
+
+```text
+studio-schedule terms list [flags]
+```
+
+List every term by its start, as the office's class pages do: its ID, name, first and last day, and "current" for the term that includes today (the one that started last if terms overlap), which `classes list` shows by default.
+
+Examples:
+
+```sh
+studio-schedule terms list --as office@example.org
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation listTerms.
 
 ### `studio-schedule vapid-keys`
 

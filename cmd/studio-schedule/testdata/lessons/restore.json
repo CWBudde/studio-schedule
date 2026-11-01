@@ -1,0 +1,36 @@
+{
+  "id": "00000000-0000-7000-8000-0000000000c9",
+  "classId": "00000000-0000-7000-8000-000000000061",
+  "startsAt": "2026-09-22T15:00:00Z",
+  "endsAt": "2026-09-22T16:00:00Z",
+  "status": "scheduled",
+  "kind": "regular",
+  "visibility": "public",
+  "level": "beginner",
+  "capacity": 20,
+  "courseType": {
+    "id": "00000000-0000-7000-8000-000000000056",
+    "name": "Jazz Dance"
+  },
+  "room": {
+    "id": "00000000-0000-7000-8000-000000000046",
+    "name": "Hall 1"
+  },
+  "location": {
+    "id": "00000000-0000-7000-8000-000000000045",
+    "name": "Studio South"
+  },
+  "instructor": {
+    "id": "00000000-0000-7000-8000-00000000004d",
+    "displayName": "Nina Tapworth"
+  },
+  "freePlaces": 17,
+  "bookingClosesAt": "2026-09-22T15:00:00Z",
+  "lateCancelFrom": "2026-09-22T13:00:00Z",
+  "courseTypeDescription": "Isolations, turns and jumps to jazz and pop music.",
+  "locationAddress": "Sample Road 3, 00000 Example Town",
+  "admin": {
+    "detached": true,
+    "activeBookings": 3
+  }
+}

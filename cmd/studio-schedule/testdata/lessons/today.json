@@ -1,0 +1,130 @@
+{
+  "timezone": "Europe/Berlin",
+  "now": "2026-09-22T08:00:00Z",
+  "from": "2026-09-22",
+  "to": "2026-09-23",
+  "releasedUntil": "2026-09-27T22:00:00Z",
+  "nextReleaseAt": "2026-09-27T16:00:00Z",
+  "lessons": [
+    {
+      "id": "00000000-0000-7000-8000-0000000000c8",
+      "classId": "00000000-0000-7000-8000-000000000060",
+      "startsAt": "2026-09-22T14:00:00Z",
+      "endsAt": "2026-09-22T14:45:00Z",
+      "status": "scheduled",
+      "kind": "regular",
+      "visibility": "public",
+      "level": "beginner",
+      "capacity": 12,
+      "courseType": {
+        "id": "00000000-0000-7000-8000-000000000052",
+        "name": "Pre-Ballet"
+      },
+      "room": {
+        "id": "00000000-0000-7000-8000-000000000043",
+        "name": "Studio B"
+      },
+      "location": {
+        "id": "00000000-0000-7000-8000-000000000041",
+        "name": "Studio North"
+      },
+      "instructor": {
+        "id": "00000000-0000-7000-8000-000000000049",
+        "displayName": "Sofia Quillon"
+      },
+      "freePlaces": 10,
+      "bookingClosesAt": "2026-09-22T14:00:00Z",
+      "lateCancelFrom": "2026-09-22T12:00:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-0000000000c9",
+      "classId": "00000000-0000-7000-8000-000000000061",
+      "startsAt": "2026-09-22T15:00:00Z",
+      "endsAt": "2026-09-22T16:00:00Z",
+      "status": "scheduled",
+      "kind": "regular",
+      "visibility": "public",
+      "level": "beginner",
+      "capacity": 20,
+      "courseType": {
+        "id": "00000000-0000-7000-8000-000000000056",
+        "name": "Jazz Dance"
+      },
+      "room": {
+        "id": "00000000-0000-7000-8000-000000000046",
+        "name": "Hall 1"
+      },
+      "location": {
+        "id": "00000000-0000-7000-8000-000000000045",
+        "name": "Studio South"
+      },
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004d",
+        "displayName": "Nina Tapworth"
+      },
+      "freePlaces": 17,
+      "bookingClosesAt": "2026-09-22T15:00:00Z",
+      "lateCancelFrom": "2026-09-22T13:00:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-0000000000ca",
+      "classId": "00000000-0000-7000-8000-000000000062",
+      "startsAt": "2026-09-22T16:30:00Z",
+      "endsAt": "2026-09-22T17:45:00Z",
+      "status": "scheduled",
+      "kind": "regular",
+      "visibility": "public",
+      "level": "intermediate",
+      "capacity": 18,
+      "courseType": {
+        "id": "00000000-0000-7000-8000-000000000055",
+        "name": "Contemporary"
+      },
+      "room": {
+        "id": "00000000-0000-7000-8000-000000000042",
+        "name": "Studio A"
+      },
+      "location": {
+        "id": "00000000-0000-7000-8000-000000000041",
+        "name": "Studio North"
+      },
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004a",
+        "displayName": "Marco Wrenfield"
+      },
+      "freePlaces": 15,
+      "bookingClosesAt": "2026-09-22T16:30:00Z",
+      "lateCancelFrom": "2026-09-22T14:30:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-0000000000cb",
+      "classId": "00000000-0000-7000-8000-000000000063",
+      "startsAt": "2026-09-22T17:00:00Z",
+      "endsAt": "2026-09-22T18:00:00Z",
+      "status": "scheduled",
+      "kind": "regular",
+      "visibility": "public",
+      "level": "open",
+      "capacity": 12,
+      "courseType": {
+        "id": "00000000-0000-7000-8000-000000000059",
+        "name": "Barre Fitness"
+      },
+      "room": {
+        "id": "00000000-0000-7000-8000-000000000047",
+        "name": "Hall 2"
+      },
+      "location": {
+        "id": "00000000-0000-7000-8000-000000000045",
+        "name": "Studio South"
+      },
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004d",
+        "displayName": "Nina Tapworth"
+      },
+      "freePlaces": 8,
+      "bookingClosesAt": "2026-09-22T17:00:00Z",
+      "lateCancelFrom": "2026-09-22T15:00:00Z"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+statistics from 2026-08-01 to 2026-08-02 (custom), by week, in Europe/Berlin
+totals:
+lessons               0
+canceled lessons      0
+places                0
+bookings              0
+utilization           0%
+attended              0
+no-shows              0
+no-show rate          -
+late cancellations    0
+trials                0
+guests                0
+waiting-list entries  0
+active members        0
+passes sold           0
+sales                 0.00 EUR
+by week:
+2026-08-01 to 2026-08-02  0  0  0  0%  0  0  -  0  0  0  0  0  0.00 EUR
+by class:
+none
+by room:
+none
+by course type:
+none
+by instructor:
+none
