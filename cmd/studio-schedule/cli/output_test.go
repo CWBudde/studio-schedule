@@ -271,3 +271,21 @@ func TestMoney(t *testing.T) {
 		}
 	}
 }
+
+// TestLocation is the school's time zone, UTC before it has settings.
+func TestLocation(t *testing.T) {
+	t.Parallel()
+
+	if got := (&Output{}).Location(); got != time.UTC {
+		t.Errorf("Location() without settings = %v, want UTC", got)
+	}
+
+	berlin, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := (&Output{loc: berlin}).Location(); got != berlin {
+		t.Errorf("Location() = %v, want %v", got, berlin)
+	}
+}

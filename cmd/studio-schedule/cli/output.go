@@ -72,8 +72,9 @@ func (o *Output) Paint(style Style, s string) string {
 	return string(style) + s + resetStyle
 }
 
-// location is the school's time zone, UTC before the school has settings.
-func (o *Output) location() *time.Location {
+// Location is the school's time zone, in which a command shows dates and
+// times; UTC before the school has settings.
+func (o *Output) Location() *time.Location {
 	if o.loc == nil {
 		return time.UTC
 	}
@@ -151,7 +152,7 @@ func (t *Text) Time(at time.Time) string {
 		return ""
 	}
 
-	return at.In(t.out.location()).Format("2006-01-02 15:04")
+	return at.In(t.out.Location()).Format("2006-01-02 15:04")
 }
 
 // Date formats a school date; the zero date is empty.

@@ -45,10 +45,7 @@ func newLessonsListCmd(app *cli.App) *cobra.Command {
 			cmd.MarkFlagsRequiredTogether("from", "to")
 		},
 		Run: func(ctx context.Context, env *cli.Env, _ []string) error {
-			loc, err := env.Services.Schedule.TimeZone(ctx)
-			if err != nil {
-				return err
-			}
+			loc := env.Out.Location()
 
 			first, last, err := lessonDays(env, loc, date, from, to)
 			if err != nil {
@@ -310,10 +307,7 @@ func setLessonStatus(
 		return err
 	}
 
-	loc, err := env.Services.Schedule.TimeZone(ctx)
-	if err != nil {
-		return err
-	}
+	loc := env.Out.Location()
 
 	sl, err := env.Services.Schedule.Lesson(ctx, env.Principal, id)
 	if err != nil {

@@ -210,25 +210,6 @@ func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQ
 	return out, nil
 }
 
-// TimeZone returns the school's time zone, in which the command line
-// shows the dates and times of lessons. Without settings it is
-// ErrNoSchool.
-func (s *ScheduleService) TimeZone(ctx context.Context) (*time.Location, error) {
-	var loc *time.Location
-
-	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
-		var err error
-		_, loc, err = loadSchool(ctx, tx)
-
-		return err
-	})
-	if err != nil {
-		return nil, fmt.Errorf("time zone: %w", err)
-	}
-
-	return loc, nil
-}
-
 // Lesson returns one lesson p may see; a zero p is a guest. A lesson that
 // does not exist or is not visible fails alike with domain.ErrNotFound, so
 // the response does not reveal hidden or unreleased lessons. Office and
