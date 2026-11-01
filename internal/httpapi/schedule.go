@@ -175,6 +175,12 @@ func (h *handlers) getSchedule(ctx context.Context, in *ScheduleInput) (*Schedul
 		return nil, h.toHTTPError(ctx, err)
 	}
 
+	return &ScheduleOutput{Body: NewSchedule(s)}, nil
+}
+
+// NewSchedule is the response body of getSchedule for s; the command line's
+// `lessons list --output json` prints it too (ADR 0020).
+func NewSchedule(s service.Schedule) Schedule {
 	body := Schedule{
 		Timezone:      s.Timezone,
 		Now:           s.Now.UTC(),
@@ -192,7 +198,7 @@ func (h *handlers) getSchedule(ctx context.Context, in *ScheduleInput) (*Schedul
 		})
 	}
 
-	return &ScheduleOutput{Body: body}, nil
+	return body
 }
 
 func (h *handlers) getLesson(ctx context.Context, in *LessonInput) (*LessonOutput, error) {
@@ -203,10 +209,13 @@ func (h *handlers) getLesson(ctx context.Context, in *LessonInput) (*LessonOutpu
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	return &LessonOutput{Body: lessonDetail(sl)}, nil
+	return &LessonOutput{Body: NewLessonDetail(sl)}, nil
 }
 
-func lessonDetail(sl service.ScheduledLesson) LessonDetail {
+// NewLessonDetail is the response body of getLesson and of the lesson
+// writes for sl; the command line's `lessons cancel|restore --output json`
+// prints it too (ADR 0020).
+func NewLessonDetail(sl service.ScheduledLesson) LessonDetail {
 	out := LessonDetail{
 		LessonSummary:         lessonSummary(sl),
 		Availability:          availability(sl),

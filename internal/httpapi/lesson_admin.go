@@ -268,7 +268,7 @@ func (h *handlers) lessonOutput(ctx context.Context) func(service.ScheduledLesso
 			return nil, h.lessonError(ctx, err)
 		}
 
-		return &LessonOutput{Body: lessonDetail(sl)}, nil
+		return &LessonOutput{Body: NewLessonDetail(sl)}, nil
 	}
 }
 

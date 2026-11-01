@@ -183,6 +183,12 @@ func (h *handlers) getStatistics(ctx context.Context, in *StatisticsInput) (*Sta
 		return nil, h.toHTTPError(ctx, err)
 	}
 
+	return &StatisticsOutput{Body: NewStatistics(st)}, nil
+}
+
+// NewStatistics is the response body of getStatistics for st; the command
+// line's `stats --output json` prints it too (ADR 0020).
+func NewStatistics(st service.Statistics) Statistics {
 	body := Statistics{
 		Timezone: st.Timezone, Currency: st.Currency, Today: st.Today, Range: string(st.Range), From: st.From, To: st.To,
 		Granularity: string(st.Granularity),
@@ -246,5 +252,5 @@ func (h *handlers) getStatistics(ctx context.Context, in *StatisticsInput) (*Sta
 		})
 	}
 
-	return &StatisticsOutput{Body: body}, nil
+	return body
 }

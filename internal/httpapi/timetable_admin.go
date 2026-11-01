@@ -201,12 +201,18 @@ func (h *handlers) listAllClasses(ctx context.Context, in *ClassListInput) (*Cla
 		return nil, h.toHTTPError(ctx, err)
 	}
 
+	return &ClassEntryListOutput{Body: NewClassEntryList(classes)}, nil
+}
+
+// NewClassEntryList is the response body of listAllClasses for classes; the
+// command line's `classes list --output json` prints it too (ADR 0020).
+func NewClassEntryList(classes []service.TimetableClass) ClassEntryList {
 	items := make([]ClassEntry, 0, len(classes))
 	for _, c := range classes {
 		items = append(items, ClassEntry{Class: class(c), Retired: c.Retired})
 	}
 
-	return &ClassEntryListOutput{Body: ClassEntryList{Items: items}}, nil
+	return ClassEntryList{Items: items}
 }
 
 func (h *handlers) createClass(ctx context.Context, in *ClassCreateInput) (*ClassOutput, error) {

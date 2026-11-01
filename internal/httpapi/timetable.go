@@ -55,12 +55,18 @@ func (h *handlers) listTerms(ctx context.Context, _ *struct{}) (*TermListOutput,
 		return nil, h.toHTTPError(ctx, err)
 	}
 
+	return &TermListOutput{Body: NewTermList(terms)}, nil
+}
+
+// NewTermList is the response body of listTerms for terms; the command
+// line's `terms list --output json` prints it too (ADR 0020).
+func NewTermList(terms []domain.Term) TermList {
 	items := make([]Term, 0, len(terms))
 	for _, t := range terms {
 		items = append(items, term(t))
 	}
 
-	return &TermListOutput{Body: TermList{Items: items}}, nil
+	return TermList{Items: items}
 }
 
 func term(t domain.Term) Term {
