@@ -1277,6 +1277,64 @@ Each module lands in both backends (Phase 13).
       a **separate private repository** because it touches real data; the public repo only provides
       the import format and the `import` command.
 
+## Phase 15 — Parity with the live system
+
+Goal: nothing the school uses today is missing here. The previous system kept running as a fork
+that drifted from its original for over a year. On 2026-10-31 that fork's live schedule was
+compared with this rewrite. Most of what the fork added already exists here: admin impersonation,
+the office role, invitations, class members and mail to them, undoing a cancellation, the
+trial-lesson note and leaving the waiting list. Linking lessons to classes by hand, which the fork
+also added, is not needed, because classes generate their lessons. Three features were missing and
+are now done. What remains is the rest of the comparison and the review leftovers.
+
+- [x] Compare the live fork with this rewrite (2026-10-31): the logged-out schedule, its frontend
+      bundle against the last known build of the original, and its UI strings. The staff and admin
+      screens were compared by their strings only
+- [x] Room rentals (2026-10-31) — ADR 0007, amendment: the lesson kind `rental` with a required
+      renter and no instructor, places, bookings, waiting list or passes. A rental occupies its
+      room for the `room-taken` check and is visible to staff only; their calendar feeds show the
+      renter in place of an instructor. Statistics leave rentals out. A rental is one-off: a lesson
+      of a class cannot be one (422 on `kind`). The demo has one
+- [x] A manual "released through" date (2026-10-31) — ADR 0003, amendment: an optional date on the
+      booking-rules card. The release then runs to the later of the weekly rule's end and that
+      date, so the date only extends the release. A past date has no effect, and a date more than
+      52 weeks ahead is refused. A date beyond the rule generates its lessons at once, and the form
+      says whether the date changes anything
+- [x] Top participants in the statistics (2026-10-31): the 20 persons with the most non-canceled
+      bookings in the range, with their attended lessons and late cancellations. Anonymized and
+      merged persons are left out (`Bookings().CountsByPersons`, `Persons().ListByIDs`)
+- [x] A rental's course type is optional (2026-11-01) — ADR 0007, amendment: migration 00030 (a
+      CHECK allows a lesson without a course type only for `rental`), and `courseType` is optional
+      in the API. Such a rental is titled "Room rental" in every view and "Room rental – <renter>"
+      in staff feeds. The course type stays fixed after creation, so a rental without one cannot
+      become another kind (422 on `kind`). The demo's rental has no course type
+- [ ] Weekly rentals: classes carry no kind, so today a rental repeats only when the office copies
+      a week. Decide first, and ask: a kind on classes, so that a class generates rentals, or a
+      rental series of its own. Then the ADR 0007 amendment, class sync and generator, the form,
+      the demo
+- [ ] Compare the staff and admin screens visually with the live fork. This needs a staff account
+      from the school. Look only: copy no data, and keep screenshots with real names out of the
+      repository
+- [ ] Mail feedback: the fork shows a spinner and colours its mail-send buttons by success or
+      failure. Check that every action here that sends mail gives the same feedback while pending
+      and after it: an invitation, a password-reset link, an announcement with mail, the requeue
+      of a failed mail
+- [ ] Review leftovers of the rental and statistics work:
+  - [ ] Statistics: `CountActivePersons` is redundant beside `CountsByPersons`, because the
+        active members are the persons with an active booking in that result. Drop the read and
+        the repository method in both stores
+  - [ ] Statistics: the top list loads every person who booked in the range and then shows 20.
+        Rank and cut in the store. Low priority at a school's size
+  - [ ] `becomesRental` (`service/lesson_admin.go`) reads the bookings and the waiting list a
+        second time after `places()`. Reuse what `places()` read, or check before it
+  - [ ] Web: one school-date check in `lib/schoolTime.ts` (today `isSchoolDate` in
+        `settingsForms.ts`), used by the clone, lesson, term and search forms as well. Today only
+        the booking-rules card refuses a date that does not exist, such as 2026-02-30
+  - [ ] Memory store `ListByStaff`: the `!l.InstructorID.IsZero()` guard cannot change the
+        result, because no caller asks for a zero staff ID. Drop it so that both stores read alike
+  - [ ] `UpdateLesson` reports the `kind` error of a rental without a course type before the
+        other field errors. Report them together. The form never sends that combination
+
 ---
 
 ## Lessons from the previous attempt
