@@ -71,8 +71,8 @@ func newDBCheckCmd(app *cli.App) *cobra.Command {
 }
 
 // runDBCheck runs checks (service.SelectIntegrityChecks) and prints the
-// findings; findings are an error after the report, so the command exits
-// with status 1.
+// findings; findings are a reported failure after the report, so the
+// command exits with status 1 (cli.Reported).
 func runDBCheck(ctx context.Context, env *cli.Env, checks []service.IntegrityCheck) error {
 	findings, err := env.Services.Integrity.Check(ctx, checks...)
 	if err != nil {
@@ -103,7 +103,7 @@ func runDBCheck(ctx context.Context, env *cli.Env, checks []service.IntegrityChe
 		noun = "finding"
 	}
 
-	return fmt.Errorf("%d %s", len(findings), noun)
+	return cli.Reported(fmt.Errorf("%d %s", len(findings), noun))
 }
 
 // dbCheckReport is the JSON of db check.

@@ -168,8 +168,9 @@ func TestImportCommand(t *testing.T) {
 
 		// The same dry run as the response body of runImport.
 		got = r.exec(t, "import", "--as", demoOffice, file, "--notes", "Kurs", "--output", "json")
-		if got.code != 1 || !strings.Contains(got.stderr, `"detail": "rows failed: 1 of 6`) {
-			t.Fatalf("dry run, JSON: exit %d, stderr %q", got.code, got.stderr)
+		// The report says the row failed: stderr gets no problem document.
+		if got.code != 1 || got.stderr != "" {
+			t.Fatalf("dry run, JSON: exit %d, stderr %q; want 1 and no problem document", got.code, got.stderr)
 		}
 
 		golden(t, "import/dry-run.json", got.stdout)

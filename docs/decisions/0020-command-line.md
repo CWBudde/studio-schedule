@@ -228,3 +228,10 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
   `--output json`. `receipts verify` does not look for duplicate numbers or a receipt canceled
   twice, which both stores refuse with unique constraints; it checks instead that a number ends in
   its year and sequence and that a Storno negates its original.
+- **A report that says it failed gets no problem document.** `db check` and `receipts verify`
+  with findings, `doctor` with a failed check and `import` with failed rows print their report on
+  stdout and exit with status 1. In text, stderr gets the line `error: …` as before; with
+  `--output json` it gets nothing, since the report on stdout (`ok: false`, the rows marked
+  `error`) is the answer, and a problem document's status 500 would call a finding an internal
+  error (`cli.Reported`). A failed `jobs run` keeps its problem document: there the job's own work
+  failed.

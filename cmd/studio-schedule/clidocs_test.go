@@ -121,7 +121,8 @@ func cliReference(t *testing.T, root *cobra.Command) string {
 		"**Errors** go to stderr as one line, `error: …`. An invalid value names the flag the way the "+
 			"command spells it (`--email: …`, or `key=value` for a setting). With `--output json`, stderr "+
 			"gets the error as a problem document like the API's, with `title`, `status`, `detail` and "+
-			"`errors`.")
+			"`errors`. A command whose report on stdout says what failed (a check with findings, an import "+
+			"with failed rows) exits with status "+strconv.Itoa(cli.ExitFailed)+" without one.")
 
 	add("## Confirmation",
 		"A command that deletes, anonymizes, mails, cancels or merges asks for confirmation when stdin "+

@@ -60,6 +60,27 @@ func Usage(err error) error {
 // Usagef is Usage(fmt.Errorf(format, args...)).
 func Usagef(format string, args ...any) error { return Usage(fmt.Errorf(format, args...)) }
 
+// reportedError is a failure whose result the command printed already.
+type reportedError struct{ err error }
+
+func (e reportedError) Error() string { return e.err.Error() }
+
+func (e reportedError) Unwrap() error { return e.err }
+
+// Reported marks err as the failure of a command whose result on stdout
+// says so already: a check with findings, an import with failed rows, a
+// job run that failed. It exits with status 1 (ExitFailed), whatever err
+// wraps, and Report writes its line in text only: with --output json the
+// document on stdout is the answer, and stderr gets no problem document,
+// since the command did not fail as the API's 500 would. nil stays nil.
+func Reported(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	return reportedError{err}
+}
+
 // ranError is an error a command's own code returned. Everything else that
 // cobra returns (an unknown command or flag, wrong arguments) is a usage
 // error.
@@ -86,6 +107,8 @@ func ExitCode(err error) int {
 	switch {
 	case err == nil:
 		return ExitOK
+	case errors.As(err, new(reportedError)):
+		return ExitFailed
 	case !errors.As(err, new(ranError)),
 		errors.Is(err, ErrUsage),
 		errors.Is(err, config.ErrInvalid),
@@ -103,11 +126,16 @@ func ExitCode(err error) int {
 // Report writes err to w (stderr): the line "error: …", or with asJSON the
 // error as a problem document like the API's (title, status, detail,
 // errors). Its status is the HTTP status the API answers such an error
-// with; a field error names its flag (or field) as the location.
+// with; a field error names its flag (or field) as the location. A
+// Reported failure gets its line in text only: with asJSON nothing.
 func Report(w io.Writer, err error, asJSON bool) {
 	if !asJSON {
 		_, _ = fmt.Fprintln(w, "error:", err)
 
+		return
+	}
+
+	if errors.As(err, new(reportedError)) {
 		return
 	}
 

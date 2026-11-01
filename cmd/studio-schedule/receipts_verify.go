@@ -78,7 +78,7 @@ func newReceiptsVerifyCmd(app *cli.App) *cobra.Command {
 				return err
 			}
 
-			return fmt.Errorf("%w: %d", errReceiptFindings, len(v.Findings))
+			return cli.Reported(fmt.Errorf("%w: %d", errReceiptFindings, len(v.Findings)))
 		},
 	})
 }

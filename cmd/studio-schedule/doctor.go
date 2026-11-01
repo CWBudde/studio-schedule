@@ -76,7 +76,7 @@ func newDoctorCmd(app *cli.App) *cobra.Command {
 				return err
 			}
 
-			return errChecksFailed
+			return cli.Reported(errChecksFailed)
 		},
 	})
 }

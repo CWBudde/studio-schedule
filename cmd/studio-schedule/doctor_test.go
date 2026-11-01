@@ -68,6 +68,11 @@ func doctorResults(t *testing.T, r cliRun, args ...string) (map[string]doctorChe
 		t.Errorf("ok %v with exit %d", report.OK, res.code)
 	}
 
+	// A failed check is in the report: stderr gets no problem document.
+	if res.stderr != "" {
+		t.Errorf("stderr %q, want none", res.stderr)
+	}
+
 	byName := map[string]doctorCheck{}
 	for _, c := range report.Checks {
 		byName[c.Name] = c

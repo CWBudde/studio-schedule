@@ -157,8 +157,8 @@ func runImport(ctx context.Context, env *cli.Env, file service.ImportFile, m ser
 		}
 	})
 	if err == nil && res.Counts.Failed > 0 {
-		err = fmt.Errorf("%w: %d of %d (see the lines marked error)", errRowsFailed, res.Counts.Failed,
-			res.Counts.Rows)
+		err = cli.Reported(fmt.Errorf("%w: %d of %d (see the lines marked error)", errRowsFailed,
+			res.Counts.Failed, res.Counts.Rows))
 	}
 
 	return err

@@ -68,11 +68,10 @@ func TestDBCheckFindings(t *testing.T) {
 			t.Errorf("stderr %q, want %q", text.stderr, want)
 		}
 
-		var problem struct {
-			Detail string `json:"detail"`
-		}
-		if err := json.Unmarshal([]byte(js.stderr), &problem); err != nil || problem.Detail != want {
-			t.Errorf("--output json: stderr %q, want a problem document with %q (%v)", js.stderr, want, err)
+		// The report on stdout is the answer: a finding is no internal
+		// error, so stderr gets no problem document.
+		if js.stderr != "" {
+			t.Errorf("--output json: stderr %q, want none", js.stderr)
 		}
 
 		ran := map[string]bool{}

@@ -42,6 +42,10 @@ func TestExitCode(t *testing.T) {
 		"forbidden":          {err: ranError{fmt.Errorf("--as x: %w", domain.ErrForbidden)}, want: ExitConflict},
 		"failed":             {err: ranError{errors.New("disk full")}, want: ExitFailed},
 		"failed, ran inside": {err: fmt.Errorf("outer: %w", ranError{errors.New("disk full")}), want: ExitFailed},
+		"reported":           {err: ranError{Reported(errors.New("3 findings"))}, want: ExitFailed},
+		"reported conflict": {
+			err: ranError{Reported(fmt.Errorf("the job failed: %w", domain.ErrConflict))}, want: ExitFailed,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -74,6 +78,40 @@ func TestUsage(t *testing.T) {
 
 	if err := (ranError{base}); err.Error() != "no file" || !errors.Is(err, base) {
 		t.Errorf("ranError = %v", err)
+	}
+}
+
+// TestReported: a failure the command reported on stdout already exits
+// with status 1 and gets its line on stderr in text, but no problem
+// document with --output json: it is not an internal error.
+func TestReported(t *testing.T) {
+	t.Parallel()
+
+	if Reported(nil) != nil {
+		t.Error("Reported(nil) is not nil")
+	}
+
+	base := errors.New("3 findings")
+
+	err := ranError{Reported(base)}
+	if !errors.Is(err, base) || err.Error() != "3 findings" {
+		t.Errorf("Reported(%v) = %v", base, err)
+	}
+
+	var text bytes.Buffer
+
+	Report(&text, err, false)
+
+	if got := text.String(); got != "error: 3 findings\n" {
+		t.Errorf("Report in text = %q", got)
+	}
+
+	var js bytes.Buffer
+
+	Report(&js, err, true)
+
+	if js.Len() != 0 {
+		t.Errorf("Report with JSON = %q, want nothing", js.String())
 	}
 }
 

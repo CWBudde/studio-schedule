@@ -200,8 +200,8 @@ func TestReceiptsVerifyFindings(t *testing.T) {
 		golden(t, "receipts/verify-findings.txt", got.stdout)
 
 		got = r.exec(t, "receipts", "verify", "--output", "json")
-		if got.code != 1 || !strings.Contains(got.stderr, "the receipts have findings: 6") {
-			t.Fatalf("JSON: exit %d, stderr %q", got.code, got.stderr)
+		if got.code != 1 || got.stderr != "" {
+			t.Fatalf("JSON: exit %d, stderr %q; want 1 and no problem document", got.code, got.stderr)
 		}
 
 		golden(t, "receipts/verify-findings.json", got.stdout)
@@ -394,8 +394,8 @@ func TestReceiptsVerifyCases(t *testing.T) {
 				args := append([]string{"receipts", "verify"}, tc.args...)
 
 				got := r.exec(t, append(args, "--output", "json")...)
-				if got.code != code {
-					t.Fatalf("JSON: exit %d, want %d; stderr %q", got.code, code, got.stderr)
+				if got.code != code || got.stderr != "" {
+					t.Fatalf("JSON: exit %d, want %d; stderr %q, want none", got.code, code, got.stderr)
 				}
 
 				if report := rverifyTReport(t, got); !rverifyTSame(report, want) {
