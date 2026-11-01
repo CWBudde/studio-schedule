@@ -2,6 +2,7 @@ import { Clock, KeyRound, MapPin, UserRound, UsersRound } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
+import { formatAudience } from '@/lib/audience';
 import {
   formatDate,
   formatTimeRange,
@@ -16,7 +17,7 @@ import type { CardLesson } from './cardParts';
 
 /**
  * The content of a lesson card, for inside its button: the course type and
- * level; the time (with the date for `withDate`, its year only outside the
+ * whom it is for (levels, stage, ages); the time (with the date for `withDate`, its year only outside the
  * year of `today`), canceled (`canceledLabel`), kind and visibility badges
  * and `badges`; the place, the staff and the `person` it is for, under
  * `detailsId` (for the button's aria-describedby); then `children`.
@@ -50,6 +51,7 @@ export function LessonCardBody({
   const title = useLessonTitle();
   const canceled = lesson.status === 'canceled';
   const date = schoolDateOf(lesson.startsAt, timeZone);
+  const audience = formatAudience(lesson, t, 'long');
 
   return (
     <>
@@ -62,10 +64,8 @@ export function LessonCardBody({
         >
           {title(lesson)}
         </span>
-        {lesson.level && (
-          <span className="shrink-0 text-right eyebrow text-muted-foreground">
-            {t(`level.${lesson.level}`)}
-          </span>
+        {audience && (
+          <span className="max-w-1/2 text-right eyebrow text-muted-foreground">{audience}</span>
         )}
       </span>
 

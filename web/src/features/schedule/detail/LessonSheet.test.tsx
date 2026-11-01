@@ -20,11 +20,22 @@ afterEach(() => {
 
 /** A room rental without a course type. */
 const rentalId = '0190a000-0000-7000-8000-000000000199';
+/** A ballet lesson for all levels, stage 3, up to 18 years. */
+const allLevelsId = '0190a000-0000-7000-8000-000000000198';
 
 const details: Record<string, object> = {
   [ids.lessonBallet]: lessonBalletDetail,
   [ids.lessonContemporary]: { ...lessonContemporary, visibility: 'members' },
   [ids.lessonWorkshop]: { ...lessonWorkshop, visibility: 'hidden' },
+  [allLevelsId]: {
+    ...lessonBalletDetail,
+    id: allLevelsId,
+    levelFrom: undefined,
+    levelTo: undefined,
+    allLevels: true,
+    stage: 3,
+    ageToMonths: 216,
+  },
   [rentalId]: {
     ...lessonWorkshop,
     id: rentalId,
@@ -72,6 +83,15 @@ describe('LessonSheet', () => {
     expect(sheet.queryByText('Members only')).not.toBeInTheDocument();
   });
 
+  it('names whom a lesson is for', async () => {
+    mockLessons();
+
+    renderAtSchedule(<LessonSheet />, { lesson: allLevelsId });
+
+    const dialog = await screen.findByRole('dialog', { name: 'Ballet' });
+    expect(within(dialog).getByText('All levels · Stage 3 · up to 18 yrs')).toBeInTheDocument();
+  });
+
   it('marks a lesson for members', async () => {
     mockLessons();
 
@@ -101,7 +121,7 @@ describe('LessonSheet', () => {
     expect(within(dialog).queryByText('Accompanist')).not.toBeInTheDocument();
   });
 
-  it('shows the kind of a one-off lesson and no level', async () => {
+  it('shows the kind of a one-off lesson and no audience', async () => {
     mockLessons();
 
     renderAtSchedule(<LessonSheet />, { lesson: ids.lessonWorkshop });

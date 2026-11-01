@@ -209,6 +209,15 @@ export const levels: Level[] = [
   { id: ids.levelProfessional, name: 'Professional', code: 'P', position: 4 },
 ];
 
+/** A level of `levels` as a lesson or class names it (`LevelRef`). */
+export const levelRef = (id: string) => {
+  const { name, code } = levels.find((l) => l.id === id)!;
+  return { id, name, ...(code ? { code } : {}) };
+};
+
+/** The audience of a class for exactly one level of `levels`. */
+export const oneLevel = (id: string) => ({ levelFrom: levelRef(id), levelTo: levelRef(id) });
+
 /**
  * Regular ballet class, Monday 2026-10-26 18:00–19:30 in Berlin, with an
  * accompanist. Like every fixture lesson, booking closes an hour before the
@@ -228,7 +237,7 @@ export const lessonBallet: ScheduleLesson = {
   lateCancelFrom: '2026-10-25T17:00:00Z',
   status: 'scheduled',
   kind: 'regular',
-  level: 'beginner',
+  ...oneLevel(ids.levelBeginner),
   capacity: 12,
   visibility: 'public',
   freePlaces: 12,
@@ -247,7 +256,7 @@ export const lessonContemporary: ScheduleLesson = {
   bookingClosesAt: '2026-10-27T15:00:00Z',
   status: 'canceled',
   kind: 'regular',
-  level: 'intermediate',
+  ...oneLevel(ids.levelIntermediate),
   capacity: 10,
   visibility: 'public',
   freePlaces: 10,
@@ -331,6 +340,7 @@ export const catalogFixtures = {
   '/api/v1/rooms': { body: { items: rooms } },
   '/api/v1/staff': { body: { items: staff } },
   '/api/v1/course-types': { body: { items: courseTypes } },
+  '/api/v1/levels': { body: { items: levels } },
 };
 
 type Term = components['schemas']['Term'];
@@ -357,7 +367,7 @@ export const autumnClasses: Class[] = [
     courseTypeId: ids.jazz,
     roomId: ids.roomB,
     instructor: { id: ids.staffRiley, displayName: 'Riley Sample' },
-    level: 'open',
+    allLevels: true,
     weekday: 0,
     startTime: '11:00',
     durationMinutes: 90,
@@ -370,7 +380,7 @@ export const autumnClasses: Class[] = [
     roomId: ids.roomA,
     instructor: { id: ids.staffAlex, displayName: 'Alex Example' },
     accompanist: { id: ids.staffSam, displayName: 'Sam Pianist' },
-    level: 'beginner',
+    ...oneLevel(ids.levelBeginner),
     weekday: 1,
     startTime: '18:00',
     durationMinutes: 90,
@@ -382,7 +392,7 @@ export const autumnClasses: Class[] = [
     courseTypeId: ids.contemporary,
     roomId: ids.roomB,
     instructor: { id: ids.staffRiley, displayName: 'Riley Sample' },
-    level: 'intermediate',
+    ...oneLevel(ids.levelIntermediate),
     weekday: 2,
     startTime: '17:00',
     durationMinutes: 60,
@@ -395,7 +405,8 @@ type ClassEntry = components['schemas']['ClassEntry'];
 /**
  * The classes of the autumn term as the office lists them
  * (GET /admin/terms/{termId}/classes): the public ones and a retired
- * Saturday jazz class, in the API's order (Sunday first).
+ * Saturday jazz class for Beginner to Intermediate, stage 2, ages 3½ to 6,
+ * in the API's order (Sunday first).
  */
 export const autumnClassEntries: ClassEntry[] = [
   ...autumnClasses.map((c) => ({ ...c, retired: false })),
@@ -405,7 +416,11 @@ export const autumnClassEntries: ClassEntry[] = [
     courseTypeId: ids.jazz,
     roomId: ids.roomA,
     instructor: { id: ids.staffQuinn, displayName: 'Quinn Former' },
-    level: 'beginner',
+    levelFrom: levelRef(ids.levelBeginner),
+    levelTo: levelRef(ids.levelIntermediate),
+    stage: 2,
+    ageFromMonths: 42,
+    ageToMonths: 72,
     weekday: 6,
     startTime: '10:00',
     durationMinutes: 60,
@@ -422,7 +437,7 @@ export const springClasses: Class[] = [
     courseTypeId: ids.ballet,
     roomId: ids.roomA,
     instructor: { id: ids.staffAlex, displayName: 'Alex Example' },
-    level: 'advanced',
+    ...oneLevel(ids.levelAdvanced),
     weekday: 4,
     startTime: '19:15',
     durationMinutes: 75,

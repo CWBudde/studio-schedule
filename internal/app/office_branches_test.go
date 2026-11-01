@@ -259,7 +259,7 @@ func TestMergeCancelsAndDropsMemberships(t *testing.T) {
 	demo, _ := classes["items"].([]any)[0].(map[string]any)
 	class := decode(t, a.expect(http.StatusCreated, http.MethodPost, "/api/v1/terms/"+termID+"/classes",
 		`{"courseTypeId":"`+demo["courseTypeId"].(string)+`","roomId":"`+demo["roomId"].(string)+
-			`","instructorId":"`+demo["instructor"].(map[string]any)["id"].(string)+`","level":"open","weekday":3,`+
+			`","instructorId":"`+demo["instructor"].(map[string]any)["id"].(string)+`","allLevels":true,"weekday":3,`+
 			`"startTime":"20:15","durationMinutes":45,"capacity":10,"retired":false}`, office))
 	classID, _ := class["id"].(string)
 

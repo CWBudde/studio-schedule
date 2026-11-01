@@ -5,12 +5,12 @@
     "list": "List",
     "week": "Week"
   },
-  "level": {
-    "beginner": "Beginner",
-    "intermediate": "Intermediate",
-    "advanced": "Advanced",
-    "professional": "Professional",
-    "open": "All levels"
+  "audience": {
+    "allLevels": "All levels",
+    "stage": "Stage {{stage}}",
+    "ageFrom": "from {{age}} yrs",
+    "ageTo": "up to {{age}} yrs",
+    "ageRange": "{{from}}–{{to}} yrs"
   },
   "kind": {
     "regular": "Class",

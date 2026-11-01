@@ -89,6 +89,9 @@ describe('TimetablePage', () => {
     expect(contemporary.getByText('Room B · South Studio')).toBeInTheDocument();
     expect(contemporary.getByText('Riley Sample')).toBeInTheDocument();
     expect(contemporary.queryByText(/accompanied by/)).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Sunday' })).getByText('All levels'),
+    ).toBeVisible();
 
     expect(screen.getByRole('link', { name: 'Schedule' })).toHaveAttribute('href', '/schedule');
   });
@@ -209,7 +212,11 @@ describe('TimetablePage', () => {
     const monday = await screen.findByRole('region', { name: 'Montag' });
     expect(screen.getByRole('heading', { level: 1, name: 'Kurse' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Kurszeitraum' })).toBeInTheDocument();
-    expect(within(monday).getByText('Anfänger')).toBeInTheDocument();
+    // Level names are the school's own; only "all levels" is translated.
+    expect(within(monday).getByText('Beginner')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Sonntag' })).getByText('alle Level'),
+    ).toBeVisible();
     expect(within(monday).getByText('Korrepetition: Sam Pianist')).toBeInTheDocument();
   });
 });

@@ -34,7 +34,7 @@ describe('ScheduleFilters', () => {
       location: ids.locationSouth,
       instructor: ids.staffRiley,
       courseType: ids.jazz,
-      level: 'advanced',
+      level: ids.levelAdvanced,
     });
   });
 
@@ -42,19 +42,47 @@ describe('ScheduleFilters', () => {
     mockApiGet(catalogFixtures);
     const { router } = renderAtSchedule(<ScheduleFilters />, {
       location: ids.locationNorth,
-      level: 'open',
+      level: ids.levelIntermediate,
     });
 
     await screen.findByRole('combobox', { name: 'Location' });
     await waitFor(() =>
       expect(screen.getByRole('combobox', { name: 'Location' })).toHaveTextContent('North Studio'),
     );
-    expect(screen.getByRole('combobox', { name: 'Level' })).toHaveTextContent('All levels');
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Level' })).toHaveTextContent('Intermediate'),
+    );
 
     await choose('Location', 'All locations');
     await choose('Level', 'Any level');
 
     expect(router.state.location.search).toEqual({});
+  });
+
+  it("offers the school's levels in their order", async () => {
+    mockApiGet(catalogFixtures);
+    const user = userEvent.setup();
+    renderAtSchedule(<ScheduleFilters />);
+
+    const select = await screen.findByRole('combobox', { name: 'Level' });
+    await waitFor(() => expect(select).toBeEnabled());
+    await user.click(select);
+
+    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual([
+      'Any level',
+      'Beginner',
+      'Intermediate',
+      'Advanced',
+      'Professional',
+    ]);
+  });
+
+  it('leaves out the level filter while the school has no levels', async () => {
+    mockApiGet({ ...catalogFixtures, '/api/v1/levels': { body: { items: [] } } });
+    renderAtSchedule(<ScheduleFilters />);
+
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Location' })).toBeEnabled());
+    expect(screen.queryByRole('combobox', { name: 'Level' })).not.toBeInTheDocument();
   });
 
   it('shows a reset button only while a filter is active', async () => {
@@ -90,6 +118,6 @@ describe('ScheduleFilters', () => {
     renderAtSchedule(<ScheduleFilters />);
 
     expect(await screen.findByRole('combobox', { name: 'Standort' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Stufe' })).toHaveTextContent('Jede Stufe');
+    expect(screen.getByRole('combobox', { name: 'Level' })).toHaveTextContent('Jedes Level');
   });
 });

@@ -5,12 +5,12 @@
     "list": "Liste",
     "week": "Woche"
   },
-  "level": {
-    "beginner": "Anfänger",
-    "intermediate": "Mittelstufe",
-    "advanced": "Fortgeschrittene",
-    "professional": "Profis",
-    "open": "Alle Stufen"
+  "audience": {
+    "allLevels": "alle Level",
+    "stage": "Stufe {{stage}}",
+    "ageFrom": "ab {{age}} J.",
+    "ageTo": "bis {{age}} J.",
+    "ageRange": "{{from}}–{{to}} J."
   },
   "kind": {
     "regular": "Kurs",
@@ -54,11 +54,11 @@
     "location": "Standort",
     "instructor": "Lehrkraft",
     "courseType": "Kursart",
-    "level": "Stufe",
+    "level": "Level",
     "allLocations": "Alle Standorte",
     "allInstructors": "Alle Lehrkräfte",
     "allCourseTypes": "Alle Kursarten",
-    "anyLevel": "Jede Stufe",
+    "anyLevel": "Jedes Level",
     "reset": "Filter zurücksetzen"
   },
   "week": {

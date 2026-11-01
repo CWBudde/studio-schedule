@@ -31,7 +31,7 @@ func TestAdminLessonClone(t *testing.T) {
 
 	// A new Tuesday class generates its lessons from next week on.
 	class := decode(t, a.expect(http.StatusCreated, http.MethodPost, "/api/v1/terms/"+termID+"/classes",
-		fmt.Sprintf(`{"courseTypeId":%q,"roomId":%q,"instructorId":%q,"level":"open","weekday":2,`+
+		fmt.Sprintf(`{"courseTypeId":%q,"roomId":%q,"instructorId":%q,"allLevels":true,"weekday":2,`+
 			`"startTime":"21:15","durationMinutes":45,"capacity":6}`, courseType, room, instructor), office))
 
 	// A workshop late on Tuesday 2026-10-27, after the class.

@@ -99,10 +99,10 @@ type ClassStatistics struct {
 	ClassID        domain.ClassID  `doc:"The class; absent for a one-off lesson."                    json:"classId,omitzero"`
 	LessonID       domain.LessonID `doc:"The one-off lesson; absent for a class."                    json:"lessonId,omitzero"`
 	CourseTypeName string          `doc:"Name of the course type."                                   json:"courseTypeName"`
-	Level          string          `doc:"Level of the class; absent for a one-off lesson." enum:"beginner,intermediate,advanced,professional,open" json:"level,omitempty" required:"false"`
-	Weekday        *int            `doc:"Day of the week of the class, 0 = Sunday to 6 = Saturday; absent for a one-off lesson." json:"weekday,omitempty" maximum:"6" minimum:"0" required:"false"`
-	StartTime      string          `doc:"Start time (HH:MM) of the class in the school time zone; absent for a one-off lesson." json:"startTime,omitempty" required:"false"`
-	StartsAt       time.Time       `doc:"Start of the one-off lesson (UTC); absent for a class."     json:"startsAt,omitzero"`
+	Audience
+	Weekday   *int      `doc:"Day of the week of the class, 0 = Sunday to 6 = Saturday; absent for a one-off lesson." json:"weekday,omitempty" maximum:"6" minimum:"0" required:"false"`
+	StartTime string    `doc:"Start time (HH:MM) of the class in the school time zone; absent for a one-off lesson." json:"startTime,omitempty" required:"false"`
+	StartsAt  time.Time `doc:"Start of the one-off lesson (UTC); absent for a class."     json:"startsAt,omitzero"`
 	LessonFigures
 }
 
@@ -219,7 +219,7 @@ func NewStatistics(st service.Statistics) Statistics {
 			row.LessonID, row.StartsAt = c.Lesson.ID, c.Lesson.StartsAt.UTC()
 		} else {
 			weekday := int(c.Class.Weekday)
-			row.ClassID, row.Level, row.Weekday = c.Class.ID, string(c.Class.Level), &weekday
+			row.ClassID, row.Audience, row.Weekday = c.Class.ID, NewAudience(c.Audience), &weekday
 			row.StartTime = c.Class.StartTime.String()
 		}
 

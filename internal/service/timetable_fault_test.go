@@ -61,16 +61,17 @@ func classFixture(t *testing.T) (*genFixture, TimetableClass) {
 }
 
 // TestCreateClassStoreFaults: a store failure anywhere in creating a class
-// is returned, and neither the class nor one of its lessons or member
-// bookings stays.
+// (for a span of levels, so they are read too) is returned, and neither the
+// class nor one of its lessons or member bookings stays.
 func TestCreateClassStoreFaults(t *testing.T) {
 	t.Parallel()
 
 	SweepFaults(t, FaultSweep{Setup: func(t *testing.T) (*FaultStore, func() error) {
-		f := newGenFixture(t, seed.DemoSettings())
+		f := newAudienceFixture(t)
 		fs, svc := f.faultTimetable(t, faultNow)
 		d := f.classData()
 		d.AccompanistID = f.pianist
+		d.AllLevels, d.Levels = false, span(f.a, f.b)
 
 		return fs, func() error {
 			_, err := svc.CreateClass(t.Context(), f.term.ID, d)
@@ -480,7 +481,7 @@ func TestGenerateRefusesBrokenClass(t *testing.T) {
 func TestTimetableReadStoreFaults(t *testing.T) {
 	t.Parallel()
 
-	for _, method := range []string{"Terms.List", "Terms.Get", "Classes.ListByTerm", "Staff.List"} {
+	for _, method := range []string{"Terms.List", "Terms.Get", "Classes.ListByTerm", "Staff.List", "Levels.List"} {
 		t.Run(method, func(t *testing.T) {
 			t.Parallel()
 

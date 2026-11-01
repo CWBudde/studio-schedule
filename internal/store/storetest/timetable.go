@@ -48,7 +48,12 @@ func testTimetable(t *testing.T, newStore func(*testing.T) store.Store) {
 				minimal := e.newClass(e.setting(), time.Wednesday, domain.TimeOfDay{Hour: 16, Minute: 45})
 				full := minimal
 				full.AccompanistID = e.staffMember("Accompanist").ID
-				full.Level = domain.LevelAdvanced
+				// The span's ends stored in the other order than the scale.
+				full.Levels = domain.LevelRange{
+					From: e.level("Advanced", "A", 2).ID, To: e.level("Beginner", "B", 1).ID,
+				}
+				full.Stage = 3
+				full.AgeFrom, full.AgeTo = 48, 72
 				full.Weekday = time.Saturday
 				full.StartTime = domain.TimeOfDay{Hour: 10}
 				full.Duration = 90 * time.Minute
@@ -116,6 +121,12 @@ func testTimetable(t *testing.T, newStore func(*testing.T) store.Store) {
 				"room":        func(c *domain.Class) { c.RoomID = newID[domain.RoomID](e) },
 				"instructor":  func(c *domain.Class) { c.InstructorID = newID[domain.StaffID](e) },
 				"accompanist": func(c *domain.Class) { c.AccompanistID = newID[domain.StaffID](e) },
+				"lower level": func(c *domain.Class) {
+					c.Levels = domain.LevelRange{From: newID[domain.LevelID](e), To: e.level("Upper", "", 1).ID}
+				},
+				"upper level": func(c *domain.Class) {
+					c.Levels = domain.LevelRange{From: e.level("Lower", "", 1).ID, To: newID[domain.LevelID](e)}
+				},
 			} {
 				c := e.newClass(s, time.Friday, domain.TimeOfDay{Hour: 17})
 				mutate(&c)
@@ -123,6 +134,60 @@ func testTimetable(t *testing.T, newStore func(*testing.T) store.Store) {
 				err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Classes().Create(ctx, c) })
 				if !errorsIs(err, domain.ErrConflict) {
 					e.t.Errorf("class with missing %s: want ErrConflict, got %v", name, err)
+				}
+			}
+		},
+		"Audience": func(e *env) {
+			s := e.setting()
+			low, high := e.level("Beginner", "B", 1), e.level("Intermediate", "I", 2)
+
+			stated := map[string]func(*domain.Class){
+				"span upwards":   func(c *domain.Class) { c.Levels = domain.LevelRange{From: low.ID, To: high.ID} },
+				"span downwards": func(c *domain.Class) { c.Levels = domain.LevelRange{From: high.ID, To: low.ID} },
+				"one level":      func(c *domain.Class) { c.Levels = domain.LevelRange{From: high.ID, To: high.ID} },
+				"all levels":     func(c *domain.Class) { c.AllLevels = true },
+				"stage":          func(c *domain.Class) { c.Stage = domain.MaxStage },
+				"ages":           func(c *domain.Class) { c.AgeFrom, c.AgeTo = 1, domain.MaxAgeMonths },
+				"age from":       func(c *domain.Class) { c.AgeFrom = 42 },
+				"age to":         func(c *domain.Class) { c.AgeTo = 72 },
+				"everything": func(c *domain.Class) {
+					c.Levels = domain.LevelRange{From: high.ID, To: low.ID}
+					c.Stage, c.AgeFrom, c.AgeTo = 2, 48, 72
+				},
+				"nothing": func(*domain.Class) {},
+			}
+
+			get := func(id domain.ClassID) domain.Class {
+				e.t.Helper()
+
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) (domain.Class, error) {
+					return tx.Classes().Get(ctx, id)
+				})
+			}
+
+			for name, state := range stated {
+				c := e.newClass(s, time.Tuesday, domain.TimeOfDay{Hour: 17})
+				state(&c)
+				valid(e.t, c)
+				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Classes().Create(ctx, c) })
+
+				if got := get(c.ID); got != c {
+					e.t.Errorf("%s: created %+v, read %+v", name, c, got)
+				}
+
+				// An update states nothing any more, and back again.
+				plain := e.newClass(s, c.Weekday, c.StartTime)
+				plain.ID = c.ID
+				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Classes().Update(ctx, plain) })
+
+				if got := get(c.ID); got != plain {
+					e.t.Errorf("%s: cleared to %+v, read %+v", name, plain, got)
+				}
+
+				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Classes().Update(ctx, c) })
+
+				if got := get(c.ID); got != c {
+					e.t.Errorf("%s: updated to %+v, read %+v", name, c, got)
 				}
 			}
 		},

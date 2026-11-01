@@ -70,8 +70,11 @@ func (r levelRepo) Delete(_ context.Context, id domain.LevelID) error {
 		return err
 	}
 
-	if !s.levels.has(id) {
+	switch {
+	case !s.levels.has(id):
 		return notFound("level")
+	case s.classes.exists(func(c domain.Class) bool { return c.Levels.From == id || c.Levels.To == id }):
+		return conflict("level %s is referenced", id)
 	}
 
 	s.levels.delete(r.tx.gen, id)

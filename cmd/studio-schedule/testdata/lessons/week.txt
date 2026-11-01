@@ -1,12 +1,12 @@
-00000000-0000-7000-8000-0000000000c7  2026-09-21  15:30-16:15  Creative Dance (open)                  Sofia Quillon    Studio C  2/10  scheduled
-00000000-0000-7000-8000-0000000000c8  2026-09-21  16:30-17:30  Classical Ballet (beginner)            Alina Starling   Studio A  3/16  scheduled
-00000000-0000-7000-8000-0000000000c9  2026-09-21  17:45-19:00  Classical Ballet (intermediate)        Alina Starling   Studio A  3/16  scheduled
-00000000-0000-7000-8000-0000000000ca  2026-09-21  18:00-19:00  Hip-Hop (beginner)                     Jonas Featherby  Hall 1    4/20  scheduled
-00000000-0000-7000-8000-0000000000cb  2026-09-21  19:15-20:45  Classical Ballet (advanced)            Alina Starling   Studio A  2/16  scheduled
-00000000-0000-7000-8000-0000000000cc  2026-09-22  16:00-16:45  Pre-Ballet (beginner)                  Sofia Quillon    Studio B  2/12  scheduled
-00000000-0000-7000-8000-0000000000cd  2026-09-22  17:00-18:00  Jazz Dance (beginner)                  Nina Tapworth    Hall 1    3/20  scheduled
-00000000-0000-7000-8000-0000000000ce  2026-09-22  18:30-19:45  Contemporary (intermediate)            Marco Wrenfield  Studio A  3/18  scheduled
-00000000-0000-7000-8000-0000000000cf  2026-09-22  19:00-20:00  Barre Fitness (open)                   Nina Tapworth    Hall 2    4/12  scheduled
+00000000-0000-7000-8000-0000000000c7  2026-09-21  15:30-16:15  Creative Dance (4–6 yrs)               Sofia Quillon    Studio C  2/10  scheduled
+00000000-0000-7000-8000-0000000000c8  2026-09-21  16:30-17:30  Classical Ballet (Beginner)            Alina Starling   Studio A  3/16  scheduled
+00000000-0000-7000-8000-0000000000c9  2026-09-21  17:45-19:00  Classical Ballet (Intermediate)        Alina Starling   Studio A  3/16  scheduled
+00000000-0000-7000-8000-0000000000ca  2026-09-21  18:00-19:00  Hip-Hop (Beginner)                     Jonas Featherby  Hall 1    4/20  scheduled
+00000000-0000-7000-8000-0000000000cb  2026-09-21  19:15-20:45  Classical Ballet (Advanced)            Alina Starling   Studio A  2/16  scheduled
+00000000-0000-7000-8000-0000000000cc  2026-09-22  16:00-16:45  Pre-Ballet (6–8 yrs)                   Sofia Quillon    Studio B  2/12  scheduled
+00000000-0000-7000-8000-0000000000cd  2026-09-22  17:00-18:00  Jazz Dance (Beginner)                  Nina Tapworth    Hall 1    3/20  scheduled
+00000000-0000-7000-8000-0000000000ce  2026-09-22  18:30-19:45  Contemporary (Intermediate)            Marco Wrenfield  Studio A  3/18  scheduled
+00000000-0000-7000-8000-0000000000cf  2026-09-22  19:00-20:00  Barre Fitness (all levels)             Nina Tapworth    Hall 2    4/12  scheduled
 00000000-0000-7000-8000-000000000079  2026-09-25  13:30-15:30  Contemporary (workshop)                Marco Wrenfield  Studio A  0/18  scheduled
 00000000-0000-7000-8000-00000000032e  2026-09-26  13:30-15:30  room rental: Copperleaf Theater Group  -                Studio B  -     scheduled
 00000000-0000-7000-8000-00000000007c  2026-09-27  13:30-15:30  Contemporary (workshop)                Marco Wrenfield  Studio B  0/12  scheduled

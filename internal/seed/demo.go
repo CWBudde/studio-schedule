@@ -107,6 +107,7 @@ func demoAt(anchor domain.Date, settings domain.Settings, locations []locationSp
 		rooms:       map[string]domain.RoomID{},
 		staff:       map[string]domain.StaffID{},
 		courseTypes: map[string]domain.CourseTypeID{},
+		levels:      map[string]domain.LevelID{},
 	}
 
 	for _, h := range demoHouseholds {
@@ -372,6 +373,24 @@ var demoLevels = []levelSpec{
 	{"Professional", "P"},
 }
 
+// audienceSpec is who a class is for: from and to name levels of the table
+// above (both or neither), all is for every level; ages are in months.
+type audienceSpec struct {
+	from, to       string
+	all            bool
+	stage          int
+	ageFrom, ageTo domain.AgeMonths
+}
+
+// level is a class for one level of the scale.
+func level(name string) audienceSpec { return audienceSpec{from: name, to: name} }
+
+// allLevels is a class for every level.
+var allLevels = audienceSpec{all: true}
+
+// ages is a class for children of an age, in months, instead of a level.
+func ages(from, to domain.AgeMonths) audienceSpec { return audienceSpec{ageFrom: from, ageTo: to} }
+
 // classSpec is a weekly class. Names refer to the tables above; members are
 // "Given Family" keys of persons.
 type classSpec struct {
@@ -382,7 +401,7 @@ type classSpec struct {
 	courseType  string
 	instructor  string
 	accompanist string
-	level       domain.SkillLevel
+	audience    audienceSpec
 	capacity    int
 	members     []string
 }
@@ -390,114 +409,116 @@ type classSpec struct {
 var demoClasses = []classSpec{
 	// Monday
 	{
-		time.Monday, at(15, 30), 45, "Studio C", "Creative Dance", "Sofia Quillon", "", domain.LevelOpen, 10,
+		time.Monday, at(15, 30), 45, "Studio C", "Creative Dance", "Sofia Quillon", "", ages(48, 72), 10,
 		[]string{"Mia Birchmoor", "Finn Amberly"},
 	},
 	{
-		time.Monday, at(16, 30), 60, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", domain.LevelBeginner, 16,
+		time.Monday, at(16, 30), 60, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", level("Beginner"), 16,
 		[]string{"Rosa Elderwick", "Leni Dunfield", "Ella Amberly"},
 	},
 	{
-		time.Monday, at(17, 45), 75, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", domain.LevelIntermediate, 16,
+		time.Monday, at(17, 45), 75, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", level("Intermediate"), 16,
 		[]string{"Lotta Birchmoor", "Ben Gildenmoor", "Emil Elderwick"},
 	},
 	{
-		time.Monday, at(18, 0), 60, "Hall 1", "Hip-Hop", "Jonas Featherby", "", domain.LevelBeginner, 20,
+		time.Monday, at(18, 0), 60, "Hall 1", "Hip-Hop", "Jonas Featherby", "", level("Beginner"), 20,
 		[]string{"Noah Cloudsley", "Jakob Ivorycombe"},
 	},
 	{
-		time.Monday, at(19, 15), 90, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", domain.LevelAdvanced, 16,
+		time.Monday, at(19, 15), 90, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", level("Advanced"), 16,
 		[]string{"Rhea Pinecrest", "Wanda Sparrowhill"},
 	},
 
 	// Tuesday
 	{
-		time.Tuesday, at(16, 0), 45, "Studio B", "Pre-Ballet", "Sofia Quillon", "", domain.LevelBeginner, 12,
+		time.Tuesday, at(16, 0), 45, "Studio B", "Pre-Ballet", "Sofia Quillon", "", ages(72, 96), 12,
 		[]string{"Mia Birchmoor", "Rosa Elderwick"},
 	},
 	{
-		time.Tuesday, at(17, 0), 60, "Hall 1", "Jazz Dance", "Nina Tapworth", "", domain.LevelBeginner, 20,
+		time.Tuesday, at(17, 0), 60, "Hall 1", "Jazz Dance", "Nina Tapworth", "", level("Beginner"), 20,
 		[]string{"Kira Gildenmoor", "Ella Amberly", "Emil Elderwick"},
 	},
 	{
-		time.Tuesday, at(18, 30), 75, "Studio A", "Contemporary", "Marco Wrenfield", "", domain.LevelIntermediate, 18,
+		time.Tuesday, at(18, 30), 75, "Studio A", "Contemporary", "Marco Wrenfield", "", level("Intermediate"), 18,
 		[]string{"Kai Lanternby", "Lina Mistlewood", "Marta Fernwhistle"},
 	},
 	{
-		time.Tuesday, at(19, 0), 60, "Hall 2", "Barre Fitness", "Nina Tapworth", "", domain.LevelOpen, 12,
+		time.Tuesday, at(19, 0), 60, "Hall 2", "Barre Fitness", "Nina Tapworth", "", allLevels, 12,
 		[]string{"Clara Amberly", "Irene Inkwell", "Vera Rushwick", "Hanna Birchmoor"},
 	},
 
 	// Wednesday
 	{
-		time.Wednesday, at(15, 30), 45, "Studio C", "Creative Dance", "Sofia Quillon", "", domain.LevelOpen, 10,
+		time.Wednesday, at(15, 30), 45, "Studio C", "Creative Dance", "Sofia Quillon", "", ages(48, 72), 10,
 		[]string{"Mia Birchmoor"},
 	},
 	{
-		time.Wednesday, at(16, 30), 75, "Studio A", "Classical Ballet", "Lea Moonfield", "Greta Ivorylane", domain.LevelIntermediate, 16,
+		time.Wednesday, at(16, 30), 75, "Studio A", "Classical Ballet", "Lea Moonfield", "Greta Ivorylane", level("Intermediate"), 16,
 		[]string{"Ida Elderwick", "Kira Gildenmoor", "Lotta Birchmoor"},
 	},
 	{
-		time.Wednesday, at(18, 0), 45, "Studio B", "Pointe Work", "Lea Moonfield", "Greta Ivorylane", domain.LevelAdvanced, 12,
+		time.Wednesday, at(18, 0), 45, "Studio B", "Pointe Work", "Lea Moonfield", "Greta Ivorylane", level("Advanced"), 12,
 		[]string{"Ida Elderwick", "Jona Fernwhistle", "Sophie Hollowmere"},
 	},
 	{
-		time.Wednesday, at(18, 30), 60, "Hall 1", "Hip-Hop", "Jonas Featherby", "", domain.LevelIntermediate, 20,
+		time.Wednesday, at(18, 30), 60, "Hall 1", "Hip-Hop", "Jonas Featherby", "", level("Intermediate"), 20,
 		[]string{"Noah Cloudsley", "Ben Gildenmoor"},
 	},
 	{
-		time.Wednesday, at(19, 0), 90, "Studio A", "Classical Ballet", "Lea Moonfield", "Greta Ivorylane", domain.LevelProfessional, 16,
+		time.Wednesday, at(19, 0), 90, "Studio A", "Classical Ballet", "Lea Moonfield", "Greta Ivorylane", level("Professional"), 16,
 		[]string{"Wanda Sparrowhill"},
 	},
 
 	// Thursday
 	{
-		time.Thursday, at(16, 0), 60, "Hall 2", "Tap", "Nina Tapworth", "", domain.LevelBeginner, 12,
+		time.Thursday, at(16, 0), 60, "Hall 2", "Tap", "Nina Tapworth", "", level("Beginner"), 12,
 		[]string{"Leni Dunfield", "Jakob Ivorycombe"},
 	},
 	{
-		time.Thursday, at(17, 0), 60, "Studio A", "Contemporary", "Marco Wrenfield", "", domain.LevelBeginner, 18,
+		time.Thursday, at(17, 0), 60, "Studio A", "Contemporary", "Marco Wrenfield", "", level("Beginner"), 18,
 		[]string{"Lotta Birchmoor", "Ida Elderwick"},
 	},
 	{
-		time.Thursday, at(18, 30), 90, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", domain.LevelBeginner, 16,
+		time.Thursday, at(18, 30), 90, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth",
+		audienceSpec{from: "Beginner", to: "Intermediate"},
+		16,
 		[]string{"Oskar Nettlebury", "Tilo Quarrystone", "Sara Dunfield", "Petra Elderwick"},
 	},
 	{
-		time.Thursday, at(19, 30), 60, "Hall 1", "Jazz Dance", "Marco Wrenfield", "", domain.LevelIntermediate, 20,
+		time.Thursday, at(19, 30), 60, "Hall 1", "Jazz Dance", "Marco Wrenfield", "", level("Intermediate"), 20,
 		[]string{"Lukas Fernwhistle", "Kai Lanternby"},
 	},
 
 	// Friday
 	{
-		time.Friday, at(15, 30), 45, "Studio B", "Pre-Ballet", "Sofia Quillon", "", domain.LevelBeginner, 12,
+		time.Friday, at(15, 30), 45, "Studio B", "Pre-Ballet", "Sofia Quillon", "", ages(72, 96), 12,
 		[]string{"Finn Amberly"},
 	},
 	{
-		time.Friday, at(16, 30), 60, "Studio A", "Classical Ballet", "Lea Moonfield", "Greta Ivorylane", domain.LevelBeginner, 16,
+		time.Friday, at(16, 30), 60, "Studio A", "Classical Ballet", "Lea Moonfield", "Greta Ivorylane", level("Beginner"), 16,
 		[]string{"Leni Dunfield", "Kira Gildenmoor"},
 	},
 	{
-		time.Friday, at(17, 45), 60, "Hall 1", "Hip-Hop", "Jonas Featherby", "", domain.LevelOpen, 24,
+		time.Friday, at(17, 45), 60, "Hall 1", "Hip-Hop", "Jonas Featherby", "", allLevels, 24,
 		[]string{"Jan Cloudsley", "Tilo Quarrystone"},
 	},
 	{
-		time.Friday, at(18, 0), 75, "Studio B", "Pointe Work", "Lea Moonfield", "", domain.LevelAdvanced, 12,
+		time.Friday, at(18, 0), 75, "Studio B", "Pointe Work", "Lea Moonfield", "", level("Advanced"), 12,
 		[]string{"Sophie Hollowmere"},
 	},
 
 	// Saturday
-	{time.Saturday, at(10, 0), 45, "Studio C", "Creative Dance", "Sofia Quillon", "", domain.LevelOpen, 10, nil},
+	{time.Saturday, at(10, 0), 45, "Studio C", "Creative Dance", "Sofia Quillon", "", ages(48, 72), 10, nil},
 	{
-		time.Saturday, at(10, 0), 90, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", domain.LevelAdvanced, 16,
+		time.Saturday, at(10, 0), 90, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", level("Advanced"), 16,
 		[]string{"Jona Fernwhistle", "Sophie Hollowmere", "Ida Elderwick"},
 	},
 	{
-		time.Saturday, at(11, 0), 60, "Hall 2", "Tap", "Nina Tapworth", "", domain.LevelOpen, 12,
+		time.Saturday, at(11, 0), 60, "Hall 2", "Tap", "Nina Tapworth", "", allLevels, 12,
 		[]string{"Irene Inkwell", "Nora Ivorycombe", "David Hollowmere"},
 	},
 	{
-		time.Saturday, at(12, 0), 75, "Studio A", "Contemporary", "Marco Wrenfield", "", domain.LevelOpen, 18,
+		time.Saturday, at(12, 0), 75, "Studio A", "Contemporary", "Marco Wrenfield", "", allLevels, 18,
 		[]string{"Lina Mistlewood", "Yara Gildenmoor"},
 	},
 }
@@ -626,6 +647,7 @@ type builder struct {
 	rooms       map[string]domain.RoomID
 	staff       map[string]domain.StaffID
 	courseTypes map[string]domain.CourseTypeID
+	levels      map[string]domain.LevelID
 }
 
 func (b *builder) household(h householdSpec) {
@@ -720,9 +742,20 @@ func (b *builder) courseType(c domain.CourseType) {
 
 // level adds the next step of the level scale, after the ones before it.
 func (b *builder) level(spec levelSpec) {
-	b.d.Levels = append(b.d.Levels, domain.Level{
+	l := domain.Level{
 		ID: ids.New[domain.LevelID](b.seq), Name: spec.name, Code: spec.code, Position: len(b.d.Levels) + 1,
-	})
+	}
+	b.d.Levels = append(b.d.Levels, l)
+	b.levels[l.Name] = l.ID
+}
+
+// levelRange resolves the level names of a class's audience.
+func (b *builder) levelRange(a audienceSpec) domain.LevelRange {
+	if a.from == "" && a.to == "" {
+		return domain.LevelRange{}
+	}
+
+	return domain.LevelRange{From: lookup(b.levels, a.from), To: lookup(b.levels, a.to)}
 }
 
 func (b *builder) class(term domain.TermID, spec classSpec) {
@@ -732,7 +765,11 @@ func (b *builder) class(term domain.TermID, spec classSpec) {
 		CourseTypeID: lookup(b.courseTypes, spec.courseType),
 		RoomID:       lookup(b.rooms, spec.room),
 		InstructorID: lookup(b.staff, spec.instructor),
-		Level:        spec.level,
+		Levels:       b.levelRange(spec.audience),
+		AllLevels:    spec.audience.all,
+		Stage:        spec.audience.stage,
+		AgeFrom:      spec.audience.ageFrom,
+		AgeTo:        spec.audience.ageTo,
 		Weekday:      spec.day,
 		StartTime:    spec.start,
 		Duration:     time.Duration(spec.minutes) * time.Minute,

@@ -68,7 +68,9 @@ func registerTimetableAdmin(api huma.API, h *handlers) {
 		Path:        BasePath + "/terms/{termId}/classes",
 		Summary:     "Create a class",
 		Description: "Adds a weekly class to a term and generates its lessons that lie ahead. An unknown " +
-			"course type, room or staff member is a 422 on the field that names it.",
+			"course type, room, staff member or level is a 422 on the field that names it. The class is for " +
+			"the levels from `levelFromId` to `levelToId` (either way round, both or neither), for all levels, " +
+			"or for no level (ADR 0021); `allLevels` with a span is a 422 on `allLevels`.",
 		DefaultStatus: http.StatusCreated,
 	}), h.createClass)
 
@@ -77,7 +79,8 @@ func registerTimetableAdmin(api huma.API, h *handlers) {
 		Method:      http.MethodPut,
 		Path:        BasePath + "/classes/{classId}",
 		Summary:     "Update a class",
-		Description: "Replaces the fields of a class; its term stays. The future lessons that were not " +
+		Description: "Replaces the fields of a class, its audience included (see `createClass`); its term " +
+			"stays. The future lessons that were not " +
 			"edited one by one follow, with their bookings; a capacity below the class's member count or the " +
 			"bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and " +
 			"leaves the public timetable; its future lessons that still follow it and have no bookings but " +
@@ -147,7 +150,12 @@ type ClassData struct {
 	RoomID          domain.RoomID       `doc:"Room the class takes place in."               json:"roomId"`
 	InstructorID    domain.StaffID      `doc:"Instructor."                                  json:"instructorId"`
 	AccompanistID   domain.StaffID      `doc:"Accompanist, if any."                         json:"accompanistId,omitzero" required:"false"`
-	Level           domain.SkillLevel   `doc:"Skill level the class is aimed at."           enum:"beginner,intermediate,advanced,professional,open" json:"level"`
+	LevelFromID     domain.LevelID      `doc:"One end of the levels the class is for, in either order with levelToId; with levelToId or not at all." json:"levelFromId,omitzero" required:"false"`
+	LevelToID       domain.LevelID      `doc:"The other end of the levels the class is for, the same as levelFromId for one level." json:"levelToId,omitzero" required:"false"`
+	AllLevels       bool                `doc:"Whether the class is for every level; not with a level span." json:"allLevels,omitempty" required:"false"`
+	Stage           int                 `doc:"Stage of the class, if any." json:"stage,omitempty" maximum:"9" minimum:"1" required:"false"`
+	AgeFromMonths   int                 `doc:"Youngest age the class is for, in months, if any." json:"ageFromMonths,omitempty" maximum:"1200" minimum:"1" required:"false"`
+	AgeToMonths     int                 `doc:"Oldest age the class is for, in months, if any; not below ageFromMonths." json:"ageToMonths,omitempty" maximum:"1200" minimum:"1" required:"false"`
 	Weekday         int                 `doc:"Day of the week, 0 = Sunday to 6 = Saturday." json:"weekday"                                          maximum:"6"      minimum:"0"`
 	StartTime       domain.TimeOfDay    `doc:"Start time (HH:MM) in the school time zone."  example:"18:00"                                         json:"startTime" pattern:"^[0-2][0-9]:[0-5][0-9]$"`
 	DurationMinutes int                 `doc:"Length of each lesson in minutes."            json:"durationMinutes"                                  maximum:"1440"   minimum:"1"`
@@ -244,7 +252,9 @@ func (h *handlers) classOutput(ctx context.Context) func(service.TimetableClass,
 func (d ClassData) service() service.ClassData {
 	return service.ClassData{
 		CourseTypeID: d.CourseTypeID, RoomID: d.RoomID, InstructorID: d.InstructorID, AccompanistID: d.AccompanistID,
-		Level: d.Level, Weekday: time.Weekday(d.Weekday), StartTime: d.StartTime,
+		Levels: domain.LevelRange{From: d.LevelFromID, To: d.LevelToID}, AllLevels: d.AllLevels, Stage: d.Stage,
+		AgeFrom: domain.AgeMonths(d.AgeFromMonths), AgeTo: domain.AgeMonths(d.AgeToMonths),
+		Weekday: time.Weekday(d.Weekday), StartTime: d.StartTime,
 		Duration: time.Duration(d.DurationMinutes) * time.Minute, Capacity: d.Capacity, Retired: d.Retired,
 	}
 }

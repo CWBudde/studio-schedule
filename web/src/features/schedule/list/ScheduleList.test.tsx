@@ -8,6 +8,7 @@ import {
   lessonBallet,
   lessonContemporary,
   lessonWorkshop,
+  levelRef,
   family,
   meMember,
   mockApiGet,
@@ -213,7 +214,7 @@ describe('ScheduleList', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows course type, level, place and staff of a lesson', async () => {
+  it('shows course type, audience, place and staff of a lesson', async () => {
     renderList(schedule);
 
     const card = within(
@@ -224,6 +225,27 @@ describe('ScheduleList', () => {
     expect(card.getByText(/Room A · North Studio/)).toBeInTheDocument();
     expect(card.getByText('Alex Example')).toBeInTheDocument();
     expect(card.getByText(/accompanied by Sam Pianist/)).toBeInTheDocument();
+  });
+
+  it('names the span, stage and ages a lesson is for', async () => {
+    renderList({
+      ...schedule,
+      lessons: [
+        {
+          ...lessonBallet,
+          levelFrom: levelRef(ids.levelBeginner),
+          levelTo: levelRef(ids.levelIntermediate),
+          stage: 2,
+          ageFromMonths: 48,
+          ageToMonths: 72,
+        },
+      ],
+    });
+
+    const card = within(
+      await screen.findByRole('button', { name: 'Ballet, Monday, October 26, 18:00–19:30' }),
+    );
+    expect(card.getByText('Beginner–Intermediate · Stage 2 · 4–6 yrs')).toBeInTheDocument();
   });
 
   it('lists canceled lessons with their status and workshops with their kind', async () => {
@@ -275,7 +297,7 @@ describe('ScheduleList', () => {
   it('opens the lesson detail by writing the lesson id into the URL', async () => {
     const user = userEvent.setup();
     const { router } = renderList(schedule, {
-      level: 'beginner',
+      level: ids.levelBeginner,
     });
 
     await user.click(
@@ -283,7 +305,7 @@ describe('ScheduleList', () => {
     );
 
     expect(router.state.location.search).toEqual({
-      level: 'beginner',
+      level: ids.levelBeginner,
       lesson: ids.lessonBallet,
     });
   });
@@ -304,7 +326,7 @@ describe('ScheduleList', () => {
     const user = userEvent.setup();
     const { router } = renderList(empty, {
       view: 'list',
-      level: 'advanced',
+      level: ids.levelAdvanced,
       location: ids.locationSouth,
     });
 
@@ -367,13 +389,16 @@ describe('ScheduleList', () => {
 
   it('renders in German', async () => {
     await i18n.changeLanguage('de');
-    renderList(schedule);
+    renderList({
+      ...schedule,
+      lessons: [{ ...lessonBallet, stage: 2, ageFromMonths: 42 }, lessonContemporary],
+    });
 
     expect(
       await screen.findByRole('heading', { level: 2, name: 'Montag, 26. Oktober' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Abgesagt')).toBeInTheDocument();
-    expect(screen.getByText('Anfänger')).toBeInTheDocument();
+    expect(screen.getByText('Beginner · Stufe 2 · ab 3½ J.')).toBeInTheDocument();
   });
 
   it('asks a guest for no family, whose 401 would sign out', async () => {

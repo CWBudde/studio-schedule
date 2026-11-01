@@ -13,7 +13,10 @@ const timeZone = 'Europe/Berlin';
 /** Friday 2026-10-23, before the lesson. */
 const now = Date.parse('2026-10-23T10:00:00Z');
 
-/** Ballet on Monday 2026-10-26, 18:00–19:30 in Berlin: 8 places, 3 free. */
+/**
+ * Ballet on Monday 2026-10-26, 18:00–19:30 in Berlin: 8 places, 3 free; for
+ * Beginner (B) to Intermediate (I), stage 2, from 3½ years.
+ */
 const ballet: ScheduleLesson = {
   id: '0190a000-0000-7000-8000-000000000101',
   classId: '0190a000-0000-7000-8000-000000000201',
@@ -28,13 +31,24 @@ const ballet: ScheduleLesson = {
   lateCancelFrom: '2026-10-25T17:00:00Z',
   status: 'scheduled',
   kind: 'regular',
-  level: 'beginner',
+  levelFrom: { id: '0190a000-0000-7000-8000-000000000041', name: 'Beginner', code: 'B' },
+  levelTo: { id: '0190a000-0000-7000-8000-000000000042', name: 'Intermediate', code: 'I' },
+  stage: 2,
+  ageFromMonths: 42,
   capacity: 8,
   visibility: 'public',
   freePlaces: 3,
 };
 
 const label = 'Ballet, Monday, October 26, 18:00–19:30';
+
+/** A lesson that states nothing about whom it is for. */
+const noAudience = {
+  levelFrom: undefined,
+  levelTo: undefined,
+  stage: undefined,
+  ageFromMonths: undefined,
+};
 
 const booked: ScheduleLesson['bookedFor'] = [
   {
@@ -81,11 +95,12 @@ function renderCard({
 }
 
 describe('Werkstatt LessonCard', () => {
-  it('shows the lesson: course type, level, time, place, participants and staff', () => {
+  it('shows the lesson: course type, audience, time, place, participants and staff', () => {
     const { card } = renderCard();
 
     expect(card.getByText('Ballet')).toBeInTheDocument();
-    expect(card.getByText('Beginner')).toBeInTheDocument();
+    // The short form: level codes.
+    expect(card.getByText('B/I · Stage 2 · from 3½ yrs')).toBeInTheDocument();
     expect(card.getByText('18:00–19:30')).toHaveClass('text-primary');
     expect(card.getByText('Room A · North Studio')).toBeInTheDocument();
     // 8 places, 3 free: 5 taken, in green while places are free.
@@ -142,14 +157,14 @@ describe('Werkstatt LessonCard', () => {
 
   it('marks the kind and the visibility', () => {
     renderCard({
-      lesson: { ...ballet, kind: 'workshop', visibility: 'members', level: undefined },
+      lesson: { ...ballet, kind: 'workshop', visibility: 'members', ...noAudience },
       name: `${label}, Workshop, Members only`,
     });
 
     const group = within(screen.getByRole('group', { name: `${label}, Workshop, Members only` }));
     expect(group.getByText('Workshop')).toBeInTheDocument();
     expect(group.getByText('Members only')).toBeInTheDocument();
-    expect(group.queryByText('Beginner')).not.toBeInTheDocument();
+    expect(group.queryByText(/B\/I/)).not.toBeInTheDocument();
   });
 
   it('marks a room rental with its renter, without staff, places or a quick action', () => {
@@ -158,7 +173,7 @@ describe('Werkstatt LessonCard', () => {
       lesson: {
         ...ballet,
         classId: undefined,
-        level: undefined,
+        ...noAudience,
         kind: 'rental',
         visibility: 'hidden',
         instructor: undefined,
@@ -186,7 +201,7 @@ describe('Werkstatt LessonCard', () => {
         ...ballet,
         classId: undefined,
         courseType: undefined,
-        level: undefined,
+        ...noAudience,
         kind: 'rental',
         visibility: 'hidden',
         instructor: undefined,
@@ -343,7 +358,7 @@ describe('Werkstatt LessonCard', () => {
 
     expect(card.getByRole('button', { name: 'Eintragen' })).toBeInTheDocument();
     expect(card.getByText('Teilnehmende: 5 / 8')).toBeInTheDocument();
-    expect(card.getByText('Anfänger')).toBeInTheDocument();
+    expect(card.getByText('B/I · Stufe 2 · ab 3½ J.')).toBeInTheDocument();
   });
 
   it.each([

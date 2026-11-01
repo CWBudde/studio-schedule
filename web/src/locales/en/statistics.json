@@ -67,6 +67,7 @@
     "participant": "Person",
     "period": "Period",
     "class": "Class",
+    "audience": "Audience",
     "room": "Room",
     "courseType": "Course type",
     "instructor": "Instructor",

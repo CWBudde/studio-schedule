@@ -113,7 +113,28 @@ describe('ClassesPage', () => {
       'Sam Pianist',
     ]);
     await user.click(screen.getByRole('option', { name: 'Sam Pianist' }));
-    await choose(user, sheet, 'Level', 'Advanced');
+    // "Up to" appears with a level and follows it while it names one level.
+    expect(sheet.getByRole('combobox', { name: 'Level' })).toHaveTextContent('No level');
+    expect(sheet.queryByRole('combobox', { name: 'Up to' })).not.toBeInTheDocument();
+    await user.click(sheet.getByRole('combobox', { name: 'Level' }));
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'No level',
+      'All levels',
+      'Beginner',
+      'Intermediate',
+      'Advanced',
+      'Professional',
+    ]);
+    await user.click(screen.getByRole('option', { name: 'Beginner' }));
+    expect(sheet.getByRole('combobox', { name: 'Up to' })).toHaveTextContent('Beginner');
+    await choose(user, sheet, 'Level', 'Intermediate');
+    expect(sheet.getByRole('combobox', { name: 'Up to' })).toHaveTextContent('Intermediate');
+    await choose(user, sheet, 'Up to', 'Advanced');
+    await choose(user, sheet, 'Level', 'Beginner');
+    expect(sheet.getByRole('combobox', { name: 'Up to' })).toHaveTextContent('Advanced');
+    await user.type(sheet.getByLabelText('Stage'), '2');
+    await user.type(sheet.getByLabelText('Age from'), '3.5');
+    await user.type(sheet.getByLabelText('Age to'), '6');
     await choose(user, sheet, 'Weekday', 'Wednesday');
     await user.type(sheet.getByLabelText('Start time'), '09:30');
     await user.type(sheet.getByLabelText('Duration (minutes)'), '75');
@@ -127,7 +148,11 @@ describe('ClassesPage', () => {
         roomId: ids.roomA,
         instructorId: ids.staffAlex,
         accompanistId: ids.staffSam,
-        level: 'advanced',
+        levelFromId: ids.levelBeginner,
+        levelToId: ids.levelAdvanced,
+        stage: 2,
+        ageFromMonths: 42,
+        ageToMonths: 72,
         weekday: 3,
         startTime: '09:30',
         durationMinutes: 75,
@@ -176,6 +201,39 @@ describe('ClassesPage', () => {
     );
     expect(sheet.getByLabelText('Duration (minutes)')).toHaveAccessibleDescription(
       'Enter a whole number of minutes from 1 to 1440.',
+    );
+
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('checks the stage and the ages before sending them', async () => {
+    mockApiGet(asOffice);
+    const post = mockApiPost({});
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Add class' }));
+    const sheet = within(await screen.findByRole('dialog', { name: 'Add a class' }));
+    await user.type(sheet.getByLabelText('Stage'), '10');
+    await user.type(sheet.getByLabelText('Age from'), '3.25');
+    await user.click(sheet.getByRole('button', { name: 'Add class' }));
+
+    expect(sheet.getByLabelText('Stage')).toHaveAccessibleDescription(
+      /Enter a whole number from 1 to 9, or leave it empty\.$/,
+    );
+    expect(sheet.getByLabelText('Age from')).toHaveAccessibleDescription(
+      /Enter an age in whole or half years from 0\.5 to 100, such as 3\.5, or leave it empty\.$/,
+    );
+
+    await user.clear(sheet.getByLabelText('Age from'));
+    await user.type(sheet.getByLabelText('Age from'), '6');
+    await user.type(sheet.getByLabelText('Age to'), '4.5');
+    expect(sheet.getByLabelText('Age from')).toHaveAccessibleDescription(
+      'Optional, in years, such as 3.5.',
+    );
+    await user.click(sheet.getByRole('button', { name: 'Add class' }));
+    expect(sheet.getByLabelText('Age to')).toHaveAccessibleDescription(
+      /“Age to” cannot be below “Age from”\.$/,
     );
 
     expect(post).not.toHaveBeenCalled();
@@ -230,6 +288,10 @@ describe('ClassesPage', () => {
     expect(sheet.getByRole('combobox', { name: 'Instructor' })).toHaveTextContent('Alex Example');
     expect(sheet.getByRole('combobox', { name: 'Accompanist' })).toHaveTextContent('Sam Pianist');
     expect(sheet.getByRole('combobox', { name: 'Level' })).toHaveTextContent('Beginner');
+    expect(sheet.getByRole('combobox', { name: 'Up to' })).toHaveTextContent('Beginner');
+    expect(sheet.getByLabelText('Stage')).toHaveValue(null);
+    expect(sheet.getByLabelText('Age from')).toHaveValue(null);
+    expect(sheet.getByLabelText('Age to')).toHaveValue(null);
     expect(sheet.getByRole('combobox', { name: 'Weekday' })).toHaveTextContent('Monday');
     expect(sheet.getByLabelText('Start time')).toHaveValue('18:00');
     expect(sheet.getByLabelText('Duration (minutes)')).toHaveValue(90);
@@ -255,7 +317,8 @@ describe('ClassesPage', () => {
         roomId: ids.roomB,
         instructorId: ids.staffAlex,
         accompanistId: ids.staffSam,
-        level: 'beginner',
+        levelFromId: ids.levelBeginner,
+        levelToId: ids.levelBeginner,
         weekday: 1,
         startTime: '18:15',
         durationMinutes: 90,
@@ -286,18 +349,143 @@ describe('ClassesPage', () => {
     const instructor = sheet.getByRole('combobox', { name: 'Instructor' });
     expect(instructor).toHaveTextContent('Quinn Former (inactive)');
     expect(sheet.getByRole('combobox', { name: 'Accompanist' })).toHaveTextContent('None');
+    // The audience of the class.
+    expect(sheet.getByRole('combobox', { name: 'Level' })).toHaveTextContent('Beginner');
+    expect(sheet.getByRole('combobox', { name: 'Up to' })).toHaveTextContent('Intermediate');
+    expect(sheet.getByLabelText('Stage')).toHaveValue(2);
+    expect(sheet.getByLabelText('Age from')).toHaveValue(3.5);
+    expect(sheet.getByLabelText('Age to')).toHaveValue(6);
     await user.click(sheet.getByRole('button', { name: 'Save changes' }));
 
     // A retired class stays retired.
     await waitFor(() =>
       expect(put).toHaveBeenCalledWith('/api/v1/classes/{classId}', {
         params: { path: { classId: ids.classRetired } },
-        body: expect.objectContaining({ instructorId: ids.staffQuinn, retired: true }),
+        body: expect.objectContaining({
+          instructorId: ids.staffQuinn,
+          levelFromId: ids.levelBeginner,
+          levelToId: ids.levelIntermediate,
+          stage: 2,
+          ageFromMonths: 42,
+          ageToMonths: 72,
+          retired: true,
+        }),
       }),
     );
     expect((put.mock.calls[0]?.[1] as MockRequest | undefined)?.body).not.toHaveProperty(
       'accompanistId',
     );
+  });
+
+  it('edits a class for all levels, and one for no level', async () => {
+    mockApiGet(asOffice);
+    const put = mockApiPut({ '/api/v1/classes/{classId}': answer });
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(
+      (await card('Jazz, Sunday, 11:00–12:30')).getByRole('button', {
+        name: 'Edit Jazz, Sunday 11:00',
+      }),
+    );
+    const sheet = within(await screen.findByRole('dialog', { name: 'Edit Jazz, Sunday 11:00' }));
+    expect(sheet.getByRole('combobox', { name: 'Level' })).toHaveTextContent('All levels');
+    expect(sheet.queryByRole('combobox', { name: 'Up to' })).not.toBeInTheDocument();
+    await user.click(sheet.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    const sent = () => put.mock.lastCall?.[1] as MockRequest | undefined;
+    expect(sent()?.body).toMatchObject({ allLevels: true });
+    expect(sent()?.body).not.toHaveProperty('levelFromId');
+    expect(sent()?.body).not.toHaveProperty('levelToId');
+
+    await user.click(
+      (await card('Jazz, Sunday, 11:00–12:30')).getByRole('button', {
+        name: 'Edit Jazz, Sunday 11:00',
+      }),
+    );
+    const again = within(await screen.findByRole('dialog', { name: 'Edit Jazz, Sunday 11:00' }));
+    await choose(user, again, 'Level', 'Beginner');
+    await choose(user, again, 'Level', 'No level');
+    expect(again.queryByRole('combobox', { name: 'Up to' })).not.toBeInTheDocument();
+    await user.click(again.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(2));
+    for (const field of ['allLevels', 'levelFromId', 'levelToId', 'stage', 'ageFromMonths']) {
+      expect(sent()?.body).not.toHaveProperty(field);
+    }
+  });
+
+  it('marks the level the API refuses and asks for the levels again', async () => {
+    const get = mockApiGet(asOffice);
+    mockApiPut({
+      '/api/v1/classes/{classId}': problem(422, 'level does not exist', [
+        { location: 'body.levelToId' },
+      ]),
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(
+      (await card('Ballet, Monday, 18:00–19:30')).getByRole('button', {
+        name: 'Edit Ballet, Monday 18:00',
+      }),
+    );
+    const sheet = within(await screen.findByRole('dialog', { name: 'Edit Ballet, Monday 18:00' }));
+    await choose(user, sheet, 'Up to', 'Professional');
+    const levelReads = () =>
+      get.mock.calls.filter((call) => (call as unknown[])[0] === '/api/v1/levels').length;
+    const before = levelReads();
+    await user.click(sheet.getByRole('button', { name: 'Save changes' }));
+
+    expect(await sheet.findByRole('alert')).toHaveTextContent('Please check your entries.');
+    expect(sheet.getByRole('combobox', { name: 'Up to' })).toHaveAccessibleDescription(
+      /This level no longer exists; choose another one\.$/,
+    );
+    expect(sheet.getByRole('combobox', { name: 'Level' })).not.toHaveAccessibleDescription(
+      /no longer exists/,
+    );
+    await waitFor(() => expect(levelReads()).toBeGreaterThan(before));
+  });
+
+  it('links to the levels while the school has none, and saves a class without a level', async () => {
+    mockApiGet({ ...asOffice, '/api/v1/levels': { body: { items: [] } } });
+    const post = mockApiPost({ '/api/v1/terms/{termId}/classes': answer });
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Add class' }));
+    const sheet = within(await screen.findByRole('dialog', { name: 'Add a class' }));
+    expect(await sheet.findByText(/^No levels yet –/)).toBeInTheDocument();
+    expect(sheet.getByRole('link', { name: 'add them on the Levels page' })).toHaveAttribute(
+      'href',
+      '/admin/levels',
+    );
+    expect(sheet.queryByRole('combobox', { name: 'Level' })).not.toBeInTheDocument();
+    expect(sheet.queryByRole('combobox', { name: 'Up to' })).not.toBeInTheDocument();
+
+    await choose(user, sheet, 'Course type', 'Ballet');
+    await choose(user, sheet, 'Room', 'North Studio · Room A');
+    await choose(user, sheet, 'Instructor', 'Alex Example');
+    await choose(user, sheet, 'Weekday', 'Friday');
+    await user.type(sheet.getByLabelText('Start time'), '16:00');
+    await user.type(sheet.getByLabelText('Duration (minutes)'), '45');
+    await user.click(sheet.getByRole('button', { name: 'Add class' }));
+
+    expect(await screen.findByText('Ballet, Friday 16:00 has been added.')).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith('/api/v1/terms/{termId}/classes', {
+      params: { path: { termId: ids.termAutumn } },
+      body: {
+        courseTypeId: ids.ballet,
+        roomId: ids.roomA,
+        instructorId: ids.staffAlex,
+        weekday: 5,
+        startTime: '16:00',
+        durationMinutes: 45,
+        capacity: 16,
+        retired: false,
+      },
+    });
   });
 
   it('deletes a class without history', async () => {
@@ -357,7 +545,8 @@ describe('ClassesPage', () => {
         courseTypeId: ids.contemporary,
         roomId: ids.roomB,
         instructorId: ids.staffRiley,
-        level: 'intermediate',
+        levelFromId: ids.levelIntermediate,
+        levelToId: ids.levelIntermediate,
         weekday: 2,
         startTime: '17:00',
         durationMinutes: 60,
@@ -388,7 +577,11 @@ describe('ClassesPage', () => {
         courseTypeId: ids.jazz,
         roomId: ids.roomA,
         instructorId: ids.staffQuinn,
-        level: 'beginner',
+        levelFromId: ids.levelBeginner,
+        levelToId: ids.levelIntermediate,
+        stage: 2,
+        ageFromMonths: 42,
+        ageToMonths: 72,
         weekday: 6,
         startTime: '10:00',
         durationMinutes: 60,
@@ -450,7 +643,9 @@ describe('ClassesPage', () => {
     const sheet = within(await screen.findByRole('dialog', { name: 'Kurs hinzufügen' }));
     expect(sheet.getByRole('combobox', { name: 'Korrepetition' })).toBeInTheDocument();
     expect(sheet.getByRole('combobox', { name: 'Lehrkraft' })).toBeInTheDocument();
-    expect(sheet.getByRole('combobox', { name: 'Niveau' })).toBeInTheDocument();
+    expect(sheet.getByRole('combobox', { name: 'Level' })).toHaveTextContent('Kein Level');
+    expect(sheet.getByLabelText('Stufe')).toBeInTheDocument();
+    expect(sheet.getByLabelText('Alter von')).toBeInTheDocument();
     expect(sheet.getByRole('combobox', { name: 'Raum' })).toBeInTheDocument();
   });
 });

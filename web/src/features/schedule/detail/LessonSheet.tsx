@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { canAdminister } from '@/features/admin/access';
+import { formatAudience } from '@/lib/audience';
 import { useOnline } from '@/lib/online';
 import { formatDayHeading, formatTimeRange, formatTimestamp, schoolDateOf } from '@/lib/schoolTime';
 import { LessonActions } from '../admin/LessonActions';
@@ -181,6 +182,7 @@ function LessonDetails({
   const label = useLessonLabel()(lesson, timeZone);
   const title = useLessonTitle();
   const canceled = lesson.status === 'canceled';
+  const audience = formatAudience(lesson, t, 'long');
   const rental = lesson.kind === 'rental';
   // What the office sees of the cancellation (ADR 0007).
   const admin = lesson.admin;
@@ -199,11 +201,11 @@ function LessonDetails({
             {formatTimeRange(lesson.startsAt, lesson.endsAt, timeZone, lang)}
           </span>
         </SheetDescription>
-        {(canceled || showsKind(lesson) || lesson.level || lesson.visibility !== 'public') && (
+        {(canceled || showsKind(lesson) || audience || lesson.visibility !== 'public') && (
           <div className="flex flex-wrap gap-1.5 pt-1">
             {canceled && <Badge variant="destructive">{t('status.canceled')}</Badge>}
             {showsKind(lesson) && <Badge variant="secondary">{t(`kind.${lesson.kind}`)}</Badge>}
-            {lesson.level && <Badge variant="outline">{t(`level.${lesson.level}`)}</Badge>}
+            {audience && <Badge variant="outline">{audience}</Badge>}
             <VisibilityBadge visibility={lesson.visibility} />
           </div>
         )}
