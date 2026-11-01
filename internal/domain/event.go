@@ -262,8 +262,10 @@ func (r EventRegistration) Validate() error {
 		rule{!r.UpdatedAt.IsZero(), "registration update time must be set"},
 		rule{notBefore(r.UpdatedAt, r.CreatedAt), "a registration cannot be updated before it was created"},
 		rule{notBefore(r.InvitedAt, r.CreatedAt), "a registration cannot be invited before it was created"},
-		rule{(r.Status == EventRegistrationCanceled) == !r.CanceledAt.IsZero(),
-			"cancellation time must be set exactly for canceled registrations"},
+		rule{
+			(r.Status == EventRegistrationCanceled) == !r.CanceledAt.IsZero(),
+			"cancellation time must be set exactly for canceled registrations",
+		},
 		rule{notBefore(r.CanceledAt, r.CreatedAt), "a registration cannot be canceled before it was created"},
 	)
 }
