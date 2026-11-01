@@ -50,20 +50,304 @@ A command that deletes, anonymizes, mails, cancels or merges asks for confirmati
 
 ## Commands
 
+- [`studio-schedule accounts`](#studio-schedule-accounts): Administer the accounts: roles, passwords, sessions
+- [`studio-schedule classes`](#studio-schedule-classes): List the weekly classes of a term
 - [`studio-schedule completion`](#studio-schedule-completion): Generate the autocompletion script for the specified shell
 - [`studio-schedule config`](#studio-schedule-config): Inspect the configuration
+- [`studio-schedule db`](#studio-schedule-db): Check the database
 - [`studio-schedule doctor`](#studio-schedule-doctor): Check the configuration, the database, the mail server and the receipt module
 - [`studio-schedule healthcheck`](#studio-schedule-healthcheck): Check that the local server answers (for container health checks)
 - [`studio-schedule import`](#studio-schedule-import): Import members from a CSV file (a dry run unless `--apply`)
 - [`studio-schedule init`](#studio-schedule-init): Set up a new school: its settings and the first admin
+- [`studio-schedule jobs`](#studio-schedule-jobs): List the background jobs and run one now
+- [`studio-schedule lessons`](#studio-schedule-lessons): List, generate, cancel and restore lessons
+- [`studio-schedule mail`](#studio-schedule-mail): Test the mail server, list the mail log and queue failed mails again
 - [`studio-schedule migrate`](#studio-schedule-migrate): Manage the database schema
 - [`studio-schedule openapi`](#studio-schedule-openapi): Print the OpenAPI 3.1 specification as JSON
 - [`studio-schedule passes`](#studio-schedule-passes): Show the passes of a person
+- [`studio-schedule persons`](#studio-schedule-persons): Find, export, anonymize and merge persons
 - [`studio-schedule receipts`](#studio-schedule-receipts): List, download, export and verify receipts
 - [`studio-schedule seed`](#studio-schedule-seed): Load the fictional demo data set into an empty database
 - [`studio-schedule serve`](#studio-schedule-serve): Run the HTTP server (API and web UI)
+- [`studio-schedule settings`](#studio-schedule-settings): Read and change the school settings
+- [`studio-schedule stats`](#studio-schedule-stats): Print the statistics of a range of school dates
+- [`studio-schedule terms`](#studio-schedule-terms): List the terms of the timetable
 - [`studio-schedule vapid-keys`](#studio-schedule-vapid-keys): Print a new VAPID key pair for web push
 - [`studio-schedule version`](#studio-schedule-version): Print the version
+
+### `studio-schedule accounts`
+
+Administer the accounts: roles, passwords, sessions.
+
+```text
+studio-schedule accounts <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule accounts create`](#studio-schedule-accounts-create): Create an account for a person and mail it an invitation
+- [`studio-schedule accounts delete`](#studio-schedule-accounts-delete): Delete an account; its person stays
+- [`studio-schedule accounts disable`](#studio-schedule-accounts-disable): Disable an account: it is signed out and may not sign in
+- [`studio-schedule accounts enable`](#studio-schedule-accounts-enable): Enable a disabled account again
+- [`studio-schedule accounts list`](#studio-schedule-accounts-list): List every account with its role and status
+- [`studio-schedule accounts reset-password`](#studio-schedule-accounts-reset-password): Print a password-reset link for an account, or mail it with `--mail`
+- [`studio-schedule accounts sessions`](#studio-schedule-accounts-sessions): End the sessions of accounts
+- [`studio-schedule accounts set-role`](#studio-schedule-accounts-set-role): Change the role of an account
+- [`studio-schedule accounts show`](#studio-schedule-accounts-show): Show one account
+
+#### `studio-schedule accounts create`
+
+Create an account for a person and mail it an invitation.
+
+```text
+studio-schedule accounts create <email> --person <id> --role <role> [flags]
+```
+
+Create an account for an existing person, as the office's person page does: unconfirmed and without a password. It mails the address an invitation, whose link (valid for 72 hours) sets the password and confirms the account; the deliver-mail job sends it. Only an admin creates an admin account. The person is named by its ID (see the office's person page); a person with an account and an email another account has are refused with exit status 4.
+
+Examples:
+
+```sh
+studio-schedule accounts create --as office@example.org --person 0190a5d2-ac96-774b-bcce-b302099a8057 --role instructor dance.teacher@example.org
+```
+
+Flags:
+
+- `--person` (string): ID of the person the account is for (required)
+- `--role` (string): role of the account: member, instructor, office or admin (required)
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the response body of the operation createPersonAccount.
+
+#### `studio-schedule accounts delete`
+
+Delete an account; its person stays.
+
+```text
+studio-schedule accounts delete <email|id> [flags]
+```
+
+Delete an account with its password, sessions, links, calendar feeds and announcement dismissals, as the admin's account page does; its person stays. An account that receipts, the audit log, announcements or duplicate dismissals name is refused (in-use, exit status 4): disable it instead. Recorded in the audit log. The account is named by its email address (in any case) or its ID. Refused with exit status 4: the `--as` account's own account (own-account) and the last admin who can sign in (last-admin).
+
+Examples:
+
+```sh
+studio-schedule accounts delete --as admin@example.org --yes member@example.org
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the account as it was, an item of the response body of the operation listAccounts (AccountEntry); the operation deleteAccount answers without a body.
+
+#### `studio-schedule accounts disable`
+
+Disable an account: it is signed out and may not sign in.
+
+```text
+studio-schedule accounts disable <email|id> [flags]
+```
+
+Disable an account: it may no longer sign in, and its sessions and the impersonations it started end. Recorded in the audit log. The account is named by its email address (in any case) or its ID. Refused with exit status 4: the `--as` account's own account (own-account) and the last admin who can sign in (last-admin).
+
+Examples:
+
+```sh
+studio-schedule accounts disable --as admin@example.org --yes member@example.org
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the response body of the operation disableAccount.
+
+#### `studio-schedule accounts enable`
+
+Enable a disabled account again.
+
+```text
+studio-schedule accounts enable <email|id> [flags]
+```
+
+Enable a disabled account again: it may sign in. Recorded in the audit log. The account is named by its email address (in any case) or its ID. The `--as` account's own account is refused (own-account, exit status 4).
+
+Examples:
+
+```sh
+studio-schedule accounts enable --as admin@example.org member@example.org
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Output with `--output json`: the response body of the operation enableAccount.
+
+#### `studio-schedule accounts list`
+
+List every account with its role and status.
+
+```text
+studio-schedule accounts list [flags]
+```
+
+List every account, ordered by email, with its role, its status (active; pending: the email is not confirmed yet; disabled) and the name of its person, as the admin's account page does.
+
+Examples:
+
+```sh
+studio-schedule accounts list --as admin@example.org
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Output with `--output json`: the response body of the operation listAccounts.
+
+#### `studio-schedule accounts reset-password`
+
+Print a password-reset link for an account, or mail it with `--mail`.
+
+```text
+studio-schedule accounts reset-password <email|id> [flags]
+```
+
+Issue a password-reset link for an account, valid for one hour; it replaces the account's older links. Without `--mail` the link is printed on stdout and nothing is mailed: this is the way back in for an admin who has forgotten their password (run it `--as` their own email). With `--mail` the link is mailed to the account, as "forgot password" does, and not printed; the deliver-mail job sends it. The link sets the password once; keep it secret. It works for an account that may sign in and for an invited one; a disabled account or an unconfirmed registration is refused with exit status 4. The account is named by its email address (in any case) or its ID.
+
+Examples:
+
+```sh
+studio-schedule accounts reset-password --as admin@example.org admin@example.org
+studio-schedule accounts reset-password --as admin@example.org --mail --yes member@example.org
+```
+
+Flags:
+
+- `--mail` (bool): mail the link to the account instead of printing it
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: one object: account (an item of the response body of the operation listAccounts (AccountEntry)), link (the reset link; absent with `--mail`), expiresAt (when the link stops working, an RFC 3339 instant), mailed (bool).
+
+#### `studio-schedule accounts sessions`
+
+End the sessions of accounts.
+
+```text
+studio-schedule accounts sessions <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule accounts sessions revoke`](#studio-schedule-accounts-sessions-revoke): End the sessions of an account, or of every account
+
+##### `studio-schedule accounts sessions revoke`
+
+End the sessions of an account, or of every account.
+
+```text
+studio-schedule accounts sessions revoke <email|id>|--all [flags]
+```
+
+Sign an account out everywhere: end its sessions and the impersonations it started, as disabling it does, and remove its devices' push subscriptions. It may sign in again. With `--all`, every account is signed out (after a leak, say). It prints how many sessions ended. The account is named by its email address (in any case) or its ID.
+
+Examples:
+
+```sh
+studio-schedule accounts sessions revoke --as admin@example.org --yes member@example.org
+studio-schedule accounts sessions revoke --as admin@example.org --all
+```
+
+Flags:
+
+- `--all` (bool): end the sessions of every account
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: one object: sessionsEnded (how many sessions ended that had not ended yet), accounts (of how many accounts).
+
+#### `studio-schedule accounts set-role`
+
+Change the role of an account.
+
+```text
+studio-schedule accounts set-role <email|id> <role> [flags]
+```
+
+Give an account another role (member, instructor, office or admin); it takes effect with its next request. Recorded in the audit log. The account is named by its email address (in any case) or its ID. Refused with exit status 4: the `--as` account's own account (own-account) and the last admin who can sign in (last-admin).
+
+Examples:
+
+```sh
+studio-schedule accounts set-role --as admin@example.org office@example.org admin
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Output with `--output json`: the response body of the operation setAccountRole.
+
+#### `studio-schedule accounts show`
+
+Show one account.
+
+```text
+studio-schedule accounts show <email|id> [flags]
+```
+
+Show an account: its ID, email, role, status and person. The account is named by its email address (in any case) or its ID.
+
+Examples:
+
+```sh
+studio-schedule accounts show --as admin@example.org member@example.org
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Output with `--output json`: an item of the response body of the operation listAccounts (AccountEntry).
+
+### `studio-schedule classes`
+
+List the weekly classes of a term.
+
+```text
+studio-schedule classes <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule classes list`](#studio-schedule-classes-list): List the weekly classes of a term
+
+#### `studio-schedule classes list`
+
+List the weekly classes of a term.
+
+```text
+studio-schedule classes list [flags]
+```
+
+List the weekly classes of the term of `--term` (an ID from `terms list`), by default the current term, as the office's class page does: retired classes included. After a line naming the term, each line names the class's ID, its weekday and time in the school's time zone, the course type, the level, the room, the instructor and accompanist, the places, and "retired" for a retired class. Without a term that includes today, give `--term`.
+
+Examples:
+
+```sh
+studio-schedule classes list --as office@example.org
+studio-schedule classes list --as office@example.org --term <term-id>
+```
+
+Flags:
+
+- `--term` (string): the term's ID; default the term that includes today
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation listAllClasses.
 
 ### `studio-schedule completion`
 
@@ -269,6 +553,43 @@ Access: an operator command. It acts as no account and refuses `--as`.
 
 Output with `--output json`: one object: databaseUrl, httpAddr, baseUrl (strings), demoMode (bool), smtp {host, port (number, 0: the default of the TLS mode), tls (empty: starttls), username, password, from}, trustedProxies (array of strings), hstsIncludeSubdomains (bool), metricsAddr, log {format, level}, push {publicKey, privateKey, subject}, as; an empty string is an unset setting, and the secrets (the database password, smtp.password, push.privateKey) are xxxxx when set.
 
+### `studio-schedule db`
+
+Check the database.
+
+```text
+studio-schedule db <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule db check`](#studio-schedule-db-check): Check the data for inconsistencies the database cannot rule out
+
+#### `studio-schedule db check`
+
+Check the data for inconsistencies the database cannot rule out.
+
+```text
+studio-schedule db check [flags]
+```
+
+Run the integrity checks on the database from `DATABASE_URL` or `--database-url` and print one line per finding: passes (a visit pass's used visits equal the bookings it paid for, and no pass paid for a booking that costs no visit: one canceled in time, or one of a lesson the school canceled), capacity (no lesson has more active bookings than places, but for those booked beyond the capacity on purpose), tombstones (nothing still refers to a merged or anonymized person that the merge would have moved or anonymizing ended) and receipt-counters (each year's receipt counter is at least the highest receipt number issued that year). `--only` runs some of them. A finding names records by their IDs, never by personal data. The command only reads, in one read-only transaction, so it is safe on a live database. It exits with status 0 without a finding, 1 with findings or when the database cannot be opened, and 2 for an unknown check or without a database URL. With `--output json` it prints one object: ok (bool, false when a check found something), checks (an array of the names of the checks that ran, in their order) and findings (an array, empty without any, of {check, entity, id, message}: the check that found it; the entity pass, booking, lesson, person or receipt-year; the record's ID, or the year of a receipt counter; and what is inconsistent).
+
+Examples:
+
+```sh
+studio-schedule db check
+studio-schedule db check --only passes,capacity --output json
+```
+
+Flags:
+
+- `--only` (stringSlice): run only these checks (repeatable or comma-separated): passes, capacity, tombstones, receipt-counters
+
+Access: an operator command. It acts as no account and refuses `--as`.
+
+Output with `--output json`: one object: ok (bool, false when a check found something), checks (an array of the names of the checks that ran, in their order) and findings (an array, empty without any, of {check, entity, id, message}: the check that found it; the entity pass, booking, lesson, person or receipt-year; the record's ID, or the year of a receipt counter; and what is inconsistent).
+
 ### `studio-schedule doctor`
 
 Check the configuration, the database, the mail server and the receipt module.
@@ -367,6 +688,273 @@ Flags:
 Access: an operator command. It acts as no account and refuses `--as`.
 
 Output: text only; `--output json` is refused.
+
+### `studio-schedule jobs`
+
+List the background jobs and run one now.
+
+```text
+studio-schedule jobs <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule jobs list`](#studio-schedule-jobs-list): List the background jobs with their interval and latest run
+- [`studio-schedule jobs run`](#studio-schedule-jobs-run): Run a background job now and wait for it
+
+#### `studio-schedule jobs list`
+
+List the background jobs with their interval and latest run.
+
+```text
+studio-schedule jobs list [flags]
+```
+
+List the background jobs of the database from `DATABASE_URL` or `--database-url` with their interval and their latest recorded run, of any process (a serve instance or jobs run): its start in the school's time zone, its duration, its result (ok, failed, or skipped because another process ran the job) and the error of a failed run. The jobs are those serve runs with the same configuration: deliver-mail only with `SMTP_HOST` set, deliver-push only with the `VAPID_*` keys. Runs are kept for 30 days.
+
+Examples:
+
+```sh
+studio-schedule jobs list
+studio-schedule jobs list --output json
+```
+
+Access: an operator command. It acts as no account and refuses `--as`.
+
+Output with `--output json`: an array of {name, everySeconds, lastRun} in the order the jobs run at startup, where everySeconds is the interval and lastRun, absent before the first run, is {job, startedAt, endedAt, result, error}, where result is ok, failed or skipped and error is the error message of a failed run (absent otherwise); the instants are RFC 3339 in UTC.
+
+#### `studio-schedule jobs run`
+
+Run a background job now and wait for it.
+
+```text
+studio-schedule jobs run <name> [flags]
+```
+
+Run one background job now, in this process, under the job's lock, and wait for it: what serve does on the job's interval, recorded the same way (jobs list shows the run). The job does its real work: deliver-mail sends the due mails through the configured mail server, deliver-push sends the due push messages, announcements queues the mails of the announcements that are due, and purge-sessions, purge-mail and purge-personal-data delete what their retention periods let go. The jobs are those serve runs with the same configuration: deliver-mail only with `SMTP_HOST` set, deliver-push only with the `VAPID_*` keys. It prints the run and exits with status 1 when the job failed, 3 for a job this configuration does not have, and 4 when another process (a serve instance, another jobs run) holds the job's lock and runs it.
+
+Examples:
+
+```sh
+studio-schedule jobs run generate-lessons
+studio-schedule jobs run deliver-mail
+```
+
+Access: an operator command. It acts as no account and refuses `--as`.
+
+Output with `--output json`: {job, startedAt, endedAt, result, error}, where result is ok, failed or skipped and error is the error message of a failed run (absent otherwise); the instants are RFC 3339 in UTC.
+
+### `studio-schedule lessons`
+
+List, generate, cancel and restore lessons.
+
+```text
+studio-schedule lessons <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule lessons cancel`](#studio-schedule-lessons-cancel): Cancel a lesson and mail everyone booked on it
+- [`studio-schedule lessons generate`](#studio-schedule-lessons-generate): Generate the lessons of the weekly classes through a date
+- [`studio-schedule lessons list`](#studio-schedule-lessons-list): List the lessons of a day or a range of days
+- [`studio-schedule lessons restore`](#studio-schedule-lessons-restore): Restore a canceled lesson and mail everyone booked on it
+
+#### `studio-schedule lessons cancel`
+
+Cancel a lesson and mail everyone booked on it.
+
+```text
+studio-schedule lessons cancel <lesson-id> [flags]
+```
+
+Cancel a lesson that has not started, e.g. when its instructor is ill, as the office's lesson page does (ADR 0007): everyone with an active booking is mailed, with the `--note` if given (the mails wait in the outbox for the server's deliver-mail job). The bookings stay but cost nothing: their passes get the visits back. The waiting list's invites go back to waiting. A lesson canceled already stays as it is, and nobody is mailed again. It asks for confirmation (`--yes` without a terminal). There is no way to cancel without the mails.
+
+Examples:
+
+```sh
+studio-schedule lessons cancel --as office@example.org --note "The teacher is ill." <lesson-id>
+```
+
+Flags:
+
+- `--note` (string): a note for those booked, e.g. the reason (at most 500 characters)
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the response body of the operation cancelLesson.
+
+#### `studio-schedule lessons generate`
+
+Generate the lessons of the weekly classes through a date.
+
+```text
+studio-schedule lessons generate [flags]
+```
+
+Create the missing lessons of the weekly classes from today through `--until` (inclusive), as the hourly generate-lessons job does for its rolling horizon (ADR 0003): one lesson per class and week within the class's term, none that has started, none of a retired class, and the class members booked into each. A lesson that exists, was moved or canceled stays as it is, so running it again creates nothing. It prints how many lessons it created.
+
+Examples:
+
+```sh
+studio-schedule lessons generate --as office@example.org --until 2026-12-31
+```
+
+Flags:
+
+- `--until` (string): the last school date to generate lessons for (YYYY-MM-DD)
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: one object: created (number), the lessons created; until (date), the last school date.
+
+#### `studio-schedule lessons list`
+
+List the lessons of a day or a range of days.
+
+```text
+studio-schedule lessons list [flags]
+```
+
+List the lessons that start on a school date (`--date`, default today) or from `--from` through `--to` (both inclusive, at most 42 days), as the office sees the schedule: hidden, unreleased and canceled lessons included. Each line names the lesson's ID, its date and time in the school's time zone, the class (course type and level) or the kind of a one-off lesson, the instructor, the room, the active bookings and the places, and its status.
+
+Examples:
+
+```sh
+studio-schedule lessons list --as office@example.org
+studio-schedule lessons list --as office@example.org --from 2026-09-21 --to 2026-09-27
+```
+
+Flags:
+
+- `--date` (string): the school date (YYYY-MM-DD); default today
+- `--from` (string): the first school date of a range (YYYY-MM-DD), with `--to`
+- `--to` (string): the last school date of a range (inclusive), with `--from`
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation getSchedule.
+
+#### `studio-schedule lessons restore`
+
+Restore a canceled lesson and mail everyone booked on it.
+
+```text
+studio-schedule lessons restore <lesson-id> [flags]
+```
+
+Let a canceled lesson that has not started take place after all, as the office's lesson page does (ADR 0007): everyone with an active booking is mailed its time and room, its bookings use their passes again, and its free places go to the waiting list. Another lesson in the room at an overlapping time is a conflict (exit 4) unless `--confirm-room-overlap`. A scheduled lesson stays as it is. It asks for confirmation (`--yes` without a terminal).
+
+Examples:
+
+```sh
+studio-schedule lessons restore --as office@example.org <lesson-id>
+```
+
+Flags:
+
+- `--confirm-room-overlap` (bool): restore even if another lesson uses the room at an overlapping time
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the response body of the operation restoreLesson.
+
+### `studio-schedule mail`
+
+Test the mail server, list the mail log and queue failed mails again.
+
+```text
+studio-schedule mail <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule mail list`](#studio-schedule-mail-list): List the mail log, newest first
+- [`studio-schedule mail requeue`](#studio-schedule-mail-requeue): Queue a failed mail, or every failed one, again
+- [`studio-schedule mail test`](#studio-schedule-mail-test): Send a test mail through the configured mail server
+
+#### `studio-schedule mail list`
+
+List the mail log, newest first.
+
+```text
+studio-schedule mail list [flags]
+```
+
+List the mails of the outbox as the admins' mail log does (ADR 0014), newest first, at most 50 per page, acting as the admin account of `--as`: when, the delivery state, the template, the recipient, the subject, the attempts and the last error. Bodies are never printed. `--status` and `--template` filter; when another page follows, a hint on stderr gives its `--cursor` (with `--output json`, the nextCursor of the page). The bodies of mails sent more than 30 days ago are removed, mails older than 180 days deleted.
+
+Examples:
+
+```sh
+studio-schedule mail list --as admin@example.org --status failed
+studio-schedule mail list --as admin@example.org --template receipt --output json
+```
+
+Flags:
+
+- `--cursor` (string): where the page starts: the cursor of the previous page's hint (nextCursor)
+- `--status` (string): only mails in this state: pending, sent or failed
+- `--template` (string): only mails of this template, e.g. receipt
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Output with `--output json`: the response body of the operation searchMails.
+
+#### `studio-schedule mail requeue`
+
+Queue a failed mail, or every failed one, again.
+
+```text
+studio-schedule mail requeue <id> | --failed [flags]
+```
+
+Queue a failed mail of the mail log again, or with `--failed` every failed mail, acting as the admin account of `--as` (ADR 0014): its next attempt is now and its attempts start over, so the server's deliver-mail job sends it again. Each mail is recorded in the audit log as mail-requeued. A mail with a secret link (confirm-email, change-email, reset-password, invite, waitlist-invite) is never queued again: with an ID that is a conflict, with `--failed` it stays failed and is counted. A pending or sent mail is a conflict too.
+
+Examples:
+
+```sh
+studio-schedule mail requeue --as admin@example.org 0190a7c4-1b2c-7d3e-8f40-5a6b7c8d9e0f
+studio-schedule mail requeue --as admin@example.org --failed --yes
+```
+
+Flags:
+
+- `--failed` (bool): queue every failed mail again instead of one
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: with an ID, the response body of the operation requeueMail; with `--failed`, one object: requeued (the number of failed mails queued again) and secretLink (the number of failed mails with a secret link, which stay failed).
+
+#### `studio-schedule mail test`
+
+Send a test mail through the configured mail server.
+
+```text
+studio-schedule mail test --to <address> [flags]
+```
+
+Render a short test mail and send it to `--to` straight through the mail server of `SMTP_HOST` and the other `SMTP_*` variables, as serve sends mail, but not through the outbox: it sends a real mail. It is an operator check like doctor's smtp line, which only logs in: it prints ok when the server accepted the mail and exits with status 1 and the server's error when it did not. Without `SMTP_HOST` it exits with status 2. The mail is in English, or in the language of `--locale`.
+
+Examples:
+
+```sh
+studio-schedule mail test --to office@example.org
+studio-schedule mail test --to office@example.org --locale de
+```
+
+Flags:
+
+- `--locale` (string, default `en`): the language of the test mail: en or de
+- `--to` (string): the address the test mail goes to (required)
+
+Access: an operator command. It acts as no account and refuses `--as`.
+
+Output with `--output json`: one object: to (the recipient), server (the mail server, `SMTP_HOST`), locale (the language of the mail) and subject.
 
 ### `studio-schedule migrate`
 
@@ -469,6 +1057,181 @@ Flags:
 Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
 
 Output with `--output json`: the response body of the operation listPersonPasses.
+
+### `studio-schedule persons`
+
+Find, export, anonymize and merge persons.
+
+```text
+studio-schedule persons <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule persons anonymize`](#studio-schedule-persons-anonymize): Erase a person's personal data, keeping their history anonymous (asks first)
+- [`studio-schedule persons duplicates`](#studio-schedule-persons-duplicates): List pairs of persons that may be the same
+- [`studio-schedule persons export`](#studio-schedule-persons-export): Export everything the school stores about a person as JSON (GDPR)
+- [`studio-schedule persons merge`](#studio-schedule-persons-merge): Merge a duplicate person into another (a dry run unless `--apply`)
+- [`studio-schedule persons search`](#studio-schedule-persons-search): Search persons by name, email or member number (the term from stdin)
+- [`studio-schedule persons show`](#studio-schedule-persons-show): Show a person with their family, account, staff links and classes
+
+#### `studio-schedule persons anonymize`
+
+Erase a person's personal data, keeping their history anonymous (asks first).
+
+```text
+studio-schedule persons anonymize <person-id> [flags]
+```
+
+Anonymize a person as the office's privacy page does (ADR 0016): the name becomes "Deleted person", and email, phone, birth date, notes and member number are cleared. Guardian links in both directions, class memberships, open waiting-list entries and staff links are removed, bookings of lessons that have not started are canceled on time, and the account is deleted with its sessions, links and calendar feeds. Past bookings, passes and receipts stay. It cannot be undone: it asks on a terminal and needs `--yes` otherwise. Recorded in the audit log under the account of `--as`. Refused: an unknown or merged person (exit 3), an anonymized one, the only guardian of a dependent, a person whose account receipts, the audit log, announcements or duplicate dismissals name, the person of `--as`, that of an admin account unless `--as` is an admin, and that of the last admin who can sign in (exit 4).
+
+Examples:
+
+```sh
+studio-schedule persons anonymize --as office@example.org <person-id>
+studio-schedule persons anonymize --as office@example.org --yes <person-id>
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the response body of the operation anonymizePerson.
+
+#### `studio-schedule persons duplicates`
+
+List pairs of persons that may be the same.
+
+```text
+studio-schedule persons duplicates <command> [flags]
+```
+
+List the pairs of persons that may be the same, as the office's duplicates page does (ADR 0015), at most 200: strong ones (the same email, a person's or its account's, ignoring case; or the same name and birth date) first, then weak ones (the same name, a birth date unknown). A guardian and its dependent, or two dependents of one guardian, do not match by the email alone. Dismissed pairs and merged persons are left out. Merge a pair with persons merge, or dismiss it with persons duplicates dismiss.
+
+Examples:
+
+```sh
+studio-schedule persons duplicates --as office@example.org
+```
+
+Commands:
+
+- [`studio-schedule persons duplicates dismiss`](#studio-schedule-persons-duplicates-dismiss): Record that two persons are not the same, so the pair is no longer listed
+
+##### `studio-schedule persons duplicates dismiss`
+
+Record that two persons are not the same, so the pair is no longer listed.
+
+```text
+studio-schedule persons duplicates dismiss <person-a> <person-b> [flags]
+```
+
+Dismiss a pair of persons persons duplicates lists, as the office's duplicates page does (ADR 0015): it records that the two are not the same, so the pair is no longer listed. Dismissing a pair again changes nothing; an unknown or merged person exits with status 3.
+
+Examples:
+
+```sh
+studio-schedule persons duplicates dismiss --as office@example.org <person-a> <person-b>
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: nothing: the operation dismissDuplicate answers without a body.
+
+#### `studio-schedule persons export`
+
+Export everything the school stores about a person as JSON (GDPR).
+
+```text
+studio-schedule persons export <person-id> [flags]
+```
+
+Export the data of a person as one JSON document, as the office's export does (ADR 0016): the person, their family links (names only), account, bookings, waiting-list entries, passes with their redemptions, receipts (no PDFs), calendar feeds, push devices, dismissed announcements and class memberships, without secrets. A merged or anonymized person is exported too. The document goes to stdout, with nothing else, in either output format; with `--file` it goes into that file, created with mode 0600, and an existing file is refused unless `--force`.
+
+Examples:
+
+```sh
+studio-schedule persons export --as office@example.org <person-id> --file erika.json
+studio-schedule persons export --as office@example.org <person-id> > erika.json
+```
+
+Flags:
+
+- `--file`, `-f` (string): write the export into this file (mode 0600) instead of stdout
+- `--force` (bool): overwrite the file of `--file` if it exists
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation exportPerson, also without `--output json`; with `--file` it goes into the file, and stdout stays empty.
+
+#### `studio-schedule persons merge`
+
+Merge a duplicate person into another (a dry run unless `--apply`).
+
+```text
+studio-schedule persons merge <survivor> <duplicate> [flags]
+```
+
+Merge the duplicate person into the survivor, as the office's duplicates page does (ADR 0015): its bookings, waiting-list entries, class memberships, passes (owned and paid for), guardian links, staff links and account move to the survivor. Where both have a booking of the same lesson that has not started, the duplicate's is canceled (a visit it cost comes back); of a lesson that has started, both stay as history. Where both are members of a class, the survivor's membership stays. The survivor keeps its fields but those of `--take`, and the notes of both; the duplicate stays as a hidden record for its receipts. Without `--apply` it is a dry run that prints what would happen and writes nothing; with it, it asks on a terminal and needs `--yes` otherwise, and the merge is recorded in the audit log under the account of `--as`. Refused: an unknown, merged or anonymized person (exit 3), both with an account, and a merge after which a guardian would also be a dependent of the survivor (exit 4).
+
+Examples:
+
+```sh
+studio-schedule persons merge --as office@example.org <survivor> <duplicate>
+studio-schedule persons merge --as office@example.org --take email,phone --apply <survivor> <duplicate>
+```
+
+Flags:
+
+- `--apply` (bool): merge; without it, a dry run that writes nothing
+- `--take` (stringSlice): the fields the survivor takes from the duplicate: name, email, phone, birthDate, memberNo (comma-separated or repeatable)
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the response body of the operation mergePersons.
+
+#### `studio-schedule persons search`
+
+Search persons by name, email or member number (the term from stdin).
+
+```text
+studio-schedule persons search [flags]
+```
+
+Search the persons whose given name, family name, email or member number contains every word of the search term, ignoring case, as the office's person search does; at most 50, ordered by family and given name; merged and anonymized persons are left out. The term is read from stdin, after a prompt on a terminal, never from an argument, so it stays out of the shell history and the process list (ASVS 8.3.1). It prints each person's ID, name, member number and email.
+
+Examples:
+
+```sh
+studio-schedule persons search --as office@example.org
+echo 'erika example' | studio-schedule persons search --as office@example.org --output json
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation searchPersons.
+
+#### `studio-schedule persons show`
+
+Show a person with their family, account, staff links and classes.
+
+```text
+studio-schedule persons show <person-id> [flags]
+```
+
+Show every field of a person with their guardians, dependents, account, linked staff members, class memberships and the persons merged into them, as the office's person page does. A merged or anonymized person is shown too, with the person it was merged into or when it was anonymized.
+
+Examples:
+
+```sh
+studio-schedule persons show --as office@example.org 01890a5d-ac96-774b-bcce-b302099a8057
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation getPerson.
 
 ### `studio-schedule receipts`
 
@@ -631,6 +1394,170 @@ Flags:
 Access: an operator command. It acts as no account and refuses `--as`.
 
 Output: text only; `--output json` is refused.
+
+### `studio-schedule settings`
+
+Read and change the school settings.
+
+```text
+studio-schedule settings <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule settings export`](#studio-schedule-settings-export): Write every area's settings as one JSON document
+- [`studio-schedule settings get`](#studio-schedule-settings-get): Print the settings of an area, or of all areas
+- [`studio-schedule settings import`](#studio-schedule-settings-import): Write the settings of a settings export (overwrites them)
+- [`studio-schedule settings set`](#studio-schedule-settings-set): Change settings of an area
+
+#### `studio-schedule settings export`
+
+Write every area's settings as one JSON document.
+
+```text
+studio-schedule settings export [file] [flags]
+```
+
+Write the settings of every area as one JSON document, to the file or else to stdout, acting as the office account of `--as`: the document settings import reads, to set up a second school the same way. Each area is its API request body, so the read-only fields are left out, and so are the logo and the background image: set them on the settings page. The receipt settings name the school as the issuer; edit them for another school. It prints JSON with either `--output`.
+
+Examples:
+
+```sh
+studio-schedule settings export --as office@example.org settings.json
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the settings document, always JSON: version (number, 1), then every area's request body by area: school (updateSchoolSettings), branding (updateBrandingSettings), regional (updateRegionalSettings), bookingRules (updateBookingRules), receipts (updateReceiptSettings), passes (updatePassSettings).
+
+#### `studio-schedule settings get`
+
+Print the settings of an area, or of all areas.
+
+```text
+studio-schedule settings get [area] [flags]
+```
+
+Print the settings of an area (school, branding, regional, booking-rules, receipts, passes), or of every area without one, as the settings page shows them, acting as the office account of `--as`: one line per setting with the area, the key and the value. The keys are the fields of the area's API body, which settings set takes; the fields only shown (such as timezoneLocked or the booking rules' window) are read-only. Durations show in days, hours and minutes, amounts in the school's currency and instants in the school's time zone; `--output json` prints the API's form.
+
+Examples:
+
+```sh
+studio-schedule settings get --as office@example.org
+studio-schedule settings get booking-rules --as office@example.org --output json
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: with an area, the response body of its get operation: getSchoolSettings (school), getBrandingSettings (branding), getRegionalSettings (regional), getBookingRules (booking-rules), getReceiptSettings (receipts) or getPassSettings (passes); without one, an object with every area's: school, branding, regional, bookingRules, receipts, passes.
+
+#### `studio-schedule settings import`
+
+Write the settings of a settings export (overwrites them).
+
+```text
+studio-schedule settings import <file> [flags]
+```
+
+Write the areas of a document of settings export, acting as the admin account of `--as`: all of them in one transaction, or none if one is refused, each with the rules of its card. An area in the document replaces all of its settings; an area left out stays as it is. The time zone and the currency stay locked once used: a different locked value is a conflict (exit status 4). It overwrites settings, so it asks for confirmation on a terminal and needs `--yes` otherwise; `--dry-run` checks everything and writes nothing. It prints every setting that changes (or would change), with its value before and after.
+
+Examples:
+
+```sh
+studio-schedule settings import --as admin@example.org --dry-run settings.json
+studio-schedule settings import --as admin@example.org --yes settings.json
+```
+
+Flags:
+
+- `--dry-run` (bool): check the document and print the changes; write nothing
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: one object: dryRun (bool), changes (array of {area, key, from, to}: the area as the commands name it, the key of its request body, and the values before and after in the request body's form, null for none), generatedLessons (number: lessons a wider release window generated at once).
+
+#### `studio-schedule settings set`
+
+Change settings of an area.
+
+```text
+studio-schedule settings set <area> key=value... [flags]
+```
+
+Change the named settings of an area (school, branding, regional, booking-rules, receipts, passes) and keep the others, as the area's card on the settings page does, acting as the admin account of `--as`: the area is read, the keys are changed and the area is written back, with the same rules as the API. The keys are the fields of the area's API body (settings get lists them): a number is a whole number, a date YYYY-MM-DD (empty: none), a time HH:MM, and the cutoffs count minutes. The time zone cannot change once lessons exist, the currency once a price or a receipt exists (exit status 4). A wider release window generates its lessons at once. It prints the area after the change.
+
+Examples:
+
+```sh
+studio-schedule settings set school schoolName='Studio Example' --as admin@example.org
+studio-schedule settings set booking-rules releaseWeeksAhead=3 cancellationCutoffMinutes=180 --as admin@example.org
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Output with `--output json`: the response body of the area's update operation: updateSchoolSettings, updateBrandingSettings, updateRegionalSettings, updateBookingRules, updateReceiptSettings or updatePassSettings.
+
+### `studio-schedule stats`
+
+Print the statistics of a range of school dates.
+
+```text
+studio-schedule stats [flags]
+```
+
+Print the school's figures of a range of school dates, as the office's statistics page does: the totals, by week (by month beyond 26 weeks), by class, room, course type and instructor. `--range` picks the current week and the 3 or 11 before it (last4Weeks, the default; last12Weeks) or the current term up to today (term); `--from` and `--to` (both inclusive, at most 366 days) give a custom range. The text leaves the top 20 participants out, as they name persons, unless `--participants`; `--output json` prints the whole response body, as the API gives it to the office.
+
+Examples:
+
+```sh
+studio-schedule stats --as office@example.org
+studio-schedule stats --as office@example.org --from 2026-09-01 --to 2026-09-30 --participants
+```
+
+Flags:
+
+- `--from` (string): the first school date of a custom range (YYYY-MM-DD), with `--to`
+- `--participants` (bool): list the top participants in the text, with their names
+- `--range` (string): the range: last4Weeks, last12Weeks, term, custom; default last4Weeks, custom with `--from` and `--to`
+- `--to` (string): the last school date of a custom range (inclusive), with `--from`
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation getStatistics.
+
+### `studio-schedule terms`
+
+List the terms of the timetable.
+
+```text
+studio-schedule terms <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule terms list`](#studio-schedule-terms-list): List the terms
+
+#### `studio-schedule terms list`
+
+List the terms.
+
+```text
+studio-schedule terms list [flags]
+```
+
+List every term by its start, as the office's class pages do: its ID, name, first and last day, and "current" for the term that includes today (the one that started last if terms overlap), which `classes list` shows by default.
+
+Examples:
+
+```sh
+studio-schedule terms list --as office@example.org
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation listTerms.
 
 ### `studio-schedule vapid-keys`
 

@@ -24,9 +24,9 @@ const (
 	demoUnknown = "00000000-0000-7000-8000-00000000ffff"
 )
 
-// wantExit fails unless res exited with code and its stderr contains
+// wantExitCode fails unless res exited with code and its stderr contains
 // stderr.
-func wantExit(t *testing.T, res result, code int, stderr string) {
+func wantExitCode(t *testing.T, res result, code int, stderr string) {
 	t.Helper()
 
 	if res.code != code || !strings.Contains(res.stderr, stderr) {
@@ -41,12 +41,12 @@ func TestLessonsList(t *testing.T) {
 
 	stores(t, func(t *testing.T, r cliRun) {
 		got := r.exec(t, "lessons", "list", "--as", demoOffice)
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "lessons/today.txt", got.stdout)
 
 		// The same day by --date, as getSchedule's body.
 		got = r.exec(t, "lessons", "list", "--as", demoOffice, "--date", "2026-09-22", "--output", "json")
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "lessons/today.json", got.stdout)
 
 		var body struct {
@@ -64,7 +64,7 @@ func TestLessonsList(t *testing.T) {
 
 		// A week, both ends inclusive: workshops and a room rental.
 		got = r.exec(t, "lessons", "list", "--as", demoOffice, "--from", "2026-09-21", "--to", "2026-09-27")
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "lessons/week.txt", got.stdout)
 
 		got = r.exec(t, "lessons", "list", "--as", demoOffice, "--date", "2026-08-15")
@@ -161,7 +161,7 @@ func TestLessonsGenerate(t *testing.T) {
 		before := lessonCount(t, st)
 
 		got := r.exec(t, "lessons", "generate", "--as", demoOffice, "--until", "2026-12-31")
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "lessons/generate.txt", got.stdout)
 
 		created := lessonCount(t, st) - before
@@ -197,7 +197,7 @@ func TestLessonsGenerateRefusals(t *testing.T) {
 		{[]string{"--as", demoOffice, "--until", "2026-09-21"}, 2, "--until: the last date must not lie before today"},
 		{[]string{"--as", demoMember, "--until", "2026-12-31"}, 4, "below office"},
 	} {
-		wantExit(t, r.exec(t, append([]string{"lessons", "generate"}, c.args...)...), c.code, c.stderr)
+		wantExitCode(t, r.exec(t, append([]string{"lessons", "generate"}, c.args...)...), c.code, c.stderr)
 	}
 
 	// Today is the earliest date: its lessons exist already.
@@ -263,7 +263,7 @@ func TestLessonsCancelRestore(t *testing.T) {
 
 		// Off a terminal without --yes: refused, nothing changed.
 		got := r.exec(t, "lessons", "cancel", "--as", demoOffice, demoJazz)
-		wantExit(t, got, 2, "confirm with --yes when stdin is not a terminal; nothing was changed")
+		wantExitCode(t, got, 2, "confirm with --yes when stdin is not a terminal; nothing was changed")
 
 		if lessonOf(t, st, demoJazz).Status != domain.LessonScheduled || canceled() != 0 {
 			t.Fatal("the refused cancel changed the lesson or mailed")
@@ -274,7 +274,7 @@ func TestLessonsCancelRestore(t *testing.T) {
 		term.terminal, term.stdin = true, "n\n"
 
 		got = term.exec(t, "lessons", "cancel", "--as", demoOffice, demoJazz)
-		wantExit(t, got, 2, "Cancel Jazz Dance (beginner) on 2026-09-22 at 17:00 in Hall 1 and mail those "+
+		wantExitCode(t, got, 2, "Cancel Jazz Dance (beginner) on 2026-09-22 at 17:00 in Hall 1 and mail those "+
 			"booked on it (3 active bookings)? [y/N] error: not confirmed; nothing was changed")
 
 		if lessonOf(t, st, demoJazz).Status != domain.LessonScheduled || canceled() != 0 {
@@ -284,7 +284,7 @@ func TestLessonsCancelRestore(t *testing.T) {
 		// "y" on a terminal cancels, with the note; the table has its header.
 		term.stdin = "y\n"
 		got = term.exec(t, "lessons", "cancel", "--as", demoOffice, "--note", "The teacher is ill.", demoJazz)
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "lessons/cancel.txt", got.stdout)
 
 		// Four mails for three bookings: a booked child's guardians get one
@@ -297,7 +297,7 @@ func TestLessonsCancelRestore(t *testing.T) {
 
 		// Again: nothing changes, nobody is mailed, nothing is asked.
 		got = r.exec(t, "lessons", "cancel", "--as", demoOffice, "--note", "Another note.", demoJazz)
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "lessons/cancel-again.txt", got.stdout)
 
 		if l := lessonOf(t, st, demoJazz); l.CancelNote != "The teacher is ill." || canceled() != 4 {
@@ -306,14 +306,14 @@ func TestLessonsCancelRestore(t *testing.T) {
 
 		// Restore: refused without --yes, then done with it, as restoreLesson's body.
 		got = r.exec(t, "lessons", "restore", "--as", demoOffice, demoJazz)
-		wantExit(t, got, 2, "confirm with --yes")
+		wantExitCode(t, got, 2, "confirm with --yes")
 
 		if lessonOf(t, st, demoJazz).Status != domain.LessonCanceled || restored() != 0 {
 			t.Fatal("the refused restore changed the lesson or mailed")
 		}
 
 		got = r.exec(t, "lessons", "restore", "--as", demoOffice, "--yes", "--output", "json", demoJazz)
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "lessons/restore.json", got.stdout)
 
 		if l := lessonOf(t, st, demoJazz); l.Status != domain.LessonScheduled || !l.Detached || restored() != 4 {
@@ -321,12 +321,12 @@ func TestLessonsCancelRestore(t *testing.T) {
 		}
 
 		got = r.exec(t, "lessons", "restore", "--as", demoOffice, demoJazz)
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "lessons/restore-again.txt", got.stdout)
 
 		// The cancel as cancelLesson's body.
 		got = r.exec(t, "lessons", "cancel", "--as", demoOffice, "--yes", "--output", "json", demoJazz)
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "lessons/cancel.json", got.stdout)
 	})
 }
@@ -356,7 +356,7 @@ func TestLessonsRestoreRoomTaken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wantExit(t, r.exec(t, "lessons", "restore", "--as", demoOffice, "--yes", demoJazz), 4, "the room is taken by lesson")
+	wantExitCode(t, r.exec(t, "lessons", "restore", "--as", demoOffice, "--yes", demoJazz), 4, "the room is taken by lesson")
 
 	if lessonOf(t, st, demoJazz).Status != domain.LessonCanceled {
 		t.Fatal("the refused restore changed the lesson")
@@ -423,5 +423,5 @@ func TestLessonsGroup(t *testing.T) {
 		t.Errorf("help: exit %d, stdout %q", got.code, got.stdout)
 	}
 
-	wantExit(t, r.exec(t, "lessons", "move"), 2, `unknown command "move"`)
+	wantExitCode(t, r.exec(t, "lessons", "move"), 2, `unknown command "move"`)
 }

@@ -82,11 +82,11 @@ func TestTermsList(t *testing.T) {
 
 	stores(t, func(t *testing.T, r cliRun) {
 		got := r.exec(t, "terms", "list", "--as", demoOffice)
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "terms/list.txt", got.stdout)
 
 		got = r.exec(t, "terms", "list", "--as", demoOffice, "--output", "json")
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "terms/list.json", got.stdout)
 	})
 }
@@ -97,9 +97,9 @@ func TestTermsListRefusals(t *testing.T) {
 	t.Parallel()
 
 	r := cliRun{st: demoStore(t)}
-	wantExit(t, r.exec(t, "terms", "list", "--as", demoMember), 4, "below office")
-	wantExit(t, r.exec(t, "terms", "list", "--as", demoInstructor), 4, "below office")
-	wantExit(t, r.exec(t, "terms", "list"), 2, "give --as <email>")
+	wantExitCode(t, r.exec(t, "terms", "list", "--as", demoMember), 4, "below office")
+	wantExitCode(t, r.exec(t, "terms", "list", "--as", demoInstructor), 4, "below office")
+	wantExitCode(t, r.exec(t, "terms", "list"), 2, "give --as <email>")
 
 	// The term of an earlier school year is not current.
 	got := cliRun{st: pastDemoStore(t)}.exec(t, "terms", "list", "--as", demoOffice)
@@ -158,11 +158,11 @@ func TestClassesList(t *testing.T) {
 		retire(t, servicesOf(t, storeOf(t, r)), demoContemporary)
 
 		got := r.exec(t, "classes", "list", "--as", demoOffice)
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "classes/list.txt", got.stdout)
 
 		got = r.exec(t, "classes", "list", "--as", demoOffice, "--term", demoTerm, "--output", "json")
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "classes/list.json", got.stdout)
 
 		if !strings.Contains(got.stdout, `"id": "`+demoContemporary+`",`) {
@@ -189,7 +189,7 @@ func TestClassesListRefusals(t *testing.T) {
 		{[]string{"--as", demoOffice, "--term", "spring"}, 2, `--term: "spring" is not a term ID`},
 		{[]string{"--as", demoOffice, "--term", demoUnknown}, 3, "--term: term " + demoUnknown + ": not found"},
 	} {
-		wantExit(t, r.exec(t, append([]string{"classes", "list"}, c.args...)...), c.code, c.stderr)
+		wantExitCode(t, r.exec(t, append([]string{"classes", "list"}, c.args...)...), c.code, c.stderr)
 	}
 
 	// A new term has no classes yet.
@@ -209,7 +209,7 @@ func TestClassesListRefusals(t *testing.T) {
 
 	// Without a current term, --term is needed.
 	past := cliRun{st: pastDemoStore(t)}
-	wantExit(t, past.exec(t, "classes", "list", "--as", demoOffice), 3,
+	wantExitCode(t, past.exec(t, "classes", "list", "--as", demoOffice), 3,
 		"no term includes today; give --term (see terms list)")
 
 	got = past.exec(t, "classes", "list", "--as", demoOffice, "--term", demoTerm)

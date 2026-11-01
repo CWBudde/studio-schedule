@@ -16,7 +16,7 @@ func TestStats(t *testing.T) {
 
 	stores(t, func(t *testing.T, r cliRun) {
 		got := r.exec(t, "stats", "--as", demoOffice)
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "stats/last4weeks.txt", got.stdout)
 
 		if !strings.HasSuffix(got.stdout, "top participants: left out, as they name persons; --participants lists them\n") ||
@@ -25,11 +25,11 @@ func TestStats(t *testing.T) {
 		}
 
 		got = r.exec(t, "stats", "--as", demoOffice, "--range", "term", "--participants")
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "stats/term.txt", got.stdout)
 
 		got = r.exec(t, "stats", "--as", demoOffice, "--from", "2026-09-14", "--to", "2026-09-20", "--output", "json")
-		wantExit(t, got, 0, "")
+		wantExitCode(t, got, 0, "")
 		golden(t, "stats/week.json", got.stdout)
 
 		var body struct {
@@ -68,7 +68,7 @@ func TestStatsRanges(t *testing.T) {
 	}
 
 	got = r.exec(t, "stats", "--as", demoOffice, "--from", "2026-08-01", "--to", "2026-08-02")
-	wantExit(t, got, 0, "")
+	wantExitCode(t, got, 0, "")
 	golden(t, "stats/empty.txt", got.stdout)
 
 	for _, c := range []struct {
@@ -118,7 +118,7 @@ func TestStatsRanges(t *testing.T) {
 	}
 
 	// The term range needs a term that includes today.
-	wantExit(t, cliRun{st: pastDemoStore(t)}.exec(t, "stats", "--as", demoOffice, "--range", "term"), 3,
+	wantExitCode(t, cliRun{st: pastDemoStore(t)}.exec(t, "stats", "--as", demoOffice, "--range", "term"), 3,
 		"no term includes today")
 }
 
