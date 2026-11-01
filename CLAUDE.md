@@ -200,6 +200,13 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   jobs from `Env.Jobs`, built like `serve`'s (the senders of `newDelivery` through
   `cli.System.Delivery`). The generate-lessons job's generator is `Services.Generator`'s
   (`newLessonGenerator`).
+- **Events:** ADR 0019. `domain.Event` and `domain.EventRegistration` (`internal/domain/event.go`);
+  sessions are `workshop` lessons with `Lesson.EventID` (`Lessons().ListByEvent`). The repos:
+  `Events()` (slug, `Lock` before any lesson lock, the image like the background) and
+  `EventRegistrations()` (one open registration per person and event, `CountsByEvents(at)` for free
+  places, `AnonymizeGuests`); memory `internal/store/memory/events.go`, PostgreSQL
+  `internal/store/postgres/events.go` (migration 00031), contracts `storetest/events.go`. Services,
+  API and web follow in Phase 10.
 - **PWA & web push:** ADR 0017. The service worker is `web/src/sw.ts` (vite-plugin-pwa
   `injectManifest`; precaches the shell, never `*.wasm`, never the API), registered with the update
   toast in `web/src/pwa.ts`; offline the allow-listed query cache comes from IndexedDB

@@ -825,31 +825,48 @@ Order: the ADR first. Then the domain and the store, the office's event administ
 page and registration, and payment with receipts. Statistics, theme slots and the demo seed come
 last.
 
-- [ ] ADR "Events and workshops" (0019) settles the open decisions, each one asked first:
-  - [ ] Model: an event (title, slug, description, image, course type, instructor(s), location)
+- [x] ADR "Events and workshops" (0019) settles the open decisions, each one asked first
+      (2026-11-01) — ADR 0019, amending ADR 0009 (sessions are not booked one by one) and ADR 0012
+      (event fees on the same receipt series):
+  - [x] Model: an event (title, slug, description, image, course type, instructor(s), location)
         groups one or more sessions, which stay lessons (kind `workshop`) and so keep the schedule,
         calendar feeds, attendance and room overlap checks. Is a registration for the whole event
         only, or can a person sign up for single sessions?
-  - [ ] Pricing: one gross price plus VAT rate per event (`domain.Money`, basis points as for pass
+        (2026-11-01) — the whole event only; `Lesson.EventID` links the sessions
+  - [x] Pricing: one gross price plus VAT rate per event (`domain.Money`, basis points as for pass
         types), or price tiers (early bird until a date, member/guest, reduced)? Does any pass, or
         only a named pass type, pay for an event (default: no pass pays for one)?
-  - [ ] Payment: no online payment. A registration starts `unpaid`, and the office marks it paid at
+        (2026-11-01) — one gross price and VAT rate, 0 for free; no pass pays for an event
+  - [x] Payment: no online payment. A registration starts `unpaid`, and the office marks it paid at
         the desk. Is that the receipt moment? ADR 0012 then needs an amendment: receipts cover
         event fees too (lines, VAT snapshot, Storno, the same gapless counter)
-  - [ ] Who registers: members for themselves and their dependents (family rules, ADR 0008). Can
+        (2026-11-01) — yes: marking paid issues the receipt in the same transaction; refund = Storno
+  - [x] Who registers: members for themselves and their dependents (family rules, ADR 0008). Can
         guests sign up from the public page with a name and email (confirmed by a mail link, rate
         limited), or does the office add them only, as for lessons today?
-  - [ ] Capacity and waitlist: one capacity per event, checked under an event lock, and the
+        (2026-11-01) — members and their dependents; guests only through the office
+  - [x] Capacity and waitlist: one capacity per event, checked under an event lock, and the
         existing waitlist chain reused (ADR 0010)? The lock order then becomes event → lessons
-  - [ ] Cancellation: an event-specific deadline, refund or credit rules after it, and what an
+        (2026-11-01) — yes, both; registered places and open invites fill the capacity
+  - [x] Cancellation: an event-specific deadline, refund or credit rules after it, and what an
         event cancelled by the school does to registrations and receipts
-  - [ ] Visibility and release: publish date, sign-up window (opens/closes), and whether events
+        (2026-11-01) — `cancelUntil`: before it the member cancels (Storno if paid), after it only
+        the office, refund or not; a canceled event cancels and refunds everything and mails
+  - [x] Visibility and release: publish date, sign-up window (opens/closes), and whether events
         ignore the timetable's release window as workshops do now (ADR 0003)
-  - [ ] Existing one-off `workshop` lessons: do they stay as plain lessons, or does a migration or
+        (2026-11-01) — draft/published/canceled and a sign-up window; the release window is
+        ignored
+  - [x] Existing one-off `workshop` lessons: do they stay as plain lessons, or does a migration or
         the demo seed turn them into events?
-- [ ] Domain and store: `domain.Event`, `EventRegistration` (person or guest, status, paid state,
+        (2026-11-01) — they stay plain lessons; the demo seed adds new events
+- [x] Domain and store: `domain.Event`, `EventRegistration` (person or guest, status, paid state,
       price snapshot), typed IDs, `Validate()`; `Events()`/`EventRegistrations()` repos in memory
-      and postgres (migration, sqlc), contract cases in `storetest`
+      and postgres (migration, sqlc), contract cases in `storetest` (2026-11-01) — migration
+      00031 (`events`, `event_images`, `event_registrations`, `lessons.event_id`); `Events()`
+      with slug lookup, `Lock` and the image like the background; `EventRegistrations()` with one
+      open registration per person and event, `CountsByEvents(at)`, `GetByInviteTokenHash`,
+      `GetByReceipt` and `AnonymizeGuests`; `Lessons().ListByEvent`; the store's choices are in
+      ADR 0019's amendment
 - [ ] Office administration (`/api/v1/admin/events`, `office`): create/edit/delete events, add,
       move and remove sessions (lessons) under the class/lesson rules of ADR 0007, list
       registrations, add a registration for a person or guest, mark paid, cancel; `withConflict`

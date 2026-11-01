@@ -137,3 +137,37 @@ that build them and recorded here as amendments.
   for the whole event and settles the price by hand.
 - Guests reach an event only through the office, so the public pages gain no unauthenticated write
   and no new abuse surface.
+
+## Amendment (2026-11-01): the store
+
+These choices were made while building the domain and both stores (migration 00031):
+
+- **Slug.** Groups of lowercase ASCII letters and digits joined by single hyphens, at most 80
+  characters.
+- **Bounds.**
+  - title: up to 200 characters; description: up to 10,000;
+  - capacity: 1 to 10,000;
+  - price: up to the pass price bound;
+  - the course type is required.
+- **Image.** It uses `domain.Background` (the same formats and 1 MiB) and lives in its own table,
+  which is deleted with its event.
+- **`Events().List` order.** By the first session's start (canceled sessions count), then events
+  without sessions, then by ID.
+- **Payment rules.**
+  - A free registration is `paid` and never has a receipt.
+  - A priced `paid` registration has a receipt, and an `unpaid` one has none.
+  - `refunded` has the receipt and a different Storno receipt, and only `refunded` has a Storno.
+- **Invites.** The invite fields are set exactly while a registration is `invited`. Accepting clears
+  the token hash, so a second use of the link finds nothing.
+- **Anonymized guests.** A guest named `Guest` without an email is valid: the one exception to the
+  required guest email, so that ADR 0016's anonymization leaves a valid record.
+- **`AnonymizeGuests`.** It counts canceled sessions towards an event's last session. An event
+  without sessions keeps its guests.
+- **`CountsByEvents(at)`.** It counts invites whose expiry is after the instant.
+- **Restrictions.**
+  - An event keeps its course type: `CourseTypeRepo.Delete` refuses it.
+  - A registration keeps its person.
+  - Priced events and registrations count towards the currency lock (`SettingsUsage.Prices`, ADR
+    0013).
+- **Receipts.** The schema keeps a receipt unique among registrations, but not between a pass and
+  a registration. The payment service keeps those apart.
