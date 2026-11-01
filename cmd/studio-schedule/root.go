@@ -40,7 +40,7 @@ func newRoot(sys cli.System) *cobra.Command {
 	root.AddCommand(newDBCmd(app, sys.Open))
 	root.AddCommand(newLessonsCmd(app), newTermsCmd(app), newClassesCmd(app), newStatsCmd(app))
 	root.AddCommand(newJobsCmd(app), newMailCmd(app))
-	root.AddCommand(newAccountsCmd(app))
+	root.AddCommand(newAccountsCmd(app, sys.OSUser))
 	root.AddCommand(newSettingsCmd(app))
 	root.AddCommand(newPersonsCmd(app))
 	root.AddCommand(newPassesCmd(app), newReceiptsCmd(app))

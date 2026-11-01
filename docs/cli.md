@@ -93,6 +93,7 @@ Commands:
 - [`studio-schedule accounts reset-password`](#studio-schedule-accounts-reset-password): Print a password-reset link for an account, or mail it with `--mail`
 - [`studio-schedule accounts sessions`](#studio-schedule-accounts-sessions): End the sessions of accounts
 - [`studio-schedule accounts set-role`](#studio-schedule-accounts-set-role): Change the role of an account
+- [`studio-schedule accounts setup-link`](#studio-schedule-accounts-setup-link): Print a new setup link for an unconfirmed account while no admin can sign in
 - [`studio-schedule accounts show`](#studio-schedule-accounts-show): Show one account
 
 #### `studio-schedule accounts create`
@@ -214,7 +215,7 @@ Print a password-reset link for an account, or mail it with `--mail`.
 studio-schedule accounts reset-password <email|id> [flags]
 ```
 
-Issue a password-reset link for an account, valid for one hour; it replaces the account's older links. Without `--mail` the link is printed on stdout and nothing is mailed: this is the way back in for an admin who has forgotten their password (run it `--as` their own email). With `--mail` the link is mailed to the account, as "forgot password" does, and not printed; the deliver-mail job sends it. The link sets the password once; keep it secret. It works for an account that may sign in and for an invited one; a disabled account or an unconfirmed registration is refused with exit status 4. The account is named by its email address (in any case) or its ID.
+Issue a password-reset link for an account, valid for one hour; it replaces the account's older links. Without `--mail` the link is printed on stdout and nothing is mailed: this is the way back in for an admin who has forgotten their password (run it `--as` their own email). With `--mail` the link is mailed to the account, as "forgot password" does, and not printed; the deliver-mail job sends it. The link sets the password once; keep it secret. It works for an account that may sign in and for an invited one; a disabled account or an unconfirmed registration is refused with exit status 4. Recorded in the audit log, with whether the link was mailed or printed, never the link. The account is named by its email address (in any case) or its ID.
 
 Examples:
 
@@ -253,7 +254,7 @@ End the sessions of an account, or of every account.
 studio-schedule accounts sessions revoke <email|id>|--all [flags]
 ```
 
-Sign an account out everywhere: end its sessions and the impersonations it started, as disabling it does, and remove its devices' push subscriptions. It may sign in again. With `--all`, every account is signed out (after a leak, say). It prints how many sessions ended. The account is named by its email address (in any case) or its ID.
+Sign an account out everywhere: end its sessions and the impersonations it started, as disabling it does, and remove its devices' push subscriptions. It may sign in again. With `--all`, every account is signed out (after a leak, say). It prints how many sessions ended. Recorded in the audit log with the count. The account is named by its email address (in any case) or its ID.
 
 Examples:
 
@@ -291,6 +292,29 @@ studio-schedule accounts set-role --as admin@example.org office@example.org admi
 Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
 
 Output with `--output json`: the response body of the operation setAccountRole.
+
+#### `studio-schedule accounts setup-link`
+
+Print a new setup link for an unconfirmed account while no admin can sign in.
+
+```text
+studio-schedule accounts setup-link <email|id> [flags]
+```
+
+Print a new setup link for an account that has not confirmed its email, such as the first admin of init whose 72-hour link expired before it was used: the way back in for a school none of whose admins can sign in. The link sets the password, and so confirms the account; it is valid for 72 hours, works once and replaces the account's pending links. It is printed on stdout and nothing is mailed; keep it secret. This is an operator command: it acts as no account and takes no `--as`, since without an admin there is nobody to act as. It works only while no admin can sign in (an admin account that is confirmed and not disabled); otherwise it is refused (admin-exists, exit status 4) and nothing changes, so it never gets round an admin, who issues a link with accounts reset-password instead. A confirmed account is refused (confirmed, exit status 4), and so are a disabled account and a registration with a password of its own. Recorded in the audit log with the OS user who ran it. The account is named by its email address (in any case) or its ID.
+
+Examples:
+
+```sh
+studio-schedule accounts setup-link --yes admin@example.org
+studio-schedule accounts setup-link --yes -o json first.admin@example.org
+```
+
+Access: an operator command. It acts as no account and refuses `--as`.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: one object: account (an item of the response body of the operation listAccounts (AccountEntry)), link (the setup link), expiresAt (when the link stops working, an RFC 3339 instant), mailed (always false).
 
 #### `studio-schedule accounts show`
 

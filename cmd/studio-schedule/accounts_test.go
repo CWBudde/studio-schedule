@@ -688,9 +688,11 @@ func TestAccountGuard(t *testing.T) {
 	t.Parallel()
 
 	for err, want := range map[error]string{
-		service.ErrOwnAccount:  "refused (own-account): ",
-		service.ErrLastAdmin:   "refused (last-admin): ",
-		service.ErrAccountKept: "refused (in-use): ",
+		service.ErrOwnAccount:       "refused (own-account): ",
+		service.ErrLastAdmin:        "refused (last-admin): ",
+		service.ErrAccountKept:      "refused (in-use): ",
+		service.ErrAdminExists:      "refused (admin-exists): ",
+		service.ErrAccountConfirmed: "refused (confirmed): ",
 	} {
 		got := accountGuard(fmt.Errorf("delete account: %w", err))
 		if !strings.HasPrefix(got.Error(), want) || !errors.Is(got, err) || !errors.Is(got, domain.ErrConflict) {

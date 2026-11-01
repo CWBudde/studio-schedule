@@ -19,14 +19,16 @@ var cli = domain.AuditVia{Channel: domain.ChannelCLI, OSUser: "operator"}
 
 // Audit runs the scenarios of the command line's actor (ADR 0020, "The
 // actor") on fresh stores from newStore: Actor finds an account by its
-// email, and every audit event written for a principal records the
-// principal's channel, which the audit log returns.
+// email, every audit event written for a principal records the
+// principal's channel, which the audit log returns, and an operator's setup
+// link is audited with the operator's channel and no actor.
 func Audit(t *testing.T, newStore func(t *testing.T) store.Store) {
 	t.Helper()
 
 	for name, fn := range map[string]func(t *testing.T, w *world){
-		"Actor":    actor,
-		"AuditVia": auditVia,
+		"Actor":     actor,
+		"AuditVia":  auditVia,
+		"SetupLink": setupLink,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

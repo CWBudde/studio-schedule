@@ -1,0 +1,14 @@
+{
+  "account": {
+    "id": "00000000-0001-7000-8000-000000000002",
+    "email": "first.admin@example.org",
+    "role": "admin",
+    "givenName": "Ada",
+    "familyName": "Example",
+    "confirmed": false,
+    "disabled": false
+  },
+  "link": "http://localhost:8080/reset-password?token=REDACTED",
+  "expiresAt": "2026-09-25T08:00:00Z",
+  "mailed": false
+}

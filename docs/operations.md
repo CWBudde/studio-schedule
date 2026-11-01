@@ -147,6 +147,10 @@ These go before or after the command, as `studio-schedule --output json doctor` 
 
 ### Commands and flags: accounts
 
+`accounts setup-link <email|id>` takes no flag of its own: an operator command without `--as`, it
+prints a new 72-hour setup link for an account that has not confirmed, and only while no admin can
+sign in.
+
 | Command                    | Flag       | Meaning                                                                                     |
 | -------------------------- | ---------- | ------------------------------------------------------------------------------------------- |
 | `accounts create`          | `--person` | the ID of the person the new account is for (required)                                      |

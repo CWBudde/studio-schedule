@@ -1,0 +1,3 @@
+Open this link before 2026-09-25 10:00 to set the password of first.admin@example.org and confirm the account (it works once; keep it secret):
+
+  http://localhost:8080/reset-password?token=REDACTED

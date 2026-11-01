@@ -16,11 +16,13 @@ import (
 
 // newAccountsCmd is the group `accounts` (ADR 0020): the admin's account
 // administration (ADR 0016) on the shell, and the way back in when the
-// last admin has forgotten their password.
-func newAccountsCmd(app *cli.App) *cobra.Command {
+// last admin has forgotten their password, or when no admin can sign in
+// (setup-link, an operator command; osUser is the OS user it records).
+func newAccountsCmd(app *cli.App, osUser string) *cobra.Command {
 	return cli.Group("accounts", "Administer the accounts: roles, passwords, sessions",
 		newAccountsListCmd(app), newAccountsShowCmd(app), newAccountsCreateCmd(app), newAccountsSetRoleCmd(app),
 		newAccountsDisableCmd(app, true), newAccountsDisableCmd(app, false), newAccountsResetPasswordCmd(app),
+		newAccountsSetupLinkCmd(app, osUser),
 		cli.Group("sessions", "End the sessions of accounts", newAccountsRevokeCmd(app)),
 		newAccountsDeleteCmd(app))
 }
@@ -408,7 +410,8 @@ const accountGuardsHelp = "Refused with exit status 4: the --as account's own ac
 	"last admin who can sign in (last-admin)."
 
 // accountGuards are the refusals of the account administration by the
-// name the API gives them (the reason of its 409).
+// name the API gives them (the reason of its 409), and those of the setup
+// link, which only the command line issues.
 var accountGuards = []struct {
 	err  error
 	name string
@@ -416,6 +419,8 @@ var accountGuards = []struct {
 	{service.ErrOwnAccount, "own-account"},
 	{service.ErrLastAdmin, "last-admin"},
 	{service.ErrAccountKept, "in-use"},
+	{service.ErrAdminExists, "admin-exists"},
+	{service.ErrAccountConfirmed, "confirmed"},
 }
 
 // accountGuard names the guard that refused err, keeping its exit status.

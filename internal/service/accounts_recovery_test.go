@@ -90,6 +90,24 @@ func TestAccountsRecoveryStoreFaults(t *testing.T) {
 				return err
 			}
 		},
+		// No admin can sign in: the admin set is read and locked, then the
+		// invited account and its credentials.
+		"IssueSetupLink": func(t *testing.T, f *authFixture) func(*service.AuthService) error {
+			_, err := f.svc.CreateAccount(t.Context(), adminPrincipal, f.newPerson("Kim"), service.NewAccount{
+				Email: "kim@example.org", Role: domain.RoleAdmin,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			return func(svc *service.AuthService) error {
+				_, err := svc.IssueSetupLink(t.Context(), "kim@example.org", domain.AuditVia{
+					Channel: domain.ChannelCLI, OSUser: "operator",
+				})
+
+				return err
+			}
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
