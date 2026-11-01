@@ -34,12 +34,12 @@ const (
 func Demo() Dataset { return DemoAt(FixedDemoAnchor) }
 
 // DemoAt returns the fictional demo school as seen on the visit date
-// anchor: two locations, their rooms, staff, course types, one term around
-// anchor with its weekly classes, members with their families and accounts,
-// and a few one-off workshops in the weeks after anchor, one of them full
-// with a waiting list (ADR 0010), and one with guests and a trial that its
-// instructor added (ADR 0009, amendment). Of the weekly
-// classes it has the lessons from the term start up to and including
+// anchor: two locations, their rooms, staff, course types, the level scale,
+// one term around anchor with its weekly classes, members with their
+// families and accounts, and a few one-off workshops in the weeks after
+// anchor, one of them full with a waiting list (ADR 0010), and one with
+// guests and a trial that its instructor added (ADR 0009, amendment). Of
+// the weekly classes it has the lessons from the term start up to and including
 // anchor (history), with the automatic bookings of the class members, as
 // the lesson generator would have created them, their attendance and a few
 // guests and trials, so the statistics have weeks to count; the generator
@@ -129,6 +129,10 @@ func demoAt(anchor domain.Date, settings domain.Settings, locations []locationSp
 
 	for _, c := range demoCourseTypes {
 		b.courseType(c)
+	}
+
+	for _, l := range demoLevels {
+		b.level(l)
 	}
 
 	termEnd := termStart.AddDays(termDays - 1)
@@ -355,6 +359,17 @@ var demoCourseTypes = []domain.CourseType{
 	{Name: "Hip-Hop", Description: "Grooves, footwork and choreography."},
 	{Name: "Tap", Description: "Rhythm and sound with tap shoes."},
 	{Name: "Barre Fitness", Description: "Strength and stretching at the barre, no experience needed."},
+}
+
+// levelSpec is a step on the school's level scale; the table lists them
+// from least to most advanced, so a level's position is its place in it.
+type levelSpec struct{ name, code string }
+
+var demoLevels = []levelSpec{
+	{"Beginner", "B"},
+	{"Intermediate", "I"},
+	{"Advanced", "A"},
+	{"Professional", "P"},
 }
 
 // classSpec is a weekly class. Names refer to the tables above; members are
@@ -701,6 +716,13 @@ func (b *builder) courseType(c domain.CourseType) {
 	c.ID = ids.New[domain.CourseTypeID](b.seq)
 	b.d.CourseTypes = append(b.d.CourseTypes, c)
 	b.courseTypes[c.Name] = c.ID
+}
+
+// level adds the next step of the level scale, after the ones before it.
+func (b *builder) level(spec levelSpec) {
+	b.d.Levels = append(b.d.Levels, domain.Level{
+		ID: ids.New[domain.LevelID](b.seq), Name: spec.name, Code: spec.code, Position: len(b.d.Levels) + 1,
+	})
 }
 
 func (b *builder) class(term domain.TermID, spec classSpec) {

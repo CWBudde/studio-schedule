@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -39,9 +40,17 @@ func TestLoadDemo(t *testing.T) {
 
 	want := seed.Demo()
 
-	var bookings, events int
+	var (
+		bookings, events int
+		levels           []domain.Level
+	)
 
 	err := st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		var err error
+		if levels, err = tx.Levels().List(ctx); err != nil {
+			return err
+		}
+
 		for _, l := range want.Lessons {
 			bs, err := tx.Bookings().ListByLesson(ctx, l.ID)
 			if err != nil {
@@ -68,6 +77,10 @@ func TestLoadDemo(t *testing.T) {
 
 	if bookings != len(want.Bookings) || events != len(want.BookingEvents) || bookings == 0 {
 		t.Fatalf("%d bookings and %d events, want %d and %d", bookings, events, len(want.Bookings), len(want.BookingEvents))
+	}
+
+	if !slices.Equal(levels, want.Levels) || len(levels) == 0 {
+		t.Fatalf("levels %+v, want %+v", levels, want.Levels)
 	}
 }
 

@@ -61,6 +61,7 @@ func TestDemoDeterministic(t *testing.T) {
 	sameSlice(t, "rooms", a.Rooms, b.Rooms)
 	sameSlice(t, "staff", a.Staff, b.Staff)
 	sameSlice(t, "course types", a.CourseTypes, b.CourseTypes)
+	sameSlice(t, "levels", a.Levels, b.Levels)
 	sameSlice(t, "terms", a.Terms, b.Terms)
 	sameSlice(t, "classes", a.Classes, b.Classes)
 	sameSlice(t, "persons", a.Persons, b.Persons)
@@ -398,6 +399,7 @@ func TestDemoValid(t *testing.T) {
 	validAll(t, d.Rooms)
 	validAll(t, d.Staff)
 	validAll(t, d.CourseTypes)
+	validAll(t, d.Levels)
 	validAll(t, d.Terms)
 	validAll(t, d.Classes)
 	validAll(t, d.Persons)
@@ -1178,6 +1180,14 @@ func TestLoadDemoRoundTrip(t *testing.T) {
 
 		sameSet(t, "course types", courseTypes, want.CourseTypes)
 
+		levels, err := tx.Levels().List(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Listed by position, the order of the scale.
+		sameSlice(t, "levels", levels, want.Levels)
+
 		terms, err := tx.Terms().List(ctx)
 		if err != nil {
 			return err
@@ -1449,6 +1459,26 @@ func TestLoadDemoRefusesStoreWithLocations(t *testing.T) {
 
 	if err := seed.LoadDemo(t.Context(), st); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("load into store with locations: want %v, got %v", domain.ErrConflict, err)
+	}
+}
+
+// TestLoadDemoRefusesStoreWithLevels: a school that has only set up its
+// level scale is in use, too.
+func TestLoadDemoRefusesStoreWithLevels(t *testing.T) {
+	t.Parallel()
+
+	st := memory.New()
+	l := domain.Level{ID: domain.LevelID{1}, Name: "Existing Level", Position: 1}
+
+	err := st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return tx.Levels().Create(ctx, l)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := seed.LoadDemo(t.Context(), st); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("load into store with levels: want %v, got %v", domain.ErrConflict, err)
 	}
 }
 
@@ -2203,4 +2233,53 @@ func TestDemoRoomPositions(t *testing.T) {
 	if want := []string{"1 Oben", "2 Unten", "3 Trainingsraum"}; !slices.Equal(got, want) {
 		t.Errorf("werkstatt rooms = %q, want %q", got, want)
 	}
+}
+
+// TestDemoLevels: every demo school has the four levels from beginner to
+// professional, at positions 1 to 4, with their codes, and loading puts them
+// into the store in that order.
+func TestDemoLevels(t *testing.T) {
+	t.Parallel()
+
+	want := []string{"1 Beginner B", "2 Intermediate I", "3 Advanced A", "4 Professional P"}
+
+	for _, school := range seed.Schools() {
+		d, err := seed.DemoSchoolAt(seed.FixedDemoAnchor, school)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got := levelLines(d.Levels); !slices.Equal(got, want) {
+			t.Errorf("%s: levels = %q, want %q", school, got, want)
+		}
+
+		st := memory.New()
+		if err := seed.LoadDemoSchoolAt(t.Context(), st, seed.FixedDemoAnchor, school); err != nil {
+			t.Fatal(err)
+		}
+
+		var stored []domain.Level
+
+		err = st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+			stored, err = tx.Levels().List(ctx)
+
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !slices.Equal(stored, d.Levels) {
+			t.Errorf("%s: stored levels %+v, want %+v", school, stored, d.Levels)
+		}
+	}
+}
+
+func levelLines(levels []domain.Level) []string {
+	lines := make([]string, 0, len(levels))
+	for _, l := range levels {
+		lines = append(lines, fmt.Sprintf("%d %s %s", l.Position, l.Name, l.Code))
+	}
+
+	return lines
 }
