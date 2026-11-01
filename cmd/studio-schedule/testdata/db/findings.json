@@ -10,20 +10,20 @@
     {
       "check": "passes",
       "entity": "pass",
-      "id": "00000000-0000-7000-8000-000000000254",
+      "id": "00000000-0000-7000-8000-000000000258",
       "message": "3 of its visits are used, but it paid for 2 bookings"
     },
     {
       "check": "capacity",
       "entity": "lesson",
-      "id": "00000000-0000-7000-8000-000000000077",
+      "id": "00000000-0000-7000-8000-00000000007b",
       "message": "3 active bookings for 2 places, and only 0 of them were booked beyond the capacity on purpose"
     },
     {
       "check": "tombstones",
       "entity": "person",
       "id": "00000000-0000-7000-8000-000000000037",
-      "message": "the person is merged, but booking 00000000-0000-7000-8000-00000000024f still refers to it"
+      "message": "the person is merged, but booking 00000000-0000-7000-8000-000000000253 still refers to it"
     },
     {
       "check": "receipt-counters",

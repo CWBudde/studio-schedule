@@ -14,6 +14,6 @@ staff links moved                   0
 account moved                       no
 receipts listed under the survivor  0
 Canceled bookings:
-00000000-0000-7000-8000-0000000000c9  2026-09-22 17:00  Jazz Dance  booked
+00000000-0000-7000-8000-0000000000cd  2026-09-22 17:00  Jazz Dance  booked
 Ended class memberships:
-00000000-0000-7000-8000-000000000061  School Year 2026/27  Jazz Dance  Tuesday  17:00
+00000000-0000-7000-8000-000000000065  School Year 2026/27  Jazz Dance  Tuesday  17:00
