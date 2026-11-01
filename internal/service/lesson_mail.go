@@ -32,33 +32,53 @@ type recipient struct {
 	participants []string
 }
 
-// lessonRecipients returns who is mailed about the active bookings of a
-// lesson, in the order of the bookings (ADR 0007). For a booked person
-// with a disabled account, nobody. Otherwise their account's address if it
-// is confirmed, else their own address, else the addresses of the confirmed
+// lessonRecipients returns who is mailed about the active bookings of
+// lesson l, in the order of the bookings (ADR 0007), and for an event's
+// session about the registrations of its event that have a place (ADR
+// 0019), in their order. For a booked or registered person with a
+// disabled account, nobody. Otherwise their account's address if it is
+// confirmed, else their own address, else the addresses of the confirmed
 // accounts of their guardians that are not disabled; an unconfirmed or
 // disabled guardian account gets nothing, and so does a guardian without an
 // account. For a guest, the guest's address, if they gave one, in the
 // school's default language (guestRecipient). Each address appears once,
-// ignoring case, with every booked person it is mailed for; an address that
-// is an account's and also a person's own is mailed as the account's.
-func lessonRecipients(ctx context.Context, tx store.Tx, lesson domain.LessonID) ([]recipient, error) {
-	bookings, err := tx.Bookings().ListByLesson(ctx, lesson)
+// ignoring case, with every person it is mailed for; an address that is an
+// account's and also a person's own is mailed as the account's.
+func lessonRecipients(ctx context.Context, tx store.Tx, l domain.Lesson) ([]recipient, error) {
+	bookings, err := tx.Bookings().ListByLesson(ctx, l.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	bookings = slices.DeleteFunc(bookings, func(b domain.Booking) bool { return b.Status == domain.BookingCanceled })
 
-	var booked []domain.PersonID
+	var registrations []domain.EventRegistration
+
+	if !l.EventID.IsZero() {
+		if registrations, err = tx.EventRegistrations().ListByEvent(ctx, l.EventID); err != nil {
+			return nil, err
+		}
+
+		registrations = slices.DeleteFunc(registrations, func(r domain.EventRegistration) bool {
+			return r.Status != domain.EventRegistered
+		})
+	}
+
+	var persons []domain.PersonID
 
 	for _, b := range bookings {
-		if !b.PersonID.IsZero() && !slices.Contains(booked, b.PersonID) {
-			booked = append(booked, b.PersonID)
+		if !b.PersonID.IsZero() && !slices.Contains(persons, b.PersonID) {
+			persons = append(persons, b.PersonID)
 		}
 	}
 
-	chains, err := recipientsOf(ctx, tx, booked)
+	for _, r := range registrations {
+		if !r.PersonID.IsZero() && !slices.Contains(persons, r.PersonID) {
+			persons = append(persons, r.PersonID)
+		}
+	}
+
+	chains, err := recipientsOf(ctx, tx, persons)
 	if err != nil {
 		return nil, err
 	}
@@ -66,20 +86,31 @@ func lessonRecipients(ctx context.Context, tx store.Tx, lesson domain.LessonID) 
 	var set recipientSet
 
 	for _, b := range bookings {
-		if b.PersonID.IsZero() {
-			if r, ok := guestRecipient(b); ok {
-				set.add(r, b.GuestName)
-			}
+		set.addPerson(chains, b.PersonID, b.GuestName, b.GuestEmail)
+	}
 
-			continue
-		}
-
-		for _, r := range chains[b.PersonID] {
-			set.add(r, r.participants[0])
-		}
+	for _, r := range registrations {
+		set.addPerson(chains, r.PersonID, r.GuestName, r.GuestEmail)
 	}
 
 	return set.list, nil
+}
+
+// addPerson adds whom mail about person goes to, by chains (recipientsOf),
+// or for a zero person the guest with name and email, if the guest gave an
+// email (guestRecipient).
+func (s *recipientSet) addPerson(chains map[domain.PersonID][]recipient, person domain.PersonID, name, email string) {
+	if person.IsZero() {
+		if r, ok := guestRecipient(name, email); ok {
+			s.add(r, name)
+		}
+
+		return
+	}
+
+	for _, r := range chains[person] {
+		s.add(r, r.participants[0])
+	}
 }
 
 // recipientSet collects recipients, each address once ignoring case, in
@@ -120,16 +151,16 @@ func (s *recipientSet) add(r recipient, participants ...string) {
 	}
 }
 
-// guestRecipient returns the guest of booking b as the recipient of the
-// mails about it, greeted by their name, in the school's default language
-// (no account has a language for them); false for a guest without an
-// email (ADR 0009, amendment).
-func guestRecipient(b domain.Booking) (recipient, bool) {
-	if b.GuestEmail == "" {
+// guestRecipient returns the guest with name and email, of a booking or an
+// event's registration, as the recipient of the mails about it, greeted by
+// their name, in the school's default language (no account has a language
+// for them); false for a guest without an email (ADR 0009, amendment).
+func guestRecipient(name, email string) (recipient, bool) {
+	if email == "" {
 		return recipient{}, false
 	}
 
-	return recipient{email: b.GuestEmail, givenName: b.GuestName, guest: true, participants: []string{b.GuestName}}, true
+	return recipient{email: email, givenName: name, guest: true, participants: []string{name}}, true
 }
 
 // mailsGuardians reports whether mail about booked person p goes to p's
@@ -358,7 +389,7 @@ func (s *LessonService) mailRecipients(
 		return nil
 	}
 
-	recipients, err := lessonRecipients(ctx, tx, l.ID)
+	recipients, err := lessonRecipients(ctx, tx, l)
 	if err != nil || len(recipients) == 0 {
 		return err
 	}

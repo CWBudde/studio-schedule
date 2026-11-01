@@ -372,7 +372,7 @@ func (s *TeachService) Notify(ctx context.Context, p Principal, lesson domain.Le
 			return err
 		}
 
-		recipients, err := lessonRecipients(ctx, tx, l.ID)
+		recipients, err := lessonRecipients(ctx, tx, l)
 		if err != nil || len(recipients) == 0 {
 			return err
 		}

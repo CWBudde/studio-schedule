@@ -633,7 +633,7 @@ func (s *ParticipantService) mailParticipant(
 	var recipients []recipient
 
 	if b.PersonID.IsZero() {
-		if r, ok := guestRecipient(b); ok {
+		if r, ok := guestRecipient(b.GuestName, b.GuestEmail); ok {
 			recipients = append(recipients, r)
 		}
 	} else {

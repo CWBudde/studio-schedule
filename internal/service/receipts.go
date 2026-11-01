@@ -17,11 +17,12 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/store"
 )
 
-// Receipts (ADR 0012) are payment confirmations for pass sales: issued in
-// the sale's transaction with a gapless number per year, immutable, with the
-// issuer, the tax data and the rendered PDF snapshotted, and mailed with the
-// PDF to whoever paid. A cancellation receipt (Storno) negates one and voids
-// its pass, if the pass was not used.
+// Receipts (ADR 0012) are payment confirmations for pass sales and event
+// fees (ADR 0019): issued in the sale's or the payment's transaction with a
+// gapless number per year, immutable, with the issuer, the tax data and the
+// rendered PDF snapshotted, and mailed with the PDF to whoever paid. A
+// cancellation receipt (Storno) negates one and voids its pass, if the pass
+// was not used, or refunds its registration, if the event has not started.
 
 var (
 	// ErrReceiptSettingsIncomplete refuses a receipt (and so a sale) while
@@ -34,6 +35,11 @@ var (
 	ErrReceiptCanceled = fmt.Errorf("%w: the receipt is canceled already", domain.ErrConflict)
 	// ErrCancelCancellation refuses to cancel a cancellation receipt.
 	ErrCancelCancellation = fmt.Errorf("%w: the receipt is a cancellation", domain.ErrConflict)
+	// ErrEventAttended refuses to cancel the receipt of an event fee once
+	// the event's first session has started; the office cancels the
+	// registration or the event with a refund instead (ADR 0012,
+	// amendment).
+	ErrEventAttended = fmt.Errorf("%w: the event has started", domain.ErrConflict)
 	// ErrNoPDFRenderer reports an installation without a PDF renderer: it
 	// cannot issue receipts.
 	ErrNoPDFRenderer = errors.New("no PDF renderer configured")
@@ -147,6 +153,56 @@ func (s *ReceiptService) issueSale(
 		return receiptfmt.PassLine(locale, t.Name, fullName(owner), pass.ValidFrom, pass.ValidUntil)
 	}
 	r.Lines = []domain.ReceiptLine{domain.NewReceiptLine(1, item(r.Locale), 1, pass.PricePaid, t.VATRate, r.TaxMode)}
+	r.Net, r.VAT, r.Gross = r.Lines[0].Net, r.Lines[0].VAT, r.Lines[0].Gross
+
+	if err := s.issue(ctx, tx, r, nil, settings, payer.ID, item); err != nil {
+		return domain.Receipt{}, err
+	}
+
+	return r, nil
+}
+
+// issueEventFee issues, in tx, the receipt of the fee of registration reg
+// for event e by the office account p (ADR 0012, amendment "event fees"):
+// one line for the event and its dates (first to last, school dates) at
+// the price and VAT rate snapshotted on the registration, paid by payer (a
+// person's registration) or by the guest, whose name and email the receipt
+// keeps as its recipient. Zero fields of to take the payer's or the
+// guest's. The caller sets reg.ReceiptID and stores the registration
+// afterwards.
+func (s *ReceiptService) issueEventFee(
+	ctx context.Context, tx store.Tx, settings domain.Settings, loc *time.Location, p Principal, e domain.Event,
+	reg domain.EventRegistration, participant string, payer domain.Person, first, last domain.Date,
+	method domain.PaymentMethod, to ReceiptRecipient,
+) (domain.Receipt, error) {
+	if err := receiptSettingsComplete(settings); err != nil {
+		return domain.Receipt{}, err
+	}
+
+	r, err := s.newReceipt(ctx, tx, settings, loc, p, domain.ReceiptSale)
+	if err != nil {
+		return domain.Receipt{}, err
+	}
+
+	r.PayerID, r.PaymentMethod, r.Currency = payer.ID, method, settings.Currency
+	r.RecipientAddress = strings.TrimSpace(to.Address)
+
+	if payer.ID.IsZero() {
+		r.RecipientName = cmp.Or(strings.TrimSpace(to.Name), reg.GuestName)
+		r.RecipientEmail = cmp.Or(strings.TrimSpace(to.Email), reg.GuestEmail)
+	} else {
+		r.RecipientName = cmp.Or(strings.TrimSpace(to.Name), fullName(payer))
+
+		switch _, err := tx.Accounts().GetByPerson(ctx, payer.ID); {
+		case errors.Is(err, domain.ErrNotFound):
+			r.RecipientEmail = strings.TrimSpace(to.Email)
+		case err != nil:
+			return domain.Receipt{}, err
+		}
+	}
+
+	item := func(locale string) string { return receiptfmt.EventLine(locale, e.Title, participant, first, last) }
+	r.Lines = []domain.ReceiptLine{domain.NewReceiptLine(1, item(r.Locale), 1, reg.Price, reg.VATRate, r.TaxMode)}
 	r.Net, r.VAT, r.Gross = r.Lines[0].Net, r.Lines[0].VAT, r.Lines[0].Gross
 
 	if err := s.issue(ctx, tx, r, nil, settings, payer.ID, item); err != nil {
@@ -321,10 +377,13 @@ func (s *ReceiptService) mail(
 // Cancel issues the cancellation receipt (Storno) of a sale receipt as the
 // office account p, with an optional reason: it negates every line, keeps
 // the tax mode, the payer, the recipient and the payment method, and voids
-// the pass the receipt confirms. A pass that paid for visits is
-// ErrPassUsed (the office voids it instead), a receipt canceled before
-// ErrReceiptCanceled, a cancellation ErrCancelCancellation; an unknown
-// receipt domain.ErrNotFound.
+// the pass the receipt confirms or refunds the registration whose fee it
+// confirms (ADR 0012, amendment). A pass that paid for visits is
+// ErrPassUsed (the office voids it instead), an event whose first session
+// has started ErrEventAttended (the office cancels the registration with a
+// refund instead), a receipt canceled before ErrReceiptCanceled, a
+// cancellation ErrCancelCancellation; an unknown receipt
+// domain.ErrNotFound.
 func (s *ReceiptService) Cancel(ctx context.Context, p Principal, id domain.ReceiptID, reason string) (ReceiptView, error) {
 	var out ReceiptView
 
@@ -343,51 +402,8 @@ func (s *ReceiptService) Cancel(ctx context.Context, p Principal, id domain.Rece
 			return err
 		}
 
-		if orig.Kind == domain.ReceiptCancellation {
-			return ErrCancelCancellation
-		}
-
-		if _, err := tx.Receipts().GetCancellation(ctx, id); err == nil {
-			return ErrReceiptCanceled
-		} else if !errors.Is(err, domain.ErrNotFound) {
-			return err
-		}
-
-		if err := s.voidUnused(ctx, tx, id); err != nil {
-			return err
-		}
-
-		if err := receiptSettingsComplete(settings); err != nil {
-			return err
-		}
-
-		r, err := s.newReceipt(ctx, tx, settings, loc, p, domain.ReceiptCancellation)
+		r, err := s.storno(ctx, tx, settings, loc, p, orig, reason, false)
 		if err != nil {
-			return err
-		}
-
-		r.CancelsReceiptID, r.Reason = orig.ID, strings.TrimSpace(reason)
-		r.TaxMode, r.TaxNote, r.Currency = orig.TaxMode, orig.TaxNote, orig.Currency
-		r.PayerID, r.RecipientName, r.RecipientAddress = orig.PayerID, orig.RecipientName, orig.RecipientAddress
-		r.RecipientEmail, r.PaymentMethod = orig.RecipientEmail, orig.PaymentMethod
-		r.Net, r.VAT, r.Gross = -orig.Net, -orig.VAT, -orig.Gross
-
-		r.Lines = make([]domain.ReceiptLine, len(orig.Lines))
-		for i, l := range orig.Lines {
-			r.Lines[i] = l.Negated()
-		}
-
-		// What was canceled, in the words of the original if the mail is in
-		// its language.
-		item := func(locale string) string {
-			if receiptfmt.Lang(locale) != receiptfmt.Lang(orig.Locale) {
-				return ""
-			}
-
-			return orig.Lines[0].Description
-		}
-
-		if err := s.issue(ctx, tx, r, &orig, settings, orig.PayerID, item); err != nil {
 			return err
 		}
 
@@ -400,6 +416,125 @@ func (s *ReceiptService) Cancel(ctx context.Context, p Principal, id domain.Rece
 	}
 
 	return out, nil
+}
+
+// storno issues, in tx, the cancellation receipt of orig as p with an
+// optional reason (see Cancel) and voids its pass or refunds its
+// registration; attended lets it refund the fee of an event that has
+// started, which only the cancellation of the registration or of the event
+// does.
+func (s *ReceiptService) storno(
+	ctx context.Context, tx store.Tx, settings domain.Settings, loc *time.Location, p Principal, orig domain.Receipt,
+	reason string, attended bool,
+) (domain.Receipt, error) {
+	if orig.Kind == domain.ReceiptCancellation {
+		return domain.Receipt{}, ErrCancelCancellation
+	}
+
+	if _, err := tx.Receipts().GetCancellation(ctx, orig.ID); err == nil {
+		return domain.Receipt{}, ErrReceiptCanceled
+	} else if !errors.Is(err, domain.ErrNotFound) {
+		return domain.Receipt{}, err
+	}
+
+	if err := s.voidUnused(ctx, tx, orig.ID); err != nil {
+		return domain.Receipt{}, err
+	}
+
+	reg, refunds, err := s.refundable(ctx, tx, orig.ID, attended)
+	if err != nil {
+		return domain.Receipt{}, err
+	}
+
+	if err := receiptSettingsComplete(settings); err != nil {
+		return domain.Receipt{}, err
+	}
+
+	r, err := s.newReceipt(ctx, tx, settings, loc, p, domain.ReceiptCancellation)
+	if err != nil {
+		return domain.Receipt{}, err
+	}
+
+	r.CancelsReceiptID, r.Reason = orig.ID, strings.TrimSpace(reason)
+	r.TaxMode, r.TaxNote, r.Currency = orig.TaxMode, orig.TaxNote, orig.Currency
+	r.PayerID, r.RecipientName, r.RecipientAddress = orig.PayerID, orig.RecipientName, orig.RecipientAddress
+	r.RecipientEmail, r.PaymentMethod = orig.RecipientEmail, orig.PaymentMethod
+	r.Net, r.VAT, r.Gross = -orig.Net, -orig.VAT, -orig.Gross
+
+	r.Lines = make([]domain.ReceiptLine, len(orig.Lines))
+	for i, l := range orig.Lines {
+		r.Lines[i] = l.Negated()
+	}
+
+	// What was canceled, in the words of the original if the mail is in
+	// its language.
+	item := func(locale string) string {
+		if receiptfmt.Lang(locale) != receiptfmt.Lang(orig.Locale) {
+			return ""
+		}
+
+		return orig.Lines[0].Description
+	}
+
+	if err := s.issue(ctx, tx, r, &orig, settings, orig.PayerID, item); err != nil {
+		return domain.Receipt{}, err
+	}
+
+	if !refunds {
+		return r, nil
+	}
+
+	// Paid with orig, it is refunded by r.
+	reg.Payment, reg.CancellationReceiptID, reg.UpdatedAt = domain.EventRefunded, r.ID, s.clock.Now()
+
+	return r, tx.EventRegistrations().Update(ctx, reg)
+}
+
+// refundable returns the registration whose fee the receipt confirms, read
+// under its event's lock, and whether there is one. Unless attended, an
+// event whose first scheduled session has started is ErrEventAttended.
+func (s *ReceiptService) refundable(
+	ctx context.Context, tx store.Tx, receipt domain.ReceiptID, attended bool,
+) (domain.EventRegistration, bool, error) {
+	reg, err := tx.EventRegistrations().GetByReceipt(ctx, receipt)
+	if errors.Is(err, domain.ErrNotFound) {
+		return domain.EventRegistration{}, false, nil
+	} else if err != nil {
+		return domain.EventRegistration{}, false, err
+	}
+
+	// Lock order: the event first, then the registration read again under
+	// it (a cancellation of the event or the registration holds it too).
+	if _, err := tx.Events().Lock(ctx, reg.EventID); err != nil {
+		return domain.EventRegistration{}, false, err
+	}
+
+	if reg, err = tx.EventRegistrations().Get(ctx, reg.ID); err != nil {
+		return domain.EventRegistration{}, false, err
+	}
+
+	if attended {
+		return reg, true, nil
+	}
+
+	sessions, err := tx.Lessons().ListByEvent(ctx, reg.EventID)
+	if err != nil {
+		return domain.EventRegistration{}, false, err
+	}
+
+	if started(sessions, s.clock.Now()) {
+		return domain.EventRegistration{}, false, ErrEventAttended
+	}
+
+	return reg, true, nil
+}
+
+// started reports whether one of the sessions the school has not canceled
+// has started at now: the event has been attended.
+func started(sessions []domain.Lesson, now time.Time) bool {
+	return slices.ContainsFunc(sessions, func(l domain.Lesson) bool {
+		return l.Status == domain.LessonScheduled && !l.StartsAt.After(now)
+	})
 }
 
 // voidUnused voids the pass the receipt confirms, under the lock of its
@@ -464,11 +599,18 @@ type ReceiptView struct {
 	// it is the fixed one (the receipt keeps the name it printed).
 	PayerName       string
 	PayerAnonymized bool
+	// EventID and EventTitle name the event whose fee a sale receipt, or
+	// the receipt a cancellation cancels, confirms (ADR 0019); zero and
+	// empty for a pass. EventStarted tells that one of the event's sessions
+	// has started, so the receipt is canceled only with its registration.
+	EventID      domain.EventID
+	EventTitle   string
+	EventStarted bool
 }
 
 // Cancelable reports whether the office can cancel the receipt now.
 func (v ReceiptView) Cancelable() bool {
-	return v.Receipt.Kind == domain.ReceiptSale && v.CanceledBy == nil && !v.PassUsed
+	return v.Receipt.Kind == domain.ReceiptSale && v.CanceledBy == nil && !v.PassUsed && !v.EventStarted
 }
 
 // view returns the ReceiptView of r.
@@ -542,8 +684,16 @@ func (s *ReceiptService) views(ctx context.Context, tx store.Tx, receipts []doma
 
 	names := byID(persons)
 
+	events, err := s.eventsOf(ctx, tx, receipts)
+	if err != nil {
+		return nil, err
+	}
+
 	for i, r := range receipts {
 		v := ReceiptView{Receipt: r, Pass: byReceipt[r.ID]}
+		if fee, ok := events[cmp.Or(r.CancelsReceiptID, r.ID)]; ok {
+			v.EventID, v.EventTitle, v.EventStarted = fee.event.ID, fee.event.Title, fee.started
+		}
 
 		if c, ok := byCanceled[r.ID]; ok {
 			v.CanceledBy = &c
@@ -561,6 +711,60 @@ func (s *ReceiptService) views(ctx context.Context, tx store.Tx, receipts []doma
 	}
 
 	return s.withUses(ctx, tx, out)
+}
+
+// eventFee is the event whose fee a receipt confirms, and whether it has
+// started.
+type eventFee struct {
+	event   domain.Event
+	started bool
+}
+
+// eventsOf returns, by receipt, the events whose fees the sale receipts
+// among receipts, and the receipts the cancellations cancel, confirm, with
+// three queries for any number of receipts.
+func (s *ReceiptService) eventsOf(
+	ctx context.Context, tx store.Tx, receipts []domain.Receipt,
+) (map[domain.ReceiptID]eventFee, error) {
+	sales := mapSlice(receipts, func(r domain.Receipt) domain.ReceiptID { return cmp.Or(r.CancelsReceiptID, r.ID) })
+
+	regs, err := tx.EventRegistrations().ListByReceipts(ctx, sales)
+	if err != nil || len(regs) == 0 {
+		return nil, err
+	}
+
+	var ids []domain.EventID
+
+	for _, r := range regs {
+		if !slices.Contains(ids, r.EventID) {
+			ids = append(ids, r.EventID)
+		}
+	}
+
+	events, err := tx.Events().ListByIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("events: %w", err)
+	}
+
+	sessions, err := tx.Lessons().ListByEvents(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("sessions: %w", err)
+	}
+
+	now := s.clock.Now()
+	byEvent := make(map[domain.EventID]eventFee, len(events))
+
+	for _, e := range events {
+		byEvent[e.ID] = eventFee{event: e, started: started(slices.DeleteFunc(slices.Clone(sessions),
+			func(l domain.Lesson) bool { return l.EventID != e.ID }), now)}
+	}
+
+	out := make(map[domain.ReceiptID]eventFee, len(regs))
+	for _, r := range regs {
+		out[r.ReceiptID] = byEvent[r.EventID]
+	}
+
+	return out, nil
 }
 
 // withUses sets PassUsed on the views whose pass paid for visits.
