@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;">
+<div style="max-width:560px;margin:0 auto;padding:24px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;color:#18181b;background-color:#ffffff;">
+<p>Hallo Anna,</p>
+<p>leider hat Studio Example diese Veranstaltung abgesagt:</p>
+<p><strong>Imaginary Intensive</strong><br>Freitag, 3. Juli 2026 – Sonntag, 5. Juli 2026<br>Angemeldet: Anna Example, Mia Example</p>
+<p>Hinweis von Studio Example: The guest teacher is ill.</p>
+<p>Die gezahlte Gebühr wird erstattet. Den Stornobeleg bekommst du mit einer eigenen E-Mail.</p>
+<p>Viele Grüße<br>Studio Example</p>
+</div>
+</body>
+</html>

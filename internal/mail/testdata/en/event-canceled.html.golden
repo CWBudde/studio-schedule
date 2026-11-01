@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;">
+<div style="max-width:560px;margin:0 auto;padding:24px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;color:#18181b;background-color:#ffffff;">
+<p>Hello Anna,</p>
+<p>unfortunately, Studio Example has canceled this event:</p>
+<p><strong>Imaginary Intensive</strong><br>Friday, 3 July 2026 – Sunday, 5 July 2026<br>Registered: Anna Example, Mia Example</p>
+<p>Note from Studio Example: The guest teacher is ill.</p>
+<p>The fee you paid is refunded. You get the cancellation receipt in a separate email.</p>
+<p>Kind regards,<br>Studio Example</p>
+</div>
+</body>
+</html>

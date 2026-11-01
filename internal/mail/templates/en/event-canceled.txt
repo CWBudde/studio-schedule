@@ -1,0 +1,22 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+unfortunately, {{.SchoolName}} has canceled this event:
+
+{{.Title}}
+{{- if .SeveralDays}}
+{{date .FirstDay}} – {{date .LastDay}}
+{{- else if .HasDates}}
+{{date .FirstDay}}
+{{- end}}
+Registered: {{join .Participants}}
+{{- with .Note}}
+
+Note from {{$.SchoolName}}: {{.}}
+{{- end}}
+{{- if .Refunded}}
+
+The fee you paid is refunded. You get the cancellation receipt in a separate email.
+{{- end}}
+
+Kind regards,
+{{.SchoolName}}

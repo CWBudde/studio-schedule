@@ -68,6 +68,11 @@ const (
 	// changed or reset (ASVS 2.2.3); it has no link. Data:
 	// PasswordChangedData.
 	TemplatePasswordChanged = "password-changed"
+	// TemplateEventCanceled tells those registered for an event, through
+	// the persons' recipients or to a guest's address (ADR 0019), that the
+	// school canceled it, and whether their fee was refunded. Data:
+	// EventCanceledData.
+	TemplateEventCanceled = "event-canceled"
 	// TemplateTest is the test mail of `studio-schedule mail test`, which
 	// checks that the mail server delivers. It goes straight to the mail
 	// server, never through the outbox, so it is no template of the mail
@@ -82,7 +87,7 @@ func TemplateNames() []string {
 		TemplateConfirmEmail, TemplateResetPassword, TemplateChangeEmail, TemplateEmailChanged, TemplateInvite,
 		TemplateLessonCanceled, TemplateLessonRestored, TemplateLessonChanged, TemplateBookingConfirmed,
 		TemplateBookingCanceled, TemplateWaitlistInvite, TemplateWaitlistExpired, TemplateLessonNotice,
-		TemplateReceipt, TemplateAnnouncement, TemplateAccountDeleted, TemplatePasswordChanged,
+		TemplateReceipt, TemplateAnnouncement, TemplateAccountDeleted, TemplatePasswordChanged, TemplateEventCanceled,
 	}
 }
 
@@ -483,6 +488,58 @@ type TestData struct {
 func (d TestData) Validate() error {
 	if strings.TrimSpace(d.Server) == "" {
 		return fmt.Errorf("%w: a test mail names its mail server", domain.ErrValidation)
+	}
+
+	return nil
+}
+
+// EventCanceledData is the data of TemplateEventCanceled. The templates
+// format FirstDay and LastDay in their own location, which must be the
+// school's time zone.
+type EventCanceledData struct {
+	// SchoolName is the school that sends the mail.
+	SchoolName string
+	// GivenName greets the recipient; empty means a greeting without name.
+	GivenName string
+	// Participants are the names of the registered persons the mail is
+	// about: the recipient, their dependents, or a guest.
+	Participants []string
+	// Title names the event.
+	Title string
+	// FirstDay and LastDay are the starts of the event's first and last
+	// sessions, canceled ones included; both zero for an event without
+	// sessions.
+	FirstDay, LastDay time.Time
+	// Note is the school's note on the cancellation; optional.
+	Note string
+	// Refunded tells that a fee the recipient's participants paid is
+	// refunded by a Storno of its receipt, which is mailed apart.
+	Refunded bool
+}
+
+// HasDates reports whether the event has sessions to name.
+func (d EventCanceledData) HasDates() bool { return !d.FirstDay.IsZero() }
+
+// SeveralDays reports whether the event's sessions span more than one day
+// (in the location of FirstDay), so the mail names its first and last day.
+func (d EventCanceledData) SeveralDays() bool {
+	last := d.LastDay.In(d.FirstDay.Location())
+
+	return d.HasDates() && (last.Year() != d.FirstDay.Year() || last.YearDay() != d.FirstDay.YearDay())
+}
+
+// Validate checks the data before rendering. All errors wrap
+// domain.ErrValidation.
+func (d EventCanceledData) Validate() error {
+	switch {
+	case strings.TrimSpace(d.SchoolName) == "":
+		return fmt.Errorf("%w: school name must not be empty", domain.ErrValidation)
+	case strings.TrimSpace(d.Title) == "":
+		return fmt.Errorf("%w: the event's title must not be empty", domain.ErrValidation)
+	case len(d.Participants) == 0:
+		return fmt.Errorf("%w: an event mail needs a participant", domain.ErrValidation)
+	case d.FirstDay.IsZero() != d.LastDay.IsZero() || d.LastDay.Before(d.FirstDay):
+		return fmt.Errorf("%w: the event's last day must not come before its first", domain.ErrValidation)
 	}
 
 	return nil

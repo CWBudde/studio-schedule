@@ -1,0 +1,22 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+leider hat {{.SchoolName}} diese Veranstaltung abgesagt:
+
+{{.Title}}
+{{- if .SeveralDays}}
+{{date .FirstDay}} – {{date .LastDay}}
+{{- else if .HasDates}}
+{{date .FirstDay}}
+{{- end}}
+Angemeldet: {{join .Participants}}
+{{- with .Note}}
+
+Hinweis von {{$.SchoolName}}: {{.}}
+{{- end}}
+{{- if .Refunded}}
+
+Die gezahlte Gebühr wird erstattet. Den Stornobeleg bekommst du mit einer eigenen E-Mail.
+{{- end}}
+
+Viele Grüße
+{{.SchoolName}}
