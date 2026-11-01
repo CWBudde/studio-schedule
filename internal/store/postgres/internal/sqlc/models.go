@@ -167,6 +167,15 @@ type ImportRun struct {
 	Errors           []byte
 }
 
+type JobRun struct {
+	ID        pgtype.UUID
+	Job       string
+	StartedAt pgtype.Timestamptz
+	EndedAt   pgtype.Timestamptz
+	Result    string
+	Error     pgtype.Text
+}
+
 type Lesson struct {
 	ID            pgtype.UUID
 	ClassID       pgtype.UUID

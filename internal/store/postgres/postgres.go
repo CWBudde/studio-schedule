@@ -39,6 +39,8 @@ type Store struct {
 	// embedded migrations, both for Ready.
 	sqlDB      *sql.DB
 	migrations []int64
+
+	jobs jobLocks // see TryLockJob (jobs.go)
 }
 
 var _ store.Store = (*Store)(nil)
@@ -52,6 +54,10 @@ type retryPolicy struct {
 
 var defaultRetry = retryPolicy{attempts: 5, backoff: 10 * time.Millisecond}
 
+// minPoolConns is the smallest pool Open accepts: one connection for the job
+// locks and one for the transactions.
+const minPoolConns = 2
+
 // rollbackTimeout bounds the rollback after a failed or canceled callback.
 const rollbackTimeout = 5 * time.Second
 
@@ -62,6 +68,14 @@ func Open(ctx context.Context, databaseURL string) (*Store, error) {
 	cfg, err := poolConfig(databaseURL)
 	if err != nil {
 		return nil, err
+	}
+
+	// The job locks hold a connection of their own while the job's
+	// transactions need another (TryLockJob): a pool of one would starve
+	// them.
+	if cfg.MaxConns < minPoolConns {
+		return nil, fmt.Errorf("postgres: pool_max_conns is %d, the store needs at least %d connections",
+			cfg.MaxConns, minPoolConns)
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
@@ -114,8 +128,10 @@ func poolConfig(databaseURL string) (*pgxpool.Config, error) {
 	return cfg, nil
 }
 
-// Close closes all connections. Transactions in progress fail.
+// Close closes all connections. Transactions in progress fail, and job locks
+// still held end (their release then does nothing).
 func (s *Store) Close() {
+	s.jobs.close()
 	_ = s.sqlDB.Close()
 	s.pool.Close()
 }
@@ -260,3 +276,4 @@ func (t *tx) PushSubscriptions() store.PushSubscriptionRepo {
 	return pushSubscriptionRepo{t.q}
 }
 func (t *tx) PushOutbox() store.PushOutboxRepo { return pushOutboxRepo{t.q} }
+func (t *tx) JobRuns() store.JobRunRepo        { return jobRunRepo{t.q} }

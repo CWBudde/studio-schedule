@@ -193,7 +193,15 @@ func createTestDatabase(t *testing.T, options string) string {
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
 
-	st, err := Open(t.Context(), withParams(newTestDatabase(t), map[string]string{"pool_max_conns": "4"}))
+	return openTestStore(t, newTestDatabase(t))
+}
+
+// openTestStore returns a Store on the test database at dbURL, with a pool
+// of its own; it is closed when t ends.
+func openTestStore(t *testing.T, dbURL string) *Store {
+	t.Helper()
+
+	st, err := Open(t.Context(), withParams(dbURL, map[string]string{"pool_max_conns": "4"}))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

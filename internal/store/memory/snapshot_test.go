@@ -51,6 +51,14 @@ func content(st *state, name string) reflect.Value {
 	return f
 }
 
+// transientTables are the tables the snapshot leaves out (transient in
+// snapshot.go): the job runs. A write to one alone is no change worth
+// saving, and a restored store has none of their rows. Every other table is
+// saved, and a write to it is a change.
+var transientTables = []string{"jobRuns"}
+
+func transientTable(name string) bool { return slices.Contains(transientTables, name) }
+
 func empty(v reflect.Value) bool {
 	if v.Kind() == reflect.Pointer {
 		return v.IsNil()
@@ -78,8 +86,11 @@ func TestSnapshotCoversEveryTable(t *testing.T) {
 	}
 }
 
+// snapshotJob names the job run fullStore adds, which no snapshot contains.
+const snapshotJob = "snapshot-job"
+
 // fullStore holds the demo data plus a row in each table the seed leaves
-// empty, so the round trip covers every table.
+// empty, so the round trip covers every table, the transient ones included.
 func fullStore(t *testing.T) *Store {
 	t.Helper()
 
@@ -227,6 +238,10 @@ func fullStore(t *testing.T) *Store {
 				ID: ids.New[domain.PushMessageID](src), SubscriptionID: pushSub.ID, Payload: `{"title":"Hello"}`,
 				CreatedAt: at, ExpiresAt: at.Add(time.Hour), NextAttemptAt: at,
 			}),
+			tx.JobRuns().Create(ctx, domain.JobRun{
+				ID: ids.New[domain.JobRunID](src), Job: snapshotJob, StartedAt: at, EndedAt: at.Add(time.Second),
+				Result: domain.JobFailed, Error: "snapshot job error",
+			}),
 		)
 	})
 	if err != nil {
@@ -259,9 +274,22 @@ func TestSnapshotRoundTrip(t *testing.T) {
 
 	for _, name := range stateFields() {
 		want, got := content(&original.state, name), content(&restored.state, name)
+		if transientTable(name) {
+			if !empty(got) {
+				t.Errorf("transient table %s was restored: %v", name, got)
+			}
+
+			continue
+		}
+
 		if !reflect.DeepEqual(want.Interface(), got.Interface()) {
 			t.Errorf("%s differs after the round trip:\nwant %v\n got %v", name, want, got)
 		}
+	}
+
+	// The snapshot holds nothing of the job runs, only null for their table.
+	if bytes.Contains(data, []byte(snapshotJob)) || !bytes.Contains(data, []byte(`"jobRuns":null`)) {
+		t.Errorf("the snapshot contains job runs: %s", data)
 	}
 
 	// The restored store keeps working: a write copies the restored tables

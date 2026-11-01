@@ -171,6 +171,21 @@ func derived[K comparable, V any](field string, tbl func(*state) *table[K, V]) c
 	}
 }
 
+// transient is the codec of a table the snapshot leaves out: the job runs,
+// which the demo's jobs add every minute. Saving them would save the demo
+// every minute and let its saved data grow by thousands of rows a day, for
+// a history nobody reads in the browser. The snapshot writes null for the
+// table, Restore leaves it empty, and a transaction that writes only to it
+// changes nothing worth saving (OnCommit is not called).
+func transient(field string) codec {
+	return codec{
+		field:   field,
+		encode:  func(enc *jsontext.Encoder, _ *state) error { return enc.WriteToken(jsontext.Null) },
+		decode:  func(dec *jsontext.Decoder, _ *state) error { return dec.SkipValue() },
+		changed: func(_, _ *state) bool { return false },
+	}
+}
+
 // reindex builds the indexes derived from the tables of a restored state.
 func reindex(st *state) {
 	st.memberNos = table[string, domain.PersonID]{rows: map[string]domain.PersonID{}}
@@ -367,6 +382,7 @@ var codecs = []codec{
 		func(v domain.PushSubscription) domain.PushSubscriptionID { return v.ID }),
 	rows("pushOutbox", func(s *state) *table[domain.PushMessageID, domain.PushMessage] { return &s.pushOutbox },
 		func(v domain.PushMessage) domain.PushMessageID { return v.ID }),
+	transient("jobRuns"),
 }
 
 // OnCommit registers fn to run after every read-write transaction that

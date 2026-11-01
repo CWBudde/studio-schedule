@@ -176,6 +176,15 @@ func (s *FaultStore) InTx(ctx context.Context, mode store.TxMode, fn func(ctx co
 	})
 }
 
+// TryLockJob implements store.Store; it can fail as "TryLockJob".
+func (s *FaultStore) TryLockJob(ctx context.Context, name string) (func(), bool, error) {
+	if err := s.hit("TryLockJob"); err != nil {
+		return nil, false, err
+	}
+
+	return s.inner.TryLockJob(ctx, name)
+}
+
 // FaultSweep describes an operation whose store failures SweepFaults checks.
 type FaultSweep struct {
 	// Setup builds a fresh fixture whose services use the returned

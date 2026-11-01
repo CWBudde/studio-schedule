@@ -491,6 +491,10 @@ func (s retryingStore) InTx(ctx context.Context, mode store.TxMode, fn func(cont
 	return s.inner.InTx(ctx, mode, fn)
 }
 
+func (s retryingStore) TryLockJob(ctx context.Context, name string) (func(), bool, error) {
+	return s.inner.TryLockJob(ctx, name)
+}
+
 func TestGenerateCountsOnlyTheCommittedAttempt(t *testing.T) {
 	t.Parallel()
 

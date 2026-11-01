@@ -29,6 +29,11 @@ type Store struct {
 	gen      uint64 // incremented per read-write transaction
 	state    state
 	onCommit func() // see OnCommit
+
+	// jobLocks holds a mutex per job name (TryLockJob), apart from mu, so a
+	// job can run transactions while it holds its lock.
+	jobLocksMu sync.Mutex
+	jobLocks   map[string]*sync.Mutex
 }
 
 // state is the complete data set. Tables are copied on write, so copying a
@@ -79,6 +84,10 @@ type state struct {
 
 	pushSubs   table[domain.PushSubscriptionID, domain.PushSubscription]
 	pushOutbox table[domain.PushMessageID, domain.PushMessage]
+
+	// jobRuns is left out of the snapshot (transient in snapshot.go): the
+	// demo's job history starts again on every page load.
+	jobRuns table[domain.JobRunID, domain.JobRun]
 }
 
 type dismissalKey struct {
@@ -276,6 +285,7 @@ func (t *tx) PushSubscriptions() store.PushSubscriptionRepo {
 	return pushSubscriptionRepo{t}
 }
 func (t *tx) PushOutbox() store.PushOutboxRepo { return pushOutboxRepo{t} }
+func (t *tx) JobRuns() store.JobRunRepo        { return jobRunRepo{t} }
 
 func (t *tx) checkWritable() error {
 	if t.mode != store.ReadWrite {

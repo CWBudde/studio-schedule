@@ -88,6 +88,7 @@ type (
 	lessonNoticeKind  struct{}
 	pushSubKind       struct{}
 	pushMessageKind   struct{}
+	jobRunKind        struct{}
 
 	announcementMailingKind struct{}
 )
@@ -168,4 +169,7 @@ type (
 
 	// PushMessageID identifies a web push message.
 	PushMessageID = ID[pushMessageKind]
+
+	// JobRunID identifies a run of a background job.
+	JobRunID = ID[jobRunKind]
 )

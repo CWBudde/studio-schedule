@@ -316,21 +316,21 @@ func TestMigrateDownWithoutMigrations(t *testing.T) {
 }
 
 // migrateFailNewest rolls back the two newest migrations of a new database,
-// breaks the newest one (00027 adds settings.released_through, which then
+// breaks the newest one (00028 creates the table job_runs, which then
 // exists already) and runs migrate up, which must fail. It returns the
 // database, the embedded migrations, and the output and error of up.
 func migrateFailNewest(t *testing.T) (url string, embedded []string, out string, err error) {
 	t.Helper()
 
 	embedded = migrateEmbedded(t)
-	if last := embedded[len(embedded)-1]; last != "00027_settings_released_through.sql" {
-		t.Fatalf("the newest migration is %s; migrateFailNewest breaks 00027 on purpose and needs updating", last)
+	if last := embedded[len(embedded)-1]; last != "00028_job_runs.sql" {
+		t.Fatalf("the newest migration is %s; migrateFailNewest breaks 00028 on purpose and needs updating", last)
 	}
 
 	url = newTestDatabase(t)
 	migrateRun(t, url, "down")
 	migrateRun(t, url, "down")
-	execSQL(t, url, "ALTER TABLE settings ADD COLUMN released_through date")
+	execSQL(t, url, "CREATE TABLE job_runs (id uuid PRIMARY KEY)")
 
 	out, err = execute(map[string]string{"DATABASE_URL": url}, "migrate", "up")
 	if err == nil {

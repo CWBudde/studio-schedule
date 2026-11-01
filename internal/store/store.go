@@ -89,6 +89,15 @@ type Store interface {
 	// returns nil and rolls back otherwise. See the package documentation
 	// for the full contract.
 	InTx(ctx context.Context, mode TxMode, fn func(ctx context.Context, tx Tx) error) error
+	// TryLockJob takes the lock of the background job name (ADR 0020)
+	// without waiting. It reports ok false while another holder has it:
+	// another process on the same database, or another caller in this one.
+	// release frees the lock; calling it again does nothing. The lock sits
+	// beside the transactions: the holder runs InTx while it holds it, and
+	// it is no part of any transaction. It also ends with the process and,
+	// on PostgreSQL, with the connection that holds it. err reports a store
+	// that could not be asked (ok is then false).
+	TryLockJob(ctx context.Context, name string) (release func(), ok bool, err error)
 }
 
 // Tx gives access to the repositories bound to one transaction.
@@ -128,6 +137,7 @@ type Tx interface {
 	DuplicateDismissals() DuplicateDismissalRepo
 	PushSubscriptions() PushSubscriptionRepo
 	PushOutbox() PushOutboxRepo
+	JobRuns() JobRunRepo
 }
 
 // SettingsRepo stores the single, school-wide settings record.
@@ -1053,4 +1063,17 @@ type DuplicateDismissalRepo interface {
 	// Delete removes the dismissal of the pair a and b, in either order; a
 	// pair without one is domain.ErrNotFound.
 	Delete(ctx context.Context, a, b domain.PersonID) error
+}
+
+// JobRunRepo stores the runs of the background jobs (ADR 0020). Runs are
+// only ever added, and deleted by the retention job.
+type JobRunRepo interface {
+	// Create fails with domain.ErrConflict if the ID is taken.
+	Create(ctx context.Context, r domain.JobRun) error
+	// Latest returns the latest run of each job that has one, the run with
+	// the latest StartedAt and then the greatest ID, ordered by Job.
+	Latest(ctx context.Context) ([]domain.JobRun, error)
+	// DeleteStartedBefore deletes every run that started before the instant
+	// and returns how many it deleted. It needs a ReadWrite transaction.
+	DeleteStartedBefore(ctx context.Context, before time.Time) (int, error)
 }

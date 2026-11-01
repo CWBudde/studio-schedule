@@ -132,6 +132,10 @@ func (t *faultTx) PushOutbox() store.PushOutboxRepo {
 	return &faultPushOutboxRepo{PushOutboxRepo: t.Tx.PushOutbox(), f: t.f}
 }
 
+func (t *faultTx) JobRuns() store.JobRunRepo {
+	return &faultJobRunRepo{JobRunRepo: t.Tx.JobRuns(), f: t.f}
+}
+
 type faultSettingsRepo struct {
 	store.SettingsRepo
 	f *FaultStore
@@ -2003,4 +2007,33 @@ func (r *faultPushOutboxRepo) DeleteCreatedBefore(a0 context.Context, a1 time.Ti
 	}
 
 	return r.PushOutboxRepo.DeleteCreatedBefore(a0, a1)
+}
+
+type faultJobRunRepo struct {
+	store.JobRunRepo
+	f *FaultStore
+}
+
+func (r *faultJobRunRepo) Create(a0 context.Context, a1 domain.JobRun) (err error) {
+	if err = r.f.hit("JobRuns.Create"); err != nil {
+		return err
+	}
+
+	return r.JobRunRepo.Create(a0, a1)
+}
+
+func (r *faultJobRunRepo) Latest(a0 context.Context) (r0 []domain.JobRun, err error) {
+	if err = r.f.hit("JobRuns.Latest"); err != nil {
+		return r0, err
+	}
+
+	return r.JobRunRepo.Latest(a0)
+}
+
+func (r *faultJobRunRepo) DeleteStartedBefore(a0 context.Context, a1 time.Time) (r0 int, err error) {
+	if err = r.f.hit("JobRuns.DeleteStartedBefore"); err != nil {
+		return r0, err
+	}
+
+	return r.JobRunRepo.DeleteStartedBefore(a0, a1)
 }
