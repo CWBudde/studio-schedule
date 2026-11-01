@@ -145,6 +145,15 @@ These go before or after the command, as `studio-schedule --output json doctor` 
 | `mail list`    | `--cursor`   | where the page starts: the cursor of the previous page's hint (`nextCursor`) |
 | `mail requeue` | `--failed`   | queue every failed mail again instead of one                                 |
 
+### Commands and flags: accounts
+
+| Command                    | Flag       | Meaning                                                                                     |
+| -------------------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `accounts create`          | `--person` | the ID of the person the new account is for (required)                                      |
+| `accounts create`          | `--role`   | the new account's role: `member`, `instructor`, `office` or `admin` (required)              |
+| `accounts reset-password`  | `--mail`   | mail the reset link to the account (the `deliver-mail` job sends it) instead of printing it |
+| `accounts sessions revoke` | `--all`    | end the sessions of every account instead of one                                            |
+
 `migrate up` applies every pending migration, `migrate down` rolls back the latest one and
 `migrate status` lists them all; `seed` loads the fictional demo data into an empty, migrated
 database. `openapi` prints the OpenAPI document, `version` the build version and `vapid-keys` a new

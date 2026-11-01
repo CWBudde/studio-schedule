@@ -1,0 +1,1 @@
+Created the admin account new.admin@example.org; its invitation is mailed, and its link is valid for 72 hours.

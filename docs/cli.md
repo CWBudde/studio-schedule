@@ -50,6 +50,7 @@ A command that deletes, anonymizes, mails, cancels or merges asks for confirmati
 
 ## Commands
 
+- [`studio-schedule accounts`](#studio-schedule-accounts): Administer the accounts: roles, passwords, sessions
 - [`studio-schedule completion`](#studio-schedule-completion): Generate the autocompletion script for the specified shell
 - [`studio-schedule config`](#studio-schedule-config): Inspect the configuration
 - [`studio-schedule doctor`](#studio-schedule-doctor): Check the configuration, the database, the mail server and the receipt module
@@ -64,6 +65,243 @@ A command that deletes, anonymizes, mails, cancels or merges asks for confirmati
 - [`studio-schedule serve`](#studio-schedule-serve): Run the HTTP server (API and web UI)
 - [`studio-schedule vapid-keys`](#studio-schedule-vapid-keys): Print a new VAPID key pair for web push
 - [`studio-schedule version`](#studio-schedule-version): Print the version
+
+### `studio-schedule accounts`
+
+Administer the accounts: roles, passwords, sessions.
+
+```text
+studio-schedule accounts <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule accounts create`](#studio-schedule-accounts-create): Create an account for a person and mail it an invitation
+- [`studio-schedule accounts delete`](#studio-schedule-accounts-delete): Delete an account; its person stays
+- [`studio-schedule accounts disable`](#studio-schedule-accounts-disable): Disable an account: it is signed out and may not sign in
+- [`studio-schedule accounts enable`](#studio-schedule-accounts-enable): Enable a disabled account again
+- [`studio-schedule accounts list`](#studio-schedule-accounts-list): List every account with its role and status
+- [`studio-schedule accounts reset-password`](#studio-schedule-accounts-reset-password): Print a password-reset link for an account, or mail it with `--mail`
+- [`studio-schedule accounts sessions`](#studio-schedule-accounts-sessions): End the sessions of accounts
+- [`studio-schedule accounts set-role`](#studio-schedule-accounts-set-role): Change the role of an account
+- [`studio-schedule accounts show`](#studio-schedule-accounts-show): Show one account
+
+#### `studio-schedule accounts create`
+
+Create an account for a person and mail it an invitation.
+
+```text
+studio-schedule accounts create <email> --person <id> --role <role> [flags]
+```
+
+Create an account for an existing person, as the office's person page does: unconfirmed and without a password. It mails the address an invitation, whose link (valid for 72 hours) sets the password and confirms the account; the deliver-mail job sends it. Only an admin creates an admin account. The person is named by its ID (see the office's person page); a person with an account and an email another account has are refused with exit status 4.
+
+Examples:
+
+```sh
+studio-schedule accounts create --as office@example.org --person 0190a5d2-ac96-774b-bcce-b302099a8057 --role instructor dance.teacher@example.org
+```
+
+Flags:
+
+- `--person` (string): ID of the person the account is for (required)
+- `--role` (string): role of the account: member, instructor, office or admin (required)
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the response body of the operation createPersonAccount.
+
+#### `studio-schedule accounts delete`
+
+Delete an account; its person stays.
+
+```text
+studio-schedule accounts delete <email|id> [flags]
+```
+
+Delete an account with its password, sessions, links, calendar feeds and announcement dismissals, as the admin's account page does; its person stays. An account that receipts, the audit log, announcements or duplicate dismissals name is refused (in-use, exit status 4): disable it instead. Recorded in the audit log. The account is named by its email address (in any case) or its ID. Refused with exit status 4: the `--as` account's own account (own-account) and the last admin who can sign in (last-admin).
+
+Examples:
+
+```sh
+studio-schedule accounts delete --as admin@example.org --yes member@example.org
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the account as it was, an item of the response body of the operation listAccounts (AccountEntry); the operation deleteAccount answers without a body.
+
+#### `studio-schedule accounts disable`
+
+Disable an account: it is signed out and may not sign in.
+
+```text
+studio-schedule accounts disable <email|id> [flags]
+```
+
+Disable an account: it may no longer sign in, and its sessions and the impersonations it started end. Recorded in the audit log. The account is named by its email address (in any case) or its ID. Refused with exit status 4: the `--as` account's own account (own-account) and the last admin who can sign in (last-admin).
+
+Examples:
+
+```sh
+studio-schedule accounts disable --as admin@example.org --yes member@example.org
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the response body of the operation disableAccount.
+
+#### `studio-schedule accounts enable`
+
+Enable a disabled account again.
+
+```text
+studio-schedule accounts enable <email|id> [flags]
+```
+
+Enable a disabled account again: it may sign in. Recorded in the audit log. The account is named by its email address (in any case) or its ID. The `--as` account's own account is refused (own-account, exit status 4).
+
+Examples:
+
+```sh
+studio-schedule accounts enable --as admin@example.org member@example.org
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Output with `--output json`: the response body of the operation enableAccount.
+
+#### `studio-schedule accounts list`
+
+List every account with its role and status.
+
+```text
+studio-schedule accounts list [flags]
+```
+
+List every account, ordered by email, with its role, its status (active; pending: the email is not confirmed yet; disabled) and the name of its person, as the admin's account page does.
+
+Examples:
+
+```sh
+studio-schedule accounts list --as admin@example.org
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Output with `--output json`: the response body of the operation listAccounts.
+
+#### `studio-schedule accounts reset-password`
+
+Print a password-reset link for an account, or mail it with `--mail`.
+
+```text
+studio-schedule accounts reset-password <email|id> [flags]
+```
+
+Issue a password-reset link for an account, valid for one hour; it replaces the account's older links. Without `--mail` the link is printed on stdout and nothing is mailed: this is the way back in for an admin who has forgotten their password (run it `--as` their own email). With `--mail` the link is mailed to the account, as "forgot password" does, and not printed; the deliver-mail job sends it. The link sets the password once; keep it secret. It works for an account that may sign in and for an invited one; a disabled account or an unconfirmed registration is refused with exit status 4. The account is named by its email address (in any case) or its ID.
+
+Examples:
+
+```sh
+studio-schedule accounts reset-password --as admin@example.org admin@example.org
+studio-schedule accounts reset-password --as admin@example.org --mail --yes member@example.org
+```
+
+Flags:
+
+- `--mail` (bool): mail the link to the account instead of printing it
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: one object: account (an item of the response body of the operation listAccounts (AccountEntry)), link (the reset link; absent with `--mail`), expiresAt (when the link stops working, an RFC 3339 instant), mailed (bool).
+
+#### `studio-schedule accounts sessions`
+
+End the sessions of accounts.
+
+```text
+studio-schedule accounts sessions <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule accounts sessions revoke`](#studio-schedule-accounts-sessions-revoke): End the sessions of an account, or of every account
+
+##### `studio-schedule accounts sessions revoke`
+
+End the sessions of an account, or of every account.
+
+```text
+studio-schedule accounts sessions revoke <email|id>|--all [flags]
+```
+
+Sign an account out everywhere: end its sessions and the impersonations it started, as disabling it does, and remove its devices' push subscriptions. It may sign in again. With `--all`, every account is signed out (after a leak, say). It prints how many sessions ended. The account is named by its email address (in any case) or its ID.
+
+Examples:
+
+```sh
+studio-schedule accounts sessions revoke --as admin@example.org --yes member@example.org
+studio-schedule accounts sessions revoke --as admin@example.org --all
+```
+
+Flags:
+
+- `--all` (bool): end the sessions of every account
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: one object: sessionsEnded (how many sessions ended that had not ended yet), accounts (of how many accounts).
+
+#### `studio-schedule accounts set-role`
+
+Change the role of an account.
+
+```text
+studio-schedule accounts set-role <email|id> <role> [flags]
+```
+
+Give an account another role (member, instructor, office or admin); it takes effect with its next request. Recorded in the audit log. The account is named by its email address (in any case) or its ID. Refused with exit status 4: the `--as` account's own account (own-account) and the last admin who can sign in (last-admin).
+
+Examples:
+
+```sh
+studio-schedule accounts set-role --as admin@example.org office@example.org admin
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Output with `--output json`: the response body of the operation setAccountRole.
+
+#### `studio-schedule accounts show`
+
+Show one account.
+
+```text
+studio-schedule accounts show <email|id> [flags]
+```
+
+Show an account: its ID, email, role, status and person. The account is named by its email address (in any case) or its ID.
+
+Examples:
+
+```sh
+studio-schedule accounts show --as admin@example.org member@example.org
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Output with `--output json`: an item of the response body of the operation listAccounts (AccountEntry).
 
 ### `studio-schedule completion`
 

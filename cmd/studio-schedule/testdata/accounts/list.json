@@ -1,0 +1,220 @@
+{
+  "items": [
+    {
+      "id": "00000000-0000-7000-8000-000000000039",
+      "email": "alina.starling@example.net",
+      "role": "instructor",
+      "givenName": "Alina",
+      "familyName": "Starling",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000040",
+      "email": "arno.keystone@example.net",
+      "role": "admin",
+      "givenName": "Arno",
+      "familyName": "Keystone",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000002",
+      "email": "clara.amberly@example.org",
+      "role": "member",
+      "givenName": "Clara",
+      "familyName": "Amberly",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000021",
+      "email": "david.hollowmere@example.com",
+      "role": "member",
+      "givenName": "David",
+      "familyName": "Hollowmere",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000003c",
+      "email": "felix.keysworth@example.net",
+      "role": "instructor",
+      "givenName": "Felix",
+      "familyName": "Keysworth",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000008",
+      "email": "hanna.birchmoor@example.com",
+      "role": "member",
+      "givenName": "Hanna",
+      "familyName": "Birchmoor",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000028",
+      "email": "irene.inkwell@example.com",
+      "role": "member",
+      "givenName": "Irene",
+      "familyName": "Inkwell",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000000c",
+      "email": "jan.cloudsley@example.org",
+      "role": "member",
+      "givenName": "Jan",
+      "familyName": "Cloudsley",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000002a",
+      "email": "kai.lanternby@example.org",
+      "role": "member",
+      "givenName": "Kai",
+      "familyName": "Lanternby",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000002c",
+      "email": "lina.mistlewood@example.com",
+      "role": "member",
+      "givenName": "Lina",
+      "familyName": "Mistlewood",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000001a",
+      "email": "lukas.fernwhistle@example.com",
+      "role": "member",
+      "givenName": "Lukas",
+      "familyName": "Fernwhistle",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000018",
+      "email": "marta.fernwhistle@example.com",
+      "role": "member",
+      "givenName": "Marta",
+      "familyName": "Fernwhistle",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000025",
+      "email": "nora.ivorycombe@example.org",
+      "role": "member",
+      "givenName": "Nora",
+      "familyName": "Ivorycombe",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000003e",
+      "email": "olga.ledgerby@example.net",
+      "role": "office",
+      "givenName": "Olga",
+      "familyName": "Ledgerby",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000002e",
+      "email": "oskar.nettlebury@example.org",
+      "role": "member",
+      "givenName": "Oskar",
+      "familyName": "Nettlebury",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000013",
+      "email": "petra.elderwick@example.org",
+      "role": "member",
+      "givenName": "Petra",
+      "familyName": "Elderwick",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000030",
+      "email": "rhea.pinecrest@example.com",
+      "role": "member",
+      "givenName": "Rhea",
+      "familyName": "Pinecrest",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000000f",
+      "email": "sara.dunfield@example.com",
+      "role": "member",
+      "givenName": "Sara",
+      "familyName": "Dunfield",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000023",
+      "email": "sophie.hollowmere@example.com",
+      "role": "member",
+      "givenName": "Sophie",
+      "familyName": "Hollowmere",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000032",
+      "email": "tilo.quarrystone@example.org",
+      "role": "member",
+      "givenName": "Tilo",
+      "familyName": "Quarrystone",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000004",
+      "email": "tom.amberly@example.org",
+      "role": "member",
+      "givenName": "Tom",
+      "familyName": "Amberly",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000034",
+      "email": "vera.rushwick@example.com",
+      "role": "member",
+      "givenName": "Vera",
+      "familyName": "Rushwick",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000036",
+      "email": "wanda.sparrowhill@example.org",
+      "role": "member",
+      "givenName": "Wanda",
+      "familyName": "Sparrowhill",
+      "confirmed": true,
+      "disabled": false
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000001d",
+      "email": "yara.gildenmoor@example.org",
+      "role": "member",
+      "givenName": "Yara",
+      "familyName": "Gildenmoor",
+      "confirmed": true,
+      "disabled": false
+    }
+  ]
+}
