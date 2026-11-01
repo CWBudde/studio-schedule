@@ -277,3 +277,25 @@ Anonymizing a person ([ADR 0016](0016-privacy-and-account-administration.md)) do
 receipts: they stay immutable with their snapshot of the recipient, for the retention duty of
 receipts; its passes and redemptions stay as well. An account that created receipts is not deleted
 (`receipts.created_by` refuses it) and is disabled instead.
+
+## Amendment (2026-11-01): event fees
+
+Events ([ADR 0019](0019-events-and-workshops.md)) are paid at the desk. When the office marks a
+registration paid, that issues a receipt in the same transaction and series as a pass sale. The
+receipt uses:
+
+- the same counter and `PREFIX-YYYY-NNNN` number;
+- the school's tax mode, issuer and note, snapshotted on the receipt;
+- the payment method and the PDF;
+- the mail, sent to the person's recipients, or to a guest's email in the school's language.
+
+Its one line names the event and its dates, for the price snapshotted on the registration (gross
+and VAT rate). The registration refers to the receipt (unique), as a pass does. A guest's
+registration has no payer person. Its receipt keeps the guest's name and email as the recipient,
+which `RecipientName` and `RecipientEmail` already snapshot.
+
+A Storno of an event receipt (`cancelReceipt`, or the refund when a registration or event is
+canceled) marks the registration `refunded`. It is refused with a 409 `event-attended` once the
+event's first session has started, unless the office cancels the event or the registration with a
+refund. The other Storno rules stay as they are: the same series, the negated lines, and
+`already-canceled`.

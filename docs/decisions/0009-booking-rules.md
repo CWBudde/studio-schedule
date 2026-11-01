@@ -372,3 +372,10 @@ the school canceled, timely cancellations and staff removals never use a pass; l
 and no-shows do. Every booking change in this ADR settles its pass in the same transaction, after the
 lesson lock (term → class → lesson → passes). The participant list and My lessons carry each
 booking's `payment`, which costs up to three more queries per request.
+
+## Amendment (2026-11-01): event sessions
+
+A lesson that is an event's session (`Lesson.EventID`, [ADR 0019](0019-events-and-workshops.md))
+is not booked one by one. `bookLesson`, staff booking and joining its waiting list are a 409
+`event-session`. Its participant list shows the event's registered persons and guests instead.
+Attendance is still kept per lesson.

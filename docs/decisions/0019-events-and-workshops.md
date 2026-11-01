@@ -1,0 +1,139 @@
+# 0019 — Events and workshops
+
+- Status: accepted
+- Date: 2026-11-01
+- Amends: [0012](0012-passes-and-receipts.md) (receipts cover event fees),
+  [0009](0009-booking-rules.md) (an event's sessions are not booked one by one)
+
+## Context
+
+A workshop today is a one-off lesson of kind `workshop` (ADR 0007). Like every lesson it is booked
+one by one, any pass pays for it (ADR 0012), and it ignores the release window (ADR 0003). Schools
+also run intensives, holiday courses and guest-teacher weekends: several dates sold as one thing,
+at their own price, with a receipt of their own, apart from the weekly timetable and its passes.
+Payment happens at the desk; the app takes no online payments. Phase 10 adds events. The eight
+open questions of the plan were each asked and answered before this record.
+
+## Decision
+
+### An event groups sessions
+
+`domain.Event` has a typed ID, a slug (unique, lowercase letters, digits and hyphens, used in
+`/events/$slug`), a title, a description, a course type, a capacity (at least 1), a gross price
+(`domain.Money`, 0 for a free event) with a VAT rate in basis points (as for pass types: 1900 =
+19 %), a status, a sign-up window, a cancellation deadline and an optional image (stored and served
+like the school's background image, ADR 0018).
+
+Its **sessions** are lessons of kind `workshop` with the new optional `Lesson.EventID`. They stay
+lessons, so the schedule, calendar feeds (ADR 0011), attendance, the room overlap check and the
+announcement audiences keep working on them unchanged. An event stores no instructor and no
+location of its own: those are its sessions' instructors, accompanists and rooms. An event without
+sessions cannot be published.
+
+A session belongs to its event: it is not booked one by one. `bookLesson` and staff booking refuse
+it with a 409 `event-session`, and it has no waiting list of its own. Its participants are the
+event's registered persons and guests. Existing one-off `workshop` lessons without an event stay
+what they are: booked one by one and paid by passes. Nothing migrates; the demo seed adds two or
+three events next to its workshops.
+
+### Registration is for the whole event
+
+`domain.EventRegistration` names the event and either a person or a guest (a name and an email,
+exactly one of the two). It has:
+
+- **status:** `waiting`, `invited`, `registered` or `canceled`;
+- **payment:** `unpaid`, `paid` or `refunded`;
+- **price snapshot:** the gross price and VAT rate when the registration was created; a later price
+  change does not touch existing registrations;
+- the receipt and its Storno;
+- an invite's token hash and expiry, in the shape of ADR 0010;
+- the account that registered it, and the times.
+
+A person has at most one open registration (`waiting`, `invited` or `registered`) per event.
+
+**Who registers.**
+
+- Signed-in members register themselves and their dependents (the family rules of ADR 0008; a 404
+  for anyone else's person).
+- The office registers a person or adds a guest at the desk, as it adds guest bookings to lessons
+  today (ADR 0009).
+- There is no public sign-up form for guests.
+
+**Free events** are `paid` from the start with no receipt, because there is nothing to pay.
+
+### Capacity and the waiting list
+
+**Capacity.** One capacity per event, checked under the event's lock (`Events().Lock`: `FOR UPDATE`
+on PostgreSQL, a mutex per event in memory). The lock order is event → its lessons → the persons'
+passes, before any lesson lock. The event is full when its registered places plus its open invites
+fill the capacity.
+
+**Waiting list.** A full event answers a member with a 409 `full` and offers the waiting list. The
+waiting list is the event's registrations in `waiting` and `invited`, and follows ADR 0010:
+
+- order by joining time, then by ID;
+- one invite per freed place, a mailed token valid for `waitlist_invite_expiry` but never beyond the
+  sign-up close;
+- an open invite holds its place;
+- an invite that runs out goes to the next person waiting.
+
+Accepting the invite turns the registration into `registered`. The office may register beyond the
+capacity with the same explicit confirmation as for lessons (ADR 0009, amendment).
+
+### Release and the sign-up window
+
+**Status.** An event is `draft` (only the office sees it), `published` (public in `listEvents` and
+`getEvent`) or `canceled`. Events ignore the timetable's release window, as workshops do (ADR 0003):
+publishing shows the event and its sessions at once.
+
+**Sign-up window.** Registering is possible between `signupOpensAt` (optional: from publishing on)
+and `signupClosesAt` (optional: the first session's start). Outside the window a member gets a 409
+`closed`. The office can still register.
+
+### Payment and receipts
+
+The app takes no online payment. A paid registration starts `unpaid`, and the office marks it paid
+at the desk with a payment method. **Marking it paid issues the receipt in the same transaction**,
+through `ReceiptService` (ADR 0012, amendment "event fees"). A failure rolls back both the payment
+and the receipt number.
+
+### Cancellation
+
+**The deadline.** Each event has a cancellation deadline, `cancelUntil` (optional: the sign-up
+close).
+
+- **Before the deadline**, a member cancels their own or a dependent's registration. A paid one is
+  refunded by a Storno of its receipt and becomes `refunded`.
+- **After the deadline**, a member gets a 409 `too-late`, and only the office cancels. It chooses
+  whether to refund (Storno) or keep the payment.
+
+Either way the freed place goes to the waiting list.
+
+**An event the school cancels.** Every open registration is canceled, every paid receipt is
+cancelled by Storno, its sessions are canceled like lessons (ADR 0007), and the registered persons
+and guests are mailed, in the causing transaction.
+
+### Data protection
+
+A guest's name and email fall under ADR 0016's guest retention: 12 months after the event's last
+session they become `Guest` without an email. Receipts keep their snapshot. A person's registrations
+belong in their data export and stay, with the person, when it is anonymised.
+
+### Left to the items that build it
+
+Mail templates and their wording, the API shapes beyond the operation names in PLAN.md, the theme
+slots, and how the lesson waiting list's code is shared with the events' are decided by the items
+that build them and recorded here as amendments.
+
+## Consequences
+
+- An intensive is sold as one thing at one price and gets one receipt. Its dates still show in the
+  schedule and in feeds like any lesson.
+- No pass pays for an event, so a school that wants a pass-paid workshop keeps it a plain
+  `workshop` lesson.
+- The receipt series now holds pass sales and event fees. Both share the counter, the VAT rules and
+  the Storno, so the tax adviser sees one series.
+- A registration for a few dates of an intensive is not possible. The office registers the person
+  for the whole event and settles the price by hand.
+- Guests reach an event only through the office, so the public pages gain no unauthenticated write
+  and no new abuse surface.

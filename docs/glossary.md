@@ -28,6 +28,8 @@ where it differs.
 | Pause (membership) | Paused until        | Pausiert bis           | Class member canceled the following weeks up to a date (0009)            |
 | Guest booking      | Guest               | Gast / extern          | Booking without a person record: a name, optional email (staff only)     |
 | Trial              | Trial lesson        | Probestunde            | Flag on a booking, with an optional note for the instructor              |
+| `Event`            | Event               | Veranstaltung          | Workshop or intensive: sessions (lessons), own price, receipt (0019)     |
+| Event registration | Registration        | Anmeldung              | Sign-up of a person or guest for a whole event (`EventRegistration`)     |
 | Participants       | Participants        | Teilnehmende           | A lesson's bookings and waiting list, for its staff (ADR 0009)           |
 | Attendance         | Attendance          | Anwesenheit            | `attended` / `no_show`; instructors until the day's end, then office     |
 | `WaitlistEntry`    | Waiting list        | Warteliste             | Timed invites instead of "notify all"                                    |
