@@ -819,6 +819,14 @@ func (r *faultLevelRepo) SetOrder(a0 context.Context, a1 []domain.LevelID) (err 
 	return r.LevelRepo.SetOrder(a0, a1)
 }
 
+func (r *faultLevelRepo) LockScale(a0 context.Context) (err error) {
+	if err = r.f.hit("Levels.LockScale"); err != nil {
+		return err
+	}
+
+	return r.LevelRepo.LockScale(a0)
+}
+
 type faultTermRepo struct {
 	store.TermRepo
 	f *FaultStore

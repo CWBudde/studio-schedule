@@ -89,6 +89,23 @@ func (q *Queries) ListLevels(ctx context.Context) ([]Level, error) {
 	return items, nil
 }
 
+const lockLevelScale = `-- name: LockLevelScale :one
+SELECT CASE WHEN current_setting('transaction_read_only')::boolean THEN false
+    ELSE (SELECT true FROM (SELECT pg_advisory_xact_lock(hashtext('level-scale'))) AS l)
+END::boolean AS locked
+`
+
+// A transaction-scoped advisory lock serializes adding a level and
+// reordering the scale (row locks cannot stop an insert). The key is
+// arbitrary but fixed: hashtext('level-scale'). A read-only transaction gets
+// false and no lock.
+func (q *Queries) LockLevelScale(ctx context.Context) (bool, error) {
+	row := q.db.QueryRow(ctx, lockLevelScale)
+	var locked bool
+	err := row.Scan(&locked)
+	return locked, err
+}
+
 const lockLevels = `-- name: LockLevels :many
 SELECT id, name, code, position FROM levels ORDER BY id FOR UPDATE
 `

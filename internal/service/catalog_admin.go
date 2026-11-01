@@ -286,6 +286,10 @@ func (s *CatalogService) CreateLevel(ctx context.Context, d LevelData) (domain.L
 			return err
 		}
 
+		if err := tx.Levels().LockScale(ctx); err != nil {
+			return err
+		}
+
 		levels, err := tx.Levels().List(ctx)
 		if err != nil {
 			return err
@@ -349,6 +353,10 @@ func (s *CatalogService) DeleteLevel(ctx context.Context, id domain.LevelID) err
 // since the caller read the list.
 func (s *CatalogService) SetLevelOrder(ctx context.Context, order []domain.LevelID) error {
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		if err := tx.Levels().LockScale(ctx); err != nil {
+			return err
+		}
+
 		err := tx.Levels().SetOrder(ctx, order)
 		if errors.Is(err, domain.ErrValidation) {
 			return fmt.Errorf("%w (%w)", errLevelOrder, err)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/store"
 	"github.com/cwbudde/studio-schedule/internal/store/postgres/internal/sqlc"
 )
 
@@ -89,6 +90,19 @@ func (r levelRepo) SetOrder(ctx context.Context, order []domain.LevelID) error {
 		if err := affected("level", n, err); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (r levelRepo) LockScale(ctx context.Context) error {
+	locked, err := r.q.LockLevelScale(ctx)
+
+	switch {
+	case err != nil:
+		return mapErr(err)
+	case !locked:
+		return store.ErrReadOnly
 	}
 
 	return nil

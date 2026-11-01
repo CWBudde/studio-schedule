@@ -494,6 +494,11 @@ type LevelRepo interface {
 	// It fails with domain.ErrValidation unless order holds every level
 	// exactly once and nothing else.
 	SetOrder(ctx context.Context, order []domain.LevelID) error
+	// LockScale serializes the transactions that add a level or reorder
+	// the scale, until the transaction ends, so a new level neither takes
+	// another's position nor slips past a reorder that misses it. It needs
+	// a ReadWrite transaction and fails with ErrReadOnly otherwise.
+	LockScale(ctx context.Context) error
 }
 
 // TermRepo stores terms.

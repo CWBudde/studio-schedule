@@ -126,6 +126,11 @@ func testLevels(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			wantSlice(e.t, e.levels(), before)
 		},
+		"LockScale": func(e *env) {
+			err := e.read(func(ctx context.Context, tx store.Tx) error { return tx.Levels().LockScale(ctx) })
+			wantErr(e.t, err, store.ErrReadOnly)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Levels().LockScale(ctx) })
+		},
 		"SetOrderWithoutLevels": func(e *env) {
 			for _, order := range [][]domain.LevelID{nil, {}} {
 				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Levels().SetOrder(ctx, order) })

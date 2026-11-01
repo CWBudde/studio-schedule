@@ -116,3 +116,7 @@ func (r levelRepo) SetOrder(_ context.Context, order []domain.LevelID) error {
 
 	return nil
 }
+
+// LockScale needs no lock of its own: the memory store serializes all
+// transactions.
+func (r levelRepo) LockScale(context.Context) error { return r.tx.checkWritable() }

@@ -54,8 +54,11 @@ types:
   cannot write back a position a concurrent reorder has just changed, which `RoomRepo` needed a
   row lock for (a room's position also changes when it moves to another location; a level's only
   through the order).
-- As for rooms there is no unique constraint on the position: two concurrent creates may tie, the
-  tie falls back to the name, and the next reorder numbers the levels 1..n again.
+- `createLevel` and `setLevelOrder` first take `LevelRepo.LockScale`, in PostgreSQL a
+  transaction-scoped advisory lock, because the row lock of `SetOrder` cannot stop an insert.
+  Concurrent creates therefore take positions one after another, and a create during a reorder
+  waits and goes after the reordered levels, so the reorder cannot commit an order that misses it.
+  There is still no unique constraint on the position; the lock keeps the positions apart.
 - Deleting a level that classes use will be a 409 `in-use` (`domain.ErrInUse`) once classes refer
   to levels; until then nothing refers to them.
 
