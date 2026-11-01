@@ -241,6 +241,8 @@ func (h *handlers) bookingError(ctx context.Context, err error) error {
 		c.Why = string(closed.Why)
 
 		return c
+	case errors.Is(err, service.ErrEventSession):
+		return conflict(reasonEventSession, "the lesson is a session of an event; register for the event")
 	case errors.Is(err, service.ErrAlreadyBooked):
 		return conflict(reasonAlreadyBooked, "the person is booked for the lesson already")
 	case errors.Is(err, service.ErrLessonFull):

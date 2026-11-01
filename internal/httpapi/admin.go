@@ -99,6 +99,10 @@ type AuditDetails struct {
 	Delivery string    `doc:"How the link of password-reset-issued or setup-link-issued reached its holder; the link itself is never recorded." enum:"mailed,printed" json:"delivery,omitempty"`
 	Sessions int       `doc:"How many running sessions sessions-revoked ended; absent for none."                                                  json:"sessions,omitempty"`
 	Via      *AuditVia `doc:"The channel the actor acted through, for any action; absent for the API."                                           json:"via,omitempty"`
+	// ADR 0019.
+	EventID        domain.EventID             `doc:"The event of the event actions." json:"eventId,omitzero"`
+	RegistrationID domain.EventRegistrationID `doc:"The registration of event-registration-added, -canceled and -paid." json:"registrationId,omitzero"`
+	Refund         bool                       `doc:"Whether event-registration-canceled refunded the fee by a Storno." json:"refund,omitempty"`
 }
 
 // AuditVia is the channel an actor acted through when not the API.
@@ -111,7 +115,7 @@ type AuditVia struct {
 type AuditEventEntry struct {
 	ID           domain.AuditEventID `doc:"Audit event ID."  json:"id"`
 	At           time.Time           `doc:"When it happened." json:"at"`
-	Action       string              `doc:"What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one), person-anonymized (target: the person), account-disabled, account-enabled and account-role-changed (target: the account; details of a role change: both roles), account-deleted (target: the account's person, which stays; without an actor its holder deleted it), password-reset-issued (target: the account; details: the delivery), sessions-revoked (target: the account, none when every account's sessions were ended; details: how many sessions ended), setup-link-issued (target: the account; no actor; details: the delivery and via); later versions may add actions. An event that targeted an account deleted since targets its person." json:"action"`
+	Action       string              `doc:"What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one), person-anonymized (target: the person), account-disabled, account-enabled and account-role-changed (target: the account; details of a role change: both roles), account-deleted (target: the account's person, which stays; without an actor its holder deleted it), password-reset-issued (target: the account; details: the delivery), sessions-revoked (target: the account, none when every account's sessions were ended; details: how many sessions ended), setup-link-issued (target: the account; no actor; details: the delivery and via), event-registration-added, event-registration-canceled and event-registration-paid (target: the registered person, none for a guest; details: the event, the registration and, when canceled, whether it refunded), event-canceled (no target; details: the event); later versions may add actions. An event that targeted an account deleted since targets its person." json:"action"`
 	Actor        *AuditAccount       `doc:"The account that acted; absent only for account-deleted when the account's holder deleted it, and for setup-link-issued, which an operator issues on the command line (details.via names the OS user)." json:"actor,omitempty"`
 	Target       *AuditAccount       `doc:"The account acted upon; absent unless the event targets an account." json:"target,omitempty"`
 	TargetPerson *AuditPerson        `doc:"The person acted upon; absent unless the event targets a person." json:"targetPerson,omitempty"`
@@ -172,7 +176,8 @@ func (h *handlers) listAuditEvents(ctx context.Context, _ *struct{}) (*AuditEven
 			entry.Details = &AuditDetails{
 				MailID: d.MailID, Recipient: d.Recipient, Template: d.Template, MergedPersonID: d.MergedPersonID,
 				MergedName: d.MergedName, PreviousRole: string(d.PreviousRole), Role: string(d.Role),
-				Delivery: string(d.Delivery), Sessions: d.Sessions,
+				Delivery: string(d.Delivery), Sessions: d.Sessions, EventID: d.EventID, RegistrationID: d.RegistrationID,
+				Refund: d.Refund,
 			}
 
 			if !d.Via.IsZero() {

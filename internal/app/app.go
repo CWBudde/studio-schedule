@@ -206,6 +206,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 		MailLog:        svc.MailLog,
 		Imports:        svc.Imports,
 		Push:           svc.Push,
+		Events:         svc.Events,
 	})
 
 	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {

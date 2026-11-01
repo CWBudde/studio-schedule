@@ -292,6 +292,230 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/event-registrations/{registrationId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a registration
+         * @description Cancels an open registration, after the members' deadline too. With `refund`, a fee paid with a receipt is refunded by a Storno of the receipt, even once the event has started; without, the payment stays. A canceled registration is a 409 `already-canceled`.
+         */
+        post: operations["officeCancelEventRegistration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/event-registrations/{registrationId}/pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take an event fee
+         * @description Records that the fee of an open, unpaid registration was paid at the desk and issues its receipt in the same transaction: one line naming the event and its dates, mailed to the payer (default: the registered person), or to a guest's email. A paid, free or refunded registration is a 409 `already-paid`, a canceled one a 409 `already-canceled`; an unknown payer, or one for a guest, a 422 on `body.payerId`; incomplete receipt settings a 409 `receipt-settings-incomplete`.
+         */
+        post: operations["markEventRegistrationPaid"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List events
+         * @description Returns every event, drafts and canceled ones included, ordered by the start of its first session (events without one last), with its sessions and the places taken now.
+         */
+        get: operations["listAdminEvents"];
+        put?: never;
+        /**
+         * Create an event
+         * @description Adds a draft event, which only the office sees. Without a slug the title's is taken (lowercase, umlauts spelled out, other accents dropped, everything else a hyphen), numbered (-2, -3, …) while another event has it; a title that gives none is a 422 on `body.slug`. A slug that is given and taken is a 409 `duplicate`. An unknown course type is a 422 on `body.courseTypeId`.
+         */
+        post: operations["createEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/events/{eventId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an event
+         * @description Returns an event as the office sees it, with its sessions, the places taken now and its image's type and digest.
+         */
+        get: operations["getAdminEvent"];
+        /**
+         * Update an event
+         * @description Replaces the editable fields of an event; its status stays, and without a slug it keeps its own. A new capacity is written to every session that has not started, canceled ones included; lowering it below the registrations and open invites is a 422 on `body.capacity`. The course type of an event with sessions stays (a 422 on `body.courseTypeId`). A slug that is given and taken is a 409 `duplicate`.
+         */
+        put: operations["updateEvent"];
+        post?: never;
+        /**
+         * Delete an event
+         * @description Deletes an event with its sessions and image. An event with registrations (canceled ones included) or a session that has started is a 409 `in-use`: it is canceled instead.
+         */
+        delete: operations["deleteEvent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/events/{eventId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel an event
+         * @description Cancels an event in one transaction, with an optional note: its sessions that have not started are canceled like lessons (without their own mails), every open registration is canceled and a paid one refunded by a Storno of its receipt, even once the event has started, and everyone registered gets one event-canceled mail. An event canceled already is a 409 `closed`; incomplete receipt settings a 409 `receipt-settings-incomplete`.
+         */
+        post: operations["cancelEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/events/{eventId}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Event image
+         * @description Returns the event's image; a 404 without one. With the `ETag` in `If-None-Match` an unchanged image is a 304.
+         */
+        get: operations["getAdminEventImage"];
+        /**
+         * Set the event image
+         * @description Sets the event's image: a JPEG, PNG or WebP image of at most 1 MiB, base64 encoded, as for the school's background. Another type is a 422 on `body.contentType`; an empty or larger image, or data that does not match the type, one on `body.data`.
+         */
+        put: operations["putEventImage"];
+        post?: never;
+        /**
+         * Remove the event image
+         * @description Removes the event's image, if it has one.
+         */
+        delete: operations["deleteEventImage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/events/{eventId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish an event
+         * @description Shows a draft event and its sessions to everyone. An event that is not a draft is a 409 `not-draft`, one without a scheduled session a 409 `no-sessions`.
+         */
+        post: operations["publishEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/events/{eventId}/registrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List an event's registrations
+         * @description Returns the registrations of an event, canceled ones included, in the order they were made.
+         */
+        get: operations["listEventRegistrations"];
+        put?: never;
+        /**
+         * Register for an event
+         * @description Registers a person or a guest (exactly one of `personId` and `guest`, a 422 on `body` otherwise; a guest needs an email) for a published event at the desk. A draft or canceled event is a 409 `closed`; one whose registrations and open invites fill its capacity a 409 `full` unless `confirmOverCapacity` is set; a person registered already a 409 `duplicate`. An unknown person is a 422 on `body.personId`. The price is the event's now; a free registration is paid, a priced one unpaid until `markEventRegistrationPaid`.
+         */
+        post: operations["addEventRegistration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/events/{eventId}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a session to an event
+         * @description Adds a session: a public lesson of kind workshop without a class, with the event's course type and capacity. A canceled event is a 409 `closed`. Otherwise the checks of `createLesson` apply (422 on unknown rooms or staff, 409 `past`, 409 `room-taken`). The session is then edited, canceled and deleted as a lesson; its capacity stays the event's.
+         */
+        post: operations["addEventSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/events/{eventId}/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take an event back
+         * @description Makes a published event a draft again, which only the office sees. One that is not published is a 409 `not-published`, one with open registrations a 409 `in-use`.
+         */
+        post: operations["unpublishEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/imports": {
         parameters: {
             query?: never;
@@ -2715,6 +2939,17 @@ export interface components {
              */
             role: "member" | "instructor" | "office" | "admin";
         };
+        AddEventRegistrationData: {
+            /** @description Register even if the event is full (skips the 409 full). */
+            confirmOverCapacity?: boolean;
+            /** @description A guest to register instead of a person; an email is required. */
+            guest?: components["schemas"]["GuestData"];
+            /**
+             * Format: uuid
+             * @description The person to register.
+             */
+            personId?: string;
+        };
         AddParticipantData: {
             /** @description Book even if the lesson is full (skips the 409 full); the booking event records the override. */
             confirmOverCapacity?: boolean;
@@ -2729,6 +2964,91 @@ export interface components {
             trial?: boolean;
             /** @description Note on the trial for the instructor; only with trial. */
             trialNote?: string;
+        };
+        AdminEvent: {
+            /**
+             * Format: date-time
+             * @description Deadline of a member's own cancellation; absent: the sign-up close.
+             */
+            cancelUntil?: string;
+            /**
+             * Format: int64
+             * @description Places for the whole event.
+             */
+            capacity: number;
+            /**
+             * Format: uuid
+             * @description Course type of the event and its sessions.
+             */
+            courseTypeId: string;
+            /**
+             * Format: date-time
+             * @description When the event was created.
+             */
+            createdAt: string;
+            /** @description Description, plain text; absent if none. */
+            description?: string;
+            /**
+             * Format: uuid
+             * @description Event ID.
+             */
+            id: string;
+            /** @description The image's type and digest; absent without one, and in listAdminEvents. */
+            image?: components["schemas"]["EventImageInfo"];
+            /**
+             * Format: int64
+             * @description Open invites of the waiting list, each holding a place.
+             */
+            invited: number;
+            /**
+             * Format: int64
+             * @description Gross price in minor units; 0 for a free event.
+             */
+            price: number;
+            /**
+             * Format: int64
+             * @description Registrations with a place.
+             */
+            registered: number;
+            /** @description The sessions, canceled ones included, ordered by start. */
+            sessions: components["schemas"]["LessonSummary"][];
+            /**
+             * Format: date-time
+             * @description When registering closes; absent: at the first session's start.
+             */
+            signupClosesAt?: string;
+            /**
+             * Format: date-time
+             * @description When members may register; absent: from publishing on.
+             */
+            signupOpensAt?: string;
+            /** @description Slug, used in /events/{slug}. */
+            slug: string;
+            /**
+             * @description draft: only the office sees it; published: public with its sessions; canceled: canceled by the school.
+             * @enum {string}
+             */
+            status: "draft" | "published" | "canceled";
+            /** @description Title. */
+            title: string;
+            /**
+             * Format: date-time
+             * @description When it was last changed.
+             */
+            updatedAt: string;
+            /**
+             * Format: int64
+             * @description VAT rate of the price in basis points.
+             */
+            vatRate: number;
+            /**
+             * Format: int64
+             * @description Registrations waiting for a place.
+             */
+            waiting: number;
+        };
+        AdminEventList: {
+            items: components["schemas"]["AdminEvent"][];
         };
         AdminPass: {
             /**
@@ -3125,6 +3445,11 @@ export interface components {
             delivery?: "mailed" | "printed";
             /**
              * Format: uuid
+             * @description The event of the event actions.
+             */
+            eventId?: string;
+            /**
+             * Format: uuid
              * @description The mail of mail-requeued.
              */
             mailId?: string;
@@ -3142,6 +3467,13 @@ export interface components {
             previousRole?: "member" | "instructor" | "office" | "admin";
             /** @description Its recipient. */
             recipient?: string;
+            /** @description Whether event-registration-canceled refunded the fee by a Storno. */
+            refund?: boolean;
+            /**
+             * Format: uuid
+             * @description The registration of event-registration-added, -canceled and -paid.
+             */
+            registrationId?: string;
             /**
              * @description The role after account-role-changed.
              * @enum {string}
@@ -3158,7 +3490,7 @@ export interface components {
             via?: components["schemas"]["AuditVia"];
         };
         AuditEventEntry: {
-            /** @description What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one), person-anonymized (target: the person), account-disabled, account-enabled and account-role-changed (target: the account; details of a role change: both roles), account-deleted (target: the account's person, which stays; without an actor its holder deleted it), password-reset-issued (target: the account; details: the delivery), sessions-revoked (target: the account, none when every account's sessions were ended; details: how many sessions ended), setup-link-issued (target: the account; no actor; details: the delivery and via); later versions may add actions. An event that targeted an account deleted since targets its person. */
+            /** @description What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one), person-anonymized (target: the person), account-disabled, account-enabled and account-role-changed (target: the account; details of a role change: both roles), account-deleted (target: the account's person, which stays; without an actor its holder deleted it), password-reset-issued (target: the account; details: the delivery), sessions-revoked (target: the account, none when every account's sessions were ended; details: how many sessions ended), setup-link-issued (target: the account; no actor; details: the delivery and via), event-registration-added, event-registration-canceled and event-registration-paid (target: the registered person, none for a guest; details: the event, the registration and, when canceled, whether it refunded), event-canceled (no target; details: the event); later versions may add actions. An event that targeted an account deleted since targets its person. */
             action: string;
             /** @description The account that acted; absent only for account-deleted when the account's holder deleted it, and for setup-link-issued, which an operator issues on the command line (details.via names the OS user). */
             actor?: components["schemas"]["AuditAccount"];
@@ -3861,10 +4193,10 @@ export interface components {
             /** @description The lesson that uses the room; only with reason room-taken. */
             lesson?: components["schemas"]["ConflictLesson"];
             /**
-             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, or the members fill the class's capacity; closed: the lesson cannot be booked (see why); already-canceled: the booking, or the receipt, is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead; two-accounts: both persons of a merge have an account, so one is disabled first; guardian-cycle: after the merge a guardian of the survivor would also be its dependent; anonymized: the person is anonymized already; sole-guardian: the person is the only guardian of a dependent, so another guardian is linked or the link removed first; last-admin: the account is the last admin who can sign in (enabled and confirmed), which is not disabled, demoted or deleted; own-account: an admin does not disable, demote or delete their own account (another admin does).
+             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, the members fill the class's capacity, or the registrations and open invites fill the event's capacity; closed: the lesson cannot be booked (see why), or the event takes no registrations or sessions (a draft or canceled event, without why); already-canceled: the booking, the receipt, or the event registration is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead; two-accounts: both persons of a merge have an account, so one is disabled first; guardian-cycle: after the merge a guardian of the survivor would also be its dependent; anonymized: the person is anonymized already; sole-guardian: the person is the only guardian of a dependent, so another guardian is linked or the link removed first; last-admin: the account is the last admin who can sign in (enabled and confirmed), which is not disabled, demoted or deleted; own-account: an admin does not disable, demote or delete their own account (another admin does); event-session: the lesson is a session of an event, for which people register as a whole, so it is not booked and has no waiting list of its own; no-sessions: the event has no scheduled session, so it is not published; not-draft: the event is published or canceled already; not-published: the event is not published, so it is not taken back; already-paid: the registration is paid already (a free one from the start) or refunded; event-attended: a session of the event has started, so the receipt of its fee is canceled only with the registration (with a refund).
              * @enum {string}
              */
-            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation" | "timezone-locked" | "currency-locked" | "mail-limit" | "expired" | "not-failed" | "secret-link" | "two-accounts" | "guardian-cycle" | "anonymized" | "sole-guardian" | "last-admin" | "own-account";
+            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation" | "timezone-locked" | "currency-locked" | "mail-limit" | "expired" | "not-failed" | "secret-link" | "two-accounts" | "guardian-cycle" | "anonymized" | "sole-guardian" | "last-admin" | "own-account" | "event-session" | "no-sessions" | "not-draft" | "not-published" | "already-paid" | "event-attended";
             /** @description The ID of the request (the X-Request-Id response header), for finding it in the server's logs. */
             requestId?: string;
             /**
@@ -4140,6 +4472,200 @@ export interface components {
              * @example https://example.com/errors/example
              */
             type: string;
+        };
+        EventData: {
+            /**
+             * Format: date-time
+             * @description Deadline of a member's own cancellation; absent: the sign-up close.
+             */
+            cancelUntil?: string;
+            /**
+             * Format: int64
+             * @description Places for the whole event.
+             */
+            capacity: number;
+            /**
+             * Format: uuid
+             * @description Course type of the event and its sessions; it stays once the event has sessions.
+             */
+            courseTypeId: string;
+            /** @description Description, plain text. */
+            description?: string;
+            /**
+             * Format: int64
+             * @description Gross price in minor units of the school currency (cents); 0 for a free event.
+             */
+            price: number;
+            /**
+             * Format: date-time
+             * @description When registering closes; absent: at the first session's start.
+             */
+            signupClosesAt?: string;
+            /**
+             * Format: date-time
+             * @description When members may register; absent: from publishing on.
+             */
+            signupOpensAt?: string;
+            /** @description Lowercase letters and digits in groups joined by single hyphens, used in /events/{slug}. Absent: a new event's is derived from the title, an edited one keeps its own. */
+            slug?: string;
+            /** @description Title. */
+            title: string;
+            /**
+             * Format: int64
+             * @description VAT rate of the price in basis points (1900 = 19 %); 0 for none.
+             */
+            vatRate: number;
+        };
+        EventImageInfo: {
+            /**
+             * @description The image type.
+             * @enum {string}
+             */
+            contentType: "image/jpeg" | "image/png" | "image/webp";
+            /** @description Digest of the image, its ETag in getAdminEventImage. */
+            digest: string;
+        };
+        EventImagePutInputBody: {
+            /**
+             * @description The image type.
+             * @enum {string}
+             */
+            contentType: "image/jpeg" | "image/png" | "image/webp";
+            /** @description The image, base64 encoded; at most 1 MiB. */
+            data: string;
+        };
+        EventPayment: {
+            /** @description The receipt issued. */
+            receipt: components["schemas"]["ReceiptRef"];
+            registration: components["schemas"]["EventRegistration"];
+        };
+        EventPaymentData: {
+            /**
+             * Format: uuid
+             * @description Who paid; default: the registered person. A guest pays for themself.
+             */
+            payerId?: string;
+            /**
+             * @description How it was paid; printed on the receipt.
+             * @default cash
+             * @enum {string}
+             */
+            paymentMethod: "cash" | "transfer" | "card";
+            /** @description The payer's address printed on the receipt, one line per printed line; none by default. */
+            recipientAddress?: string;
+            /** @description Where the receipt is mailed if the payer has no account; a guest's default is their email. */
+            recipientEmail?: string;
+            /** @description The name the receipt prints as the payer; default: the payer's or the guest's name. */
+            recipientName?: string;
+        };
+        EventRegistration: {
+            /**
+             * Format: date-time
+             * @description When it was canceled; only if canceled.
+             */
+            canceledAt?: string;
+            /**
+             * Format: uuid
+             * @description The Storno of a refund.
+             */
+            cancellationReceiptId?: string;
+            /**
+             * Format: date-time
+             * @description When it was made: its place in the waiting list.
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description The event.
+             */
+            eventId: string;
+            /** @description The registered guest; absent for a person. An anonymized guest is named Guest, without an email. */
+            guest?: components["schemas"]["GuestData"];
+            /**
+             * Format: uuid
+             * @description Registration ID.
+             */
+            id: string;
+            /**
+             * Format: date-time
+             * @description When an open invite runs out; only while invited.
+             */
+            inviteExpiresAt?: string;
+            /**
+             * @description unpaid: the fee is owed; paid: paid at the desk with a receipt, or free; refunded: the receipt was canceled by a Storno.
+             * @enum {string}
+             */
+            payment: "unpaid" | "paid" | "refunded";
+            /** @description The registered person; absent for a guest. */
+            person?: components["schemas"]["PassPerson"];
+            /**
+             * Format: int64
+             * @description The event's gross price when the registration was made, in minor units.
+             */
+            price: number;
+            /**
+             * Format: uuid
+             * @description The receipt of the payment; absent if unpaid or free.
+             */
+            receiptId?: string;
+            /**
+             * @description waiting and invited: on the waiting list (an invite holds a place); registered: has a place; canceled.
+             * @enum {string}
+             */
+            status: "waiting" | "invited" | "registered" | "canceled";
+            /**
+             * Format: date-time
+             * @description When it was last changed.
+             */
+            updatedAt: string;
+            /**
+             * Format: int64
+             * @description Its VAT rate in basis points.
+             */
+            vatRate: number;
+        };
+        EventRegistrationCancelInputBody: {
+            /** @description Refund a fee paid with a receipt by a Storno of the receipt. */
+            refund?: boolean;
+        };
+        EventRegistrationList: {
+            items: components["schemas"]["EventRegistration"][];
+        };
+        EventSessionData: {
+            /**
+             * Format: uuid
+             * @description Accompanist, if any.
+             */
+            accompanistId?: string;
+            /** @description Save even if the session starts in the past (skips the 409 past). */
+            confirmPast?: boolean;
+            /** @description Save even if another lesson uses the room at an overlapping time (skips the 409 room-taken). */
+            confirmRoomOverlap?: boolean;
+            /**
+             * Format: date
+             * @description School date of the session.
+             */
+            date: string;
+            /**
+             * Format: int64
+             * @description Length in minutes; the session ends on its day.
+             */
+            durationMinutes: number;
+            /**
+             * Format: uuid
+             * @description Instructor.
+             */
+            instructorId: string;
+            /**
+             * Format: uuid
+             * @description Room.
+             */
+            roomId: string;
+            /**
+             * @description Start time (HH:MM) in the school time zone.
+             * @example 10:00
+             */
+            startTime: string;
         };
         ExportAccount: {
             /**
@@ -5144,6 +5670,11 @@ export interface components {
              */
             endsAt: string;
             /**
+             * Format: uuid
+             * @description The event whose session the lesson is (ADR 0019): it is not booked one by one; absent otherwise.
+             */
+            eventId?: string;
+            /**
              * Format: int64
              * @description Places left: the capacity minus the active bookings and the places that waiting-list invites reserve, at least 0. A lesson without one is full: members may join its waiting list.
              */
@@ -5311,6 +5842,11 @@ export interface components {
             endsAt: string;
             /**
              * Format: uuid
+             * @description The event whose session the lesson is (ADR 0019): it is not booked one by one; absent otherwise.
+             */
+            eventId?: string;
+            /**
+             * Format: uuid
              * @description Lesson ID.
              */
             id: string;
@@ -5466,7 +6002,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled";
             /** @description Plain text body; only with body shown. */
             text?: string;
             /** @description Recipient address. */
@@ -5486,7 +6022,7 @@ export interface components {
              * @description Only mails of this template; absent: all.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled";
         };
         MailLogItem: {
             /** @description File name of the attached PDF; absent if none. */
@@ -5536,7 +6072,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled";
             /** @description Recipient address. */
             to: string;
         };
@@ -5583,7 +6119,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled";
             /** @description Plain text body. */
             text: string;
             /** @description Recipient address. */
@@ -6358,7 +6894,7 @@ export interface components {
             publicKey?: string;
         };
         Receipt: {
-            /** @description Whether the office can cancel it now: a sale, not canceled, whose pass paid for no visit. */
+            /** @description Whether the office can cancel it now: a sale, not canceled, whose pass paid for no visit and whose event has not started. */
             cancelable: boolean;
             /** @description The cancellation of a receipt, if canceled. */
             canceledBy?: components["schemas"]["ReceiptRef"];
@@ -6366,6 +6902,13 @@ export interface components {
             cancels?: components["schemas"]["ReceiptRef"];
             /** @description ISO 4217 currency of the amounts. */
             currency: string;
+            /**
+             * Format: uuid
+             * @description The event whose fee a sale receipt, or the receipt a cancellation cancels, confirms.
+             */
+            eventId?: string;
+            /** @description That event's title. */
+            eventTitle?: string;
             /**
              * Format: int64
              * @description Total in minor units.
@@ -6388,7 +6931,7 @@ export interface components {
             issuedAt: string;
             issuer: components["schemas"]["ReceiptIssuer"];
             /**
-             * @description sale: confirms the payment of a pass; cancellation: cancels a sale receipt (Storno), every amount negated.
+             * @description sale: confirms the payment of a pass or an event fee; cancellation: cancels a sale receipt (Storno), every amount negated.
              * @enum {string}
              */
             kind: "sale" | "cancellation";
@@ -6863,6 +7406,11 @@ export interface components {
              * @description End instant (UTC).
              */
             endsAt: string;
+            /**
+             * Format: uuid
+             * @description The event whose session the lesson is (ADR 0019): it is not booked one by one; absent otherwise.
+             */
+            eventId?: string;
             /**
              * Format: int64
              * @description Places left: the capacity minus the active bookings and the places that waiting-list invites reserve, at least 0. A lesson without one is full: members may join its waiting list.
@@ -7352,6 +7900,11 @@ export interface components {
              * @description End instant (UTC).
              */
             endsAt: string;
+            /**
+             * Format: uuid
+             * @description The event whose session the lesson is (ADR 0019): it is not booked one by one; absent otherwise.
+             */
+            eventId?: string;
             /**
              * Format: int64
              * @description Capacity minus active bookings and held places, at least 0.
@@ -8151,6 +8704,644 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    officeCancelEventRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The registration. */
+                registrationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventRegistrationCancelInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRegistration"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    markEventRegistrationPaid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The registration. */
+                registrationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventPaymentData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventPayment"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listAdminEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEventList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEvent"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getAdminEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event. */
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEvent"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event. */
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEvent"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event. */
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    cancelEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event. */
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LessonCancelData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEvent"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getAdminEventImage: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag of the image the client has; unchanged: a 304. */
+                "If-None-Match"?: string;
+            };
+            path: {
+                /** @description The event. */
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
+                };
+            };
+            /** @description The image did not change since the ETag in If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    putEventImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event. */
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventImagePutInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteEventImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event. */
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    publishEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event. */
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEvent"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listEventRegistrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event. */
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRegistrationList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    addEventRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event. */
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddEventRegistrationData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventRegistration"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    addEventSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event. */
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventSessionData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LessonDetail"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    unpublishEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event. */
+                eventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEvent"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
             };
             /** @description Error */
             default: {

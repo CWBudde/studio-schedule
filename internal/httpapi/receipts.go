@@ -188,7 +188,7 @@ type ReceiptRef struct {
 type Receipt struct {
 	ID               domain.ReceiptID `doc:"Receipt ID." json:"id"`
 	Number           string           `doc:"Printed number, e.g. SD-2026-0001: the prefix, the year and a gapless sequence per year." json:"number"`
-	Kind             string           `doc:"sale: confirms the payment of a pass; cancellation: cancels a sale receipt (Storno), every amount negated." enum:"sale,cancellation" json:"kind"`
+	Kind             string           `doc:"sale: confirms the payment of a pass or an event fee; cancellation: cancels a sale receipt (Storno), every amount negated." enum:"sale,cancellation" json:"kind"`
 	IssuedAt         time.Time        `doc:"When it was issued." json:"issuedAt"`
 	IssueDate        domain.Date      `doc:"School date it was issued." format:"date" json:"issueDate"`
 	Issuer           ReceiptIssuer    `json:"issuer"`
@@ -208,7 +208,9 @@ type Receipt struct {
 	Cancels          *ReceiptRef      `doc:"The receipt a cancellation cancels." json:"cancels,omitempty"`
 	CanceledBy       *ReceiptRef      `doc:"The cancellation of a receipt, if canceled." json:"canceledBy,omitempty"`
 	PassID           domain.PassID    `doc:"The pass a sale receipt confirms." json:"passId,omitzero"`
-	Cancelable       bool             `doc:"Whether the office can cancel it now: a sale, not canceled, whose pass paid for no visit." json:"cancelable"`
+	EventID          domain.EventID   `doc:"The event whose fee a sale receipt, or the receipt a cancellation cancels, confirms." json:"eventId,omitzero"`
+	EventTitle       string           `doc:"That event's title." json:"eventTitle,omitempty"`
+	Cancelable       bool             `doc:"Whether the office can cancel it now: a sale, not canceled, whose pass paid for no visit and whose event has not started." json:"cancelable"`
 }
 
 func receiptRef(r *domain.Receipt) *ReceiptRef {
@@ -232,7 +234,7 @@ func receiptBody(v service.ReceiptView) Receipt {
 		PaymentMethod: string(r.PaymentMethod), Currency: r.Currency, Net: int64(r.Net), VAT: int64(r.VAT),
 		Gross: int64(r.Gross), Reason: r.Reason, Lines: make([]ReceiptLine, len(r.Lines)),
 		Cancels: receiptRef(v.Cancels), CanceledBy: receiptRef(v.CanceledBy), PassID: v.Pass.ID,
-		Cancelable: v.Cancelable(),
+		EventID: v.EventID, EventTitle: v.EventTitle, Cancelable: v.Cancelable(),
 	}
 
 	if !r.PayerID.IsZero() {
@@ -407,6 +409,8 @@ func (h *handlers) receiptError(ctx context.Context, err error) error {
 		return conflict(reasonAlreadyCanceled, "the receipt is canceled already")
 	case errors.Is(err, service.ErrCancelCancellation):
 		return conflict(reasonCancellation, "a cancellation cannot be canceled")
+	case errors.Is(err, service.ErrEventAttended):
+		return conflict(reasonEventAttended, "the event has started; cancel the registration with a refund instead")
 	default:
 		return h.toHTTPError(ctx, err)
 	}

@@ -100,6 +100,7 @@ type LessonSummary struct {
 	Instructor  *StaffRef       `doc:"Instructor; absent for a room rental." json:"instructor,omitempty"`
 	Accompanist *StaffRef       `doc:"Accompanist; absent if the lesson has none." json:"accompanist,omitempty"`
 	Renter      string          `doc:"Who rents the room; only for a room rental." json:"renter,omitempty"`
+	EventID     domain.EventID  `doc:"The event whose session the lesson is (ADR 0019): it is not booked one by one; absent otherwise." json:"eventId,omitzero"`
 }
 
 // LessonDetail is the response body of getLesson and of the lesson writes.
@@ -289,6 +290,7 @@ func lessonSummary(sl service.ScheduledLesson) LessonSummary {
 		Room:       RoomRef{ID: sl.Room.ID, Name: sl.Room.Name},
 		Location:   LocationRef{ID: sl.Location.ID, Name: sl.Location.Name},
 		Renter:     l.Renter,
+		EventID:    l.EventID,
 	}
 
 	if !sl.Instructor.ID.IsZero() {
