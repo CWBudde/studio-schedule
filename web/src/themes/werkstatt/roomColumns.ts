@@ -12,9 +12,10 @@ export interface RoomColumn {
 }
 
 /**
- * The rooms that `lessons` use, one column each, ordered by location name,
- * then room name (in `lang`), then id; a column's lessons by start time,
- * keeping their order on ties.
+ * The rooms that `lessons` use, one column each, ordered by location name
+ * (in `lang`), then the room's position (the office's order of the
+ * location's rooms), then room name (in `lang`), then id; a column's lessons
+ * by start time, keeping their order on ties.
  */
 export function roomColumns(lessons: ScheduleLesson[], lang: string): RoomColumn[] {
   const byRoom = new Map<string, RoomColumn>();
@@ -39,6 +40,7 @@ export function roomColumns(lessons: ScheduleLesson[], lang: string): RoomColumn
   return columns.sort(
     (a, b) =>
       a.location.name.localeCompare(b.location.name, lang) ||
+      a.room.position - b.room.position ||
       a.room.name.localeCompare(b.room.name, lang) ||
       (a.key < b.key ? -1 : a.key > b.key ? 1 : 0),
   );

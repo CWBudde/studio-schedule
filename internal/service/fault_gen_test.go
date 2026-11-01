@@ -616,6 +616,14 @@ func (r *faultRoomRepo) Get(a0 context.Context, a1 domain.RoomID) (r0 domain.Roo
 	return r.RoomRepo.Get(a0, a1)
 }
 
+func (r *faultRoomRepo) Lock(a0 context.Context, a1 domain.RoomID) (r0 domain.Room, err error) {
+	if err = r.f.hit("Rooms.Lock"); err != nil {
+		return r0, err
+	}
+
+	return r.RoomRepo.Lock(a0, a1)
+}
+
 func (r *faultRoomRepo) Create(a0 context.Context, a1 domain.Room) (err error) {
 	if err = r.f.hit("Rooms.Create"); err != nil {
 		return err
@@ -646,6 +654,14 @@ func (r *faultRoomRepo) List(a0 context.Context, a1 domain.LocationID) (r0 []dom
 	}
 
 	return r.RoomRepo.List(a0, a1)
+}
+
+func (r *faultRoomRepo) SetOrder(a0 context.Context, a1 domain.LocationID, a2 []domain.RoomID) (err error) {
+	if err = r.f.hit("Rooms.SetOrder"); err != nil {
+		return err
+	}
+
+	return r.RoomRepo.SetOrder(a0, a1, a2)
 }
 
 type faultStaffRepo struct {

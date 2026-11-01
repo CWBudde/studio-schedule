@@ -185,8 +185,8 @@ export const staffEntries: StaffEntry[] = [
 ];
 
 export const rooms = [
-  { id: ids.roomA, locationId: ids.locationNorth, name: 'Room A', capacity: 16 },
-  { id: ids.roomB, locationId: ids.locationSouth, name: 'Room B', capacity: 12 },
+  { id: ids.roomA, locationId: ids.locationNorth, name: 'Room A', capacity: 16, position: 1 },
+  { id: ids.roomB, locationId: ids.locationSouth, name: 'Room B', capacity: 12, position: 1 },
 ];
 
 export const courseTypes = [
@@ -204,7 +204,7 @@ export const lessonBallet: ScheduleLesson = {
   id: ids.lessonBallet,
   classId: ids.classBallet,
   courseType: { id: ids.ballet, name: 'Ballet' },
-  room: { id: ids.roomA, name: 'Room A' },
+  room: { id: ids.roomA, name: 'Room A', position: 1 },
   location: { id: ids.locationNorth, name: 'North Studio' },
   instructor: { id: ids.staffAlex, displayName: 'Alex Example' },
   accompanist: { id: ids.staffSam, displayName: 'Sam Pianist' },
@@ -225,7 +225,7 @@ export const lessonContemporary: ScheduleLesson = {
   id: ids.lessonContemporary,
   classId: ids.classContemporary,
   courseType: { id: ids.contemporary, name: 'Contemporary' },
-  room: { id: ids.roomB, name: 'Room B' },
+  room: { id: ids.roomB, name: 'Room B', position: 1 },
   location: { id: ids.locationSouth, name: 'South Studio' },
   instructor: { id: ids.staffRiley, displayName: 'Riley Sample' },
   startsAt: '2026-10-27T16:00:00Z',
@@ -243,7 +243,7 @@ export const lessonContemporary: ScheduleLesson = {
 export const lessonWorkshop: ScheduleLesson = {
   id: ids.lessonWorkshop,
   courseType: { id: ids.jazz, name: 'Jazz' },
-  room: { id: ids.roomA, name: 'Room A' },
+  room: { id: ids.roomA, name: 'Room A', position: 1 },
   location: { id: ids.locationNorth, name: 'North Studio' },
   instructor: { id: ids.staffRiley, displayName: 'Riley Sample' },
   startsAt: '2026-11-07T13:00:00Z',

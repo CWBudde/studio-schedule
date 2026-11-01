@@ -82,10 +82,11 @@ func (s *CatalogService) DeleteLocation(ctx context.Context, id domain.LocationI
 	return nil
 }
 
-// CreateRoom adds a room to a location. An unknown location is a
-// validation error on locationId.
+// CreateRoom adds a room to a location, after its last room. An unknown
+// location is a validation error on locationId.
 func (s *CatalogService) CreateRoom(ctx context.Context, d RoomData) (domain.Room, error) {
 	r := d.room(ids.New[domain.RoomID](s.ids))
+	r.Position = 1 // for Validate; the place comes once the location is known
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		if err := r.Validate(); err != nil {
@@ -93,6 +94,11 @@ func (s *CatalogService) CreateRoom(ctx context.Context, d RoomData) (domain.Roo
 		}
 
 		if err := locationExists(ctx, tx, r.LocationID); err != nil {
+			return err
+		}
+
+		var err error
+		if r.Position, err = nextRoomPosition(ctx, tx, r.LocationID); err != nil {
 			return err
 		}
 
@@ -105,16 +111,23 @@ func (s *CatalogService) CreateRoom(ctx context.Context, d RoomData) (domain.Roo
 	return r, nil
 }
 
-// UpdateRoom replaces a room's location, name and capacity. Lessons keep
+// UpdateRoom replaces a room's location, name and capacity. The room keeps
+// its place, or goes after the last room of its new location. Lessons keep
 // the capacity they were created with.
 func (s *CatalogService) UpdateRoom(ctx context.Context, id domain.RoomID, d RoomData) (domain.Room, error) {
 	r := d.room(id)
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		// An unknown room is a 404 before anything about its fields.
-		if _, err := tx.Rooms().Get(ctx, id); err != nil {
+		// An unknown room is a 404 before anything about its fields. The
+		// lock makes a concurrent SetRoomOrder either finish first, so the
+		// position read here is its own, or wait for this write; an
+		// unlocked read would write a stale position back over it.
+		old, err := tx.Rooms().Lock(ctx, id)
+		if err != nil {
 			return err
 		}
+
+		r.Position = old.Position
 
 		if err := r.Validate(); err != nil {
 			return err
@@ -124,6 +137,12 @@ func (s *CatalogService) UpdateRoom(ctx context.Context, id domain.RoomID, d Roo
 			return err
 		}
 
+		if r.LocationID != old.LocationID {
+			if r.Position, err = nextRoomPosition(ctx, tx, r.LocationID); err != nil {
+				return err
+			}
+		}
+
 		return roomWriteErr(tx.Rooms().Update(ctx, r))
 	})
 	if err != nil {
@@ -131,6 +150,49 @@ func (s *CatalogService) UpdateRoom(ctx context.Context, id domain.RoomID, d Roo
 	}
 
 	return r, nil
+}
+
+// SetRoomOrder numbers the rooms of a location from 1 in the order given.
+// An unknown location is domain.ErrNotFound; an order that is not exactly
+// the location's rooms, each once, is a validation error on roomIds, also
+// when a room was added or removed since the caller read the list.
+func (s *CatalogService) SetRoomOrder(ctx context.Context, location domain.LocationID, order []domain.RoomID) error {
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		if _, err := tx.Locations().Get(ctx, location); err != nil {
+			return err
+		}
+
+		err := tx.Rooms().SetOrder(ctx, location, order)
+		if errors.Is(err, domain.ErrValidation) {
+			return fmt.Errorf("%w (%w)", errRoomOrder, err)
+		}
+
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("set room order: %w", err)
+	}
+
+	return nil
+}
+
+// errRoomOrder is a room order that is not exactly the location's rooms.
+var errRoomOrder error = &domain.FieldError{Field: "roomIds", Msg: "must list each room of the location exactly once"}
+
+// nextRoomPosition returns the position after the location's last room, 1
+// for its first.
+func nextRoomPosition(ctx context.Context, tx store.Tx, location domain.LocationID) (int, error) {
+	rooms, err := tx.Rooms().List(ctx, location)
+	if err != nil {
+		return 0, err
+	}
+
+	next := 1
+	for _, r := range rooms {
+		next = max(next, r.Position+1)
+	}
+
+	return next, nil
 }
 
 // DeleteRoom removes a room that no class or lesson uses; a used one is

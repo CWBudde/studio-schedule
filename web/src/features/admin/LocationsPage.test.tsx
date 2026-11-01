@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api } from '@/api/client';
 import { Toaster } from '@/components/ui/sonner';
 import i18n from '@/i18n';
 import {
@@ -32,6 +33,38 @@ function renderPage() {
   // The toaster lives outside the page, as in the app's layout.
   render(<Toaster />);
   return renderInRouter(<LocationsPage />);
+}
+
+/**
+ * North Studio with three rooms, ordered by position and not by name, and
+ * South Studio with one; in the API's order (by location, then position).
+ */
+const studio = '0190a000-0000-7000-8000-0000000000';
+type RoomFixture = (typeof rooms)[number];
+const [roomA, roomB] = rooms as [RoomFixture, RoomFixture];
+const roomD = {
+  id: `${studio}13`,
+  locationId: ids.locationNorth,
+  name: 'Room D',
+  capacity: 8,
+  position: 2,
+};
+const roomC = {
+  id: `${studio}14`,
+  locationId: ids.locationNorth,
+  name: 'Room C',
+  capacity: 10,
+  position: 3,
+};
+const ordered = [roomA, roomD, roomC, roomB];
+
+/** The names in the first column of the rooms table, top to bottom. */
+function roomNames() {
+  const table = screen.getByRole('table', { name: 'Rooms' });
+  return within(table)
+    .getAllByRole('row')
+    .slice(1)
+    .map((tr) => within(tr).getAllByRole('cell')[0]?.textContent);
 }
 
 /** The body row of the table `table` whose first cell is `name`. */
@@ -352,5 +385,197 @@ describe('LocationsPage', () => {
     const north = await row('Standorte', 'North Studio');
     expect(north.getByText('1 Raum')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Raum hinzufügen' })).toBeInTheDocument();
+  });
+
+  describe('room order', () => {
+    it('lists the rooms of each location by position, each with its move buttons', async () => {
+      mockApiGet({ ...asOffice, '/api/v1/rooms': { body: { items: ordered } } });
+
+      renderPage();
+
+      await row('Rooms', 'Room A');
+      expect(roomNames()).toEqual(['Room A', 'Room D', 'Room C', 'Room B']);
+      const first = await row('Rooms', 'Room A');
+      expect(first.queryByRole('button', { name: /^Move Room A .* up$/ })).not.toBeInTheDocument();
+      expect(
+        first.getByRole('button', { name: 'Move Room A (North Studio) down' }),
+      ).toBeInTheDocument();
+      const middle = await row('Rooms', 'Room D');
+      expect(middle.getByRole('button', { name: 'Move Room D (North Studio) up' })).toBeEnabled();
+      expect(middle.getByRole('button', { name: 'Move Room D (North Studio) down' })).toBeEnabled();
+      const last = await row('Rooms', 'Room C');
+      expect(last.getByRole('button', { name: 'Move Room C (North Studio) up' })).toBeEnabled();
+      expect(last.queryByRole('button', { name: /^Move Room C .* down$/ })).not.toBeInTheDocument();
+      // The only room of a location has nowhere to go.
+      const only = await row('Rooms', 'Room B');
+      expect(only.queryByRole('button', { name: /^Move / })).not.toBeInTheDocument();
+    });
+
+    it("sends the location's whole new order and shows it", async () => {
+      let saved = false;
+      mockApiGet({
+        ...asOffice,
+        '/api/v1/rooms': () => ({
+          body: {
+            items: saved
+              ? [{ ...roomD, position: 1 }, { ...roomA, position: 2 }, roomC, roomB]
+              : ordered,
+          },
+        }),
+      });
+      let answer: (value: { error?: unknown; response: Response }) => void = () => undefined;
+      const put = vi.spyOn(api, 'PUT').mockImplementation(
+        (() =>
+          new Promise((resolve) => {
+            answer = resolve;
+          })) as unknown as typeof api.PUT,
+      );
+      const user = userEvent.setup();
+
+      renderPage();
+      await user.click(
+        (await row('Rooms', 'Room D')).getByRole('button', {
+          name: 'Move Room D (North Studio) up',
+        }),
+      );
+
+      expect(put).toHaveBeenCalledWith('/api/v1/locations/{locationId}/room-order', {
+        params: { path: { locationId: ids.locationNorth } },
+        body: { roomIds: [roomD.id, roomA.id, roomC.id] },
+      });
+      // While the order is saved, no other move can start.
+      for (const button of within(screen.getByRole('table', { name: 'Rooms' })).getAllByRole(
+        'button',
+        { name: /^Move / },
+      ))
+        expect(button).toBeDisabled();
+
+      saved = true;
+      answer({ response: new Response(null, { status: 204 }) });
+
+      await waitFor(() => expect(roomNames()).toEqual(['Room D', 'Room A', 'Room C', 'Room B']));
+      expect(
+        (await row('Rooms', 'Room A')).getByRole('button', {
+          name: 'Move Room A (North Studio) up',
+        }),
+      ).toBeEnabled();
+    });
+
+    it('says when the rooms have changed meanwhile and shows them as they are', async () => {
+      // Someone added Room E to North Studio after the page loaded.
+      const roomE = {
+        id: `${studio}15`,
+        locationId: ids.locationNorth,
+        name: 'Room E',
+        capacity: 6,
+        position: 4,
+      };
+      let loads = 0;
+      mockApiGet({
+        ...asOffice,
+        '/api/v1/rooms': () => ({
+          body: { items: loads++ === 0 ? ordered : [roomA, roomD, roomC, roomE, roomB] },
+        }),
+      });
+      const put = mockApiPut({
+        '/api/v1/locations/{locationId}/room-order': problem(422, 'validation failed', [
+          { location: 'body.roomIds' },
+        ]),
+      });
+      const user = userEvent.setup();
+
+      renderPage();
+      await user.click(
+        (await row('Rooms', 'Room C')).getByRole('button', {
+          name: 'Move Room C (North Studio) up',
+        }),
+      );
+
+      expect(
+        await screen.findByText(
+          'The rooms of North Studio have changed meanwhile. The list now shows them as they are; please move the room again.',
+        ),
+      ).toBeInTheDocument();
+      expect(put).toHaveBeenCalledWith('/api/v1/locations/{locationId}/room-order', {
+        params: { path: { locationId: ids.locationNorth } },
+        body: { roomIds: [roomA.id, roomC.id, roomD.id] },
+      });
+      await waitFor(() =>
+        expect(roomNames()).toEqual(['Room A', 'Room D', 'Room C', 'Room E', 'Room B']),
+      );
+      expect(screen.queryByText('validation failed')).not.toBeInTheDocument();
+    });
+
+    it('says when the location is gone or the order could not be saved', async () => {
+      mockApiGet({ ...asOffice, '/api/v1/rooms': { body: { items: ordered } } });
+      let status = 404;
+      mockApiPut({
+        '/api/v1/locations/{locationId}/room-order': () => problem(status, 'nope'),
+      });
+      const user = userEvent.setup();
+
+      renderPage();
+      await user.click(
+        (await row('Rooms', 'Room A')).getByRole('button', {
+          name: 'Move Room A (North Studio) down',
+        }),
+      );
+      expect(await screen.findByText('North Studio no longer exists.')).toBeInTheDocument();
+
+      status = 500;
+      await user.click(
+        (await row('Rooms', 'Room A')).getByRole('button', {
+          name: 'Move Room A (North Studio) down',
+        }),
+      );
+      expect(
+        await screen.findByText('The new order of the rooms of North Studio could not be saved.'),
+      ).toBeInTheDocument();
+    });
+
+    it('offers the moves only while the table shows the rooms in their order', async () => {
+      mockApiGet({ ...asOffice, '/api/v1/rooms': { body: { items: ordered } } });
+      const user = userEvent.setup();
+      const moves = () =>
+        within(screen.getByRole('table', { name: 'Rooms' })).queryAllByRole('button', {
+          name: /^Move /,
+        });
+
+      renderPage();
+      await row('Rooms', 'Room A');
+      expect(moves()).toHaveLength(4);
+
+      // By name, a move would swap rooms that are not next to each other.
+      const rooms = within(screen.getByRole('region', { name: 'Rooms' }));
+      await user.click(rooms.getByRole('button', { name: 'Name' }));
+      expect(roomNames()).toEqual(['Room A', 'Room B', 'Room C', 'Room D']);
+      expect(moves()).toHaveLength(0);
+      expect((await row('Rooms', 'Room C')).getByText('3')).toBeInTheDocument();
+
+      await user.click(rooms.getByRole('button', { name: 'Order' }));
+      expect(roomNames()).toEqual(['Room A', 'Room D', 'Room C', 'Room B']);
+      expect(moves()).toHaveLength(4);
+
+      // A search hides neighbours, so it hides the moves too.
+      await user.type(rooms.getByRole('searchbox', { name: 'Search rooms' }), 'Room C');
+      expect(roomNames()).toEqual(['Room C']);
+      expect(moves()).toHaveLength(0);
+    });
+
+    it('names the moves in German', async () => {
+      mockApiGet({ ...asOffice, '/api/v1/rooms': { body: { items: ordered } } });
+      await i18n.changeLanguage('de');
+
+      renderPage();
+
+      const middle = await row('Räume', 'Room D');
+      expect(
+        middle.getByRole('button', { name: 'Room D (North Studio) nach oben verschieben' }),
+      ).toBeInTheDocument();
+      expect(
+        middle.getByRole('button', { name: 'Room D (North Studio) nach unten verschieben' }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Reihenfolge' })).toBeInTheDocument();
+    });
   });
 });

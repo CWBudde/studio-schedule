@@ -82,10 +82,22 @@ func TestCatalogRooms(t *testing.T) {
 
 	demo := seed.Demo()
 	svc := service.NewCatalogService(catalogDemoStore(t), ids.V7{})
-	byName := func(rooms []domain.Room) []domain.Room {
-		return sortedByName(rooms,
-			func(r domain.Room) string { return r.Name },
-			func(r domain.Room) [16]byte { return [16]byte(r.ID) })
+	locationName := map[domain.LocationID]string{}
+	for _, l := range demo.Locations {
+		locationName[l.ID] = l.Name
+	}
+	// inListOrder orders rooms like the store lists: by location name and
+	// ID, then by position, name and ID.
+	inListOrder := func(rooms []domain.Room) []domain.Room {
+		return slices.SortedFunc(slices.Values(rooms), func(a, b domain.Room) int {
+			return cmp.Or(
+				cmp.Compare(locationName[a.LocationID], locationName[b.LocationID]),
+				slices.Compare(a.LocationID[:], b.LocationID[:]),
+				cmp.Compare(a.Position, b.Position),
+				cmp.Compare(a.Name, b.Name),
+				slices.Compare(a.ID[:], b.ID[:]),
+			)
+		})
 	}
 
 	t.Run("all", func(t *testing.T) {
@@ -96,7 +108,7 @@ func TestCatalogRooms(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if want := byName(demo.Rooms); !slices.Equal(got, want) {
+		if want := inListOrder(demo.Rooms); !slices.Equal(got, want) {
 			t.Fatalf("Rooms() = %+v, want %+v", got, want)
 		}
 	})
@@ -110,7 +122,7 @@ func TestCatalogRooms(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			want := byName(slices.DeleteFunc(slices.Clone(demo.Rooms), func(r domain.Room) bool {
+			want := inListOrder(slices.DeleteFunc(slices.Clone(demo.Rooms), func(r domain.Room) bool {
 				return r.LocationID != l.ID
 			}))
 			if len(want) == 0 || !slices.Equal(got, want) {

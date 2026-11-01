@@ -25,20 +25,14 @@ export function staffOptions(
 }
 
 /**
- * The options of a room select, labelled "<location> · <room>" and sorted
- * in the UI language; `unknown` names a location that is not in the list.
+ * The options of a room select, labelled "<location> · <room>" in the API's
+ * order (by location, then the office's order of its rooms); `unknown` names
+ * a location that is not in the list.
  */
-export function roomOptions(
-  rooms: Room[],
-  locations: Location[],
-  lang: string,
-  unknown: string,
-): Option[] {
+export function roomOptions(rooms: Room[], locations: Location[], unknown: string): Option[] {
   const locationName = new Map(locations.map((l) => [l.id, l.name]));
-  return rooms
-    .map((r) => ({
-      value: r.id,
-      label: `${locationName.get(r.locationId) ?? unknown} · ${r.name}`,
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label, lang));
+  return rooms.map((r) => ({
+    value: r.id,
+    label: `${locationName.get(r.locationId) ?? unknown} · ${r.name}`,
+  }));
 }

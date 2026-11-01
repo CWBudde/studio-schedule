@@ -214,11 +214,27 @@ func (e *env) location(name string) domain.Location {
 func (e *env) room(l domain.Location, name string) domain.Room {
 	e.t.Helper()
 
-	r := domain.Room{ID: newID[domain.RoomID](e), LocationID: l.ID, Name: name, Capacity: 12}
+	return e.roomAt(l, name, 1)
+}
+
+// roomAt creates a room of l at the position.
+func (e *env) roomAt(l domain.Location, name string, position int) domain.Room {
+	e.t.Helper()
+
+	r := domain.Room{ID: newID[domain.RoomID](e), LocationID: l.ID, Name: name, Capacity: 12, Position: position}
 	valid(e.t, r)
 	e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Rooms().Create(ctx, r) })
 
 	return r
+}
+
+// rooms lists the rooms of the location, or all rooms if it is zero.
+func (e *env) rooms(location domain.LocationID) []domain.Room {
+	e.t.Helper()
+
+	return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Room, error) {
+		return tx.Rooms().List(ctx, location)
+	})
 }
 
 func (e *env) staffMember(name string) domain.Staff {

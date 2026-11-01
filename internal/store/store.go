@@ -423,6 +423,11 @@ type LocationRepo interface {
 // RoomRepo stores rooms.
 type RoomRepo interface {
 	Get(ctx context.Context, id domain.RoomID) (domain.Room, error)
+	// Lock returns the room and locks it until the transaction ends (in
+	// PostgreSQL: SELECT … FOR UPDATE), so a concurrent SetOrder of its
+	// location waits for it. It fails with store.ErrReadOnly in a read-only
+	// transaction.
+	Lock(ctx context.Context, id domain.RoomID) (domain.Room, error)
 	// Create and Update fail with domain.ErrConflict if the location does
 	// not exist, and with domain.ErrDuplicate if another room of the
 	// location has the name, ignoring ASCII case.
@@ -432,8 +437,12 @@ type RoomRepo interface {
 	// room.
 	Delete(ctx context.Context, id domain.RoomID) error
 	// List returns the rooms of a location, or all rooms if location is
-	// zero, ordered by name and ID.
+	// zero, ordered by location name and ID, then position, name and ID.
 	List(ctx context.Context, location domain.LocationID) ([]domain.Room, error)
+	// SetOrder sets the positions of the location's rooms to 1..n in the
+	// order given. It fails with domain.ErrValidation unless order holds
+	// every room of the location exactly once and no other room.
+	SetOrder(ctx context.Context, location domain.LocationID, order []domain.RoomID) error
 }
 
 // StaffRepo stores instructors and accompanists.

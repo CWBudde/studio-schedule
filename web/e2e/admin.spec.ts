@@ -1,4 +1,4 @@
-import { demoName, expect, gotoDemo, type Page, signIn, test } from './fixtures';
+import { demoName, expect, gotoDemo, type Page, savedStore, signIn, test } from './fixtures';
 
 /** Opens the administration from the account menu; it starts with the locations. */
 async function openAdministration(page: Page, name: string): Promise<void> {
@@ -101,6 +101,49 @@ test('deleting a room that classes use says why it stays', async ({ page }) => {
   await expect(dialog.getByRole('button', { name: 'Delete' })).toBeEnabled();
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(roomsList(page).getByRole('button', { name: label })).toBeVisible();
+});
+
+/** The rooms of `location` in the order the rooms list shows them. */
+async function roomOrder(page: Page, location: string): Promise<string[]> {
+  const labels = await roomsList(page)
+    .getByRole('button', { name: new RegExp(`^Edit .+ \\(${location}\\)$`) })
+    .evaluateAll((buttons) => buttons.map((b) => b.getAttribute('aria-label') ?? ''));
+  return labels.map((label) => label.replace(/^Edit (.+) \(.+\)$/, '$1'));
+}
+
+test('the office moves a room up and the order stays after a reload', async ({ page }) => {
+  const office = await signIn(page, 'Office');
+  await openAdministration(page, office);
+  await expect
+    .poll(() => roomOrder(page, 'Studio North'))
+    .toEqual(['Studio A', 'Studio B', 'Studio C']);
+  // The first room has nowhere to go up, the last nowhere down.
+  await expect(
+    roomsList(page).getByRole('button', { name: 'Move Studio A (Studio North) up' }),
+  ).toHaveCount(0);
+  await expect(
+    roomsList(page).getByRole('button', { name: 'Move Studio C (Studio North) down' }),
+  ).toHaveCount(0);
+
+  await roomsList(page).getByRole('button', { name: 'Move Studio B (Studio North) up' }).click();
+
+  await expect
+    .poll(() => roomOrder(page, 'Studio North'))
+    .toEqual(['Studio B', 'Studio A', 'Studio C']);
+  await expect(
+    roomsList(page).getByRole('button', { name: 'Move Studio B (Studio North) up' }),
+  ).toHaveCount(0);
+
+  // The demo saves its data a moment after a change.
+  await expect
+    .poll(() => savedStore(page), { timeout: 10_000 })
+    .toMatch(/"Name":"Studio B"[^}]*"Position":1\b/);
+  await page.reload();
+  await expect(page.getByText('Starting demo backend…')).toBeHidden({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'Locations and rooms' })).toBeVisible();
+  await expect
+    .poll(() => roomOrder(page, 'Studio North'))
+    .toEqual(['Studio B', 'Studio A', 'Studio C']);
 });
 
 test('a member has no access to the administration', async ({ page }) => {

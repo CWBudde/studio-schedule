@@ -76,6 +76,10 @@
     "deleting": "Deleting…",
     "cancel": "Cancel"
   },
+  "reorder": {
+    "up": "Move {{name}} up",
+    "down": "Move {{name}} down"
+  },
   "locations": {
     "title": "Locations and rooms",
     "description": "Where the school teaches. Each location has rooms; a room's capacity is the default capacity of its lessons.",
@@ -129,7 +133,12 @@
     "notFound": "This room no longer exists.",
     "deleteTitle": "Delete {{name}}?",
     "deleteDescription": "The room at {{location}} is deleted for good. A room that classes or lessons use cannot be deleted.",
-    "inUse": "{{name}} is used by classes or lessons, so it cannot be deleted."
+    "inUse": "{{name}} is used by classes or lessons, so it cannot be deleted.",
+    "order": "Order",
+    "moveLabel": "{{name}} ({{location}})",
+    "orderStale": "The rooms of {{location}} have changed meanwhile. The list now shows them as they are; please move the room again.",
+    "orderGone": "{{location}} no longer exists.",
+    "orderFailed": "The new order of the rooms of {{location}} could not be saved."
   },
   "access": {
     "loadError": "Could not check whether you may see this page."

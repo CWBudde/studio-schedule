@@ -43,11 +43,16 @@ func testCatalogue(t *testing.T, newStore func(*testing.T) store.Store) {
 			update: func(ctx context.Context, tx store.Tx, r domain.Room) error { return tx.Rooms().Update(ctx, r) },
 			remove: func(ctx context.Context, tx store.Tx, id domain.RoomID) error { return tx.Rooms().Delete(ctx, id) },
 			fixtures: func(e *env) (domain.Room, domain.Room) {
-				minimal := domain.Room{ID: newID[domain.RoomID](e), LocationID: e.location("South Studio").ID, Name: "Room B", Capacity: 8}
+				minimal := domain.Room{
+					ID: newID[domain.RoomID](e), LocationID: e.location("South Studio").ID, Name: "Room B", Capacity: 8, Position: 1,
+				}
 				full := minimal
 				full.LocationID = e.location("East Studio").ID
 				full.Name = "Room B (large)"
 				full.Capacity = 20
+				full.Position = 3
+				valid(e.t, minimal)
+				valid(e.t, full)
 
 				return minimal, full
 			},
@@ -108,10 +113,12 @@ func testCatalogue(t *testing.T, newStore func(*testing.T) store.Store) {
 				return tx.Locations().List(ctx)
 			}), []domain.Location{la, lb})
 
+			// All rooms: by location name first (byte order, like the
+			// locations), then, at equal positions, by name.
 			r2, r1, r3 := e.room(la, "Room 2"), e.room(la, "Room 1"), e.room(lb, "Room 1")
 			wantSlice(e.t, mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Room, error) {
 				return tx.Rooms().List(ctx, domain.LocationID{})
-			}), []domain.Room{r1, r3, r2})
+			}), []domain.Room{r1, r2, r3})
 			wantSlice(e.t, mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Room, error) {
 				return tx.Rooms().List(ctx, la.ID)
 			}), []domain.Room{r1, r2})
@@ -125,6 +132,102 @@ func testCatalogue(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantSlice(e.t, mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.CourseType, error) {
 				return tx.CourseTypes().List(ctx)
 			}), []domain.CourseType{c1, c2})
+		},
+		"RoomListOrderByPosition": func(e *env) {
+			// Created in another order than either list, so that neither
+			// the insertion order nor the name alone gives the expected one.
+			lb, la := e.location("B-Studio"), e.location("A-Studio")
+			aardvark := e.roomAt(lb, "Aardvark", 1)
+			mid, zeta, alpha := e.roomAt(la, "Mid", 2), e.roomAt(la, "Zeta", 1), e.roomAt(la, "Alpha", 2)
+
+			// Within a location by position, a tie by name.
+			wantSlice(e.t, e.rooms(la.ID), []domain.Room{zeta, alpha, mid})
+			// Across locations the location's name comes first.
+			wantSlice(e.t, e.rooms(domain.LocationID{}), []domain.Room{zeta, alpha, mid, aardvark})
+		},
+		"RoomSetOrder": func(e *env) {
+			l := e.location("Main Hall")
+			a, b, c := e.roomAt(l, "Room A", 1), e.roomAt(l, "Room B", 2), e.roomAt(l, "Room C", 3)
+			other := e.roomAt(e.location("Side Hall"), "Room D", 1)
+
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				return tx.Rooms().SetOrder(ctx, l.ID, []domain.RoomID{c.ID, b.ID, a.ID})
+			})
+
+			a.Position, b.Position, c.Position = 3, 2, 1
+			wantSlice(e.t, e.rooms(l.ID), []domain.Room{c, b, a})
+			// The other location's room keeps its place.
+			wantSlice(e.t, e.rooms(other.LocationID), []domain.Room{other})
+		},
+		"RoomSetOrderRefusals": func(e *env) {
+			l := e.location("Main Hall")
+			a, b, c := e.roomAt(l, "Room A", 1), e.roomAt(l, "Room B", 2), e.roomAt(l, "Room C", 3)
+			other := e.roomAt(e.location("Side Hall"), "Room D", 1)
+			before := e.rooms(domain.LocationID{})
+
+			for name, order := range map[string][]domain.RoomID{
+				"missing room":              {c.ID, a.ID},
+				"repeated room":             {c.ID, a.ID, a.ID},
+				"repeated room, one extra":  {c.ID, b.ID, a.ID, a.ID},
+				"another location's room":   {c.ID, b.ID, other.ID},
+				"another location's, extra": {c.ID, b.ID, a.ID, other.ID},
+				"unknown room":              {c.ID, b.ID, newID[domain.RoomID](e)},
+				"empty":                     nil,
+			} {
+				err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Rooms().SetOrder(ctx, l.ID, order) })
+				if !errorsIs(err, domain.ErrValidation) {
+					e.t.Errorf("%s: want ErrValidation, got %v", name, err)
+				}
+			}
+
+			// A valid order in a read-only transaction.
+			err := e.read(func(ctx context.Context, tx store.Tx) error {
+				return tx.Rooms().SetOrder(ctx, l.ID, []domain.RoomID{c.ID, b.ID, a.ID})
+			})
+			wantErr(e.t, err, store.ErrReadOnly)
+
+			wantSlice(e.t, e.rooms(domain.LocationID{}), before)
+		},
+		"RoomLock": func(e *env) {
+			r := e.roomAt(e.location("Main Hall"), "Room A", 1)
+
+			var got domain.Room
+
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				var err error
+				got, err = tx.Rooms().Lock(ctx, r.ID)
+
+				return err
+			})
+			wantEqual(e.t, got, r)
+
+			err := e.read(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Rooms().Lock(ctx, r.ID)
+
+				return err
+			})
+			wantErr(e.t, err, store.ErrReadOnly)
+
+			err = e.write(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Rooms().Lock(ctx, newID[domain.RoomID](e))
+
+				return err
+			})
+			wantErr(e.t, err, domain.ErrNotFound)
+		},
+		"RoomSetOrderEmptyLocation": func(e *env) {
+			empty, l := e.location("Empty Hall"), e.location("Main Hall")
+			r := e.roomAt(l, "Room A", 1)
+
+			for _, order := range [][]domain.RoomID{nil, {}} {
+				e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Rooms().SetOrder(ctx, empty.ID, order) })
+			}
+
+			err := e.write(func(ctx context.Context, tx store.Tx) error {
+				return tx.Rooms().SetOrder(ctx, empty.ID, []domain.RoomID{r.ID})
+			})
+			wantErr(e.t, err, domain.ErrValidation)
+			wantSlice(e.t, e.rooms(l.ID), []domain.Room{r})
 		},
 		"StaffByPerson": func(e *env) {
 			p, other := e.person("Sam", "Staff"), e.person("Oli", "Other")
@@ -164,7 +267,7 @@ func testCatalogue(t *testing.T, newStore func(*testing.T) store.Store) {
 			room := e.room(main, "Studio 1")
 			e.room(other, "Studio 1")
 
-			dupRoom := domain.Room{ID: newID[domain.RoomID](e), LocationID: main.ID, Name: "studio 1", Capacity: 4}
+			dupRoom := domain.Room{ID: newID[domain.RoomID](e), LocationID: main.ID, Name: "studio 1", Capacity: 4, Position: 2}
 			wantErr(e.t, e.write(func(ctx context.Context, tx store.Tx) error { return tx.Rooms().Create(ctx, dupRoom) }), domain.ErrDuplicate)
 
 			moved := e.room(other, "Studio 2")
@@ -186,7 +289,7 @@ func testCatalogue(t *testing.T, newStore func(*testing.T) store.Store) {
 			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.CourseTypes().Update(ctx, ballet) })
 		},
 		"MissingReferenceIsConflict": func(e *env) {
-			room := domain.Room{ID: newID[domain.RoomID](e), LocationID: newID[domain.LocationID](e), Name: "Nowhere", Capacity: 1}
+			room := domain.Room{ID: newID[domain.RoomID](e), LocationID: newID[domain.LocationID](e), Name: "Nowhere", Capacity: 1, Position: 1}
 			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Rooms().Create(ctx, room) })
 			wantErr(e.t, err, domain.ErrConflict)
 

@@ -283,3 +283,31 @@ kind still needs one (422 on `courseTypeId`).
   schedule, the lesson detail, the `room-taken` conflict and the clone preview). The web titles
   such a lesson "Room rental" and its schedule feed event reads "Room rental – renter". The demo's
   rental has no course type.
+
+## Amendment (2026-11-01): room order
+
+Rooms were listed by name, so a school whose rooms have an order of their own (upstairs,
+downstairs, online, the training room) saw them alphabetically everywhere, including the Werkstatt
+theme's room columns. A room now has a **position** within its location.
+
+- **What it is.** `domain.Room.Position`, 1-based within the location (`Validate`: a 422 on
+  `position` below 1). Lists order rooms by location (name, then ID), then position, then name and
+  ID; the API's `Room` and the schedule's `RoomRef` carry `position`. Migration 00033 numbers the
+  existing rooms of each location in their old name order, so nothing visible changes.
+- **Appended, never chosen.** The create and update bodies take no position. `createRoom` puts the
+  room after the location's last one (its highest position + 1), `updateRoom` keeps the position
+  unless the room moves to another location, where it goes last as well.
+- **Reordered as a set.** `setRoomOrder` (`PUT /api/v1/locations/{locationId}/room-order`,
+  `office`, 204) takes `roomIds` and numbers them 1..n. The list must name every room of the
+  location exactly once and no other room (`RoomRepo.SetOrder` checks it under a lock of the
+  location's rooms); anything else is a 422 on `roomIds`, an unknown location a 404. An office that
+  sends the order it read before another user added or moved a room therefore gets the 422, and
+  the locations page says so and reloads the rooms instead of writing a stale order.
+- **No unique constraint.** A reorder rewrites every position of the location in one transaction,
+  and two concurrent creates may compute the same next position. A tie is harmless: it falls back
+  to the name, and the next reorder numbers the rooms 1..n again. The web shows a room's place by
+  counting in the API's order, so a tie never reads as "2, 2".
+- **Web.** The locations page offers "move up" and "move down" buttons per room while the table
+  shows the rooms in their order (not when sorted by another column or searched); each move sends
+  the location's whole new order. Room pickers keep the API's order, and the Werkstatt room
+  columns sort by location name, then position, then name.

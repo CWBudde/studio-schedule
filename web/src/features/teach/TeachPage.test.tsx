@@ -54,7 +54,7 @@ const meInstructor: Me = {
 const lesson = (n: number, extra: Partial<TeachLesson>): TeachLesson => ({
   id: id(900 + n),
   courseType: { id: ids.ballet, name: 'Ballet' },
-  room: { id: ids.roomA, name: 'Room A' },
+  room: { id: ids.roomA, name: 'Room A', position: 1 },
   location: { id: ids.locationNorth, name: 'North Studio' },
   instructor: { id: ids.staffAlex, displayName: 'Alex Example' },
   startsAt: '2026-10-28T09:30:00Z',

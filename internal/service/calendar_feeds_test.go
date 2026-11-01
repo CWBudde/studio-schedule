@@ -66,7 +66,7 @@ func newFeedFixture(t *testing.T) *feedFixture {
 			tx.Accounts().Update(ctx, acc),
 			tx.Staff().Update(ctx, st),
 			tx.Locations().Create(ctx, f.elsewhere),
-			tx.Rooms().Create(ctx, domain.Room{ID: f.room2, LocationID: f.elsewhere.ID, Name: "Room Two", Capacity: 8}),
+			tx.Rooms().Create(ctx, domain.Room{ID: f.room2, LocationID: f.elsewhere.ID, Name: "Room Two", Capacity: 8, Position: 1}),
 		)
 	})
 

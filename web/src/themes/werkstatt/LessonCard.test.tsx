@@ -18,7 +18,7 @@ const ballet: ScheduleLesson = {
   id: '0190a000-0000-7000-8000-000000000101',
   classId: '0190a000-0000-7000-8000-000000000201',
   courseType: { id: '0190a000-0000-7000-8000-000000000031', name: 'Ballet' },
-  room: { id: '0190a000-0000-7000-8000-000000000011', name: 'Room A' },
+  room: { id: '0190a000-0000-7000-8000-000000000011', name: 'Room A', position: 1 },
   location: { id: '0190a000-0000-7000-8000-000000000001', name: 'North Studio' },
   instructor: { id: '0190a000-0000-7000-8000-000000000021', displayName: 'Alex Example' },
   accompanist: { id: '0190a000-0000-7000-8000-000000000022', displayName: 'Sam Pianist' },

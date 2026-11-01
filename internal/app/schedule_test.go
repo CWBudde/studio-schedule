@@ -371,7 +371,7 @@ func TestGetSchedule(t *testing.T) {
 
 	refs := map[string]map[string]any{
 		"courseType":  {"id": a.entityID(t, "courseType", "Classical Ballet"), "name": "Classical Ballet"},
-		"room":        {"id": l.RoomID.String(), "name": "Studio A"},
+		"room":        {"id": l.RoomID.String(), "name": "Studio A", "position": float64(1)},
 		"location":    {"id": a.entityID(t, "location", "Studio North"), "name": "Studio North"},
 		"instructor":  {"id": l.InstructorID.String(), "displayName": "Alina Starling"},
 		"accompanist": {"id": l.AccompanistID.String(), "displayName": "Felix Keysworth"},

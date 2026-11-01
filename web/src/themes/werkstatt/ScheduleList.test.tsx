@@ -9,10 +9,16 @@ import { ScheduleList } from './ScheduleList';
 
 const north = { id: '0190a000-0000-7000-8000-00000000a001', name: 'Nordhaus' };
 const south = { id: '0190a000-0000-7000-8000-00000000a002', name: 'Südhaus' };
-const oben = { id: '0190a000-0000-7000-8000-00000000b001', name: 'Oben' };
-const unten = { id: '0190a000-0000-7000-8000-00000000b002', name: 'Unten' };
-const keller = { id: '0190a000-0000-7000-8000-00000000b003', name: 'Keller' };
-const garten = { id: '0190a000-0000-7000-8000-00000000b004', name: 'Garten' };
+// Positions as the office ordered the rooms: not by name.
+const oben = { id: '0190a000-0000-7000-8000-00000000b001', name: 'Oben', position: 1 };
+const unten = { id: '0190a000-0000-7000-8000-00000000b002', name: 'Unten', position: 2 };
+const keller = { id: '0190a000-0000-7000-8000-00000000b003', name: 'Keller', position: 4 };
+const garten = { id: '0190a000-0000-7000-8000-00000000b004', name: 'Garten', position: 5 };
+const training = {
+  id: '0190a000-0000-7000-8000-00000000b005',
+  name: 'Trainingsraum',
+  position: 3,
+};
 
 /** A lesson named `name`, in `room` at `location`, starting at `startsAt`. */
 function lesson(
@@ -146,7 +152,7 @@ describe('Werkstatt ScheduleList, wide', () => {
     expect(names(tuesday.getByRole('list', { name: 'Keller' }))).toEqual(['Stretching']);
   });
 
-  it('orders a column by start time and the columns by location, then room', () => {
+  it('orders a column by start time and the columns by location, then room position', () => {
     onWide();
     renderList([
       day('2026-10-26', [
@@ -181,8 +187,8 @@ describe('Werkstatt ScheduleList, wide', () => {
 
     const lists = dayRegion('2026-10-26').getAllByRole('list');
     expect(lists.map((list) => list.getAttribute('aria-labelledby'))).toHaveLength(3);
-    expect(lists[0]).toHaveAccessibleName('Garten · Nordhaus');
-    expect(lists[1]).toHaveAccessibleName('Unten · Nordhaus');
+    expect(lists[0]).toHaveAccessibleName('Unten · Nordhaus');
+    expect(lists[1]).toHaveAccessibleName('Garten · Nordhaus');
     expect(lists[2]).toHaveAccessibleName('Oben · Südhaus');
   });
 
@@ -262,11 +268,27 @@ describe('Werkstatt ScheduleList', () => {
 });
 
 describe('roomColumns', () => {
-  it('groups by room, orders by location, room name and id, and keeps start order', () => {
-    const twin = { id: '0190a000-0000-7000-8000-00000000b000', name: 'Oben' };
+  it('orders the rooms of a location by position, not by name', () => {
+    const columns = roomColumns(
+      [
+        lesson('A', training, '2026-10-26T16:00:00Z'),
+        lesson('B', unten, '2026-10-26T16:00:00Z'),
+        lesson('C', oben, '2026-10-26T16:00:00Z'),
+      ],
+      'de',
+    );
+
+    expect(columns.map((c) => c.label)).toEqual(['Oben', 'Unten', 'Trainingsraum']);
+  });
+
+  it('groups by room, orders by location, position, room name and id, and keeps start order', () => {
+    // The same position (e.g. two rooms added at once): by name, then id.
+    const twin = { id: '0190a000-0000-7000-8000-00000000b000', name: 'Oben', position: 1 };
+    const atelier = { id: '0190a000-0000-7000-8000-00000000b009', name: 'Atelier', position: 1 };
     const columns = roomColumns(
       [
         lesson('B', oben, '2026-10-26T17:00:00Z'),
+        lesson('E', atelier, '2026-10-26T18:00:00Z'),
         lesson('A', oben, '2026-10-26T16:00:00Z'),
         lesson('C', twin, '2026-10-26T16:00:00Z'),
         lesson('D', garten, '2026-10-26T16:00:00Z', south),
@@ -275,6 +297,7 @@ describe('roomColumns', () => {
     );
 
     expect(columns.map((c) => [c.key, c.label, c.lessons.map((l) => l.id)])).toEqual([
+      [atelier.id, 'Atelier · Nordhaus', ['E']],
       [twin.id, 'Oben · Nordhaus', ['C']],
       [oben.id, 'Oben · Nordhaus', ['A', 'B']],
       [garten.id, 'Garten · Südhaus', ['D']],

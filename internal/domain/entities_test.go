@@ -155,12 +155,16 @@ func TestCatalogueValidate(t *testing.T) {
 	t.Run("Room", func(t *testing.T) {
 		t.Parallel()
 		checkValidate(t, func() domain.Room {
-			return domain.Room{ID: newID[domain.RoomID](), LocationID: newID[domain.LocationID](), Name: "Studio A", Capacity: 20}
+			return domain.Room{
+				ID: newID[domain.RoomID](), LocationID: newID[domain.LocationID](), Name: "Studio A", Capacity: 20, Position: 1,
+			}
 		}, map[string]func(*domain.Room){
-			"zero id":       func(r *domain.Room) { r.ID = domain.RoomID{} },
-			"zero location": func(r *domain.Room) { r.LocationID = domain.LocationID{} },
-			"no name":       func(r *domain.Room) { r.Name = "" },
-			"zero capacity": func(r *domain.Room) { r.Capacity = 0 },
+			"zero id":           func(r *domain.Room) { r.ID = domain.RoomID{} },
+			"zero location":     func(r *domain.Room) { r.LocationID = domain.LocationID{} },
+			"no name":           func(r *domain.Room) { r.Name = "" },
+			"zero capacity":     func(r *domain.Room) { r.Capacity = 0 },
+			"zero position":     func(r *domain.Room) { r.Position = 0 },
+			"negative position": func(r *domain.Room) { r.Position = -1 },
 		})
 	})
 
@@ -1338,7 +1342,9 @@ func TestOutboxMailValidate(t *testing.T) {
 func TestFieldErrors(t *testing.T) {
 	t.Parallel()
 
-	room := domain.Room{ID: newID[domain.RoomID](), LocationID: newID[domain.LocationID](), Name: "Studio A", Capacity: 20}
+	room := domain.Room{
+		ID: newID[domain.RoomID](), LocationID: newID[domain.LocationID](), Name: "Studio A", Capacity: 20, Position: 1,
+	}
 	class := domain.Class{
 		ID: newID[domain.ClassID](), TermID: newID[domain.TermID](), CourseTypeID: newID[domain.CourseTypeID](),
 		RoomID: newID[domain.RoomID](), InstructorID: newID[domain.StaffID](), Level: domain.LevelOpen,
@@ -1354,6 +1360,8 @@ func TestFieldErrors(t *testing.T) {
 		"room location":     {func() domain.Room { r := room; r.LocationID = domain.LocationID{}; return r }(), "locationId"},
 		"room name":         {func() domain.Room { r := room; r.Name = " "; return r }(), "name"},
 		"room capacity":     {func() domain.Room { r := room; r.Capacity = 0; return r }(), "capacity"},
+		"room position":     {func() domain.Room { r := room; r.Position = 0; return r }(), "position"},
+		"room position -1":  {func() domain.Room { r := room; r.Position = -1; return r }(), "position"},
 		"course type":       {domain.CourseType{ID: newID[domain.CourseTypeID]()}, "name"},
 		"staff name":        {domain.Staff{ID: newID[domain.StaffID](), Kind: domain.StaffInstructor}, "displayName"},
 		"staff kind":        {domain.Staff{ID: newID[domain.StaffID](), DisplayName: "A", Kind: "dancer"}, "kind"},

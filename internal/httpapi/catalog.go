@@ -23,8 +23,9 @@ func registerCatalog(api huma.API, h *handlers) {
 		Method:      "GET",
 		Path:        BasePath + "/rooms",
 		Summary:     "List rooms",
-		Description: "Returns the rooms of one location, or of all locations, ordered by name.",
-		Tags:        []string{"catalog"},
+		Description: "Returns the rooms of one location, or of all locations, ordered by location name, then " +
+			"by their position within the location (the office's order), then by name.",
+		Tags: []string{"catalog"},
 	}, h.listRooms)
 
 	register(api, AccessPublic, huma.Operation{
@@ -79,15 +80,16 @@ func (h *handlers) listLocations(ctx context.Context, _ *struct{}) (*LocationLis
 
 // Room is a studio at a location.
 type Room struct {
-	ID         domain.RoomID     `doc:"Room ID."                         json:"id"`
-	LocationID domain.LocationID `doc:"Location the room belongs to."    json:"locationId"`
-	Name       string            `doc:"Display name."                    json:"name"`
-	Capacity   int               `doc:"Default capacity of its lessons." json:"capacity" minimum:"1"`
+	ID         domain.RoomID     `doc:"Room ID."                                       json:"id"`
+	LocationID domain.LocationID `doc:"Location the room belongs to."                  json:"locationId"`
+	Name       string            `doc:"Display name."                                  json:"name"`
+	Capacity   int               `doc:"Default capacity of its lessons."               json:"capacity" minimum:"1"`
+	Position   int               `doc:"Place among the rooms of its location, from 1." json:"position" minimum:"1"`
 }
 
 // RoomList is the response body of listRooms.
 type RoomList struct {
-	Items []Room `doc:"Rooms ordered by name." json:"items" nullable:"false"`
+	Items []Room `doc:"Rooms ordered by location name, then by position and name." json:"items" nullable:"false"`
 }
 
 // RoomListInput is the request of listRooms.
@@ -108,10 +110,14 @@ func (h *handlers) listRooms(ctx context.Context, in *RoomListInput) (*RoomListO
 
 	items := make([]Room, 0, len(rooms))
 	for _, r := range rooms {
-		items = append(items, Room{ID: r.ID, LocationID: r.LocationID, Name: r.Name, Capacity: r.Capacity})
+		items = append(items, newRoom(r))
 	}
 
 	return &RoomListOutput{Body: RoomList{Items: items}}, nil
+}
+
+func newRoom(r domain.Room) Room {
+	return Room{ID: r.ID, LocationID: r.LocationID, Name: r.Name, Capacity: r.Capacity, Position: r.Position}
 }
 
 // StaffMember is an instructor or accompanist. The link to a person record

@@ -42,7 +42,7 @@ func newMergeFaultWorld(t *testing.T) *mergeFaultWorld {
 	settings.RedemptionMode = domain.RedeemOnBooking
 
 	location := domain.Location{ID: ids.New[domain.LocationID](w.seq), Name: "Studio Nowhere"}
-	room := domain.Room{ID: ids.New[domain.RoomID](w.seq), LocationID: location.ID, Name: "Room One", Capacity: 12}
+	room := domain.Room{ID: ids.New[domain.RoomID](w.seq), LocationID: location.ID, Name: "Room One", Capacity: 12, Position: 1}
 	courseType := domain.CourseType{ID: ids.New[domain.CourseTypeID](w.seq), Name: "Imaginary Ballet"}
 	instructor := domain.Staff{
 		ID: ids.New[domain.StaffID](w.seq), DisplayName: "Ada Example", Kind: domain.StaffInstructor, Active: true,

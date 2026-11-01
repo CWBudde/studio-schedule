@@ -180,10 +180,9 @@ function LessonForm({
   onDone: () => void;
   onCreated?: (lessonId: string) => void;
 }) {
-  const { t, i18n } = useTranslation('admin');
+  const { t } = useTranslation('admin');
   const { t: tAuth } = useTranslation('auth');
   const { t: tSchedule } = useTranslation('schedule');
-  const lang = i18n.resolvedLanguage ?? 'en';
   const errorText = useAdminErrorText();
   const queryClient = useQueryClient();
   const create = useMutation(createLessonMutation(queryClient));
@@ -213,7 +212,7 @@ function LessonForm({
     const inactive = (name: string) => t('classes.inactiveStaff', { name });
     return {
       courseTypes: choices.courseTypes.map((c) => ({ value: c.id, label: c.name })),
-      rooms: roomOptions(choices.rooms, choices.locations, lang, t('classes.unknown')),
+      rooms: roomOptions(choices.rooms, choices.locations, t('classes.unknown')),
       instructors: staffOptions(choices.staff, 'instructor', editing?.instructor, inactive),
       accompanists: [
         { value: none, label: t('lessons.noAccompanist') },
@@ -227,7 +226,7 @@ function LessonForm({
         .filter((k) => k === 'rental' || !rentalOnly)
         .map((k) => ({ value: k, label: t(`lessons.kinds.${k}`) })),
     };
-  }, [choices, editing, lang, rentalOnly, t, tSchedule]);
+  }, [choices, editing, rentalOnly, t, tSchedule]);
 
   /** A new lesson gets the capacity of its room, unless the capacity was typed. */
   const pickRoom = (roomId: string) => {

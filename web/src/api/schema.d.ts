@@ -2256,6 +2256,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{locationId}/room-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the order of a location's rooms
+         * @description Numbers the rooms of a location from 1 in the order given; lists and the schedule show them in this order. The list must name every room of the location exactly once and no other room, else it is a 422 on `roomIds`, also when a room was added or removed meanwhile. A new room goes after the last one, as does a room moved to the location.
+         */
+        put: operations["setRoomOrder"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/my/account": {
         parameters: {
             query?: never;
@@ -2493,13 +2513,13 @@ export interface paths {
         };
         /**
          * List rooms
-         * @description Returns the rooms of one location, or of all locations, ordered by name.
+         * @description Returns the rooms of one location, or of all locations, ordered by location name, then by their position within the location (the office's order), then by name.
          */
         get: operations["listRooms"];
         put?: never;
         /**
          * Create a room
-         * @description Adds a room to a location. A name another room of the location has (ignoring case) is a 409 `duplicate`; an unknown location is a 422 on `locationId`.
+         * @description Adds a room to a location, after its last room. A name another room of the location has (ignoring case) is a 409 `duplicate`; an unknown location is a 422 on `locationId`.
          */
         post: operations["createRoom"];
         delete?: never;
@@ -2518,7 +2538,7 @@ export interface paths {
         get?: never;
         /**
          * Update a room
-         * @description Replaces the location, name and capacity of a room. Existing lessons keep their capacity. A name another room of the location has is a 409 `duplicate`.
+         * @description Replaces the location, name and capacity of a room. The room keeps its place, or goes after the last room of its new location. Existing lessons keep their capacity. A name another room of the location has is a 409 `duplicate`.
          */
         put: operations["updateRoom"];
         post?: never;
@@ -7246,6 +7266,11 @@ export interface components {
             locationId: string;
             /** @description Display name. */
             name: string;
+            /**
+             * Format: int64
+             * @description Place among the rooms of its location, from 1.
+             */
+            position: number;
         };
         RoomData: {
             /**
@@ -7262,13 +7287,22 @@ export interface components {
             name: string;
         };
         RoomList: {
-            /** @description Rooms ordered by name. */
+            /** @description Rooms ordered by location name, then by position and name. */
             items: components["schemas"]["Room"][];
+        };
+        RoomOrder: {
+            /** @description Every room of the location, each once, in their new order. */
+            roomIds: string[];
         };
         RoomRef: {
             /** Format: uuid */
             id: string;
             name: string;
+            /**
+             * Format: int64
+             * @description Place among the rooms of its location, from 1.
+             */
+            position: number;
         };
         RoomStatistics: {
             /**
@@ -13220,6 +13254,49 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setRoomOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location. */
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoomOrder"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {

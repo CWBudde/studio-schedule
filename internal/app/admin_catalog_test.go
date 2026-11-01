@@ -1,7 +1,10 @@
 package app_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/cwbudde/studio-schedule/internal/app"
@@ -69,6 +72,88 @@ func TestAdminLocations(t *testing.T) {
 	used := decode(t, a.expect(http.StatusConflict, http.MethodDelete, "/api/v1/rooms/"+usedRoom, "", office))
 	if used["reason"] != "in-use" || used["detail"] != "the record is still in use" {
 		t.Errorf("409 %v, want reason in-use", used)
+	}
+}
+
+// TestAdminRoomOrder runs the office's room order over HTTP: new rooms go
+// to the end, a reorder is a 204 that listRooms shows, a list that is not
+// exactly the location's rooms is a 422 on body.roomIds, an unknown
+// location a 404, and a member gets a 403.
+func TestAdminRoomOrder(t *testing.T) {
+	t.Parallel()
+
+	a := newAuthApp(t, app.Deps{})
+	office := a.login("olga.ledgerby@example.net")
+	member := a.login("clara.amberly@example.org")
+
+	loc := decode(t, a.expect(http.StatusCreated, http.MethodPost, "/api/v1/locations", `{"name":"West Studio"}`, office))
+	locID, _ := loc["id"].(string)
+	path := "/api/v1/locations/" + locID + "/room-order"
+
+	var ids []string
+
+	for i, name := range []string{"Zeta", "Alpha"} {
+		room := decode(t, a.expect(http.StatusCreated, http.MethodPost, "/api/v1/rooms",
+			`{"locationId":"`+locID+`","name":"`+name+`","capacity":12}`, office))
+		if room["position"] != float64(i+1) {
+			t.Fatalf("created %v, want position %d", room, i+1)
+		}
+
+		id, _ := room["id"].(string)
+		ids = append(ids, id)
+	}
+
+	order := func(ids ...string) string {
+		body, err := json.Marshal(map[string][]string{"roomIds": ids})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return string(body)
+	}
+	listed := func() []string {
+		t.Helper()
+
+		var got []string
+
+		for _, item := range decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/rooms?location="+locID, "", office))["items"].([]any) {
+			r, _ := item.(map[string]any)
+			got = append(got, fmt.Sprintf("%v %v", r["position"], r["name"]))
+		}
+
+		return got
+	}
+
+	if got := listed(); !slices.Equal(got, []string{"1 Zeta", "2 Alpha"}) {
+		t.Fatalf("rooms %q before the reorder", got)
+	}
+
+	a.expect(http.StatusForbidden, http.MethodPut, path, order(ids[1], ids[0]), member)
+	a.expect(http.StatusNoContent, http.MethodPut, path, order(ids[1], ids[0]), office)
+
+	if got := listed(); !slices.Equal(got, []string{"1 Alpha", "2 Zeta"}) {
+		t.Fatalf("rooms %q after the reorder, want Alpha first", got)
+	}
+
+	for name, body := range map[string]string{
+		"missing room":  order(ids[1]),
+		"repeated room": order(ids[1], ids[0], ids[0]),
+		"null":          `{"roomIds":null}`,
+	} {
+		invalid := decode(t, a.expect(http.StatusUnprocessableEntity, http.MethodPut, path, body, office))
+		if errs, _ := invalid["errors"].([]any); len(errs) != 1 || errs[0].(map[string]any)["location"] != "body.roomIds" {
+			t.Errorf("%s: 422 errors %v, want body.roomIds", name, invalid["errors"])
+		}
+	}
+
+	// Without the list at all.
+	a.expect(http.StatusUnprocessableEntity, http.MethodPut, path, `{}`, office)
+
+	a.expect(http.StatusNotFound, http.MethodPut, "/api/v1/locations/ffffffff-ffff-7fff-bfff-ffffffffffff/room-order",
+		`{"roomIds":[]}`, office)
+
+	if got := listed(); !slices.Equal(got, []string{"1 Alpha", "2 Zeta"}) {
+		t.Fatalf("rooms %q after the refused orders", got)
 	}
 }
 
