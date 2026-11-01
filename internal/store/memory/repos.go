@@ -668,13 +668,71 @@ func (r roomRepo) Delete(_ context.Context, id domain.RoomID) error {
 }
 
 func (r roomRepo) List(_ context.Context, location domain.LocationID) ([]domain.Room, error) {
-	rooms := r.tx.state.rooms.filter(func(rm domain.Room) bool {
+	s := &r.tx.state
+	rooms := s.rooms.filter(func(rm domain.Room) bool {
 		return location.IsZero() || rm.LocationID == location
 	})
 
+	// A room's location exists: put refuses a missing one, and a location
+	// with rooms cannot be deleted.
+	locationName := func(id domain.LocationID) string {
+		l, _ := s.locations.get(id)
+
+		return l.Name
+	}
+
 	return sorted(rooms, func(a, b domain.Room) int {
-		return cmp.Or(strings.Compare(a.Name, b.Name), compareID(a.ID, b.ID))
+		return cmp.Or(
+			strings.Compare(locationName(a.LocationID), locationName(b.LocationID)),
+			compareID(a.LocationID, b.LocationID),
+			cmp.Compare(a.Position, b.Position),
+			strings.Compare(a.Name, b.Name),
+			compareID(a.ID, b.ID),
+		)
 	}), nil
+}
+
+func (r roomRepo) SetOrder(_ context.Context, location domain.LocationID, order []domain.RoomID) error {
+	s := &r.tx.state
+	if err := r.tx.checkWritable(); err != nil {
+		return err
+	}
+
+	rooms := s.rooms.filter(func(rm domain.Room) bool { return rm.LocationID == location })
+	if err := checkRoomOrder(rooms, order); err != nil {
+		return err
+	}
+
+	for i, id := range order {
+		rm, _ := s.rooms.get(id)
+		rm.Position = i + 1
+		s.rooms.put(r.tx.gen, id, rm)
+	}
+
+	return nil
+}
+
+// checkRoomOrder fails with domain.ErrValidation unless order holds each of
+// the rooms exactly once and no other room.
+func checkRoomOrder(rooms []domain.Room, order []domain.RoomID) error {
+	open := make(map[domain.RoomID]bool, len(rooms))
+	for _, rm := range rooms {
+		open[rm.ID] = true
+	}
+
+	for _, id := range order {
+		if !open[id] {
+			return fmt.Errorf("room order: %s is not a room of the location or repeated: %w", id, domain.ErrValidation)
+		}
+
+		delete(open, id)
+	}
+
+	if len(open) > 0 {
+		return fmt.Errorf("room order: %d rooms of the location are missing: %w", len(open), domain.ErrValidation)
+	}
+
+	return nil
 }
 
 type staffRepo struct{ tx *tx }

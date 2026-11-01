@@ -55,6 +55,9 @@ func TestOutOfRangeValuesFailWrites(t *testing.T) {
 		"room update": func(ctx context.Context, tx store.Tx) error {
 			return tx.Rooms().Update(ctx, domain.Room{ID: ids.New[domain.RoomID](seq), Capacity: -big - 1})
 		},
+		"room position": func(ctx context.Context, tx store.Tx) error {
+			return tx.Rooms().Create(ctx, domain.Room{ID: ids.New[domain.RoomID](seq), Capacity: 1, Position: big})
+		},
 		"import run": func(ctx context.Context, tx store.Tx) error {
 			return tx.Imports().Create(ctx, domain.ImportRun{
 				ID: ids.New[domain.ImportRunID](seq), Counts: domain.ImportCounts{Rows: 1, LinksAdded: big},
@@ -266,6 +269,52 @@ func TestReceiptLineFailureRollsBack(t *testing.T) {
 	}
 }
 
+// TestRoomOrderWriteFails checks that SetOrder fails as a whole when the
+// write of a position fails after others succeeded: a constraint added for
+// the test refuses the second position.
+func TestRoomOrderWriteFails(t *testing.T) {
+	t.Parallel()
+
+	st := newTestStore(t)
+	seq := ids.NewSequence()
+	loc := domain.Location{ID: ids.New[domain.LocationID](seq), Name: "Main Hall"}
+	a := domain.Room{ID: ids.New[domain.RoomID](seq), LocationID: loc.ID, Name: "Room A", Capacity: 8, Position: 1}
+	b := domain.Room{ID: ids.New[domain.RoomID](seq), LocationID: loc.ID, Name: "Room B", Capacity: 8, Position: 2}
+
+	err := st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return errors.Join(tx.Locations().Create(ctx, loc), tx.Rooms().Create(ctx, a), tx.Rooms().Create(ctx, b))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := st.pool.Exec(t.Context(),
+		`ALTER TABLE rooms ADD CONSTRAINT rooms_position_test CHECK (position < 2) NOT VALID`); err != nil {
+		t.Fatal(err)
+	}
+
+	err = st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return tx.Rooms().SetOrder(ctx, loc.ID, []domain.RoomID{b.ID, a.ID})
+	})
+	if !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("SetOrder = %v, want ErrValidation", err)
+	}
+
+	noDriverError(t, err)
+
+	var rooms []domain.Room
+
+	err = st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+		var listErr error
+		rooms, listErr = tx.Rooms().List(ctx, loc.ID)
+
+		return listErr
+	})
+	if err != nil || len(rooms) != 2 || rooms[0] != a || rooms[1] != b {
+		t.Errorf("rooms after the failed reorder: %+v, %v; want %+v and %+v unchanged", rooms, err, a, b)
+	}
+}
+
 // TestEmptyReceiptPDF checks that PutPDF refuses an empty PDF.
 func TestEmptyReceiptPDF(t *testing.T) {
 	t.Parallel()
@@ -385,6 +434,9 @@ func TestCanceledQueryInTx(t *testing.T) {
 		}},
 		"event image removal": {store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 			return tx.Events().PutImage(ctx, ids.New[domain.EventID](seq), domain.Background{})
+		}},
+		"room order lock": {store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+			return tx.Rooms().SetOrder(ctx, ids.New[domain.LocationID](seq), nil)
 		}},
 		"waiting list by lessons": {store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 			_, err := tx.Waitlist().CountByLessons(ctx, lessons)

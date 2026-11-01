@@ -42,7 +42,7 @@ func (q *Queries) CreateLocation(ctx context.Context, arg CreateLocationParams) 
 }
 
 const createRoom = `-- name: CreateRoom :exec
-INSERT INTO rooms (id, location_id, name, capacity) VALUES ($1, $2, $3, $4)
+INSERT INTO rooms (id, location_id, name, capacity, position) VALUES ($1, $2, $3, $4, $5)
 `
 
 type CreateRoomParams struct {
@@ -50,6 +50,7 @@ type CreateRoomParams struct {
 	LocationID pgtype.UUID
 	Name       string
 	Capacity   int32
+	Position   int32
 }
 
 func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) error {
@@ -58,6 +59,7 @@ func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) error {
 		arg.LocationID,
 		arg.Name,
 		arg.Capacity,
+		arg.Position,
 	)
 	return err
 }
@@ -156,7 +158,7 @@ func (q *Queries) GetLocation(ctx context.Context, id pgtype.UUID) (Location, er
 }
 
 const getRoom = `-- name: GetRoom :one
-SELECT id, location_id, name, capacity FROM rooms WHERE id = $1
+SELECT id, location_id, name, capacity, position FROM rooms WHERE id = $1
 `
 
 func (q *Queries) GetRoom(ctx context.Context, id pgtype.UUID) (Room, error) {
@@ -167,6 +169,7 @@ func (q *Queries) GetRoom(ctx context.Context, id pgtype.UUID) (Room, error) {
 		&i.LocationID,
 		&i.Name,
 		&i.Capacity,
+		&i.Position,
 	)
 	return i, err
 }
@@ -237,7 +240,8 @@ func (q *Queries) ListLocations(ctx context.Context) ([]Location, error) {
 }
 
 const listRooms = `-- name: ListRooms :many
-SELECT id, location_id, name, capacity FROM rooms ORDER BY name, id
+SELECT rooms.id, rooms.location_id, rooms.name, rooms.capacity, rooms.position FROM rooms JOIN locations ON locations.id = rooms.location_id
+ORDER BY locations.name, locations.id, rooms.position, rooms.name, rooms.id
 `
 
 func (q *Queries) ListRooms(ctx context.Context) ([]Room, error) {
@@ -254,6 +258,7 @@ func (q *Queries) ListRooms(ctx context.Context) ([]Room, error) {
 			&i.LocationID,
 			&i.Name,
 			&i.Capacity,
+			&i.Position,
 		); err != nil {
 			return nil, err
 		}
@@ -266,7 +271,7 @@ func (q *Queries) ListRooms(ctx context.Context) ([]Room, error) {
 }
 
 const listRoomsByLocation = `-- name: ListRoomsByLocation :many
-SELECT id, location_id, name, capacity FROM rooms WHERE location_id = $1 ORDER BY name, id
+SELECT id, location_id, name, capacity, position FROM rooms WHERE location_id = $1 ORDER BY position, name, id
 `
 
 func (q *Queries) ListRoomsByLocation(ctx context.Context, locationID pgtype.UUID) ([]Room, error) {
@@ -283,6 +288,7 @@ func (q *Queries) ListRoomsByLocation(ctx context.Context, locationID pgtype.UUI
 			&i.LocationID,
 			&i.Name,
 			&i.Capacity,
+			&i.Position,
 		); err != nil {
 			return nil, err
 		}
@@ -354,6 +360,50 @@ func (q *Queries) ListStaffByPerson(ctx context.Context, personID pgtype.UUID) (
 	return items, nil
 }
 
+const lockRoomsByLocation = `-- name: LockRoomsByLocation :many
+SELECT id, location_id, name, capacity, position FROM rooms WHERE location_id = $1 ORDER BY id FOR UPDATE
+`
+
+func (q *Queries) LockRoomsByLocation(ctx context.Context, locationID pgtype.UUID) ([]Room, error) {
+	rows, err := q.db.Query(ctx, lockRoomsByLocation, locationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Room
+	for rows.Next() {
+		var i Room
+		if err := rows.Scan(
+			&i.ID,
+			&i.LocationID,
+			&i.Name,
+			&i.Capacity,
+			&i.Position,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setRoomPosition = `-- name: SetRoomPosition :exec
+UPDATE rooms SET position = $2 WHERE id = $1
+`
+
+type SetRoomPositionParams struct {
+	ID       pgtype.UUID
+	Position int32
+}
+
+func (q *Queries) SetRoomPosition(ctx context.Context, arg SetRoomPositionParams) error {
+	_, err := q.db.Exec(ctx, setRoomPosition, arg.ID, arg.Position)
+	return err
+}
+
 const updateCourseType = `-- name: UpdateCourseType :execrows
 UPDATE course_types SET name = $2, description = $3 WHERE id = $1
 `
@@ -391,7 +441,7 @@ func (q *Queries) UpdateLocation(ctx context.Context, arg UpdateLocationParams) 
 }
 
 const updateRoom = `-- name: UpdateRoom :execrows
-UPDATE rooms SET location_id = $2, name = $3, capacity = $4 WHERE id = $1
+UPDATE rooms SET location_id = $2, name = $3, capacity = $4, position = $5 WHERE id = $1
 `
 
 type UpdateRoomParams struct {
@@ -399,6 +449,7 @@ type UpdateRoomParams struct {
 	LocationID pgtype.UUID
 	Name       string
 	Capacity   int32
+	Position   int32
 }
 
 func (q *Queries) UpdateRoom(ctx context.Context, arg UpdateRoomParams) (int64, error) {
@@ -407,6 +458,7 @@ func (q *Queries) UpdateRoom(ctx context.Context, arg UpdateRoomParams) (int64, 
 		arg.LocationID,
 		arg.Name,
 		arg.Capacity,
+		arg.Position,
 	)
 	if err != nil {
 		return 0, err

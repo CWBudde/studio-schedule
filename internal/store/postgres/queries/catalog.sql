@@ -17,19 +17,26 @@ SELECT * FROM locations ORDER BY name, id;
 SELECT * FROM rooms WHERE id = $1;
 
 -- name: CreateRoom :exec
-INSERT INTO rooms (id, location_id, name, capacity) VALUES ($1, $2, $3, $4);
+INSERT INTO rooms (id, location_id, name, capacity, position) VALUES ($1, $2, $3, $4, $5);
 
 -- name: UpdateRoom :execrows
-UPDATE rooms SET location_id = $2, name = $3, capacity = $4 WHERE id = $1;
+UPDATE rooms SET location_id = $2, name = $3, capacity = $4, position = $5 WHERE id = $1;
 
 -- name: DeleteRoom :execrows
 DELETE FROM rooms WHERE id = $1;
 
 -- name: ListRooms :many
-SELECT * FROM rooms ORDER BY name, id;
+SELECT rooms.* FROM rooms JOIN locations ON locations.id = rooms.location_id
+ORDER BY locations.name, locations.id, rooms.position, rooms.name, rooms.id;
 
 -- name: ListRoomsByLocation :many
-SELECT * FROM rooms WHERE location_id = $1 ORDER BY name, id;
+SELECT * FROM rooms WHERE location_id = $1 ORDER BY position, name, id;
+
+-- name: LockRoomsByLocation :many
+SELECT * FROM rooms WHERE location_id = $1 ORDER BY id FOR UPDATE;
+
+-- name: SetRoomPosition :exec
+UPDATE rooms SET position = $2 WHERE id = $1;
 
 -- name: GetStaff :one
 SELECT * FROM staff WHERE id = $1;

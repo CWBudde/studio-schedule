@@ -432,8 +432,12 @@ type RoomRepo interface {
 	// room.
 	Delete(ctx context.Context, id domain.RoomID) error
 	// List returns the rooms of a location, or all rooms if location is
-	// zero, ordered by name and ID.
+	// zero, ordered by location name and ID, then position, name and ID.
 	List(ctx context.Context, location domain.LocationID) ([]domain.Room, error)
+	// SetOrder sets the positions of the location's rooms to 1..n in the
+	// order given. It fails with domain.ErrValidation unless order holds
+	// every room of the location exactly once and no other room.
+	SetOrder(ctx context.Context, location domain.LocationID, order []domain.RoomID) error
 }
 
 // StaffRepo stores instructors and accompanists.

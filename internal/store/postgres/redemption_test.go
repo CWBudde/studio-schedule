@@ -70,7 +70,7 @@ func TestRedeemLastVisitConcurrently(t *testing.T) {
 		ConfirmedAt: now,
 	}
 	location := domain.Location{ID: ids.New[domain.LocationID](seq), Name: "Studio Nowhere"}
-	room := domain.Room{ID: ids.New[domain.RoomID](seq), LocationID: location.ID, Name: "Room One", Capacity: 12}
+	room := domain.Room{ID: ids.New[domain.RoomID](seq), LocationID: location.ID, Name: "Room One", Capacity: 12, Position: 1}
 	courseType := domain.CourseType{ID: ids.New[domain.CourseTypeID](seq), Name: "Imaginary Ballet"}
 	staff := domain.Staff{
 		ID: ids.New[domain.StaffID](seq), DisplayName: "Ada Example", Kind: domain.StaffInstructor, Active: true,

@@ -419,6 +419,7 @@ type Room struct {
 	LocationID pgtype.UUID
 	Name       string
 	Capacity   int32
+	Position   int32
 }
 
 type Session struct {

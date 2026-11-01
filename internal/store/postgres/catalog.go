@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/store/postgres/internal/sqlc"
@@ -60,6 +61,7 @@ func toRoom(row sqlc.Room) domain.Room {
 		LocationID: fromPgID[domain.LocationID](row.LocationID),
 		Name:       row.Name,
 		Capacity:   int(row.Capacity),
+		Position:   int(row.Position),
 	}
 }
 
@@ -73,27 +75,39 @@ func (r roomRepo) Get(ctx context.Context, id domain.RoomID) (domain.Room, error
 }
 
 func (r roomRepo) Create(ctx context.Context, rm domain.Room) error {
-	capacity, err := int4(rm.Capacity)
+	capacity, position, err := roomNumbers(rm)
 	if err != nil {
 		return err
 	}
 
 	return mapErr(r.q.CreateRoom(ctx, sqlc.CreateRoomParams{
-		ID: pgID(rm.ID), LocationID: pgID(rm.LocationID), Name: rm.Name, Capacity: capacity,
+		ID: pgID(rm.ID), LocationID: pgID(rm.LocationID), Name: rm.Name, Capacity: capacity, Position: position,
 	}))
 }
 
 func (r roomRepo) Update(ctx context.Context, rm domain.Room) error {
-	capacity, err := int4(rm.Capacity)
+	capacity, position, err := roomNumbers(rm)
 	if err != nil {
 		return err
 	}
 
 	n, err := r.q.UpdateRoom(ctx, sqlc.UpdateRoomParams{
-		ID: pgID(rm.ID), LocationID: pgID(rm.LocationID), Name: rm.Name, Capacity: capacity,
+		ID: pgID(rm.ID), LocationID: pgID(rm.LocationID), Name: rm.Name, Capacity: capacity, Position: position,
 	})
 
 	return affected("room", n, err)
+}
+
+// roomNumbers converts the room's capacity and position for their integer
+// columns.
+func roomNumbers(rm domain.Room) (capacity, position int32, err error) {
+	if capacity, err = int4(rm.Capacity); err != nil {
+		return 0, 0, err
+	}
+
+	position, err = int4(rm.Position)
+
+	return capacity, position, err
 }
 
 func (r roomRepo) Delete(ctx context.Context, id domain.RoomID) error {
@@ -112,6 +126,40 @@ func (r roomRepo) List(ctx context.Context, location domain.LocationID) ([]domai
 	rows, err := r.q.ListRoomsByLocation(ctx, pgID(location))
 
 	return convertRows(rows, err, toRoom)
+}
+
+func (r roomRepo) SetOrder(ctx context.Context, location domain.LocationID, order []domain.RoomID) error {
+	rows, err := r.q.LockRoomsByLocation(ctx, pgID(location))
+	if err != nil {
+		return mapErr(err)
+	}
+
+	open := make(map[domain.RoomID]bool, len(rows))
+	for _, row := range rows {
+		open[fromPgID[domain.RoomID](row.ID)] = true
+	}
+
+	for _, id := range order {
+		if !open[id] {
+			return fmt.Errorf("room order: %s is not a room of the location or repeated: %w", id, domain.ErrValidation)
+		}
+
+		delete(open, id)
+	}
+
+	if len(open) > 0 {
+		return fmt.Errorf("room order: %d rooms of the location are missing: %w", len(open), domain.ErrValidation)
+	}
+
+	var position int32
+	for _, id := range order {
+		position++
+		if err := r.q.SetRoomPosition(ctx, sqlc.SetRoomPositionParams{ID: pgID(id), Position: position}); err != nil {
+			return mapErr(err)
+		}
+	}
+
+	return nil
 }
 
 // ---------------------------------------------------------------- staff

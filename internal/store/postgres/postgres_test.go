@@ -179,6 +179,73 @@ func TestMigrationsRoundTrip(t *testing.T) {
 	}
 }
 
+// TestRoomPositionBackfill checks that 00032_room_position.sql numbers the
+// existing rooms of each location in today's order, by name and ID.
+func TestRoomPositionBackfill(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	dbURL := newTestDatabase(t) // already migrated up
+
+	m, err := NewMigrator(dbURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = m.Close() })
+
+	for {
+		res, err := m.Down(ctx)
+		if err != nil {
+			t.Fatalf("down: %v", err)
+		}
+
+		if res.Version == 32 {
+			break
+		}
+	}
+
+	seq := ids.NewSequence()
+	north, south := ids.New[domain.LocationID](seq), ids.New[domain.LocationID](seq)
+	rooms := map[string]struct {
+		id       domain.RoomID
+		location domain.LocationID
+		want     int
+	}{
+		"Studio B": {ids.New[domain.RoomID](seq), north, 2},
+		"Studio A": {ids.New[domain.RoomID](seq), north, 1},
+		"atelier":  {ids.New[domain.RoomID](seq), north, 3}, // byte order: lowercase after uppercase
+		"Hall":     {ids.New[domain.RoomID](seq), south, 1},
+	}
+
+	if _, err := m.db.ExecContext(ctx, `INSERT INTO locations (id, name) VALUES ($1, 'North'), ($2, 'South')`,
+		north.String(), south.String()); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, r := range rooms {
+		if _, err := m.db.ExecContext(ctx, `INSERT INTO rooms (id, location_id, name, capacity) VALUES ($1, $2, $3, 10)`,
+			r.id.String(), r.location.String(), name); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := m.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, r := range rooms {
+		var position int
+		if err := m.db.QueryRowContext(ctx, `SELECT position FROM rooms WHERE id = $1`, r.id.String()).Scan(&position); err != nil {
+			t.Fatal(err)
+		}
+
+		if position != r.want {
+			t.Errorf("%s: position %d, want %d", name, position, r.want)
+		}
+	}
+}
+
 func TestMapErr(t *testing.T) {
 	t.Parallel()
 
@@ -466,7 +533,7 @@ func TestUniqueNamesMigration(t *testing.T) {
 	t.Cleanup(func() { _ = m.Close() })
 
 	for _, want := range []string{
-		"00031_events.sql", "00030_lesson_rental_course_type.sql", "00029_audit_command_line.sql", "00028_job_runs.sql", "00027_settings_released_through.sql", "00026_lesson_rental.sql", "00025_settings_theme_background.sql", "00024_push.sql", "00023_privacy_accounts.sql", "00022_outbox_failed_index.sql", "00021_import_merge.sql", "00020_mail_log_audit.sql", "00019_announcements.sql",
+		"00032_room_position.sql", "00031_events.sql", "00030_lesson_rental_course_type.sql", "00029_audit_command_line.sql", "00028_job_runs.sql", "00027_settings_released_through.sql", "00026_lesson_rental.sql", "00025_settings_theme_background.sql", "00024_push.sql", "00023_privacy_accounts.sql", "00022_outbox_failed_index.sql", "00021_import_merge.sql", "00020_mail_log_audit.sql", "00019_announcements.sql",
 		"00018_settings_accent.sql", "00017_receipts.sql", "00016_passes.sql", "00015_calendar_feeds.sql", "00014_lesson_notices.sql", "00013_staff_bookings.sql", "00012_waitlist.sql", "00011_class_member_bookings.sql",
 		"00010_booking_rules.sql", "00009_lesson_admin.sql",
 		"00008_lesson_slots.sql", "00007_course_type_unique_names.sql",
@@ -536,7 +603,7 @@ func TestLessonSlotsMigration(t *testing.T) {
 	t.Cleanup(func() { _ = m.Close() })
 
 	for _, want := range []string{
-		"00031_events.sql", "00030_lesson_rental_course_type.sql", "00029_audit_command_line.sql", "00028_job_runs.sql", "00027_settings_released_through.sql", "00026_lesson_rental.sql", "00025_settings_theme_background.sql", "00024_push.sql", "00023_privacy_accounts.sql", "00022_outbox_failed_index.sql", "00021_import_merge.sql", "00020_mail_log_audit.sql", "00019_announcements.sql",
+		"00032_room_position.sql", "00031_events.sql", "00030_lesson_rental_course_type.sql", "00029_audit_command_line.sql", "00028_job_runs.sql", "00027_settings_released_through.sql", "00026_lesson_rental.sql", "00025_settings_theme_background.sql", "00024_push.sql", "00023_privacy_accounts.sql", "00022_outbox_failed_index.sql", "00021_import_merge.sql", "00020_mail_log_audit.sql", "00019_announcements.sql",
 		"00018_settings_accent.sql", "00017_receipts.sql", "00016_passes.sql", "00015_calendar_feeds.sql", "00014_lesson_notices.sql", "00013_staff_bookings.sql", "00012_waitlist.sql", "00011_class_member_bookings.sql",
 		"00010_booking_rules.sql", "00009_lesson_admin.sql",
 		"00008_lesson_slots.sql",
@@ -621,7 +688,7 @@ func TestSettingsMigration(t *testing.T) {
 			t.Cleanup(func() { _ = m.Close() })
 
 			for _, want := range []string{
-				"00031_events.sql", "00030_lesson_rental_course_type.sql", "00029_audit_command_line.sql", "00028_job_runs.sql", "00027_settings_released_through.sql", "00026_lesson_rental.sql", "00025_settings_theme_background.sql", "00024_push.sql", "00023_privacy_accounts.sql", "00022_outbox_failed_index.sql", "00021_import_merge.sql", "00020_mail_log_audit.sql", "00019_announcements.sql", "00018_settings_accent.sql",
+				"00032_room_position.sql", "00031_events.sql", "00030_lesson_rental_course_type.sql", "00029_audit_command_line.sql", "00028_job_runs.sql", "00027_settings_released_through.sql", "00026_lesson_rental.sql", "00025_settings_theme_background.sql", "00024_push.sql", "00023_privacy_accounts.sql", "00022_outbox_failed_index.sql", "00021_import_merge.sql", "00020_mail_log_audit.sql", "00019_announcements.sql", "00018_settings_accent.sql",
 			} {
 				if res, err := m.Down(ctx); err != nil || res.Name != want {
 					t.Fatalf("down = %+v, %v; want %s rolled back", res, err, want)
@@ -762,7 +829,7 @@ func createLesson(t *testing.T, st *Store, seq *ids.Sequence, offset time.Durati
 	// Location and course type names are unique; each lesson gets its own.
 	locID, ctID := ids.New[domain.LocationID](seq), ids.New[domain.CourseTypeID](seq)
 	loc := domain.Location{ID: locID, Name: "Studio " + locID.String()}
-	room := domain.Room{ID: ids.New[domain.RoomID](seq), LocationID: loc.ID, Name: "Room A", Capacity: 10}
+	room := domain.Room{ID: ids.New[domain.RoomID](seq), LocationID: loc.ID, Name: "Room A", Capacity: 10, Position: 1}
 	staff := domain.Staff{ID: ids.New[domain.StaffID](seq), DisplayName: "Instructor", Kind: domain.StaffInstructor}
 	ct := domain.CourseType{ID: ctID, Name: "Ballet " + ctID.String()}
 	l := domain.Lesson{
