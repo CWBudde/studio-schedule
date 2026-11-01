@@ -271,10 +271,11 @@ type Env struct {
 	app *App
 	cmd *cobra.Command
 	in  *bufio.Reader
-	// cfg and st are the configuration and the store of a Spec that opens
-	// the database.
+	// cfg, st and pdf are the configuration, the store and the receipt
+	// renderer of a Spec that opens the database.
 	cfg config.Config
 	st  store.Store
+	pdf *lazyPDF
 }
 
 // Stderr is where prompts and messages beside the result go.
@@ -291,14 +292,17 @@ func (e *Env) Config(flags config.Flags) (config.Config, error) {
 
 // Open opens the database of cfg (Env.Config) with the System's Opener
 // and returns its services, for a command that opens it itself, such as
-// doctor, which reports a database it cannot open as a finding.
-func (e *Env) Open(ctx context.Context, cfg config.Config) (app.Services, func(), error) {
-	st, release, err := e.app.sys.Open(ctx, cfg.DatabaseURL)
+// doctor, which reports a database it cannot open as a finding. release
+// closes the database and stops the receipt renderer if it started.
+func (e *Env) Open(ctx context.Context, cfg config.Config) (svc app.Services, release func(), err error) {
+	st, closeDB, err := e.app.sys.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return app.Services{}, nil, err
 	}
 
-	return e.app.services(st, cfg), release, nil
+	pdf := e.app.renderer()
+
+	return e.app.services(st, cfg, pdf), func() { pdf.release(); closeDB() }, nil
 }
 
 // PDF starts the System's receipt renderer; ok is false without one.
@@ -327,7 +331,7 @@ func (e *Env) Delivery(cfg config.Config) (Delivery, error) {
 // Jobs returns the background jobs on the command's database, built as
 // serve builds them (app.Jobs): with the senders of the configuration
 // (Env.Delivery), so deliver-mail and deliver-push are there exactly when
-// serve has them, and with the System's receipt renderer, started on the
+// serve has them, and with the services' receipt renderer, started on the
 // first receipt it renders. The jobs log their warnings and errors to
 // stderr. release stops the renderer. The Spec must open the database.
 func (e *Env) Jobs() (runner *jobs.Runner, release func(), err error) {
@@ -340,7 +344,11 @@ func (e *Env) Jobs() (runner *jobs.Runner, release func(), err error) {
 		return nil, nil, err
 	}
 
-	pdf := &lazyPDF{start: e.app.sys.PDF}
+	pdf := e.pdf
+	if pdf == nil {
+		pdf = &lazyPDF{} // renders nothing: the build has no renderer
+	}
+
 	logger := slog.New(slog.NewTextHandler(e.Stderr(), &slog.HandlerOptions{Level: slog.LevelWarn}))
 
 	runner = app.Jobs(app.Deps{
@@ -352,7 +360,7 @@ func (e *Env) Jobs() (runner *jobs.Runner, release func(), err error) {
 }
 
 // lazyPDF is a receipt renderer that starts the System's on its first
-// render, so a command whose jobs render no receipt never compiles one.
+// render, so a command that renders no receipt never compiles one.
 type lazyPDF struct {
 	start func() (service.ReceiptRenderer, func())
 
@@ -380,11 +388,15 @@ func (l *lazyPDF) Render(ctx context.Context, input []byte) ([]byte, error) {
 	return l.r.Render(ctx, input)
 }
 
-// release stops the renderer if it started.
+// release stops the renderer if it started; once is enough, a second call
+// does nothing. A nil renderer has nothing to stop.
 func (l *lazyPDF) release() {
-	if l.started {
-		l.stop()
+	if l == nil || !l.started {
+		return
 	}
+
+	l.started = false
+	l.stop()
 }
 
 // ErrNotConfirmed is the answer "no" to Env.Confirm.
@@ -502,12 +514,14 @@ func (a *App) open(ctx context.Context, cmd *cobra.Command, spec Spec, env *Env)
 		return nil, Usagef("%s acts as an account: give --as <email> or set %s", cmd.CommandPath(), config.EnvAs)
 	}
 
-	st, release, err := a.sys.Open(ctx, cfg.DatabaseURL)
+	st, closeDB, err := a.sys.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return nil, err
 	}
 
-	env.Services, env.cfg, env.st = a.services(st, cfg), cfg, st
+	env.pdf = a.renderer()
+	env.Services, env.cfg, env.st = a.services(st, cfg, env.pdf), cfg, st
+	release := func() { env.pdf.release(); closeDB() }
 
 	if err := a.schoolTime(ctx, env); err != nil {
 		release()
@@ -527,9 +541,25 @@ func (a *App) open(ctx context.Context, cmd *cobra.Command, spec Spec, env *Env)
 }
 
 // services are the application's services on st, with links to the app of
-// cfg.
-func (a *App) services(st store.Store, cfg config.Config) app.Services {
-	return app.NewServices(app.Deps{Store: st, Clock: a.sys.Clock, IDs: a.sys.IDs, AppURL: AppURL(cfg)})
+// cfg and pdf as their receipt renderer (none if nil).
+func (a *App) services(st store.Store, cfg config.Config, pdf *lazyPDF) app.Services {
+	deps := app.Deps{Store: st, Clock: a.sys.Clock, IDs: a.sys.IDs, AppURL: AppURL(cfg)}
+	if pdf != nil {
+		deps.PDF = pdf
+	}
+
+	return app.NewServices(deps)
+}
+
+// renderer is the System's receipt renderer, started on its first render
+// (lazyPDF); nil without one, so the services report ErrNoPDFRenderer as
+// a server without a renderer does.
+func (a *App) renderer() *lazyPDF {
+	if a.sys.PDF == nil {
+		return nil
+	}
+
+	return &lazyPDF{start: a.sys.PDF}
 }
 
 // schoolTime sets the presenter's time zone to the school's; a database

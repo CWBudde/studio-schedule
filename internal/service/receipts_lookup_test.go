@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"slices"
@@ -272,40 +271,6 @@ func TestReceiptsInChunks(t *testing.T) {
 
 	if page.Total != n || len(page.Items) != n || page.Items[0].Receipt.Sequence != n {
 		t.Errorf("Issued: total %d, %d receipts, want %d, newest first", page.Total, len(page.Items), n)
-	}
-}
-
-// TestReceiptWithRenderer: a copy with a renderer renders and stores the
-// PDF of a receipt without one; the service it was made from keeps having
-// none, and reads the stored PDF.
-func TestReceiptWithRenderer(t *testing.T) {
-	t.Parallel()
-
-	f := newPassFixture(t, domain.RedeemOnAttendance)
-	first, second := f.lookupReceipt(t, "2026-10-01"), f.lookupReceipt(t, "2026-10-02")
-	rs := NewReceiptService(f.st, clock.NewFixed(mustInstant(t, bookingNow)), f.seq, Mails{}, nil)
-
-	if _, err := rs.PDF(t.Context(), first.ID); !errors.Is(err, ErrNoPDFRenderer) {
-		t.Fatalf("PDF without a renderer = %v, want ErrNoPDFRenderer", err)
-	}
-
-	c := rs.WithRenderer(f.pdf)
-
-	file, err := c.PDF(t.Context(), first.ID)
-	if err != nil || !bytes.HasPrefix(file.PDF, []byte("%PDF-fake")) || f.pdf.count() != 1 {
-		t.Fatalf("PDF with the renderer = %q, %v after %d renders", file.PDF, err, f.pdf.count())
-	}
-
-	if c == rs || rs.renderer != nil {
-		t.Errorf("WithRenderer changed the service it copied")
-	}
-
-	if _, err := rs.PDF(t.Context(), second.ID); !errors.Is(err, ErrNoPDFRenderer) {
-		t.Errorf("PDF of another receipt without the renderer = %v, want ErrNoPDFRenderer", err)
-	}
-
-	if stored, err := rs.PDF(t.Context(), first.ID); err != nil || !bytes.Equal(stored.PDF, file.PDF) {
-		t.Errorf("PDF without the renderer after the render = %q, %v; want the stored one", stored.PDF, err)
 	}
 }
 

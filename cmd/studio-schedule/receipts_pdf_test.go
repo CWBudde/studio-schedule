@@ -170,9 +170,15 @@ func TestReceiptsPDFRendered(t *testing.T) {
 			t.Fatalf("stored %q after the failures, want none", pdf)
 		}
 
-		// Rendered, written and stored.
+		// Rendered, written and stored; the renderer stops with the command.
+		var starts, stops int
+
 		rendering := r
-		rendering.pdf = renderingPDF
+		rendering.pdf = func() (service.ReceiptRenderer, func()) {
+			starts++
+
+			return fakeRenderer{out: []byte(rpdfTRendered)}, func() { stops++ }
+		}
 		file := filepath.Join(dir, "rendered.pdf")
 
 		got = rendering.exec(t, "receipts", "pdf", "--as", demoOffice, "SD-2026-0001", "--file", file)
@@ -187,6 +193,10 @@ func TestReceiptsPDFRendered(t *testing.T) {
 
 		if pdf := rpdfTPDFOf(t, st, "SD-2026-0001"); string(pdf) != rpdfTRendered {
 			t.Errorf("stored %q, want the rendered PDF", pdf)
+		}
+
+		if starts != 1 || stops != 1 {
+			t.Errorf("the renderer started %d and stopped %d times, want once each", starts, stops)
 		}
 
 		// Read again without a renderer: the stored one.

@@ -114,7 +114,7 @@ func (c countingRenderer) Render(context.Context, []byte) ([]byte, error) {
 }
 
 // TestLazyPDF starts the renderer on the first render only, once, and
-// releases only one that started; without a renderer a render fails.
+// releases only one that started, once; without a renderer a render fails.
 func TestLazyPDF(t *testing.T) {
 	t.Parallel()
 
@@ -141,6 +141,7 @@ func TestLazyPDF(t *testing.T) {
 	}
 
 	used.release()
+	used.release() // the command's release after the jobs'
 
 	if starts != 1 || renders != 2 || releases != 1 {
 		t.Errorf("%d starts, %d renders, %d releases; want 1, 2, 1", starts, renders, releases)
@@ -149,4 +150,7 @@ func TestLazyPDF(t *testing.T) {
 	if _, err := (&lazyPDF{}).Render(t.Context(), nil); !errors.Is(err, errNoRenderer) {
 		t.Errorf("without a renderer: %v, want errNoRenderer", err)
 	}
+
+	var none *lazyPDF
+	none.release() // a System without a renderer: nothing to stop
 }

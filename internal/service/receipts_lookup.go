@@ -21,16 +21,6 @@ const receiptsChunk = 500
 // errReceiptRange refuses a range whose start lies after its end.
 var errReceiptRange error = &domain.FieldError{Field: "to", Msg: "the end lies before the start"}
 
-// WithRenderer returns a copy of s that renders PDFs with r, for a caller
-// that starts the renderer only when a receipt needs one (the command line:
-// a receipt issued without a PDF, the seed's, is rendered on first read).
-func (s *ReceiptService) WithRenderer(r ReceiptRenderer) *ReceiptService {
-	c := *s
-	c.renderer = r
-
-	return &c
-}
-
 // ByNumber returns the receipt with the printed number, e.g. SD-2026-0001,
 // ignoring surrounding spaces and ASCII case; an unknown number is
 // domain.ErrNotFound.

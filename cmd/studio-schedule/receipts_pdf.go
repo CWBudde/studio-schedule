@@ -2,13 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
 
 	"github.com/spf13/cobra"
 
 	"github.com/cwbudde/studio-schedule/cmd/studio-schedule/cli"
 	"github.com/cwbudde/studio-schedule/internal/httpapi"
-	"github.com/cwbudde/studio-schedule/internal/service"
 )
 
 func newReceiptsPDFCmd(app *cli.App) *cobra.Command {
@@ -38,7 +36,9 @@ func newReceiptsPDFCmd(app *cli.App) *cobra.Command {
 				return err
 			}
 
-			pdf, err := receiptPDF(ctx, env, v)
+			// The services start the renderer only for a receipt issued
+			// without a PDF (the demo data's), which it then stores.
+			pdf, err := env.Services.Receipts.PDF(ctx, v.Receipt.ID)
 			if err != nil {
 				return err
 			}
@@ -56,23 +56,4 @@ func newReceiptsPDFCmd(app *cli.App) *cobra.Command {
 			})
 		},
 	})
-}
-
-// receiptPDF returns the PDF of the receipt of v. The services of a command
-// have no renderer, and a stored PDF needs none: the renderer starts only
-// for a receipt without one.
-func receiptPDF(ctx context.Context, env *cli.Env, v service.ReceiptView) (service.ReceiptFile, error) {
-	pdf, err := env.Services.Receipts.PDF(ctx, v.Receipt.ID)
-	if !errors.Is(err, service.ErrNoPDFRenderer) {
-		return pdf, err
-	}
-
-	renderer, release, ok := env.PDF()
-	if !ok {
-		return service.ReceiptFile{}, err
-	}
-
-	defer release()
-
-	return env.Services.Receipts.WithRenderer(renderer).PDF(ctx, v.Receipt.ID)
 }
