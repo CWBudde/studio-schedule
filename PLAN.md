@@ -950,9 +950,9 @@ command groups by need: recovery and diagnosis first, then data, then reports.
 - [ ] Settings: `settings get [area]` and `settings set <area> key=value…` through
       `SettingsService` (same validation; time zone and currency stay locked once used).
       `settings export|import` as JSON, to set up a second school the same way
-- [ ] Jobs: `jobs list` (name, interval, last run and result) and `jobs run <name>` (one job now,
+- [x] Jobs: `jobs list` (name, interval, last run and result) and `jobs run <name>` (one job now,
       e.g. `generate-lessons`, `purge-personal-data`, `deliver-mail`). A database lock keeps a
-      serving instance and the command from running the same job at once
+      serving instance and the command from running the same job at once (2026-11-01)
   - [x] Storage and lock (2026-11-01) — the Runner records every run in `job_runs` (both stores,
         `Tx.JobRuns()`; the memory store leaves the runs out of the demo's snapshot), under
         `Store.TryLockJob` beside the transactions: on PostgreSQL a session advisory lock on one
@@ -961,7 +961,16 @@ command groups by need: recovery and diagnosis first, then data, then reports.
         the run as `skipped`. `purge-personal-data` deletes runs after 30 days. `Runner.Jobs`,
         `Statuses` and `RunNow` (unknown name `ErrNotFound`, held lock `ErrConflict`) are ready for
         the commands
-  - [ ] The `jobs list` and `jobs run <name>` commands on the command layer
+  - [x] The `jobs list` and `jobs run <name>` commands on the command layer (2026-11-01) —
+        operator commands (no `--as`) on the jobs serve would run: `Env.Jobs` builds them with
+        `app.Jobs` and the senders of serve's own constructor (`newDelivery`, through
+        `cli.System.Delivery`), so `deliver-mail` needs `SMTP_HOST` and `deliver-push` the VAPID
+        keys as in serve; the receipt renderer starts on the first receipt it renders. `jobs list`
+        shows interval, latest start (school time zone), duration, result and error; `jobs run`
+        prints the run and exits 1 when it failed (also when the job's error wraps a conflict), 3
+        for an unknown job (listing the jobs), 4 for a held lock. Their JSON has no operation, so
+        docs/cli.md documents it. Not destructive (ADR 0020, amendment): a job only does early what
+        serve does on its tick, which its help spells out
 - [ ] Mail: `mail test --to` renders a test mail and sends it through the configured SMTP.
       `mail list --status failed`; `mail requeue <id>|--failed` is audited as `mail-requeued`
       (ADR 0014)

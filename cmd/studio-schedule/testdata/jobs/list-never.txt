@@ -1,0 +1,6 @@
+generate-lessons     1h   -  -  -  -
+purge-sessions       1h   -  -  -  -
+waitlist-expiry      1m   -  -  -  -
+announcements        1m   -  -  -  -
+purge-mail           24h  -  -  -  -
+purge-personal-data  24h  -  -  -  -

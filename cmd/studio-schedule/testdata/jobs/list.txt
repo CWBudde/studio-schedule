@@ -1,0 +1,6 @@
+generate-lessons     1h   2026-09-22 10:00  0s  ok  -
+purge-sessions       1h   2026-09-22 10:00  0s  ok  -
+waitlist-expiry      1m   -                 -   -   -
+announcements        1m   -                 -   -   -
+purge-mail           24h  -                 -   -   -
+purge-personal-data  24h  -                 -   -   -

@@ -1,0 +1,38 @@
+[
+  {
+    "name": "generate-lessons",
+    "everySeconds": 3600,
+    "lastRun": {
+      "job": "generate-lessons",
+      "startedAt": "2026-09-22T08:00:00Z",
+      "endedAt": "2026-09-22T08:00:00Z",
+      "result": "ok"
+    }
+  },
+  {
+    "name": "purge-sessions",
+    "everySeconds": 3600,
+    "lastRun": {
+      "job": "purge-sessions",
+      "startedAt": "2026-09-22T08:00:00Z",
+      "endedAt": "2026-09-22T08:00:00Z",
+      "result": "ok"
+    }
+  },
+  {
+    "name": "waitlist-expiry",
+    "everySeconds": 60
+  },
+  {
+    "name": "announcements",
+    "everySeconds": 60
+  },
+  {
+    "name": "purge-mail",
+    "everySeconds": 86400
+  },
+  {
+    "name": "purge-personal-data",
+    "everySeconds": 86400
+  }
+]
