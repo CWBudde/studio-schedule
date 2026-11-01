@@ -24,6 +24,7 @@ type Room struct {
 	LocationID LocationID
 	Name       string
 	Capacity   int
+	Position   int // 1-based within the location; orders its rooms
 }
 
 // Validate checks the room for consistency. All errors wrap ErrValidation.
@@ -33,6 +34,7 @@ func (r Room) Validate() error {
 		on("locationId", !r.LocationID.IsZero(), "room location must be set"),
 		on("name", !blank(r.Name), "room name must not be empty"),
 		on("capacity", r.Capacity > 0, "room capacity must be positive"),
+		on("position", r.Position > 0, "room position must be positive"),
 	)
 }
 
