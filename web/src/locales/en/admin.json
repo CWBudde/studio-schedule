@@ -482,7 +482,7 @@
   },
   "audit": {
     "title": "Audit log",
-    "description": "The latest {{count}} recorded actions, newest first: sign-ins as someone else, mails queued again, merged duplicates, anonymized persons, and accounts disabled, enabled, given another role or deleted. Events are kept for three years. Times are in the school’s time zone.",
+    "description": "The latest {{count}} recorded actions, newest first: sign-ins as someone else, mails queued again, merged duplicates, anonymized persons, accounts disabled, enabled, given another role or deleted, password-reset and setup links issued, and sessions ended. Events are kept for three years. Times are in the school’s time zone.",
     "table": "Audit log",
     "search": "Search the audit log",
     "empty": "Nothing has been recorded yet.",
@@ -499,7 +499,10 @@
       "account-disabled": "Account disabled",
       "account-enabled": "Account enabled",
       "account-role-changed": "Role changed",
-      "account-deleted": "Account deleted"
+      "account-deleted": "Account deleted",
+      "password-reset-issued": "Password-reset link issued",
+      "sessions-revoked": "Sessions ended",
+      "setup-link-issued": "Setup link issued"
     },
     "merged": "merged: {{name}}",
     "unknownAccount": "Unknown account",
@@ -509,7 +512,15 @@
     "noAccess": "Only administrators can see this page.",
     "holder": "The account holder",
     "roleChange": "{{from}} → {{to}}",
-    "viaCli": "via command line ({{user}})"
+    "viaCli": "via command line ({{user}})",
+    "operator": "An operator",
+    "everyAccount": "Every account",
+    "delivery": {
+      "mailed": "link mailed",
+      "printed": "link printed"
+    },
+    "sessions_one": "{{count}} session ended",
+    "sessions_other": "{{count}} sessions ended"
   },
   "lessons": {
     "manage": "Manage this lesson",

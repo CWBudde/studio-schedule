@@ -3119,6 +3119,11 @@ export interface components {
         };
         AuditDetails: {
             /**
+             * @description How the link of password-reset-issued or setup-link-issued reached its holder; the link itself is never recorded.
+             * @enum {string}
+             */
+            delivery?: "mailed" | "printed";
+            /**
              * Format: uuid
              * @description The mail of mail-requeued.
              */
@@ -3142,15 +3147,20 @@ export interface components {
              * @enum {string}
              */
             role?: "member" | "instructor" | "office" | "admin";
+            /**
+             * Format: int64
+             * @description How many running sessions sessions-revoked ended; absent for none.
+             */
+            sessions?: number;
             /** @description Its template. */
             template?: string;
             /** @description The channel the actor acted through, for any action; absent for the API. */
             via?: components["schemas"]["AuditVia"];
         };
         AuditEventEntry: {
-            /** @description What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one), person-anonymized (target: the person), account-disabled, account-enabled and account-role-changed (target: the account; details of a role change: both roles), account-deleted (target: the account's person, which stays; without an actor its holder deleted it); later versions may add actions. An event that targeted an account deleted since targets its person. */
+            /** @description What happened: impersonation-started or impersonation-ended (target: the account), mail-requeued (no target; details: the mail), person-merged (target: the surviving person; details: the merged one), person-anonymized (target: the person), account-disabled, account-enabled and account-role-changed (target: the account; details of a role change: both roles), account-deleted (target: the account's person, which stays; without an actor its holder deleted it), password-reset-issued (target: the account; details: the delivery), sessions-revoked (target: the account, none when every account's sessions were ended; details: how many sessions ended), setup-link-issued (target: the account; no actor; details: the delivery and via); later versions may add actions. An event that targeted an account deleted since targets its person. */
             action: string;
-            /** @description The account that acted; absent only for account-deleted when the account's holder deleted it. */
+            /** @description The account that acted; absent only for account-deleted when the account's holder deleted it, and for setup-link-issued, which an operator issues on the command line (details.via names the OS user). */
             actor?: components["schemas"]["AuditAccount"];
             /**
              * Format: date-time

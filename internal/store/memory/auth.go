@@ -359,8 +359,8 @@ func (r auditRepo) Create(_ context.Context, e domain.AuditEvent) error {
 	s := &r.tx.state
 
 	switch {
-	case e.ActorID.IsZero() && e.Action != domain.AuditAccountDeleted:
-		// PostgreSQL's CHECK audit_events_actor (migration 00023).
+	case e.ActorID.IsZero() && !e.Action.ActorOptional():
+		// PostgreSQL's CHECK audit_events_actor (migration 00029).
 		return fmt.Errorf("audit event without an actor: %w", domain.ErrValidation)
 	case s.audit.has(e.ID):
 		return conflict("audit event %s exists", e.ID)

@@ -217,6 +217,130 @@ describe('AuditPage', () => {
     expect(await screen.findByText('über die Kommandozeile (operator)')).toBeInTheDocument();
   });
 
+  describe('the account commands of the command line', () => {
+    const cli = { channel: 'cli', osUser: 'operator' } as const;
+    const nora = {
+      id: '0190a000-0000-7000-8000-000000000388',
+      email: 'nora.example@example.org',
+      givenName: 'Nora',
+      familyName: 'Example',
+    };
+    const commandEvents: AuditEventEntry[] = [
+      {
+        id: '0190a000-0000-7000-8000-000000000387',
+        at: '2026-10-21T08:00:00Z',
+        action: 'password-reset-issued',
+        actor: lostEvent.actor,
+        target: nora,
+        details: { delivery: 'mailed', via: cli },
+      },
+      {
+        id: '0190a000-0000-7000-8000-000000000386',
+        at: '2026-10-21T07:00:00Z',
+        action: 'sessions-revoked',
+        actor: lostEvent.actor,
+        target: nora,
+        details: { sessions: 1, via: cli },
+      },
+      {
+        id: '0190a000-0000-7000-8000-000000000385',
+        at: '2026-10-21T06:00:00Z',
+        action: 'sessions-revoked',
+        actor: lostEvent.actor,
+        details: { sessions: 3, via: cli },
+      },
+      {
+        id: '0190a000-0000-7000-8000-000000000384',
+        at: '2026-10-21T05:00:00Z',
+        action: 'setup-link-issued',
+        target: nora,
+        details: { delivery: 'printed', via: cli },
+      },
+      {
+        id: '0190a000-0000-7000-8000-000000000382',
+        at: '2026-10-21T03:00:00Z',
+        action: 'password-reset-issued',
+        actor: lostEvent.actor,
+        targetPerson: {
+          id: '0190a000-0000-7000-8000-000000000381',
+          givenName: 'Ivo',
+          familyName: 'Gone',
+        },
+        details: { delivery: 'printed', via: cli },
+      },
+      {
+        id: '0190a000-0000-7000-8000-000000000383',
+        at: '2026-10-21T04:00:00Z',
+        action: 'sessions-revoked',
+        actor: lostEvent.actor,
+        target: nora,
+        details: { via: cli },
+      },
+    ];
+
+    it('names them, with the delivery, the sessions ended and who issued a setup link', async () => {
+      mockApiGet({ ...asAdmin, '/api/v1/admin/audit': { body: { items: commandEvents } } });
+
+      renderWithQuery(<AuditPage />);
+
+      const viaAda = 'Ada Adminada.admin@example.comvia command line (operator)';
+      expect((await rows()).map((cells) => cells.slice(1))).toEqual([
+        ['Password-reset link issued', viaAda, 'Nora Examplenora.example@example.orglink mailed'],
+        ['Sessions ended', viaAda, 'Nora Examplenora.example@example.org1 session ended'],
+        ['Sessions ended', viaAda, 'Every account3 sessions ended'],
+        [
+          'Setup link issued',
+          'An operatorvia command line (operator)',
+          'Nora Examplenora.example@example.orglink printed',
+        ],
+        ['Sessions ended', viaAda, 'Nora Examplenora.example@example.org'],
+        // The account was deleted since: the event targets its person.
+        ['Password-reset link issued', viaAda, 'Ivo Gonelink printed'],
+      ]);
+      expect(screen.queryByText('The account holder')).toBeNull();
+    });
+
+    it('finds them by every account, the delivery and the operator', async () => {
+      mockApiGet({ ...asAdmin, '/api/v1/admin/audit': { body: { items: commandEvents } } });
+      const user = userEvent.setup();
+
+      renderWithQuery(<AuditPage />);
+      const search = await screen.findByRole('searchbox', { name: 'Search the audit log' });
+
+      await user.type(search, 'every account');
+      expect((await rows()).map((cells) => cells[3])).toEqual(['Every account3 sessions ended']);
+
+      await user.clear(search);
+      await user.type(search, 'link printed');
+      expect((await rows()).map((cells) => cells[1])).toEqual([
+        'Setup link issued',
+        'Password-reset link issued',
+      ]);
+
+      await user.clear(search);
+      await user.type(search, 'an operator');
+      expect((await rows()).map((cells) => cells[1])).toEqual(['Setup link issued']);
+    });
+
+    it('names them in German', async () => {
+      mockApiGet({ ...asAdmin, '/api/v1/admin/audit': { body: { items: commandEvents } } });
+      await i18n.changeLanguage('de');
+
+      renderWithQuery(<AuditPage />);
+
+      const table = within(await screen.findByRole('table', { name: 'Protokoll' }));
+      expect(table.getAllByText('Link zum Zurücksetzen des Passworts ausgestellt')).toHaveLength(2);
+      expect(table.getAllByText('Sitzungen beendet')).toHaveLength(3);
+      expect(table.getByText('Einrichtungslink ausgestellt')).toBeInTheDocument();
+      expect(table.getByText('Link gemailt')).toBeInTheDocument();
+      expect(table.getAllByText('Link ausgegeben')).toHaveLength(2);
+      expect(table.getByText('1 Sitzung beendet')).toBeInTheDocument();
+      expect(table.getByText('3 Sitzungen beendet')).toBeInTheDocument();
+      expect(table.getByText('Alle Konten')).toBeInTheDocument();
+      expect(table.getByText('Die Betreiberin oder der Betreiber')).toBeInTheDocument();
+    });
+  });
+
   it('names an anonymized person in the current language', async () => {
     const anonymized: AuditEventEntry = {
       ...lostEvent,

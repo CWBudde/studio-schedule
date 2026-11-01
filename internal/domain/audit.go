@@ -37,6 +37,21 @@ const (
 	// the account's person, which stays. Without an actor the account's
 	// holder deleted it themself.
 	AuditAccountDeleted AuditAction = "account-deleted"
+	// AuditPasswordResetIssued: an admin issued a password-reset link for
+	// the target account on the command line (ADR 0020, `accounts
+	// reset-password`). The details say whether the link was mailed or
+	// printed (Delivery), never the link.
+	AuditPasswordResetIssued AuditAction = "password-reset-issued"
+	// AuditSessionsRevoked: an admin ended the sessions of the target
+	// account, or without a target those of every account (ADR 0020,
+	// `accounts sessions revoke`). The details count the sessions that had
+	// not ended yet (Sessions; absent for none).
+	AuditSessionsRevoked AuditAction = "sessions-revoked"
+	// AuditSetupLinkIssued: an operator printed a new setup link for the
+	// target account, which has not confirmed, while no admin could sign in
+	// (ADR 0020, `accounts setup-link`). It has no actor: the details name
+	// the command line and the OS user (Via), and the delivery (printed).
+	AuditSetupLinkIssued AuditAction = "setup-link-issued"
 )
 
 // AuditActions returns all audit actions.
@@ -44,6 +59,7 @@ func AuditActions() []AuditAction {
 	return []AuditAction{
 		AuditImpersonationStarted, AuditImpersonationEnded, AuditMailRequeued, AuditPersonMerged,
 		AuditPersonAnonymized, AuditAccountDisabled, AuditAccountEnabled, AuditAccountRoleChanged, AuditAccountDeleted,
+		AuditPasswordResetIssued, AuditSessionsRevoked, AuditSetupLinkIssued,
 	}
 }
 
@@ -57,12 +73,37 @@ func (a AuditAction) Valid() bool { return slices.Contains(AuditActions(), a) }
 func (a AuditAction) targetsAccount() bool {
 	switch a {
 	case AuditImpersonationStarted, AuditImpersonationEnded, AuditAccountDisabled, AuditAccountEnabled,
-		AuditAccountRoleChanged:
+		AuditAccountRoleChanged, AuditPasswordResetIssued, AuditSetupLinkIssued:
 		return true
 	default:
 		return false
 	}
 }
+
+// ActorOptional reports whether an event of a may have no actor: an
+// account its holder deleted (AuditAccountDeleted) and a setup link an
+// operator issued (AuditSetupLinkIssued). PostgreSQL's CHECK
+// audit_events_actor mirrors it (migration 00029).
+func (a AuditAction) ActorOptional() bool {
+	return a == AuditAccountDeleted || a == AuditSetupLinkIssued
+}
+
+// LinkDelivery is how the link of an audit event reached its holder.
+type LinkDelivery string
+
+// Known deliveries.
+const (
+	// LinkMailed: the link was mailed to the account's address.
+	LinkMailed LinkDelivery = "mailed"
+	// LinkPrinted: the link was printed on the command line.
+	LinkPrinted LinkDelivery = "printed"
+)
+
+// LinkDeliveries returns all deliveries.
+func LinkDeliveries() []LinkDelivery { return []LinkDelivery{LinkMailed, LinkPrinted} }
+
+// Valid reports whether d is a known delivery.
+func (d LinkDelivery) Valid() bool { return slices.Contains(LinkDeliveries(), d) }
 
 // AuditTargetKind tells what an audit event acted upon.
 type AuditTargetKind string
@@ -120,6 +161,12 @@ type AuditDetails struct {
 	// and after.
 	PreviousRole Role `json:"previousRole,omitempty"`
 	Role         Role `json:"role,omitempty"`
+	// Delivery is how the link of AuditPasswordResetIssued or
+	// AuditSetupLinkIssued reached its holder; the link itself is never
+	// recorded.
+	Delivery LinkDelivery `json:"delivery,omitempty"`
+	// Sessions is how many running sessions AuditSessionsRevoked ended.
+	Sessions int `json:"sessions,omitempty"`
 	// Via is the channel the actor acted through, for any action; zero for
 	// the API.
 	Via AuditVia `json:"via,omitzero"`
@@ -139,7 +186,8 @@ type AuditEvent struct {
 	ID AuditEventID
 	At time.Time
 	// ActorID is the account that acted; zero only for AuditAccountDeleted
-	// of an account its holder deleted.
+	// of an account its holder deleted and for AuditSetupLinkIssued, which
+	// an operator issues (ActorOptional).
 	ActorID AccountID
 	Action  AuditAction
 	// TargetKind says which of TargetID and TargetPersonID is set; empty
@@ -157,7 +205,7 @@ func (e AuditEvent) Validate() error {
 	return validate(
 		rule{!e.ID.IsZero(), "audit event id must be set"},
 		rule{!e.At.IsZero(), "audit event time must be set"},
-		rule{!e.ActorID.IsZero() || e.Action == AuditAccountDeleted, "audit event actor must be set"},
+		rule{!e.ActorID.IsZero() || e.Action.ActorOptional(), "audit event actor must be set"},
 		rule{e.Action.Valid(), "invalid audit action"},
 		rule{e.TargetKind == "" || e.TargetKind.Valid(), "invalid audit target kind"},
 		rule{(e.TargetKind == AuditTargetAccount) == !e.TargetID.IsZero(), "an account target needs the account"},
@@ -187,6 +235,20 @@ func (e AuditEvent) Validate() error {
 		rule{
 			e.Details.Via.IsZero() || e.Details.Via.Channel.Valid(),
 			"an audit event's channel must be known",
+		},
+		rule{
+			(e.Action == AuditPasswordResetIssued || e.Action == AuditSetupLinkIssued) == e.Details.Delivery.Valid() &&
+				(e.Details.Delivery == "" || e.Details.Delivery.Valid()),
+			"an issued link says how it was delivered, and only an issued link does",
+		},
+		rule{
+			e.Action != AuditSetupLinkIssued || e.ActorID.IsZero() && e.Details.Via.Channel == ChannelCLI &&
+				e.Details.Delivery == LinkPrinted,
+			"a setup link is printed by an operator on the command line, without an actor",
+		},
+		rule{
+			e.Details.Sessions >= 0 && (e.Details.Sessions == 0 || e.Action == AuditSessionsRevoked),
+			"only revoked sessions are counted, and not below zero",
 		},
 	)
 }

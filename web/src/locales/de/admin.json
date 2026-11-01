@@ -482,7 +482,7 @@
   },
   "audit": {
     "title": "Protokoll",
-    "description": "Die letzten {{count}} protokollierten Aktionen, die neuesten zuerst: Anmeldungen als andere Person, erneut eingereihte Mails, zusammengeführte Dubletten, anonymisierte Personen sowie gesperrte, entsperrte, in der Rolle geänderte und gelöschte Konten. Einträge werden drei Jahre aufbewahrt. Die Zeiten gelten in der Zeitzone der Schule.",
+    "description": "Die letzten {{count}} protokollierten Aktionen, die neuesten zuerst: Anmeldungen als andere Person, erneut eingereihte Mails, zusammengeführte Dubletten, anonymisierte Personen, gesperrte, entsperrte, in der Rolle geänderte und gelöschte Konten, ausgestellte Links zum Zurücksetzen des Passworts und zum Einrichten sowie beendete Sitzungen. Einträge werden drei Jahre aufbewahrt. Die Zeiten gelten in der Zeitzone der Schule.",
     "table": "Protokoll",
     "search": "Protokoll durchsuchen",
     "empty": "Bisher wurde nichts protokolliert.",
@@ -499,7 +499,10 @@
       "account-disabled": "Konto gesperrt",
       "account-enabled": "Konto entsperrt",
       "account-role-changed": "Rolle geändert",
-      "account-deleted": "Konto gelöscht"
+      "account-deleted": "Konto gelöscht",
+      "password-reset-issued": "Link zum Zurücksetzen des Passworts ausgestellt",
+      "sessions-revoked": "Sitzungen beendet",
+      "setup-link-issued": "Einrichtungslink ausgestellt"
     },
     "merged": "zusammengeführt: {{name}}",
     "unknownAccount": "Unbekanntes Konto",
@@ -509,7 +512,15 @@
     "noAccess": "Nur die Administration kann diese Seite sehen.",
     "holder": "Die Kontoinhaberin oder der Kontoinhaber",
     "roleChange": "{{from}} → {{to}}",
-    "viaCli": "über die Kommandozeile ({{user}})"
+    "viaCli": "über die Kommandozeile ({{user}})",
+    "operator": "Die Betreiberin oder der Betreiber",
+    "everyAccount": "Alle Konten",
+    "delivery": {
+      "mailed": "Link gemailt",
+      "printed": "Link ausgegeben"
+    },
+    "sessions_one": "{{count}} Sitzung beendet",
+    "sessions_other": "{{count}} Sitzungen beendet"
   },
   "lessons": {
     "manage": "Stunde verwalten",

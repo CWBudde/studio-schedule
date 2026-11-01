@@ -572,6 +572,43 @@ func testAudit(t *testing.T, newStore func(*testing.T) store.Store) {
 			noPerson.ID, noPerson.TargetPersonID = newID[domain.AuditEventID](e), newID[domain.PersonID](e)
 			wantErr(e.t, create(e, noPerson), domain.ErrConflict)
 		},
+		// The command line's actions (ADR 0020): a setup link has no actor,
+		// and the details of all three round-trip.
+		"CommandLine": func(e *env) {
+			admin := e.account(e.person("Ada", "Admin"), "ada@example.org")
+			first := e.account(e.person("Fia", "First"), "fia@example.org")
+			cli := domain.AuditVia{Channel: domain.ChannelCLI, OSUser: "operator"}
+
+			reset := domain.AuditEvent{
+				ID: newID[domain.AuditEventID](e), At: t0, ActorID: admin.ID, Action: domain.AuditPasswordResetIssued,
+				TargetKind: domain.AuditTargetAccount, TargetID: first.ID,
+				Details: domain.AuditDetails{Delivery: domain.LinkMailed, Via: cli},
+			}
+			revoked := domain.AuditEvent{
+				ID: newID[domain.AuditEventID](e), At: t0.Add(time.Minute), ActorID: admin.ID,
+				Action: domain.AuditSessionsRevoked, Details: domain.AuditDetails{Sessions: 4, Via: cli},
+			}
+			setup := domain.AuditEvent{
+				ID: newID[domain.AuditEventID](e), At: t0.Add(2 * time.Minute), Action: domain.AuditSetupLinkIssued,
+				TargetKind: domain.AuditTargetAccount, TargetID: first.ID,
+				Details: domain.AuditDetails{Delivery: domain.LinkPrinted, Via: cli},
+			}
+
+			for _, ev := range []domain.AuditEvent{reset, revoked, setup} {
+				valid(e.t, ev)
+
+				if err := create(e, ev); err != nil {
+					e.t.Fatalf("Create %s: %v", ev.Action, err)
+				}
+			}
+
+			wantSlice(e.t, list(e, 10), []domain.AuditEvent{setup, revoked, reset})
+
+			// Only an account deletion and a setup link lack an actor.
+			noActor := revoked
+			noActor.ID, noActor.ActorID = newID[domain.AuditEventID](e), domain.AccountID{}
+			wantErr(e.t, create(e, noActor), domain.ErrValidation)
+		},
 		"ReadOnlyRejectsWrites": func(e *env) {
 			admin := e.account(e.person("Ada", "Admin"), "ada@example.org")
 			member := e.account(e.person("Ben", "Member"), "ben@example.org")

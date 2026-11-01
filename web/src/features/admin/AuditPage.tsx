@@ -29,6 +29,9 @@ const actionKeys: ReadonlyMap<string, `audit.actions.${KnownAction}`> = new Map(
   ['account-enabled', 'audit.actions.account-enabled'],
   ['account-role-changed', 'audit.actions.account-role-changed'],
   ['account-deleted', 'audit.actions.account-deleted'],
+  ['password-reset-issued', 'audit.actions.password-reset-issued'],
+  ['sessions-revoked', 'audit.actions.sessions-revoked'],
+  ['setup-link-issued', 'audit.actions.setup-link-issued'],
 ]);
 
 type KnownAction =
@@ -40,7 +43,10 @@ type KnownAction =
   | 'account-disabled'
   | 'account-enabled'
   | 'account-role-changed'
-  | 'account-deleted';
+  | 'account-deleted'
+  | 'password-reset-issued'
+  | 'sessions-revoked'
+  | 'setup-link-issued';
 
 type AuditAccount = NonNullable<AuditEventEntry['actor']>;
 type AuditPerson = NonNullable<AuditEventEntry['targetPerson']>;
@@ -107,11 +113,12 @@ function AuditTable() {
               },
               { id: 'action', header: t('audit.action') },
             ),
-            // No actor: the account's holder deleted it themself. The channel,
-            // when not the API, is searchable too.
+            // No actor: the account's holder deleted it themself, or an operator
+            // issued a setup link. The channel, when not the API, is
+            // searchable too.
             columns.accessor(
               (e) =>
-                [e.actor ? accountText(e.actor) : t('audit.holder'), viaLabel(e, t)]
+                [e.actor ? accountText(e.actor) : noActorLabel(e, t), viaLabel(e, t)]
                   .filter(Boolean)
                   .join(' '),
               {
@@ -125,7 +132,7 @@ function AuditTable() {
                       {event.actor ? (
                         <Account account={event.actor} />
                       ) : (
-                        <span className="block font-medium">{t('audit.holder')}</span>
+                        <span className="block font-medium">{noActorLabel(event, t)}</span>
                       )}
                       {via && <span className="block text-xs text-muted-foreground">{via}</span>}
                     </>
@@ -133,14 +140,11 @@ function AuditTable() {
                 },
               },
             ),
-            columns.accessor(
-              (e) => targetText(e, t('audit.mail', { to: e.details?.recipient ?? '' })),
-              {
-                id: 'target',
-                header: t('audit.target'),
-                cell: (info) => <Target event={info.row.original} />,
-              },
-            ),
+            columns.accessor((e) => targetText(e, t), {
+              id: 'target',
+              header: t('audit.target'),
+              cell: (info) => <Target event={info.row.original} />,
+            }),
           ]),
     [t, lang, timeZone],
   );
@@ -174,6 +178,29 @@ function viaLabel(e: AuditEventEntry, t: TFunction<'admin'>) {
 }
 
 /**
+ * Who acted in an event without an actor: an operator on the command line
+ * for a setup link (ADR 0020), else the account's holder, who deleted it.
+ */
+const noActorLabel = (e: AuditEventEntry, t: TFunction<'admin'>) =>
+  e.action === 'setup-link-issued' ? t('audit.operator') : t('audit.holder');
+
+/** Whether an event ended the sessions of every account (ADR 0020). */
+const everyAccount = (e: AuditEventEntry) =>
+  e.action === 'sessions-revoked' && !e.target && !e.targetPerson;
+
+/**
+ * The lines an event's details add under what it concerns: how a link
+ * reached its holder and how many sessions ended (ADR 0020).
+ */
+function detailLines(e: AuditEventEntry, t: TFunction<'admin'>) {
+  const { delivery, sessions } = e.details ?? {};
+  return [
+    delivery && t(`audit.delivery.${delivery}`),
+    sessions !== undefined && sessions > 0 && t('audit.sessions', { count: sessions }),
+  ].filter((line): line is string => typeof line === 'string' && line !== '');
+}
+
+/**
  * Name and email of an account, for the search and the sorting; the ID
  * as well, which is all an account that can no longer be found still has.
  */
@@ -182,14 +209,22 @@ const accountText = (a: AuditAccount) =>
 
 /**
  * What an event concerns, for the search and the sorting: its account, its
- * person, or the mail it names (`mail` is the mail's label); '' for none.
+ * person, the mail it names, or every account, with the lines its details
+ * add; '' for none.
  */
-function targetText(e: AuditEventEntry, mail: string) {
+function targetText(e: AuditEventEntry, t: TFunction<'admin'>) {
+  return [baseTargetText(e, t), ...detailLines(e, t)].filter(Boolean).join(' ');
+}
+
+function baseTargetText(e: AuditEventEntry, t: TFunction<'admin'>) {
   if (e.target) return accountText(e.target);
   if (e.targetPerson) {
     return `${personText(e.targetPerson)} ${e.details?.mergedName ?? ''} ${e.targetPerson.id}`.trimStart();
   }
-  if (e.details?.mailId) return `${mail} ${e.details.template ?? ''}`.trimEnd();
+  if (e.details?.mailId) {
+    return `${t('audit.mail', { to: e.details.recipient ?? '' })} ${e.details.template ?? ''}`.trimEnd();
+  }
+  if (everyAccount(e)) return t('audit.everyAccount');
   return '';
 }
 
@@ -225,6 +260,7 @@ function Target({ event }: { event: AuditEventEntry }) {
             })}
           </span>
         )}
+        <DetailLines event={event} />
       </>
     );
   }
@@ -248,6 +284,7 @@ function Target({ event }: { event: AuditEventEntry }) {
             {t('audit.merged', { name: mergedName })}
           </span>
         )}
+        <DetailLines event={event} />
       </>
     );
   }
@@ -264,7 +301,25 @@ function Target({ event }: { event: AuditEventEntry }) {
       </>
     );
   }
+  if (everyAccount(event)) {
+    return (
+      <>
+        <span className="block font-medium">{t('audit.everyAccount')}</span>
+        <DetailLines event={event} />
+      </>
+    );
+  }
   return <span aria-label={t('audit.nothing')}>—</span>;
+}
+
+/** The lines an event's details add under what it concerns (`detailLines`). */
+function DetailLines({ event }: { event: AuditEventEntry }) {
+  const { t } = useTranslation('admin');
+  return detailLines(event, t).map((line) => (
+    <span key={line} className="block text-xs text-muted-foreground">
+      {line}
+    </span>
+  ));
 }
 
 function Account({ account }: { account: AuditAccount }) {
