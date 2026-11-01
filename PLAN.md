@@ -1012,10 +1012,22 @@ command groups by need: recovery and diagnosis first, then data, then reports.
       (`MailLogService.RequeueFailed`, one transaction, each mail audited) the counts; mails with a
       secret link stay failed. Deviation (ADR 0020, amendment): both forms confirm, since requeuing
       mails. Not built: a recipient filter, which as a search term would come from stdin
-- [ ] Persons and privacy: `persons search` reads the search term from a prompt or stdin, never
+- [x] Persons and privacy: `persons search` reads the search term from a prompt or stdin, never
       an argument (shell history, `ps`; ASVS 8.3.1). `persons export <id> -o file.json`,
       `persons anonymize <id>` (ADR 0016), `persons duplicates`,
-      `persons merge <survivor> <duplicate>` (ADR 0015)
+      `persons merge <survivor> <duplicate>` (ADR 0015) (2026-11-01): all `office`, like their
+      operations, and their JSON the operations' bodies through converters exported from
+      `internal/httpapi` (`NewPersonMatchList`, `NewPersonDetail`, `NewPersonExport`,
+      `NewAnonymizeResult`, `NewDuplicateList`, `NewMergeSummary`). Also `persons show <id>`
+      (getPerson) and `persons duplicates dismiss <a> <b>`. `persons search` prints ID, name,
+      member number and email, an anonymized person as "Deleted person". `persons anonymize`
+      asks "Anonymize <name>? [y/N]" or needs `--yes`. `persons merge` is a dry run unless
+      `--apply`, which runs the preview, asks with both names (or `--yes`) and merges; `--take`
+      names the fields the survivor takes. Deviation, amended in the ADR: the export's file is
+      `--file`/`-f`, not `-o`, which is `--output`'s short flag (cobra panics on a second `-o`);
+      the file gets mode 0600 and an existing one needs `--force`, and without `--file` the
+      document goes to stdout in either output format. `dismiss` prints nothing with
+      `--output json` (its operation has no body)
 - [x] Timetable: `lessons list --date|--from --to`, `lessons generate --until`,
       `lessons cancel <id> --notify` (a sick instructor, from an SSH app on a phone),
       `terms list`, `classes list` (2026-11-01): all `office`, as the office's pages.
