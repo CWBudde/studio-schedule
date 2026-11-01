@@ -330,6 +330,14 @@ func (r *faultPersonRepo) ListGuardianLinks(a0 context.Context, a1 []domain.Pers
 	return r.PersonRepo.ListGuardianLinks(a0, a1)
 }
 
+func (r *faultPersonRepo) ListTombstoneReferences(a0 context.Context) (r0 []store.TombstoneReference, err error) {
+	if err = r.f.hit("Persons.ListTombstoneReferences"); err != nil {
+		return r0, err
+	}
+
+	return r.PersonRepo.ListTombstoneReferences(a0)
+}
+
 type faultAccountRepo struct {
 	store.AccountRepo
 	f *FaultStore
@@ -1142,6 +1150,14 @@ func (r *faultBookingRepo) ListEvents(a0 context.Context, a1 domain.BookingID) (
 	return r.BookingRepo.ListEvents(a0, a1)
 }
 
+func (r *faultBookingRepo) ListOverCapacity(a0 context.Context) (r0 []store.LessonOccupancy, err error) {
+	if err = r.f.hit("Bookings.ListOverCapacity"); err != nil {
+		return r0, err
+	}
+
+	return r.BookingRepo.ListOverCapacity(a0)
+}
+
 type faultWaitlistRepo struct {
 	store.WaitlistRepo
 	f *FaultStore
@@ -1439,6 +1455,14 @@ func (r *faultPassRepo) ListByReceipts(a0 context.Context, a1 []domain.ReceiptID
 	return r.PassRepo.ListByReceipts(a0, a1)
 }
 
+func (r *faultPassRepo) ListUnbalanced(a0 context.Context) (r0 []store.PassBalance, err error) {
+	if err = r.f.hit("Passes.ListUnbalanced"); err != nil {
+		return r0, err
+	}
+
+	return r.PassRepo.ListUnbalanced(a0)
+}
+
 type faultPassRedemptionRepo struct {
 	store.PassRedemptionRepo
 	f *FaultStore
@@ -1490,6 +1514,14 @@ func (r *faultPassRedemptionRepo) ListByBookings(a0 context.Context, a1 []domain
 	}
 
 	return r.PassRedemptionRepo.ListByBookings(a0, a1)
+}
+
+func (r *faultPassRedemptionRepo) ListStray(a0 context.Context) (r0 []store.StrayRedemption, err error) {
+	if err = r.f.hit("Redemptions.ListStray"); err != nil {
+		return r0, err
+	}
+
+	return r.PassRedemptionRepo.ListStray(a0)
 }
 
 type faultReceiptRepo struct {
@@ -1604,6 +1636,14 @@ func (r *faultReceiptCounterRepo) Years(a0 context.Context) (r0 []int, err error
 	}
 
 	return r.ReceiptCounterRepo.Years(a0)
+}
+
+func (r *faultReceiptCounterRepo) ListStates(a0 context.Context) (r0 []store.ReceiptCounterState, err error) {
+	if err = r.f.hit("ReceiptCounters.ListStates"); err != nil {
+		return r0, err
+	}
+
+	return r.ReceiptCounterRepo.ListStates(a0)
 }
 
 type faultOutboxRepo struct {

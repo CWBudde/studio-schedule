@@ -238,6 +238,75 @@ type PersonRepo interface {
 	// ListGuardianLinks returns the guardian links of the given dependents,
 	// each once and ordered by dependent and guardian ID.
 	ListGuardianLinks(ctx context.Context, dependents []domain.PersonID) ([]domain.Guardian, error)
+	// ListTombstoneReferences returns what still refers to a merged or an
+	// anonymized person although merging or anonymizing it would have
+	// moved or ended it (ADR 0015, ADR 0016; db check), ordered by person
+	// ID, kind and the referring record's ID. See TombstoneRefKind for
+	// what counts.
+	ListTombstoneReferences(ctx context.Context) ([]TombstoneReference, error)
+}
+
+// TombstoneReference is a record that refers to a merged or an anonymized
+// person (PersonRepo.ListTombstoneReferences).
+type TombstoneReference struct {
+	// Person is the merged or anonymized person. Anonymized: it is
+	// anonymized and not merged; the rules of a merged person apply to one
+	// that is both.
+	Person     domain.PersonID
+	Anonymized bool
+	Kind       TombstoneRefKind
+	// Ref is the ID of the referring record in its text form: the
+	// booking, waiting-list entry, class, pass, staff record or account,
+	// or the other person of a guardian link, a duplicate dismissal or a
+	// merge.
+	Ref string
+}
+
+// TombstoneRefKind says what refers to a merged or an anonymized person.
+// Merging a person moves everything but its receipts, its closed
+// waiting-list entries and a disabled account to the survivor; anonymizing
+// one keeps its past bookings and its passes (ADR 0015, ADR 0016).
+type TombstoneRefKind string
+
+// The references to a tombstone, in the order ListTombstoneReferences
+// sorts them.
+const (
+	// TombstoneBooking: a booking of a merged person, or an active (not
+	// canceled) booking of an anonymized one of a lesson that starts after
+	// it was anonymized.
+	TombstoneBooking TombstoneRefKind = "booking"
+	// TombstoneWaitlist: an open (waiting or invited) waiting-list entry.
+	TombstoneWaitlist TombstoneRefKind = "waitlist-entry"
+	// TombstoneMember: a class membership; Ref is the class.
+	TombstoneMember TombstoneRefKind = "class-member"
+	// TombstoneGuardian: the person is a guardian; Ref is the dependent.
+	TombstoneGuardian TombstoneRefKind = "guardian"
+	// TombstoneDependent: the person is a dependent; Ref is the guardian.
+	TombstoneDependent TombstoneRefKind = "dependent"
+	// TombstonePass: a pass the person owns: any of a merged person, one
+	// sold after it was anonymized of an anonymized one.
+	TombstonePass TombstoneRefKind = "pass"
+	// TombstonePaidPass: a pass the person paid for, under the same rule.
+	TombstonePaidPass TombstoneRefKind = "paid-pass"
+	// TombstoneStaff: a staff record names the person.
+	TombstoneStaff TombstoneRefKind = "staff"
+	// TombstoneAccount: the account of an anonymized person, or one of a
+	// merged person that is not disabled.
+	TombstoneAccount TombstoneRefKind = "account"
+	// TombstoneDismissal: a duplicate dismissal names the person; Ref is
+	// the other person.
+	TombstoneDismissal TombstoneRefKind = "duplicate-dismissal"
+	// TombstoneMerged: a person is merged into a merged person (a merge
+	// moves those to the survivor); Ref is that person.
+	TombstoneMerged TombstoneRefKind = "merged-person"
+)
+
+// TombstoneRefKinds returns the kinds in their order.
+func TombstoneRefKinds() []TombstoneRefKind {
+	return []TombstoneRefKind{
+		TombstoneBooking, TombstoneWaitlist, TombstoneMember, TombstoneGuardian, TombstoneDependent, TombstonePass,
+		TombstonePaidPass, TombstoneStaff, TombstoneAccount, TombstoneDismissal, TombstoneMerged,
+	}
 }
 
 // AccountRepo stores login accounts. Emails are unique ignoring the case of
@@ -579,6 +648,9 @@ type BookingRepo interface {
 	AddEvent(ctx context.Context, e domain.BookingEvent) error
 	// ListEvents returns the history of a booking ordered by At and ID.
 	ListEvents(ctx context.Context, booking domain.BookingID) ([]domain.BookingEvent, error)
+	// ListOverCapacity returns the lessons with more active (not canceled)
+	// bookings than places, ordered by lesson ID (db check).
+	ListOverCapacity(ctx context.Context) ([]LessonOccupancy, error)
 }
 
 // BookingQuery selects the bookings of persons by when their lessons take
@@ -596,6 +668,17 @@ type BookingQuery struct {
 	Desc bool
 	// Limit, if positive, is the most bookings returned.
 	Limit int
+}
+
+// LessonOccupancy is a lesson's capacity and its active bookings
+// (BookingRepo.ListOverCapacity).
+type LessonOccupancy struct {
+	Lesson   domain.LessonID
+	Capacity int
+	// Active counts the active (not canceled) bookings; Overrides those of
+	// them with an event that records a booking beyond the capacity
+	// (domain.BookingEvent.Override).
+	Active, Overrides int
 }
 
 // BookingCounts counts the active (not canceled) bookings of a lesson.
@@ -753,6 +836,10 @@ type PassRepo interface {
 	// ListByReceipts returns the passes the given receipts confirm, ordered
 	// by ID. Receipts without a pass are left out.
 	ListByReceipts(ctx context.Context, receipts []domain.ReceiptID) ([]domain.Pass, error)
+	// ListUnbalanced returns the visit passes whose used visits
+	// (VisitsTotal − VisitsRemaining) differ from their redemptions,
+	// ordered by pass ID (db check).
+	ListUnbalanced(ctx context.Context) ([]PassBalance, error)
 }
 
 // PassRedemptionRepo stores which bookings passes paid for. A booking has at
@@ -778,6 +865,30 @@ type PassRedemptionRepo interface {
 	// ListByBookings returns the redemptions of the given bookings, ordered
 	// by booking ID.
 	ListByBookings(ctx context.Context, bookings []domain.BookingID) ([]domain.PassRedemption, error)
+	// ListStray returns the redemptions of a booking canceled in time (not
+	// late) or of a lesson the school canceled, which cost no visit (ADR
+	// 0012), ordered by booking ID (db check).
+	ListStray(ctx context.Context) ([]StrayRedemption, error)
+}
+
+// PassBalance is a visit pass's used visits and its redemptions
+// (PassRepo.ListUnbalanced).
+type PassBalance struct {
+	Pass domain.PassID
+	// Used is VisitsTotal − VisitsRemaining; Redeemed counts the pass's
+	// redemptions.
+	Used, Redeemed int
+}
+
+// StrayRedemption is a redemption of a booking that costs no visit
+// (PassRedemptionRepo.ListStray): its booking was canceled in time, or its
+// lesson was canceled by the school, or both.
+type StrayRedemption struct {
+	Redemption domain.PassRedemption
+	Lesson     domain.LessonID
+	// CanceledInTime: the booking is canceled and not late.
+	// LessonCanceled: the lesson is canceled.
+	CanceledInTime, LessonCanceled bool
 }
 
 // ReceiptFilter selects receipts for ReceiptRepo.List.
@@ -852,6 +963,19 @@ type ReceiptCounterRepo interface {
 	Next(ctx context.Context, year int) (int, error)
 	// Years returns the years with numbers issued, the latest first.
 	Years(ctx context.Context) ([]int, error)
+	// ListStates returns, for every year with a counter or a receipt, the
+	// counter's last number (zero without one) and the highest sequence of
+	// the year's receipts (zero without any), ordered by year (db check).
+	ListStates(ctx context.Context) ([]ReceiptCounterState, error)
+}
+
+// ReceiptCounterState is a year's receipt counter beside the receipts
+// issued (ReceiptCounterRepo.ListStates).
+type ReceiptCounterState struct {
+	Year int
+	// Last is the counter's last number, Highest the highest sequence of
+	// the year's receipts.
+	Last, Highest int
 }
 
 // OutboxRepo stores outgoing mails.
