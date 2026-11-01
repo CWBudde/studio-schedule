@@ -1,27 +1,36 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MapPinPlus, Plus } from 'lucide-react';
-import { type ReactNode, useId, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import {
+  ApiError,
   deleteLocationMutation,
   deleteRoomMutation,
   type Location,
   locationsQuery,
   type Room,
   roomsQuery,
+  setRoomOrderMutation,
 } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { moveItem } from '@/lib/reorder';
 import { DeleteDialog } from './crud/DeleteDialog';
 import { DataTable } from './crud/DataTable';
 import { RowActions } from './crud/RowActions';
 import { columnHelper } from './crud/table';
 import { LocationSheet, type LocationTarget } from './LocationSheet';
+import { MoveButtons } from './MoveButtons';
 import { RoomSheet, type RoomTarget } from './RoomSheet';
 
 /** `roomCount` is unknown (undefined) until the rooms have loaded. */
 type LocationRow = Location & { roomCount: number | undefined };
-type RoomRow = Room & { locationName: string };
+/**
+ * A room with its place in the API's order (by location, then position):
+ * `order` among all rooms, `index` of `count` among its location's.
+ */
+type RoomRow = Room & { locationName: string; order: number; index: number; count: number };
 
 type DeleteTarget = { kind: 'location'; location: Location } | { kind: 'room'; room: RoomRow };
 
@@ -30,8 +39,13 @@ const roomColumns = columnHelper<RoomRow>();
 
 /**
  * The locations of the school and their rooms (/admin/locations), for the
- * office: add, rename and delete them. The API refuses to delete what is
- * still used, and the page says why.
+ * office: add, rename and delete them, and order each location's rooms. The
+ * API refuses to delete what is still used, and the page says why.
+ *
+ * The rooms table starts in the API's order (by location, then position) and
+ * offers the move buttons only while it shows every room in that order: a
+ * move swaps neighbours in the location's order, which another sort or a
+ * search would not show as such.
  */
 export function LocationsPage() {
   const { t } = useTranslation('admin');
@@ -53,8 +67,50 @@ export function LocationsPage() {
   const roomRows = useMemo<RoomRow[] | undefined>(() => {
     if (!rooms.data || !locations.data) return undefined;
     const names = new Map(locations.data.map((l) => [l.id, l.name]));
-    return rooms.data.map((room) => ({ ...room, locationName: names.get(room.locationId) ?? '' }));
+    const counts = new Map<string, number>();
+    for (const room of rooms.data)
+      counts.set(room.locationId, (counts.get(room.locationId) ?? 0) + 1);
+    const seen = new Map<string, number>();
+    return rooms.data.map((room, order) => {
+      const index = seen.get(room.locationId) ?? 0;
+      seen.set(room.locationId, index + 1);
+      return {
+        ...room,
+        locationName: names.get(room.locationId) ?? '',
+        order,
+        index,
+        count: counts.get(room.locationId) ?? 0,
+      };
+    });
   }, [rooms.data, locations.data]);
+
+  const queryClient = useQueryClient();
+  const { mutate: saveOrder, isPending: moving } = useMutation(setRoomOrderMutation(queryClient));
+  /** Sends the whole new order of `room`'s location, with `room` moved by `delta`. */
+  const move = useCallback(
+    (room: RoomRow, delta: -1 | 1) => {
+      const order = (rooms.data ?? []).filter((r) => r.locationId === room.locationId);
+      const location = room.locationName;
+      saveOrder(
+        {
+          locationId: room.locationId,
+          roomIds: moveItem(order, room.index, delta).map((r) => r.id),
+        },
+        {
+          // The mutation asks for the rooms again either way.
+          onError: (error) =>
+            toast.error(
+              error instanceof ApiError && error.status === 422
+                ? t('rooms.orderStale', { location })
+                : error instanceof ApiError && error.status === 404
+                  ? t('rooms.orderGone', { location })
+                  : t('rooms.orderFailed', { location }),
+            ),
+        },
+      );
+    },
+    [rooms.data, saveOrder, t],
+  );
 
   const locationTableColumns = useMemo(
     () =>
@@ -86,9 +142,37 @@ export function LocationsPage() {
           cell: (info) => <span className="font-medium">{info.getValue()}</span>,
         }),
         roomColumns.accessor('locationName', { header: t('rooms.location') }),
+        // Sorted by the place in the API's order; shows the place within the location.
+        roomColumns.accessor((room) => room.order, {
+          id: 'order',
+          header: t('rooms.order'),
+          sortFn: 'basic',
+          enableGlobalFilter: false,
+          cell: (info) => {
+            const room = info.row.original;
+            const shown = info.table.getRowModel().rows;
+            const inOrder =
+              shown.length === info.table.getCoreRowModel().rows.length &&
+              shown.every((row, i) => row.original.order === i);
+            return (
+              <div className="flex items-center gap-2">
+                <span className="w-5 text-right tabular-nums">{room.index + 1}</span>
+                {inOrder && (
+                  <MoveButtons
+                    name={t('rooms.moveLabel', { name: room.name, location: room.locationName })}
+                    index={room.index}
+                    count={room.count}
+                    disabled={moving}
+                    onMove={(delta) => move(room, delta)}
+                  />
+                )}
+              </div>
+            );
+          },
+        }),
         roomColumns.accessor('capacity', { header: t('rooms.capacity') }),
       ]),
-    [t],
+    [t, moving, move],
   );
 
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
@@ -157,10 +241,7 @@ export function LocationsPage() {
             if (rooms.isError) void rooms.refetch();
             if (locations.isError) void locations.refetch();
           }}
-          initialSorting={[
-            { id: 'locationName', desc: false },
-            { id: 'name', desc: false },
-          ]}
+          initialSorting={[{ id: 'order', desc: false }]}
           actions={(room) => (
             <RowActions
               editLabel={t('rooms.editLabel', { name: room.name, location: room.locationName })}

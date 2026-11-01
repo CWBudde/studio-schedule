@@ -76,6 +76,10 @@
     "deleting": "Wird gelöscht…",
     "cancel": "Abbrechen"
   },
+  "reorder": {
+    "up": "{{name}} nach oben verschieben",
+    "down": "{{name}} nach unten verschieben"
+  },
   "locations": {
     "title": "Standorte und Räume",
     "description": "Wo die Schule unterrichtet. Jeder Standort hat Räume; die Kapazität eines Raums ist die Standardkapazität seiner Stunden.",
@@ -129,7 +133,12 @@
     "notFound": "Diesen Raum gibt es nicht mehr.",
     "deleteTitle": "{{name}} löschen?",
     "deleteDescription": "Der Raum in {{location}} wird endgültig gelöscht. Ein Raum, den Kurse oder Stunden nutzen, kann nicht gelöscht werden.",
-    "inUse": "{{name}} wird von Kursen oder Stunden genutzt und kann daher nicht gelöscht werden."
+    "inUse": "{{name}} wird von Kursen oder Stunden genutzt und kann daher nicht gelöscht werden.",
+    "order": "Reihenfolge",
+    "moveLabel": "{{name}} ({{location}})",
+    "orderStale": "Die Räume von {{location}} haben sich inzwischen geändert. Die Liste zeigt sie jetzt, wie sie sind; bitte verschiebe den Raum noch einmal.",
+    "orderGone": "{{location}} gibt es nicht mehr.",
+    "orderFailed": "Die neue Reihenfolge der Räume von {{location}} konnte nicht gespeichert werden."
   },
   "access": {
     "loadError": "Es konnte nicht geprüft werden, ob du diese Seite sehen darfst."

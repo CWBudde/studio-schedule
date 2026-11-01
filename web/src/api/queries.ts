@@ -1291,6 +1291,26 @@ export const deleteRoomMutation = (queryClient: QueryClient) =>
     onError: onCatalogueError(queryClient),
   });
 
+/**
+ * Sets the order of a location's rooms (office): `roomIds` lists each of its
+ * rooms exactly once, first to last. A list that is no longer the location's
+ * rooms (one was added or deleted meanwhile) is a 422 on `body.roomIds`, an
+ * unknown location a 404. Either way the lists are asked again, so the page
+ * shows the rooms as they are; the order shows in the room lists and the
+ * schedule.
+ */
+export const setRoomOrderMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ locationId, roomIds }: { locationId: string; roomIds: string[] }) =>
+      expectOk(
+        api.PUT('/api/v1/locations/{locationId}/room-order', {
+          params: { path: { locationId } },
+          body: { roomIds },
+        }),
+      ),
+    onSettled: () => refreshCatalogue(queryClient),
+  });
+
 /** Adds a course type (office); a name another one has (ignoring case) is a 409 `duplicate`. */
 export const createCourseTypeMutation = (queryClient: QueryClient) =>
   mutationOptions({

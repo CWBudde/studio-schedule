@@ -117,7 +117,7 @@ function ClassForm({
     const inactive = (name: string) => t('classes.inactiveStaff', { name });
     return {
       courseTypes: choices.courseTypes.map((c) => ({ value: c.id, label: c.name })),
-      rooms: roomOptions(choices.rooms, choices.locations, lang, t('classes.unknown')),
+      rooms: roomOptions(choices.rooms, choices.locations, t('classes.unknown')),
       instructors: staffOptions(choices.staff, 'instructor', editing?.instructor, inactive),
       accompanists: [
         { value: none, label: t('classes.noAccompanist') },
