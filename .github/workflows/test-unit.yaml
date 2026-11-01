@@ -24,6 +24,32 @@ jobs:
       - name: Setup just
         uses: extractions/setup-just@v3
 
+      # The receipt renderer's module as wazero compiled it, in
+      # os.UserCacheDir()/studio-schedule (wazero for the commands' renderer,
+      # wazero-test for package typstwasm's). Compiling it under -race takes
+      # minutes on a runner, past doctor's receipts timeout, so a cold cache
+      # is filled without -race first (seconds; the compiled module is the
+      # same) and saved at once, also when a test fails later.
+      - name: Restore compiled receipt module
+        id: wazero
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/studio-schedule
+          key: wazero-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('internal/pdf/typstwasm/receipt.wasm', 'go.sum') }}
+
+      - name: Compile receipt module
+        if: steps.wazero.outputs.cache-hit != 'true'
+        run: |
+          go test -count=1 -run '^TestDoctorReceiptModule$' ./cmd/studio-schedule
+          go test -count=1 ./internal/pdf/typstwasm
+
+      - name: Save compiled receipt module
+        if: steps.wazero.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/studio-schedule
+          key: ${{ steps.wazero.outputs.cache-primary-key }}
+
       # Includes the PostgreSQL contract tests: testcontainers starts
       # postgres:18-alpine on the runner's Docker. -coverpkg=./... counts a
       # package's statements whichever package's tests run them (the stores
