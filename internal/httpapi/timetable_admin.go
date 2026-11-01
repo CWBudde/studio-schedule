@@ -147,7 +147,7 @@ type ClassData struct {
 	RoomID          domain.RoomID       `doc:"Room the class takes place in."               json:"roomId"`
 	InstructorID    domain.StaffID      `doc:"Instructor."                                  json:"instructorId"`
 	AccompanistID   domain.StaffID      `doc:"Accompanist, if any."                         json:"accompanistId,omitzero" required:"false"`
-	Level           domain.SkillLevel        `doc:"Skill level the class is aimed at."           enum:"beginner,intermediate,advanced,professional,open" json:"level"`
+	Level           domain.SkillLevel   `doc:"Skill level the class is aimed at."           enum:"beginner,intermediate,advanced,professional,open" json:"level"`
 	Weekday         int                 `doc:"Day of the week, 0 = Sunday to 6 = Saturday." json:"weekday"                                          maximum:"6"      minimum:"0"`
 	StartTime       domain.TimeOfDay    `doc:"Start time (HH:MM) in the school time zone."  example:"18:00"                                         json:"startTime" pattern:"^[0-2][0-9]:[0-5][0-9]$"`
 	DurationMinutes int                 `doc:"Length of each lesson in minutes."            json:"durationMinutes"                                  maximum:"1440"   minimum:"1"`
