@@ -196,7 +196,9 @@ These choices were made while building the office's administration (`service.Eve
   each with a lookup by slug: a failed insert would end a PostgreSQL transaction. A title that
   gives no slug is a 422 on `slug`; a slug that is given and taken is a 409 `duplicate`.
 - A new capacity goes to every session that has not started, canceled ones included, since they
-  may be restored. A session's capacity is always its event's: `updateLesson` refuses another one.
+  may be restored. A session's capacity is always its event's: `updateLesson` refuses another one
+  (422 on `capacity`). A session is always public, since its event's status decides who sees it:
+  `updateLesson` refuses another visibility (422 on `visibility`).
 - Only lowering the capacity below the registrations and open invites is refused, so an event the
   office registered beyond its capacity stays editable.
 - The course type of an event with sessions stays.
@@ -211,7 +213,8 @@ These choices were made while building the office's administration (`service.Eve
 
 - `addEventSession` creates a public `workshop` lesson with the event's course type and capacity,
   under the checks of `createLesson`. Moving, canceling, restoring and deleting it are the lesson
-  operations; deleting is refused (`in-use`) while the event has open registrations.
+  operations; deleting is refused (`in-use`) while the event has open registrations. Restoring a
+  session of a canceled event is a 409 `closed`; it takes the event's lock first.
 - A session of a draft event is staff's only: the schedule, `getLesson` and the schedule feed hide
   it from everyone else, with one read of the sessions' events.
 - Booking a session, adding a participant to it and joining its waiting list are a 409
@@ -225,22 +228,28 @@ These choices were made while building the office's administration (`service.Eve
 
 - `cancelEvent` cancels the sessions that have not started without their own mails, cancels every
   open registration, refunds every paid one by a Storno, and mails one `event-canceled` (EN/DE) per
-  recipient, saying whether a fee is refunded.
+  recipient, saying whether this cancellation refunded a fee. The refunds are in the same
+  transaction, so an event with paid registrations is canceled only with complete receipt settings
+  (409 `receipt-settings-incomplete` otherwise).
 - `officeCancelEventRegistration` refunds only with `refund`; without it the payment stays.
-- `cancelReceipt` on an event fee's receipt marks its registration `refunded` and leaves its status.
+- `cancelReceipt` on an event fee's receipt is a 409 `registration-open` while its registration is
+  open: the office cancels the registration with a refund instead, which frees the place with the
+  money. A registration canceled with its fee kept is refunded there, which marks it `refunded`.
   Once a scheduled session has started it is a 409 `event-attended`; canceling the registration or
   the event refunds even then.
 - `markEventRegistrationPaid` is refused for a paid, free or refunded registration (409
-  `already-paid`) and a canceled one (409 `already-canceled`). The payer defaults to the
+  `already-paid`), a canceled one (409 `already-canceled`) and one on the waiting list (409
+  `not-registered`). The payer defaults to the
   registered person; a guest pays for themself.
 
 **Audit.** Four actions: `event-registration-added`, `event-registration-canceled` and
 `event-registration-paid` target the registered person (nothing for a guest) and name the event
-and the registration; the canceled one records `refund`. `event-canceled` has no target and names
+and the registration; the canceled one records `refund`, whether that cancellation refunded the fee. `event-canceled` has no target and names
 the event.
 
 **Receipt views.** A receipt names the event of its fee (`eventId`, `eventTitle`), a Storno the
-event of the receipt it cancels. A receipt whose event has started is not `cancelable`.
+event of the receipt it cancels. A receipt whose registration is open or whose event has started is
+not `cancelable`.
 
 **Not yet.** The event waiting list, which offers freed places (the Public API item), the
 registration confirmation mails, and moving registrations when persons are merged (ADR 0015).
