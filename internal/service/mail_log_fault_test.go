@@ -48,7 +48,8 @@ func TestMailLogAttachments(t *testing.T) {
 }
 
 // TestMailLogStoreFaults: the log's reads return a store failure; a failed
-// requeue neither queues the mail again nor records it in the audit log;
+// requeue (of one mail or of every failed one) neither queues a mail again
+// nor records it in the audit log;
 // a failed purge keeps every body and mail.
 func TestMailLogStoreFaults(t *testing.T) {
 	t.Parallel()
@@ -84,6 +85,14 @@ func TestMailLogStoreFaults(t *testing.T) {
 		},
 		"Requeue": func(t *testing.T, svc *MailLogService, f *passFixture, m domain.OutboxMail) error {
 			_, err := svc.Requeue(t.Context(), f.office, m.ID)
+
+			return err
+		},
+		"RequeueFailed": func(t *testing.T, svc *MailLogService, f *passFixture, _ domain.OutboxMail) error {
+			c, err := svc.RequeueFailed(t.Context(), f.office)
+			if err == nil && c.Requeued != 1 {
+				t.Fatalf("requeued %+v, want the failed receipt mail", c)
+			}
 
 			return err
 		},

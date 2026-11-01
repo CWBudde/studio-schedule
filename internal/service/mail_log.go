@@ -183,26 +183,7 @@ func (s *MailLogService) Requeue(ctx context.Context, p Principal, id domain.Out
 			return ErrMailNotFailed
 		}
 
-		now := s.clock.Now()
-		m.Attempts, m.NextAttemptAt = 0, now
-
-		if err := m.Validate(); err != nil {
-			return err
-		}
-
-		if err := tx.Outbox().Update(ctx, m); err != nil {
-			return err
-		}
-
-		e := domain.AuditEvent{
-			ID: ids.New[domain.AuditEventID](s.ids), At: now, ActorID: actorOf(p), Action: domain.AuditMailRequeued,
-			Details: domain.AuditDetails{MailID: m.ID, Recipient: m.To, Template: m.Template, Via: p.Via},
-		}
-		if err := e.Validate(); err != nil {
-			return err
-		}
-
-		if err := tx.Audit().Create(ctx, e); err != nil {
+		if m, err = s.requeue(ctx, tx, p, m); err != nil {
 			return err
 		}
 
@@ -219,6 +200,85 @@ func (s *MailLogService) Requeue(ctx context.Context, p Principal, id domain.Out
 	}
 
 	return out, nil
+}
+
+// RequeueCounts are the failed mails RequeueFailed found.
+type RequeueCounts struct {
+	// Requeued were queued again.
+	Requeued int
+	// SecretLink stay failed: a mail with a secret link is never queued
+	// again (ErrSecretLinkMail).
+	SecretLink int
+}
+
+// RequeueFailed queues every failed mail again in one transaction, as
+// Requeue does each, and records each in the audit log; the failed mails
+// with a secret link stay failed and are counted apart.
+func (s *MailLogService) RequeueFailed(ctx context.Context, p Principal) (RequeueCounts, error) {
+	var counts RequeueCounts
+
+	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		counts = RequeueCounts{}
+		f := store.OutboxFilter{Status: domain.MailFailed, Limit: MailLogPageSize}
+
+		for {
+			mails, err := tx.Outbox().List(ctx, f)
+			if err != nil {
+				return err
+			}
+
+			for _, m := range mails {
+				if mail.SecretLink(m.Template) {
+					counts.SecretLink++
+
+					continue
+				}
+
+				if _, err := s.requeue(ctx, tx, p, m); err != nil {
+					return err
+				}
+
+				counts.Requeued++
+			}
+
+			if len(mails) < f.Limit {
+				return nil
+			}
+
+			last := mails[len(mails)-1]
+			f.AfterCreatedAt, f.AfterID = last.CreatedAt, last.ID
+		}
+	})
+	if err != nil {
+		return RequeueCounts{}, fmt.Errorf("requeue failed mails: %w", err)
+	}
+
+	return counts, nil
+}
+
+// requeue queues the failed mail m again and records it in the audit log
+// as p's; it returns the mail as queued.
+func (s *MailLogService) requeue(ctx context.Context, tx store.Tx, p Principal, m domain.OutboxMail) (domain.OutboxMail, error) {
+	now := s.clock.Now()
+	m.Attempts, m.NextAttemptAt = 0, now
+
+	if err := m.Validate(); err != nil {
+		return domain.OutboxMail{}, err
+	}
+
+	if err := tx.Outbox().Update(ctx, m); err != nil {
+		return domain.OutboxMail{}, err
+	}
+
+	e := domain.AuditEvent{
+		ID: ids.New[domain.AuditEventID](s.ids), At: now, ActorID: actorOf(p), Action: domain.AuditMailRequeued,
+		Details: domain.AuditDetails{MailID: m.ID, Recipient: m.To, Template: m.Template, Via: p.Via},
+	}
+	if err := e.Validate(); err != nil {
+		return domain.OutboxMail{}, err
+	}
+
+	return m, tx.Audit().Create(ctx, e)
 }
 
 // Purge removes the bodies of the mails sent more than MailBodyRetention

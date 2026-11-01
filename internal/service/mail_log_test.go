@@ -192,6 +192,79 @@ func TestMailLogRequeue(t *testing.T) {
 	}
 }
 
+// TestMailLogRequeueFailed queues every failed mail again, over more than
+// one page of them, and records each in the audit log with the channel; a
+// failed mail with a secret link stays failed, pending and sent mails stay
+// as they are.
+func TestMailLogRequeueFailed(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := &mailLogFixture{newBookingFixture(t)}
+	now := mustInstant(t, bookingNow)
+	svc := f.service(now.Add(time.Hour))
+	admin := f.principal(t, f.olga)
+	admin.Via = domain.AuditVia{Channel: domain.ChannelCLI, OSUser: "operator"}
+
+	failed := MailLogPageSize + 3
+	for i := range failed {
+		f.addMail(t, fmt.Sprintf("m%02d@example.org", i), mail.TemplateReceipt, now.Add(time.Duration(i)*time.Second),
+			domain.MailFailed)
+	}
+
+	link := f.addMail(t, "anna@example.org", mail.TemplateInvite, now, domain.MailFailed)
+	pending := f.addMail(t, "anna@example.org", mail.TemplateReceipt, now, domain.MailPending)
+	sent := f.addMail(t, "anna@example.org", mail.TemplateReceipt, now, domain.MailSent)
+
+	counts, err := svc.RequeueFailed(ctx, admin)
+	if err != nil || counts != (RequeueCounts{Requeued: failed, SecretLink: 1}) {
+		t.Fatalf("RequeueFailed = %+v, %v; want %d requeued, 1 with a secret link", counts, err, failed)
+	}
+
+	var (
+		events []domain.AuditEvent
+		mails  map[domain.OutboxMailID]domain.OutboxMail
+	)
+
+	f.write(t, func(ctx context.Context, tx store.Tx) error {
+		all, err := tx.Outbox().List(ctx, store.OutboxFilter{Limit: 1000})
+		mails = map[domain.OutboxMailID]domain.OutboxMail{}
+
+		for _, m := range all {
+			mails[m.ID] = m
+		}
+
+		if err == nil {
+			events, err = tx.Audit().List(ctx, 1000)
+		}
+
+		return err
+	})
+
+	if len(events) != failed {
+		t.Errorf("%d audit events, want %d", len(events), failed)
+	}
+
+	for _, e := range events {
+		if e.Action != domain.AuditMailRequeued || e.Details.Via != admin.Via || mails[e.Details.MailID].Status() != domain.MailPending {
+			t.Errorf("audit event %+v: want mail-requeued via the command line of a pending mail", e)
+		}
+	}
+
+	for m, want := range map[domain.OutboxMail]domain.MailStatus{
+		link: domain.MailFailed, pending: domain.MailPending, sent: domain.MailSent,
+	} {
+		if got := mails[m.ID]; got != m || got.Status() != want {
+			t.Errorf("mail to %s of %s changed: %+v", m.To, m.Template, got)
+		}
+	}
+
+	// Nothing failed any more but the secret link.
+	if counts, err := svc.RequeueFailed(ctx, admin); err != nil || counts != (RequeueCounts{SecretLink: 1}) {
+		t.Errorf("again: %+v, %v; want only the secret link", counts, err)
+	}
+}
+
 // TestMailLogPurge: the bodies of mails sent more than 30 days ago go, the
 // mails created more than 180 days ago too.
 func TestMailLogPurge(t *testing.T) {

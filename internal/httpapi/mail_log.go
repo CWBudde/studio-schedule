@@ -138,7 +138,7 @@ type MailLogItemOutput struct {
 func (h *handlers) searchMails(ctx context.Context, in *MailLogInput) (*MailLogOutput, error) {
 	f := in.Body
 
-	after, err := parseMailCursor(f.Cursor)
+	after, err := ParseMailCursor(f.Cursor)
 	if err != nil {
 		return nil, huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
 			Message: "invalid cursor", Location: "body.cursor",
@@ -152,12 +152,18 @@ func (h *handlers) searchMails(ctx context.Context, in *MailLogInput) (*MailLogO
 		return nil, h.toHTTPError(ctx, err)
 	}
 
+	return &MailLogOutput{Body: NewMailLogPage(page)}, nil
+}
+
+// NewMailLogPage is the response body of searchMails for page; the command
+// line's `mail list --output json` prints it too (ADR 0020).
+func NewMailLogPage(page service.MailLogPage) MailLogPage {
 	items := make([]MailLogItem, 0, len(page.Mails))
 	for _, e := range page.Mails {
-		items = append(items, mailLogItem(e))
+		items = append(items, NewMailLogItem(e))
 	}
 
-	return &MailLogOutput{Body: MailLogPage{Items: items, NextCursor: mailCursor(page.Next)}}, nil
+	return MailLogPage{Items: items, NextCursor: mailCursor(page.Next)}
 }
 
 func (h *handlers) getMail(ctx context.Context, in *MailRefInput) (*MailLogDetailOutput, error) {
@@ -166,7 +172,7 @@ func (h *handlers) getMail(ctx context.Context, in *MailRefInput) (*MailLogDetai
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	out := &MailLogDetailOutput{Body: MailLogDetail{MailLogItem: mailLogItem(e)}}
+	out := &MailLogDetailOutput{Body: MailLogDetail{MailLogItem: NewMailLogItem(e)}}
 	if e.Body == service.MailBodyShown {
 		out.Body.Text, out.Body.HTML = e.Mail.Text, e.Mail.HTML
 	}
@@ -188,10 +194,13 @@ func (h *handlers) requeueMail(ctx context.Context, in *MailRefInput) (*MailLogI
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	return &MailLogItemOutput{Body: mailLogItem(e)}, nil
+	return &MailLogItemOutput{Body: NewMailLogItem(e)}, nil
 }
 
-func mailLogItem(e service.MailLogEntry) MailLogItem {
+// NewMailLogItem is the mail e as the mail log shows it, the response body
+// of requeueMail; the command line's `mail requeue --output json` prints it
+// too (ADR 0020).
+func NewMailLogItem(e service.MailLogEntry) MailLogItem {
 	m := e.Mail
 
 	return MailLogItem{
@@ -212,8 +221,9 @@ func mailCursor(c service.MailCursor) string {
 		[]byte(strconv.FormatInt(c.CreatedAt.UnixMicro(), 10) + "_" + c.ID.String()))
 }
 
-// parseMailCursor decodes mailCursor; "" is the zero cursor.
-func parseMailCursor(s string) (service.MailCursor, error) {
+// ParseMailCursor decodes the nextCursor of a page (mailCursor); "" is the
+// zero cursor.
+func ParseMailCursor(s string) (service.MailCursor, error) {
 	if s == "" {
 		return service.MailCursor{}, nil
 	}
