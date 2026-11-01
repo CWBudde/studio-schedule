@@ -1,0 +1,3 @@
+booking-rules  releaseWeeksAhead  1  3
+imported: 1 settings changed
+generated 156 lessons for the wider release window

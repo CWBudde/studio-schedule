@@ -154,6 +154,12 @@ These go before or after the command, as `studio-schedule --output json doctor` 
 | `accounts reset-password`  | `--mail`   | mail the reset link to the account (the `deliver-mail` job sends it) instead of printing it |
 | `accounts sessions revoke` | `--all`    | end the sessions of every account instead of one                                            |
 
+### Commands and flags: settings
+
+| Command           | Flag        | Meaning                                                                    |
+| ----------------- | ----------- | -------------------------------------------------------------------------- |
+| `settings import` | `--dry-run` | check the document and print the settings that would change; write nothing |
+
 `migrate up` applies every pending migration, `migrate down` rolls back the latest one and
 `migrate status` lists them all; `seed` loads the fictional demo data into an empty, migrated
 database. `openapi` prints the OpenAPI document, `version` the build version and `vapid-keys` a new

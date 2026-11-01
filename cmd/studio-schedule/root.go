@@ -42,6 +42,7 @@ func newRoot(sys cli.System) *cobra.Command {
 	root.AddCommand(newJobsCmd(app))
 	root.AddCommand(newJobsCmd(app), newMailCmd(app))
 	root.AddCommand(newAccountsCmd(app))
+	root.AddCommand(newSettingsCmd(app))
 
 	return app.Wire(root)
 }

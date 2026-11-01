@@ -1,0 +1,15 @@
+school         schoolName         Second Example Studio  Studio Demo — Ballet & Dance
+school         legalNotice        -                      Studio Demo Dance School · Pirouette Lane 7 · 10999 Exampletown\nA fictional school: every name, address and number in this demo is made up.
+regional       timezone           America/New_York       Europe/Berlin
+regional       defaultLocale      de                     en
+regional       currency           USD                    EUR
+booking-rules  releaseWeeksAhead  2                      1
+receipts       issuerName         -                      Studio Demo Dance School
+receipts       issuerAddress      -                      Pirouette Lane 7\n10999 Exampletown
+receipts       taxNumber          -                      99/999/99999
+receipts       email              -                      office@studio-demo.example
+receipts       phone              -                      +49 000 0000000
+receipts       taxMode            -                      standard
+receipts       footer             -                      Bank: Example Bank · IBAN XX00 0000 0000 0000 0000 00
+receipts       receiptPrefix      R                      SD
+dry run: 14 settings would change; nothing was written; run again without --dry-run to import

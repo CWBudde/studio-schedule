@@ -1,0 +1,17 @@
+{
+  "releaseWeekday": 0,
+  "releaseTime": "18:00",
+  "releaseWeeksAhead": 1,
+  "bookingCutoffMinutes": 0,
+  "cancellationCutoffMinutes": 120,
+  "waitlistInviteExpiryMinutes": 720,
+  "defaultVisibleDays": 14,
+  "window": {
+    "now": "2026-09-22T08:00:00Z",
+    "lastReleaseAt": "2026-09-20T16:00:00Z",
+    "nextReleaseAt": "2026-09-27T16:00:00Z",
+    "releasedUntil": "2026-09-27T22:00:00Z",
+    "ruleReleasedUntil": "2026-09-27T22:00:00Z"
+  },
+  "generatedLessons": 0
+}

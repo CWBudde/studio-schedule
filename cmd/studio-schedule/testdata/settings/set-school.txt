@@ -1,0 +1,2 @@
+school  schoolName   Studio Example
+school  legalNotice  -

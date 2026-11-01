@@ -967,9 +967,19 @@ command groups by need: recovery and diagnosis first, then data, then reports.
         themselves (`--as` needs a confirmed account), so `reset-password` does not reach them.
         Without mail, nothing does. Decide whether `init` may issue a new link for the unconfirmed
         first admin
-- [ ] Settings: `settings get [area]` and `settings set <area> key=value…` through
+- [x] Settings: `settings get [area]` and `settings set <area> key=value…` through
       `SettingsService` (same validation; time zone and currency stay locked once used).
-      `settings export|import` as JSON, to set up a second school the same way
+      `settings export|import` as JSON, to set up a second school the same way (2026-11-01): the
+      areas are the cards of ADR 0013 plus `receipts` (`ReceiptService.SetSettings`) and `passes`
+      (the redemption mode); reads `office`, writes `admin`. The keys are the fields of the area's
+      request body, the JSON its response body (`httpapi.New…Settings`, exported); text shows
+      durations, amounts and instants in their human form. `set` reads the area, changes the named
+      keys and writes it back; a field error names `key=value`. `export [file]` writes
+      `{"version": 1, …}` with every area's request body (no logo or background); `import <file>`
+      is destructive (`--yes`, `--dry-run`) and writes every area of the file in one transaction
+      (`SettingsService.Import`, the setters' rules through shared `apply` functions), printing the
+      changes. Deviations, amended in the ADR: the file of `export` is an argument (`-o` is
+      `--output`), and `set` is not destructive
 - [x] Jobs: `jobs list` (name, interval, last run and result) and `jobs run <name>` (one job now,
       e.g. `generate-lessons`, `purge-personal-data`, `deliver-mail`). A database lock keeps a
       serving instance and the command from running the same job at once (2026-11-01)

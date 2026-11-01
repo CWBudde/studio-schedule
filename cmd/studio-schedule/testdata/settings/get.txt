@@ -1,0 +1,39 @@
+school         schoolName                   Studio Demo — Ballet & Dance
+school         legalNotice                  Studio Demo Dance School · Pirouette Lane 7 · 10999 Exampletown\nA fictional school: every name, address and number in this demo is made up.
+branding       accentColor                  -
+branding       theme                        programme
+branding       minContrast                  4.5
+branding       hasLogo                      no
+branding       hasBackground                no
+regional       timezone                     Europe/Berlin
+regional       defaultLocale                en
+regional       currency                     EUR
+regional       timezoneLocked               yes
+regional       currencyLocked               yes
+booking-rules  releaseWeekday               Sunday
+booking-rules  releaseTime                  18:00
+booking-rules  releaseWeeksAhead            1
+booking-rules  bookingCutoffMinutes         0m
+booking-rules  cancellationCutoffMinutes    2h
+booking-rules  waitlistInviteExpiryMinutes  12h
+booking-rules  defaultVisibleDays           14
+booking-rules  releasedThrough              -
+booking-rules  window.now                   2026-09-22 10:00
+booking-rules  window.lastReleaseAt         2026-09-20 18:00
+booking-rules  window.nextReleaseAt         2026-09-27 18:00
+booking-rules  window.releasedUntil         2026-09-28 00:00
+booking-rules  window.ruleReleasedUntil     2026-09-28 00:00
+booking-rules  generatedLessons             0
+receipts       issuerName                   Studio Demo Dance School
+receipts       issuerAddress                Pirouette Lane 7\n10999 Exampletown
+receipts       taxNumber                    99/999/99999
+receipts       email                        office@studio-demo.example
+receipts       phone                        +49 000 0000000
+receipts       taxMode                      standard
+receipts       taxNote                      -
+receipts       footer                       Bank: Example Bank · IBAN XX00 0000 0000 0000 0000 00
+receipts       receiptPrefix                SD
+receipts       complete                     yes
+receipts       logoMaxBytes                 512 KiB
+receipts       addressRequiredAbove         250.00 EUR
+passes         redemptionMode               attendance

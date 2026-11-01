@@ -1,0 +1,6 @@
+Area      Key            From                   To
+school    schoolName     Second Example Studio  Third Example Studio
+regional  timezone       America/New_York       Europe/Vienna
+regional  defaultLocale  de                     en
+regional  currency       USD                    EUR
+imported: 4 settings changed

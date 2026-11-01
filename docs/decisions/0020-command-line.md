@@ -188,3 +188,11 @@ docs/cli.md is generated from the cobra tree, and CI fails when it is stale, as 
   `listAuditEvents`, so it waits for a change of its own. The impersonations that end are audited,
   as before. The `last-admin` guard cannot be reached from the command line alone: `--as` needs an
   admin who can sign in, and an admin's own account is refused as `own-account` first.
+- **`settings`: the file is an argument, and the areas include receipts and passes.** `-o` is the
+  global `--output`, so `settings export [file]` takes its file as an argument, like
+  `settings import <file>`. Besides the cards of ADR 0013 (`school`, `branding`, `regional`,
+  `booking-rules`), the receipt settings (`receipts`) and the redemption mode (`passes`) are areas
+  too: each is a pair of API operations whose request body is flat `key=value` data. The export is
+  `{"version": 1, …}` with every area's request body; an area in it replaces the whole area on
+  import, in one transaction (`SettingsService.Import`), and a key the API requires is required
+  there too. `settings set` is not destructive: it changes only the values it names.

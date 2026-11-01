@@ -63,6 +63,7 @@ A command that deletes, anonymizes, mails, cancels or merges asks for confirmati
 - [`studio-schedule openapi`](#studio-schedule-openapi): Print the OpenAPI 3.1 specification as JSON
 - [`studio-schedule seed`](#studio-schedule-seed): Load the fictional demo data set into an empty database
 - [`studio-schedule serve`](#studio-schedule-serve): Run the HTTP server (API and web UI)
+- [`studio-schedule settings`](#studio-schedule-settings): Read and change the school settings
 - [`studio-schedule vapid-keys`](#studio-schedule-vapid-keys): Print a new VAPID key pair for web push
 - [`studio-schedule version`](#studio-schedule-version): Print the version
 
@@ -865,6 +866,110 @@ Flags:
 Access: an operator command. It acts as no account and refuses `--as`.
 
 Output: text only; `--output json` is refused.
+
+### `studio-schedule settings`
+
+Read and change the school settings.
+
+```text
+studio-schedule settings <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule settings export`](#studio-schedule-settings-export): Write every area's settings as one JSON document
+- [`studio-schedule settings get`](#studio-schedule-settings-get): Print the settings of an area, or of all areas
+- [`studio-schedule settings import`](#studio-schedule-settings-import): Write the settings of a settings export (overwrites them)
+- [`studio-schedule settings set`](#studio-schedule-settings-set): Change settings of an area
+
+#### `studio-schedule settings export`
+
+Write every area's settings as one JSON document.
+
+```text
+studio-schedule settings export [file] [flags]
+```
+
+Write the settings of every area as one JSON document, to the file or else to stdout, acting as the office account of `--as`: the document settings import reads, to set up a second school the same way. Each area is its API request body, so the read-only fields are left out, and so are the logo and the background image: set them on the settings page. The receipt settings name the school as the issuer; edit them for another school. It prints JSON with either `--output`.
+
+Examples:
+
+```sh
+studio-schedule settings export --as office@example.org settings.json
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the settings document, always JSON: version (number, 1), then every area's request body by area: school (updateSchoolSettings), branding (updateBrandingSettings), regional (updateRegionalSettings), bookingRules (updateBookingRules), receipts (updateReceiptSettings), passes (updatePassSettings).
+
+#### `studio-schedule settings get`
+
+Print the settings of an area, or of all areas.
+
+```text
+studio-schedule settings get [area] [flags]
+```
+
+Print the settings of an area (school, branding, regional, booking-rules, receipts, passes), or of every area without one, as the settings page shows them, acting as the office account of `--as`: one line per setting with the area, the key and the value. The keys are the fields of the area's API body, which settings set takes; the fields only shown (such as timezoneLocked or the booking rules' window) are read-only. Durations show in days, hours and minutes, amounts in the school's currency and instants in the school's time zone; `--output json` prints the API's form.
+
+Examples:
+
+```sh
+studio-schedule settings get --as office@example.org
+studio-schedule settings get booking-rules --as office@example.org --output json
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: with an area, the response body of its get operation: getSchoolSettings (school), getBrandingSettings (branding), getRegionalSettings (regional), getBookingRules (booking-rules), getReceiptSettings (receipts) or getPassSettings (passes); without one, an object with every area's: school, branding, regional, bookingRules, receipts, passes.
+
+#### `studio-schedule settings import`
+
+Write the settings of a settings export (overwrites them).
+
+```text
+studio-schedule settings import <file> [flags]
+```
+
+Write the areas of a document of settings export, acting as the admin account of `--as`: all of them in one transaction, or none if one is refused, each with the rules of its card. An area in the document replaces all of its settings; an area left out stays as it is. The time zone and the currency stay locked once used: a different locked value is a conflict (exit status 4). It overwrites settings, so it asks for confirmation on a terminal and needs `--yes` otherwise; `--dry-run` checks everything and writes nothing. It prints every setting that changes (or would change), with its value before and after.
+
+Examples:
+
+```sh
+studio-schedule settings import --as admin@example.org --dry-run settings.json
+studio-schedule settings import --as admin@example.org --yes settings.json
+```
+
+Flags:
+
+- `--dry-run` (bool): check the document and print the changes; write nothing
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: one object: dryRun (bool), changes (array of {area, key, from, to}: the area as the commands name it, the key of its request body, and the values before and after in the request body's form, null for none), generatedLessons (number: lessons a wider release window generated at once).
+
+#### `studio-schedule settings set`
+
+Change settings of an area.
+
+```text
+studio-schedule settings set <area> key=value... [flags]
+```
+
+Change the named settings of an area (school, branding, regional, booking-rules, receipts, passes) and keep the others, as the area's card on the settings page does, acting as the admin account of `--as`: the area is read, the keys are changed and the area is written back, with the same rules as the API. The keys are the fields of the area's API body (settings get lists them): a number is a whole number, a date YYYY-MM-DD (empty: none), a time HH:MM, and the cutoffs count minutes. The time zone cannot change once lessons exist, the currency once a price or a receipt exists (exit status 4). A wider release window generates its lessons at once. It prints the area after the change.
+
+Examples:
+
+```sh
+studio-schedule settings set school schoolName='Studio Example' --as admin@example.org
+studio-schedule settings set booking-rules releaseWeeksAhead=3 cancellationCutoffMinutes=180 --as admin@example.org
+```
+
+Access: `admin`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `admin` or above.
+
+Output with `--output json`: the response body of the area's update operation: updateSchoolSettings, updateBrandingSettings, updateRegionalSettings, updateBookingRules, updateReceiptSettings or updatePassSettings.
 
 ### `studio-schedule vapid-keys`
 

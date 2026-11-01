@@ -1,0 +1,52 @@
+{
+  "school": {
+    "schoolName": "Studio Demo — Ballet & Dance",
+    "legalNotice": "Studio Demo Dance School · Pirouette Lane 7 · 10999 Exampletown\nA fictional school: every name, address and number in this demo is made up."
+  },
+  "branding": {
+    "theme": "programme",
+    "minContrast": 4.5,
+    "hasLogo": false,
+    "hasBackground": false
+  },
+  "regional": {
+    "timezone": "Europe/Berlin",
+    "defaultLocale": "en",
+    "currency": "EUR",
+    "timezoneLocked": true,
+    "currencyLocked": true
+  },
+  "bookingRules": {
+    "releaseWeekday": 0,
+    "releaseTime": "18:00",
+    "releaseWeeksAhead": 1,
+    "bookingCutoffMinutes": 0,
+    "cancellationCutoffMinutes": 120,
+    "waitlistInviteExpiryMinutes": 720,
+    "defaultVisibleDays": 14,
+    "window": {
+      "now": "2026-09-22T08:00:00Z",
+      "lastReleaseAt": "2026-09-20T16:00:00Z",
+      "nextReleaseAt": "2026-09-27T16:00:00Z",
+      "releasedUntil": "2026-09-27T22:00:00Z",
+      "ruleReleasedUntil": "2026-09-27T22:00:00Z"
+    },
+    "generatedLessons": 0
+  },
+  "receipts": {
+    "issuerName": "Studio Demo Dance School",
+    "issuerAddress": "Pirouette Lane 7\n10999 Exampletown",
+    "taxNumber": "99/999/99999",
+    "email": "office@studio-demo.example",
+    "phone": "+49 000 0000000",
+    "taxMode": "standard",
+    "footer": "Bank: Example Bank · IBAN XX00 0000 0000 0000 0000 00",
+    "receiptPrefix": "SD",
+    "complete": true,
+    "logoMaxBytes": 524288,
+    "addressRequiredAbove": 25000
+  },
+  "passes": {
+    "redemptionMode": "attendance"
+  }
+}

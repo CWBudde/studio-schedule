@@ -1,0 +1,90 @@
+{
+  "dryRun": false,
+  "changes": [
+    {
+      "area": "school",
+      "key": "schoolName",
+      "from": "Second Example Studio",
+      "to": "Studio Demo — Ballet & Dance"
+    },
+    {
+      "area": "school",
+      "key": "legalNotice",
+      "from": null,
+      "to": "Studio Demo Dance School · Pirouette Lane 7 · 10999 Exampletown\nA fictional school: every name, address and number in this demo is made up."
+    },
+    {
+      "area": "regional",
+      "key": "timezone",
+      "from": "America/New_York",
+      "to": "Europe/Berlin"
+    },
+    {
+      "area": "regional",
+      "key": "defaultLocale",
+      "from": "de",
+      "to": "en"
+    },
+    {
+      "area": "regional",
+      "key": "currency",
+      "from": "USD",
+      "to": "EUR"
+    },
+    {
+      "area": "booking-rules",
+      "key": "releaseWeeksAhead",
+      "from": 2,
+      "to": 1
+    },
+    {
+      "area": "receipts",
+      "key": "issuerName",
+      "from": null,
+      "to": "Studio Demo Dance School"
+    },
+    {
+      "area": "receipts",
+      "key": "issuerAddress",
+      "from": null,
+      "to": "Pirouette Lane 7\n10999 Exampletown"
+    },
+    {
+      "area": "receipts",
+      "key": "taxNumber",
+      "from": null,
+      "to": "99/999/99999"
+    },
+    {
+      "area": "receipts",
+      "key": "email",
+      "from": null,
+      "to": "office@studio-demo.example"
+    },
+    {
+      "area": "receipts",
+      "key": "phone",
+      "from": null,
+      "to": "+49 000 0000000"
+    },
+    {
+      "area": "receipts",
+      "key": "taxMode",
+      "from": null,
+      "to": "standard"
+    },
+    {
+      "area": "receipts",
+      "key": "footer",
+      "from": null,
+      "to": "Bank: Example Bank · IBAN XX00 0000 0000 0000 0000 00"
+    },
+    {
+      "area": "receipts",
+      "key": "receiptPrefix",
+      "from": "R",
+      "to": "SD"
+    }
+  ],
+  "generatedLessons": 0
+}
