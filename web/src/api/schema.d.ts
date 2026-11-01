@@ -2208,6 +2208,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/level-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the order of the levels
+         * @description Numbers the levels from 1 in the order given, from least to most advanced. The list must name every level exactly once, else it is a 422 on `levelIds`, also when a level was added or removed meanwhile.
+         */
+        put: operations["setLevelOrder"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List levels
+         * @description Returns the school's levels ordered by position.
+         */
+        get: operations["listLevels"];
+        put?: never;
+        /**
+         * Create a level
+         * @description Adds a level after the last one. A name or code another level has (ignoring case) is a 409 `duplicate`.
+         */
+        post: operations["createLevel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/levels/{levelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update a level
+         * @description Replaces the name and code of a level; it keeps its position. A name or code another level has is a 409 `duplicate`.
+         */
+        put: operations["updateLevel"];
+        post?: never;
+        /**
+         * Delete a level
+         * @description Deletes a level that no class uses; a used one is a 409 `in-use`.
+         */
+        delete: operations["deleteLevel"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations": {
         parameters: {
             query?: never;
@@ -5939,6 +6007,36 @@ export interface components {
             status: "waiting" | "invited" | "accepted" | "expired" | "withdrawn";
             /** @description Whether an invite that expires or is declined puts the entry back at the end of the list. */
             stayOnList: boolean;
+        };
+        Level: {
+            /** @description Short label, if any. */
+            code?: string;
+            /**
+             * Format: uuid
+             * @description Level ID.
+             */
+            id: string;
+            /** @description Display name. */
+            name: string;
+            /**
+             * Format: int64
+             * @description Place on the school's level scale, from 1 (least advanced).
+             */
+            position: number;
+        };
+        LevelData: {
+            /** @description Short label, if any; unique (ignoring case). */
+            code?: string;
+            /** @description Display name, unique (ignoring case). */
+            name: string;
+        };
+        LevelList: {
+            /** @description Levels ordered by position. */
+            items: components["schemas"]["Level"][];
+        };
+        LevelOrder: {
+            /** @description Every level, each once, in their new order. */
+            levelIds: string[];
         };
         Location: {
             /** @description Postal address, if known. */
@@ -13254,6 +13352,201 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listLevels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LevelList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createLevel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LevelData"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Level"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateLevel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The level. */
+                levelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LevelData"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Level"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteLevel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The level. */
+                levelId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setLevelOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LevelOrder"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {

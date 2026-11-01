@@ -27,6 +27,7 @@ const adminErrors = [
   'location',
   'person',
   'duplicate',
+  'nameOrCodeTaken',
   'choose',
   'startTime',
   'duration',

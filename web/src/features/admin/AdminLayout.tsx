@@ -39,6 +39,9 @@ function Administration({ role }: { role: Role }) {
         <Link to="/admin/course-types" className={sectionLink}>
           {t('nav.courseTypes')}
         </Link>
+        <Link to="/admin/levels" className={sectionLink}>
+          {t('nav.levels')}
+        </Link>
         <Link to="/admin/pass-types" className={sectionLink}>
           {t('nav.passes')}
         </Link>

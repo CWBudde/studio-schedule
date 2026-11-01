@@ -234,6 +234,13 @@ export const courseTypesQuery = queryOptions({
   staleTime: 5 * 60_000,
 });
 
+/** The school's levels, ordered by position (least to most advanced; public). */
+export const levelsQuery = queryOptions({
+  queryKey: ['levels'],
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/levels', { signal }))).items,
+  staleTime: 5 * 60_000,
+});
+
 /** The rooms of all locations. */
 export const roomsQuery = queryOptions({
   queryKey: ['rooms'],
@@ -908,6 +915,10 @@ export type RoomData = PostBody<'/api/v1/rooms'>;
 export type CourseType = components['schemas']['CourseType'];
 /** The editable fields of a course type (create and update). */
 export type CourseTypeData = PostBody<'/api/v1/course-types'>;
+
+export type Level = components['schemas']['Level'];
+
+export type LevelData = PostBody<'/api/v1/levels'>;
 /** A staff member as the office sees them: with the person link and the active flag. */
 export type StaffEntry = components['schemas']['StaffEntry'];
 /** The editable fields of a staff member (create and update); no `personId` means no person. */
@@ -1344,6 +1355,60 @@ export const deleteCourseTypeMutation = (queryClient: QueryClient) =>
       ),
     onSuccess: () => refreshCatalogue(queryClient),
     onError: onCatalogueError(queryClient),
+  });
+
+/** After a write to the levels: the list is asked again. */
+function refreshLevels(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({ queryKey: levelsQuery.queryKey });
+}
+
+/** The errors of a level write: a 404 means someone else deleted it meanwhile. */
+function onLevelError(queryClient: QueryClient) {
+  return (error: Error) => {
+    if (error instanceof ApiError && error.status === 404) void refreshLevels(queryClient);
+  };
+}
+
+/**
+ * Adds a level after the last one (office); a name or code another level has
+ * (ignoring case) is a 409 `duplicate`.
+ */
+export const createLevelMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: LevelData) => unwrap(api.POST('/api/v1/levels', { body })),
+    onSuccess: () => refreshLevels(queryClient),
+    onError: onLevelError(queryClient),
+  });
+
+/** Replaces the name and code of a level (office); it keeps its position. */
+export const updateLevelMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ levelId, body }: { levelId: string; body: LevelData }) =>
+      unwrap(api.PUT('/api/v1/levels/{levelId}', { params: { path: { levelId } }, body })),
+    onSuccess: () => refreshLevels(queryClient),
+    onError: onLevelError(queryClient),
+  });
+
+/** Deletes a level (office); one that classes use is a 409 `in-use`. */
+export const deleteLevelMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (levelId: string) =>
+      expectOk(api.DELETE('/api/v1/levels/{levelId}', { params: { path: { levelId } } })),
+    onSuccess: () => refreshLevels(queryClient),
+    onError: onLevelError(queryClient),
+  });
+
+/**
+ * Sets the order of the levels (office): `levelIds` lists each level exactly
+ * once, least to most advanced. A list that is no longer the levels (one was
+ * added or deleted meanwhile) is a 422 on `body.levelIds`. Either way the
+ * list is asked again, so the page shows the levels as they are.
+ */
+export const setLevelOrderMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (levelIds: string[]) =>
+      expectOk(api.PUT('/api/v1/level-order', { body: { levelIds } })),
+    onSettled: () => refreshLevels(queryClient),
   });
 
 /** Adds a staff member (office); an unknown person is a 422 on `body.personId`. */
