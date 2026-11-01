@@ -1099,11 +1099,29 @@ command groups by need: recovery and diagnosis first, then data, then reports.
       the totals and the tables by period, class, room, course type and instructor; the top
       participants only with `--participants`, the JSON is getStatistics's full body. The
       `events` commands wait for Phase 10
-- [ ] Tests: every command runs in-process (cobra `Execute` with buffers) on the memory store
+- [x] Tests: every command runs in-process (cobra `Execute` with buffers) on the memory store
       and PostgreSQL. They cover golden text and JSON output, exit codes, and the refusal without
-      `--yes`. The commands count towards the coverage gate (Phase 9)
-- [ ] Docs: docs/cli.md (generated); docs/operations.md (recovery, cron examples for scripted
-      exports); the CLAUDE.md code map
+      `--yes`. The commands count towards the coverage gate (Phase 9) (2026-11-01): checked command
+      by command; every command on the layer runs on both stores (`stores`, `schools`,
+      `pastStores`), every destructive one is refused without `--yes`. Filled: a real
+      `lessons restore` in text and its exit 3, `lessons generate`, `mail requeue` and
+      `import --apply` goldens, exit 1 on a failing store for the commands that lacked it
+      (`storefail_test.go`), the store-dependent exit codes of `settings set|import`,
+      `lessons restore`, `classes list` and `stats` on PostgreSQL too, an unknown `--as` for
+      `terms list`, the global flags refused by the commands off the layer, and `completion` for
+      each shell. Not golden by design: `receipts pdf` (a PDF file), `receipts export` (CSV, no
+      JSON), the exports (the text is the JSON document), body-less answers, `mail test` and
+      `config check` (no database). The `accounts` gaps (a few goldens, exit 3 for an unknown
+      target account) are left to the session that owns `accounts.go`
+- [x] Docs: docs/cli.md (generated); docs/operations.md (recovery, cron examples for scripted
+      exports); the CLAUDE.md code map (2026-11-01): operations.md has "Recovery" (a forgotten
+      admin password, an expired first-admin link via `accounts setup-link`, ending every session
+      after a leak, `doctor`/`db check`/`receipts verify`) and "Scripted tasks" (a nightly
+      `db check` and `receipts verify` that mail on exit 1, the yearly `receipts export`,
+      `jobs run` at a fixed time; `DATABASE_URL` and `STUDIO_AS` in a 0600 env file);
+      architecture.md's "Command line" names the groups and where they get their services; the
+      CLAUDE.md code map lists the groups, `db check`'s `IntegrityService`, the shared helpers
+      and two useful commands
 
 ## Phase 12 — MCP server
 
