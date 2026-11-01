@@ -51,8 +51,8 @@ writes all positions in one transaction).
 
 - `createRoom` appends: position = the location's highest + 1. The create and update bodies
   don't take a position.
-- New operation `setRoomOrder` (office): `PUT /api/v1/admin/locations/{id}/room-order` with
-  `{"roomIds": [...]}` → 204. A list that misses a room, repeats one or names another location's
+- New operation `setRoomOrder` (office): `PUT /api/v1/locations/{locationId}/room-order` with
+  `{"roomIds": [...]}` → 204, beside the other catalogue writes (`/api/v1/rooms`). A list that misses a room, repeats one or names another location's
   room is a 422 on `body.roomIds`.
 - Rooms in the API (`listRooms`, the schedule's `room`, the admin lists) carry `position`.
 
@@ -105,8 +105,8 @@ higher one.
 - `Stage` is 0 or 1–9.
 - Ages are 0 or 1–1200, and `AgeTo` is 0 or ≥ `AgeFrom`.
 
-The class service checks that both level IDs exist. Errors are field errors (`levelFrom`,
-`levelTo`, `allLevels`, `stage`, `ageFromMonths`, `ageToMonths`).
+The class service checks that both level IDs exist. Errors are field errors named like the body
+fields (`levelFromId`, `levelToId`, `allLevels`, `stage`, `ageFromMonths`, `ageToMonths`).
 
 **Store.**
 
@@ -116,8 +116,9 @@ The class service checks that both level IDs exist. Errors are field errors (`le
 - `SetOrder` writes positions 1..n. It fails with `domain.ErrValidation` unless the IDs are
   exactly the school's levels, the same rule as `RoomRepo.SetOrder`.
 - `Delete` of a level a class uses fails with `domain.ErrInUse` (FK `ON DELETE RESTRICT`).
-- Migration `00032_class_audience.sql` (the next free number at the time of writing):
-  - creates `levels` (uuid id, name, code, position; unique on `lower(name)` and on `code`);
+- Migration `00032_levels.sql` creates `levels` (uuid id, name, code, position; unique on
+  `lower(name)` and on `lower(code)`).
+- Migration `00033_class_audience.sql` (the next free numbers at the time of writing):
   - inserts a row for each old enum value an existing class uses, named and coded in English
     (Beginner B, Intermediate I, Advanced A, Professional P), in scale order;
   - replaces `classes.level` with `level_from_id` and `level_to_id` (nullable, both or neither),
@@ -133,10 +134,10 @@ The class service checks that both level IDs exist. Errors are field errors (`le
 - Public `listLevels`, `GET /api/v1/levels`: the schedule filter needs it when nobody is signed
   in.
 - Office writes, registered `withConflict` and pinned in `internal/app/access_test.go`:
-  - `createLevel` `POST /api/v1/admin/levels` → 201;
-  - `updateLevel` `PUT /api/v1/admin/levels/{id}`;
-  - `deleteLevel` `DELETE /api/v1/admin/levels/{id}` → 204, or 409 `in-use`;
-  - `setLevelOrder` `PUT /api/v1/admin/level-order` with `{"levelIds": [...]}` → 204. A list
+  - `createLevel` `POST /api/v1/levels` → 201;
+  - `updateLevel` `PUT /api/v1/levels/{levelId}`;
+  - `deleteLevel` `DELETE /api/v1/levels/{levelId}` → 204, or 409 `in-use`;
+  - `setLevelOrder` `PUT /api/v1/level-order` with `{"levelIds": [...]}` → 204. A list
     that misses a level, repeats one or names an unknown one is a 422 on `body.levelIds`.
 - Class bodies replace `level` with `levelFromId`, `levelToId` and `allLevels`, plus `stage`,
   `ageFromMonths` and `ageToMonths`.
@@ -182,7 +183,7 @@ from a bookmark.
 **Command line.** The `classes` and `stats` tables print the range by level name, lower first,
 or "all levels". There are no `levels` commands.
 
-**ADR 0019** "Class audience" records the levels table, the span rule, all levels, stage and age,
+**ADR 0021** "Levels and class audience" records the levels table, the span rule, all levels, stage and age,
 the filter rule and the migration.
 
 ## 3. A school of its own
