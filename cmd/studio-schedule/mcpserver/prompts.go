@@ -109,7 +109,13 @@ func fillWeek(args map[string]string, today domain.Date, d promptData) error {
 
 	// time.Weekday counts from Sunday; the school's weeks start on Monday.
 	from := day.AddDays(-((int(day.Weekday()) + 6) % 7))
-	d["from"], d["to"] = from.String(), from.AddDays(6).String()
+
+	to := from.AddDays(6)
+	if !to.Valid() {
+		return &domain.FieldError{Field: "week", Msg: "week ends after 9999-12-31"}
+	}
+
+	d["from"], d["to"] = from.String(), to.String()
 
 	return nil
 }

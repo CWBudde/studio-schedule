@@ -318,6 +318,7 @@ func TestPromptsWeek(t *testing.T) {
 		{"2026-09-28", "2026-09-28", "2026-10-04"},
 		{"2026-10-01", "2026-09-28", "2026-10-04"},
 		{"2027-01-01", "2026-12-28", "2027-01-03"}, // across the year
+		{"9999-12-26", "9999-12-20", "9999-12-26"}, // the last whole week
 	} {
 		var args map[string]string
 		if tc.week != "" {
@@ -377,6 +378,8 @@ func TestPromptsInvalid(t *testing.T) {
 		{"waitlist_invitations", map[string]string{"lessonId": secret}, "validation failed: lessonId is not an ID"},
 		{"weekly_overview", map[string]string{"week": secret}, "validation failed: week is not a date (YYYY-MM-DD)"},
 		{"weekly_overview", map[string]string{"week": "2026-02-30"}, "validation failed: week is not a date (YYYY-MM-DD)"},
+		// The week of 9999-12-31 ends in a year no date reaches.
+		{"weekly_overview", map[string]string{"week": "9999-12-31"}, "validation failed: week ends after 9999-12-31"},
 		// An unknown argument is refused by its name, which the error
 		// repeats, the first in name order, before a required one is
 		// missed.
