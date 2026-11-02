@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -133,6 +134,14 @@ func testCommands(a *App, rec *record) []*cobra.Command {
 				return nil
 			},
 			Run: func(context.Context, *Env, []string) error { rec.ran = true; return nil },
+		}),
+		a.Command(Spec{
+			Use: "echo", Short: "copy stdin to stdout, as a protocol speaks on them",
+			Run: func(_ context.Context, env *Env, _ []string) error {
+				_, err := io.Copy(env.Stdout(), env.Stdin())
+
+				return err
+			},
 		}),
 		a.Command(Spec{
 			Use: "table", Short: "print a table",
@@ -995,6 +1004,17 @@ func TestFailures(t *testing.T) {
 	if got.code != ExitUsage || !strings.Contains(got.stderr, `"status": 422`) ||
 		!strings.Contains(got.stderr, `"location": "--email"`) {
 		t.Errorf("JSON: exit %d, stderr %s", got.code, got.stderr)
+	}
+}
+
+// TestEnvStdio: Stdin and Stdout are the command's own, unbuffered by the
+// presenter, for a command that speaks a protocol on them (the MCP server).
+func TestEnvStdio(t *testing.T) {
+	t.Parallel()
+
+	got := harness{stdin: "line one\nline two\n"}.run(t, &record{}, "echo")
+	if got.code != ExitOK || got.stdout != "line one\nline two\n" || got.stderr != "" {
+		t.Errorf("exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
 	}
 }
 

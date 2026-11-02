@@ -230,6 +230,16 @@ safe on a live database. Run it after a restore, before and after an upgrade, an
 exits with status 1 on a finding (and prints the findings by record ID, never by personal data),
 with 0 when the data is consistent.
 
+### Commands and flags: mcp
+
+| Command | Flag              | Meaning                                                                                                                      |
+| ------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `mcp`   | `--personal-data` | list the tools that return person data; the assistant's provider receives what they return                                   |
+| `mcp`   | `--allow-writes`  | list the write tools of these groups (repeatable or comma-separated): `bookings`, `lessons`, `announcements`, `mail`, `jobs` |
+
+`mcp` is the MCP server for an assistant ([mcp.md](mcp.md), [ADR 0022](decisions/0022-mcp-server.md)):
+it acts as the account of `--as`, speaks MCP on stdin and stdout, and audits every tool call.
+
 ### The command line
 
 Every command runs locally on the server's shell, with the database's credentials; there is no

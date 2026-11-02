@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"flag"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,6 +71,19 @@ type result struct {
 func (r cliRun) exec(t *testing.T, args ...string) result {
 	t.Helper()
 
+	var stdout, stderr bytes.Buffer
+
+	code := r.run(t, strings.NewReader(r.stdin), &stdout, &stderr, args...)
+
+	return result{code: code, stdout: stdout.String(), stderr: stderr.String()}
+}
+
+// run runs the command tree with args on stdin, stdout and stderr, for a
+// command that speaks on them while it runs (mcp, through mcpSession), and
+// returns the exit status.
+func (r cliRun) run(t *testing.T, stdin io.Reader, stdout, stderr io.Writer, args ...string) int {
+	t.Helper()
+
 	env := map[string]string{}
 	for k, v := range r.env {
 		env[k] = v
@@ -106,16 +120,12 @@ func (r cliRun) exec(t *testing.T, args ...string) result {
 		IDs:            idsOf(t),
 	})
 
-	var stdout, stderr bytes.Buffer
-
 	root.SetArgs(args)
-	root.SetIn(strings.NewReader(r.stdin))
-	root.SetOut(&stdout)
-	root.SetErr(&stderr)
+	root.SetIn(stdin)
+	root.SetOut(stdout)
+	root.SetErr(stderr)
 
-	code := runMain(root, &stderr)
-
-	return result{code: code, stdout: stdout.String(), stderr: stderr.String()}
+	return runMain(root, stderr)
 }
 
 // runIDs hold the ID source of each test's runs (idsOf), by test name.

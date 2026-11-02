@@ -1,0 +1,45 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "name": "config",
+      "result": "ok",
+      "detail": "valid"
+    },
+    {
+      "name": "database",
+      "result": "ok",
+      "detail": "connected"
+    },
+    {
+      "name": "schema",
+      "result": "ok",
+      "detail": "up to date"
+    },
+    {
+      "name": "settings",
+      "result": "ok",
+      "detail": "Europe/Berlin, EUR"
+    },
+    {
+      "name": "smtp",
+      "result": "skip",
+      "detail": "SMTP_HOST is not set: mails stay in the outbox"
+    },
+    {
+      "name": "vapid",
+      "result": "skip",
+      "detail": "the VAPID_* variables are not set: web push is off"
+    },
+    {
+      "name": "base-url",
+      "result": "warn",
+      "detail": "BASE_URL is not set: links point to http://localhost:8080/; local development only"
+    },
+    {
+      "name": "receipts",
+      "result": "skip",
+      "detail": "this build has no receipt renderer"
+    }
+  ]
+}

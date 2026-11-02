@@ -301,6 +301,16 @@ type Env struct {
 // Stderr is where prompts and messages beside the result go.
 func (e *Env) Stderr() io.Writer { return e.cmd.ErrOrStderr() }
 
+// Stdin is the command's own input, for a command that speaks a protocol
+// on stdin and stdout instead of presenting a result: the MCP server (ADR
+// 0022). Any other command reads with ReadLine and Confirm. It is the
+// reader those use, so nothing they buffered is lost.
+func (e *Env) Stdin() io.Reader { return e.in }
+
+// Stdout is the command's own output, for a command that speaks a protocol
+// on it (Stdin); any other command writes with Out.
+func (e *Env) Stdout() io.Writer { return e.cmd.OutOrStdout() }
+
 // Config loads the configuration as serve does (config.Load: the
 // environment, flags, the defaults), with the global --database-url and
 // --as; flags are the command's own explicit flags. Nothing is opened.

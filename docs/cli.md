@@ -62,6 +62,7 @@ A command that deletes, anonymizes, mails, cancels or merges asks for confirmati
 - [`studio-schedule jobs`](#studio-schedule-jobs): List the background jobs and run one now
 - [`studio-schedule lessons`](#studio-schedule-lessons): List, generate, cancel and restore lessons
 - [`studio-schedule mail`](#studio-schedule-mail): Test the mail server, list the mail log and queue failed mails again
+- [`studio-schedule mcp`](#studio-schedule-mcp): Serve the Model Context Protocol on stdin and stdout for an assistant
 - [`studio-schedule migrate`](#studio-schedule-migrate): Manage the database schema
 - [`studio-schedule openapi`](#studio-schedule-openapi): Print the OpenAPI 3.1 specification as JSON
 - [`studio-schedule passes`](#studio-schedule-passes): Show the passes of a person
@@ -979,6 +980,33 @@ Flags:
 Access: an operator command. It acts as no account and refuses `--as`.
 
 Output with `--output json`: one object: to (the recipient), server (the mail server, `SMTP_HOST`), locale (the language of the mail) and subject.
+
+### `studio-schedule mcp`
+
+Serve the Model Context Protocol on stdin and stdout for an assistant.
+
+```text
+studio-schedule mcp [flags]
+```
+
+Run an MCP server over stdio (ADR 0022), for an assistant's client such as Claude Desktop or Claude Code, which starts the command and speaks MCP on its stdin and stdout; over SSH, the client runs it on the school's host. Its tools act as the account of `--as` with that account's rights: a session lists the tools whose access level the account's role reaches, and every call resolves the account again, so an account disabled or demoted since the start is refused on its next call. Every call is audited as mcp-tool-called with the tool's name and its outcome, never with its arguments. Without `--personal-data` the tools return no person data; write tools are listed only for the groups of `--allow-writes` (bookings, lessons, announcements, mail, jobs). Nothing but MCP goes to stdout; warnings and errors go to stderr. The command takes no `--output json` and no `--yes`: the client asks its user before a write.
+
+Examples:
+
+```sh
+studio-schedule mcp --as office@example.org
+claude mcp add studio-schedule -- studio-schedule mcp --as office@example.org
+ssh school.example.org studio-schedule mcp --as office@example.org --personal-data
+```
+
+Flags:
+
+- `--allow-writes` (stringSlice): list the write tools of these groups (repeatable or comma-separated): bookings, lessons, announcements, mail, jobs
+- `--personal-data` (bool): list the tools that return person data; the assistant's provider receives what they return
+
+Access: `signedIn`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `member` or above.
+
+Output with `--output json`: no JSON document: stdout carries the MCP messages, so `--output json` is refused.
 
 ### `studio-schedule migrate`
 
