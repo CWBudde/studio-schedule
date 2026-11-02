@@ -17,6 +17,7 @@ import {
   updateAnnouncementMutation,
 } from '@/api/queries';
 import { ProblemAlert } from '@/components/ProblemAlert';
+import { type ProblemTexts, useProblemText } from '@/components/problemText';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -104,6 +105,7 @@ function AnnouncementForm({
   const { t: tAuth } = useTranslation('auth');
   const lang = i18n.resolvedLanguage ?? 'en';
   const errorText = useErrorText();
+  const problemText = useProblemText();
   const queryClient = useQueryClient();
   const create = useMutation(createAnnouncementMutation(queryClient));
   const update = useMutation(updateAnnouncementMutation(queryClient));
@@ -122,8 +124,16 @@ function AnnouncementForm({
   });
   /** The body waiting for the confirmation of its email. */
   const [confirming, setConfirming] = useState<AnnouncementData | null>(null);
+  /** Why a write failed, for the alert and the toast alike. */
+  const problems: ProblemTexts = {
+    conflicts: { 'mail-limit': t('admin.mailLimit'), expired: t('admin.expired') },
+    messages: { 404: t('admin.notFound'), 422: tAuth('form.checkEntries') },
+  };
 
   const send = (body: AnnouncementData) => {
+    // Whether this write would queue its email: one whose mailing has
+    // begun is never mailed again.
+    const mails = body.email === true && !emailStarted;
     const onError = (error: Error) => {
       showServerErrors(error, form, announcementFields);
       for (const [api, field] of Object.entries(dateFields)) {
@@ -131,31 +141,47 @@ function AnnouncementForm({
           form.setError(field, { type: 'server', message: 'invalid' });
         }
       }
-    };
-    const done =
-      (message: 'admin.added' | 'admin.addedSending' | 'admin.scheduled' | 'admin.saved') => () => {
-        toast.success(t(message, { title: body.title }));
-        onDone();
-      };
-    if (editing) {
-      update.mutate(
-        { announcementId: editing.id, body },
-        { onSuccess: done('admin.saved'), onError },
-      );
-    } else {
-      create.mutate(body, {
-        // Published later than written: scheduled. Published now with
-        // email: the announcements job is sending it.
-        onSuccess: (a) =>
-          done(
-            Date.parse(a.publishAt ?? a.createdAt) > Date.parse(a.createdAt)
-              ? 'admin.scheduled'
-              : a.email
-                ? 'admin.addedSending'
-                : 'admin.added',
-          )(),
-        onError,
+      const title = editing
+        ? mails
+          ? 'admin.saveFailedEmail'
+          : 'admin.saveFailed'
+        : mails
+          ? 'admin.publishFailedEmail'
+          : 'admin.publishFailed';
+      toast.error(t(title, { title: body.title }), {
+        description: problemText(error, problems),
       });
+    };
+    // The announcements job mails it (SendDue): the toast says the email
+    // is queued, or goes out at its publication, never that it is sent.
+    // Whether it publishes later is the API's word: its publishAt against
+    // the time of the write (createdAt for a new one; updatedAt, which
+    // every edit sets, for an edit), both from the server's clock.
+    const onSuccess = (a: Announcement) => {
+      const written = Date.parse(editing ? a.updatedAt : a.createdAt);
+      const later = Date.parse(a.publishAt ?? a.createdAt) > written;
+      // A mailing begun before (or meanwhile) is not this write's.
+      const queued = a.email === true && !mailStarted(a);
+      const message = editing
+        ? queued
+          ? later
+            ? 'admin.savedSendingLater'
+            : 'admin.savedSending'
+          : 'admin.saved'
+        : later
+          ? queued
+            ? 'admin.scheduledSending'
+            : 'admin.scheduled'
+          : queued
+            ? 'admin.addedSending'
+            : 'admin.added';
+      toast.success(t(message, { title: a.title }));
+      onDone();
+    };
+    if (editing) {
+      update.mutate({ announcementId: editing.id, body }, { onSuccess, onError });
+    } else {
+      create.mutate(body, { onSuccess, onError });
     }
   };
 
@@ -175,11 +201,7 @@ function AnnouncementForm({
         className="flex flex-col gap-4 px-4 pb-4"
         onSubmit={form.handleSubmit(onSubmit)}
       >
-        <ProblemAlert
-          error={save.error}
-          conflicts={{ 'mail-limit': t('admin.mailLimit'), expired: t('admin.expired') }}
-          messages={{ 404: t('admin.notFound'), 422: tAuth('form.checkEntries') }}
-        />
+        <ProblemAlert error={save.error} {...problems} />
         <TextField
           label={t('admin.titleField')}
           autoComplete="off"
@@ -288,6 +310,7 @@ function AnnouncementForm({
         <FormSheetActions
           pending={save.isPending}
           submitLabel={editing ? tAdmin('form.save') : t('admin.publish')}
+          pendingLabel={editing ? undefined : t('admin.publishing')}
           icon={editing ? <Save aria-hidden="true" /> : <Megaphone aria-hidden="true" />}
         />
       </form>

@@ -28,10 +28,11 @@ async function announce(page: Page, title: string, text: string, email: boolean)
     await expect(confirm.getByText(/^It goes to \d+ addresses now/)).toBeVisible();
     await confirm.getByRole('button', { name: 'Publish and send' }).click();
   }
-  // With email, the announcements job sends it right after it is published.
+  // With email, the announcements job sends it right after it is published:
+  // the toast says it is queued.
   await expect(
     page.getByText(
-      email ? `“${title}” is published and is being sent by email.` : `“${title}” is published.`,
+      email ? `“${title}” is published; its email is queued.` : `“${title}” is published.`,
     ),
   ).toBeVisible();
 }
