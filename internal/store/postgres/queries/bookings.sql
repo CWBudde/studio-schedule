@@ -48,10 +48,6 @@ FROM bookings
 WHERE lesson_id = ANY(sqlc.arg(lessons)::uuid[]) AND status = 'canceled' AND late
 GROUP BY lesson_id;
 
--- name: CountActiveBookingPersons :one
-SELECT count(DISTINCT person_id) FROM bookings
-WHERE lesson_id = ANY(sqlc.arg(lessons)::uuid[]) AND status <> 'canceled' AND person_id IS NOT NULL;
-
 -- name: CountBookingsByPersons :many
 SELECT person_id::uuid AS person_id,
     count(*) FILTER (WHERE status <> 'canceled') AS active,

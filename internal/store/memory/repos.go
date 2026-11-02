@@ -1488,21 +1488,6 @@ func (r bookingRepo) CountLateCanceledByLessons(
 	return out, nil
 }
 
-func (r bookingRepo) CountActivePersons(_ context.Context, lessons []domain.LessonID) (int, error) {
-	wanted := setOf(lessons)
-	persons := map[domain.PersonID]struct{}{}
-
-	for _, b := range r.tx.state.bookings.filter(func(b domain.Booking) bool {
-		_, ok := wanted[b.LessonID]
-
-		return ok && active(b) && !b.PersonID.IsZero()
-	}) {
-		persons[b.PersonID] = struct{}{}
-	}
-
-	return len(persons), nil
-}
-
 func (r bookingRepo) CountsByPersons(
 	_ context.Context, lessons []domain.LessonID,
 ) (map[domain.PersonID]store.PersonBookingCounts, error) {

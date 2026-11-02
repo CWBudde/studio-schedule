@@ -439,11 +439,6 @@ func TestCanceledQueryInTx(t *testing.T) {
 
 			return err
 		}},
-		"active persons": {store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
-			_, err := tx.Bookings().CountActivePersons(ctx, lessons)
-
-			return err
-		}},
 		"booking counts by persons": {store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 			_, err := tx.Bookings().CountsByPersons(ctx, lessons)
 
