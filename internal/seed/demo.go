@@ -109,14 +109,6 @@ func demoAt(anchor domain.Date, s schoolSpec) (Dataset, error) {
 		b.location(l)
 	}
 
-	// A school with fewer places than the programme's skips the IDs they
-	// would take, so that every later entity has the same ID in both. The
-	// padding keeps the werkstatt school's IDs aligned with the programme's
-	// until it has tables of its own (task 5.1).
-	for range placeIDs(programme().locations) - placeIDs(s.locations) {
-		b.seq.NewUUID()
-	}
-
 	for _, st := range s.staff {
 		b.staffMember(st)
 	}
@@ -219,6 +211,44 @@ type schoolSpec struct {
 	trialNotes []string
 	// termName names the term, e.g. "School Year 2026/27".
 	termName func(start, end domain.Date) string
+	// workshopsOn moves every workshop, the full one included, to the
+	// first such weekday on or after its day; zero keeps the day.
+	workshopsOn onDay
+	// rentalOn moves the rental likewise.
+	rentalOn onDay
+}
+
+// onDay moves a one-off lesson to the first weekday of its kind on or after
+// its day, whatever weekday the anchor is: the werkstatt school's workshops
+// take Sunday, the day without classes. The zero onDay keeps the day.
+type onDay struct {
+	weekday time.Weekday
+	set     bool
+}
+
+// on is the onDay of weekday w.
+func on(w time.Weekday) onDay { return onDay{weekday: w, set: true} }
+
+// date returns the day days after anchor, moved by o.
+func (o onDay) date(anchor domain.Date, days int) domain.Date {
+	day := anchor.AddDays(days)
+	if !o.set {
+		return day
+	}
+
+	return day.AddDays((int(o.weekday) - int(day.Weekday()) + 7) % 7)
+}
+
+// schoolYear returns a termName: "<prefix> 2026/27", or "<prefix> 2027" for a
+// term within one calendar year.
+func schoolYear(prefix string) func(start, end domain.Date) string {
+	return func(start, end domain.Date) string {
+		if start.Year == end.Year {
+			return fmt.Sprintf("%s %d", prefix, start.Year)
+		}
+
+		return fmt.Sprintf("%s %d/%02d", prefix, start.Year, end.Year%100)
+	}
 }
 
 // adultSpec is an adult of a household. A zero role means no account.
@@ -238,7 +268,8 @@ type childSpec struct {
 }
 
 // householdSpec is a family, a single adult or a staff member's person
-// record. Adults with an account get the email given.family@host.
+// record. Adults with an account get the email given.family@host, in ASCII
+// (emailOf).
 type householdSpec struct {
 	family   string
 	host     string
@@ -252,22 +283,9 @@ type locationSpec struct {
 	rooms   []roomSpec
 }
 
-// roomSpec is a room; holds names the programme rooms whose classes it
-// holds in another school's places, none for a programme room itself.
 type roomSpec struct {
 	name     string
 	capacity int
-	holds    []string
-}
-
-// placeIDs is the number of IDs the places of locations take.
-func placeIDs(locations []locationSpec) int {
-	n := len(locations)
-	for _, l := range locations {
-		n += len(l.rooms)
-	}
-
-	return n
 }
 
 // staffSpec is a staff member; person is the "Given Family" key of their
@@ -341,7 +359,7 @@ type rentalSpec struct {
 }
 
 func (b *builder) rental(anchor domain.Date, spec rentalSpec) {
-	start := anchor.AddDays(spec.days).At(spec.start, b.loc)
+	start := b.s.rentalOn.date(anchor, spec.days).At(spec.start, b.loc)
 
 	b.d.Lessons = append(b.d.Lessons, domain.Lesson{
 		ID:         ids.New[domain.LessonID](b.seq),
@@ -420,11 +438,11 @@ func (b *builder) household(h householdSpec) {
 }
 
 // person adds p with an ID. With a role, p gets the email
-// given.family@host and an account with that role, confirmed when the term
-// starts, that signs in with DemoPassword.
+// given.family@host (emailOf) and an account with that role, confirmed when
+// the term starts, that signs in with DemoPassword.
 func (b *builder) person(p domain.Person, host string, role domain.Role) domain.Person {
 	if role != "" {
-		p.Email = strings.ToLower(p.GivenName + "." + p.FamilyName + "@" + host)
+		p.Email = emailOf(p.GivenName, p.FamilyName, host)
 	}
 
 	p.ID = ids.New[domain.PersonID](b.seq)
@@ -451,6 +469,15 @@ func (b *builder) person(p domain.Person, host string, role domain.Role) domain.
 	return p
 }
 
+// asciiFold spells the German letters of a lower-case name in ASCII.
+var asciiFold = strings.NewReplacer("ä", "ae", "ö", "oe", "ü", "ue", "ß", "ss")
+
+// emailOf is the address given.family@host in lower case and ASCII, so
+// "Konrad Flügel" gets konrad.fluegel@host.
+func emailOf(given, family, host string) string {
+	return asciiFold.Replace(strings.ToLower(given + "." + family + "@" + host))
+}
+
 func (b *builder) location(spec locationSpec) {
 	l := domain.Location{ID: ids.New[domain.LocationID](b.seq), Name: spec.name, Address: spec.address}
 	b.d.Locations = append(b.d.Locations, l)
@@ -460,14 +487,7 @@ func (b *builder) location(spec locationSpec) {
 			ID: ids.New[domain.RoomID](b.seq), LocationID: l.ID, Name: r.name, Capacity: r.capacity, Position: i + 1,
 		}
 		b.d.Rooms = append(b.d.Rooms, room)
-
-		if len(r.holds) == 0 {
-			b.rooms[r.name] = room.ID
-		}
-
-		for _, key := range r.holds {
-			b.rooms[key] = room.ID
-		}
+		b.rooms[r.name] = room.ID
 	}
 }
 
@@ -742,7 +762,7 @@ func (b *builder) memberOf(class domain.ClassID, person domain.PersonID) bool {
 }
 
 func (b *builder) workshop(anchor domain.Date, spec workshopSpec) {
-	start := anchor.AddDays(spec.days).At(spec.start, b.loc)
+	start := b.s.workshopsOn.date(anchor, spec.days).At(spec.start, b.loc)
 
 	l := domain.Lesson{
 		ID:           ids.New[domain.LessonID](b.seq),

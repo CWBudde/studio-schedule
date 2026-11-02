@@ -1,7 +1,6 @@
 package seed
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
@@ -360,16 +359,6 @@ func programme() schoolSpec {
 		guests:     []string{"Theo Dropwell", "Lena Visby", "Jonte Comewell", "Ivy Passmore"},
 		trialists:  []string{"Nora Ivorycombe", "Yara Gildenmoor", "Hanna Birchmoor", "Oskar Nettlebury", "Petra Elderwick"},
 		trialNotes: []string{"Thinking about joining after the holidays.", "", "Wants to try a second style."},
-		termName:   programmeTermName,
+		termName:   schoolYear("School Year"),
 	}
-}
-
-// programmeTermName is "School Year 2026/27", or "School Year 2027" for a
-// term within one calendar year.
-func programmeTermName(start, end domain.Date) string {
-	if start.Year == end.Year {
-		return fmt.Sprintf("School Year %d", start.Year)
-	}
-
-	return fmt.Sprintf("School Year %d/%02d", start.Year, end.Year%100)
 }

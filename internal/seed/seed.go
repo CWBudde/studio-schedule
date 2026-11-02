@@ -50,11 +50,9 @@ func DemoSettings() domain.Settings {
 }
 
 // School selects one of the fictional demo schools (ADR 0018). Each school
-// is built from its own tables (schoolSpec). For now the werkstatt school's
-// tables are the programme school's apart from its settings (its name,
-// imprint, receipt issuer, theme, accent color and language, and so the
-// receipts issued with them), its background and its places: its one house
-// holds the same classes in fewer rooms.
+// is built from its own tables (schoolSpec): its settings, people, places,
+// catalog, weekly plan, workshops, passes and announcements; the two
+// share no record (programme.go, werkstatt.go).
 // The zero School is not valid: a caller names the school it wants.
 type School string
 
@@ -64,7 +62,8 @@ const (
 	// (DemoSettings), the default.
 	SchoolProgramme School = "programme"
 	// SchoolWerkstatt is a German demo school in the Werkstatt look, with
-	// a background image.
+	// a background image, its own German people and a catalog shaped like
+	// the previous app's.
 	SchoolWerkstatt School = "werkstatt"
 )
 
