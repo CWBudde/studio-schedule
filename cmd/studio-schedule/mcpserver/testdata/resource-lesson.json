@@ -1,0 +1,73 @@
+{
+  "lessonId": "00000000-0000-7000-8000-0000000000a3",
+  "capacity": 16,
+  "active": 4,
+  "held": 0,
+  "freePlaces": 12,
+  "waiting": 0,
+  "dayOverAt": "2026-09-10T22:00:00Z",
+  "bookings": [
+    {
+      "bookingId": "00000000-0000-7000-8000-000000000178",
+      "personId": "00000000-0000-7000-8000-00000000002d",
+      "name": "Oskar Nettlebury",
+      "guest": false,
+      "contactEmail": "oskar.nettlebury@example.org",
+      "status": "booked",
+      "source": "member",
+      "trial": false,
+      "late": false,
+      "bookedAt": "2026-09-01T07:00:00Z",
+      "payment": {
+        "status": "free"
+      }
+    },
+    {
+      "bookingId": "00000000-0000-7000-8000-00000000017a",
+      "personId": "00000000-0000-7000-8000-000000000031",
+      "name": "Tilo Quarrystone",
+      "guest": false,
+      "contactEmail": "tilo.quarrystone@example.org",
+      "status": "booked",
+      "source": "member",
+      "trial": false,
+      "late": false,
+      "bookedAt": "2026-09-01T07:00:00Z",
+      "payment": {
+        "status": "free"
+      }
+    },
+    {
+      "bookingId": "00000000-0000-7000-8000-00000000017c",
+      "personId": "00000000-0000-7000-8000-00000000000e",
+      "name": "Sara Dunfield",
+      "guest": false,
+      "contactEmail": "sara.dunfield@example.com",
+      "contactPhone": "+49 000 0000104",
+      "status": "booked",
+      "source": "member",
+      "trial": false,
+      "late": false,
+      "bookedAt": "2026-09-01T07:00:00Z",
+      "payment": {
+        "status": "free"
+      }
+    },
+    {
+      "bookingId": "00000000-0000-7000-8000-00000000017e",
+      "personId": "00000000-0000-7000-8000-000000000012",
+      "name": "Petra Elderwick",
+      "guest": false,
+      "contactEmail": "petra.elderwick@example.org",
+      "status": "booked",
+      "source": "member",
+      "trial": false,
+      "late": false,
+      "bookedAt": "2026-09-01T07:00:00Z",
+      "payment": {
+        "status": "free"
+      }
+    }
+  ],
+  "waitlist": []
+}

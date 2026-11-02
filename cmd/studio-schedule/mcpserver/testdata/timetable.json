@@ -1,0 +1,588 @@
+{
+  "items": [
+    {
+      "id": "00000000-0000-7000-8000-00000000005f",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000051",
+      "roomId": "00000000-0000-7000-8000-000000000044",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-000000000049",
+        "displayName": "Sofia Quillon"
+      },
+      "ageFromMonths": 48,
+      "ageToMonths": 72,
+      "weekday": 1,
+      "startTime": "15:30",
+      "durationMinutes": 45,
+      "capacity": 10
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000060",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000053",
+      "roomId": "00000000-0000-7000-8000-000000000042",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-000000000048",
+        "displayName": "Alina Starling"
+      },
+      "accompanist": {
+        "id": "00000000-0000-7000-8000-00000000004f",
+        "displayName": "Felix Keysworth"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "weekday": 1,
+      "startTime": "16:30",
+      "durationMinutes": 60,
+      "capacity": 16
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000061",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000053",
+      "roomId": "00000000-0000-7000-8000-000000000042",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-000000000048",
+        "displayName": "Alina Starling"
+      },
+      "accompanist": {
+        "id": "00000000-0000-7000-8000-00000000004f",
+        "displayName": "Felix Keysworth"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "weekday": 1,
+      "startTime": "17:45",
+      "durationMinutes": 75,
+      "capacity": 16
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000062",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000057",
+      "roomId": "00000000-0000-7000-8000-000000000046",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004b",
+        "displayName": "Jonas Featherby"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "weekday": 1,
+      "startTime": "18:00",
+      "durationMinutes": 60,
+      "capacity": 20
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000063",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000053",
+      "roomId": "00000000-0000-7000-8000-000000000042",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-000000000048",
+        "displayName": "Alina Starling"
+      },
+      "accompanist": {
+        "id": "00000000-0000-7000-8000-00000000004f",
+        "displayName": "Felix Keysworth"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "weekday": 1,
+      "startTime": "19:15",
+      "durationMinutes": 90,
+      "capacity": 16
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000064",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000052",
+      "roomId": "00000000-0000-7000-8000-000000000043",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-000000000049",
+        "displayName": "Sofia Quillon"
+      },
+      "ageFromMonths": 72,
+      "ageToMonths": 96,
+      "weekday": 2,
+      "startTime": "16:00",
+      "durationMinutes": 45,
+      "capacity": 12
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000065",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000056",
+      "roomId": "00000000-0000-7000-8000-000000000046",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004d",
+        "displayName": "Nina Tapworth"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "weekday": 2,
+      "startTime": "17:00",
+      "durationMinutes": 60,
+      "capacity": 20
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000066",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000055",
+      "roomId": "00000000-0000-7000-8000-000000000042",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004a",
+        "displayName": "Marco Wrenfield"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "weekday": 2,
+      "startTime": "18:30",
+      "durationMinutes": 75,
+      "capacity": 18
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000067",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000059",
+      "roomId": "00000000-0000-7000-8000-000000000047",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004d",
+        "displayName": "Nina Tapworth"
+      },
+      "allLevels": true,
+      "weekday": 2,
+      "startTime": "19:00",
+      "durationMinutes": 60,
+      "capacity": 12
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000068",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000051",
+      "roomId": "00000000-0000-7000-8000-000000000044",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-000000000049",
+        "displayName": "Sofia Quillon"
+      },
+      "ageFromMonths": 48,
+      "ageToMonths": 72,
+      "weekday": 3,
+      "startTime": "15:30",
+      "durationMinutes": 45,
+      "capacity": 10
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000069",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000053",
+      "roomId": "00000000-0000-7000-8000-000000000042",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004c",
+        "displayName": "Lea Moonfield"
+      },
+      "accompanist": {
+        "id": "00000000-0000-7000-8000-000000000050",
+        "displayName": "Greta Ivorylane"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "weekday": 3,
+      "startTime": "16:30",
+      "durationMinutes": 75,
+      "capacity": 16
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000006a",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000054",
+      "roomId": "00000000-0000-7000-8000-000000000043",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004c",
+        "displayName": "Lea Moonfield"
+      },
+      "accompanist": {
+        "id": "00000000-0000-7000-8000-000000000050",
+        "displayName": "Greta Ivorylane"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "weekday": 3,
+      "startTime": "18:00",
+      "durationMinutes": 45,
+      "capacity": 12
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000006b",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000057",
+      "roomId": "00000000-0000-7000-8000-000000000046",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004b",
+        "displayName": "Jonas Featherby"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "weekday": 3,
+      "startTime": "18:30",
+      "durationMinutes": 60,
+      "capacity": 20
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000006c",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000053",
+      "roomId": "00000000-0000-7000-8000-000000000042",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004c",
+        "displayName": "Lea Moonfield"
+      },
+      "accompanist": {
+        "id": "00000000-0000-7000-8000-000000000050",
+        "displayName": "Greta Ivorylane"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005d",
+        "name": "Professional",
+        "code": "P"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005d",
+        "name": "Professional",
+        "code": "P"
+      },
+      "weekday": 3,
+      "startTime": "19:00",
+      "durationMinutes": 90,
+      "capacity": 16
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000006d",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000058",
+      "roomId": "00000000-0000-7000-8000-000000000047",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004d",
+        "displayName": "Nina Tapworth"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "weekday": 4,
+      "startTime": "16:00",
+      "durationMinutes": 60,
+      "capacity": 12
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000006e",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000055",
+      "roomId": "00000000-0000-7000-8000-000000000042",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004a",
+        "displayName": "Marco Wrenfield"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "weekday": 4,
+      "startTime": "17:00",
+      "durationMinutes": 60,
+      "capacity": 18
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000006f",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000053",
+      "roomId": "00000000-0000-7000-8000-000000000042",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-000000000048",
+        "displayName": "Alina Starling"
+      },
+      "accompanist": {
+        "id": "00000000-0000-7000-8000-00000000004f",
+        "displayName": "Felix Keysworth"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "weekday": 4,
+      "startTime": "18:30",
+      "durationMinutes": 90,
+      "capacity": 16
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000070",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000056",
+      "roomId": "00000000-0000-7000-8000-000000000046",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004a",
+        "displayName": "Marco Wrenfield"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "weekday": 4,
+      "startTime": "19:30",
+      "durationMinutes": 60,
+      "capacity": 20
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000071",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000052",
+      "roomId": "00000000-0000-7000-8000-000000000043",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-000000000049",
+        "displayName": "Sofia Quillon"
+      },
+      "ageFromMonths": 72,
+      "ageToMonths": 96,
+      "weekday": 5,
+      "startTime": "15:30",
+      "durationMinutes": 45,
+      "capacity": 12
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000072",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000053",
+      "roomId": "00000000-0000-7000-8000-000000000042",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004c",
+        "displayName": "Lea Moonfield"
+      },
+      "accompanist": {
+        "id": "00000000-0000-7000-8000-000000000050",
+        "displayName": "Greta Ivorylane"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "weekday": 5,
+      "startTime": "16:30",
+      "durationMinutes": 60,
+      "capacity": 16
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000073",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000057",
+      "roomId": "00000000-0000-7000-8000-000000000046",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004b",
+        "displayName": "Jonas Featherby"
+      },
+      "allLevels": true,
+      "weekday": 5,
+      "startTime": "17:45",
+      "durationMinutes": 60,
+      "capacity": 24
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000074",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000054",
+      "roomId": "00000000-0000-7000-8000-000000000043",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004c",
+        "displayName": "Lea Moonfield"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "weekday": 5,
+      "startTime": "18:00",
+      "durationMinutes": 75,
+      "capacity": 12
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000075",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000051",
+      "roomId": "00000000-0000-7000-8000-000000000044",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-000000000049",
+        "displayName": "Sofia Quillon"
+      },
+      "ageFromMonths": 48,
+      "ageToMonths": 72,
+      "weekday": 6,
+      "startTime": "10:00",
+      "durationMinutes": 45,
+      "capacity": 10
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000076",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000053",
+      "roomId": "00000000-0000-7000-8000-000000000042",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-000000000048",
+        "displayName": "Alina Starling"
+      },
+      "accompanist": {
+        "id": "00000000-0000-7000-8000-00000000004f",
+        "displayName": "Felix Keysworth"
+      },
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "weekday": 6,
+      "startTime": "10:00",
+      "durationMinutes": 90,
+      "capacity": 16
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000077",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000058",
+      "roomId": "00000000-0000-7000-8000-000000000047",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004d",
+        "displayName": "Nina Tapworth"
+      },
+      "allLevels": true,
+      "weekday": 6,
+      "startTime": "11:00",
+      "durationMinutes": 60,
+      "capacity": 12
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000078",
+      "termId": "00000000-0000-7000-8000-00000000005e",
+      "courseTypeId": "00000000-0000-7000-8000-000000000055",
+      "roomId": "00000000-0000-7000-8000-000000000042",
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004a",
+        "displayName": "Marco Wrenfield"
+      },
+      "allLevels": true,
+      "weekday": 6,
+      "startTime": "12:00",
+      "durationMinutes": 75,
+      "capacity": 18
+    }
+  ]
+}

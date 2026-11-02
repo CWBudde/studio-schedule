@@ -314,7 +314,8 @@ func (h *handlers) listLessonParticipants(
 }
 
 // NewLessonParticipants is the response body of listLessonParticipants: the
-// lesson's bookings and waiting list with the counts.
+// lesson's bookings and waiting list with the counts. The MCP server's lesson
+// tool and lesson://{id} resource return it too (ADR 0022).
 func NewLessonParticipants(lp service.LessonParticipants) LessonParticipants {
 	body := LessonParticipants{
 		LessonID: lp.Lesson.ID, Capacity: lp.Lesson.Capacity, Active: lp.Active, Held: lp.Held,

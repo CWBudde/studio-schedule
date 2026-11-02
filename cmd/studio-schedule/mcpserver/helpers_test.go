@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"log/slog"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/cwbudde/studio-schedule/internal/app"
@@ -270,6 +272,71 @@ func wantError(t *testing.T, cs *mcp.ClientSession, name string, args any, want 
 	if text, isError := callTool(t, cs, name, args); !isError || text != want {
 		t.Errorf("call %s %v: result %q (error %t), want the error %q", name, args, text, isError, want)
 	}
+}
+
+// resourceURIs lists the resources of cs and the URI templates of its
+// resource templates, each sorted.
+func resourceURIs(t *testing.T, cs *mcp.ClientSession) (uris, templates []string) {
+	t.Helper()
+
+	res, err := cs.ListResources(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, r := range res.Resources {
+		uris = append(uris, r.URI)
+	}
+
+	tmpl, err := cs.ListResourceTemplates(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, r := range tmpl.ResourceTemplates {
+		templates = append(templates, r.URITemplate)
+	}
+
+	slices.Sort(uris)
+	slices.Sort(templates)
+
+	return uris, templates
+}
+
+// readResource reads uri and returns its one content, or the JSON-RPC
+// error of a failed read; any other error, or a result of more or fewer
+// contents, fails the test.
+func readResource(t *testing.T, cs *mcp.ClientSession, uri string) (*mcp.ResourceContents, *jsonrpc.Error) {
+	t.Helper()
+
+	res, err := cs.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: uri})
+	if err != nil {
+		var rpcErr *jsonrpc.Error
+		if !errors.As(err, &rpcErr) {
+			t.Fatalf("read %s: %v (%T)", uri, err, err)
+		}
+
+		return nil, rpcErr
+	}
+
+	if len(res.Contents) != 1 {
+		t.Fatalf("read %s: %d contents", uri, len(res.Contents))
+	}
+
+	return res.Contents[0], nil
+}
+
+// readText reads uri and returns the text of its content; a failed read
+// fails the test.
+func readText(t *testing.T, cs *mcp.ClientSession, uri string) string {
+	t.Helper()
+
+	c, rpcErr := readResource(t, cs, uri)
+	if rpcErr != nil {
+		t.Fatalf("read %s: %v", uri, rpcErr)
+	}
+
+	return c.Text
 }
 
 // toolCalls returns the mcp-tool-called events of st, oldest first.

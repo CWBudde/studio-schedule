@@ -1,0 +1,10 @@
+{
+  "schoolName": "Studio Demo — Ballet \u0026 Dance",
+  "legalNotice": "Studio Demo Dance School · Pirouette Lane 7 · 10999 Exampletown\nA fictional school: every name, address and number in this demo is made up.",
+  "theme": "programme",
+  "hasLogo": false,
+  "hasBackground": false,
+  "timezone": "Europe/Berlin",
+  "defaultLocale": "en",
+  "currency": "EUR"
+}
