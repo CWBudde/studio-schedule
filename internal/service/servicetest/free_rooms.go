@@ -22,6 +22,7 @@ func FreeRooms(t *testing.T, newStore func(t *testing.T) store.Store) {
 	for name, fn := range map[string]func(t *testing.T, r freeRoomsWorld){
 		"Overlap":         freeRoomsOverlap,
 		"Excluded":        freeRoomsExcluded,
+		"PreviousDay":     freeRoomsPreviousDay,
 		"Rental":          freeRoomsRental,
 		"Hidden":          freeRoomsHidden,
 		"Locations":       freeRoomsLocations,
@@ -166,6 +167,16 @@ func freeRoomsExcluded(_ *testing.T, r freeRoomsWorld) {
 	r.lesson(r.roomTwo, freeDate.AddDays(-1), domain.TimeOfDay{Hour: 18}, time.Hour, nil)
 
 	r.wantFree(domain.TimeOfDay{Hour: 18}, time.Hour, r.roomOne, r.roomTwo)
+}
+
+// freeRoomsPreviousDay: a lesson that starts on the date before, at 23:00,
+// and runs past midnight takes its room on the date until it ends, so
+// FreeRooms must look at the overlap, not at the lessons of the date.
+func freeRoomsPreviousDay(_ *testing.T, r freeRoomsWorld) {
+	r.lesson(r.roomOne, freeDate.AddDays(-1), domain.TimeOfDay{Hour: 23}, 2*time.Hour, nil)
+
+	r.wantFree(domain.TimeOfDay{Minute: 30}, time.Hour, r.roomTwo)
+	r.wantFree(domain.TimeOfDay{Hour: 1}, time.Hour, r.roomOne, r.roomTwo)
 }
 
 // freeRoomsRental: a room rental, without instructor, capacity or course
