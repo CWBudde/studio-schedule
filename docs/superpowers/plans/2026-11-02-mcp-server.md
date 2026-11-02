@@ -450,7 +450,46 @@ PLAN.md Phase 12, "Read tools": "rooms free at a time". This task needs Task 1.1
 
 ## Task 2.3
 
-- [ ] 2.3 `mcp-resources` MCP resources: the school settings, the current term's timetable, the glossary, and the templates `lesson://{id}` and `person://{id}` — see "Task 2.3".
+- [x] 2.3 `mcp-resources` MCP resources: the school settings, the current term's timetable, the glossary, and the templates `lesson://{id}` and `person://{id}` — see "Task 2.3".
+  - Done: `mcpserver/resources.go`, a `resource` registry listed like the tools (`Server.lists` now
+    takes the access level, personal data and write group). `call` became a thin wrapper of
+    `run(ctx, callee, fn)`, which tools and resource reads share: actor again, role check, one
+    `mcp-tool-called` row under the tool's name or the resource's URI template. A `markdown`
+    document is returned as it is. The resources:
+    - `school://glossary` (public, `text/markdown`): `docs/glossary.md` through the new
+      `package docs` (`docs/glossary.go`, `//go:embed`).
+    - `school://timetable` (public): listClasses of the current term, since that operation is
+      public. Parity: `classes list` without the retired classes and their `retired` key (the test
+      retires one, as the demo has none).
+    - `school://settings` (signedIn): the `settings get --output json` document for the office and
+      admins, getPublicSettings below, by the current role (parity with both).
+    - `lesson://{id}` (staff, personal data): listLessonParticipants, which Task 2.1's `lesson` tool
+      returns too, with the service's `manages` check.
+    - `person://{id}` (office, personal data): `persons show` without `birthDate` (parity).
+
+    New exported converters `httpapi.NewPublicSettings`, `NewClassList` and
+    `NewLessonParticipants`, extracted from their handlers. A failed read is a JSON-RPC error, as
+    a read has no error result: not found and a bad ID are invalid params (the SDK's
+    `CodeResourceNotFound` is deprecated and equals it), a refusal an invalid request, the rest
+    internal. Tests: `mcpserver/resources_test.go` (registry, listing per role and flag, unlisted
+    templates unreadable and unaudited, every read with goldens, the audit rows, unknown, empty
+    and `Zebulon` IDs, refusal mid-session, store and audit failures), and `TestMCPResource*` and
+    `TestMCPLessonResource` in `mcp_test.go` on both stores. Coverage 99.0 % total; `mcpserver`
+    100 %.
+
+    Discoveries:
+    - The SDK answers a read of an unlisted resource like an unknown one ("Resource not found",
+      no audit row), so Review focus 3 holds without code of ours.
+    - An empty `{id}` (`person://`) matches the template and reaches the service as the zero ID:
+      not found, not invalid (pinned).
+    - A not-found message repeats the ID it read; it reaches the client only, never the log or the
+      audit.
+
+    Residual gaps:
+    - The timetable names course types and rooms by ID only, as listClasses does; no read tool
+      lists the catalogue yet.
+    - If Task 2.1 merges first, keep one `httpapi.NewLessonParticipants` and point the `lesson`
+      tool and `lesson://{id}` at it.
 
 PLAN.md Phase 12, "Resources". This task needs Task 1.1 on main.
 
