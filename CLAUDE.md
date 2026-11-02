@@ -27,6 +27,7 @@ go run ./cmd/studio-schedule init  # new school: settings + first admin (prints 
 go run ./cmd/studio-schedule doctor  # check a deployment (config check: the effective configuration)
 go run ./cmd/studio-schedule db check  # integrity of the data (also: receipts verify); exit 1 on a finding
 go run ./cmd/studio-schedule lessons list --as office@example.org  # an admin command acts as --as (env STUDIO_AS)
+go run ./cmd/studio-schedule mcp --as office@example.org  # MCP server over stdio for an assistant (docs/mcp.md)
 just test-pg     # PostgreSQL store tests only (Docker via testcontainers, or STUDIO_TEST_DATABASE_URL)
 just typst-wasm  # after changing tools/receipt-pdf: rebuild receipt.wasm reproducibly (Docker; Git LFS)
 just sqlc        # after changing internal/store/postgres/{migrations,queries}: regenerate sqlc code
@@ -248,6 +249,16 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
     `names.go` (`deletedPersonName`, `shownName`, `personName`, `yesNo`), `files.go`
     (`outputFile`: `--file`/`-f` and `--force`, mode 0600; `-o` is `--output`), and
     `cli.Reported` (a report that says it failed: exit 1, no problem document).
+- **MCP server:** ADR 0022; docs/mcp.md. `cmd/studio-schedule/mcp.go` is the command (stdio,
+  `--as`, `--personal-data`, `--allow-writes` validated against the write groups; no `--output`, no
+  `--yes`). `cmd/studio-schedule/mcpserver`: `New`/`Options`, the `tool` registry in `tool.go`
+  (access level, `personalData`, `write` group; a tool not listed under the flags is not
+  registered), and the call wrapper `(*Server).call`: `cli.Env.Actor` again on every call, the
+  current role against the tool's level, then `AuthService.RecordToolCall` → `mcp-tool-called` with
+  `domain.ChannelMCP` and the outcome, never the arguments. The tools (`tools_*.go`) call the
+  services and return the `httpapi.New…` documents of the commands they mirror (parity tests in
+  `cmd/studio-schedule/mcp_test.go`, goldens in `mcpserver/testdata`); `cmd/studio-schedule/diagnose`
+  computes the `doctor` and `db check` reports for both.
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),
