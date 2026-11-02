@@ -69,6 +69,11 @@ const (
 	// registrations and sessions. It has no target; the details name the
 	// event.
 	AuditEventCanceled AuditAction = "event-canceled"
+	// AuditMCPToolCalled: an account called a tool of the MCP server (ADR
+	// 0022), reads included. It has no target, so the log does not reveal
+	// whom a search looked for; the details name the tool and the outcome,
+	// never the arguments, and Via the MCP channel.
+	AuditMCPToolCalled AuditAction = "mcp-tool-called"
 )
 
 // AuditActions returns all audit actions.
@@ -77,7 +82,7 @@ func AuditActions() []AuditAction {
 		AuditImpersonationStarted, AuditImpersonationEnded, AuditMailRequeued, AuditPersonMerged,
 		AuditPersonAnonymized, AuditAccountDisabled, AuditAccountEnabled, AuditAccountRoleChanged, AuditAccountDeleted,
 		AuditPasswordResetIssued, AuditSessionsRevoked, AuditSetupLinkIssued, AuditEventRegistrationAdded,
-		AuditEventRegistrationCanceled, AuditEventRegistrationPaid, AuditEventCanceled,
+		AuditEventRegistrationCanceled, AuditEventRegistrationPaid, AuditEventCanceled, AuditMCPToolCalled,
 	}
 }
 
@@ -161,12 +166,18 @@ func (k AuditTargetKind) Valid() bool { return slices.Contains(AuditTargetKinds(
 // AuditChannel is how an actor reached the app, when not through the API.
 type AuditChannel string
 
-// ChannelCLI is the command line (ADR 0020): a command run as an account
-// with --as.
-const ChannelCLI AuditChannel = "cli"
+// Known channels.
+const (
+	// ChannelCLI is the command line (ADR 0020): a command run as an
+	// account with --as.
+	ChannelCLI AuditChannel = "cli"
+	// ChannelMCP is the MCP server (ADR 0022): a tool an assistant called
+	// as the account of `mcp --as`.
+	ChannelMCP AuditChannel = "mcp"
+)
 
 // AuditChannels returns all channels.
-func AuditChannels() []AuditChannel { return []AuditChannel{ChannelCLI} }
+func AuditChannels() []AuditChannel { return []AuditChannel{ChannelCLI, ChannelMCP} }
 
 // Valid reports whether c is a known channel.
 func (c AuditChannel) Valid() bool { return slices.Contains(AuditChannels(), c) }
@@ -210,6 +221,10 @@ type AuditDetails struct {
 	// Refund tells that AuditEventRegistrationCanceled refunded the fee by
 	// a Storno of its receipt.
 	Refund bool `json:"refund,omitempty"`
+	// Tool and Outcome are the tool of AuditMCPToolCalled and how the call
+	// ended: "ok" or the kind of its error (ADR 0022).
+	Tool    string `json:"tool,omitempty"`
+	Outcome string `json:"outcome,omitempty"`
 	// Via is the channel the actor acted through, for any action; zero for
 	// the API.
 	Via AuditVia `json:"via,omitzero"`
@@ -309,6 +324,15 @@ func (e AuditEvent) Validate() error {
 		rule{
 			!e.Details.Refund || e.Action == AuditEventRegistrationCanceled,
 			"only a canceled registration records a refund",
+		},
+		rule{
+			(e.Action == AuditMCPToolCalled) == (e.Details.Tool != "" || e.Details.Outcome != "") &&
+				(e.Action != AuditMCPToolCalled || e.Details.Tool != "" && e.Details.Outcome != ""),
+			"a tool call names the tool and its outcome, and only a tool call does",
+		},
+		rule{
+			e.Action != AuditMCPToolCalled || e.TargetKind == "" && e.Details.Via.Channel == ChannelMCP,
+			"a tool call has no target and comes through the MCP channel",
 		},
 	)
 }
