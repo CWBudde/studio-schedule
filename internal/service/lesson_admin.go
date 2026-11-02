@@ -226,13 +226,18 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 
 		now := s.clock.Now()
 
-		active, held, err := places(ctx, tx, now, l.ID)
+		rental, err := becomesRental(ctx, tx, old, l)
 		if err != nil {
 			return err
 		}
 
-		if err := becomesRental(ctx, tx, old, l); err != nil {
-			return err
+		// A lesson that becomes a rental has no bookings and no waiting
+		// list, so nothing is active or held either.
+		var active, held int
+		if !rental {
+			if active, held, err = places(ctx, tx, now, l.ID); err != nil {
+				return err
+			}
 		}
 
 		if err := sessionFields(ctx, tx, l); err != nil {
@@ -582,30 +587,32 @@ func sessionFields(ctx context.Context, tx store.Tx, l domain.Lesson) error {
 	return nil
 }
 
-// becomesRental refuses to make old, which is no room rental, the rental
-// l while bookings (canceled ones included) or its waiting list refer to
-// it: a rental takes neither (ADR 0007, amendment). A validation error on
-// kind.
-func becomesRental(ctx context.Context, tx store.Tx, old, l domain.Lesson) error {
+// becomesRental reports whether old, which is no room rental, becomes the
+// rental l, and refuses it while bookings (canceled ones included) or its
+// waiting list refer to it: a rental takes neither (ADR 0007, amendment).
+// A validation error on kind. Otherwise it reads nothing.
+func becomesRental(ctx context.Context, tx store.Tx, old, l domain.Lesson) (bool, error) {
 	if l.Kind != domain.LessonRental || old.Kind == domain.LessonRental {
-		return nil
+		return false, nil
 	}
 
 	booked, err := hasBookings(ctx, tx, l.ID)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	open, err := tx.Waitlist().ListOpenByLessons(ctx, []domain.LessonID{l.ID})
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if booked || len(open) > 0 {
-		return &domain.FieldError{Field: "kind", Msg: "a lesson with bookings or a waiting list cannot become a room rental"}
+		return false, &domain.FieldError{
+			Field: "kind", Msg: "a lesson with bookings or a waiting list cannot become a room rental",
+		}
 	}
 
-	return nil
+	return true, nil
 }
 
 // confirmPast returns ErrLessonPast if l does not start in the future and
