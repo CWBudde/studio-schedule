@@ -58,6 +58,21 @@ export function minutesSinceMidnight(instant: Instant, timeZone: string): number
   return Number(p.hour) * 60 + Number(p.minute);
 }
 
+const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Whether v is a school date ('YYYY-MM-DD') that exists: 2026-02-30 is not
+ * one, and neither is a date of the year 0000, which the API refuses
+ * (years 1 to 9999). A date input never holds such a value, but a URL
+ * search param, a pasted value or a stored one can. Every form's date field
+ * checks it.
+ */
+export function isSchoolDate(v: string): boolean {
+  if (!datePattern.test(v) || v.startsWith('0000')) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
 function utcDate(date: SchoolDate): Date {
   const [y = 0, m = 1, d = 1] = date.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d));

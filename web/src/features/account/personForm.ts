@@ -4,22 +4,25 @@ import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { type FamilyPerson, type PersonData, publicSettingsQuery } from '@/api/queries';
 import { invalidFields, useFieldErrorText } from '@/features/auth/form';
-import { type SchoolDate, todayIn } from '@/lib/schoolTime';
+import { isSchoolDate, type SchoolDate, todayIn } from '@/lib/schoolTime';
 
 // Limits as in the API (PersonData).
 const name = z.string().trim().min(1, 'required').max(100, 'tooLong');
 
 /**
  * The person data of the profile and dependent forms. Empty phone and birth
- * date mean "none". The birth date must not be after `today` (the school's
- * date); while that is unknown, the API decides.
+ * date mean "none". The birth date must exist and must not be after `today`
+ * (the school's date); while that is unknown, the API decides the latter.
  */
 export const personSchema = (today: SchoolDate | undefined) =>
   z.object({
     givenName: name,
     familyName: name,
     phone: z.string().trim().max(50, 'tooLong'),
-    birthDate: z.string().refine((d) => !today || d === '' || d <= today, 'birthDateFuture'),
+    birthDate: z
+      .string()
+      .refine((d) => d === '' || isSchoolDate(d), { message: 'date', abort: true })
+      .refine((d) => !today || d === '' || d <= today, 'birthDateFuture'),
   });
 
 export type PersonValues = z.infer<ReturnType<typeof personSchema>>;
@@ -57,9 +60,9 @@ export function useSchoolToday(): SchoolDate | undefined {
 const personFields = ['givenName', 'familyName', 'phone', 'birthDate'] as const;
 
 /**
- * Marks the fields a 422 answer of a person operation refuses. The date
- * input only sends well-formed dates, so a refused birth date is one in the
- * future.
+ * Marks the fields a 422 answer of a person operation refuses. The form
+ * only sends existing dates (the date input and the schema refuse others),
+ * so a refused birth date is one in the future.
  */
 export function showPersonErrors(error: unknown, form: UseFormReturn<PersonValues>) {
   for (const field of invalidFields(error, personFields)) {
@@ -75,5 +78,7 @@ export function usePersonErrorText() {
   const { t } = useTranslation('account');
   const errorText = useFieldErrorText();
   return (error: FieldError | undefined): string | undefined =>
-    error?.message === 'birthDateFuture' ? t('person.errors.birthDateFuture') : errorText(error);
+    error?.message === 'birthDateFuture' || error?.message === 'date'
+      ? t(`person.errors.${error.message}`)
+      : errorText(error);
 }

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ClassMemberData } from '@/api/queries';
+import { isSchoolDate } from '@/lib/schoolTime';
 
 // Messages are keys of `auth:form.errors` or `admin:form.errors` (see
 // useAdminErrorText).
@@ -7,7 +8,7 @@ import type { ClassMemberData } from '@/api/queries';
 /** The form that adds a member to a class: a person and, if known, since when. */
 export const classMemberSchema = z.object({
   personId: z.string().min(1, 'choosePerson'),
-  since: z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/, 'invalid'),
+  since: z.string().refine((v) => v === '' || isSchoolDate(v), 'date'),
 });
 
 export type ClassMemberValues = z.infer<typeof classMemberSchema>;

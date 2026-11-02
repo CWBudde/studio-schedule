@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { isSchoolDate } from '@/lib/schoolTime';
 
-const schoolDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const schoolDate = z.string().refine(isSchoolDate);
 
 /**
  * Search params of /schedule. Everything is optional so URLs stay short;

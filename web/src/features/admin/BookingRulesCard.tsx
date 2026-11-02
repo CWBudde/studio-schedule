@@ -32,6 +32,7 @@ import {
   formatDate,
   formatDateTime,
   formatDayHeading,
+  isSchoolDate,
   schoolDateOf,
 } from '@/lib/schoolTime';
 import { SelectField } from './crud/fields';
@@ -40,7 +41,6 @@ import { useDescription } from './crud/useDescription';
 import { Section } from './PersonSection';
 import {
   durations,
-  isSchoolDate,
   maxReleasedThroughDays,
   type RulesField,
   rulesSchemaUntil,

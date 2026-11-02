@@ -9,6 +9,7 @@ import type {
   SchoolSettings,
 } from '@/api/queries';
 import { accentContrast, minAccentContrast, parseColor } from '@/lib/color';
+import { isSchoolDate } from '@/lib/schoolTime';
 
 // Limits as in the API (SchoolSettings, BrandingSettingsData,
 // RegionalSettingsData, BookingRulesData). Messages are keys of
@@ -136,15 +137,6 @@ export const durations = [
     message: 'inviteExpiry',
   },
 ] as const;
-
-const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-
-/** Whether v is a school date (YYYY-MM-DD) that exists. */
-export function isSchoolDate(v: string): boolean {
-  if (!datePattern.test(v)) return false;
-  const d = new Date(`${v}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
-}
 
 /** How many days after today the released-through date may lie: 52 weeks, as in the API. */
 export const maxReleasedThroughDays = 7 * 52;

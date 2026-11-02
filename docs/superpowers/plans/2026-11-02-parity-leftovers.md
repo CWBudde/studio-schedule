@@ -117,7 +117,7 @@ only (review). Now the zero ID is dropped from the wanted set once, and the cont
 
 ## Task 1.3
 
-- [ ] 1.3 `school-date` Web: one school-date check in `lib/schoolTime.ts`, used by every form with a date field, so that a date that does not exist (2026-02-30) is refused everywhere — see "Task 1.3".
+- [x] 1.3 `school-date` Web: one school-date check in `lib/schoolTime.ts`, used by every form with a date field, so that a date that does not exist (2026-02-30) is refused everywhere — see "Task 1.3".
 
 PLAN.md, Phase 15, "Review leftovers", the web sub-item. Today only the booking-rules card refuses
 a date that does not exist, through `isSchoolDate` in `web/src/features/admin/settingsForms.ts`.
@@ -130,6 +130,23 @@ custom range, announcements, person birth dates). A date input normally cannot p
 2026-02-30, but typed or pasted values and URL search params can; a test per form feeds one and
 expects the field's translated error. Reuse the existing `date` error key where a form has one,
 otherwise add the key to both locales.
+
+**Done** (closes PLAN.md, Phase 15, "Review leftovers", the web sub-item). `isSchoolDate` lives in
+`lib/schoolTime.ts` with its own tests, and every date-only field uses it: the booking rules, clone,
+lesson, term, pass (`validFrom`), class member (`since`), both person forms' birth date, the
+announcement's publication, expiry and lesson dates, the statistics' custom range (was
+`z.iso.date()`), and the `from` param of `/schedule` and `/teach`. Admin forms report `date` ("Enter
+a date."; term, pass and class member said `invalid` before, also for a malformed date); the
+profile and dependent forms got `account:person.errors.date` (en, de); the announcement form
+reuses the admin `date` through its error hook (now `useAnnouncementErrorText`, exported to test
+it). 43 new test cases in 16 test files; `just web-check` 138 files, 1438 tests; e2e 245 passed.
+Discoveries: a date input cannot hold 2026-02-30 (the HTML value sanitization empties it, in jsdom
+too), so the per-form tests feed the schemas, and the URL tests (schedule, statistics) the pages.
+Before, the clone form took 2026-02-30 as a Monday and switching to weeks turned it into 2026-03-02,
+and the announcement form made it an instant in March. zod 4 runs an object's `superRefine` even
+after a field failed, so the clone form's `isSchoolDate` guard there stays. Left alone: the
+cancel-following dialog (only a date input and the server's preview date reach the API), the
+statistics page's draft (a URL value is dropped before it gets there).
 
 ---
 
