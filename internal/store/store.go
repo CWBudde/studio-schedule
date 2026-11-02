@@ -604,7 +604,7 @@ type LessonRepo interface {
 	ListByEvents(ctx context.Context, events []domain.EventID) ([]domain.Lesson, error)
 	// ListByStaff returns the lessons with from <= StartsAt < to whose
 	// instructor or accompanist is one of the staff members, ordered by
-	// StartsAt and ID.
+	// StartsAt and ID. The zero ID matches no lesson.
 	ListByStaff(ctx context.Context, staff []domain.StaffID, from, to time.Time) ([]domain.Lesson, error)
 	// ListRoomOverlaps returns the lessons in the room that are not
 	// canceled and overlap [from, to) (StartsAt < to and EndsAt > from),

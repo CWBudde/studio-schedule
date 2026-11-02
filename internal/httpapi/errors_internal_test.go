@@ -160,6 +160,34 @@ func TestToHTTPError(t *testing.T) {
 	}
 }
 
+// TestToHTTPErrorJoinedFields: field errors joined into one error give one
+// 422 with a detail per field, in the order they were joined.
+func TestToHTTPErrorJoinedFields(t *testing.T) {
+	t.Parallel()
+
+	kind := &domain.FieldError{Field: "kind", Msg: "a room rental without a course type cannot become another kind"}
+	date := &domain.FieldError{Field: "date", Msg: "invalid date"}
+
+	h := &handlers{deps: Deps{Logger: slog.New(slog.DiscardHandler)}}
+	err := h.toHTTPError(context.Background(), fmt.Errorf("update lesson: %w", errors.Join(kind, date)))
+
+	var problem *ErrorModel
+	if !errors.As(err, &problem) || problem.Status != http.StatusUnprocessableEntity || problem.Detail != "validation failed" {
+		t.Fatalf("error = %#v, want a 422 validation failed", err)
+	}
+
+	want := []huma.ErrorDetail{{Message: kind.Msg, Location: "body.kind"}, {Message: date.Msg, Location: "body.date"}}
+	if len(problem.Errors) != len(want) {
+		t.Fatalf("details %+v, want %+v", problem.Errors, want)
+	}
+
+	for i, w := range want {
+		if got := problem.Errors[i]; got.Message != w.Message || got.Location != w.Location || got.Value != nil {
+			t.Errorf("detail %d = %+v, want %+v", i, got, w)
+		}
+	}
+}
+
 // TestNewProblemSkipsNilErrors: like huma.NewError, a nil error among the
 // details is left out; an ErrorDetailer gives its own detail, any other
 // error its message.

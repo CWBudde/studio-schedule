@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -357,6 +358,15 @@ func TestRentalWithoutCourseType(t *testing.T) {
 
 		_, err := svc.UpdateLesson(ctx, rental.Lesson.ID, d)
 		wantFieldError(t, err, "kind")
+
+		// With another field error, both are reported, not the kind alone;
+		// the missing course type the kind would need is not one of them.
+		d.Date, d.Duration = domain.Date{Year: 2026, Month: 2, Day: 30}, 0
+
+		_, err = svc.UpdateLesson(ctx, rental.Lesson.ID, d)
+		if got := fieldsOf(err); !slices.Equal(got, []string{"kind", "date"}) {
+			t.Fatalf("fields %v (%v), want kind and date", got, err)
+		}
 
 		d = f.rentalData()
 		d.Renter = "Juniper Players"
