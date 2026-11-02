@@ -168,6 +168,11 @@ type Spec struct {
 	// must reach the level. Empty: an operator command, which takes no
 	// --as.
 	Access httpapi.Access
+	// Channel is the channel the account of --as acts through, which its
+	// principal's Via names and the audit events it causes record; zero is
+	// the command line's, domain.ChannelCLI. The MCP server's is
+	// domain.ChannelMCP (ADR 0022).
+	Channel domain.AuditChannel
 	// Store opens the database (Env.Services). A command with Access opens
 	// it in any case.
 	Store bool
@@ -198,6 +203,14 @@ func (a *App) Command(spec Spec) *cobra.Command {
 		if _, ok := spec.Access.MinRole(); !ok {
 			panic("cli: command " + spec.Use + " has an unknown access level " + string(spec.Access))
 		}
+	}
+
+	if spec.Channel == "" {
+		spec.Channel = domain.ChannelCLI
+	}
+
+	if !spec.Channel.Valid() {
+		panic("cli: command " + spec.Use + " has an unknown channel " + string(spec.Channel))
 	}
 
 	args := spec.Args
@@ -280,6 +293,9 @@ type Env struct {
 	cfg config.Config
 	st  store.Store
 	pdf *lazyPDF
+	// spec is the command's Spec, whose access level and channel Actor
+	// checks the account of --as against.
+	spec Spec
 }
 
 // Stderr is where prompts and messages beside the result go.
@@ -466,7 +482,7 @@ func (a *App) run(ctx context.Context, cmd *cobra.Command, spec Spec, args []str
 		return err
 	}
 
-	env := &Env{Out: out, Clock: a.sys.Clock, app: a, cmd: cmd, in: bufio.NewReader(cmd.InOrStdin())}
+	env := &Env{Out: out, Clock: a.sys.Clock, app: a, cmd: cmd, in: bufio.NewReader(cmd.InOrStdin()), spec: spec}
 
 	if spec.Access == "" && cmd.Flags().Changed(config.FlagAs) {
 		return Usagef("--as: %s acts as no account", cmd.CommandPath())
@@ -540,7 +556,7 @@ func (a *App) open(ctx context.Context, cmd *cobra.Command, spec Spec, env *Env)
 	}
 
 	if spec.Access != "" {
-		if env.Principal, err = a.actor(ctx, env, spec.Access, cfg.As); err != nil {
+		if env.Principal, err = env.Actor(ctx); err != nil {
 			release()
 
 			return nil, err
@@ -594,16 +610,27 @@ func (a *App) schoolTime(ctx context.Context, env *Env) error {
 	return nil
 }
 
-// actor resolves the account of email as the command line's principal and
-// checks its role against access: an unknown, unconfirmed or disabled
-// account is not found (exit 3), a role too low forbidden (exit 4).
-func (a *App) actor(ctx context.Context, env *Env, access httpapi.Access, email string) (service.Principal, error) {
-	p, err := env.Services.Auth.Actor(ctx, email, domain.AuditVia{Channel: domain.ChannelCLI, OSUser: a.sys.OSUser})
+// Actor resolves the account of --as through AuthService.Actor, as the
+// principal of the Spec's channel with the OS user, and checks its role
+// against the Spec's access level: an unknown, unconfirmed or disabled
+// account is not found (exit 3), a role too low forbidden (exit 4). The
+// layer calls it before Run; a process that runs for long, the MCP server
+// (ADR 0022), calls it again before each piece of work, so an account
+// disabled or demoted since the start loses access at once. The Spec must
+// have an access level.
+func (e *Env) Actor(ctx context.Context) (service.Principal, error) {
+	if e.spec.Access == "" {
+		return service.Principal{}, fmt.Errorf("cli: %s acts as no account", e.cmd.CommandPath())
+	}
+
+	email := e.cfg.As
+
+	p, err := e.Services.Auth.Actor(ctx, email, domain.AuditVia{Channel: e.spec.Channel, OSUser: e.app.sys.OSUser})
 	if err != nil {
 		return service.Principal{}, fmt.Errorf("--as %s: %w", email, err)
 	}
 
-	minimum, _ := access.MinRole()
+	minimum, _ := e.spec.Access.MinRole()
 	if !p.Role.AtLeast(minimum) {
 		return service.Principal{}, fmt.Errorf("--as %s: %w: the account's role %s is below %s, which this command needs",
 			email, domain.ErrForbidden, p.Role, minimum)

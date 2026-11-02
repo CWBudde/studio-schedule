@@ -40,6 +40,17 @@ var ErrUsage = errors.New("usage")
 // neither DATABASE_URL nor --database-url names one.
 var ErrNoDatabaseURL = Usage(errors.New("no database URL: set " + config.EnvDatabaseURL + " or --database-url"))
 
+// The errors of an Opener whose database's schema does not match the
+// binary's migrations (serve refuses to start on them, doctor reports them).
+var (
+	// ErrSchemaOutdated: the database lacks migrations that the binary
+	// embeds.
+	ErrSchemaOutdated = errors.New("the database schema is not up to date: run `studio-schedule migrate up`")
+	// ErrSchemaNewer: the database has migrations that the binary does not
+	// embed.
+	ErrSchemaNewer = errors.New("the database schema is newer than this binary: run a newer studio-schedule")
+)
+
 // usageError is an error that is a usage error without saying so.
 type usageError struct{ err error }
 
