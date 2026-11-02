@@ -14,9 +14,9 @@ func receiptTools() []tool {
 		description: "The receipts issued on the school dates from from through to, both inclusive, newest " +
 			"first, as `receipts list` lists them (the body of searchReceipts): number, issue date, kind " +
 			"(sale, or cancellation for a storno), the recipient printed on it, the amounts, the payment " +
-			"method, and the receipt a storno cancels or the storno that canceled a receipt; total is their " +
-			"number, years the years with receipts. Without to the range ends today in the school's time " +
-			"zone, without from it starts on January 1 of the year of to.",
+			"method, and the receipt a storno cancels or the storno that canceled a receipt; total is the " +
+			"number of receipts, and years lists the years that have receipts. Without to the range ends " +
+			"today in the school's time zone, without from it starts on January 1 of the year of to.",
 		access:       httpapi.AccessOffice,
 		personalData: true,
 		annotations:  readOnly("Receipts"),
