@@ -326,15 +326,6 @@ func (r bookingRepo) CountLateCanceledByLessons(
 	return out, nil
 }
 
-func (r bookingRepo) CountActivePersons(ctx context.Context, lessons []domain.LessonID) (int, error) {
-	n, err := r.q.CountActiveBookingPersons(ctx, pgIDs(lessons))
-	if err != nil {
-		return 0, mapErr(err)
-	}
-
-	return int(n), nil
-}
-
 func (r bookingRepo) CountsByPersons(
 	ctx context.Context, lessons []domain.LessonID,
 ) (map[domain.PersonID]store.PersonBookingCounts, error) {

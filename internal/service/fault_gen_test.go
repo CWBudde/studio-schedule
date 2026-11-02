@@ -1175,14 +1175,6 @@ func (r *faultBookingRepo) CountLateCanceledByLessons(a0 context.Context, a1 []d
 	return r.BookingRepo.CountLateCanceledByLessons(a0, a1)
 }
 
-func (r *faultBookingRepo) CountActivePersons(a0 context.Context, a1 []domain.LessonID) (r0 int, err error) {
-	if err = r.f.hit("Bookings.CountActivePersons"); err != nil {
-		return r0, err
-	}
-
-	return r.BookingRepo.CountActivePersons(a0, a1)
-}
-
 func (r *faultBookingRepo) CountsByPersons(a0 context.Context, a1 []domain.LessonID) (r0 map[domain.PersonID]store.PersonBookingCounts, err error) {
 	if err = r.f.hit("Bookings.CountsByPersons"); err != nil {
 		return r0, err

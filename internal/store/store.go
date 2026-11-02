@@ -649,10 +649,6 @@ type BookingRepo interface {
 	// canceled late, for each of the given lessons that has one; other
 	// lessons (and those that do not exist) are left out.
 	CountLateCanceledByLessons(ctx context.Context, lessons []domain.LessonID) (map[domain.LessonID]int, error)
-	// CountActivePersons returns how many different persons have an active
-	// (not canceled) booking in any of the given lessons; guests do not
-	// count.
-	CountActivePersons(ctx context.Context, lessons []domain.LessonID) (int, error)
 	// CountsByPersons returns, by person, the counts of their bookings in
 	// any of the given lessons, for each person with an active (not
 	// canceled) or a late-canceled booking there; guests do not count.
