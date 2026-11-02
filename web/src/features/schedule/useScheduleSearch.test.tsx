@@ -40,4 +40,10 @@ describe('useScheduleSearch', () => {
       JSON.stringify({ courseType: ids.ballet }),
     );
   });
+
+  it('drops a first date that does not exist', async () => {
+    renderAtSchedule(<Probe />, { from: '2026-02-30', view: 'week' });
+
+    expect(await screen.findByRole('status')).toHaveTextContent(JSON.stringify({ view: 'week' }));
+  });
 });
