@@ -92,7 +92,7 @@ func TestFreeRoomsGolden(t *testing.T) {
 	f := newFixture(t)
 	args := map[string]any{"date": "2026-09-22", "start": "18:00", "durationMinutes": 60}
 
-	text, isError := callTool(t, f.session(t, demoMember, Options{}, registry), "free_rooms", args)
+	text, isError := callTool(t, f.session(t, demoInstructor, Options{}, registry), "free_rooms", args)
 	if isError {
 		t.Fatalf("error result %q", text)
 	}
@@ -111,7 +111,7 @@ func TestFreeRooms(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
-	cs := f.session(t, demoMember, Options{}, registry)
+	cs := f.session(t, demoInstructor, Options{}, registry)
 
 	for _, tc := range []struct {
 		start   string
@@ -151,13 +151,12 @@ func TestFreeRooms(t *testing.T) {
 	}
 }
 
-// TestFreeRoomsHidden: a hidden room rental takes its room for a member
-// too, who does not see the rental in the schedule.
+// TestFreeRoomsHidden: a hidden room rental takes its room.
 func TestFreeRoomsHidden(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
-	cs := f.session(t, demoMember, Options{}, registry)
+	cs := f.session(t, demoInstructor, Options{}, registry)
 
 	// The rental of Studio B on Saturday, 13:30–15:30.
 	doc := document(t, cs, "free_rooms",
@@ -169,13 +168,6 @@ func TestFreeRoomsHidden(t *testing.T) {
 	if taken := scheduledRooms(t, f, "2026-09-26", "14:00", 60); !slices.Equal(taken, []string{"Studio B"}) {
 		t.Errorf("the office's schedule has lessons in %v", taken)
 	}
-
-	week := document(t, cs, "schedule", map[string]any{"from": "2026-09-26", "to": "2026-09-26"})
-	for _, l := range week["lessons"].([]any) {
-		if l.(map[string]any)["room"].(map[string]any)["name"] == "Studio B" {
-			t.Errorf("the member sees %v", l)
-		}
-	}
 }
 
 // TestFreeRoomsLocation: locationId keeps the rooms of one location; an
@@ -184,7 +176,7 @@ func TestFreeRoomsLocation(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
-	cs := f.session(t, demoMember, Options{}, registry)
+	cs := f.session(t, demoInstructor, Options{}, registry)
 	args := func(location string) map[string]any {
 		return map[string]any{"date": "2026-09-22", "start": "18:00", "durationMinutes": 60, "locationId": location}
 	}
@@ -229,7 +221,7 @@ func TestFreeRoomsInput(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
-	cs := f.session(t, demoMember, Options{}, registry)
+	cs := f.session(t, demoInstructor, Options{}, registry)
 
 	const (
 		duration = "validation failed: the duration must be more than 0 and at most 12h0m0s"
@@ -294,7 +286,7 @@ func TestFreeRoomsSchema(t *testing.T) {
 
 	f := newFixture(t)
 
-	res, err := f.session(t, demoMember, Options{}, registry).ListTools(t.Context(), nil)
+	res, err := f.session(t, demoInstructor, Options{}, registry).ListTools(t.Context(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,19 +318,44 @@ func TestFreeRoomsSchema(t *testing.T) {
 }
 
 // TestFreeRoomsAudit: a call writes one mcp-tool-called event with the
-// tool's name and the outcome, by the member's account.
+// tool's name and the outcome, by the instructor's account.
 func TestFreeRoomsAudit(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
-	member := f.principal(t, demoMember)
-	cs := f.session(t, demoMember, Options{}, registry)
+	instructor := f.principal(t, demoInstructor)
+	cs := f.session(t, demoInstructor, Options{}, registry)
 
 	document(t, cs, "free_rooms", map[string]any{"date": "2026-09-22", "start": "18:00", "durationMinutes": 60})
 
 	calls := toolCalls(t, f.st)
-	if len(calls) != 1 || calls[0].ActorID != member.AccountID ||
+	if len(calls) != 1 || calls[0].ActorID != instructor.AccountID ||
 		calls[0].Details != (domain.AuditDetails{Tool: "free_rooms", Outcome: "ok", Via: via}) {
+		t.Errorf("audit events %+v", calls)
+	}
+}
+
+// TestFreeRoomsStaffOnly: a member, who would learn of hidden lessons and
+// rentals from a room's occupancy, gets no free_rooms: it is not listed,
+// a call by name is an unknown tool, and nothing is audited.
+func TestFreeRoomsStaffOnly(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	cs := f.session(t, demoMember, Options{}, registry)
+
+	if slices.Contains(toolNames(t, cs), "free_rooms") {
+		t.Error("free_rooms is listed for a member")
+	}
+
+	_, err := cs.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "free_rooms", Arguments: map[string]any{"date": "2026-09-22", "start": "18:00", "durationMinutes": 60},
+	})
+	if err == nil || !strings.Contains(err.Error(), `unknown tool "free_rooms"`) {
+		t.Errorf("call as a member: %v", err)
+	}
+
+	if calls := toolCalls(t, f.st); len(calls) != 0 {
 		t.Errorf("audit events %+v", calls)
 	}
 }
@@ -355,7 +372,7 @@ func TestFreeRoomsSchool(t *testing.T) {
 		t.Parallel()
 
 		f := fixtureOn(noSchool{newFixture(t).st})
-		wantError(t, f.session(t, demoMember, Options{}, registry), "free_rooms", args,
+		wantError(t, f.session(t, demoInstructor, Options{}, registry), "free_rooms", args,
 			"free rooms: not found: no school settings")
 	})
 
@@ -364,8 +381,8 @@ func TestFreeRoomsSchool(t *testing.T) {
 
 		st := &faultStore{Store: newFixture(t).st}
 		f := fixtureOn(st)
-		member := f.principal(t, demoMember)
-		cs := f.sessionOf(t, member, func(context.Context) (service.Principal, error) { return member, nil },
+		instructor := f.principal(t, demoInstructor)
+		cs := f.sessionOf(t, instructor, func(context.Context) (service.Principal, error) { return instructor, nil },
 			Options{}, registry)
 
 		st.failing(store.ReadOnly, errors.New("connection reset"))
@@ -381,7 +398,7 @@ func TestFreeRoomsSchool(t *testing.T) {
 		t.Parallel()
 
 		f := fixtureOn(noLocations{newFixture(t).st})
-		wantError(t, f.session(t, demoMember, Options{}, registry), "free_rooms", args, "internal error")
+		wantError(t, f.session(t, demoInstructor, Options{}, registry), "free_rooms", args, "internal error")
 
 		if log := f.log.String(); !strings.Contains(log, "list locations: connection reset") {
 			t.Errorf("log %q", log)

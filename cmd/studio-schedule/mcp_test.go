@@ -187,7 +187,7 @@ func TestMCPTools(t *testing.T) {
 			as    string
 			tools []string
 		}{
-			{demoMember, []string{"free_rooms", "schedule"}},
+			{demoMember, []string{"schedule"}},
 			{demoInstructor, []string{"free_rooms", "schedule"}},
 			{demoOffice, []string{"free_rooms", "schedule", "statistics"}},
 			{demoAdmin, []string{"db_check", "doctor", "free_rooms", "schedule", "statistics"}},

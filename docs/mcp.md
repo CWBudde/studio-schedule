@@ -122,8 +122,8 @@ below. Resources and prompts follow in later versions.
 
 | Name         | Access   | Personal data | Write group | Mirrors                                          |
 | ------------ | -------- | ------------- | ----------- | ------------------------------------------------ |
-| `free_rooms` | `public` | no            | –           | – (no command; `CatalogService.FreeRooms`)       |
 | `schedule`   | `public` | no            | –           | `lessons list --output json` (getSchedule)       |
+| `free_rooms` | `staff`  | no            | –           | – (no command; `CatalogService.FreeRooms`)       |
 | `statistics` | `office` | no            | –           | `stats --output json` (getStatistics), see below |
 | `db_check`   | `admin`  | no            | –           | `db check --output json`                         |
 | `doctor`     | `admin`  | no            | –           | `doctor --output json`                           |
@@ -132,8 +132,9 @@ below. Resources and prompts follow in later versions.
 wall clock time, HH:MM) for `durationMinutes` (whole minutes, more than 0 and at most 720, which is
 12 hours), optionally only those of the location `locationId` (an ID; an unknown one is not found).
 `date`, `start` and `durationMinutes` are required. A room is taken while any lesson that is not
-canceled overlaps the time: a room rental and a hidden lesson take it too, so a member may find a
-room taken by a lesson they do not see in `schedule`. A lesson that ends when the time starts, or
+canceled overlaps the time: a room rental and a hidden lesson take it too. The tool is for staff
+(`staff`): a member would learn from it that a room is taken by a hidden lesson or a rental they do
+not see in `schedule`. A lesson that ends when the time starts, or
 starts when it ends, leaves the room free. The result is
 `{rooms: [{id, name, location: {id, name}}]}`, ordered by location name, then as the location
 orders its rooms; the list is empty when no room is free.

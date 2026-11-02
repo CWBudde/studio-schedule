@@ -20,12 +20,12 @@ func roomTools() []tool {
 		name: "free_rooms",
 		description: "The rooms that are free on a school date from a start time for a duration, at one " +
 			"location or at all of them (CatalogService.FreeRooms; no command): a room is taken while any " +
-			"lesson that is not canceled overlaps the time, a room rental and a hidden lesson too, so a room " +
-			"may be taken by a lesson the account does not see in the schedule. A lesson that ends when the " +
+			"lesson that is not canceled overlaps the time, a room rental and a hidden lesson too; it is for staff, " +
+			"as it would otherwise reveal those to members. A lesson that ends when the " +
 			"time starts, or starts when it ends, leaves the room free. The date and start are the school's " +
 			"wall clock, in its time zone. Each room has its ID, name and location, ordered by location name, " +
 			"then as the location orders its rooms. At most " + strconv.Itoa(maxFreeRoomsMinutes) + " minutes (12 hours).",
-		access:      httpapi.AccessPublic,
+		access:      httpapi.AccessStaff,
 		annotations: readOnly("Free rooms"),
 		add:         handler(freeRooms),
 	}}
