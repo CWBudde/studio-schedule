@@ -64,8 +64,10 @@ types:
   are `ON DELETE RESTRICT`). The office first changes or retires the classes.
 
 **A fresh school has none.** Neither the migration nor `init` creates levels: the office adds the
-school's own on the Levels page (Admin → Levels, after Course types). The demo seed creates the
-programme school's scale: Beginner (B), Intermediate (I), Advanced (A), Professional (P).
+school's own on the Levels page (Admin → Levels, after Course types). The demo seed creates each
+school's own scale: the programme school's Beginner (B), Intermediate (I), Advanced (A),
+Professional (P), the werkstatt school's Einsteiger (E), Anfänger (A), Mittelstufe (M),
+Fortgeschritten (F), Profi (P).
 
 **The web.** The Levels page lists the levels in their order with name and code, "move up" and
 "move down" buttons ("Move <level> up/down"; the first has no up, the last no down), each move

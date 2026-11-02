@@ -63,11 +63,12 @@ returning visitor sees no flash of the other look. The school's accent still ove
 color in both themes.
 
 **The demo offers one school per theme.** `seed.LoadDemoSchoolAt` seeds `programme` (today's demo,
-unchanged; `LoadDemoAt` is this school) or `werkstatt`: the same people, classes and history in
-a place of its own (one house with the rooms "Oben", "Unten" and "Trainingsraum"), with another fictional name, the Werkstatt theme, its accent, German as the default language and a
-CC0 background photo embedded in the seed package (`internal/seed/assets`, source and licence noted
-next to it). `studio-schedule seed --school` takes the variant, so it is not demo-only. The web demo
-picks the school and keeps its data per school (docs/demo-mode.md).
+unchanged; `LoadDemoAt` is this school) or `werkstatt`: at first the same people, classes and
+history in a house of its own (its own data since the amendment below), with another fictional
+name, the Werkstatt theme, its accent, German as the default language and a CC0 background photo
+embedded in the seed package (`internal/seed/assets`, source and licence noted next to it).
+`studio-schedule seed --school` takes the variant, so it is not demo-only. The web demo picks the
+school and keeps its data per school (docs/demo-mode.md).
 
 ## Consequences
 
@@ -81,3 +82,36 @@ picks the school and keeps its data per school (docs/demo-mode.md).
 - A third theme is a registry entry, an enum value and a CHECK change; it costs a migration.
 - Snapshots of the web demo written before this change lack the background and start fresh, as any
   snapshot of another build does.
+
+## Amendment (2026-11-02): the demo schools have their own data
+
+The Werkstatt school had the programme school's people and classes in German settings, so a visitor
+saw English names and an English timetable in the old app's look. Each school is now built from
+tables of its own (`schoolSpec` in `internal/seed`: `programme()` and `werkstatt()`) by the same
+builder; the design is §3 of
+[the Werkstatt catalogue spec](../superpowers/specs/2026-11-01-werkstatt-catalogue-design.md).
+
+- **Programme stays as it was.** Its tables are the ones from before, and
+  `TestProgrammeDatasetUnchanged` pins its dataset for `FixedDemoAnchor` as the SHA-256 of its
+  JSON: same IDs, same records. The two schools' IDs no longer line up.
+- **Werkstatt is a German school of its own.** One house "Tanzhaus am Lindenhof" with the rooms
+  Oben, Unten, Online and Trainingsraum (in that order), the levels Einsteiger (E) to Profi (P),
+  70 weekly classes from Monday to Saturday, seven instructors with one kind of course each and a
+  former one, two accompanists, German passes (Einzelstunde, 10er-Karte, Monatskarte) and
+  announcements, and terms named "Schuljahr …" (`schoolYear`). Its 23 households mirror the
+  programme's record by record (roles, families and guardians), so the same scenarios exist: a
+  member with several children, a managed teenager, single adults, a walk-in guest, a former
+  instructor, an accompanist with a login, two duplicate pairs, classes behind with the attendance.
+- **Shaped like the previous app, moved and renamed.** The Werkstatt look is for members who know
+  the previous app, so its timetable should read like one: the catalogue and the weekly plan take
+  the previous app's course kinds, level codes, class lengths and the rhythm of its week, but on
+  other days, in other rooms and at other times, under other names. Nothing else is taken from it:
+  every person, description, price and address is invented, as for the programme school.
+- **Workshops take Sunday.** The plan leaves Sunday free, so each Werkstatt workshop, the full one
+  included, lies on the Sunday on or after its day offset (the programme's offsets;
+  `workshopsOn`), and the rental on the Wednesday on or after its offset, in the evening after
+  Unten's last class (`rentalOn`). Since several offsets may fall on one Sunday, each workshop has
+  a room and time of its own, so none meet whichever Sunday they fall on.
+- **Workshops need course types of their own.** A lesson has no title; a workshop is named by its
+  course type. The spec's German workshop titles (Floor Barre, Pas de deux, Yoga für Tänzerinnen
+  und Tänzer) are therefore three course types beyond the plan's 23, used by no class.

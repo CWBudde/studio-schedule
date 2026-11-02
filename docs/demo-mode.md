@@ -58,28 +58,38 @@ the API, is the same code.
 
 On a fresh start (the first visit, after "Reset demo", or after a new build) `cmd/wasm` seeds the
 store for the day of the visit (today in the school time zone, from the app's clock) with the
-visitor's demo school (see "Two demo schools"): `seed.LoadDemoSchoolAt(ctx, st, today, school)`. A later visit restores the saved data instead, with the dates of
-the visit that seeded it: the term and workshops do not move along, and after a few weeks the
-workshops lie in the past. "Reset demo" seeds again for today; the banner says so. The demo
-term runs from three weeks before that day to about ten months after it, class members join on the
-term's first day, and three one-off public workshops follow 3, 17 and 24 days after it. The seeded
-class lessons of the week up to the visit carry the members' automatic bookings, and the lesson
-generation at startup books the members into every later lesson it creates (ADR 0009), so class
-lessons show fewer free places than workshops, which nobody is booked into, except two: a small
-tap workshop 10 days after the visit is booked up by members and has two members on its waiting
-list (ADR 0010; nobody of the demo logins' families), so the demo shows a full lesson. Alina's
-ballet workshop (24 days after the visit, accompanied by Felix) has the participants she added
-herself (ADR 0009, amendment): a guest with an email, a walk-in guest without one, and Ute
-Tallowfield on a trial with a note. The demo
-releases one week ahead, so the later workshops always lie beyond the release window; they are visible
-because workshops are published early. `scripts/wasm-smoke.mjs` checks this.
+visitor's demo school (see "Two demo schools"): `seed.LoadDemoSchoolAt(ctx, st, today, school)`. A
+later visit restores the saved data instead, with the dates of the visit that seeded it: the term
+and workshops do not move along, and after a few weeks the workshops lie in the past. "Reset demo"
+seeds again for today; the banner says so. The demo term runs from three weeks before that day to
+about ten months after it, class members join on the term's first day, and three one-off public
+workshops follow 3, 17 and 24 days after it (in the Werkstatt school, like all its workshops, on the
+Sunday on or after each of these days, since its classes leave Sunday free). The seeded class
+lessons of the week up to the visit carry the members' automatic bookings, and the lesson generation
+at startup books the members into every later lesson it creates (ADR 0009), so class lessons show
+fewer free places than workshops, which nobody is booked into, except two. A small workshop 10 days
+after the visit is booked up by members and has two members on its waiting list (ADR 0010; nobody of
+the demo logins' families), so the demo shows a full lesson. A ballet workshop 24 days after the
+visit has the participants its instructor added herself (ADR 0009, amendment): a guest with an
+email, a walk-in guest without one, and a person on a trial with a note.
+
+|                               | Programme                                                | Werkstatt                                            |
+| ----------------------------- | -------------------------------------------------------- | ---------------------------------------------------- |
+| full workshop (day 10)        | Tap in Studio C                                          | Irish Dance in Trainingsraum                         |
+| workshop with guests (day 24) | Classical Ballet by Alina Starling, with Felix Keysworth | Pas de deux by Johanna Sternberg, with Konrad Flügel |
+| its participants              | Mara Gastfield, Pia Walkby, Ute Tallowfield              | Nele Gastberg, Jana Laufmann, Ursula Tauberich       |
+| room rental (day 4)           | Copperleaf Theater Group, Studio B, 13:30                | Theatergruppe Kupferblatt, Unten, Wednesday 20:00    |
+
+The demo releases one week ahead, so the later workshops always lie beyond the release window;
+they are visible because workshops are published early. `scripts/wasm-smoke.mjs` checks this (on
+the programme school).
 
 The server (`studio-schedule serve` with `DEMO_MODE=true`, on the memory store) uses `seed.LoadDemo`,
 which builds the same data for the fixed `seed.FixedDemoAnchor`: the term is the school year
 2026-09-01 to 2027-07-31 on every run, and its workshops lie in September and October 2026.
 `studio-schedule seed` uses `seed.LoadDemoSchoolAt` with the same fixed anchor by default
-(`--anchor today` or a date moves it, `--school` picks the school). Only the dates differ between
-them; names, IDs and the timetable are the same.
+(`--anchor today` or a date moves it, `--school` picks the school). For one school only the dates
+differ between them; names, IDs and the timetable are the same.
 
 ## Receipt PDFs
 
@@ -164,11 +174,30 @@ button.
 The demo offers one fictional school per theme (ADR 0018), on the same site: **programme**
 ("Studio Demo — Ballet & Dance", the app's own look, English) and **werkstatt** ("Tanzhaus am
 Lindenhof", the Werkstatt look, German, with a background photo). Each school is built from its
-own tables (`schoolSpec` in `internal/seed`: `programme()` and `werkstatt()`, `seed.DemoSchoolAt`),
-and a digest test pins the programme school's dataset. For now the werkstatt tables are the
-programme's people and classes with their own settings (name, theme, accent, language, background,
-imprint and receipt issuer; the seeded receipts are the werkstatt school's own, in German) and
-places: the werkstatt school has one house with the rooms "Oben", "Unten" and "Trainingsraum".
+own tables (`schoolSpec` in `internal/seed`: `programme()` and `werkstatt()`, `seed.DemoSchoolAt`)
+by the same builder; the two have no person in common (ADR 0018, amendment "the demo schools have
+their own data").
+
+- **Programme:** English names on `example.com`, `.org` and `.net`, two houses (Studio North with
+  Studios A to C, Studio South with Halls 1 and 2), the levels Beginner to Professional, terms named
+  "School Year …". Its dataset is pinned: `TestProgrammeDatasetUnchanged` compares the SHA-256 of
+  its JSON for `seed.FixedDemoAnchor`, so a change to the builder that moves one of its IDs or
+  fields fails.
+- **Werkstatt:** a German school, "Tanzhaus am Lindenhof", with its own settings (name, theme,
+  accent, language, background, imprint and receipt issuer; the seeded receipts are in German) and
+  its own data. One house with the rooms Oben (24), Unten (18), Online (40) and Trainingsraum (8),
+  in that order; the levels Einsteiger (E), Anfänger (A), Mittelstufe (M), Fortgeschritten (F) and
+  Profi (P); 70 weekly classes from Monday to Saturday, with level spans, stages and age ranges;
+  seven instructors with one kind of course each, the former instructor Werner Altmann, and the
+  accompanists Konrad Flügel and Elise Hammerschlag; terms named "Schuljahr …". Its 23
+  households mirror the programme school's record by record (families with children, single
+  adults, the walk-in guest Ursula Tauberich without an account, the staff), with emails
+  `vorname.nachname@` (umlauts and ß spelled out) on `post.example`, `mail.example` and
+  `tanzhaus-lindenhof.example`. The workshops take Sunday, the rental a Wednesday evening ("Seed
+  data relative to the visit"). Passes: Einzelstunde 16 €, 10er-Karte 140 €, Monatskarte 79 €.
+  The catalogue follows the structure of the previous app's weekly plan (course kinds, level
+  codes, class lengths, the rhythm of the week) on other days, in other rooms and at other times
+  and under other names; everything else is invented.
 
 - **Choosing:** `web/src/features/demo/school.ts`. The page address may name the school outside the
   hash, `?demo=werkstatt` or `?demo=programme` (the README links both). `main.tsx` reads it before
@@ -200,32 +229,39 @@ The demo is a _demo installation_ (`app.Deps.Demo`, also set for `serve` with `D
 
 - **Demo accounts:** every seeded account has the published password `demo-password`, and
   `GET /api/v1/demo/logins` lists one account per role (member, instructor, office, admin) of the
-  school seeded for the login page (`seed.SchoolLogins`; `serve` lists the programme school's). One more is a managed dependent (ADR 0008): Sophie Hollowmere, a teenager with an
-  account of her own (`sophie.hollowmere@example.com`), who books her classes herself; the admin
-  can also "sign in as" her from Accounts. Another is the accompanist Felix Keysworth
-  (`felix.keysworth@example.net`, an instructor account linked to his staff record), who sees the
-  participants of the lessons he accompanies; he is not on the login page, which lists the first
-  account of each role (Alina Starling for instructors), so he signs in by email.
+  school seeded for the login page (`seed.SchoolLogins`; `serve` lists the programme school's; the
+  Werkstatt school's are Katrin Ahrenfeld, Johanna Sternberg, Heike Buchwald and Rainer Ostwald).
+  One more is a managed dependent (ADR 0008): Sophie Hollowmere (`sophie.hollowmere@example.com`;
+  in the Werkstatt school Charlotte Hollerbach, `charlotte.hollerbach@mail.example`), a teenager
+  with an account of her own, who books her classes herself; the admin can also "sign in as" her
+  from Accounts. Another is the accompanist Felix Keysworth (`felix.keysworth@example.net`; in the
+  Werkstatt school Konrad Flügel, `konrad.fluegel@tanzhaus-lindenhof.example`), an instructor
+  account linked to his staff record, who sees the participants of the lessons he accompanies; he
+  is not on the login page, which lists the first account of each role (Alina Starling, Johanna
+  Sternberg for instructors), so he signs in by email.
 - **Mailbox:** nothing is ever delivered. `GET /api/v1/demo/mailbox` lists the outbox, and the
   mailbox panel in the header shows it, so a visitor can register, open the confirmation link and
   sign in. The admin's mail log (`/admin/mails`, ADR 0014) lists the same outbox: every mail stays
   pending there, which the page says.
 - **Announcements:** the seed has two, written by the office and not emailed: one for everyone, and
-  one for the members of the Creative Dance classes, which the demo member sees through her son.
-  An announcement the office emails in the demo lands in the mailbox: publishing it wakes the
-  `announcements` job, which runs in the Worker too (every minute for scheduled ones).
+  one for the members of the Creative Dance classes (Tanzzwerge in the Werkstatt school), which the
+  demo member sees through her son. An announcement the office emails in the demo lands in the
+  mailbox: publishing it wakes the `announcements` job, which runs in the Worker too (every minute
+  for scheduled ones).
 - **Import and duplicates** (ADR 0015): the office's Import page offers a fictional sample file as
   a download, a Blob made in the browser from the page's own copy
   (`web/src/features/import/members-sample.csv`, kept equal to the tests' file by
   `servicetest.TestSampleCopy`); importing it into the demo creates and updates persons like on a
   server, in the in-memory store. The seed has two pairs of duplicates for the Duplicates page:
   Lena Quillfeather twice with the same email (one with the member number M-1042, which the sample
-  updates) and Jonas Brightwater twice with the same name, none with an account.
+  updates) and Jonas Brightwater twice with the same name, none with an account; the Werkstatt
+  school has Lea Wacholder (M-2042) and Timo Holunder the same way. The sample is the programme
+  school's: in the Werkstatt school it matches no one, so its rows create new persons.
 - **What each role sees:** the demo data has one workshop for members only, one hidden workshop
-  (staff only) and a room rental (staff only, ADR 0007, amendment) a few days after the visit
-  date. Signing in as the demo member, instructor or admin
-  shows the difference. The admin can open Accounts and "sign in as" another account; a banner
-  leads back ([ADR 0005](decisions/0005-rbac-and-impersonation.md)).
+  (staff only) and a room rental (staff only, ADR 0007, amendment) a few days after the visit date
+  (in the Werkstatt school on the following Sundays and a Wednesday evening). Signing in as the demo
+  member, instructor or admin shows the difference. The admin can open Accounts and "sign in as"
+  another account; a banner leads back ([ADR 0005](decisions/0005-rbac-and-impersonation.md)).
 - **Mail links:** the Worker passes the app's URL (with the `#/` route prefix) to Go as the
   `APP_URL` environment variable. This includes the waiting-list invites
   (`#/waitlist/accept?token=…`), which the `waitlist-expiry` job (every minute, in the Worker too)
@@ -278,7 +314,9 @@ the visitor's language set to English so the shared helpers' names apply): its l
 the font, the background, and a school without one), the header's sign-in and sign-out, dialogs,
 the tabs and the phone menu, the schedule's day bands and room columns, booking and canceling with
 a card's square button, home's "My schedule", the account page and taking attendance in the
-participants table. Each test runs in a fresh browser context, so saved data never leaks
+participants table, the room columns in the house's order (Oben, Unten, Online, Trainingsraum)
+and the one list a phone shows instead, a card's level codes ("A/M"), and the login page's German
+demo accounts, which sign in. Each test runs in a fresh browser context, so saved data never leaks
 from one test to the next. Any console error fails a test. The
 `test-e2e` CI job runs them on every push and uploads the Playwright report when they fail. Run
 `just e2e-install` once to download the browser.
@@ -287,8 +325,8 @@ Lessons get random IDs when they are generated, so a link to a lesson works only
 saved data that holds it (until "Reset demo" or a new build). Generation creates only lessons that have not started (ADR 0003); the seed
 brings the lessons from the term start (three weeks before the visit) up to the visit, with
 attendance, no-shows, late cancellations, guests and trials, so the schedule has a past and the
-statistics have weeks to count. Classical Ballet's past lessons have no attendance, so the
-instructor and office views show attendance to take.
+statistics have weeks to count. Classical Ballet's past lessons (Ballett Erwachsene's in the
+Werkstatt school) have no attendance, so the instructor and office views show attendance to take.
 
 ## Constraints to keep in mind
 
@@ -300,7 +338,9 @@ instructor and office views show attendance to take.
 - A panic that escapes recovery terminates the Go program. The UI then shows "Demo crashed —
   reload". A reload restores the saved data; if that data is what crashed it, the card's "Reset
   demo" starts over.
-- Encoding a snapshot after a change runs in the Worker too: the demo data (seed, generated lessons) is
-  about 450 KB of JSON and takes a few milliseconds in WASM. Keep the store's tables plain (no derived indexes that
+- Encoding a snapshot after a change runs in the Worker too: the programme school's data (seed,
+  generated lessons) is about 450 KB of JSON and takes a few milliseconds in WASM; the werkstatt
+  school's, with 70 weekly classes instead of 26, about three times as much (the seed alone: 289 KB
+  and 864 KB for `seed.FixedDemoAnchor`). Keep the store's tables plain (no derived indexes that
   would bloat the snapshot).
 - The binary size is reported in every CI run (`test-web` job summary).
