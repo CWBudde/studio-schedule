@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { registerMutation } from '@/api/queries';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { PasswordStrengthMeter } from '@/components/PasswordStrengthMeter';
+import { PendingIcon } from '@/components/PendingIcon';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -109,7 +110,7 @@ export function RegisterPage() {
                 {...form.register('password')}
               />
               <Button type="submit" className="w-full" disabled={register.isPending}>
-                <UserPlus aria-hidden="true" />
+                <PendingIcon pending={register.isPending} icon={<UserPlus aria-hidden="true" />} />
                 {register.isPending ? t('register.submitting') : t('register.submit')}
               </Button>
             </form>

@@ -1,7 +1,9 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api } from '@/api/client';
 import {
+  deferred,
   family,
   meImpersonated,
   meMember,
@@ -253,6 +255,28 @@ describe('AccountPage', () => {
       });
       // The current address stays until the link is opened.
       expect(card.getByText('nora.example@example.org')).toBeInTheDocument();
+    });
+
+    it('shows that the link is being sent until the API answers', async () => {
+      mockApiGet(signedInMember);
+      const answer = deferred<unknown>();
+      vi.spyOn(api, 'POST').mockImplementation(
+        (() => answer.promise) as unknown as typeof api.POST,
+      );
+
+      renderAccount();
+      const card = await changeEmail('nora.new@example.org', 'secret-password');
+
+      const pending = await card.findByRole('button', { name: 'Sending…' });
+      expect(pending).toBeDisabled();
+      expect(pending.querySelector('[data-slot="spinner"]')).not.toBeNull();
+
+      answer.resolve({
+        data: undefined,
+        error: undefined,
+        response: new Response(null, { status: 202 }),
+      });
+      expect(await card.findByRole('status')).toHaveTextContent('Check your inbox');
     });
 
     it('points to the demo mailbox in a demo', async () => {

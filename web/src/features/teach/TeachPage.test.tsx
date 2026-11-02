@@ -2,10 +2,12 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '@/api/client';
+import { api } from '@/api/client';
 import type { TeachLesson, TeachLessons } from '@/api/queries';
 import { Toaster } from '@/components/ui/sonner';
 import i18n from '@/i18n';
 import {
+  deferred,
   ids,
   lessonBalletDetail,
   meMember,
@@ -473,6 +475,28 @@ describe('NotifyDialog', () => {
       params: { path: { lessonId: ids.lessonBallet } },
       body: { message: 'Bring water.' },
     });
+  });
+
+  it('shows that it sends until the API answers', async () => {
+    mockTeach(meInstructor);
+    const answer = deferred<unknown>();
+    vi.spyOn(api, 'POST').mockImplementation((() => answer.promise) as unknown as typeof api.POST);
+    const user = userEvent.setup();
+
+    const dialog = await openDialog(user);
+    await user.type(within(dialog).getByRole('textbox', { name: 'Message' }), 'Bring water.');
+    await user.click(within(dialog).getByRole('button', { name: 'Send' }));
+
+    const pending = await within(dialog).findByRole('button', { name: 'Sending…' });
+    expect(pending).toBeDisabled();
+    expect(pending.querySelector('[data-slot="spinner"]')).not.toBeNull();
+
+    answer.resolve({
+      data: { recipients: 3 },
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+    expect(await screen.findByText('Sent to 3 recipients.')).toBeInTheDocument();
   });
 
   it('says when nobody could be reached', async () => {

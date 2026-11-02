@@ -119,6 +119,9 @@ otherwise add the key to both locales.
   `accounts reset-password --mail` has it. The self-service forgot-password page got the spinner
   only: its inline success alert replaces the form and its failure alert was already there.
   Adding the office action needs an API operation and was left out (no API change in this plan).
+  After review, the other buttons that send mail show the spinner too: registering, changing the
+  email address, and messaging a lesson's participants. Their failures stay inline (the form or
+  dialog stays open with its alert), as the forgot-password page's do.
 
 PLAN.md, Phase 15, "Mail feedback". The previous app shows a spinner and colours its mail
 buttons by success or failure. Here, check these actions and bring each one to the same
