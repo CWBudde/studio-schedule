@@ -180,26 +180,47 @@ func toolCalls(t *testing.T, st store.Store) []domain.AuditEvent {
 
 // TestMCPTools: a session lists the tools whose access level the role of
 // --as reaches; every signed-in role reaches the schedule, so no role
-// starts without a tool. --personal-data adds no tool yet: none of these
-// returns person data.
+// starts without a tool. --personal-data adds the person tools the role
+// reaches: the staff's lesson, the office's person search, a person's
+// bookings and passes, and the receipts, and the admins' mail log.
 func TestMCPTools(t *testing.T) {
 	t.Parallel()
 
 	stores(t, func(t *testing.T, r cliRun) {
 		for _, tc := range []struct {
-			as    string
-			tools []string
+			as       string
+			tools    []string
+			personal []string
 		}{
-			{demoMember, []string{"schedule"}},
-			{demoInstructor, []string{"schedule"}},
-			{demoOffice, []string{"schedule", "statistics"}},
-			{demoAdmin, []string{"db_check", "doctor", "schedule", "statistics"}},
+			{demoMember, []string{"schedule"}, []string{"schedule"}},
+			{demoInstructor, []string{"free_rooms", "schedule"}, []string{"free_rooms", "lesson", "schedule"}},
+			{
+				demoOffice,
+				[]string{"free_rooms", "schedule", "statistics"},
+				[]string{
+					"free_rooms", "lesson", "person_bookings", "person_passes", "receipts", "schedule", "search_persons",
+					"statistics",
+				},
+			},
+			{
+				demoAdmin,
+				[]string{"db_check", "doctor", "free_rooms", "schedule", "statistics"},
+				[]string{
+					"db_check", "doctor", "free_rooms", "lesson", "mail_log", "person_bookings", "person_passes", "receipts",
+					"schedule", "search_persons", "statistics",
+				},
+			},
 		} {
 			for _, flags := range [][]string{nil, {"--personal-data"}, {"--allow-writes", "bookings,jobs"}} {
 				s := mcpSession(t, r, append([]string{"--as", tc.as}, flags...)...)
 
-				if got := s.toolNames(t); !slices.Equal(got, tc.tools) {
-					t.Errorf("%s %v: tools %v, want %v", tc.as, flags, got, tc.tools)
+				want := tc.tools
+				if slices.Contains(flags, "--personal-data") {
+					want = tc.personal
+				}
+
+				if got := s.toolNames(t); !slices.Equal(got, want) {
+					t.Errorf("%s %v: tools %v, want %v", tc.as, flags, got, want)
 				}
 
 				s.close(t)
@@ -320,6 +341,10 @@ func TestMCPArgumentsStayPrivate(t *testing.T) {
 			{"schedule", map[string]any{secret: "2026-09-21"}},
 			{"statistics", map[string]any{"range": secret}},
 			{"db_check", map[string]any{"only": []string{secret}}},
+			{"free_rooms", map[string]any{"date": secret, "start": "18:00", "durationMinutes": 60}},
+			{"free_rooms", map[string]any{"date": "2026-09-22", "start": secret, "durationMinutes": 60}},
+			{"free_rooms", map[string]any{"date": "2026-09-22", "start": "18:00", "durationMinutes": secret}},
+			{"free_rooms", map[string]any{"date": "2026-09-22", "start": "18:00", "durationMinutes": 60, "locationId": secret}},
 		} {
 			if text, isError := s.callTool(t, call.tool, call.args); !isError {
 				t.Errorf("%s %v: no error result but %q", call.tool, call.args, text)
@@ -331,8 +356,8 @@ func TestMCPArgumentsStayPrivate(t *testing.T) {
 		}
 
 		calls := toolCalls(t, st)
-		if len(calls) != 5 {
-			t.Fatalf("%d tool calls audited, want 5", len(calls))
+		if len(calls) != 9 {
+			t.Fatalf("%d tool calls audited, want 9", len(calls))
 		}
 
 		for _, e := range calls {

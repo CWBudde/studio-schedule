@@ -1,0 +1,26 @@
+{
+  "items": [
+    {
+      "id": "00000000-0000-7000-8000-000000000001",
+      "givenName": "Clara",
+      "familyName": "Amberly",
+      "email": "clara.amberly@example.org"
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000005",
+      "givenName": "Ella",
+      "familyName": "Amberly"
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000006",
+      "givenName": "Finn",
+      "familyName": "Amberly"
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000003",
+      "givenName": "Tom",
+      "familyName": "Amberly",
+      "email": "tom.amberly@example.org"
+    }
+  ]
+}

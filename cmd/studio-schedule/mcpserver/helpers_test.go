@@ -67,11 +67,15 @@ func newFixture(t *testing.T) *fixture {
 	return fixtureOn(st)
 }
 
-// fixtureOn returns the fixture of st.
+// fixtureOn returns the fixture of st. Its services have the web app's
+// URL, which the links of the mails they write need.
 func fixtureOn(st store.Store) *fixture {
 	return &fixture{
-		st:  st,
-		svc: app.NewServices(app.Deps{Store: st, Clock: clock.NewFixed(testNow), IDs: offsetIDs{ids.NewSequence()}}),
+		st: st,
+		svc: app.NewServices(app.Deps{
+			Store: st, Clock: clock.NewFixed(testNow), IDs: offsetIDs{ids.NewSequence()},
+			AppURL: "https://studio.example.test/",
+		}),
 		log: &syncBuffer{},
 	}
 }

@@ -317,7 +317,50 @@ are written against these.
 
 ## Task 2.1
 
-- [ ] 2.1 `mcp-person-reads` The read tools that need `--personal-data`: a lesson with participants and waiting list, person search, a person's bookings and passes, receipts, the mail log, and the statistics' top participants — see "Task 2.1".
+- [x] 2.1 `mcp-person-reads` The read tools that need `--personal-data`: a lesson with participants and waiting list, person search, a person's bookings and passes, receipts, the mail log, and the statistics' top participants — see "Task 2.1".
+  - Done: `lesson` (staff), `search_persons`, `person_bookings`, `person_passes`, `receipts` (office)
+    and `mail_log` (admin), all `personalData`, in `tools_lessons.go`, `tools_persons.go`,
+    `tools_receipts.go` and `tools_mail.go`; `statistics` returns the whole getStatistics body with
+    `--personal-data`. `httpapi` exports `NewLessonParticipants` (moved out of the handler) and
+    `NewPersonMatch`. Deviations from the section:
+    - `persons show` returns neither bookings nor passes, and no command prints only a person's
+      bookings. So `person_bookings` is `{person, bookings, waitlistEntries}`: the person as
+      `search_persons` lists it (with `anonymized`), and the two lists of `persons export`. The rest of
+      the export, the date of birth among it, is left out. Its parity test compares the lists with the
+      export and `person` with `persons show`.
+    - `receipts list` takes `--from`/`--to` only (no year, number range or person), so the tool takes
+      `from`/`to`.
+    - `mail list` has no recipient filter (the API has), so neither has `mail_log`. It refuses the
+      `test` template as the command does.
+
+    Tests: `mcpserver` covers each tool's input errors, store failures, goldens (`lesson`,
+    `search_persons`, `person_bookings`, `person_passes`, `receipts`, `mail_log`,
+    `statistics-personal-data`), mail paging over 53 mails, and that no result has a mail body.
+    Review focus 3 is `TestPersonalDataUnlisted` (per role: unlisted without the flag, a call by name is
+    the SDK's `unknown tool` and writes no audit row) and `TestMCPPersonToolsNeedTheFlag` on the real
+    command. Review focus 4 is `TestPersonAnonymized` (`anonymized: true` and "Deleted person" in
+    `lesson` and `person_bookings`, the former name and email nowhere) and `TestSearchPersonsMerged`.
+    Review focus 2 for the search is `TestMCPSearchTermStaysPrivate` (`"Zebulon"`).
+    `TestGoldensWithoutBirthDates` checks every golden. `cmd/studio-schedule/mcp_persons_test.go`
+    holds the parity tests on both stores (the search term on stdin, the whole `stats` with the top
+    participants) and the instructor's `lesson`. Coverage 99.0 % total; every function of the new tool
+    files at 100 %.
+
+    Discoveries:
+    - The `mcpserver` fixture had no `AppURL`, so a service that mails a link failed. Anonymizing a
+      person cancels their future bookings, and that invites the next person on a full lesson's
+      waiting list. `fixtureOn` sets one now.
+    - The demo data has no outbox mails. The tests write them: password resets in `mcpserver`, the
+      store directly in the parity test.
+    - `lesson` words its two not-found errors differently: another instructor's lesson is
+      `participants of lesson <id>: not found: lesson <id>`, an unknown ID
+      `participants of lesson <id>: lesson: not found`. That tells an instructor that the lesson
+      exists, but the schedule lists every lesson to staff anyway. Pinned, not changed.
+    - `person_bookings` of a merged person (tombstone) returns it with its own email and no bookings,
+      as `persons show` and `persons export` do.
+
+    Residual gap: `lesson` returns what listLessonParticipants returns, so it has the lesson's ID and
+    counts but not its time or course type. The assistant reads those from `schedule`.
 
 PLAN.md Phase 12, "Read tools": the person part. This task needs Task 1.1 on main.
 
@@ -390,7 +433,44 @@ PLAN.md Phase 12, "Read tools": the person part. This task needs Task 1.1 on mai
 
 ## Task 2.2
 
-- [ ] 2.2 `mcp-free-rooms` A service method for the rooms of a location free at a date, time and duration, and its read tool `free_rooms` — see "Task 2.2".
+- [x] 2.2 `mcp-free-rooms` A service method for the rooms of a location free at a date, time and duration, and its read tool `free_rooms` — see "Task 2.2".
+  - Done: `CatalogService.FreeRooms` and `FreeRoomsQuery` as planned (`internal/service/free_rooms.go`),
+    plus `MaxFreeRoomsDuration`. It reads with existing methods only (no repo change): the school's
+    zone (`loadSchool`), the rooms list, and per room `ListRoomOverlaps`, the overlap the office
+    meets when it places a lesson (`roomFree`), rather than the date range read. By construction
+    this also counts a lesson that started the day before and is still running, which no test
+    covers on its own. Field errors on `date`, `start` and `duration`, checked before the store is
+    touched; an unknown location and a school without settings are not found. Rentals block
+    (pinned), and so do hidden lessons.
+
+    The tool `free_rooms` is `public` like `listRooms`, has no person data, and returns
+    `{rooms: [{id, name, location: {id, name}}]}`. The location names come from `Catalog.Locations`.
+
+    Tests:
+    - `servicetest.FreeRooms` runs on both stores (`TestFreeRoomsScenarios`, memory and PostgreSQL).
+      It covers overlap on both edges (back to back is free), canceled and other-date lessons, a
+      rental, a hidden lesson, the location filter and order, and an unknown location. The
+      instants come from the school's zone, and one case fails if the date is read in UTC.
+    - Memory unit tests cover validation, `ErrNoSchool`, and a `SweepFaults` sweep over every
+      store call.
+    - The tool's tests check each time case against the office's `schedule` of that day. They
+      also cover a golden (`testdata/free_rooms.json`), the hidden rental a member cannot see,
+      the input errors, the schema, the audit row, and no settings or a failing store. The
+      `mcp_test.go` tool lists and Review focus 2 (`"Zebulon"` in each of the four arguments)
+      include it.
+
+    Coverage is 99.0 % total. `free_rooms.go`, `tools_rooms.go` and `mcpserver` are at 100 %.
+
+    Deviations and discoveries:
+    - `date`, `start` and `durationMinutes` are required. A missing `start` would otherwise
+      decode to 00:00, a valid time.
+    - `durationMinutes` is its own type `minutes`. With a plain `int`, the decoder's error
+      repeats a non-integer value, which `decode` promises never to do.
+    - The minutes are clamped before the multiplication: 2^53+60 minutes would otherwise
+      overflow to a valid 60 minutes.
+    - `handler`'s doc no longer says "plain string fields".
+    - The tool shows a member that a room is taken by a lesson they cannot see (a rental or a
+      hidden lesson), but never which lesson or who. docs/mcp.md says so.
 
 PLAN.md Phase 12, "Read tools": "rooms free at a time". This task needs Task 1.1 on main.
 
