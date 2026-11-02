@@ -217,6 +217,54 @@ describe('AuditPage', () => {
     expect(await screen.findByText('über die Kommandozeile (operator)')).toBeInTheDocument();
   });
 
+  describe('the tool calls of the MCP server', () => {
+    const mcp = { channel: 'mcp', osUser: 'assistant' } as const;
+    const toolCall = (n: number, tool: string, outcome: string): AuditEventEntry => ({
+      id: `0190a000-0000-7000-8000-00000000037${n}`,
+      at: `2026-10-21T0${n}:00:00Z`,
+      action: 'mcp-tool-called',
+      actor: lostEvent.actor,
+      details: { tool, outcome, via: mcp },
+    });
+    // A later API version may add an outcome: it shows as the API names it.
+    const toolCalls = [
+      toolCall(3, 'schedule', 'ok'),
+      toolCall(2, 'statistics', 'forbidden'),
+      toolCall(1, 'db_check', 'timeout'),
+    ];
+
+    it('names the tool, its outcome and the OS user who ran the server', async () => {
+      mockApiGet({ ...asAdmin, '/api/v1/admin/audit': { body: { items: toolCalls } } });
+      const user = userEvent.setup();
+
+      renderWithQuery(<AuditPage />);
+
+      const viaAda = 'Ada Adminada.admin@example.comvia MCP (assistant)';
+      expect((await rows()).map((cells) => cells.slice(1))).toEqual([
+        ['Assistant tool called', viaAda, 'tool schedule: ok'],
+        ['Assistant tool called', viaAda, 'tool statistics: refused'],
+        ['Assistant tool called', viaAda, 'tool db_check: timeout'],
+      ]);
+      expect(screen.queryByText(/command line/)).toBeNull();
+
+      await user.type(screen.getByRole('searchbox', { name: 'Search the audit log' }), 'refused');
+      expect((await rows()).map((cells) => cells[3])).toEqual(['tool statistics: refused']);
+    });
+
+    it('names them in German', async () => {
+      mockApiGet({ ...asAdmin, '/api/v1/admin/audit': { body: { items: toolCalls } } });
+      await i18n.changeLanguage('de');
+
+      renderWithQuery(<AuditPage />);
+
+      const table = within(await screen.findByRole('table', { name: 'Protokoll' }));
+      expect(table.getAllByText('Werkzeug des Assistenten aufgerufen')).toHaveLength(3);
+      expect(table.getAllByText('über MCP (assistant)')).toHaveLength(3);
+      expect(table.getByText('Werkzeug schedule: ok')).toBeInTheDocument();
+      expect(table.getByText('Werkzeug statistics: abgelehnt')).toBeInTheDocument();
+    });
+  });
+
   describe('the account commands of the command line', () => {
     const cli = { channel: 'cli', osUser: 'operator' } as const;
     const nora = {

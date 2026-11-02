@@ -36,6 +36,7 @@ const actionKeys: ReadonlyMap<string, `audit.actions.${KnownAction}`> = new Map(
   ['event-registration-canceled', 'audit.actions.event-registration-canceled'],
   ['event-registration-paid', 'audit.actions.event-registration-paid'],
   ['event-canceled', 'audit.actions.event-canceled'],
+  ['mcp-tool-called', 'audit.actions.mcp-tool-called'],
 ]);
 
 type KnownAction =
@@ -54,7 +55,23 @@ type KnownAction =
   | 'event-registration-added'
   | 'event-registration-canceled'
   | 'event-registration-paid'
-  | 'event-canceled';
+  | 'event-canceled'
+  | 'mcp-tool-called';
+
+/**
+ * The translation keys of the outcomes of a tool call (ADR 0022). Any other
+ * outcome shows as the API names it.
+ */
+const outcomeKeys: ReadonlyMap<string, `audit.outcomes.${KnownOutcome}`> = new Map([
+  ['ok', 'audit.outcomes.ok'],
+  ['forbidden', 'audit.outcomes.forbidden'],
+  ['not-found', 'audit.outcomes.not-found'],
+  ['invalid', 'audit.outcomes.invalid'],
+  ['conflict', 'audit.outcomes.conflict'],
+  ['error', 'audit.outcomes.error'],
+]);
+
+type KnownOutcome = 'ok' | 'forbidden' | 'not-found' | 'invalid' | 'conflict' | 'error';
 
 type AuditAccount = NonNullable<AuditEventEntry['actor']>;
 type AuditPerson = NonNullable<AuditEventEntry['targetPerson']>;
@@ -176,13 +193,20 @@ function AuditTable() {
 }
 
 /**
- * The channel the actor acted through, when not the API (ADR 0020): the
- * command line, with the OS user who ran it. Undefined for the API and for
- * a channel this page does not know.
+ * The channel the actor acted through, when not the API: the command line
+ * (ADR 0020) or the MCP server (ADR 0022), with the OS user who ran it.
+ * Undefined for the API and for a channel this page does not know.
  */
 function viaLabel(e: AuditEventEntry, t: TFunction<'admin'>) {
   const via = e.details?.via;
-  return via?.channel === 'cli' ? t('audit.viaCli', { user: via.osUser }) : undefined;
+  switch (via?.channel) {
+    case 'cli':
+      return t('audit.viaCli', { user: via.osUser });
+    case 'mcp':
+      return t('audit.viaMcp', { user: via.osUser });
+    default:
+      return undefined;
+  }
 }
 
 /**
@@ -198,14 +222,22 @@ const everyAccount = (e: AuditEventEntry) =>
 
 /**
  * The lines an event's details add under what it concerns: how a link
- * reached its holder and how many sessions ended (ADR 0020).
+ * reached its holder and how many sessions ended (ADR 0020), and which tool
+ * an assistant called with what outcome (ADR 0022).
  */
 function detailLines(e: AuditEventEntry, t: TFunction<'admin'>) {
-  const { delivery, sessions } = e.details ?? {};
+  const { delivery, sessions, tool, outcome } = e.details ?? {};
   return [
     delivery && t(`audit.delivery.${delivery}`),
     sessions !== undefined && sessions > 0 && t('audit.sessions', { count: sessions }),
+    tool && t('audit.tool', { tool, outcome: outcomeLabel(outcome, t) }),
   ].filter((line): line is string => typeof line === 'string' && line !== '');
+}
+
+/** A tool call's outcome by name, or as the API names it. */
+function outcomeLabel(outcome: string | undefined, t: TFunction<'admin'>) {
+  const key = outcome === undefined ? undefined : outcomeKeys.get(outcome);
+  return key === undefined ? (outcome ?? '') : t(key);
 }
 
 /**
@@ -317,6 +349,9 @@ function Target({ event }: { event: AuditEventEntry }) {
       </>
     );
   }
+  // An event without a target whose details still say something: the tool
+  // an assistant called (ADR 0022).
+  if (detailLines(event, t).length > 0) return <DetailLines event={event} />;
   return <span aria-label={t('audit.nothing')}>—</span>;
 }
 
