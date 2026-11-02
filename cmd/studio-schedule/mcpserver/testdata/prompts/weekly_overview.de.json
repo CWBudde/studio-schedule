@@ -1,0 +1,20 @@
+{
+  "_meta": {
+    "io.modelcontextprotocol/serverInfo": {
+      "name": "studio-schedule",
+      "title": "Studio Schedule",
+      "version": "test"
+    }
+  },
+  "description": "A summary of one week's lessons from the schedule: cancellations, full lessons and free places, day by day.",
+  "messages": [
+    {
+      "content": {
+        "type": "text",
+        "text": "Gib mir einen Überblick über die Woche der Schule von Montag, 2026-09-21, bis Sonntag, 2026-09-27.\n\nRuf das Tool `schedule` mit from 2026-09-21 und to 2026-09-27 auf. Fasse die Woche dann Tag für Tag auf Deutsch zusammen:\n\n- Absagen: die Stunden mit dem Status canceled.\n- Volle Stunden: die Stunden ohne freie Plätze (freePlaces 0). Lass Raumvermietungen (kind rental) weg, sie nehmen keine Buchungen an.\n- Freie Plätze: die übrigen Stunden, jeweils mit der Zahl der freien Plätze.\n\nSchließ mit den Summen der Woche: Stunden, abgesagte Stunden und volle Stunden. Die Ergebnisse geben Zeiten als UTC-Zeitpunkte an: Zeig sie in der Zeitzone der Schule, Europe/Berlin. Nenn eine Stunde nach Kursart, Tag, Uhrzeit und Raum, nicht nach ihrer ID, und ergänze nichts, was nicht in den Ergebnissen steht."
+      },
+      "role": "user"
+    }
+  ],
+  "resultType": "complete"
+}

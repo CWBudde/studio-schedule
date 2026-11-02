@@ -253,10 +253,12 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `--as`, `--personal-data`, `--allow-writes` validated against the write groups; no `--output`, no
   `--yes`). `cmd/studio-schedule/mcpserver`: `New`/`Options`, the `tool` registry in `tool.go`
   (access level, `personalData`, `write` group; a tool not listed under the flags is not
-  registered), and the call wrapper `(*Server).call`: `cli.Env.Actor` again on every call, the
-  current role against the tool's level, then `AuthService.RecordToolCall` → `mcp-tool-called` with
-  `domain.ChannelMCP` and the outcome, never the arguments. The tools (`tools_*.go`) call the
-  services and return the `httpapi.New…` documents of the commands they mirror (parity tests in
+  registered), and the call wrapper `(*Server).call` over `(*Server).run`: `cli.Env.Actor` again on
+  every call, the current role against the tool's level, then `AuthService.RecordToolCall` →
+  `mcp-tool-called` with `domain.ChannelMCP` and the outcome, never the arguments. The prompts
+  (`mcpserver/prompts.go`, texts in `mcpserver/prompts/{en,de}.json` in the school's language) are
+  listed under the tools' rules and every get goes through `run` too. The tools (`tools_*.go`) call
+  the services and return the `httpapi.New…` documents of the commands they mirror (parity tests in
   `cmd/studio-schedule/mcp_test.go`, goldens in `mcpserver/testdata`); `cmd/studio-schedule/diagnose`
   computes the `doctor` and `db check` reports for both. The resources (`resources.go`: `school://`
   settings, timetable and glossary, the templates `lesson://{id}` and `person://{id}`) are listed

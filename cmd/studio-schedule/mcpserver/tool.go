@@ -134,12 +134,13 @@ const (
 // has the error.
 var errInternal = errors.New("internal error")
 
-// callee is what a call checks and audits: a tool, or a resource read.
+// callee is what a call checks and audits: a tool, a resource read or a
+// prompt get.
 type callee struct {
 	// name is what the audit event records: the tool's name, or the
 	// resource's URI, a template's never with the concrete ID.
 	name string
-	// kind names it in a refusal: "tool" or "resource".
+	// kind names it in a refusal and the log: "tool", "resource" or "prompt".
 	kind string
 	// access is its access level (ADR 0005).
 	access httpapi.Access

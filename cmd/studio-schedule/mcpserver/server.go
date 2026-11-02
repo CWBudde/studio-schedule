@@ -118,8 +118,9 @@ const instructions = "The tools read a dance school's schedule, figures and chec
 // New builds the server for start, the principal of --as resolved at the
 // start: the tools whose access level start's role reaches, those that
 // return person data only with opts.PersonalData, and write tools only of
-// the groups of opts.AllowWrites. A tool not listed is unknown to the
-// session: a call by its name fails like any unknown tool's. actor
+// the groups of opts.AllowWrites; the prompts likewise. A tool or prompt
+// not listed is unknown to the session: a call or get by its name fails
+// like any unknown one's. actor
 // resolves the account again before every call; version is the binary's.
 func New(
 	svc app.Services, actor Actor, start service.Principal, clk clock.Clock, opts Options, version string,
@@ -163,10 +164,16 @@ func newServer(
 		}
 	}
 
+	for _, p := range prompts {
+		if s.lists(p.access, p.personalData, "") {
+			s.addPrompt(p)
+		}
+	}
+
 	return s, nil
 }
 
-// lists reports whether the session lists a tool or resource of the access
+// lists reports whether the session lists a tool, resource or prompt of the access
 // level with personalData and the write group: the start's role reaches
 // the level, and the flags allow its person data and its write group.
 func (s *Server) lists(access httpapi.Access, personalData bool, write WriteGroup) bool {

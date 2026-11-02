@@ -142,6 +142,14 @@ func (f *fixture) sessionOf(
 		t.Fatal(err)
 	}
 
+	return connect(t, s)
+}
+
+// connect connects a client in memory to s. Its cleanup closes the
+// session and fails the test unless Run ends without an error.
+func connect(t *testing.T, s *Server) *mcp.ClientSession {
+	t.Helper()
+
 	clientT, serverT := mcp.NewInMemoryTransports()
 
 	ran := make(chan error, 1)

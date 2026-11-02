@@ -3,9 +3,7 @@ package mcpserver
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/httpapi"
@@ -116,18 +114,9 @@ func (s *Server) scheduleQuery(ctx context.Context, in scheduleInput) (service.S
 // today is the school date of now in the school's time zone; UTC without
 // school settings, whose schedule the service then refuses.
 func (s *Server) today(ctx context.Context) (domain.Date, error) {
-	loc := time.UTC
-
-	settings, err := s.svc.Settings.Public(ctx)
-
-	switch {
-	case errors.Is(err, domain.ErrNotFound):
-	case err != nil:
+	_, loc, err := s.school(ctx)
+	if err != nil {
 		return domain.Date{}, err
-	default:
-		if loc, err = time.LoadLocation(settings.Timezone); err != nil {
-			return domain.Date{}, fmt.Errorf("the school's time zone: %w", err)
-		}
 	}
 
 	return domain.DateOf(s.clk.Now(), loc), nil

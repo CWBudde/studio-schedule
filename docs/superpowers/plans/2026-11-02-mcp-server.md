@@ -630,7 +630,39 @@ PLAN.md Phase 12, "Resources". This task needs Task 1.1 on main.
 
 ## Task 2.4
 
-- [ ] 2.4 `mcp-prompts` MCP prompts in the school's language: "weekly overview", "whom to invite from the waiting list", "draft an announcement for a canceled lesson" — see "Task 2.4".
+- [x] 2.4 `mcp-prompts` MCP prompts in the school's language: "weekly overview", "whom to invite from the waiting list", "draft an announcement for a canceled lesson" — see "Task 2.4".
+  - Done: `mcpserver/prompts.go` (the `prompts` registry: `weekly_overview` staff, `waitlist_invitations`
+    office with `personalData`, `canceled_lesson_announcement` office) and the texts in
+    `mcpserver/prompts/{en,de}.json` with `{{placeholder}}`s, checked when the package loads (a missing
+    file or prompt, an extra prompt, an unknown placeholder panics). `newServer` lists them under the
+    tools' rules. `(*Server).call` is now a thin layer over `(*Server).run(ctx, kind, name, access, fn)`,
+    which both tools and prompts use: actor again, role check, `mcp-tool-called` with the prompt's name.
+    The refusal's message names the kind ("which the prompt … needs"), and the log line now reads
+    "mcp: a call failed" with `kind`. A get reads only the public settings: the locale (`de`/`en`, else
+    English; English and UTC before setup, through the new `(*Server).school`, which `today` now uses
+    too) and the time zone, for the week (Monday to Sunday, default this week), today and the limits.
+    The listing (name, title, description, arguments) stays English like the tools'; the German texts
+    say "du", as `web/src/locales/de` does, and use the app's "Kursart" and audience labels rather than
+    the glossary's "Stilrichtung". Invalid arguments (missing, not an ID, not a date, an argument the
+    prompt does not take) are a JSON-RPC `-32602` that names the argument, never its value, audited
+    `invalid`; a refusal or unexpected error is `-32603`. Tests: 12 `TestPrompt*` in
+    `mcpserver/prompts_test.go` (listing per role and flag, unlisted is `unknown prompt` with no row,
+    goldens for 3 prompts × 2 languages in `testdata/prompts`, `de-AT`/`fr` fallback, the week across
+    midnight in Berlin and a new year, every invalid argument with `"Zebulon"` in neither error, log nor
+    audit, mid-session disable and demotion, a failing settings read and audit write, the parser's
+    errors) and `TestMCPPrompts` through the real command on both stores. Coverage 99.0 % total; `mcpserver` stays at 100 %.
+
+    Discoveries:
+    - The SDK does not check a prompt argument's `Required`, so the handler does, and the get is audited.
+    - A plain handler error goes out with JSON-RPC code 0, so `promptError` sets the codes.
+    - The glossary's "Stilrichtung" is "Kursart" everywhere in the German UI.
+
+    Residual gaps:
+    - `waitlist_invitations` leads to the tool `lesson` of Task 2.1, which is not on main yet; until it
+      is, the prompt is listed but cannot be followed through (docs/mcp.md says so).
+    - `canceled_lesson_announcement` finds the lesson through `schedule` (no lesson-by-ID read without
+      person data), so the model asks for the date or searches in 42-day ranges. It mentions a draft
+      tool only conditionally, since Task 3.1 may leave `draft_announcement` out.
 
 PLAN.md Phase 12, "Prompts". This task needs Task 1.1 on main.
 
