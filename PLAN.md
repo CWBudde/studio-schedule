@@ -1365,25 +1365,38 @@ are now done. What remains is the rest of the comparison and the review leftover
 - [ ] Compare the staff and admin screens visually with the live fork. This needs a staff account
       from the school. Look only: copy no data, and keep screenshots with real names out of the
       repository
-- [ ] Mail feedback: the fork shows a spinner and colours its mail-send buttons by success or
+- [x] Mail feedback: the fork shows a spinner and colours its mail-send buttons by success or
       failure. Check that every action here that sends mail gives the same feedback while pending
       and after it: an invitation, a password-reset link, an announcement with mail, the requeue
-      of a failed mail
+      of a failed mail (2026-11-02) — `components/PendingIcon.tsx` on every form sheet and every
+      button that sends mail (also registering, changing the email, messaging participants);
+      error toasts beside the inline alerts for the invitation, announcements and the requeue;
+      announcement toasts say the mail is queued. The office has no web action to send a reset
+      link (only `accounts reset-password --mail`); the forgot-password page got the spinner
 - [ ] Review leftovers of the rental and statistics work:
-  - [ ] Statistics: `CountActivePersons` is redundant beside `CountsByPersons`, because the
+  - [x] Statistics: `CountActivePersons` is redundant beside `CountsByPersons`, because the
         active members are the persons with an active booking in that result. Drop the read and
-        the repository method in both stores
+        the repository method in both stores (2026-11-02)
   - [ ] Statistics: the top list loads every person who booked in the range and then shows 20.
-        Rank and cut in the store. Low priority at a school's size
-  - [ ] `becomesRental` (`service/lesson_admin.go`) reads the bookings and the waiting list a
+        Rank and cut in the store. Low priority at a school's size. Since 2026-11-02 the active
+        members are counted from the same full `CountsByPersons` result, so a cut in the store
+        needs that count from elsewhere
+  - [x] `becomesRental` (`service/lesson_admin.go`) reads the bookings and the waiting list a
         second time after `places()`. Reuse what `places()` read, or check before it
-  - [ ] Web: one school-date check in `lib/schoolTime.ts` (today `isSchoolDate` in
+        (2026-11-02) — it runs first, and a lesson becoming a rental skips `places()`
+  - [x] Web: one school-date check in `lib/schoolTime.ts` (today `isSchoolDate` in
         `settingsForms.ts`), used by the clone, lesson, term and search forms as well. Today only
         the booking-rules card refuses a date that does not exist, such as 2026-02-30
-  - [ ] Memory store `ListByStaff`: the `!l.InstructorID.IsZero()` guard cannot change the
+        (2026-11-02) — also the year 0000, which the API refuses
+  - [x] Memory store `ListByStaff`: the `!l.InstructorID.IsZero()` guard cannot change the
         result, because no caller asks for a zero staff ID. Drop it so that both stores read alike
-  - [ ] `UpdateLesson` reports the `kind` error of a rental without a course type before the
+        (2026-11-02) — changed by review: the guard was not dead (a zero ID would match a lesson
+        without an accompanist in memory, never in PostgreSQL). The zero ID is now dropped from
+        the wanted set once, and the contract case pins that it matches no lesson on both stores
+  - [x] `UpdateLesson` reports the `kind` error of a rental without a course type before the
         other field errors. Report them together. The form never sends that combination
+        (2026-11-02) — joined with the timing errors; a 422 now reports every `FieldError` of a
+        joined error (`domain.FieldErrors`)
 
 ---
 
