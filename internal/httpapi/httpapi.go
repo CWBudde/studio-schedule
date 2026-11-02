@@ -158,16 +158,20 @@ type handlers struct {
 // toHTTPError maps domain errors to RFC 9457 problem responses. Unknown
 // errors are logged and reported as 500 without leaking details.
 func (h *handlers) toHTTPError(ctx context.Context, err error) error {
-	var field *domain.FieldError
+	fields := domain.FieldErrors(err)
 
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		return huma.Error404NotFound("resource not found")
-	case errors.As(err, &field):
-		// Located like Huma's own schema errors, so forms can mark the field.
-		return huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
-			Message: field.Msg, Location: "body." + field.Field,
-		})
+	case len(fields) > 0:
+		// Located like Huma's own schema errors, so forms can mark the
+		// fields: one detail per field error, in the order they were joined.
+		details := make([]error, len(fields))
+		for i, f := range fields {
+			details[i] = &huma.ErrorDetail{Message: f.Msg, Location: "body." + f.Field}
+		}
+
+		return huma.Error422UnprocessableEntity("validation failed", details...)
 	case errors.Is(err, domain.ErrValidation):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, domain.ErrInUse):
