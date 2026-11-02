@@ -1299,8 +1299,7 @@ func (r lessonRepo) ListByStaff(
 		_, instructor := wanted[l.InstructorID]
 		_, accompanist := wanted[l.AccompanistID]
 
-		return ((instructor && !l.InstructorID.IsZero()) || (accompanist && !l.AccompanistID.IsZero())) &&
-			!l.StartsAt.Before(from) && l.StartsAt.Before(to)
+		return (instructor || accompanist) && !l.StartsAt.Before(from) && l.StartsAt.Before(to)
 	})
 
 	return sorted(lessons, func(a, b domain.Lesson) int {
