@@ -1,0 +1,20 @@
+{
+  "_meta": {
+    "io.modelcontextprotocol/serverInfo": {
+      "name": "studio-schedule",
+      "title": "Studio Schedule",
+      "version": "test"
+    }
+  },
+  "description": "A draft announcement about a canceled lesson, in the school's language, for the office to review and publish.",
+  "messages": [
+    {
+      "content": {
+        "type": "text",
+        "text": "Draft an announcement about the canceled lesson 00000000-0000-7000-8000-00000000abcd, in English.\n\nFirst find the lesson: call the tool `schedule` and look for the lesson with the ID 00000000-0000-7000-8000-00000000abcd. If you don't know its date, ask me for it, or search from today, 2026-09-22, in ranges of at most 42 days. If its status is not canceled, tell me so and stop.\n\nThen write:\n\n- a title of at most 120 characters that names the course type and the date;\n- a body in plain text of at most 4000 characters: which lesson is canceled (course type, day, time in the school's time zone Europe/Berlin, room and location) and what the members need to know. Give a reason or an alternative only if I tell you one, and invent none.\n\nThose booked for the lesson got a mail about the cancellation already. Suggest whom the announcement is for: the members of the lesson's class (and those booked for its coming lessons) or the members of its course type. \"Participants of a lesson\" reaches only those booked for the lesson.\n\nThis is a draft only: publish nothing. A tool that saves an announcement saves a draft and never sends it; the office reviews it and publishes it in the app."
+      },
+      "role": "user"
+    }
+  ],
+  "resultType": "complete"
+}

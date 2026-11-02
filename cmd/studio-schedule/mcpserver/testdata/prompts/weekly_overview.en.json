@@ -1,0 +1,20 @@
+{
+  "_meta": {
+    "io.modelcontextprotocol/serverInfo": {
+      "name": "studio-schedule",
+      "title": "Studio Schedule",
+      "version": "test"
+    }
+  },
+  "description": "A summary of one week's lessons from the schedule: cancellations, full lessons and free places, day by day.",
+  "messages": [
+    {
+      "content": {
+        "type": "text",
+        "text": "Give me an overview of the school's week from Monday 2026-09-21 through Sunday 2026-09-27.\n\nCall the tool `schedule` with from 2026-09-21 and to 2026-09-27. Then summarize the week day by day, in English:\n\n- Cancellations: the lessons whose status is canceled.\n- Full lessons: the lessons without free places (freePlaces 0). Leave out room rentals (kind rental), which take no bookings.\n- Free places: the other lessons, each with the number of places left.\n\nEnd with the week's totals: lessons, canceled lessons and full lessons. The results give times as UTC instants: show them in the school's time zone, Europe/Berlin. Name a lesson by its course type, day, time and room, not by its ID, and add nothing that the results do not say."
+      },
+      "role": "user"
+    }
+  ],
+  "resultType": "complete"
+}

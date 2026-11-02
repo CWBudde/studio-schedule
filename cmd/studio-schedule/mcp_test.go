@@ -247,6 +247,71 @@ func TestMCPAudit(t *testing.T) {
 	})
 }
 
+// TestMCPPrompts: the office lists the prompts, waitlist_invitations only
+// with --personal-data; a get renders this week in the school's language
+// and is audited like a tool call.
+func TestMCPPrompts(t *testing.T) {
+	t.Parallel()
+
+	stores(t, func(t *testing.T, r cliRun) {
+		st := storeOf(t, r)
+		office, _ := accountOf(t, st, demoOffice)
+
+		for _, tc := range []struct {
+			flags   []string
+			prompts []string
+		}{
+			{nil, []string{"canceled_lesson_announcement", "weekly_overview"}},
+			{[]string{"--personal-data"}, []string{"canceled_lesson_announcement", "waitlist_invitations", "weekly_overview"}},
+		} {
+			s := mcpSession(t, r, append([]string{"--as", demoOffice}, tc.flags...)...)
+
+			res, err := s.ListPrompts(t.Context(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			names := make([]string, 0, len(res.Prompts))
+			for _, p := range res.Prompts {
+				names = append(names, p.Name)
+			}
+
+			slices.Sort(names)
+
+			if !slices.Equal(names, tc.prompts) {
+				t.Errorf("%v: prompts %v, want %v", tc.flags, names, tc.prompts)
+			}
+
+			s.close(t)
+		}
+
+		s := mcpSession(t, r, "--as", demoOffice)
+
+		got, err := s.GetPrompt(t.Context(), &mcp.GetPromptParams{Name: "weekly_overview"})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(got.Messages) != 1 {
+			t.Fatalf("messages %+v", got.Messages)
+		}
+
+		text, _ := got.Messages[0].Content.(*mcp.TextContent)
+		if text == nil || !strings.HasPrefix(text.Text,
+			"Give me an overview of the school's week from Monday 2026-09-21 through Sunday 2026-09-27.") ||
+			!strings.Contains(text.Text, "Europe/Berlin") {
+			t.Errorf("weekly_overview: %+v", got.Messages[0].Content)
+		}
+
+		calls := toolCalls(t, st)
+		if len(calls) != 1 {
+			t.Fatalf("%d calls audited, want 1", len(calls))
+		}
+
+		wantToolCall(t, calls[0], office.ID, "weekly_overview", "ok")
+	})
+}
+
 // TestMCPAccountChanges (review focus 1): an account disabled or demoted
 // after the server started is refused on its next call: an error result,
 // the tool does not run, and one audit event records the refusal.

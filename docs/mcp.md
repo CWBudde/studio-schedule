@@ -13,6 +13,7 @@ the WASM demo has no MCP server. The decisions are in [ADR 0022](decisions/0022-
 - [Exit codes at start](#exit-codes-at-start)
 - [Access on every call](#access-on-every-call)
 - [Tools](#tools)
+- [Prompts](#prompts)
 - [Audit](#audit)
 - [Privacy](#privacy)
 
@@ -79,8 +80,8 @@ prompt, since the client cannot answer one. The audit log names the remote OS us
 
 - `--as` (string): email of the account the server acts as (env `STUDIO_AS`). Required.
 - `--database-url` (string): as for every command (env `DATABASE_URL`); prefer the env var.
-- `--personal-data` (bool): also list the tools that return person data. No tool of this version
-  returns person data, so the flag lists nothing more yet.
+- `--personal-data` (bool): also list the tools and prompts that lead to person data. No tool of
+  this version returns person data, so the flag lists only the prompt `waitlist_invitations`.
 - `--allow-writes` (string list, comma-separated): also list the write tools of these groups:
   `bookings`, `lessons`, `announcements`, `mail`, `jobs`. The groups are checked at start; this
   version has no write tools yet.
@@ -105,19 +106,20 @@ an exit.
 
 ## Access on every call
 
-The account's role at start fixes the tool list: a tool is listed when the role reaches the tool's
-access level (`public`, `signedIn`, `staff`, `office`, `admin`; ADR 0005). The process can run for
-hours, so every call resolves the account again and checks its current role against the tool's
-level. An account disabled or demoted since the start gets an error result on its next call,
-nothing runs, and the refusal is audited. A tool that is not listed (for its access level, without
-`--personal-data`, or without its write group) fails like an unknown tool when called by name.
+The account's role at start fixes the tool and prompt lists: a tool or prompt is listed when the
+role reaches its access level (`public`, `signedIn`, `staff`, `office`, `admin`; ADR 0005). The
+process can run for hours, so every tool call and prompt get resolves the account again and checks
+its current role against the level. An account disabled or demoted since the start gets an error
+on its next call or get, nothing runs, and the refusal is audited. A tool that is not listed (for
+its access level, without `--personal-data`, or without its write group) fails like an unknown
+tool when called by name; a prompt that is not listed fails as `unknown prompt`.
 
 ## Tools
 
 Every tool of this version only reads (`readOnlyHint`, `idempotentHint`) and returns no person
 data. Each returns the JSON document of the command it mirrors, which is the response body of that
 command's API operation in [api/openapi.json](../api/openapi.json); a test asserts that a tool and
-its command return the same document. Resources and prompts follow in later versions.
+its command return the same document. Resources follow in a later version.
 
 | Name         | Access   | Personal data | Write group | Mirrors                                          |
 | ------------ | -------- | ------------- | ----------- | ------------------------------------------------ |
@@ -147,18 +149,60 @@ environment the client starts `mcp` with (`BASE_URL`, `SMTP_HOST`, `VAPID_*` and
 [operations.md](operations.md#configuration-reference)). The result is the document of
 `doctor --output json`.
 
+## Prompts
+
+A prompt is a template of messages that tells the model which tools to call for a question. It
+holds no data of its own: a get reads only the school's language and time zone and fills in the
+dates, the lesson ID and the limits. The model then calls the tools the prompt names, as the
+account, with their own access and person-data rules. The listing follows the tools' rules: the
+role at start must reach the prompt's access level, and a prompt that leads to person data is
+listed only with `--personal-data`.
+
+| Name                           | Access   | Personal data | Arguments             | Leads to   |
+| ------------------------------ | -------- | ------------- | --------------------- | ---------- |
+| `weekly_overview`              | `staff`  | no            | `week` (optional)     | `schedule` |
+| `canceled_lesson_announcement` | `office` | no            | `lessonId` (required) | `schedule` |
+| `waitlist_invitations`         | `office` | yes           | `lessonId` (required) | `lesson`   |
+
+**`weekly_overview`**: a summary of one week's lessons, Monday to Sunday, day by day: the
+cancellations, the full lessons and the free places, then the week's totals. `week` is a school
+date (YYYY-MM-DD) in the week; by default this week. The prompt has the model call `schedule` for
+that week.
+
+**`canceled_lesson_announcement`**: a draft announcement about the canceled lesson `lessonId`: a
+title and a plain-text body within the announcements' length limits, and a suggestion whom it is
+for. The model finds the lesson with `schedule` and stops if it is not canceled. The prompt asks
+for the text only: it tells the model to publish nothing, since an announcement tool saves a draft
+and never sends it, and the office reviews and publishes it in the app.
+
+**`waitlist_invitations`**: whom to invite from the waiting list of the lesson `lessonId`: the free
+places, the places that open invites hold, and the waiting entries next in line. It tells the model
+to book or invite no one. It leads to the tool `lesson`, which returns a lesson's bookings and
+waiting list; this version has no such tool yet, so the prompt can be listed but not followed
+through.
+
+The text is in the school's language, the settings' default locale: `de` or `en`, anything else
+English, and English before the school is set up. The German texts address the model with "du",
+as the app does. The listed name, title, description and arguments are English, like the tools'.
+
+Invalid arguments (a required one missing, a lesson ID that is not an ID, a week that is not a
+date, an argument the prompt does not take) are a JSON-RPC invalid-params error (`-32602`). The
+error names the argument, never its value. A refusal and an unexpected error are an internal error
+(`-32603`), with the message a tool's error result would have.
+
 ## Audit
 
-Every call, reads included, writes an audit event `mcp-tool-called`: the actor, `via`
-(`{channel: mcp, osUser}`, the OS user who started the server), the tool's name and the outcome:
-`ok`, `forbidden`, `not-found`, `invalid`, `conflict` or `error`. It never records the arguments
-and has no target, so the log does not reveal whom a call looked for. A write keeps its own audit
-events as well. The audit page shows the event as "Assistant tool called", via MCP.
+Every tool call, reads included, and every prompt get writes an audit event `mcp-tool-called`: the
+actor, `via` (`{channel: mcp, osUser}`, the OS user who started the server), the tool's or prompt's
+name and the outcome: `ok`, `forbidden`, `not-found`, `invalid` (also a get with invalid
+arguments), `conflict` or `error`. It never records the arguments and has no target, so the log
+does not reveal whom a call looked for. A write keeps its own audit events as well. The audit page
+shows the event as "Assistant tool called", via MCP.
 
 The audit log keeps the events that name an account for 3 years
 ([ADR 0016](decisions/0016-privacy-and-account-administration.md)). Once an account has called a
-tool, it can be disabled but no longer deleted. Use a dedicated account for the assistant, not a
-person's own.
+tool or got a prompt, it can be disabled but no longer deleted. Use a dedicated account for the
+assistant, not a person's own.
 
 ## Privacy
 
