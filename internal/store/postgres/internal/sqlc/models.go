@@ -129,12 +129,17 @@ type Class struct {
 	RoomID        pgtype.UUID
 	InstructorID  pgtype.UUID
 	AccompanistID pgtype.UUID
-	Level         string
 	Weekday       int16
 	StartTime     pgtype.Time
 	Duration      pgtype.Interval
 	Capacity      int32
 	Retired       bool
+	LevelFromID   pgtype.UUID
+	LevelToID     pgtype.UUID
+	AllLevels     bool
+	Stage         pgtype.Int2
+	AgeFromMonths pgtype.Int2
+	AgeToMonths   pgtype.Int2
 }
 
 type ClassMember struct {
@@ -263,6 +268,13 @@ type Location struct {
 	ID      pgtype.UUID
 	Name    string
 	Address pgtype.Text
+}
+
+type OldLevel struct {
+	Level string
+	Name  pgtype.Text
+	Code  pgtype.Text
+	Rank  pgtype.Int4
 }
 
 type OutboxMail struct {

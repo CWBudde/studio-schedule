@@ -356,7 +356,7 @@ List the weekly classes of a term.
 studio-schedule classes list [flags]
 ```
 
-List the weekly classes of the term of `--term` (an ID from `terms list`), by default the current term, as the office's class page does: retired classes included. After a line naming the term, each line names the class's ID, its weekday and time in the school's time zone, the course type, the level, the room, the instructor and accompanist, the places, and "retired" for a retired class. Without a term that includes today, give `--term`.
+List the weekly classes of the term of `--term` (an ID from `terms list`), by default the current term, as the office's class page does: retired classes included. After a line naming the term, each line names the class's ID, its weekday and time in the school's time zone, the course type, the audience (levels, stage, ages), the room, the instructor and accompanist, the places, and "retired" for a retired class. Without a term that includes today, give `--term`.
 
 Examples:
 
@@ -841,7 +841,7 @@ List the lessons of a day or a range of days.
 studio-schedule lessons list [flags]
 ```
 
-List the lessons that start on a school date (`--date`, default today) or from `--from` through `--to` (both inclusive, at most 42 days), as the office sees the schedule: hidden, unreleased and canceled lessons included. Each line names the lesson's ID, its date and time in the school's time zone, the class (course type and level) or the kind of a one-off lesson, the instructor, the room, the active bookings and the places, and its status.
+List the lessons that start on a school date (`--date`, default today) or from `--from` through `--to` (both inclusive, at most 42 days), as the office sees the schedule: hidden, unreleased and canceled lessons included. Each line names the lesson's ID, its date and time in the school's time zone, the class (course type and audience) or the kind of a one-off lesson, the instructor, the room, the active bookings and the places, and its status.
 
 Examples:
 

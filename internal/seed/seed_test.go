@@ -2283,3 +2283,57 @@ func levelLines(levels []domain.Level) []string {
 
 	return lines
 }
+
+// TestDemoClassAudience: every class's levels are levels of its school, the
+// children's classes state ages instead of a level, and one Classical Ballet
+// class spans Beginner to Intermediate, so the demo shows a span.
+func TestDemoClassAudience(t *testing.T) {
+	t.Parallel()
+
+	for _, school := range seed.Schools() {
+		d, err := seed.DemoSchoolAt(seed.FixedDemoAnchor, school)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		levels := map[domain.LevelID]string{}
+		for _, l := range d.Levels {
+			levels[l.ID] = l.Name
+		}
+
+		courseTypes := map[domain.CourseTypeID]string{}
+		for _, ct := range d.CourseTypes {
+			courseTypes[ct.ID] = ct.Name
+		}
+
+		spans := 0
+
+		for _, c := range d.Classes {
+			if !c.Levels.IsZero() {
+				if _, ok := levels[c.Levels.From]; !ok {
+					t.Errorf("%s: class %v starts at unknown level %v", school, c.ID, c.Levels.From)
+				}
+
+				if _, ok := levels[c.Levels.To]; !ok {
+					t.Errorf("%s: class %v ends at unknown level %v", school, c.ID, c.Levels.To)
+				}
+			}
+
+			switch name := courseTypes[c.CourseTypeID]; name {
+			case "Creative Dance", "Pre-Ballet":
+				want := map[string][2]domain.AgeMonths{"Creative Dance": {48, 72}, "Pre-Ballet": {72, 96}}[name]
+				if !c.Levels.IsZero() || c.AllLevels || [2]domain.AgeMonths{c.AgeFrom, c.AgeTo} != want {
+					t.Errorf("%s: %s class %+v, want ages %v and no level", school, name, c, want)
+				}
+			case "Classical Ballet":
+				if levels[c.Levels.From] == "Beginner" && levels[c.Levels.To] == "Intermediate" {
+					spans++
+				}
+			}
+		}
+
+		if spans != 1 {
+			t.Errorf("%s: %d Beginner–Intermediate Classical Ballet classes, want 1", school, spans)
+		}
+	}
+}

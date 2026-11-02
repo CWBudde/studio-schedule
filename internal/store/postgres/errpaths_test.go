@@ -146,6 +146,15 @@ func TestOutOfRangeValuesFailWrites(t *testing.T) {
 		"class capacity": func(ctx context.Context, tx store.Tx) error {
 			return tx.Classes().Create(ctx, domain.Class{ID: ids.New[domain.ClassID](seq), Weekday: time.Monday, Capacity: big})
 		},
+		"class stage": func(ctx context.Context, tx store.Tx) error {
+			return tx.Classes().Create(ctx, domain.Class{ID: ids.New[domain.ClassID](seq), Weekday: time.Monday, Stage: big})
+		},
+		"class age from": func(ctx context.Context, tx store.Tx) error {
+			return tx.Classes().Create(ctx, domain.Class{ID: ids.New[domain.ClassID](seq), Weekday: time.Monday, AgeFrom: -big})
+		},
+		"class age to": func(ctx context.Context, tx store.Tx) error {
+			return tx.Classes().Update(ctx, domain.Class{ID: ids.New[domain.ClassID](seq), Weekday: time.Monday, AgeTo: math.MaxInt16 + 1})
+		},
 		"class update": func(ctx context.Context, tx store.Tx) error {
 			return tx.Classes().Update(ctx, domain.Class{ID: ids.New[domain.ClassID](seq), Weekday: time.Saturday + 1})
 		},

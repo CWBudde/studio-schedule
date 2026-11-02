@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
-import { courseTypesQuery, locationsQuery, staffQuery } from '@/api/queries';
+import { courseTypesQuery, levelsQuery, locationsQuery, staffQuery } from '@/api/queries';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useScheduleSearch } from '../useScheduleSearch';
-import { clearedFilters, hasActiveFilter, levelOptions } from './filterParams';
+import { clearedFilters, hasActiveFilter } from './filterParams';
 
 /** Value of the "all" option; Radix Select does not allow an empty value. */
 const ALL = 'all';
@@ -21,7 +21,9 @@ type Option = { value: string; label: string };
 
 /**
  * Selects for location, instructor, course type and level, bound to the
- * search params of /schedule, plus a button that clears them all.
+ * search params of /schedule, plus a button that clears them all. The level
+ * select offers the school's levels in their order and is left out while the
+ * school has none.
  */
 export function ScheduleFilters() {
   const { t } = useTranslation('schedule');
@@ -29,6 +31,7 @@ export function ScheduleFilters() {
   const locations = useQuery(locationsQuery);
   const staff = useQuery(staffQuery);
   const courseTypes = useQuery(courseTypesQuery);
+  const levels = useQuery(levelsQuery);
 
   return (
     <div
@@ -57,13 +60,15 @@ export function ScheduleFilters() {
         options={courseTypes.data?.map((c) => ({ value: c.id, label: c.name }))}
         onChange={(courseType) => void update({ courseType })}
       />
-      <FilterSelect
-        label={t('filters.level')}
-        allLabel={t('filters.anyLevel')}
-        value={search.level}
-        options={levelOptions.map((level) => ({ value: level, label: t(`level.${level}`) }))}
-        onChange={(value) => void update({ level: levelOptions.find((l) => l === value) })}
-      />
+      {levels.data?.length !== 0 && (
+        <FilterSelect
+          label={t('filters.level')}
+          allLabel={t('filters.anyLevel')}
+          value={search.level}
+          options={levels.data?.map((l) => ({ value: l.id, label: l.name }))}
+          onChange={(level) => void update({ level })}
+        />
+      )}
       {hasActiveFilter(search) && (
         <Button
           variant="ghost"

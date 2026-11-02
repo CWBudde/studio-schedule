@@ -49,7 +49,7 @@ func (f *genFixture) summerClassLesson(t *testing.T, start string) domain.Class 
 	}
 	c := domain.Class{
 		ID: ids.New[domain.ClassID](f.seq), TermID: summer.ID, CourseTypeID: f.courseType, RoomID: f.room,
-		InstructorID: f.instructor, Level: domain.LevelBeginner, Weekday: time.Wednesday,
+		InstructorID: f.instructor, Weekday: time.Wednesday,
 		StartTime: domain.TimeOfDay{Hour: 18}, Duration: time.Hour, Capacity: 6,
 	}
 	at := mustInstant(t, start)

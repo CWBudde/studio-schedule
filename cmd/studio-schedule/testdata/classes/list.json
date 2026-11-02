@@ -9,7 +9,8 @@
         "id": "00000000-0000-7000-8000-000000000049",
         "displayName": "Sofia Quillon"
       },
-      "level": "open",
+      "ageFromMonths": 48,
+      "ageToMonths": 72,
       "weekday": 1,
       "startTime": "15:30",
       "durationMinutes": 45,
@@ -29,7 +30,16 @@
         "id": "00000000-0000-7000-8000-00000000004f",
         "displayName": "Felix Keysworth"
       },
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
       "weekday": 1,
       "startTime": "16:30",
       "durationMinutes": 60,
@@ -49,7 +59,16 @@
         "id": "00000000-0000-7000-8000-00000000004f",
         "displayName": "Felix Keysworth"
       },
-      "level": "intermediate",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
       "weekday": 1,
       "startTime": "17:45",
       "durationMinutes": 75,
@@ -65,7 +84,16 @@
         "id": "00000000-0000-7000-8000-00000000004b",
         "displayName": "Jonas Featherby"
       },
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
       "weekday": 1,
       "startTime": "18:00",
       "durationMinutes": 60,
@@ -85,7 +113,16 @@
         "id": "00000000-0000-7000-8000-00000000004f",
         "displayName": "Felix Keysworth"
       },
-      "level": "advanced",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
       "weekday": 1,
       "startTime": "19:15",
       "durationMinutes": 90,
@@ -101,7 +138,8 @@
         "id": "00000000-0000-7000-8000-000000000049",
         "displayName": "Sofia Quillon"
       },
-      "level": "beginner",
+      "ageFromMonths": 72,
+      "ageToMonths": 96,
       "weekday": 2,
       "startTime": "16:00",
       "durationMinutes": 45,
@@ -117,7 +155,16 @@
         "id": "00000000-0000-7000-8000-00000000004d",
         "displayName": "Nina Tapworth"
       },
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
       "weekday": 2,
       "startTime": "17:00",
       "durationMinutes": 60,
@@ -133,7 +180,16 @@
         "id": "00000000-0000-7000-8000-00000000004a",
         "displayName": "Marco Wrenfield"
       },
-      "level": "intermediate",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
       "weekday": 2,
       "startTime": "18:30",
       "durationMinutes": 75,
@@ -149,7 +205,7 @@
         "id": "00000000-0000-7000-8000-00000000004d",
         "displayName": "Nina Tapworth"
       },
-      "level": "open",
+      "allLevels": true,
       "weekday": 2,
       "startTime": "19:00",
       "durationMinutes": 60,
@@ -165,7 +221,8 @@
         "id": "00000000-0000-7000-8000-000000000049",
         "displayName": "Sofia Quillon"
       },
-      "level": "open",
+      "ageFromMonths": 48,
+      "ageToMonths": 72,
       "weekday": 3,
       "startTime": "15:30",
       "durationMinutes": 45,
@@ -185,7 +242,16 @@
         "id": "00000000-0000-7000-8000-000000000050",
         "displayName": "Greta Ivorylane"
       },
-      "level": "intermediate",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
       "weekday": 3,
       "startTime": "16:30",
       "durationMinutes": 75,
@@ -205,7 +271,16 @@
         "id": "00000000-0000-7000-8000-000000000050",
         "displayName": "Greta Ivorylane"
       },
-      "level": "advanced",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
       "weekday": 3,
       "startTime": "18:00",
       "durationMinutes": 45,
@@ -221,7 +296,16 @@
         "id": "00000000-0000-7000-8000-00000000004b",
         "displayName": "Jonas Featherby"
       },
-      "level": "intermediate",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
       "weekday": 3,
       "startTime": "18:30",
       "durationMinutes": 60,
@@ -241,7 +325,16 @@
         "id": "00000000-0000-7000-8000-000000000050",
         "displayName": "Greta Ivorylane"
       },
-      "level": "professional",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005d",
+        "name": "Professional",
+        "code": "P"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005d",
+        "name": "Professional",
+        "code": "P"
+      },
       "weekday": 3,
       "startTime": "19:00",
       "durationMinutes": 90,
@@ -257,7 +350,16 @@
         "id": "00000000-0000-7000-8000-00000000004d",
         "displayName": "Nina Tapworth"
       },
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
       "weekday": 4,
       "startTime": "16:00",
       "durationMinutes": 60,
@@ -273,7 +375,16 @@
         "id": "00000000-0000-7000-8000-00000000004a",
         "displayName": "Marco Wrenfield"
       },
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
       "weekday": 4,
       "startTime": "17:00",
       "durationMinutes": 60,
@@ -293,7 +404,16 @@
         "id": "00000000-0000-7000-8000-00000000004f",
         "displayName": "Felix Keysworth"
       },
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
       "weekday": 4,
       "startTime": "18:30",
       "durationMinutes": 90,
@@ -309,7 +429,16 @@
         "id": "00000000-0000-7000-8000-00000000004a",
         "displayName": "Marco Wrenfield"
       },
-      "level": "intermediate",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005b",
+        "name": "Intermediate",
+        "code": "I"
+      },
       "weekday": 4,
       "startTime": "19:30",
       "durationMinutes": 60,
@@ -325,7 +454,8 @@
         "id": "00000000-0000-7000-8000-000000000049",
         "displayName": "Sofia Quillon"
       },
-      "level": "beginner",
+      "ageFromMonths": 72,
+      "ageToMonths": 96,
       "weekday": 5,
       "startTime": "15:30",
       "durationMinutes": 45,
@@ -345,7 +475,16 @@
         "id": "00000000-0000-7000-8000-000000000050",
         "displayName": "Greta Ivorylane"
       },
-      "level": "beginner",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005a",
+        "name": "Beginner",
+        "code": "B"
+      },
       "weekday": 5,
       "startTime": "16:30",
       "durationMinutes": 60,
@@ -361,7 +500,7 @@
         "id": "00000000-0000-7000-8000-00000000004b",
         "displayName": "Jonas Featherby"
       },
-      "level": "open",
+      "allLevels": true,
       "weekday": 5,
       "startTime": "17:45",
       "durationMinutes": 60,
@@ -377,7 +516,16 @@
         "id": "00000000-0000-7000-8000-00000000004c",
         "displayName": "Lea Moonfield"
       },
-      "level": "advanced",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
       "weekday": 5,
       "startTime": "18:00",
       "durationMinutes": 75,
@@ -393,7 +541,8 @@
         "id": "00000000-0000-7000-8000-000000000049",
         "displayName": "Sofia Quillon"
       },
-      "level": "open",
+      "ageFromMonths": 48,
+      "ageToMonths": 72,
       "weekday": 6,
       "startTime": "10:00",
       "durationMinutes": 45,
@@ -413,7 +562,16 @@
         "id": "00000000-0000-7000-8000-00000000004f",
         "displayName": "Felix Keysworth"
       },
-      "level": "advanced",
+      "levelFrom": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
+      "levelTo": {
+        "id": "00000000-0000-7000-8000-00000000005c",
+        "name": "Advanced",
+        "code": "A"
+      },
       "weekday": 6,
       "startTime": "10:00",
       "durationMinutes": 90,
@@ -429,7 +587,7 @@
         "id": "00000000-0000-7000-8000-00000000004d",
         "displayName": "Nina Tapworth"
       },
-      "level": "open",
+      "allLevels": true,
       "weekday": 6,
       "startTime": "11:00",
       "durationMinutes": 60,
@@ -445,7 +603,7 @@
         "id": "00000000-0000-7000-8000-00000000004a",
         "displayName": "Marco Wrenfield"
       },
-      "level": "open",
+      "allLevels": true,
       "weekday": 6,
       "startTime": "12:00",
       "durationMinutes": 75,

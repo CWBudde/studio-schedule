@@ -70,7 +70,7 @@ func newMergeFaultWorld(t *testing.T) *mergeFaultWorld {
 	for i, term := range terms {
 		classes = append(classes, domain.Class{
 			ID: ids.New[domain.ClassID](w.seq), TermID: term.ID, CourseTypeID: courseType.ID, RoomID: room.ID,
-			InstructorID: instructor.ID, Level: domain.LevelOpen, Weekday: time.Weekday(i + 1),
+			InstructorID: instructor.ID, AllLevels: true, Weekday: time.Weekday(i + 1),
 			StartTime: domain.TimeOfDay{Hour: 17}, Duration: time.Hour, Capacity: 10,
 		})
 	}

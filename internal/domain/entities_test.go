@@ -13,7 +13,6 @@ func TestEnums(t *testing.T) {
 	t.Parallel()
 
 	t.Run("StaffKind", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.StaffKinds()) })
-	t.Run("Level", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.SkillLevels()) })
 	t.Run("LessonStatus", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.LessonStatuses()) })
 	t.Run("LessonVisibility", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.LessonVisibilities()) })
 	t.Run("LessonKind", func(t *testing.T) { t.Parallel(); checkEnum(t, domain.LessonKinds()) })
@@ -216,7 +215,8 @@ func TestTimetableValidate(t *testing.T) {
 			return domain.Class{
 				ID: newID[domain.ClassID](), TermID: newID[domain.TermID](), CourseTypeID: newID[domain.CourseTypeID](),
 				RoomID: newID[domain.RoomID](), InstructorID: newID[domain.StaffID](), AccompanistID: newID[domain.StaffID](),
-				Level: domain.LevelBeginner, Weekday: time.Monday, StartTime: domain.TimeOfDay{Hour: 17, Minute: 30},
+				Levels: domain.LevelRange{From: newID[domain.LevelID](), To: newID[domain.LevelID]()},
+				Stage:  2, AgeFrom: 48, AgeTo: 72, Weekday: time.Monday, StartTime: domain.TimeOfDay{Hour: 17, Minute: 30},
 				Duration: 90 * time.Minute, Capacity: 16,
 			}
 		}, map[string]func(*domain.Class){
@@ -226,7 +226,13 @@ func TestTimetableValidate(t *testing.T) {
 			"zero room":           func(c *domain.Class) { c.RoomID = domain.RoomID{} },
 			"zero instructor":     func(c *domain.Class) { c.InstructorID = domain.StaffID{} },
 			"accompanist teaches": func(c *domain.Class) { c.AccompanistID = c.InstructorID },
-			"bad level":           func(c *domain.Class) { c.Level = "expert" },
+			"one level end":       func(c *domain.Class) { c.Levels.To = domain.LevelID{} },
+			"all levels and span": func(c *domain.Class) { c.AllLevels = true },
+			"stage 10":            func(c *domain.Class) { c.Stage = 10 },
+			"negative stage":      func(c *domain.Class) { c.Stage = -1 },
+			"age over max":        func(c *domain.Class) { c.AgeTo = domain.MaxAgeMonths + 1 },
+			"negative age":        func(c *domain.Class) { c.AgeFrom = -1 },
+			"ages reversed":       func(c *domain.Class) { c.AgeFrom, c.AgeTo = 72, 48 },
 			"bad weekday":         func(c *domain.Class) { c.Weekday = 7 },
 			"bad start":           func(c *domain.Class) { c.StartTime = domain.TimeOfDay{Hour: 25} },
 			"zero duration":       func(c *domain.Class) { c.Duration = 0 },
@@ -1347,7 +1353,7 @@ func TestFieldErrors(t *testing.T) {
 	}
 	class := domain.Class{
 		ID: newID[domain.ClassID](), TermID: newID[domain.TermID](), CourseTypeID: newID[domain.CourseTypeID](),
-		RoomID: newID[domain.RoomID](), InstructorID: newID[domain.StaffID](), Level: domain.LevelOpen,
+		RoomID: newID[domain.RoomID](), InstructorID: newID[domain.StaffID](), AllLevels: true,
 		Weekday: time.Monday, StartTime: domain.TimeOfDay{Hour: 18}, Duration: time.Hour, Capacity: 12,
 	}
 	classWith := func(f func(*domain.Class)) domain.Class { c := class; f(&c); return c }
@@ -1369,7 +1375,15 @@ func TestFieldErrors(t *testing.T) {
 		"class room":        {classWith(func(c *domain.Class) { c.RoomID = domain.RoomID{} }), "roomId"},
 		"class instructor":  {classWith(func(c *domain.Class) { c.InstructorID = domain.StaffID{} }), "instructorId"},
 		"class accompanist": {classWith(func(c *domain.Class) { c.AccompanistID = c.InstructorID }), "accompanistId"},
-		"class level":       {classWith(func(c *domain.Class) { c.Level = "expert" }), "level"},
+		"class level end":   {classWith(func(c *domain.Class) { c.AllLevels = false; c.Levels.From = newID[domain.LevelID]() }), "levelToId"},
+		"class level start": {classWith(func(c *domain.Class) { c.AllLevels = false; c.Levels.To = newID[domain.LevelID]() }), "levelToId"},
+		"class all levels": {classWith(func(c *domain.Class) {
+			c.Levels = domain.LevelRange{From: newID[domain.LevelID](), To: newID[domain.LevelID]()}
+		}), "allLevels"},
+		"class stage":       {classWith(func(c *domain.Class) { c.Stage = 10 }), "stage"},
+		"class age from":    {classWith(func(c *domain.Class) { c.AgeFrom = 1201 }), "ageFromMonths"},
+		"class age to":      {classWith(func(c *domain.Class) { c.AgeTo = 1201 }), "ageToMonths"},
+		"class age reverse": {classWith(func(c *domain.Class) { c.AgeFrom, c.AgeTo = 72, 48 }), "ageToMonths"},
 		"class weekday":     {classWith(func(c *domain.Class) { c.Weekday = 7 }), "weekday"},
 		"class start":       {classWith(func(c *domain.Class) { c.StartTime = domain.TimeOfDay{Hour: 24} }), "startTime"},
 		"class duration":    {classWith(func(c *domain.Class) { c.Duration = 0 }), "durationMinutes"},

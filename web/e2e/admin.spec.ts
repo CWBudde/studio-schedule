@@ -325,7 +325,9 @@ test('the office adds a class, moves it, and the public classes follow', async (
   await add.getByRole('combobox', { name: 'Instructor' }).click();
   await page.getByRole('option', { name: 'Nina Tapworth' }).click();
   await add.getByRole('combobox', { name: 'Level' }).click();
-  await page.getByRole('option', { name: 'Beginner' }).click();
+  await page.getByRole('option', { name: 'Beginner', exact: true }).click();
+  // One level: "up to" follows it.
+  await expect(add.getByRole('combobox', { name: 'Up to' })).toHaveText('Beginner');
   await add.getByRole('combobox', { name: 'Weekday' }).click();
   await page.getByRole('option', { name: 'Sunday' }).click();
   await add.getByLabel('Start time').fill('09:15');
@@ -333,18 +335,23 @@ test('the office adds a class, moves it, and the public classes follow', async (
   await add.getByRole('button', { name: 'Add class' }).click();
   await expect(add).toBeHidden();
   await expect(page.getByText('Tap, Sunday 09:15 has been added.')).toBeVisible();
-  await expect(classCard(page, 'Tap, Sunday, 09:15–10:15')).toBeVisible();
+  await expect(classCard(page, 'Tap, Sunday, 09:15–10:15')).toContainText('Beginner');
 
+  // The class becomes a span of two levels, shown lower level first.
   await page.getByRole('button', { name: 'Edit Tap, Sunday 09:15' }).click();
   const edit = page.getByRole('dialog', { name: 'Edit Tap, Sunday 09:15' });
   await expect(edit.getByLabel('Start time')).toHaveValue('09:15');
+  await expect(edit.getByRole('combobox', { name: 'Level' })).toHaveText('Beginner');
+  await edit.getByRole('combobox', { name: 'Up to' }).click();
+  await page.getByRole('option', { name: 'Intermediate', exact: true }).click();
   await edit.getByLabel('Start time').fill('10:45');
   await edit.getByRole('button', { name: 'Save changes' }).click();
   await expect(edit).toBeHidden();
   await expect(page.getByText('Tap, Sunday 10:45 has been saved.')).toBeVisible();
+  await expect(classCard(page, 'Tap, Sunday, 10:45–11:45')).toContainText('Beginner–Intermediate');
 
   await openMain(page, 'Classes');
-  await expect(classCard(page, 'Tap, Sunday, 10:45–11:45')).toBeVisible();
+  await expect(classCard(page, 'Tap, Sunday, 10:45–11:45')).toContainText('Beginner–Intermediate');
   await expect(classCard(page, 'Tap, Sunday, 09:15–10:15')).toHaveCount(0);
 });
 

@@ -71,12 +71,14 @@ func (s *TimetableService) CurrentTerm(ctx context.Context) (domain.Term, error)
 }
 
 // TimetableClass is a weekly class with its staff, so the timetable can
-// name them even after they were deactivated (ADR 0007). Accompanist is zero
-// when there is none.
+// name them even after they were deactivated (ADR 0007), and its audience
+// with the levels resolved (ADR 0021). Accompanist is zero when there is
+// none.
 type TimetableClass struct {
 	domain.Class
 
 	Instructor, Accompanist domain.Staff
+	Audience                Audience
 }
 
 // Classes returns the weekly classes of a term with their staff, ordered by
@@ -114,14 +116,26 @@ func (s *TimetableService) classes(ctx context.Context, term domain.TermID, with
 			staff[m.ID] = m
 		}
 
+		levels, err := tx.Levels().List(ctx)
+		if err != nil {
+			return fmt.Errorf("levels: %w", err)
+		}
+
+		byID := levelIndex(levels)
+
 		classes = make([]TimetableClass, 0, len(list))
 		for _, c := range list {
 			if c.Retired && !withRetired {
 				continue
 			}
 
+			audience, err := audienceOf(c, byID)
+			if err != nil {
+				return err
+			}
+
 			classes = append(classes, TimetableClass{
-				Class: c, Instructor: staff[c.InstructorID], Accompanist: staff[c.AccompanistID],
+				Class: c, Instructor: staff[c.InstructorID], Accompanist: staff[c.AccompanistID], Audience: audience,
 			})
 		}
 

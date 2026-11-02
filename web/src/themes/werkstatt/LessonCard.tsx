@@ -10,6 +10,7 @@ import type { QuickAction } from '@/features/schedule/booking/quickAction';
 import { showsKind, useLessonTitle } from '@/features/schedule/lessonLabel';
 import { useLessonCardLabel } from '@/features/schedule/list/cardParts';
 import { VisibilityBadge } from '@/features/schedule/visibility/VisibilityBadge';
+import { formatAudience } from '@/lib/audience';
 import { formatTimeRange } from '@/lib/schoolTime';
 import { cn } from '@/lib/utils';
 import type { LessonCardProps } from '../slots';
@@ -35,6 +36,10 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
   const availabilityId = useId();
   const label = useLessonCardLabel()(lesson, timeZone);
   const title = useLessonTitle();
+  const audience = formatAudience(lesson, t, 'short');
+  // The button's label hides the card's text, and codes say little read out:
+  // the description reads the audience with the levels' names.
+  const spokenAudience = formatAudience(lesson, t, 'long');
   const canceled = lesson.status === 'canceled';
   const quiet = canceled || past;
   // A room rental has no places and no quick action (quickAction answers none).
@@ -95,10 +100,8 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
           >
             {title(lesson)}
           </span>
-          {lesson.level && (
-            <span className="shrink-0 text-right text-xs text-muted-foreground">
-              {t(`level.${lesson.level}`)}
-            </span>
+          {audience && (
+            <span className="max-w-1/2 text-right text-xs text-muted-foreground">{audience}</span>
           )}
         </span>
         <span className="flex flex-wrap items-center gap-1.5">
@@ -117,6 +120,11 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
         </span>
         {/* The API has no course description: the muted line names the place, which the room column shows only from 768px. */}
         <span id={detailsId} className="flex flex-col gap-0.5">
+          {spokenAudience && (
+            <span className="sr-only">
+              {t('list.audience')}: {spokenAudience}
+            </span>
+          )}
           <span className="text-muted-foreground">
             {lesson.room.name} · {lesson.location.name}
           </span>

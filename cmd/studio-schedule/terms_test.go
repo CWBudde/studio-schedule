@@ -161,7 +161,7 @@ func retire(t *testing.T, svc app.Services, id string) {
 
 		_, err := svc.Timetable.UpdateClass(t.Context(), c.ID, service.ClassData{
 			CourseTypeID: c.CourseTypeID, RoomID: c.RoomID, InstructorID: c.InstructorID, AccompanistID: c.AccompanistID,
-			Level: c.Level, Weekday: c.Weekday, StartTime: c.StartTime, Duration: c.Duration, Capacity: c.Capacity,
+			Levels: c.Levels, AllLevels: c.AllLevels, Stage: c.Stage, AgeFrom: c.AgeFrom, AgeTo: c.AgeTo, Weekday: c.Weekday, StartTime: c.StartTime, Duration: c.Duration, Capacity: c.Capacity,
 			Retired: true,
 		})
 		if err != nil {

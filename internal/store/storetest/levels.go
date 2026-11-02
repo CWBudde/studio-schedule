@@ -3,6 +3,7 @@ package storetest
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/store"
@@ -130,6 +131,35 @@ func testLevels(t *testing.T, newStore func(*testing.T) store.Store) {
 			err := e.read(func(ctx context.Context, tx store.Tx) error { return tx.Levels().LockScale(ctx) })
 			wantErr(e.t, err, store.ErrReadOnly)
 			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Levels().LockScale(ctx) })
+		},
+		"DeleteUsedLevel": func(e *env) {
+			low, high, unused := e.level("Beginner", "B", 1), e.level("Advanced", "A", 2), e.level("Open", "", 3)
+			s := e.setting()
+
+			// The span's lower end is To here: a use is either end, whichever
+			// is lower.
+			c := e.newClass(s, time.Monday, domain.TimeOfDay{Hour: 17})
+			c.Levels = domain.LevelRange{From: high.ID, To: low.ID}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Classes().Create(ctx, c) })
+
+			for name, id := range map[string]domain.LevelID{"from": high.ID, "to": low.ID} {
+				err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Levels().Delete(ctx, id) })
+				if !errorsIs(err, domain.ErrConflict) {
+					e.t.Errorf("delete the level a class uses as %s: want ErrConflict, got %v", name, err)
+				}
+			}
+
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Levels().Delete(ctx, unused.ID) })
+			wantSlice(e.t, e.levels(), []domain.Level{low, high})
+
+			// Once the class states one level only, the other end is free.
+			c.Levels = domain.LevelRange{From: low.ID, To: low.ID}
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Classes().Update(ctx, c) })
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error { return tx.Levels().Delete(ctx, high.ID) })
+
+			err := e.write(func(ctx context.Context, tx store.Tx) error { return tx.Levels().Delete(ctx, low.ID) })
+			wantErr(e.t, err, domain.ErrConflict)
+			wantSlice(e.t, e.levels(), []domain.Level{low})
 		},
 		"SetOrderWithoutLevels": func(e *env) {
 			for _, order := range [][]domain.LevelID{nil, {}} {

@@ -137,7 +137,7 @@ describe('SchedulePage', () => {
     const user = userEvent.setup();
     const { router } = renderAtSchedule(<SchedulePage />, {
       from: '2026-10-26',
-      level: 'beginner',
+      level: ids.levelBeginner,
       location: ids.locationNorth,
     });
 
@@ -147,9 +147,18 @@ describe('SchedulePage', () => {
     expect(requests).toContainEqual({
       from: '2026-11-09',
       to: '2026-11-23',
-      level: 'beginner',
+      level: ids.levelBeginner,
       location: ids.locationNorth,
     });
+  });
+
+  it("asks without the level of an old bookmark's fixed level", async () => {
+    const requests = mockSchedule();
+    renderAtSchedule(<SchedulePage />, { from: '2026-10-26', level: 'beginner' });
+
+    expect(await screen.findByRole('combobox', { name: 'Level' })).toHaveTextContent('Any level');
+    expect(requests).toContainEqual({ from: '2026-10-26', to: '2026-11-09' });
+    expect(requests.every((r) => r.level === undefined)).toBe(true);
   });
 
   it('opens the detail sheet of a deep-linked lesson', async () => {

@@ -124,8 +124,9 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   before first paint, `ThemeProvider` then the school's. Contrast: `werkstatt/tokens.test.ts`; e2e:
   `web/e2e/werkstatt.spec.ts`.
 - **Admin writes:** the office maintains catalogue and timetable (`service/catalog_admin.go`,
-  `httpapi/catalog_admin.go`; classes in `service/class_admin.go`, whose edits move the future
-  lessons along in `class_sync.go`, terms in `service/term_admin.go`, whose new dates delete or
+  `httpapi/catalog_admin.go`, with the rooms, course types and levels (ADR 0021; a class's
+  audience, its level span, resolves in `service/audience.go`); classes in
+  `service/class_admin.go`, whose edits move the future lessons along in `class_sync.go`, terms in `service/term_admin.go`, whose new dates delete or
   refuse the lessons they leave out, class members in `service/class_members.go`, and
   `httpapi/timetable_admin.go`; ADR 0007). Write operations are `POST` collection → 201, `PUT /{id}`,
   `DELETE /{id}` → 204, registered with `withConflict` so their 409 is the `Conflict` problem with a

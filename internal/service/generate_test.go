@@ -210,7 +210,6 @@ func (f *genFixture) addClass(t *testing.T, weekday time.Weekday, start domain.T
 		RoomID:        f.room,
 		InstructorID:  f.instructor,
 		AccompanistID: f.pianist,
-		Level:         domain.LevelBeginner,
 		Weekday:       weekday,
 		StartTime:     start,
 		Duration:      75 * time.Minute,

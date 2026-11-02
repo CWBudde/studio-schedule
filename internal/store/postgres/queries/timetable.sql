@@ -24,16 +24,17 @@ SELECT * FROM classes WHERE id = $1 FOR UPDATE;
 
 -- name: CreateClass :exec
 INSERT INTO classes (
-    id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time,
-    duration, capacity, retired
+    id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level_from_id, level_to_id,
+    all_levels, stage, age_from_months, age_to_months, weekday, start_time, duration, capacity, retired
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
 );
 
 -- name: UpdateClass :execrows
 UPDATE classes
-SET term_id = $2, course_type_id = $3, room_id = $4, instructor_id = $5, accompanist_id = $6, level = $7,
-    weekday = $8, start_time = $9, duration = $10, capacity = $11, retired = $12
+SET term_id = $2, course_type_id = $3, room_id = $4, instructor_id = $5, accompanist_id = $6,
+    level_from_id = $7, level_to_id = $8, all_levels = $9, stage = $10, age_from_months = $11,
+    age_to_months = $12, weekday = $13, start_time = $14, duration = $15, capacity = $16, retired = $17
 WHERE id = $1;
 
 -- name: DeleteClass :execrows

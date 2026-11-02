@@ -120,7 +120,32 @@ react-i18next, Vitest, Playwright.
   levels; the rename left gci misalignment in two httpapi files (fixed in a `style` commit). The
   level mutations only refresh `levelsQuery`; 3.1 adds the classes and schedule queries.
 
-- [ ] 3.1 `class-audience` Classes state a level span or all levels, a stage and an age range: migration 00035 (moves `classes.level` onto level rows), service `Audience`, API fields, the level filter by level ID, statistics, CLI, `formatAudience` on every card and table, the class sheet's new fields, ADR 0021 completed — see "Task 3.1" below.
+- [x] 3.1 `class-audience` Classes state a level span or all levels, a stage and an age range: migration 00035 (moves `classes.level` onto level rows), service `Audience`, API fields, the level filter by level ID, statistics, CLI, `formatAudience` on every card and table, the class sheet's new fields, ADR 0021 completed — see "Task 3.1" below.
+
+  Done: `domain.LevelRange`/`AgeMonths` and the class rules (the enum `SkillLevel` is gone),
+  migration 00035 (`TestClassAudienceMigration` as planned, plus `TestClassAudienceMigrationDown`
+  for spans stored high to low, a name that is no old level, and a second Up), the new columns on
+  both stores with an `Audience` contract case (ten shapes) and `DeleteUsedLevel` (either end →
+  conflict, the service's 409 `in-use`), `service.Audience` with `audienceOf`/`Covers` (review
+  focus 2 in `TestAudienceAfterReorder`, three reorders), the level filter by ID (review focus 3
+  in `TestScheduleLevelFilter`), `ClassData` with the level check inside the transaction, the
+  embedded `Audience`/`LevelRef` in `Class`, `LessonSummary` and the statistics' class rows
+  (`httpapi.NewAudience`), the CLI's "Audience" column and `name (audience)`, the seed (children's
+  classes by age 48–72 and 72–96 months, the Thursday 18:30 Classical Ballet spans
+  Beginner–Intermediate), `formatAudience`/`formatAgeYears`, both cards, the lesson sheet, the
+  timetable badge, a new "Audience" column on the statistics' class table, the level filter from
+  `levelsQuery` (hidden once it has loaded empty), the class sheet's level/"up to"/stage/ages and
+  the no-levels link (review focus 4), and level writes that refresh the classes, schedule,
+  lessons and statistics queries. Coverage 99.0 % total; every new function at 100 %. Vitest 1390,
+  e2e 241 passed. Deviations and discoveries: the migration's Down takes the span's lower end by
+  position (then ID), as the service reads it, not literally `level_from_id`; the memory store's
+  `classRepo.put` now refuses an unknown level, as PostgreSQL's foreign key does; an explicit
+  `stage: 0` (or age 0) in a class body is a 422 (Huma's minimum), so the web leaves empty fields
+  out; the German filter label "Stufe" now means stage, so the filter says "Level"; the old
+  schedule e2e had no level filter case (one was added) and `deep-links.spec.ts` used
+  `?level=beginner` (now a test that the old bookmark value is dropped). Residual gap: the class
+  sheet edits ages in half years, so a class stored through the API with other months (e.g. 40)
+  shows 3.333 and must be retyped before it saves.
 
 - [ ] 4.1 `seed-split` Each demo school is built from its own tables (`schoolSpec`); the programme dataset stays byte-identical (digest test); per-school validity, overlap and login tests replace `TestDemoSchoolSameData`; `SchoolLogins` wired into the WASM demo — see "Task 4.1" below.
 

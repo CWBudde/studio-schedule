@@ -296,7 +296,7 @@ func (e *env) newClass(s setting, day time.Weekday, start domain.TimeOfDay) doma
 
 	c := domain.Class{
 		ID: newID[domain.ClassID](e), TermID: s.term.ID, CourseTypeID: s.courseType.ID, RoomID: s.room.ID,
-		InstructorID: s.instructor.ID, Level: domain.LevelBeginner, Weekday: day, StartTime: start,
+		InstructorID: s.instructor.ID, Weekday: day, StartTime: start,
 		Duration: 60 * time.Minute, Capacity: 10,
 	}
 	valid(e.t, c)

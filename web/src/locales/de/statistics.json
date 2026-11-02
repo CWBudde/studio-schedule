@@ -67,6 +67,7 @@
     "participant": "Person",
     "period": "Zeitraum",
     "class": "Kurs",
+    "audience": "Zielgruppe",
     "room": "Raum",
     "courseType": "Kursart",
     "instructor": "Lehrkraft",

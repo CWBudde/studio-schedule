@@ -34,10 +34,10 @@ func (q *Queries) AddClassMember(ctx context.Context, arg AddClassMemberParams) 
 
 const createClass = `-- name: CreateClass :exec
 INSERT INTO classes (
-    id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time,
-    duration, capacity, retired
+    id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level_from_id, level_to_id,
+    all_levels, stage, age_from_months, age_to_months, weekday, start_time, duration, capacity, retired
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
 )
 `
 
@@ -48,7 +48,12 @@ type CreateClassParams struct {
 	RoomID        pgtype.UUID
 	InstructorID  pgtype.UUID
 	AccompanistID pgtype.UUID
-	Level         string
+	LevelFromID   pgtype.UUID
+	LevelToID     pgtype.UUID
+	AllLevels     bool
+	Stage         pgtype.Int2
+	AgeFromMonths pgtype.Int2
+	AgeToMonths   pgtype.Int2
 	Weekday       int16
 	StartTime     pgtype.Time
 	Duration      pgtype.Interval
@@ -64,7 +69,12 @@ func (q *Queries) CreateClass(ctx context.Context, arg CreateClassParams) error 
 		arg.RoomID,
 		arg.InstructorID,
 		arg.AccompanistID,
-		arg.Level,
+		arg.LevelFromID,
+		arg.LevelToID,
+		arg.AllLevels,
+		arg.Stage,
+		arg.AgeFromMonths,
+		arg.AgeToMonths,
 		arg.Weekday,
 		arg.StartTime,
 		arg.Duration,
@@ -120,7 +130,7 @@ func (q *Queries) DeleteTerm(ctx context.Context, id pgtype.UUID) (int64, error)
 }
 
 const getClass = `-- name: GetClass :one
-SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time, duration, capacity, retired FROM classes WHERE id = $1
+SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, weekday, start_time, duration, capacity, retired, level_from_id, level_to_id, all_levels, stage, age_from_months, age_to_months FROM classes WHERE id = $1
 `
 
 func (q *Queries) GetClass(ctx context.Context, id pgtype.UUID) (Class, error) {
@@ -133,12 +143,17 @@ func (q *Queries) GetClass(ctx context.Context, id pgtype.UUID) (Class, error) {
 		&i.RoomID,
 		&i.InstructorID,
 		&i.AccompanistID,
-		&i.Level,
 		&i.Weekday,
 		&i.StartTime,
 		&i.Duration,
 		&i.Capacity,
 		&i.Retired,
+		&i.LevelFromID,
+		&i.LevelToID,
+		&i.AllLevels,
+		&i.Stage,
+		&i.AgeFromMonths,
+		&i.AgeToMonths,
 	)
 	return i, err
 }
@@ -189,7 +204,7 @@ func (q *Queries) ListClassMembers(ctx context.Context, classID pgtype.UUID) ([]
 }
 
 const listClassesByIDs = `-- name: ListClassesByIDs :many
-SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time, duration, capacity, retired FROM classes WHERE id = ANY($1::uuid[]) ORDER BY id
+SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, weekday, start_time, duration, capacity, retired, level_from_id, level_to_id, all_levels, stage, age_from_months, age_to_months FROM classes WHERE id = ANY($1::uuid[]) ORDER BY id
 `
 
 func (q *Queries) ListClassesByIDs(ctx context.Context, ids []pgtype.UUID) ([]Class, error) {
@@ -208,12 +223,17 @@ func (q *Queries) ListClassesByIDs(ctx context.Context, ids []pgtype.UUID) ([]Cl
 			&i.RoomID,
 			&i.InstructorID,
 			&i.AccompanistID,
-			&i.Level,
 			&i.Weekday,
 			&i.StartTime,
 			&i.Duration,
 			&i.Capacity,
 			&i.Retired,
+			&i.LevelFromID,
+			&i.LevelToID,
+			&i.AllLevels,
+			&i.Stage,
+			&i.AgeFromMonths,
+			&i.AgeToMonths,
 		); err != nil {
 			return nil, err
 		}
@@ -226,7 +246,7 @@ func (q *Queries) ListClassesByIDs(ctx context.Context, ids []pgtype.UUID) ([]Cl
 }
 
 const listClassesByTerm = `-- name: ListClassesByTerm :many
-SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time, duration, capacity, retired FROM classes WHERE term_id = $1 ORDER BY weekday, start_time, id
+SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, weekday, start_time, duration, capacity, retired, level_from_id, level_to_id, all_levels, stage, age_from_months, age_to_months FROM classes WHERE term_id = $1 ORDER BY weekday, start_time, id
 `
 
 func (q *Queries) ListClassesByTerm(ctx context.Context, termID pgtype.UUID) ([]Class, error) {
@@ -245,12 +265,17 @@ func (q *Queries) ListClassesByTerm(ctx context.Context, termID pgtype.UUID) ([]
 			&i.RoomID,
 			&i.InstructorID,
 			&i.AccompanistID,
-			&i.Level,
 			&i.Weekday,
 			&i.StartTime,
 			&i.Duration,
 			&i.Capacity,
 			&i.Retired,
+			&i.LevelFromID,
+			&i.LevelToID,
+			&i.AllLevels,
+			&i.Stage,
+			&i.AgeFromMonths,
+			&i.AgeToMonths,
 		); err != nil {
 			return nil, err
 		}
@@ -321,7 +346,7 @@ func (q *Queries) ListTerms(ctx context.Context) ([]Term, error) {
 }
 
 const lockClass = `-- name: LockClass :one
-SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, level, weekday, start_time, duration, capacity, retired FROM classes WHERE id = $1 FOR UPDATE
+SELECT id, term_id, course_type_id, room_id, instructor_id, accompanist_id, weekday, start_time, duration, capacity, retired, level_from_id, level_to_id, all_levels, stage, age_from_months, age_to_months FROM classes WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockClass(ctx context.Context, id pgtype.UUID) (Class, error) {
@@ -334,12 +359,17 @@ func (q *Queries) LockClass(ctx context.Context, id pgtype.UUID) (Class, error) 
 		&i.RoomID,
 		&i.InstructorID,
 		&i.AccompanistID,
-		&i.Level,
 		&i.Weekday,
 		&i.StartTime,
 		&i.Duration,
 		&i.Capacity,
 		&i.Retired,
+		&i.LevelFromID,
+		&i.LevelToID,
+		&i.AllLevels,
+		&i.Stage,
+		&i.AgeFromMonths,
+		&i.AgeToMonths,
 	)
 	return i, err
 }
@@ -379,8 +409,9 @@ func (q *Queries) RemoveClassMember(ctx context.Context, arg RemoveClassMemberPa
 
 const updateClass = `-- name: UpdateClass :execrows
 UPDATE classes
-SET term_id = $2, course_type_id = $3, room_id = $4, instructor_id = $5, accompanist_id = $6, level = $7,
-    weekday = $8, start_time = $9, duration = $10, capacity = $11, retired = $12
+SET term_id = $2, course_type_id = $3, room_id = $4, instructor_id = $5, accompanist_id = $6,
+    level_from_id = $7, level_to_id = $8, all_levels = $9, stage = $10, age_from_months = $11,
+    age_to_months = $12, weekday = $13, start_time = $14, duration = $15, capacity = $16, retired = $17
 WHERE id = $1
 `
 
@@ -391,7 +422,12 @@ type UpdateClassParams struct {
 	RoomID        pgtype.UUID
 	InstructorID  pgtype.UUID
 	AccompanistID pgtype.UUID
-	Level         string
+	LevelFromID   pgtype.UUID
+	LevelToID     pgtype.UUID
+	AllLevels     bool
+	Stage         pgtype.Int2
+	AgeFromMonths pgtype.Int2
+	AgeToMonths   pgtype.Int2
 	Weekday       int16
 	StartTime     pgtype.Time
 	Duration      pgtype.Interval
@@ -407,7 +443,12 @@ func (q *Queries) UpdateClass(ctx context.Context, arg UpdateClassParams) (int64
 		arg.RoomID,
 		arg.InstructorID,
 		arg.AccompanistID,
-		arg.Level,
+		arg.LevelFromID,
+		arg.LevelToID,
+		arg.AllLevels,
+		arg.Stage,
+		arg.AgeFromMonths,
+		arg.AgeToMonths,
 		arg.Weekday,
 		arg.StartTime,
 		arg.Duration,

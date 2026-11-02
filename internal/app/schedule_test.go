@@ -295,6 +295,12 @@ func (a scheduleApp) entityID(t *testing.T, kind, name string) string {
 				return c.ID.String()
 			}
 		}
+	case "level":
+		for _, l := range a.data.Levels {
+			if l.Name == name {
+				return l.ID.String()
+			}
+		}
 	}
 
 	t.Fatalf("no demo %s %q", kind, name)
@@ -345,7 +351,8 @@ func TestGetSchedule(t *testing.T) {
 	ballet, _ := lessons[0].(map[string]any)
 	wantBallet := []string{
 		"accompanist", "bookingClosesAt", "capacity", "classId", "courseType", "endsAt", "freePlaces", "id",
-		"instructor", "kind", "lateCancelFrom", "level", "location", "room", "startsAt", "status", "visibility",
+		"instructor", "kind", "lateCancelFrom", "levelFrom", "levelTo", "location", "room", "startsAt", "status",
+		"visibility",
 	}
 	if !slices.Equal(sortedJSONKeys(ballet), wantBallet) {
 		t.Fatalf("lesson keys = %v, want %v", sortedJSONKeys(ballet), wantBallet)
@@ -360,7 +367,6 @@ func TestGetSchedule(t *testing.T) {
 		"status":     "scheduled",
 		"kind":       "regular",
 		"visibility": "public",
-		"level":      "beginner",
 		"capacity":   float64(l.Capacity),
 	}
 	for k, v := range want {
@@ -375,6 +381,9 @@ func TestGetSchedule(t *testing.T) {
 		"location":    {"id": a.entityID(t, "location", "Studio North"), "name": "Studio North"},
 		"instructor":  {"id": l.InstructorID.String(), "displayName": "Alina Starling"},
 		"accompanist": {"id": l.AccompanistID.String(), "displayName": "Felix Keysworth"},
+		// A class for one level has it as both ends.
+		"levelFrom": {"id": a.entityID(t, "level", "Beginner"), "name": "Beginner", "code": "B"},
+		"levelTo":   {"id": a.entityID(t, "level", "Beginner"), "name": "Beginner", "code": "B"},
 	}
 	for field, want := range refs {
 		ref, _ := ballet[field].(map[string]any)
@@ -396,7 +405,7 @@ func TestGetSchedule(t *testing.T) {
 	}
 
 	workshop, _ := lessons[3].(map[string]any)
-	for _, absent := range []string{"classId", "level", "accompanist"} {
+	for _, absent := range []string{"classId", "levelFrom", "levelTo", "allLevels", "accompanist"} {
 		if _, ok := workshop[absent]; ok {
 			t.Errorf("one-off workshop has %s: %v", absent, workshop[absent])
 		}
@@ -427,9 +436,11 @@ func TestGetScheduleFilters(t *testing.T) {
 		{"&location=" + a.entityID(t, "location", "Studio South"), []string{"hipHop", "workshop"}},
 		{"&instructor=" + a.entityID(t, "staff", "Felix Keysworth"), []string{"ballet"}},
 		{"&courseType=" + a.entityID(t, "courseType", "Pointe Work"), []string{"canceled"}},
-		{"&level=beginner", []string{"ballet", "hipHop"}},
-		{"&level=professional", []string{}},
-		{"&location=" + a.entityID(t, "location", "Studio North") + "&level=advanced", []string{"canceled"}},
+		{"&level=" + a.entityID(t, "level", "Beginner"), []string{"ballet", "hipHop"}},
+		{"&level=" + a.entityID(t, "level", "Professional"), []string{}},
+		{"&location=" + a.entityID(t, "location", "Studio North") + "&level=" + a.entityID(t, "level", "Advanced"), []string{"canceled"}},
+		// An unknown level matches nothing.
+		{"&level=ffffffff-ffff-7fff-bfff-ffffffffffff", []string{}},
 	}
 
 	for _, tt := range tests {
@@ -508,8 +519,8 @@ func TestGetLesson(t *testing.T) {
 	got := decode(t, body)
 	wantKeys := []string{
 		"accompanist", "bookingClosesAt", "capacity", "classId", "courseType", "courseTypeDescription", "endsAt",
-		"freePlaces", "id", "instructor", "kind", "lateCancelFrom", "level", "location", "locationAddress", "room",
-		"startsAt", "status", "visibility",
+		"freePlaces", "id", "instructor", "kind", "lateCancelFrom", "levelFrom", "levelTo", "location",
+		"locationAddress", "room", "startsAt", "status", "visibility",
 	}
 
 	if !slices.Equal(sortedJSONKeys(got), wantKeys) {
@@ -607,21 +618,10 @@ func TestScheduleEnums(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var levelParam []string
-
-	for _, p := range spec.Paths["/api/v1/schedule"]["get"].Parameters {
-		if p.Name == "level" {
-			levelParam = p.Schema.Enum
-		}
-	}
-
-	levels := enumStrings(domain.SkillLevels())
 	summary := spec.Components.Schemas["LessonSummary"].Properties
 	booking := spec.Components.Schemas["Booking"].Properties
 
 	for name, c := range map[string]struct{ got, want []string }{
-		"level parameter":   {levelParam, levels},
-		"lesson level":      {summary["level"].Enum, levels},
 		"lesson status":     {summary["status"].Enum, enumStrings(domain.LessonStatuses())},
 		"lesson kind":       {summary["kind"].Enum, enumStrings(domain.LessonKinds())},
 		"lesson visibility": {summary["visibility"].Enum, enumStrings(domain.LessonVisibilities())},

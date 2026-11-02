@@ -6,7 +6,16 @@
   "status": "canceled",
   "kind": "regular",
   "visibility": "public",
-  "level": "beginner",
+  "levelFrom": {
+    "id": "00000000-0000-7000-8000-00000000005a",
+    "name": "Beginner",
+    "code": "B"
+  },
+  "levelTo": {
+    "id": "00000000-0000-7000-8000-00000000005a",
+    "name": "Beginner",
+    "code": "B"
+  },
   "capacity": 20,
   "courseType": {
     "id": "00000000-0000-7000-8000-000000000056",

@@ -23,12 +23,17 @@ type ClassData struct {
 	RoomID        domain.RoomID
 	InstructorID  domain.StaffID
 	AccompanistID domain.StaffID
-	Level         domain.SkillLevel
-	Weekday       time.Weekday
-	StartTime     domain.TimeOfDay
-	Duration      time.Duration
-	Capacity      int
-	Retired       bool
+	// Who the class is for (ADR 0021): Levels names two of the school's
+	// levels in either order, or none; AllLevels excludes them.
+	Levels         domain.LevelRange
+	AllLevels      bool
+	Stage          int
+	AgeFrom, AgeTo domain.AgeMonths
+	Weekday        time.Weekday
+	StartTime      domain.TimeOfDay
+	Duration       time.Duration
+	Capacity       int
+	Retired        bool
 }
 
 // AllClasses returns the classes of a term with their staff like Classes,
@@ -39,7 +44,7 @@ func (s *TimetableService) AllClasses(ctx context.Context, term domain.TermID) (
 
 // CreateClass adds a weekly class to a term and generates its lessons of
 // the rolling horizon that have not started yet. An unknown term is
-// domain.ErrNotFound, an unknown course type, room or staff member a
+// domain.ErrNotFound, an unknown course type, room, staff member or level a
 // validation error on the field that names it.
 func (s *TimetableService) CreateClass(ctx context.Context, term domain.TermID, d ClassData) (TimetableClass, error) {
 	c := d.class(ids.New[domain.ClassID](s.ids), term)
@@ -202,10 +207,12 @@ var (
 	errUnknownRoom        error = &domain.FieldError{Field: "roomId", Msg: "room does not exist"}
 	errUnknownInstructor  error = &domain.FieldError{Field: "instructorId", Msg: "instructor does not exist"}
 	errUnknownAccompanist error = &domain.FieldError{Field: "accompanistId", Msg: "accompanist does not exist"}
+	errUnknownLevelFrom   error = &domain.FieldError{Field: "levelFromId", Msg: "level does not exist"}
+	errUnknownLevelTo     error = &domain.FieldError{Field: "levelToId", Msg: "level does not exist"}
 )
 
-// classReferences checks that the course type, room and staff of c exist
-// and returns c with its staff.
+// classReferences checks that the course type, room, staff and levels of c
+// exist and returns c with its staff and audience.
 func classReferences(ctx context.Context, tx store.Tx, c domain.Class) (TimetableClass, error) {
 	instructor, accompanist, err := checkReferences(ctx, tx, references{
 		CourseTypeID: c.CourseTypeID, RoomID: c.RoomID, InstructorID: c.InstructorID, AccompanistID: c.AccompanistID,
@@ -214,7 +221,36 @@ func classReferences(ctx context.Context, tx store.Tx, c domain.Class) (Timetabl
 		return TimetableClass{}, err
 	}
 
-	return TimetableClass{Class: c, Instructor: instructor, Accompanist: accompanist}, nil
+	audience, err := classAudience(ctx, tx, c)
+	if err != nil {
+		return TimetableClass{}, err
+	}
+
+	return TimetableClass{Class: c, Instructor: instructor, Accompanist: accompanist, Audience: audience}, nil
+}
+
+// classAudience resolves the audience of c, whose levels are to be written:
+// an unknown one is a validation error on the field that names it.
+func classAudience(ctx context.Context, tx store.Tx, c domain.Class) (Audience, error) {
+	if c.Levels.IsZero() {
+		return audienceOf(c, nil)
+	}
+
+	all, err := tx.Levels().List(ctx)
+	if err != nil {
+		return Audience{}, fmt.Errorf("levels: %w", err)
+	}
+
+	levels := levelIndex(all)
+	if _, ok := levels[c.Levels.From]; !ok {
+		return Audience{}, errUnknownLevelFrom
+	}
+
+	if _, ok := levels[c.Levels.To]; !ok {
+		return Audience{}, errUnknownLevelTo
+	}
+
+	return audienceOf(c, levels)
 }
 
 // references are what a class or a lesson refers to; AccompanistID is
@@ -278,7 +314,8 @@ func hasBookings(ctx context.Context, tx store.Tx, id domain.LessonID) (bool, er
 func (d ClassData) class(id domain.ClassID, term domain.TermID) domain.Class {
 	return domain.Class{
 		ID: id, TermID: term, CourseTypeID: d.CourseTypeID, RoomID: d.RoomID, InstructorID: d.InstructorID,
-		AccompanistID: d.AccompanistID, Level: d.Level, Weekday: d.Weekday, StartTime: d.StartTime,
+		AccompanistID: d.AccompanistID, Levels: d.Levels, AllLevels: d.AllLevels, Stage: d.Stage,
+		AgeFrom: d.AgeFrom, AgeTo: d.AgeTo, Weekday: d.Weekday, StartTime: d.StartTime,
 		Duration: d.Duration, Capacity: d.Capacity, Retired: d.Retired,
 	}
 }

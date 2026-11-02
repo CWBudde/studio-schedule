@@ -28,6 +28,9 @@ func TestStatistics(t *testing.T) {
 		Classes []struct {
 			ClassID, LessonID, CourseTypeName string
 			Weekday                           *int
+			LevelFrom, LevelTo                *struct{ Name string }
+			AllLevels                         bool
+			AgeFromMonths                     int
 		}
 		Instructors     []struct{ Name string }
 		TopParticipants []struct {
@@ -54,6 +57,28 @@ func TestStatistics(t *testing.T) {
 
 	if len(st.Classes) == 0 || st.Classes[0].ClassID == "" || st.Classes[0].Weekday == nil || len(st.Instructors) == 0 {
 		t.Errorf("classes %s", body)
+	}
+
+	// A class's row carries its audience (ADR 0021), a one-off's none.
+	audiences := map[string]bool{}
+
+	for _, c := range st.Classes {
+		switch {
+		case c.ClassID == "":
+			if c.LevelFrom != nil || c.AllLevels || c.AgeFromMonths != 0 {
+				t.Errorf("one-off row %+v with an audience", c)
+			}
+		case c.LevelFrom != nil && c.LevelFrom.Name == "Beginner" && c.LevelTo.Name == "Intermediate":
+			audiences["span"] = true
+		case c.AllLevels:
+			audiences["all levels"] = true
+		case c.AgeFromMonths > 0:
+			audiences["ages"] = true
+		}
+	}
+
+	if len(audiences) != 3 {
+		t.Errorf("class rows have the audiences %v, want a span, all levels and ages", audiences)
 	}
 
 	// The top participants, by bookings, with their names.

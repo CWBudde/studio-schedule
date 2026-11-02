@@ -71,7 +71,9 @@ const stats: Statistics = {
     {
       classId: '00000000-0000-7000-8000-000000000001',
       courseTypeName: 'Imaginary Ballet',
-      level: 'beginner',
+      levelFrom: { id: '00000000-0000-7000-8000-000000000041', name: 'Beginner', code: 'B' },
+      levelTo: { id: '00000000-0000-7000-8000-000000000041', name: 'Beginner', code: 'B' },
+      ageFromMonths: 96,
       weekday: 1,
       startTime: '16:30',
       ...figures,
@@ -181,9 +183,15 @@ describe('StatisticsPage', () => {
     // A weekly class by its weekday and time; a one-off lesson by its start
     // in the school's time zone, not the browser's.
     const classes = screen.getByRole('table', { name: 'By class' });
+    expect(within(classes).getByRole('columnheader', { name: 'Audience' })).toBeInTheDocument();
+    const weekly = within(classes).getByRole('rowheader', { name: 'Imaginary Ballet · Mon 16:30' });
+    expect(within(weekly.closest('tr')!).getByText('Beginner · from 8 yrs')).toBeInTheDocument();
+    // Only the classes have whom they are for.
     expect(
-      within(classes).getByRole('rowheader', { name: 'Imaginary Ballet · Mon 16:30' }),
-    ).toBeInTheDocument();
+      within(screen.getByRole('table', { name: 'By room' })).queryByRole('columnheader', {
+        name: 'Audience',
+      }),
+    ).not.toBeInTheDocument();
     const oneOff = within(classes).getByRole('rowheader', {
       name: 'Imaginary Tap · Sun, Oct 25, 23:30',
     });
@@ -350,5 +358,8 @@ describe('StatisticsPage', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Statistik' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Buchungen nach Monaten' })).toBeInTheDocument();
     expect(screen.getByText('in 3 Stunden')).toBeInTheDocument();
+    const classes = screen.getByRole('table', { name: 'Nach Kurs' });
+    expect(within(classes).getByRole('columnheader', { name: 'Zielgruppe' })).toBeInTheDocument();
+    expect(within(classes).getByText('Beginner · ab 8 J.')).toBeInTheDocument();
   });
 });

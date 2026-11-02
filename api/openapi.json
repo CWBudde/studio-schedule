@@ -1751,6 +1751,24 @@
             "$ref": "#/components/schemas/StaffRef",
             "description": "Accompanist, if any."
           },
+          "ageFromMonths": {
+            "description": "Youngest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ageToMonths": {
+            "description": "Oldest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "allLevels": {
+            "description": "Whether the class is for every level; never with levelFrom.",
+            "type": "boolean"
+          },
           "capacity": {
             "description": "Maximum number of participants per lesson.",
             "format": "int64",
@@ -1777,21 +1795,25 @@
             "$ref": "#/components/schemas/StaffRef",
             "description": "Instructor, also when no longer active."
           },
-          "level": {
-            "description": "Skill level the class is aimed at.",
-            "enum": [
-              "beginner",
-              "intermediate",
-              "advanced",
-              "professional",
-              "open"
-            ],
-            "type": "string"
+          "levelFrom": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Lower end (by position) of the levels the class is for; absent without a level."
+          },
+          "levelTo": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level."
           },
           "roomId": {
             "description": "Room the class takes place in.",
             "format": "uuid",
             "type": "string"
+          },
+          "stage": {
+            "description": "Stage of the class, from 1.",
+            "format": "int64",
+            "maximum": 9,
+            "minimum": 1,
+            "type": "integer"
           },
           "startTime": {
             "description": "Start time (HH:MM) in the school time zone.",
@@ -1820,7 +1842,6 @@
           "courseTypeId",
           "roomId",
           "instructor",
-          "level",
           "weekday",
           "startTime",
           "durationMinutes",
@@ -1835,6 +1856,24 @@
             "description": "Accompanist, if any.",
             "format": "uuid",
             "type": "string"
+          },
+          "ageFromMonths": {
+            "description": "Youngest age the class is for, in months, if any.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ageToMonths": {
+            "description": "Oldest age the class is for, in months, if any; not below ageFromMonths.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "allLevels": {
+            "description": "Whether the class is for every level; not with a level span.",
+            "type": "boolean"
           },
           "capacity": {
             "description": "Maximum number of participants per lesson.",
@@ -1860,15 +1899,14 @@
             "format": "uuid",
             "type": "string"
           },
-          "level": {
-            "description": "Skill level the class is aimed at.",
-            "enum": [
-              "beginner",
-              "intermediate",
-              "advanced",
-              "professional",
-              "open"
-            ],
+          "levelFromId": {
+            "description": "One end of the levels the class is for, in either order with levelToId; with levelToId or not at all.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "levelToId": {
+            "description": "The other end of the levels the class is for, the same as levelFromId for one level.",
+            "format": "uuid",
             "type": "string"
           },
           "retired": {
@@ -1879,6 +1917,13 @@
             "description": "Room the class takes place in.",
             "format": "uuid",
             "type": "string"
+          },
+          "stage": {
+            "description": "Stage of the class, if any.",
+            "format": "int64",
+            "maximum": 9,
+            "minimum": 1,
+            "type": "integer"
           },
           "startTime": {
             "description": "Start time (HH:MM) in the school time zone.",
@@ -1900,7 +1945,6 @@
           "courseTypeId",
           "roomId",
           "instructorId",
-          "level",
           "weekday",
           "startTime",
           "durationMinutes",
@@ -1914,6 +1958,24 @@
           "accompanist": {
             "$ref": "#/components/schemas/StaffRef",
             "description": "Accompanist, if any."
+          },
+          "ageFromMonths": {
+            "description": "Youngest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ageToMonths": {
+            "description": "Oldest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "allLevels": {
+            "description": "Whether the class is for every level; never with levelFrom.",
+            "type": "boolean"
           },
           "capacity": {
             "description": "Maximum number of participants per lesson.",
@@ -1941,16 +2003,13 @@
             "$ref": "#/components/schemas/StaffRef",
             "description": "Instructor, also when no longer active."
           },
-          "level": {
-            "description": "Skill level the class is aimed at.",
-            "enum": [
-              "beginner",
-              "intermediate",
-              "advanced",
-              "professional",
-              "open"
-            ],
-            "type": "string"
+          "levelFrom": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Lower end (by position) of the levels the class is for; absent without a level."
+          },
+          "levelTo": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level."
           },
           "retired": {
             "description": "Whether the class is retired.",
@@ -1960,6 +2019,13 @@
             "description": "Room the class takes place in.",
             "format": "uuid",
             "type": "string"
+          },
+          "stage": {
+            "description": "Stage of the class, from 1.",
+            "format": "int64",
+            "maximum": 9,
+            "minimum": 1,
+            "type": "integer"
           },
           "startTime": {
             "description": "Start time (HH:MM) in the school time zone.",
@@ -1989,7 +2055,6 @@
           "courseTypeId",
           "roomId",
           "instructor",
-          "level",
           "weekday",
           "startTime",
           "durationMinutes",
@@ -2106,6 +2171,24 @@
       "ClassStatistics": {
         "additionalProperties": false,
         "properties": {
+          "ageFromMonths": {
+            "description": "Youngest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ageToMonths": {
+            "description": "Oldest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "allLevels": {
+            "description": "Whether the class is for every level; never with levelFrom.",
+            "type": "boolean"
+          },
           "attended": {
             "description": "Bookings marked as attended.",
             "format": "int64",
@@ -2150,16 +2233,13 @@
             "format": "int64",
             "type": "integer"
           },
-          "level": {
-            "description": "Level of the class; absent for a one-off lesson.",
-            "enum": [
-              "beginner",
-              "intermediate",
-              "advanced",
-              "professional",
-              "open"
-            ],
-            "type": "string"
+          "levelFrom": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Lower end (by position) of the levels the class is for; absent without a level."
+          },
+          "levelTo": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level."
           },
           "noShowRate": {
             "description": "No-shows per booking whose attendance was taken; absent if none was.",
@@ -2169,6 +2249,13 @@
           "noShows": {
             "description": "Bookings marked as not attended.",
             "format": "int64",
+            "type": "integer"
+          },
+          "stage": {
+            "description": "Stage of the class, from 1.",
+            "format": "int64",
+            "maximum": 9,
+            "minimum": 1,
             "type": "integer"
           },
           "startTime": {
@@ -5155,6 +5242,24 @@
             "$ref": "#/components/schemas/LessonAdmin",
             "description": "What the office sees beyond the schedule; only for office and admin accounts."
           },
+          "ageFromMonths": {
+            "description": "Youngest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ageToMonths": {
+            "description": "Oldest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "allLevels": {
+            "description": "Whether the class is for every level; never with levelFrom.",
+            "type": "boolean"
+          },
           "bookedFor": {
             "description": "The signed-in person and their dependents with an active booking for the lesson, the signed-in person first; absent if there is none or the caller is not signed in (and in the responses of the lesson writes).",
             "items": {
@@ -5226,16 +5331,13 @@
             "format": "date-time",
             "type": "string"
           },
-          "level": {
-            "description": "Level of the class; absent for one-off lessons.",
-            "enum": [
-              "beginner",
-              "intermediate",
-              "advanced",
-              "professional",
-              "open"
-            ],
-            "type": "string"
+          "levelFrom": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Lower end (by position) of the levels the class is for; absent without a level."
+          },
+          "levelTo": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level."
           },
           "location": {
             "$ref": "#/components/schemas/LocationRef"
@@ -5250,6 +5352,13 @@
           },
           "room": {
             "$ref": "#/components/schemas/RoomRef"
+          },
+          "stage": {
+            "description": "Stage of the class, from 1.",
+            "format": "int64",
+            "maximum": 9,
+            "minimum": 1,
+            "type": "integer"
           },
           "startsAt": {
             "description": "Start instant (UTC).",
@@ -5471,6 +5580,24 @@
             "$ref": "#/components/schemas/StaffRef",
             "description": "Accompanist; absent if the lesson has none."
           },
+          "ageFromMonths": {
+            "description": "Youngest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ageToMonths": {
+            "description": "Oldest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "allLevels": {
+            "description": "Whether the class is for every level; never with levelFrom.",
+            "type": "boolean"
+          },
           "capacity": {
             "description": "Maximum number of participants; 0 for a room rental.",
             "format": "int64",
@@ -5515,16 +5642,13 @@
             ],
             "type": "string"
           },
-          "level": {
-            "description": "Level of the class; absent for one-off lessons.",
-            "enum": [
-              "beginner",
-              "intermediate",
-              "advanced",
-              "professional",
-              "open"
-            ],
-            "type": "string"
+          "levelFrom": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Lower end (by position) of the levels the class is for; absent without a level."
+          },
+          "levelTo": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level."
           },
           "location": {
             "$ref": "#/components/schemas/LocationRef"
@@ -5535,6 +5659,13 @@
           },
           "room": {
             "$ref": "#/components/schemas/RoomRef"
+          },
+          "stage": {
+            "description": "Stage of the class, from 1.",
+            "format": "int64",
+            "maximum": 9,
+            "minimum": 1,
+            "type": "integer"
           },
           "startsAt": {
             "description": "Start instant (UTC).",
@@ -5716,6 +5847,27 @@
         },
         "required": [
           "levelIds"
+        ],
+        "type": "object"
+      },
+      "LevelRef": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Short label, if any.",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
         ],
         "type": "object"
       },
@@ -8801,6 +8953,24 @@
             "$ref": "#/components/schemas/StaffRef",
             "description": "Accompanist; absent if the lesson has none."
           },
+          "ageFromMonths": {
+            "description": "Youngest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ageToMonths": {
+            "description": "Oldest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "allLevels": {
+            "description": "Whether the class is for every level; never with levelFrom.",
+            "type": "boolean"
+          },
           "bookedFor": {
             "description": "The signed-in person and their dependents with an active booking for the lesson, the signed-in person first; absent if there is none or the caller is not signed in (and in the responses of the lesson writes).",
             "items": {
@@ -8868,16 +9038,13 @@
             "format": "date-time",
             "type": "string"
           },
-          "level": {
-            "description": "Level of the class; absent for one-off lessons.",
-            "enum": [
-              "beginner",
-              "intermediate",
-              "advanced",
-              "professional",
-              "open"
-            ],
-            "type": "string"
+          "levelFrom": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Lower end (by position) of the levels the class is for; absent without a level."
+          },
+          "levelTo": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level."
           },
           "location": {
             "$ref": "#/components/schemas/LocationRef"
@@ -8888,6 +9055,13 @@
           },
           "room": {
             "$ref": "#/components/schemas/RoomRef"
+          },
+          "stage": {
+            "description": "Stage of the class, from 1.",
+            "format": "int64",
+            "maximum": 9,
+            "minimum": 1,
+            "type": "integer"
           },
           "startsAt": {
             "description": "Start instant (UTC).",
@@ -9683,6 +9857,24 @@
             "format": "int64",
             "type": "integer"
           },
+          "ageFromMonths": {
+            "description": "Youngest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ageToMonths": {
+            "description": "Oldest age the class is for, in months.",
+            "format": "int64",
+            "maximum": 1200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "allLevels": {
+            "description": "Whether the class is for every level; never with levelFrom.",
+            "type": "boolean"
+          },
           "attendanceOpen": {
             "description": "Whether the caller may take attendance now: the lesson takes place and has started, and for instructors and accompanists its day is not over.",
             "type": "boolean"
@@ -9755,16 +9947,13 @@
             ],
             "type": "string"
           },
-          "level": {
-            "description": "Level of the class; absent for one-off lessons.",
-            "enum": [
-              "beginner",
-              "intermediate",
-              "advanced",
-              "professional",
-              "open"
-            ],
-            "type": "string"
+          "levelFrom": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Lower end (by position) of the levels the class is for; absent without a level."
+          },
+          "levelTo": {
+            "$ref": "#/components/schemas/LevelRef",
+            "description": "Upper end of the levels the class is for, the same as levelFrom for one level; absent without a level."
           },
           "location": {
             "$ref": "#/components/schemas/LocationRef"
@@ -9784,6 +9973,13 @@
           },
           "room": {
             "$ref": "#/components/schemas/RoomRef"
+          },
+          "stage": {
+            "description": "Stage of the class, from 1.",
+            "format": "int64",
+            "maximum": 9,
+            "minimum": 1,
+            "type": "integer"
           },
           "startsAt": {
             "description": "Start instant (UTC).",
@@ -15302,7 +15498,7 @@
         "x-access": "office"
       },
       "put": {
-        "description": "Replaces the fields of a class; its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the class's member count or the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons that still follow it and have no bookings but the automatic ones of class members are deleted with those.",
+        "description": "Replaces the fields of a class, its audience included (see `createClass`); its term stays. The future lessons that were not edited one by one follow, with their bookings; a capacity below the class's member count or the bookings of one of them is a 422 on `capacity`. A retired class generates no more lessons and leaves the public timetable; its future lessons that still follow it and have no bookings but the automatic ones of class members are deleted with those.",
         "operationId": "updateClass",
         "parameters": [
           {
@@ -18193,19 +18389,13 @@
             }
           },
           {
-            "description": "Only lessons of classes at this level; excludes one-off lessons.",
+            "description": "Only lessons of classes for this level: a span of levels that includes it, or all levels. Classes without a level, one-off lessons and an unknown level match nothing.",
             "explode": false,
             "in": "query",
             "name": "level",
             "schema": {
-              "description": "Only lessons of classes at this level; excludes one-off lessons.",
-              "enum": [
-                "beginner",
-                "intermediate",
-                "advanced",
-                "professional",
-                "open"
-              ],
+              "description": "Only lessons of classes for this level: a span of levels that includes it, or all levels. Classes without a level, one-off lessons and an unknown level match nothing.",
+              "format": "uuid",
               "type": "string"
             }
           }
@@ -18986,7 +19176,7 @@
         "x-access": "public"
       },
       "post": {
-        "description": "Adds a weekly class to a term and generates its lessons that lie ahead. An unknown course type, room or staff member is a 422 on the field that names it.",
+        "description": "Adds a weekly class to a term and generates its lessons that lie ahead. An unknown course type, room, staff member or level is a 422 on the field that names it. The class is for the levels from `levelFromId` to `levelToId` (either way round, both or neither), for all levels, or for no level (ADR 0021); `allLevels` with a span is a 422 on `allLevels`.",
         "operationId": "createClass",
         "parameters": [
           {

@@ -118,6 +118,41 @@ func TestBrokenReferences(t *testing.T) {
 		})
 	}
 
+	// The stray class is for the level Advanced (strayClassLesson).
+	t.Run("level", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := t.Context()
+		f := newStaffFixture(t)
+		s := f.newScene(t)
+
+		var stray domain.Class
+
+		f.write(t, func(ctx context.Context, tx store.Tx) error {
+			var err error
+			stray, err = tx.Classes().Get(ctx, s.stray.ClassID)
+
+			return err
+		})
+		dropRows(t, f.st, "levels", stray.Levels.From.String())
+
+		anna, olga := f.earlyAnna(t), f.principal(t, f.olga)
+		sched := NewScheduleService(f.st, clock.NewFixed(mustInstant(t, bookingNow)))
+		q := ScheduleQuery{From: mustDate(t, "2026-10-21"), To: mustDate(t, "2026-10-28")}
+
+		_, err := sched.Schedule(ctx, anna, q)
+		wantBroken(t, "schedule", err)
+
+		_, err = sched.Lesson(ctx, anna, s.stray.ID)
+		wantBroken(t, "lesson", err)
+
+		_, err = f.teach(t, bookingNow).Lessons(ctx, olga, TeachQuery{})
+		wantBroken(t, "teach", err)
+
+		_, err = f.timetable(t, bookingNow).AllClasses(ctx, stray.TermID)
+		wantBroken(t, "classes", err)
+	})
+
 	t.Run("booked person", func(t *testing.T) {
 		t.Parallel()
 

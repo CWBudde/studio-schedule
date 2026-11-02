@@ -27,8 +27,8 @@ func newClassesListCmd(app *cli.App) *cobra.Command {
 		Long: "List the weekly classes of the term of --term (an ID from `terms list`), by default the current " +
 			"term, as the office's class page does: retired classes included. After a line naming the term, " +
 			"each line names the class's ID, its weekday and time in the school's time zone, the course type, " +
-			"the level, the room, the instructor and accompanist, the places, and \"retired\" for a retired " +
-			"class. Without a term that includes today, give --term.",
+			"the audience (levels, stage, ages), the room, the instructor and accompanist, the places, and " +
+			"\"retired\" for a retired class. Without a term that includes today, give --term.",
 		Example: "  studio-schedule classes list --as office@example.org\n" +
 			"  studio-schedule classes list --as office@example.org --term <term-id>",
 		Access: httpapi.AccessOffice,
@@ -69,7 +69,7 @@ func newClassesListCmd(app *cli.App) *cobra.Command {
 					return
 				}
 
-				t.Table("ID", "Day", "Time", "Course type", "Level", "Room", "Instructor", "Accompanist", "Places",
+				t.Table("ID", "Day", "Time", "Course type", "Audience", "Room", "Instructor", "Accompanist", "Places",
 					"Status")
 
 				for _, c := range classes {
@@ -79,7 +79,7 @@ func newClassesListCmd(app *cli.App) *cobra.Command {
 					}
 
 					t.Row(c.ID.String(), c.Weekday.String()[:3], classTime(c.Class), courseType[c.CourseTypeID],
-						string(c.Level), room[c.RoomID], c.Instructor.DisplayName, c.Accompanist.DisplayName,
+						audienceText(c.Audience), room[c.RoomID], c.Instructor.DisplayName, c.Accompanist.DisplayName,
 						strconv.Itoa(c.Capacity), status)
 				}
 			})

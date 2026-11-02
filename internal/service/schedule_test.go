@@ -194,6 +194,20 @@ func (f *scheduleFixture) staff(t *testing.T, name string) domain.StaffID {
 	return domain.StaffID{}
 }
 
+func (f *scheduleFixture) level(t *testing.T, name string) domain.LevelID {
+	t.Helper()
+
+	for _, l := range f.data.Levels {
+		if l.Name == name {
+			return l.ID
+		}
+	}
+
+	t.Fatalf("no demo level %q", name)
+
+	return domain.LevelID{}
+}
+
 func (f *scheduleFixture) courseType(t *testing.T, name string) domain.CourseTypeID {
 	t.Helper()
 
@@ -287,7 +301,7 @@ func TestScheduleFilters(t *testing.T) {
 		{
 			name: "level excludes one-off lessons",
 			query: func(q ScheduleQuery) ScheduleQuery {
-				q.Level = domain.LevelBeginner
+				q.Level = f.level(t, "Beginner")
 
 				return q
 			},
@@ -296,7 +310,7 @@ func TestScheduleFilters(t *testing.T) {
 		{
 			name: "level advanced",
 			query: func(q ScheduleQuery) ScheduleQuery {
-				q.Level = domain.LevelAdvanced
+				q.Level = f.level(t, "Advanced")
 
 				return q
 			},
@@ -306,7 +320,7 @@ func TestScheduleFilters(t *testing.T) {
 			name: "combined filters",
 			query: func(q ScheduleQuery) ScheduleQuery {
 				q.Location = f.location(t, "Studio North")
-				q.Level = domain.LevelBeginner
+				q.Level = f.level(t, "Beginner")
 
 				return q
 			},
@@ -386,7 +400,7 @@ func TestScheduleResult(t *testing.T) {
 		t.Errorf("lesson = %+v, want %+v", ballet.Lesson, f.lessons["monBallet"])
 	}
 
-	if ballet.Level != domain.LevelBeginner || ballet.CourseType.Name != "Classical Ballet" ||
+	if ballet.Audience.Low.Name != "Beginner" || ballet.Audience.High.Name != "Beginner" || ballet.CourseType.Name != "Classical Ballet" ||
 		ballet.Room.Name != "Studio A" || ballet.Location.Name != "Studio North" ||
 		ballet.Instructor.DisplayName != "Alina Starling" || ballet.Accompanist.DisplayName != "Felix Keysworth" {
 		t.Errorf("resolved references = %+v", ballet)
@@ -397,7 +411,7 @@ func TestScheduleResult(t *testing.T) {
 	}
 
 	ws := byName["workshop"]
-	if ws.Level != "" || !ws.Accompanist.ID.IsZero() || ws.Location.Name != "Studio North" {
+	if ws.Audience != (Audience{}) || !ws.Accompanist.ID.IsZero() || ws.Location.Name != "Studio North" {
 		t.Errorf("workshop = %+v", ws)
 	}
 }
@@ -418,7 +432,6 @@ func TestScheduleValidation(t *testing.T) {
 		{"to equals from", ScheduleQuery{From: from, To: from}},
 		{"to before from", ScheduleQuery{From: from, To: from.AddDays(-1)}},
 		{"more than 42 days", ScheduleQuery{From: from, To: from.AddDays(MaxScheduleDays + 1)}},
-		{"unknown level", ScheduleQuery{From: from, To: from.AddDays(7), Level: "expert"}},
 	}
 
 	for _, tt := range tests {
@@ -468,7 +481,7 @@ func TestLesson(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got.Level != domain.LevelBeginner || got.Location.Address == "" || got.CourseType.Description == "" ||
+	if got.Audience.Low.Name != "Beginner" || got.Location.Address == "" || got.CourseType.Description == "" ||
 		got.Accompanist.DisplayName != "Felix Keysworth" {
 		t.Errorf("resolved references = %+v", got)
 	}
@@ -512,9 +525,10 @@ func TestScheduleLessonOutsideItsTerm(t *testing.T) {
 		ID: ids.New[domain.TermID](seq), Name: "Winter",
 		StartsOn: schoolDate(2026, time.January, 5), EndsOn: schoolDate(2026, time.January, 31),
 	}
+	advanced := domain.Level{ID: ids.New[domain.LevelID](seq), Name: "Advanced", Position: 1}
 	class := domain.Class{
 		ID: ids.New[domain.ClassID](seq), TermID: term.ID, CourseTypeID: courseType.ID, RoomID: room.ID,
-		InstructorID: staff.ID, Level: domain.LevelAdvanced, Weekday: time.Monday,
+		InstructorID: staff.ID, Levels: domain.LevelRange{From: advanced.ID, To: advanced.ID}, Weekday: time.Monday,
 		StartTime: domain.TimeOfDay{Hour: 18}, Duration: time.Hour, Capacity: 10,
 	}
 	start := schoolDate(2026, time.October, 19).At(class.StartTime, loc)
@@ -532,6 +546,7 @@ func TestScheduleLessonOutsideItsTerm(t *testing.T) {
 			tx.Rooms().Create(ctx, room),
 			tx.Staff().Create(ctx, staff),
 			tx.CourseTypes().Create(ctx, courseType),
+			tx.Levels().Create(ctx, advanced),
 			tx.Terms().Create(ctx, term),
 			tx.Classes().Create(ctx, class),
 			tx.Lessons().Create(ctx, lesson),
@@ -548,7 +563,7 @@ func TestScheduleLessonOutsideItsTerm(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(s.Lessons) != 1 || s.Lessons[0].Lesson.ID != lesson.ID || s.Lessons[0].Level != domain.LevelAdvanced {
+	if len(s.Lessons) != 1 || s.Lessons[0].Lesson.ID != lesson.ID || s.Lessons[0].Audience.Low.ID != advanced.ID {
 		t.Fatalf("lessons = %+v, want the lesson with its class level", s.Lessons)
 	}
 }

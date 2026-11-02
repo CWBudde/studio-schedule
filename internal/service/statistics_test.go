@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -416,6 +417,34 @@ func TestStatisticsDemo(t *testing.T) {
 			a.Weekday == b.Weekday && a.StartTime.Compare(b.StartTime) > 0) {
 			t.Errorf("class %v before %v", a, b)
 		}
+	}
+
+	// Every class row carries its class's audience, a one-off row none.
+	spans := 0
+
+	for _, c := range got.Classes {
+		a := c.Audience
+		if c.Class.ID.IsZero() {
+			if a != (Audience{}) {
+				t.Errorf("one-off %v has the audience %+v", c.Lesson.ID, a)
+			}
+
+			continue
+		}
+
+		ends := []domain.LevelID{a.Low.ID, a.High.ID}
+		if !slices.Contains(ends, c.Class.Levels.From) || !slices.Contains(ends, c.Class.Levels.To) ||
+			a.AllLevels != c.Class.AllLevels || a.AgeFrom != c.Class.AgeFrom || a.AgeTo != c.Class.AgeTo {
+			t.Errorf("class %v has the audience %+v", c.Class, a)
+		}
+
+		if a.Low.Name == "Beginner" && a.High.Name == "Intermediate" {
+			spans++
+		}
+	}
+
+	if spans != 1 {
+		t.Errorf("%d rows for the Beginner–Intermediate class, want 1", spans)
 	}
 }
 

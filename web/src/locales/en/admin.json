@@ -70,7 +70,11 @@
       "validityDays": "Enter a whole number of days from 0 (no expiry) to 3660.",
       "timeDays": "Enter a whole number of days from 1 to 3660.",
       "passTypeInactive": "This pass type is no longer sold; choose another one.",
-      "receiptPrefix": "Use 1 to 16 letters A–Z and digits."
+      "receiptPrefix": "Use 1 to 16 letters A–Z and digits.",
+      "level": "This level no longer exists; choose another one.",
+      "stage": "Enter a whole number from 1 to 9, or leave it empty.",
+      "age": "Enter an age in whole or half years from 0.5 to 100, such as 3.5, or leave it empty.",
+      "ageRange": "“Age to” cannot be below “Age from”."
     }
   },
   "delete": {
@@ -302,6 +306,17 @@
     "noAccompanist": "None",
     "inactiveStaff": "{{name}} (inactive)",
     "level": "Level",
+    "noLevel": "No level",
+    "allLevels": "All levels",
+    "levelTo": "Up to",
+    "levelToHint": "The most advanced level the class is for; the same level for a class of one level.",
+    "noLevels": "No levels yet –",
+    "noLevelsLink": "add them on the Levels page",
+    "stage": "Stage",
+    "stageHint": "Optional: the step within the course, 1 to 9.",
+    "ageFrom": "Age from",
+    "ageTo": "Age to",
+    "ageHint": "Optional, in years, such as 3.5.",
     "weekday": "Weekday",
     "choose": "Choose",
     "startTime": "Start time",

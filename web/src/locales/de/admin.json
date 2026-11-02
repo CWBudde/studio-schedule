@@ -70,7 +70,11 @@
       "validityDays": "Gib eine ganze Zahl von Tagen von 0 (ohne Ablauf) bis 3660 ein.",
       "timeDays": "Gib eine ganze Zahl von Tagen von 1 bis 3660 ein.",
       "passTypeInactive": "Diese Kartenart wird nicht mehr verkauft; wähle eine andere.",
-      "receiptPrefix": "Verwende 1 bis 16 Buchstaben A–Z und Ziffern."
+      "receiptPrefix": "Verwende 1 bis 16 Buchstaben A–Z und Ziffern.",
+      "level": "Dieses Level gibt es nicht mehr; wähle ein anderes.",
+      "stage": "Gib eine ganze Zahl von 1 bis 9 ein oder lass das Feld leer.",
+      "age": "Gib ein Alter in ganzen oder halben Jahren von 0,5 bis 100 ein, etwa 3,5, oder lass das Feld leer.",
+      "ageRange": "„Alter bis“ darf nicht unter „Alter von“ liegen."
     }
   },
   "delete": {
@@ -301,7 +305,18 @@
     "accompanist": "Korrepetition",
     "noAccompanist": "Keine",
     "inactiveStaff": "{{name}} (inaktiv)",
-    "level": "Niveau",
+    "level": "Level",
+    "noLevel": "Kein Level",
+    "allLevels": "Alle Level",
+    "levelTo": "Bis",
+    "levelToHint": "Das fortgeschrittenste Level, für das der Kurs gedacht ist; dasselbe Level für einen Kurs mit nur einem Level.",
+    "noLevels": "Noch keine Level –",
+    "noLevelsLink": "lege sie auf der Seite Level an",
+    "stage": "Stufe",
+    "stageHint": "Optional: die Stufe innerhalb des Kurses, 1 bis 9.",
+    "ageFrom": "Alter von",
+    "ageTo": "Alter bis",
+    "ageHint": "Optional, in Jahren, etwa 3,5.",
     "weekday": "Wochentag",
     "choose": "Auswählen",
     "startTime": "Beginn",

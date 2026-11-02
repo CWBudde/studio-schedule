@@ -68,12 +68,19 @@ func toClass(row sqlc.Class) domain.Class {
 		RoomID:        fromPgID[domain.RoomID](row.RoomID),
 		InstructorID:  fromPgID[domain.StaffID](row.InstructorID),
 		AccompanistID: fromPgID[domain.StaffID](row.AccompanistID),
-		Level:         domain.SkillLevel(row.Level),
-		Weekday:       time.Weekday(row.Weekday),
-		StartTime:     fromPgTimeOfDay(row.StartTime),
-		Duration:      fromPgInterval(row.Duration),
-		Capacity:      int(row.Capacity),
-		Retired:       row.Retired,
+		Levels: domain.LevelRange{
+			From: fromPgID[domain.LevelID](row.LevelFromID),
+			To:   fromPgID[domain.LevelID](row.LevelToID),
+		},
+		AllLevels: row.AllLevels,
+		Stage:     fromPgInt2(row.Stage),
+		AgeFrom:   domain.AgeMonths(fromPgInt2(row.AgeFromMonths)),
+		AgeTo:     domain.AgeMonths(fromPgInt2(row.AgeToMonths)),
+		Weekday:   time.Weekday(row.Weekday),
+		StartTime: fromPgTimeOfDay(row.StartTime),
+		Duration:  fromPgInterval(row.Duration),
+		Capacity:  int(row.Capacity),
+		Retired:   row.Retired,
 	}
 }
 
@@ -89,6 +96,21 @@ func classParams(c domain.Class) (sqlc.CreateClassParams, error) {
 		return sqlc.CreateClassParams{}, err
 	}
 
+	stage, err := int2Opt(c.Stage)
+	if err != nil {
+		return sqlc.CreateClassParams{}, err
+	}
+
+	ageFrom, err := int2Opt(int(c.AgeFrom))
+	if err != nil {
+		return sqlc.CreateClassParams{}, err
+	}
+
+	ageTo, err := int2Opt(int(c.AgeTo))
+	if err != nil {
+		return sqlc.CreateClassParams{}, err
+	}
+
 	return sqlc.CreateClassParams{
 		ID:            pgID(c.ID),
 		TermID:        pgID(c.TermID),
@@ -96,7 +118,12 @@ func classParams(c domain.Class) (sqlc.CreateClassParams, error) {
 		RoomID:        pgID(c.RoomID),
 		InstructorID:  pgID(c.InstructorID),
 		AccompanistID: pgID(c.AccompanistID),
-		Level:         string(c.Level),
+		LevelFromID:   pgID(c.Levels.From),
+		LevelToID:     pgID(c.Levels.To),
+		AllLevels:     c.AllLevels,
+		Stage:         stage,
+		AgeFromMonths: ageFrom,
+		AgeToMonths:   ageTo,
 		Weekday:       day,
 		StartTime:     pgTimeOfDay(c.StartTime),
 		Duration:      pgInterval(c.Duration),

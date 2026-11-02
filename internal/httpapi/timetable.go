@@ -75,17 +75,17 @@ func term(t domain.Term) Term {
 
 // Class is a weekly class of a term. Its members are not exposed.
 type Class struct {
-	ID              domain.ClassID      `doc:"Class ID."                                    json:"id"`
-	TermID          domain.TermID       `doc:"Term the class belongs to."                   json:"termId"`
-	CourseTypeID    domain.CourseTypeID `doc:"Course type taught."                          json:"courseTypeId"`
-	RoomID          domain.RoomID       `doc:"Room the class takes place in."               json:"roomId"`
-	Instructor      StaffRef            `doc:"Instructor, also when no longer active."     json:"instructor"`
-	Accompanist     *StaffRef           `doc:"Accompanist, if any."                         json:"accompanist,omitempty"`
-	Level           domain.SkillLevel   `doc:"Skill level the class is aimed at."           enum:"beginner,intermediate,advanced,professional,open" json:"level"`
-	Weekday         int                 `doc:"Day of the week, 0 = Sunday to 6 = Saturday." json:"weekday"                                          maximum:"6"      minimum:"0"`
-	StartTime       domain.TimeOfDay    `doc:"Start time (HH:MM) in the school time zone."  example:"18:00"                                         json:"startTime" pattern:"^[0-2][0-9]:[0-5][0-9]$"`
-	DurationMinutes int                 `doc:"Length of each lesson in minutes."            json:"durationMinutes"                                  minimum:"1"`
-	Capacity        int                 `doc:"Maximum number of participants per lesson."   json:"capacity"                                         minimum:"1"`
+	ID           domain.ClassID      `doc:"Class ID."                                    json:"id"`
+	TermID       domain.TermID       `doc:"Term the class belongs to."                   json:"termId"`
+	CourseTypeID domain.CourseTypeID `doc:"Course type taught."                          json:"courseTypeId"`
+	RoomID       domain.RoomID       `doc:"Room the class takes place in."               json:"roomId"`
+	Instructor   StaffRef            `doc:"Instructor, also when no longer active."     json:"instructor"`
+	Accompanist  *StaffRef           `doc:"Accompanist, if any."                         json:"accompanist,omitempty"`
+	Audience
+	Weekday         int              `doc:"Day of the week, 0 = Sunday to 6 = Saturday." json:"weekday"                                          maximum:"6"      minimum:"0"`
+	StartTime       domain.TimeOfDay `doc:"Start time (HH:MM) in the school time zone."  example:"18:00"                                         json:"startTime" pattern:"^[0-2][0-9]:[0-5][0-9]$"`
+	DurationMinutes int              `doc:"Length of each lesson in minutes."            json:"durationMinutes"                                  minimum:"1"`
+	Capacity        int              `doc:"Maximum number of participants per lesson."   json:"capacity"                                         minimum:"1"`
 }
 
 // ClassList is the response body of listClasses.
@@ -125,7 +125,7 @@ func class(c service.TimetableClass) Class {
 		RoomID:          c.RoomID,
 		Instructor:      StaffRef{ID: c.Instructor.ID, DisplayName: c.Instructor.DisplayName},
 		Accompanist:     accompanistRef(c.Accompanist),
-		Level:           c.Level,
+		Audience:        NewAudience(c.Audience),
 		Weekday:         int(c.Weekday),
 		StartTime:       c.StartTime,
 		DurationMinutes: int(c.Duration / time.Minute),

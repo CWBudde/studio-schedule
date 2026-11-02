@@ -92,6 +92,34 @@ test.describe('list view', () => {
     await expect(lessons(main)).toHaveCount(all);
   });
 
+  test('filters by level: a span through it and all levels match', async ({ page }) => {
+    await gotoPastFortnight(page);
+    const main = page.getByRole('main');
+    // Creative Dance states only an age (4–6), the Thursday Tap class one level (Beginner).
+    const creativeDance = main.getByRole('button', { name: /^Creative Dance, / });
+    const beginnerTap = main.getByRole('button', { name: /^Tap, Thursday, / });
+    await expect(creativeDance.first()).toBeVisible();
+    await expect(creativeDance.first()).toContainText('4–6 yrs');
+    await expect(beginnerTap.first()).toBeVisible();
+
+    await page.getByRole('combobox', { name: 'Level' }).click();
+    await page.getByRole('option', { name: 'Intermediate', exact: true }).click();
+
+    await expect(page.getByRole('combobox', { name: 'Level' })).toHaveText('Intermediate');
+    expect(hashSearch(page).get('level')).toMatch(/^[0-9a-f-]{36}$/);
+    // The Thursday ballet class spans Beginner to Intermediate; Barre Fitness is for all levels.
+    const spanBallet = main.getByRole('button', {
+      name: /^Classical Ballet, Thursday, .*18:30–20:00/,
+    });
+    await expect(spanBallet.first()).toBeVisible();
+    await expect(spanBallet.first()).toContainText('Beginner–Intermediate');
+    const allLevels = main.getByRole('button', { name: /^Barre Fitness, Tuesday, / });
+    await expect(allLevels.first()).toBeVisible();
+    await expect(allLevels.first()).toContainText('All levels');
+    await expect(creativeDance).toHaveCount(0);
+    await expect(beginnerTap).toHaveCount(0);
+  });
+
   test('opens a lesson in a sheet that closes without a history entry', async ({ page }) => {
     await gotoDemo(page, '/schedule');
     const card = lessons(page.getByRole('main')).first();

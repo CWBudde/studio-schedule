@@ -263,6 +263,11 @@ func TestListClasses(t *testing.T) {
 		staff[m.ID] = map[string]any{"id": m.ID, "displayName": m.DisplayName}
 	}
 
+	levels := map[domain.LevelID]domain.Level{}
+	for _, l := range demo.Levels {
+		levels[l.ID] = l
+	}
+
 	var want []map[string]any
 
 	for _, c := range classes {
@@ -273,7 +278,6 @@ func TestListClasses(t *testing.T) {
 			"courseTypeId":    c.CourseTypeID,
 			"roomId":          c.RoomID,
 			"instructor":      staff[c.InstructorID],
-			"level":           c.Level,
 			"weekday":         int(c.Weekday),
 			"startTime":       c.StartTime.String(),
 			"durationMinutes": int(c.Duration / time.Minute),
@@ -282,6 +286,8 @@ func TestListClasses(t *testing.T) {
 		if !c.AccompanistID.IsZero() {
 			item["accompanist"] = staff[c.AccompanistID]
 		}
+
+		addAudience(item, c, levels)
 
 		want = append(want, item)
 	}
@@ -297,6 +303,64 @@ func TestListClasses(t *testing.T) {
 
 	if !with || !without {
 		t.Error("the demo classes need some with and some without an accompanist")
+	}
+
+	// And every shape of the audience: one level, a span, all levels, ages.
+	shapes := map[string]bool{}
+
+	for _, item := range want {
+		from, _ := item["levelFrom"].(map[string]any)
+		to, _ := item["levelTo"].(map[string]any)
+
+		switch {
+		case from != nil && from["id"] == to["id"]:
+			shapes["one level"] = true
+		case from != nil:
+			shapes["span"] = true
+		case item["allLevels"] == true:
+			shapes["all levels"] = true
+		case item["ageFromMonths"] != nil:
+			shapes["ages"] = true
+		}
+	}
+
+	if len(shapes) != 4 {
+		t.Errorf("the demo classes have the audiences %v, want all four shapes", shapes)
+	}
+}
+
+// addAudience adds the audience fields of c to the expected class item:
+// its levels lower first by position, all levels, stage and ages, each only
+// when stated.
+func addAudience(item map[string]any, c domain.Class, levels map[domain.LevelID]domain.Level) {
+	ref := func(l domain.Level) map[string]any {
+		out := map[string]any{"id": l.ID, "name": l.Name}
+		if l.Code != "" {
+			out["code"] = l.Code
+		}
+
+		return out
+	}
+
+	if !c.Levels.IsZero() {
+		low, high := levels[c.Levels.From], levels[c.Levels.To]
+		if high.Position < low.Position {
+			low, high = high, low
+		}
+
+		item["levelFrom"], item["levelTo"] = ref(low), ref(high)
+	}
+
+	if c.AllLevels {
+		item["allLevels"] = true
+	}
+
+	for key, v := range map[string]int{
+		"stage": c.Stage, "ageFromMonths": int(c.AgeFrom), "ageToMonths": int(c.AgeTo),
+	} {
+		if v != 0 {
+			item[key] = v
+		}
 	}
 }
 
@@ -371,8 +435,15 @@ func TestCatalogOpenAPI(t *testing.T) {
 		t.Errorf("StaffMember.kind enum = %v, want %v", got, want)
 	}
 
-	if got, want := enum("Class", "level"), jsonValue(t, domain.SkillLevels()); !reflect.DeepEqual(any(got), want) {
-		t.Errorf("Class.level enum = %v, want %v", got, want)
+	// The class's audience names levels of the school's own scale (ADR 0021).
+	for _, field := range []string{"levelFrom", "levelTo", "allLevels", "stage", "ageFromMonths", "ageToMonths"} {
+		if schemas["Class"].Properties[field] == nil || slices.Contains(schemas["Class"].Required, field) {
+			t.Errorf("Class.%s must be an optional field", field)
+		}
+	}
+
+	if _, ok := schemas["Class"].Properties["level"]; ok {
+		t.Error("Class must not have the old level enum")
 	}
 
 	if _, ok := schemas["StaffMember"].Properties["personId"]; ok {

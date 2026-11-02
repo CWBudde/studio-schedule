@@ -486,7 +486,8 @@ type LevelRepo interface {
 	// for an unknown level. It never writes the position, which only
 	// SetOrder changes, so an edit cannot undo a concurrent reorder.
 	Update(ctx context.Context, l domain.Level) error
-	// Delete fails with domain.ErrConflict while classes use the level.
+	// Delete fails with domain.ErrConflict while a class uses the level as
+	// either end of its span.
 	Delete(ctx context.Context, id domain.LevelID) error
 	// List returns all levels ordered by position, name and ID.
 	List(ctx context.Context) ([]domain.Level, error)
@@ -521,8 +522,8 @@ type TermRepo interface {
 // ClassRepo stores weekly classes and their members.
 type ClassRepo interface {
 	Get(ctx context.Context, id domain.ClassID) (domain.Class, error)
-	// Create fails with domain.ErrConflict if the term, course type, room or
-	// a staff member does not exist.
+	// Create fails with domain.ErrConflict if the term, course type, room, a
+	// staff member or a level of the span does not exist.
 	Create(ctx context.Context, c domain.Class) error
 	Update(ctx context.Context, c domain.Class) error
 	// Delete fails with domain.ErrConflict while lessons or members belong

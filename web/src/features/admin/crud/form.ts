@@ -58,6 +58,10 @@ const adminErrors = [
   'timeDays',
   'passTypeInactive',
   'receiptPrefix',
+  'level',
+  'stage',
+  'age',
+  'ageRange',
 ] as const;
 type AdminErrorKey = (typeof adminErrors)[number];
 const isAdminErrorKey = (key: unknown): key is AdminErrorKey =>

@@ -158,6 +158,9 @@ type StatisticsTotals struct {
 // one-off lesson (a zero Class).
 type ClassStatistics struct {
 	Class domain.Class
+	// Audience is the class's, its levels resolved (ADR 0021); zero for a
+	// one-off lesson.
+	Audience Audience
 	// CourseType is the course type of the latest lesson in the range,
 	// which may differ from the class's: every lesson counts under its own
 	// course type in CourseTypes.
@@ -600,7 +603,7 @@ func (g *statisticsGroups) add(sl ScheduledLesson, class domain.Class, f lessonF
 	} else {
 		c, ok := g.classes[l.ClassID]
 		if !ok {
-			c = &ClassStatistics{Class: class}
+			c = &ClassStatistics{Class: class, Audience: sl.Audience}
 			g.classes[l.ClassID] = c
 		}
 

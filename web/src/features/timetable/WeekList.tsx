@@ -2,6 +2,7 @@ import { Clock, MapPin, UserRound } from 'lucide-react';
 import { type ReactNode, useId, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
+import { formatAudience } from '@/lib/audience';
 import {
   endTime,
   groupByWeekday,
@@ -19,7 +20,7 @@ export type Catalogue = {
 
 /** Extras of a class card, e.g. the office's buttons; the public list has none. */
 export type CardExtras = {
-  /** Badges next to the level, such as "Retired". */
+  /** Badges next to whom the class is for, such as "Retired". */
   badges?: (weeklyClass: WeeklyClass) => ReactNode;
   /** Buttons at the foot of the card. */
   actions?: (weeklyClass: WeeklyClass) => ReactNode;
@@ -114,6 +115,7 @@ function ClassCard({
   const instructor = c.instructor.displayName;
   const accompanist = c.accompanist?.displayName;
   const time = `${c.startTime}–${endTime(c.startTime, c.durationMinutes)}`;
+  const audience = formatAudience(c, ts, 'long');
 
   return (
     <article
@@ -127,7 +129,7 @@ function ClassCard({
 
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="font-heading text-lg leading-snug font-medium">{courseType}</h3>
-        <Badge variant="secondary">{ts(`level.${c.level}`)}</Badge>
+        {audience && <Badge variant="secondary">{audience}</Badge>}
         {badges?.(c)}
       </div>
 

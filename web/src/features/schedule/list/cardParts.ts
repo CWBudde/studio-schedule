@@ -1,23 +1,24 @@
 import { useTranslation } from 'react-i18next';
 import type { components } from '@/api/schema';
+import type { AudienceFields } from '@/lib/audience';
 import { showsKind, useLessonLabel } from '../lessonLabel';
 
 /** What a lesson card shows of a lesson (the schedule's lessons and "My lessons" have it). */
-export type CardLesson = Pick<
-  components['schemas']['LessonSummary'],
-  | 'courseType'
-  | 'level'
-  | 'kind'
-  | 'status'
-  | 'visibility'
-  | 'startsAt'
-  | 'endsAt'
-  | 'room'
-  | 'location'
-  | 'instructor'
-  | 'accompanist'
-  | 'renter'
->;
+export type CardLesson = AudienceFields &
+  Pick<
+    components['schemas']['LessonSummary'],
+    | 'courseType'
+    | 'kind'
+    | 'status'
+    | 'visibility'
+    | 'startsAt'
+    | 'endsAt'
+    | 'room'
+    | 'location'
+    | 'instructor'
+    | 'accompanist'
+    | 'renter'
+  >;
 
 /**
  * The card's surface: the thin primary line on the left is a barre; ended

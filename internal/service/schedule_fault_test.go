@@ -39,8 +39,8 @@ func (f *staffFixture) newScene(t *testing.T) scene {
 }
 
 // strayClassLesson stores a term of 2027/28 with a class of the fixture's
-// catalog and a lesson of that class at start, outside the term's dates,
-// as if moved there.
+// catalog for the level Advanced, which it stores too, and a lesson of that
+// class at start, outside the term's dates, as if moved there.
 func (f *staffFixture) strayClassLesson(t *testing.T, start string) domain.Lesson {
 	t.Helper()
 
@@ -48,10 +48,11 @@ func (f *staffFixture) strayClassLesson(t *testing.T, start string) domain.Lesso
 		ID: ids.New[domain.TermID](f.seq), Name: "Fictional Next Year",
 		StartsOn: mustDate(t, "2027-09-01"), EndsOn: mustDate(t, "2028-07-31"),
 	}
+	advanced := domain.Level{ID: ids.New[domain.LevelID](f.seq), Name: "Advanced", Position: 1}
 	c := domain.Class{
 		ID: ids.New[domain.ClassID](f.seq), TermID: term.ID, CourseTypeID: f.courseType, RoomID: f.room,
-		InstructorID: f.instructor, AccompanistID: f.pianist, Level: domain.LevelAdvanced, Weekday: time.Saturday,
-		StartTime: domain.TimeOfDay{Hour: 11}, Duration: time.Hour, Capacity: 8,
+		InstructorID: f.instructor, AccompanistID: f.pianist, Levels: span(advanced, advanced),
+		Weekday: time.Saturday, StartTime: domain.TimeOfDay{Hour: 11}, Duration: time.Hour, Capacity: 8,
 	}
 	at := mustInstant(t, start)
 	l := domain.Lesson{
@@ -61,7 +62,10 @@ func (f *staffFixture) strayClassLesson(t *testing.T, start string) domain.Lesso
 		Kind: domain.LessonRegular, Capacity: 8,
 	}
 	f.write(t, func(ctx context.Context, tx store.Tx) error {
-		return errors.Join(tx.Terms().Create(ctx, term), tx.Classes().Create(ctx, c), tx.Lessons().Create(ctx, l))
+		return errors.Join(
+			tx.Levels().Create(ctx, advanced), tx.Terms().Create(ctx, term), tx.Classes().Create(ctx, c),
+			tx.Lessons().Create(ctx, l),
+		)
 	})
 
 	return l
@@ -112,7 +116,7 @@ func TestScheduleStoreFaults(t *testing.T) {
 			}
 
 			if len(byID[s.accompanied.ID].BookedFor) != 1 || len(byID[s.full.ID].Waiting) != 1 ||
-				byID[s.stray.ID].Level != domain.LevelAdvanced || len(byID[s.early.ID].BookedFor) != 1 {
+				byID[s.stray.ID].Audience.Low.Name != "Advanced" || len(byID[s.early.ID].BookedFor) != 1 {
 				return fmt.Errorf("unexpected schedule %+v", got.Lessons)
 			}
 

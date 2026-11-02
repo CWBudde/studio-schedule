@@ -15,7 +15,7 @@ import (
 
 // The demo lessons the tests work on (seed's deterministic IDs).
 const (
-	// demoJazz is today's Jazz Dance (beginner) at 17:00 in Hall 1, with
+	// demoJazz is today's Jazz Dance (Beginner) at 17:00 in Hall 1, with
 	// three active bookings; it has not started at testNow.
 	demoJazz = "00000000-0000-7000-8000-0000000000cd"
 	// demoStarted is yesterday's Creative Dance, which has started.
@@ -288,7 +288,7 @@ func TestLessonsCancelRestore(t *testing.T) {
 		term.terminal, term.stdin = true, "n\n"
 
 		got = term.exec(t, "lessons", "cancel", "--as", demoOffice, demoJazz)
-		wantExitCode(t, got, 2, "Cancel Jazz Dance (beginner) on 2026-09-22 at 17:00 in Hall 1 and mail those "+
+		wantExitCode(t, got, 2, "Cancel Jazz Dance (Beginner) on 2026-09-22 at 17:00 in Hall 1 and mail those "+
 			"booked on it (3 active bookings)? [y/N] error: not confirmed; nothing was changed")
 
 		if lessonOf(t, st, demoJazz).Status != domain.LessonScheduled || canceled() != 0 {

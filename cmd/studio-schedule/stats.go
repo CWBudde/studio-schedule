@@ -139,8 +139,7 @@ func statsText(t *cli.Text, st service.Statistics, participants bool) {
 				c.LessonCounts
 		}
 
-		return c.Class.Weekday.String()[:3] + " " + c.Class.StartTime.String() + " " + c.CourseType.Name +
-			" (" + string(c.Class.Level) + ")", c.LessonCounts
+		return c.Class.Weekday.String()[:3] + " " + c.Class.StartTime.String() + " " + withAudience(c.CourseType.Name, c.Audience), c.LessonCounts
 	})
 	figureTable(t, "room", st.Rooms, func(r service.RoomStatistics) (string, service.LessonCounts) {
 		return r.Room.Name + " (" + r.Location.Name + ")", r.LessonCounts

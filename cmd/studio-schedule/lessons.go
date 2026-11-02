@@ -30,7 +30,7 @@ func newLessonsListCmd(app *cli.App) *cobra.Command {
 		Long: "List the lessons that start on a school date (--date, default today) or from --from through " +
 			"--to (both inclusive, at most " + strconv.Itoa(service.MaxScheduleDays) + " days), as the office " +
 			"sees the schedule: hidden, unreleased and canceled lessons included. Each line names the lesson's " +
-			"ID, its date and time in the school's time zone, the class (course type and level) or the kind of " +
+			"ID, its date and time in the school's time zone, the class (course type and audience) or the kind of " +
 			"a one-off lesson, the instructor, the room, the active bookings and the places, and its status.",
 		Example: "  studio-schedule lessons list --as office@example.org\n" +
 			"  studio-schedule lessons list --as office@example.org --from 2026-09-21 --to 2026-09-27",
@@ -156,8 +156,9 @@ func lessonRow(t *cli.Text, loc *time.Location, sl service.ScheduledLesson) {
 		sl.Instructor.DisplayName, sl.Room.Name, booked, status)
 }
 
-// lessonName names the lesson sl: the course type with the level of its
-// class, or with the kind of a one-off lesson; a room rental by its renter.
+// lessonName names the lesson sl: the course type with the audience of its
+// class (if it states one), or with the kind of a one-off lesson; a room
+// rental by its renter.
 func lessonName(sl service.ScheduledLesson) string {
 	l := sl.Lesson
 
@@ -165,14 +166,14 @@ func lessonName(sl service.ScheduledLesson) string {
 	case l.Kind == domain.LessonRental:
 		return "room rental: " + l.Renter
 	case !l.ClassID.IsZero():
-		return sl.CourseType.Name + " (" + string(sl.Level) + ")"
+		return withAudience(sl.CourseType.Name, sl.Audience)
 	default:
 		return sl.CourseType.Name + " (" + string(l.Kind) + ")"
 	}
 }
 
 // lessonText names the lesson sl in a sentence, with its start in the
-// school's time zone loc: "Classical Ballet (beginner) on 2026-09-23 at
+// school's time zone loc: "Classical Ballet (Beginner) on 2026-09-23 at
 // 18:00 in Studio 1".
 func lessonText(loc *time.Location, sl service.ScheduledLesson) string {
 	start := sl.Lesson.StartsAt.In(loc)
