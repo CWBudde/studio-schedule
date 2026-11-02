@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -48,8 +49,16 @@ type authApp struct {
 func newAuthApp(t *testing.T, deps app.Deps) *authApp {
 	t.Helper()
 
+	return newSchoolAuthApp(t, deps, seed.SchoolProgramme)
+}
+
+// newSchoolAuthApp is newAuthApp on a store loaded with the demo school
+// school (for FixedDemoAnchor, like seed.LoadDemo).
+func newSchoolAuthApp(t *testing.T, deps app.Deps, school seed.School) *authApp {
+	t.Helper()
+
 	st := memory.New()
-	if err := seed.LoadDemo(t.Context(), st); err != nil {
+	if err := seed.LoadDemoSchoolAt(t.Context(), st, seed.FixedDemoAnchor, school); err != nil {
 		t.Fatal(err)
 	}
 
@@ -304,6 +313,54 @@ func TestDemoLoginsSignIn(t *testing.T) {
 
 		if role := decode(t, body)["role"]; role != l.Role {
 			t.Errorf("%s: role %v, want %s", l.Email, role, l.Role)
+		}
+	}
+}
+
+// TestWerkstattDemoLogins: the werkstatt demo, built like cmd/wasm builds
+// it for DEMO_SCHOOL=werkstatt (seed.SchoolLogins of the school it seeds),
+// lists the werkstatt school's logins, and each signs in with its role.
+func TestWerkstattDemoLogins(t *testing.T) {
+	t.Parallel()
+
+	logins, err := seed.SchoolLogins(seed.SchoolWerkstatt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a := newSchoolAuthApp(t, app.Deps{Demo: true, DemoLogins: logins}, seed.SchoolWerkstatt)
+
+	res, body := a.call(http.MethodGet, "/api/v1/demo/logins", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("demo logins: %d %s", res.StatusCode, body)
+	}
+
+	var out struct {
+		Logins []httpapi.DemoLogin `json:"logins"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("demo logins %s: %v", body, err)
+	}
+
+	want := make([]httpapi.DemoLogin, 0, len(logins))
+	for _, l := range logins {
+		want = append(want, httpapi.DemoLogin{
+			Email: l.Email, Password: l.Password, Role: string(l.Role), GivenName: l.GivenName, FamilyName: l.FamilyName,
+		})
+	}
+
+	if len(want) == 0 || !slices.Equal(out.Logins, want) {
+		t.Fatalf("werkstatt demo logins %+v, want the werkstatt school's %+v", out.Logins, want)
+	}
+
+	for _, l := range out.Logins {
+		res, body := a.call(http.MethodPost, "/api/v1/auth/login", loginBody(l.Email, l.Password))
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("werkstatt login %s: %d %s", l.Email, res.StatusCode, body)
+		}
+
+		if role := decode(t, body)["role"]; role != l.Role {
+			t.Errorf("werkstatt login %s: role %v, want %s", l.Email, role, l.Role)
 		}
 	}
 }
