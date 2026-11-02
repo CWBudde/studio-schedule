@@ -131,54 +131,22 @@ const (
 // has the error.
 var errInternal = errors.New("internal error")
 
-// call runs fn as the current principal of the session and returns its
-// document as the result:
-//
-//  1. It resolves the account of --as again (Actor), and
-//  2. checks its current role against t's access level, so an account
-//     disabled or demoted since the start is refused and fn does not run.
-//  3. fn runs with the fresh principal, so the services' own rules see
-//     the account as it is now.
-//  4. The call is audited (mcp-tool-called) with t's name and the outcome:
-//     ok, or the error's kind. A refused call is recorded as the start's
-//     principal, whose Via names the MCP channel too.
-//
-// Neither the audit event nor the log ever gets the call's arguments: the
-// log records only unexpected errors, by the tool's name, and no error of
-// the caller's input, whose message may repeat it. If the audit event
-// cannot be written, the call fails and returns nothing.
+// call runs fn as the current principal of the session (see run) and
+// returns its document as the result: the document's JSON, or an error
+// result with the error's message.
 func (s *Server) call(
 	ctx context.Context, t tool, fn func(ctx context.Context, p service.Principal) (any, error),
 ) (*mcp.CallToolResult, error) {
-	p, err := s.authorize(ctx, t)
+	var text []byte
 
-	var (
-		text    []byte
-		outcome string
-	)
-
-	if err != nil {
-		p, outcome = s.start, refusal(err)
-	} else {
-		var doc any
-		if doc, err = fn(ctx, p); err == nil {
+	err := s.run(ctx, "tool", t.name, t.access, func(ctx context.Context, p service.Principal) error {
+		doc, err := fn(ctx, p)
+		if err == nil {
 			text, err = json.Marshal(doc) // a document that does not encode is the tool's error
 		}
 
-		outcome = outcomeOf(err)
-	}
-
-	if outcome == outcomeError {
-		s.log.ErrorContext(ctx, "mcp: a tool call failed", "tool", t.name, "error", err)
-		err = errInternal
-	}
-
-	if auditErr := s.svc.Auth.RecordToolCall(ctx, p, t.name, outcome); auditErr != nil {
-		s.log.ErrorContext(ctx, "mcp: a tool call could not be audited", "tool", t.name, "error", auditErr)
-
-		return errorResult(errInternal), nil
-	}
-
+		return err
+	})
 	if err != nil {
 		return errorResult(err), nil
 	}
@@ -186,18 +154,63 @@ func (s *Server) call(
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(text)}}}, nil
 }
 
+// run runs fn as the current principal of the session, for the tool or
+// prompt (kind) name of access, and returns fn's error as the client may see it:
+//
+//  1. It resolves the account of --as again (Actor), and
+//  2. checks its current role against access, so an account disabled or
+//     demoted since the start is refused and fn does not run.
+//  3. fn runs with the fresh principal, so the services' own rules see
+//     the account as it is now.
+//  4. The call is audited (mcp-tool-called) with name and the outcome:
+//     ok, or the error's kind. A refused call is recorded as the start's
+//     principal, whose Via names the MCP channel too.
+//
+// Neither the audit event nor the log ever gets the call's arguments: the
+// log records only unexpected errors, by name, and no error of the
+// caller's input, whose message may repeat it. An unexpected error reaches
+// the client as errInternal. If the audit event cannot be written, the
+// call fails with errInternal, whatever fn returned.
+func (s *Server) run(
+	ctx context.Context, kind, name string, access httpapi.Access, fn func(ctx context.Context, p service.Principal) error,
+) error {
+	p, err := s.authorize(ctx, kind, name, access)
+
+	var outcome string
+
+	if err != nil {
+		p, outcome = s.start, refusal(err)
+	} else {
+		err = fn(ctx, p)
+		outcome = outcomeOf(err)
+	}
+
+	if outcome == outcomeError {
+		s.log.ErrorContext(ctx, "mcp: a call failed", "kind", kind, "tool", name, "error", err)
+		err = errInternal
+	}
+
+	if auditErr := s.svc.Auth.RecordToolCall(ctx, p, name, outcome); auditErr != nil {
+		s.log.ErrorContext(ctx, "mcp: a call could not be audited", "kind", kind, "tool", name, "error", auditErr)
+
+		return errInternal
+	}
+
+	return err
+}
+
 // authorize resolves the current principal and checks its role against
-// t's access level.
-func (s *Server) authorize(ctx context.Context, t tool) (service.Principal, error) {
+// access, the level of the tool or prompt (kind) name.
+func (s *Server) authorize(ctx context.Context, kind, name string, access httpapi.Access) (service.Principal, error) {
 	p, err := s.actor(ctx)
 	if err != nil {
 		return service.Principal{}, err
 	}
 
-	minimum, _ := t.access.MinRole()
+	minimum, _ := access.MinRole()
 	if !p.Role.AtLeast(minimum) {
-		return service.Principal{}, fmt.Errorf("%w: the account's role %s is below %s, which the tool %s needs",
-			domain.ErrForbidden, p.Role, minimum, t.name)
+		return service.Principal{}, fmt.Errorf("%w: the account's role %s is below %s, which the %s %s needs",
+			domain.ErrForbidden, p.Role, minimum, kind, name)
 	}
 
 	return p, nil
