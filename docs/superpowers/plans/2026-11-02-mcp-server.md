@@ -317,7 +317,50 @@ are written against these.
 
 ## Task 2.1
 
-- [ ] 2.1 `mcp-person-reads` The read tools that need `--personal-data`: a lesson with participants and waiting list, person search, a person's bookings and passes, receipts, the mail log, and the statistics' top participants — see "Task 2.1".
+- [x] 2.1 `mcp-person-reads` The read tools that need `--personal-data`: a lesson with participants and waiting list, person search, a person's bookings and passes, receipts, the mail log, and the statistics' top participants — see "Task 2.1".
+  - Done: `lesson` (staff), `search_persons`, `person_bookings`, `person_passes`, `receipts` (office)
+    and `mail_log` (admin), all `personalData`, in `tools_lessons.go`, `tools_persons.go`,
+    `tools_receipts.go` and `tools_mail.go`; `statistics` returns the whole getStatistics body with
+    `--personal-data`. `httpapi` exports `NewLessonParticipants` (moved out of the handler) and
+    `NewPersonMatch`. Deviations from the section:
+    - `persons show` returns neither bookings nor passes, and no command prints only a person's
+      bookings. So `person_bookings` is `{person, bookings, waitlistEntries}`: the person as
+      `search_persons` lists it (with `anonymized`), and the two lists of `persons export`. The rest of
+      the export, the date of birth among it, is left out. Its parity test compares the lists with the
+      export and `person` with `persons show`.
+    - `receipts list` takes `--from`/`--to` only (no year, number range or person), so the tool takes
+      `from`/`to`.
+    - `mail list` has no recipient filter (the API has), so neither has `mail_log`. It refuses the
+      `test` template as the command does.
+
+    Tests: `mcpserver` covers each tool's input errors, store failures, goldens (`lesson`,
+    `search_persons`, `person_bookings`, `person_passes`, `receipts`, `mail_log`,
+    `statistics-personal-data`), mail paging over 53 mails, and that no result has a mail body.
+    Review focus 3 is `TestPersonalDataUnlisted` (per role: unlisted without the flag, a call by name is
+    the SDK's `unknown tool` and writes no audit row) and `TestMCPPersonToolsNeedTheFlag` on the real
+    command. Review focus 4 is `TestPersonAnonymized` (`anonymized: true` and "Deleted person" in
+    `lesson` and `person_bookings`, the former name and email nowhere) and `TestSearchPersonsMerged`.
+    Review focus 2 for the search is `TestMCPSearchTermStaysPrivate` (`"Zebulon"`).
+    `TestGoldensWithoutBirthDates` checks every golden. `cmd/studio-schedule/mcp_persons_test.go`
+    holds the parity tests on both stores (the search term on stdin, the whole `stats` with the top
+    participants) and the instructor's `lesson`. Coverage 99.0 % total; every function of the new tool
+    files at 100 %.
+
+    Discoveries:
+    - The `mcpserver` fixture had no `AppURL`, so a service that mails a link failed. Anonymizing a
+      person cancels their future bookings, and that invites the next person on a full lesson's
+      waiting list. `fixtureOn` sets one now.
+    - The demo data has no outbox mails. The tests write them: password resets in `mcpserver`, the
+      store directly in the parity test.
+    - `lesson` words its two not-found errors differently: another instructor's lesson is
+      `participants of lesson <id>: not found: lesson <id>`, an unknown ID
+      `participants of lesson <id>: lesson: not found`. That tells an instructor that the lesson
+      exists, but the schedule lists every lesson to staff anyway. Pinned, not changed.
+    - `person_bookings` of a merged person (tombstone) returns it with its own email and no bookings,
+      as `persons show` and `persons export` do.
+
+    Residual gap: `lesson` returns what listLessonParticipants returns, so it has the lesson's ID and
+    counts but not its time or course type. The assistant reads those from `schedule`.
 
 PLAN.md Phase 12, "Read tools": the person part. This task needs Task 1.1 on main.
 
