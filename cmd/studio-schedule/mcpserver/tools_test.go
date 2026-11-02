@@ -195,16 +195,28 @@ func TestScheduleSchool(t *testing.T) {
 	})
 }
 
-// TestStatistics: the office's figures without the top participants, the
-// key absent; the range as `stats` reads its flags.
+// TestStatistics: the office's figures; without --personal-data the top
+// participants are left out, the key absent, with it they are the
+// getStatistics body's. The range as `stats` reads its flags.
 func TestStatistics(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
-	cs := f.session(t, demoOffice, Options{PersonalData: true}, registry)
+	cs := f.session(t, demoOffice, Options{}, registry)
 
 	text, _ := callTool(t, cs, "statistics", nil)
 	golden(t, "statistics.json", text)
+
+	persons := f.session(t, demoOffice, Options{PersonalData: true}, registry)
+
+	text, _ = callTool(t, persons, "statistics", nil)
+	golden(t, "statistics-personal-data.json", text)
+
+	for _, args := range []map[string]any{{}, {"range": "term"}} {
+		if top, _ := document(t, persons, "statistics", args)["topParticipants"].([]any); len(top) == 0 {
+			t.Errorf("%v with --personal-data: no top participants", args)
+		}
+	}
 
 	for _, tc := range []struct {
 		args            map[string]any

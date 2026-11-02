@@ -35,7 +35,9 @@ type tool struct {
 }
 
 // registry holds the tools, one list per file.
-var registry = [][]tool{scheduleTools(), roomTools(), statsTools(), checkTools()}
+var registry = [][]tool{
+	scheduleTools(), roomTools(), lessonTools(), personTools(), statsTools(), receiptTools(), mailTools(), checkTools(),
+}
 
 // readOnly are the annotations of a tool that only reads the school's own
 // data: repeating it changes nothing, and it reaches nothing outside.

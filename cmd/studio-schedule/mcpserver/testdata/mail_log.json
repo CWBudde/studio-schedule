@@ -1,0 +1,48 @@
+{
+  "items": [
+    {
+      "id": "00000000-0001-7000-8000-000000000004",
+      "to": "clara.amberly@example.org",
+      "subject": "Your password at Studio Demo — Ballet \u0026 Dance was changed",
+      "template": "password-changed",
+      "createdAt": "2026-09-22T08:00:00Z",
+      "status": "pending",
+      "attempts": 0,
+      "nextAttemptAt": "2026-09-22T08:00:00Z",
+      "body": "shown"
+    },
+    {
+      "id": "00000000-0001-7000-8000-000000000003",
+      "to": "olga.ledgerby@example.net",
+      "subject": "Reset your password for Studio Demo — Ballet \u0026 Dance",
+      "template": "reset-password",
+      "createdAt": "2026-09-22T08:00:00Z",
+      "status": "failed",
+      "attempts": 5,
+      "lastError": "550 mailbox unavailable",
+      "body": "withheld"
+    },
+    {
+      "id": "00000000-0001-7000-8000-000000000002",
+      "to": "alina.starling@example.net",
+      "subject": "Reset your password for Studio Demo — Ballet \u0026 Dance",
+      "template": "reset-password",
+      "createdAt": "2026-09-22T08:00:00Z",
+      "status": "sent",
+      "attempts": 1,
+      "sentAt": "2026-09-22T08:01:00Z",
+      "body": "withheld"
+    },
+    {
+      "id": "00000000-0001-7000-8000-000000000001",
+      "to": "clara.amberly@example.org",
+      "subject": "Reset your password for Studio Demo — Ballet \u0026 Dance",
+      "template": "reset-password",
+      "createdAt": "2026-09-22T08:00:00Z",
+      "status": "pending",
+      "attempts": 0,
+      "nextAttemptAt": "2026-09-22T08:00:00Z",
+      "body": "withheld"
+    }
+  ]
+}

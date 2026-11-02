@@ -79,8 +79,9 @@ prompt, since the client cannot answer one. The audit log names the remote OS us
 
 - `--as` (string): email of the account the server acts as (env `STUDIO_AS`). Required.
 - `--database-url` (string): as for every command (env `DATABASE_URL`); prefer the env var.
-- `--personal-data` (bool): also list the tools that return person data. No tool of this version
-  returns person data, so the flag lists nothing more yet.
+- `--personal-data` (bool): also list the tools that return person data (the "Personal data"
+  column of [Tools](#tools)), and the statistics' top participants. Read [Privacy](#privacy)
+  first.
 - `--allow-writes` (string list, comma-separated): also list the write tools of these groups:
   `bookings`, `lessons`, `announcements`, `mail`, `jobs`. The groups are checked at start; this
   version has no write tools yet.
@@ -114,19 +115,26 @@ nothing runs, and the refusal is audited. A tool that is not listed (for its acc
 
 ## Tools
 
-Every tool of this version only reads (`readOnlyHint`, `idempotentHint`) and returns no person
-data. A tool that mirrors a command returns that command's JSON document, which is the response
-body of its API operation in [api/openapi.json](../api/openapi.json); a test asserts that the tool
-and its command return the same document. `free_rooms` mirrors no command; its result is described
-below. Resources and prompts follow in later versions.
+Every tool of this version only reads (`readOnlyHint`, `idempotentHint`). Those marked "yes" under
+"Personal data" are listed only with `--personal-data`. Each tool that mirrors a command returns
+that command's JSON document, which is the response body of that command's API operation in
+[api/openapi.json](../api/openapi.json); a test asserts that a tool and its command return the same
+document. `free_rooms` mirrors no command; its result is described below. No tool returns a date of
+birth. Resources and prompts follow in later versions.
 
-| Name         | Access   | Personal data | Write group | Mirrors                                          |
-| ------------ | -------- | ------------- | ----------- | ------------------------------------------------ |
-| `schedule`   | `public` | no            | –           | `lessons list --output json` (getSchedule)       |
-| `free_rooms` | `staff`  | no            | –           | – (no command; `CatalogService.FreeRooms`)       |
-| `statistics` | `office` | no            | –           | `stats --output json` (getStatistics), see below |
-| `db_check`   | `admin`  | no            | –           | `db check --output json`                         |
-| `doctor`     | `admin`  | no            | –           | `doctor --output json`                           |
+| Name              | Access   | Personal data | Write group | Mirrors                                                          |
+| ----------------- | -------- | ------------- | ----------- | ---------------------------------------------------------------- |
+| `schedule`        | `public` | no            | –           | `lessons list --output json` (getSchedule)                       |
+| `free_rooms`      | `staff`  | no            | –           | – (no command; `CatalogService.FreeRooms`)                       |
+| `lesson`          | `staff`  | yes           | –           | no command (listLessonParticipants), see below                   |
+| `person_bookings` | `office` | yes           | –           | part of `persons export --output json` (exportPerson), see below |
+| `person_passes`   | `office` | yes           | –           | `passes list --person --output json` (listPersonPasses)          |
+| `receipts`        | `office` | yes           | –           | `receipts list --output json` (searchReceipts)                   |
+| `search_persons`  | `office` | yes           | –           | `persons search --output json` (searchPersons)                   |
+| `statistics`      | `office` | no            | –           | `stats --output json` (getStatistics), see below                 |
+| `db_check`        | `admin`  | no            | –           | `db check --output json`                                         |
+| `doctor`          | `admin`  | no            | –           | `doctor --output json`                                           |
+| `mail_log`        | `admin`  | yes           | –           | `mail list --output json` (searchMails)                          |
 
 **`free_rooms`**: the rooms free on `date` (a school date, YYYY-MM-DD) from `start` (the school's
 wall clock time, HH:MM) for `durationMinutes` (whole minutes, more than 0 and at most 720, which is
@@ -147,9 +155,38 @@ lessons. The result is the body of getSchedule, with the free places. Without `-
 each lesson leaves out `bookedFor`, `waitlist` and `renter`; the instructor's name stays, as the
 public schedule shows it.
 
+**`lesson`**: the participants of the lesson `lessonId` (an ID from `schedule`), as the
+participants page shows them to staff. The office reaches every lesson, an instructor or
+accompanist only the lessons they teach or accompany; any other lesson is a not-found error
+result. No command mirrors it, so its result is the body of listLessonParticipants: `lessonId`,
+`capacity`, `active` (bookings that are not canceled), `held` (places held by waiting-list
+invites), `freePlaces`, `waiting`, `dayOverAt` (when the attendance window ends), `bookings` (every
+booking, canceled ones included, with `bookingId`, `personId`, `name`, `anonymized`, `guest`,
+`contactEmail`, `contactPhone`, `status`, `source`, `trial`, `trialNote`, `late`, `bookedAt`,
+`canceledAt` and `payment`) and `waitlist` (every entry, ended ones included, with `entryId`,
+`personId`, `name`, `anonymized`, `status`, `position`, `stayOnList`, `joinedAt` and `expiresAt`).
+An anonymized person is marked `anonymized`, with the fixed name.
+
+**`search_persons`**: the persons whose name, email or member number contains every word of
+`term`, as `persons search` finds them; merged and anonymized persons are left out. The term is
+an argument of the call, as MCP has no other channel for it, but it is neither logged nor audited.
+The result is the body of searchPersons; its IDs are what the person tools take.
+
+**`person_bookings`**: the bookings and waiting-list entries of the person `personId`. No command
+prints only these, so the result is `person` (the person as `search_persons` lists it, with
+`anonymized`), and `bookings` and `waitlistEntries` as `persons export` has them. The rest of the
+export, the date of birth among it, is left out. A merged person is found too; its bookings moved
+to the person it was merged into.
+
+**`person_passes`**: the passes of the person `personId`, as `passes list --person` lists them.
+
+**`receipts`**: the receipts issued from `from` through `to` (school dates, both inclusive), as
+`receipts list` takes them: without `to` up to today, without `from` from January 1 of the year of
+`to`.
+
 **`statistics`**: the school's figures of a `range`: `last4Weeks` (the default), `last12Weeks` or
 `term`, or a custom range with `from` and `to`, as `stats` takes them. The result is the body of
-getStatistics without `topParticipants`, which name persons.
+getStatistics; without `--personal-data` it leaves out `topParticipants`, which name persons.
 
 **`db_check`**: the integrity checks of `db check`, all of them or those named in `only` (`passes`,
 `capacity`, `tombstones`, `receipt-counters`). The result is the document of
@@ -159,6 +196,10 @@ getStatistics without `topParticipants`, which name persons.
 environment the client starts `mcp` with (`BASE_URL`, `SMTP_HOST`, `VAPID_*` and the rest of
 [operations.md](operations.md#configuration-reference)). The result is the document of
 `doctor --output json`.
+
+**`mail_log`**: the mail log, as `mail list` lists it: a page of the newest mails, optionally only
+those of a `status` (`pending`, `sent`, `failed`) or a `template`; a page's `nextCursor` is the
+`cursor` of the next. Bodies are never returned.
 
 ## Audit
 
