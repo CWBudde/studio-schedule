@@ -190,20 +190,21 @@ func TestMCPTools(t *testing.T) {
 			personal []string
 		}{
 			{demoMember, []string{"schedule"}, []string{"schedule"}},
-			{demoInstructor, []string{"schedule"}, []string{"lesson", "schedule"}},
+			{demoInstructor, []string{"free_rooms", "schedule"}, []string{"free_rooms", "lesson", "schedule"}},
 			{
 				demoOffice,
-				[]string{"schedule", "statistics"},
+				[]string{"free_rooms", "schedule", "statistics"},
 				[]string{
-					"lesson", "person_bookings", "person_passes", "receipts", "schedule", "search_persons", "statistics",
+					"free_rooms", "lesson", "person_bookings", "person_passes", "receipts", "schedule", "search_persons",
+					"statistics",
 				},
 			},
 			{
 				demoAdmin,
-				[]string{"db_check", "doctor", "schedule", "statistics"},
+				[]string{"db_check", "doctor", "free_rooms", "schedule", "statistics"},
 				[]string{
-					"db_check", "doctor", "lesson", "mail_log", "person_bookings", "person_passes", "receipts", "schedule",
-					"search_persons", "statistics",
+					"db_check", "doctor", "free_rooms", "lesson", "mail_log", "person_bookings", "person_passes", "receipts",
+					"schedule", "search_persons", "statistics",
 				},
 			},
 		} {
@@ -337,6 +338,10 @@ func TestMCPArgumentsStayPrivate(t *testing.T) {
 			{"schedule", map[string]any{secret: "2026-09-21"}},
 			{"statistics", map[string]any{"range": secret}},
 			{"db_check", map[string]any{"only": []string{secret}}},
+			{"free_rooms", map[string]any{"date": secret, "start": "18:00", "durationMinutes": 60}},
+			{"free_rooms", map[string]any{"date": "2026-09-22", "start": secret, "durationMinutes": 60}},
+			{"free_rooms", map[string]any{"date": "2026-09-22", "start": "18:00", "durationMinutes": secret}},
+			{"free_rooms", map[string]any{"date": "2026-09-22", "start": "18:00", "durationMinutes": 60, "locationId": secret}},
 		} {
 			if text, isError := s.callTool(t, call.tool, call.args); !isError {
 				t.Errorf("%s %v: no error result but %q", call.tool, call.args, text)
@@ -348,8 +353,8 @@ func TestMCPArgumentsStayPrivate(t *testing.T) {
 		}
 
 		calls := toolCalls(t, st)
-		if len(calls) != 5 {
-			t.Fatalf("%d tool calls audited, want 5", len(calls))
+		if len(calls) != 9 {
+			t.Fatalf("%d tool calls audited, want 9", len(calls))
 		}
 
 		for _, e := range calls {

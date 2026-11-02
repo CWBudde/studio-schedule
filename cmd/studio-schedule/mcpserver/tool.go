@@ -36,7 +36,7 @@ type tool struct {
 
 // registry holds the tools, one list per file.
 var registry = [][]tool{
-	scheduleTools(), lessonTools(), personTools(), statsTools(), receiptTools(), mailTools(), checkTools(),
+	scheduleTools(), roomTools(), lessonTools(), personTools(), statsTools(), receiptTools(), mailTools(), checkTools(),
 }
 
 // readOnly are the annotations of a tool that only reads the school's own
@@ -48,11 +48,12 @@ func readOnly(title string) mcp.ToolAnnotations {
 }
 
 // handler returns the add of a tool whose arguments are In: a struct of
-// plain string fields, whose JSON schema (with the descriptions of their
-// jsonschema tags) the session lists. A call runs through Server.call: the
-// arguments are decoded only after the account was checked, so a refused
-// call reads nothing of them, and arguments that do not fit In are an
-// invalid call, audited like any other.
+// plain fields (strings, string lists, or a number type whose decoder
+// names no value, like minutes), whose JSON schema (with the descriptions
+// of their jsonschema tags) the session lists. A call runs through
+// Server.call: the arguments are decoded only after the account was
+// checked, so a refused call reads nothing of them, and arguments that do
+// not fit In are an invalid call, audited like any other.
 func handler[In any](run func(ctx context.Context, s *Server, p service.Principal, in In) (any, error)) func(*Server, tool) {
 	schema := inputSchema[In]()
 

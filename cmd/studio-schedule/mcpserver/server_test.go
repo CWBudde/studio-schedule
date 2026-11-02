@@ -81,7 +81,7 @@ func TestNew(t *testing.T) {
 		t.Errorf("server info %+v", info)
 	}
 
-	if names := toolNames(t, cs); len(names) != 4 {
+	if names := toolNames(t, cs); len(names) != 5 {
 		t.Errorf("an admin's tools: %v", names)
 	}
 
