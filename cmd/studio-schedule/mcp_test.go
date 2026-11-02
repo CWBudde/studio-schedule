@@ -177,26 +177,46 @@ func toolCalls(t *testing.T, st store.Store) []domain.AuditEvent {
 
 // TestMCPTools: a session lists the tools whose access level the role of
 // --as reaches; every signed-in role reaches the schedule, so no role
-// starts without a tool. --personal-data adds no tool yet: none of these
-// returns person data.
+// starts without a tool. --personal-data adds the person tools the role
+// reaches: the staff's lesson, the office's person search, a person's
+// bookings and passes, and the receipts, and the admins' mail log.
 func TestMCPTools(t *testing.T) {
 	t.Parallel()
 
 	stores(t, func(t *testing.T, r cliRun) {
 		for _, tc := range []struct {
-			as    string
-			tools []string
+			as       string
+			tools    []string
+			personal []string
 		}{
-			{demoMember, []string{"schedule"}},
-			{demoInstructor, []string{"schedule"}},
-			{demoOffice, []string{"schedule", "statistics"}},
-			{demoAdmin, []string{"db_check", "doctor", "schedule", "statistics"}},
+			{demoMember, []string{"schedule"}, []string{"schedule"}},
+			{demoInstructor, []string{"schedule"}, []string{"lesson", "schedule"}},
+			{
+				demoOffice,
+				[]string{"schedule", "statistics"},
+				[]string{
+					"lesson", "person_bookings", "person_passes", "receipts", "schedule", "search_persons", "statistics",
+				},
+			},
+			{
+				demoAdmin,
+				[]string{"db_check", "doctor", "schedule", "statistics"},
+				[]string{
+					"db_check", "doctor", "lesson", "mail_log", "person_bookings", "person_passes", "receipts", "schedule",
+					"search_persons", "statistics",
+				},
+			},
 		} {
 			for _, flags := range [][]string{nil, {"--personal-data"}, {"--allow-writes", "bookings,jobs"}} {
 				s := mcpSession(t, r, append([]string{"--as", tc.as}, flags...)...)
 
-				if got := s.toolNames(t); !slices.Equal(got, tc.tools) {
-					t.Errorf("%s %v: tools %v, want %v", tc.as, flags, got, tc.tools)
+				want := tc.tools
+				if slices.Contains(flags, "--personal-data") {
+					want = tc.personal
+				}
+
+				if got := s.toolNames(t); !slices.Equal(got, want) {
+					t.Errorf("%s %v: tools %v, want %v", tc.as, flags, got, want)
 				}
 
 				s.close(t)

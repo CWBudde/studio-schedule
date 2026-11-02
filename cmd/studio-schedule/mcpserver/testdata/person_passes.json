@@ -1,0 +1,77 @@
+{
+  "items": [
+    {
+      "id": "00000000-0000-7000-8000-00000000025f",
+      "passType": {
+        "id": "00000000-0000-7000-8000-000000000256",
+        "name": "10-visit pass"
+      },
+      "owner": {
+        "id": "00000000-0000-7000-8000-000000000005",
+        "name": "Ella Amberly"
+      },
+      "kind": "visits",
+      "visitsTotal": 10,
+      "visitsRemaining": 9,
+      "validFrom": "2026-09-12",
+      "validUntil": "2027-03-10",
+      "status": "active",
+      "usable": true,
+      "origin": "sale",
+      "soldAt": "2026-09-12T08:00:00Z",
+      "payer": {
+        "id": "00000000-0000-7000-8000-000000000001",
+        "name": "Clara Amberly"
+      },
+      "pricePaid": 15000,
+      "receiptId": "00000000-0000-7000-8000-00000000026c",
+      "uses": [
+        {
+          "bookingId": "00000000-0000-7000-8000-000000000260",
+          "personName": "Ella Amberly",
+          "bookingStatus": "attended",
+          "late": false,
+          "redeemedAt": "2026-09-17T15:00:00Z",
+          "lesson": {
+            "id": "00000000-0000-7000-8000-0000000000bb",
+            "classId": "00000000-0000-7000-8000-00000000006d",
+            "startsAt": "2026-09-17T14:00:00Z",
+            "endsAt": "2026-09-17T15:00:00Z",
+            "status": "scheduled",
+            "kind": "regular",
+            "visibility": "public",
+            "levelFrom": {
+              "id": "00000000-0000-7000-8000-00000000005a",
+              "name": "Beginner",
+              "code": "B"
+            },
+            "levelTo": {
+              "id": "00000000-0000-7000-8000-00000000005a",
+              "name": "Beginner",
+              "code": "B"
+            },
+            "capacity": 12,
+            "courseType": {
+              "id": "00000000-0000-7000-8000-000000000058",
+              "name": "Tap"
+            },
+            "room": {
+              "id": "00000000-0000-7000-8000-000000000047",
+              "name": "Hall 2",
+              "position": 2
+            },
+            "location": {
+              "id": "00000000-0000-7000-8000-000000000045",
+              "name": "Studio South"
+            },
+            "instructor": {
+              "id": "00000000-0000-7000-8000-00000000004d",
+              "displayName": "Nina Tapworth"
+            }
+          }
+        }
+      ],
+      "useCount": 1
+    }
+  ]
+}
