@@ -359,7 +359,7 @@ func TestResourceLesson(t *testing.T) {
 
 	instructor := c.Text
 
-	golden(t, "lesson.json", instructor)
+	golden(t, "resource-lesson.json", instructor)
 
 	var doc map[string]any
 	if err := json.Unmarshal([]byte(instructor), &doc); err != nil {
@@ -441,7 +441,7 @@ func TestResourcePerson(t *testing.T) {
 		t.Errorf("person %s %s", c.URI, c.MIMEType)
 	}
 
-	golden(t, "person.json", c.Text)
+	golden(t, "resource-person.json", c.Text)
 
 	for _, key := range []string{"birthDate", "dateOfBirth", d.Person.BirthDate.String()} {
 		if strings.Contains(c.Text, key) {
