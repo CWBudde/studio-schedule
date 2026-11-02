@@ -3,6 +3,7 @@ package app_test
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -272,5 +273,23 @@ func TestAdminRentalWithoutCourseType(t *testing.T) {
 		if errs, _ := got["errors"].([]any); len(errs) == 0 || errs[0].(map[string]any)["location"] != want {
 			t.Errorf("%s %s: 422 %v, want %s", method, path, got, want)
 		}
+	}
+
+	// One PUT that both changes the rental's kind and runs past midnight
+	// gets both fields in the one 422, the kind first.
+	got := decode(t, a.expect(http.StatusUnprocessableEntity, http.MethodPut, "/api/v1/lessons/"+id,
+		fmt.Sprintf(`{"date":"2026-12-02","startTime":"23:30","durationMinutes":60,"roomId":%q,"capacity":5,`+
+			`"visibility":"public","kind":"workshop"}`, room), office))
+
+	var locations []string
+
+	errs, _ := got["errors"].([]any)
+	for _, e := range errs {
+		loc, _ := e.(map[string]any)["location"].(string)
+		locations = append(locations, loc)
+	}
+
+	if want := []string{"body.kind", "body.durationMinutes"}; !slices.Equal(locations, want) {
+		t.Errorf("PUT both: 422 %v, want the locations %v", got, want)
 	}
 }
