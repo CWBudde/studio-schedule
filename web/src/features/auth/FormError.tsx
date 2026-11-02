@@ -1,6 +1,7 @@
 import { CircleAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useProblemText } from '@/components/problemText';
 import { retryAfterOf, statusOf } from './form';
 
 /**
@@ -16,15 +17,14 @@ export function FormError({
   /** Titles by HTTP status, e.g. `{ 401: 'The password is incorrect.' }`. */
   messages?: Partial<Record<number, string>>;
 }) {
-  const { t } = useTranslation('auth');
+  const title = useProblemText()(error, { messages });
   if (!error) return null;
-  const status = statusOf(error);
 
-  if (status === 429) {
+  if (statusOf(error) === 429) {
     return (
       <Alert variant="destructive">
         <CircleAlert aria-hidden="true" />
-        <AlertTitle>{messages[429] ?? t('form.tooMany.title')}</AlertTitle>
+        <AlertTitle>{title}</AlertTitle>
         <AlertDescription>
           <WaitText seconds={retryAfterOf(error)} />
         </AlertDescription>
@@ -35,7 +35,7 @@ export function FormError({
   return (
     <Alert variant="destructive">
       <CircleAlert aria-hidden="true" />
-      <AlertTitle>{(status !== undefined && messages[status]) || t('form.failed')}</AlertTitle>
+      <AlertTitle>{title}</AlertTitle>
     </Alert>
   );
 }

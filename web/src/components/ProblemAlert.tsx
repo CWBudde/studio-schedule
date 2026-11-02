@@ -1,5 +1,6 @@
 import { FormError } from '@/features/auth/FormError';
-import { type ConflictReason, conflictReason } from '@/api/conflict';
+import type { ConflictReason } from '@/api/conflict';
+import { problemMessages } from './problemText';
 
 /**
  * Why a write failed, in words: the sentence of `conflicts` for the reason
@@ -15,9 +16,5 @@ export function ProblemAlert({
   conflicts?: Partial<Record<ConflictReason, string>>;
   messages?: Partial<Record<number, string>>;
 }) {
-  const reason = conflictReason(error);
-  const conflict = reason && conflicts[reason];
-  return (
-    <FormError error={error} messages={conflict ? { ...messages, 409: conflict } : messages} />
-  );
+  return <FormError error={error} messages={problemMessages(error, { conflicts, messages })} />;
 }
