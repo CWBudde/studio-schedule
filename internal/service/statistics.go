@@ -150,7 +150,8 @@ type StatisticsTotals struct {
 	// CanceledLessons counts the lessons the school canceled; they are
 	// left out of every other figure.
 	CanceledLessons int
-	// ActiveMembers counts the persons with an active booking.
+	// ActiveMembers counts the persons with an active booking, guests
+	// left out; unlike TopParticipants, merged and anonymized persons count.
 	ActiveMembers int
 }
 
@@ -257,8 +258,9 @@ func NewStatisticsService(st store.Store, clk clock.Clock) *StatisticsService {
 //
 // The cost does not grow with the data outside the range: one read each
 // for the lessons, their booking counts, their late cancellations, their
-// waiting-list counts, the active members, the bookings by person and
-// their persons, and the receipts, besides the catalog.
+// waiting-list counts, the bookings by person (the active members and the
+// top participants) and the top participants' persons, and the receipts,
+// besides the catalog.
 func (s *StatisticsService) Statistics(ctx context.Context, q StatisticsQuery) (Statistics, error) {
 	var out Statistics
 
@@ -450,11 +452,6 @@ func (st *Statistics) compute(ctx context.Context, tx store.Tx, loc *time.Locati
 		return fmt.Errorf("waiting-list counts: %w", err)
 	}
 
-	st.Totals.ActiveMembers, err = tx.Bookings().CountActivePersons(ctx, ids)
-	if err != nil {
-		return fmt.Errorf("active members: %w", err)
-	}
-
 	refs, err := loadRangeRefs(ctx, tx, st.From, st.To.AddDays(1))
 	if err != nil {
 		return err
@@ -484,21 +481,24 @@ func (st *Statistics) compute(ctx context.Context, tx store.Tx, loc *time.Locati
 
 	groups.fill(st)
 
-	if err := st.addTopParticipants(ctx, tx, ids); err != nil {
+	byPerson, err := tx.Bookings().CountsByPersons(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("bookings by person: %w", err)
+	}
+
+	booked := activePersons(byPerson)
+	st.Totals.ActiveMembers = len(booked)
+
+	if err := st.addTopParticipants(ctx, tx, byPerson, booked); err != nil {
 		return err
 	}
 
 	return st.addSales(ctx, tx)
 }
 
-// addTopParticipants sets TopParticipants from the bookings by person in
-// the lessons: one read for the counts, one for the persons who booked.
-func (st *Statistics) addTopParticipants(ctx context.Context, tx store.Tx, lessons []domain.LessonID) error {
-	counts, err := tx.Bookings().CountsByPersons(ctx, lessons)
-	if err != nil {
-		return fmt.Errorf("bookings by person: %w", err)
-	}
-
+// activePersons returns the persons of counts with an active booking; the
+// others only canceled one late.
+func activePersons(counts map[domain.PersonID]store.PersonBookingCounts) []domain.PersonID {
 	booked := make([]domain.PersonID, 0, len(counts))
 
 	for id, c := range counts {
@@ -507,6 +507,15 @@ func (st *Statistics) addTopParticipants(ctx context.Context, tx store.Tx, lesso
 		}
 	}
 
+	return booked
+}
+
+// addTopParticipants sets TopParticipants from counts, the bookings by
+// person in the range's lessons, and booked, the persons among them with
+// an active booking: one read for their persons.
+func (st *Statistics) addTopParticipants(
+	ctx context.Context, tx store.Tx, counts map[domain.PersonID]store.PersonBookingCounts, booked []domain.PersonID,
+) error {
 	persons, err := tx.Persons().ListByIDs(ctx, booked)
 	if err != nil {
 		return fmt.Errorf("participants: %w", err)

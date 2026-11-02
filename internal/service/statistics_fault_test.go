@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -141,5 +142,98 @@ func TestStatisticsRangeList(t *testing.T) {
 
 	if !slices.Equal(ranges, []StatisticsRange{StatisticsLast4Weeks, StatisticsLast12Weeks, StatisticsTerm, StatisticsCustom}) {
 		t.Errorf("ranges %v", ranges)
+	}
+}
+
+// TestStatisticsActiveMembers: the active members are the persons with an
+// active booking in the range's lessons that were not canceled, counted
+// from the bookings by person that the top list reads, with no read of
+// their own. A guest, a booking canceled in time, a person whose only
+// booking was canceled late, a canceled lesson and a lesson outside the
+// range add nobody; a person booked in two lessons counts once. A person
+// merged away who kept an active booking (of a started lesson, ADR 0015)
+// counts, as before, though the top list leaves them out.
+func TestStatisticsActiveMembers(t *testing.T) {
+	t.Parallel()
+
+	f := newGenFixture(t, seed.DemoSettings())
+	in1 := f.statLesson(t, "2026-10-19T16:00:00Z", 9, domain.LessonScheduled)
+	in2 := f.statLesson(t, "2026-10-21T16:00:00Z", 9, domain.LessonScheduled)
+	canceled := f.statLesson(t, "2026-10-22T16:00:00Z", 9, domain.LessonCanceled)
+	outside := f.statLesson(t, "2026-10-26T16:00:00Z", 9, domain.LessonScheduled)
+
+	twice := domain.Person{ID: ids.New[domain.PersonID](f.seq), GivenName: "Tess", FamilyName: "Twice"}
+	merged := domain.Person{ID: ids.New[domain.PersonID](f.seq), GivenName: "Mo", FamilyName: "Merged", MergedInto: twice.ID}
+
+	var bookings []domain.Booking
+
+	for _, b := range []struct {
+		l domain.Lesson
+		p domain.PersonID
+		s domain.BookingStatus
+	}{
+		{in1, twice.ID, domain.BookingAttended},
+		{in2, twice.ID, domain.BookingBooked},
+		{in1, merged.ID, domain.BookingBooked},
+	} {
+		bookings = append(bookings, domain.Booking{
+			ID: ids.New[domain.BookingID](f.seq), LessonID: b.l.ID, PersonID: b.p, Status: b.s,
+			Source: domain.BookingSourceSelf, BookedAt: b.l.StartsAt.Add(-48 * time.Hour),
+		})
+	}
+
+	f.write(t, func(ctx context.Context, tx store.Tx) error {
+		errs := []error{tx.Persons().Create(ctx, twice), tx.Persons().Create(ctx, merged)}
+		for _, b := range bookings {
+			errs = append(errs, tx.Bookings().Create(ctx, b))
+		}
+
+		return errors.Join(errs...)
+	})
+
+	noShow := f.statBooking(t, in2, domain.BookingNoShow)
+	f.statBooking(t, in1, domain.BookingBooked, "guest")
+	f.statBooking(t, in1, domain.BookingCanceled)
+	f.statBooking(t, in2, domain.BookingCanceled, "late")
+	f.statBooking(t, canceled, domain.BookingBooked)
+	f.statBooking(t, outside, domain.BookingBooked)
+
+	fs := NewFaultStore(f.st)
+
+	got, err := NewStatisticsService(fs, clock.NewFixed(mustInstant(t, "2026-10-27T12:00:00Z"))).Statistics(
+		t.Context(), StatisticsQuery{
+			Range: StatisticsCustom, From: mustDate(t, "2026-10-19"), To: mustDate(t, "2026-10-25"),
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Tess, the no-show and Mo.
+	if got.Totals.ActiveMembers != 3 {
+		t.Errorf("active members %d, want 3", got.Totals.ActiveMembers)
+	}
+
+	var listed []domain.PersonID
+	for _, p := range got.TopParticipants {
+		listed = append(listed, p.Person.ID)
+	}
+
+	if want := []domain.PersonID{twice.ID, noShow.ID}; !slices.Equal(listed, want) {
+		t.Errorf("top participants %v, want %v", listed, want)
+	}
+
+	var reads []string
+
+	for _, c := range fs.Calls() {
+		if strings.HasPrefix(c.Method, "Bookings.") {
+			reads = append(reads, c.String())
+		}
+	}
+
+	want := []string{
+		"Bookings.CountsByLessons#1", "Bookings.CountLateCanceledByLessons#1", "Bookings.CountsByPersons#1",
+	}
+	if !slices.Equal(reads, want) {
+		t.Errorf("booking reads %v, want %v", reads, want)
 	}
 }
