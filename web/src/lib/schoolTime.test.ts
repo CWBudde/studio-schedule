@@ -57,6 +57,13 @@ describe('isSchoolDate', () => {
     expect(isSchoolDate('2100-02-29')).toBe(false);
   });
 
+  it('keeps to the years the API takes, 1 to 9999', () => {
+    expect(isSchoolDate('0000-02-29')).toBe(false);
+    expect(isSchoolDate('0000-01-01')).toBe(false);
+    expect(isSchoolDate('0001-01-01')).toBe(true);
+    expect(isSchoolDate('9999-12-31')).toBe(true);
+  });
+
   it('refuses anything but YYYY-MM-DD', () => {
     expect(isSchoolDate('')).toBe(false);
     expect(isSchoolDate('2026-2-3')).toBe(false);
