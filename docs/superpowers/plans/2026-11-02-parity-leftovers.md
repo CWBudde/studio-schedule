@@ -92,8 +92,10 @@ checks, moved out of `apply`). Residual: `timing` still stops at its first field
 is not validated as the other kind (its first error would be the missing course type again).
 Over HTTP an impossible date never reaches the service (Huma's `format:"date"`), so the app test
 pairs `kind` with a duration past midnight. The CLI's `Report` still names one field; no command
-calls `UpdateLesson`. (3) The guards are gone; the contract case already lists lessons without an
-accompanist (`own`, `foreign`), so no case was added. Coverage 99.0 % total; every touched function
+calls `UpdateLesson`. (3) The guards were not dead: a lesson without an instructor or accompanist
+holds the zero ID in memory and NULL in PostgreSQL, so a zero ID in the list matched it in memory
+only (review). Now the zero ID is dropped from the wanted set once, and the contract case and
+`ListByStaff`'s doc pin that it matches no lesson, on both stores. Coverage 99.0 % total; every touched function
 100 %.
 
 ---

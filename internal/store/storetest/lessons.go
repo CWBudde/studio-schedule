@@ -121,6 +121,9 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			wantSlice(e.t, list(newID[domain.StaffID](e)), nil)
 			wantSlice(e.t, list(), nil)
+			// The zero ID is no staff member: not the missing accompanist of own.
+			wantSlice(e.t, list(domain.StaffID{}), nil)
+			wantSlice(e.t, list(domain.StaffID{}, other.ID), []domain.Lesson{accompanied, both})
 		},
 		"ListByIDs": func(e *env) {
 			s := e.setting()

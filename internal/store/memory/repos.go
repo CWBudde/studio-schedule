@@ -1295,6 +1295,9 @@ func (r lessonRepo) ListByStaff(
 ) ([]domain.Lesson, error) {
 	from, to = instant(from), instant(to)
 	wanted := setOf(staff)
+	// A lesson without an instructor or accompanist holds the zero ID there
+	// (NULL in PostgreSQL, which no ID equals), so the zero ID matches none.
+	delete(wanted, domain.StaffID{})
 	lessons := r.tx.state.lessons.filter(func(l domain.Lesson) bool {
 		_, instructor := wanted[l.InstructorID]
 		_, accompanist := wanted[l.AccompanistID]
