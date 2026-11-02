@@ -258,7 +258,10 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `domain.ChannelMCP` and the outcome, never the arguments. The tools (`tools_*.go`) call the
   services and return the `httpapi.New…` documents of the commands they mirror (parity tests in
   `cmd/studio-schedule/mcp_test.go`, goldens in `mcpserver/testdata`); `cmd/studio-schedule/diagnose`
-  computes the `doctor` and `db check` reports for both.
+  computes the `doctor` and `db check` reports for both. The resources (`resources.go`: `school://`
+  settings, timetable and glossary, the templates `lesson://{id}` and `person://{id}`) are listed
+  and read through the same wrapper (`run`), audited under their URI template; the glossary is
+  `docs/glossary.md`, embedded by `package docs` (`docs/glossary.go`).
 - **Adding an endpoint** touches: a service in `internal/service`, a Huma operation in
   `internal/httpapi` registered with its access level (and pinned in `internal/app/access_test.go`;
   plus a field in `httpapi.Deps` and its construction in `app.New`),

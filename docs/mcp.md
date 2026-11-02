@@ -13,6 +13,7 @@ the WASM demo has no MCP server. The decisions are in [ADR 0022](decisions/0022-
 - [Exit codes at start](#exit-codes-at-start)
 - [Access on every call](#access-on-every-call)
 - [Tools](#tools)
+- [Resources](#resources)
 - [Audit](#audit)
 - [Privacy](#privacy)
 
@@ -79,8 +80,9 @@ prompt, since the client cannot answer one. The audit log names the remote OS us
 
 - `--as` (string): email of the account the server acts as (env `STUDIO_AS`). Required.
 - `--database-url` (string): as for every command (env `DATABASE_URL`); prefer the env var.
-- `--personal-data` (bool): also list the tools that return person data. No tool of this version
-  returns person data, so the flag lists nothing more yet.
+- `--personal-data` (bool): also list the tools and resources that return person data. No tool of
+  this version returns person data; the flag lists the resource templates `lesson://{id}` (staff)
+  and `person://{id}` (office).
 - `--allow-writes` (string list, comma-separated): also list the write tools of these groups:
   `bookings`, `lessons`, `announcements`, `mail`, `jobs`. The groups are checked at start; this
   version has no write tools yet.
@@ -105,19 +107,21 @@ an exit.
 
 ## Access on every call
 
-The account's role at start fixes the tool list: a tool is listed when the role reaches the tool's
-access level (`public`, `signedIn`, `staff`, `office`, `admin`; ADR 0005). The process can run for
-hours, so every call resolves the account again and checks its current role against the tool's
-level. An account disabled or demoted since the start gets an error result on its next call,
-nothing runs, and the refusal is audited. A tool that is not listed (for its access level, without
-`--personal-data`, or without its write group) fails like an unknown tool when called by name.
+The account's role at start fixes the lists of tools and resources: one is listed when the role
+reaches its access level (`public`, `signedIn`, `staff`, `office`, `admin`; ADR 0005). The process
+can run for hours, so every call and every resource read resolves the account again and checks its
+current role against the level. An account disabled or demoted since the start is refused on its
+next call or read, nothing runs, and the refusal is audited: a call gets an error result, a read a
+JSON-RPC error. A tool that is not listed (for its access level, without `--personal-data`, or
+without its write group) fails like an unknown tool when called by name, and an unlisted resource
+like an unknown one: "Resource not found", not audited.
 
 ## Tools
 
 Every tool of this version only reads (`readOnlyHint`, `idempotentHint`) and returns no person
 data. Each returns the JSON document of the command it mirrors, which is the response body of that
 command's API operation in [api/openapi.json](../api/openapi.json); a test asserts that a tool and
-its command return the same document. Resources and prompts follow in later versions.
+its command return the same document. Prompts follow in later versions.
 
 | Name         | Access   | Personal data | Write group | Mirrors                                          |
 | ------------ | -------- | ------------- | ----------- | ------------------------------------------------ |
@@ -147,21 +151,69 @@ environment the client starts `mcp` with (`BASE_URL`, `SMTP_HOST`, `VAPID_*` and
 [operations.md](operations.md#configuration-reference)). The result is the document of
 `doctor --output json`.
 
+## Resources
+
+A resource is a document the client reads by its URI, for the assistant's context; a template's
+URI names a record by its ID. Every resource only reads. A JSON resource is the response body of
+the API operation it mirrors, or the document of the command, and a test asserts that the two
+agree.
+
+| URI                  | Access     | Personal data | Mirrors                                            |
+| -------------------- | ---------- | ------------- | -------------------------------------------------- |
+| `school://glossary`  | `public`   | no            | [glossary.md](glossary.md)                         |
+| `school://timetable` | `public`   | no            | listClasses of the current term, see below         |
+| `school://settings`  | `signedIn` | no            | `settings get --output json`, or getPublicSettings |
+| `lesson://{id}`      | `staff`    | yes           | listLessonParticipants                             |
+| `person://{id}`      | `office`   | yes           | `persons show --output json` without `birthDate`   |
+
+**`school://glossary`**: the school's words, [glossary.md](glossary.md) as it is, as
+`text/markdown`, so the assistant names things as the school and the app do.
+
+**`school://timetable`**: the weekly classes of the current term, the one that includes today, as
+the public timetable shows them: the body of listClasses (`application/json`) with weekday, start
+time, duration, the IDs of the course type and the room (no names), instructor and accompanist,
+audience and places. Retired classes are left out. `classes list --output json` (listAllClasses, office) has the same items with a
+`retired` flag, retired classes included. Without a current term the read fails.
+
+**`school://settings`**: the school's settings as the account's role may read them
+(`application/json`). For the office and admins it is the document of `settings get --output json`:
+every area, booking rules, receipts and passes included. For members and instructors it is the
+body of getPublicSettings: the name, legal notice, branding, time zone, language and currency. The
+role is the current one, so an account demoted to member reads the public settings.
+
+**`lesson://{id}`**: a lesson's participants and waiting list as the participants page shows them,
+the body of listLessonParticipants (`application/json`): every booking, canceled ones included,
+with name, contact data, status, trial and payment, the waiting list in its order, and the counts
+and free places. The office reads every lesson; an instructor or accompanist only the lessons they
+teach or accompany, any other is not found. `{id}` is a lesson ID from `schedule`. No command
+mirrors it.
+
+**`person://{id}`**: a person with their guardians, dependents, account, linked staff members, class
+memberships and the persons merged into them: the document of `persons show --output json`
+(getPerson, `application/json`) without `birthDate`, since no result of the server has a date of
+birth. A merged or anonymized person is shown too, as the API shows it.
+
+A failed read is a JSON-RPC error, not an error result: a record that is not found or an `{id}`
+that is no ID is invalid params with the reason, a refusal an invalid request.
+
 ## Audit
 
-Every call, reads included, writes an audit event `mcp-tool-called`: the actor, `via`
-(`{channel: mcp, osUser}`, the OS user who started the server), the tool's name and the outcome:
-`ok`, `forbidden`, `not-found`, `invalid`, `conflict` or `error`. It never records the arguments
-and has no target, so the log does not reveal whom a call looked for. A write keeps its own audit
-events as well. The audit page shows the event as "Assistant tool called", via MCP.
+Every tool call, reads included, and every resource read writes an audit event `mcp-tool-called`:
+the actor, `via` (`{channel: mcp, osUser}`, the OS user who started the server), the tool's name or
+the resource's URI and the outcome: `ok`, `forbidden`, `not-found`, `invalid`, `conflict` or
+`error`. A template's read records the template (`person://{id}`), never the ID it read. The event
+never records the arguments and has no target, so the log does not reveal whom a call looked for. A
+read of an unlisted resource fails before it reaches the server's code and writes no event. A write
+keeps its own audit events as well. The audit page shows the event as "Assistant tool called", via
+MCP.
 
 The audit log keeps the events that name an account for 3 years
 ([ADR 0016](decisions/0016-privacy-and-account-administration.md)). Once an account has called a
-tool, it can be disabled but no longer deleted. Use a dedicated account for the assistant, not a
-person's own.
+tool or read a resource, it can be disabled but no longer deleted. Use a dedicated account for the
+assistant, not a person's own.
 
 ## Privacy
 
-Everything a tool returns goes to the assistant's provider. Without `--personal-data` the tools
-return no person data. Turn the flag on only with a data processing agreement with that provider;
-see [privacy.md](privacy.md#the-assistant-mcp).
+Everything a tool or resource returns goes to the assistant's provider. Without `--personal-data`
+neither returns person data. Turn the flag on only with a data processing agreement with that
+provider; see [privacy.md](privacy.md#the-assistant-mcp).
