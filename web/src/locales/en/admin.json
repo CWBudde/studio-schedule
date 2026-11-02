@@ -561,7 +561,8 @@
       "event-registration-added": "Registered for an event",
       "event-registration-canceled": "Event registration canceled",
       "event-registration-paid": "Event fee paid",
-      "event-canceled": "Event canceled"
+      "event-canceled": "Event canceled",
+      "mcp-tool-called": "Assistant tool called"
     },
     "merged": "merged: {{name}}",
     "unknownAccount": "Unknown account",
@@ -572,6 +573,7 @@
     "holder": "The account holder",
     "roleChange": "{{from}} → {{to}}",
     "viaCli": "via command line ({{user}})",
+    "viaMcp": "via MCP ({{user}})",
     "operator": "An operator",
     "everyAccount": "Every account",
     "delivery": {
@@ -579,7 +581,16 @@
       "printed": "link printed"
     },
     "sessions_one": "{{count}} session ended",
-    "sessions_other": "{{count}} sessions ended"
+    "sessions_other": "{{count}} sessions ended",
+    "tool": "tool {{tool}}: {{outcome}}",
+    "outcomes": {
+      "ok": "ok",
+      "forbidden": "refused",
+      "not-found": "not found",
+      "invalid": "invalid input",
+      "conflict": "conflict",
+      "error": "failed"
+    }
   },
   "lessons": {
     "manage": "Manage this lesson",

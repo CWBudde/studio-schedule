@@ -16,10 +16,10 @@ var (
 	errNoDatabaseURL = cli.ErrNoDatabaseURL
 	// errSchemaOutdated is returned when the database lacks migrations that
 	// the binary embeds.
-	errSchemaOutdated = errors.New("the database schema is not up to date: run `studio-schedule migrate up`")
+	errSchemaOutdated = cli.ErrSchemaOutdated
 	// errSchemaNewer is returned when the database has migrations that the
 	// binary does not embed.
-	errSchemaNewer = errors.New("the database schema is newer than this binary: run a newer studio-schedule")
+	errSchemaNewer = cli.ErrSchemaNewer
 )
 
 // databaseFlag reads the global --database-url (cli.App.Wire) for the

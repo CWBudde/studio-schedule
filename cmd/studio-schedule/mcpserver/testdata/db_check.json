@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "checks": [
+    "passes",
+    "capacity",
+    "tombstones",
+    "receipt-counters"
+  ],
+  "findings": []
+}

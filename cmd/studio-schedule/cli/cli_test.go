@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -55,6 +56,10 @@ type record struct {
 	// senders.
 	jobs     []string
 	delivery Delivery
+	// between runs in the command recheck between the start and Env.Actor;
+	// again is the principal Env.Actor resolved then.
+	between func()
+	again   service.Principal
 }
 
 // testCommands are the commands of the test tree, built on a.
@@ -129,6 +134,14 @@ func testCommands(a *App, rec *record) []*cobra.Command {
 				return nil
 			},
 			Run: func(context.Context, *Env, []string) error { rec.ran = true; return nil },
+		}),
+		a.Command(Spec{
+			Use: "echo", Short: "copy stdin to stdout, as a protocol speaks on them",
+			Run: func(_ context.Context, env *Env, _ []string) error {
+				_, err := io.Copy(env.Stdout(), env.Stdin())
+
+				return err
+			},
 		}),
 		a.Command(Spec{
 			Use: "table", Short: "print a table",
@@ -212,6 +225,30 @@ func testCommands(a *App, rec *record) []*cobra.Command {
 				var err error
 
 				rec.delivery, err = env.Delivery(config.Config{})
+
+				return err
+			},
+		}),
+		a.Command(Spec{
+			Use: "recheck", Short: "resolve --as again, as the MCP server does", Access: httpapi.AccessOffice,
+			Channel: domain.ChannelMCP,
+			Run: func(ctx context.Context, env *Env, _ []string) error {
+				rec.ran, rec.principal = true, env.Principal
+				if rec.between != nil {
+					rec.between()
+				}
+
+				var err error
+
+				rec.again, err = env.Actor(ctx)
+
+				return err
+			},
+		}),
+		a.Command(Spec{
+			Use: "operator-actor", Short: "resolve an account in an operator command", Store: true,
+			Run: func(ctx context.Context, env *Env, _ []string) error {
+				_, err := env.Actor(ctx)
 
 				return err
 			},
@@ -428,6 +465,86 @@ func TestActorPrincipal(t *testing.T) {
 	if got.code != ExitOK || got.stdout != "{\n  \"email\": \""+demoOffice+"\"\n}\n" {
 		t.Errorf("JSON: exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
 	}
+}
+
+// TestEnvActor: Env.Actor resolves the account of --as again, with the
+// Spec's channel in Via (ADR 0022): an account disabled since the start is
+// not found (exit 3), one demoted below the Spec's access level forbidden
+// (exit 4); an operator command acts as no account.
+func TestEnvActor(t *testing.T) {
+	t.Parallel()
+
+	mcp := domain.AuditVia{Channel: domain.ChannelMCP, OSUser: "operator"}
+
+	t.Run("unchanged", func(t *testing.T) {
+		t.Parallel()
+
+		var rec record
+
+		got := harness{st: demoStore(t)}.run(t, &rec, "recheck", "--as", demoOffice)
+		if got.code != ExitOK {
+			t.Fatalf("exit %d, stderr %q", got.code, got.stderr)
+		}
+
+		if rec.principal.Via != mcp || rec.again.Via != mcp || rec.again.AccountID != rec.principal.AccountID ||
+			rec.again.Role != domain.RoleOffice {
+			t.Errorf("start %+v, again %+v", rec.principal, rec.again)
+		}
+	})
+
+	for name, tc := range map[string]struct {
+		change func(a *domain.Account)
+		code   int
+		stderr string
+	}{
+		"disabled": {
+			change: func(a *domain.Account) { a.DisabledAt = testNow.Add(-time.Minute) }, code: ExitNotFound,
+			stderr: "error: --as " + demoOffice + ": not found: the account is not confirmed or is disabled\n",
+		},
+		"demoted": {
+			change: func(a *domain.Account) { a.Role = domain.RoleMember }, code: ExitConflict,
+			stderr: "error: --as " + demoOffice + ": forbidden: the account's role member is below office, " +
+				"which this command needs\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			st := demoStore(t)
+			rec := record{between: func() { changeAccount(t, st, demoOffice, tc.change) }}
+
+			got := harness{st: st}.run(t, &rec, "recheck", "--as", demoOffice)
+			if got.code != tc.code || got.stderr != tc.stderr || !rec.ran {
+				t.Errorf("exit %d, stderr %q, ran %v", got.code, got.stderr, rec.ran)
+			}
+
+			if rec.principal.Role != domain.RoleOffice || !rec.again.AccountID.IsZero() {
+				t.Errorf("start %+v, again %+v", rec.principal, rec.again)
+			}
+		})
+	}
+
+	t.Run("operator command", func(t *testing.T) {
+		t.Parallel()
+
+		got := harness{st: demoStore(t)}.run(t, &record{}, "operator-actor")
+		if got.code != ExitFailed || got.stderr != "error: cli: studio-schedule operator-actor acts as no account\n" {
+			t.Errorf("exit %d, stderr %q", got.code, got.stderr)
+		}
+	})
+}
+
+// TestSpecChannel: a Spec with an unknown channel is a programming error.
+func TestSpecChannel(t *testing.T) {
+	t.Parallel()
+
+	defer func() {
+		if recover() == nil {
+			t.Error("no panic")
+		}
+	}()
+
+	NewApp(System{}).Command(Spec{Use: "x", Access: httpapi.AccessOffice, Channel: "fax"})
 }
 
 // TestFlagsOfCommands: --as on an operator command, and --as, --yes or
@@ -887,6 +1004,17 @@ func TestFailures(t *testing.T) {
 	if got.code != ExitUsage || !strings.Contains(got.stderr, `"status": 422`) ||
 		!strings.Contains(got.stderr, `"location": "--email"`) {
 		t.Errorf("JSON: exit %d, stderr %s", got.code, got.stderr)
+	}
+}
+
+// TestEnvStdio: Stdin and Stdout are the command's own, unbuffered by the
+// presenter, for a command that speaks a protocol on them (the MCP server).
+func TestEnvStdio(t *testing.T) {
+	t.Parallel()
+
+	got := harness{stdin: "line one\nline two\n"}.run(t, &record{}, "echo")
+	if got.code != ExitOK || got.stdout != "line one\nline two\n" || got.stderr != "" {
+		t.Errorf("exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
 	}
 }
 

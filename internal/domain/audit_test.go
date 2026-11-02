@@ -197,3 +197,57 @@ func TestAuditEventActions(t *testing.T) {
 		})
 	})
 }
+
+// TestAuditMCPToolCalled: a tool call of the MCP server (ADR 0022) has an
+// actor, no target and comes through the MCP channel; it names the tool and
+// the outcome, which only it names.
+func TestAuditMCPToolCalled(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Channel", func(t *testing.T) {
+		t.Parallel()
+
+		if !domain.ChannelMCP.Valid() {
+			t.Error("ChannelMCP is not valid")
+		}
+
+		checkEnum(t, domain.AuditChannels())
+	})
+
+	mcp := domain.AuditVia{Channel: domain.ChannelMCP, OSUser: "operator"}
+
+	checkValidate(t, func() domain.AuditEvent {
+		return domain.AuditEvent{
+			ID: newID[domain.AuditEventID](), At: t0, ActorID: newID[domain.AccountID](),
+			Action:  domain.AuditMCPToolCalled,
+			Details: domain.AuditDetails{Tool: "schedule", Outcome: "ok", Via: mcp},
+		}
+	}, map[string]func(*domain.AuditEvent){
+		"no actor": func(e *domain.AuditEvent) { e.ActorID = domain.AccountID{} },
+		"account target": func(e *domain.AuditEvent) {
+			e.TargetKind, e.TargetID = domain.AuditTargetAccount, newID[domain.AccountID]()
+		},
+		"person target": func(e *domain.AuditEvent) {
+			e.TargetKind, e.TargetPersonID = domain.AuditTargetPerson, newID[domain.PersonID]()
+		},
+		"no tool":     func(e *domain.AuditEvent) { e.Details.Tool = "" },
+		"no outcome":  func(e *domain.AuditEvent) { e.Details.Outcome = "" },
+		"no channel":  func(e *domain.AuditEvent) { e.Details.Via = domain.AuditVia{} },
+		"cli channel": func(e *domain.AuditEvent) { e.Details.Via.Channel = domain.ChannelCLI },
+	})
+
+	// Only a tool call names a tool or an outcome.
+	for _, d := range []domain.AuditDetails{{Tool: "schedule"}, {Outcome: "ok"}} {
+		e := domain.AuditEvent{
+			ID: newID[domain.AuditEventID](), At: t0, ActorID: newID[domain.AccountID](),
+			Action: domain.AuditSessionsRevoked, Details: d,
+		}
+		if err := e.Validate(); err == nil {
+			t.Errorf("%+v: no error", d)
+		}
+	}
+
+	if domain.AuditMCPToolCalled.ActorOptional() {
+		t.Error("a tool call has an actor")
+	}
+}

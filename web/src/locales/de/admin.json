@@ -561,7 +561,8 @@
       "event-registration-added": "Für eine Veranstaltung angemeldet",
       "event-registration-canceled": "Anmeldung zu einer Veranstaltung storniert",
       "event-registration-paid": "Veranstaltungsgebühr bezahlt",
-      "event-canceled": "Veranstaltung abgesagt"
+      "event-canceled": "Veranstaltung abgesagt",
+      "mcp-tool-called": "Werkzeug des Assistenten aufgerufen"
     },
     "merged": "zusammengeführt: {{name}}",
     "unknownAccount": "Unbekanntes Konto",
@@ -572,6 +573,7 @@
     "holder": "Die Kontoinhaberin oder der Kontoinhaber",
     "roleChange": "{{from}} → {{to}}",
     "viaCli": "über die Kommandozeile ({{user}})",
+    "viaMcp": "über MCP ({{user}})",
     "operator": "Die Betreiberin oder der Betreiber",
     "everyAccount": "Alle Konten",
     "delivery": {
@@ -579,7 +581,16 @@
       "printed": "Link ausgegeben"
     },
     "sessions_one": "{{count}} Sitzung beendet",
-    "sessions_other": "{{count}} Sitzungen beendet"
+    "sessions_other": "{{count}} Sitzungen beendet",
+    "tool": "Werkzeug {{tool}}: {{outcome}}",
+    "outcomes": {
+      "ok": "ok",
+      "forbidden": "abgelehnt",
+      "not-found": "nicht gefunden",
+      "invalid": "ungültige Eingabe",
+      "conflict": "Konflikt",
+      "error": "fehlgeschlagen"
+    }
   },
   "lessons": {
     "manage": "Stunde verwalten",

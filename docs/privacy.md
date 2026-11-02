@@ -100,6 +100,24 @@ erase it too, the office anonymizes it. A confirmation mail goes to the old addr
 - **Backups** keep everything as it was when they were taken (see
   [operations.md](operations.md#retention-of-backups)).
 
+## The assistant (MCP)
+
+The MCP server (`studio-schedule mcp`, [mcp.md](mcp.md), [ADR 0022](decisions/0022-mcp-server.md))
+lets an assistant such as Claude Desktop or Claude Code call tools that read, and with
+`--allow-writes` change, the school's data as one account. The assistant's provider receives
+everything the tools return, and what the assistant's user types.
+
+- **Without `--personal-data`** the tools return no person data: the schedule (without who is
+  booked, waiting or renting), the statistics totals (without the top participants), `doctor` and
+  `db check`.
+- **With `--personal-data`** the tools also return person data. Turn it on only once the operator
+  has a data processing agreement (Art. 28 GDPR) with the assistant's provider, and per client: the
+  flag is part of the client's configuration.
+- **Arguments** of a call (a search term, a name) are never logged or audited.
+- **Every call** is audited as `mcp-tool-called`, with the account, the OS user, the tool and the
+  outcome, and no target. Such events keep the account for 3 years, so give the assistant a
+  dedicated account.
+
 ## What the operator still has to do
 
 The software gives the school the tools; the school and its operator remain responsible for:
@@ -109,7 +127,8 @@ The software gives the school the tools; the school and its operator remain resp
   the recipients (hosting, mail provider) and the rights of the people concerned. Parents consent
   for their children where consent is the basis.
 - **Processor agreements** (Art. 28 GDPR) with the hosting provider, the managed database provider
-  if any, the mail provider and the backup storage.
+  if any, the mail provider and the backup storage, and with the assistant's provider before
+  turning on `--personal-data` (above).
 - **Security of the installation**: TLS (`BASE_URL` with `https://`), updates, access to the server
   and the database, encrypted backups, see [operations.md](operations.md) and
   [security.md](security.md).

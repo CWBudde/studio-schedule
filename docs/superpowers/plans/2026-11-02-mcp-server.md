@@ -4,6 +4,7 @@
 > checkbox below, phase by phase (`--prefix 1.`, then `2.`, then `3.`). Each item starts from
 > `main` and opens its own pull request; a phase starts only after the previous phase is merged.
 > Your item's details are in the section under its checkbox. Before you change anything, read:
+>
 > - that section;
 > - `CLAUDE.md`;
 > - [ADR 0022](../../decisions/0022-mcp-server.md), the decision record this plan implements;
@@ -18,6 +19,7 @@ through `studio-schedule mcp`. It follows the same rules as every other caller: 
 level, the services' validation and the audit log.
 
 **Architecture:**
+
 - **Transport:** stdio only (ADR 0022). The command `studio-schedule mcp --as <email>` runs on the
   command layer of ADR 0020 (`cmd/studio-schedule/cli`). It opens the database like every command and
   calls the services of `app.NewServices` through `cli.Env`.
@@ -88,12 +90,54 @@ The inputs and conditions most likely to bite, each with its test in the owning 
 
 ## Task 1.1
 
-- [ ] 1.1 `mcp-server` The `studio-schedule mcp` server over stdio with the call wrapper (actor checked again on every call, `mcp-tool-called` audit, `domain.ChannelMCP`), `--personal-data` and `--allow-writes`, and the first read tools that return no person data — see "Task 1.1".
+- [x] 1.1 `mcp-server` The `studio-schedule mcp` server over stdio with the call wrapper (actor checked again on every call, `mcp-tool-called` audit, `domain.ChannelMCP`), `--personal-data` and `--allow-writes`, and the first read tools that return no person data — see "Task 1.1".
+  - Done: `domain.ChannelMCP`, `AuditMCPToolCalled` (actor, no target, Via mcp, `Tool` and
+    `Outcome` both set, and only on it), migration 00036, `AuthService.RecordToolCall`, and the
+    audit API's `tool`/`outcome` (`just gen-api`). `cli.Spec.Channel` and `cli.Env.Actor` (exit 3
+    after a disable, 4 after a demotion), plus `Env.Stdin`/`Env.Stdout` for the transport.
+    `cmd/studio-schedule/diagnose` now computes the `doctor` and `db check` reports for both the
+    commands and the tools; the schema errors moved to `cli.ErrSchemaOutdated`/`ErrSchemaNewer`.
+    `mcpserver` keeps the plan's names, with three deviations:
+    - `Options` also carries `Checks diagnose.Env` (the command's env, for `doctor`; `New` refuses
+      nil) and `Logger`;
+    - `tool.add` is `func(s *Server, t tool)`, built by the generic `handler[In]`;
+    - `ParseWriteGroups` validates `--allow-writes` (a field error, exit 2).
+
+    Tools: `schedule` (public; without `--personal-data` each lesson drops `bookedFor`, `waitlist`
+    and `renter`; instructors stay, as the public schedule shows them), `statistics` (office;
+    `topParticipants` absent), `doctor` and `db_check` (admin). Member and instructor get
+    `schedule`, the office also `statistics`, the admin all four. Every signed-in role reaches
+    `schedule`, so the exit 4 for "a role that reaches no tool" cannot happen and has no branch
+    (docs/mcp.md says so). Tests: `TestMCP*` in `cmd/studio-schedule/mcp_test.go` drive the real
+    `mcp` command through pipes on both stores. They cover the tool list per role and flag,
+    the audit row, Review focus 1 (disable and demotion: an error result, nothing ran, one
+    `forbidden` row) and Review focus 2 (`"Zebulon"` in five arguments; it is in neither stderr
+    nor the audit rows), the command's exit codes 2/3, and parity against `lessons list`,
+    `stats`, `doctor` and `db check`. `mcpserver`'s own tests cover the write-group and
+    personal-data filters with a test-only registry (no real write or person tools yet), every
+    input schema, each outcome kind, a failed audit write, the inputs, and goldens in
+    `mcpserver/testdata` (`-update`). Coverage 99.0 % total; `mcpserver` and `mcp.go` at 100 %.
+
+    Discoveries:
+    - The SDK's typed `mcp.AddTool` validates the arguments before the handler runs, so a bad call
+      would skip the wrapper and its audit row. The tools use `Server.AddTool` and decode the
+      arguments only after the account check; a bad call is an audited `invalid` call.
+    - A call to an unlisted tool is the SDK's JSON-RPC error `unknown tool`: nothing runs and no
+      row is written.
+    - The SDK's logger gets no request parameters, so the command shares its stderr logger.
+    - Audit events keep their actor (RESTRICT, ADR 0016), so an account that has called a tool can
+      be disabled but no longer deleted. docs/mcp.md advises a dedicated account.
+
+    Residual gaps:
+    - On PostgreSQL, the refusal row of an account deleted before its first call fails on the
+      foreign key; the call is refused all the same, with "internal error" and a log line.
+    - SIGINT or SIGTERM ends `mcp` with exit 1 ("context canceled").
 
 PLAN.md Phase 12: "Read tools", the server part ("With them the server itself …") and the tools
 without person data. The other read tools are Task 2.1.
 
 **Files:**
+
 - **Create:**
   - `cmd/studio-schedule/mcpserver/server.go`: `New`, `Options` and the `Server` wrapper around
     `*mcp.Server`;
@@ -181,6 +225,7 @@ Adjust a signature if the SDK forces it, keep the names, and say so in the PR bo
 are written against these.
 
 **Steps:**
+
 1. **Domain (test first):** write `internal/domain/audit_test.go` cases.
    - `ChannelMCP` is valid.
    - `AuditMCPToolCalled` with no target is valid, and with a target it is refused.
@@ -205,7 +250,7 @@ are written against these.
      2. disable the account through `env.Services`;
      3. the next call is an error result;
      4. one `mcp-tool-called` row with outcome `forbidden` or the error kind.
-     Then the same with a demotion to member.
+        Then the same with a demotion to member.
    - **Review focus 2 (the wrapper):** a call with the argument `"Zebulon"`; capture the slog handler
      and the audit rows; the string is in neither.
    - **The audit row:** actor, `Via{Channel: mcp, OSUser}`, `Tool` and `Outcome`, and no target.
@@ -234,7 +279,7 @@ are written against these.
    - `statistics`:
      - **input:** `{range, from, to}` as `stats`.
      - **access:** `office`.
-     - **result:** the body of `getStatistics` *without* the top participants (2.1 adds them with
+     - **result:** the body of `getStatistics` _without_ the top participants (2.1 adds them with
        `--personal-data`).
      - **parity:** against `stats --output json` with the top participants removed from the command's
        document.
@@ -277,6 +322,7 @@ are written against these.
 PLAN.md Phase 12, "Read tools": the person part. This task needs Task 1.1 on main.
 
 **Files:**
+
 - **Create:** `cmd/studio-schedule/mcpserver/tools_persons.go`, `tools_lessons.go`,
   `tools_receipts.go`, `tools_mail.go` and their tests; parity tests in
   `cmd/studio-schedule/mcp_persons_test.go`.
@@ -284,12 +330,14 @@ PLAN.md Phase 12, "Read tools": the person part. This task needs Task 1.1 on mai
   participants with `PersonalData`), `docs/mcp.md` (rows).
 
 **Interfaces:**
+
 - **Consumes:** from Task 1.1, `tool`, `registry`, `(*Server).call`, `Options.PersonalData`, the
   in-memory test harness.
 - **Produces:** the tool names `lesson`, `search_persons`, `person_bookings`, `person_passes`,
   `receipts`, `mail_log`. Task 3.1 refers to persons by the IDs these return.
 
 **Tools.** All are `personalData: true`, `readOnlyHint`, `idempotentHint`.
+
 - **`lesson`:**
   - **input:** `{lessonId}`.
   - **access:** `staff`. The service's `manages` check applies: an instructor sees only their own
@@ -323,6 +371,7 @@ PLAN.md Phase 12, "Read tools": the person part. This task needs Task 1.1 on mai
   compares the whole `stats --output json`.
 
 **Tests:**
+
 - **Listing:** none of these tools is listed without `--personal-data`, and a direct call by name
   fails (Review focus 3).
 - **Instructor access:** an instructor gets an error result for `lesson` on another instructor's
@@ -346,12 +395,14 @@ PLAN.md Phase 12, "Read tools": the person part. This task needs Task 1.1 on mai
 PLAN.md Phase 12, "Read tools": "rooms free at a time". This task needs Task 1.1 on main.
 
 **Files:**
+
 - **Create:**
   - `internal/service/free_rooms.go` and `free_rooms_test.go`;
   - `cmd/studio-schedule/mcpserver/tools_rooms.go` and its test.
 - **Modify:** `mcpserver/tool.go` (one registry entry), `docs/mcp.md` (a row and the result schema).
 
 **Interfaces:**
+
 - **Consumes:** from Task 1.1, `tool`, `registry`, `(*Server).call`.
 - **Produces:**
   ```go
@@ -370,6 +421,7 @@ PLAN.md Phase 12, "Read tools": "rooms free at a time". This task needs Task 1.1
   that is not `CatalogService`, use that service and say so.
 
 **Steps:**
+
 1. Write the service tests first, on both stores via `internal/service/servicetest` or the service
    tests' store helper.
    - **Overlap:** a lesson 18:00–19:00 in room A. A query for 18:30, 60 min excludes A, and a query
@@ -403,6 +455,7 @@ PLAN.md Phase 12, "Read tools": "rooms free at a time". This task needs Task 1.1
 PLAN.md Phase 12, "Resources". This task needs Task 1.1 on main.
 
 **Files:**
+
 - **Create:** `cmd/studio-schedule/mcpserver/resources.go` and its test.
 - **Modify:**
   - `mcpserver/server.go`, which adds the resources in `New`, filtered like the tools: access level
@@ -410,12 +463,14 @@ PLAN.md Phase 12, "Resources". This task needs Task 1.1 on main.
   - `docs/mcp.md`, a resources table.
 
 **Interfaces:**
+
 - **Consumes:** from Task 1.1, `New`, `Options`, `Actor`, `(*Server).call` (so a resource read is
   checked and audited like a tool call; `Tool` holds the resource URI's template, never the ID).
 - **Produces:** the URIs `school://settings`, `school://timetable`, `school://glossary`,
   `lesson://{id}` and `person://{id}`.
 
 **Resources:**
+
 - **`school://settings`:**
   - The public settings: name, time zone, currency, languages and booking rules, as `getPublicSettings`
     or `settings get --output json` returns them for the account's level.
@@ -442,6 +497,7 @@ PLAN.md Phase 12, "Resources". This task needs Task 1.1 on main.
   - `personalData: true`.
 
 **Tests:**
+
 - **Listing:** per role and per `--personal-data`. Without the flag, neither template is listed, and
   reading `person://<id>` directly fails (Review focus 3).
 - **Audit:** a read writes one `mcp-tool-called` row whose `Tool` is the template (`person://{id}`),
@@ -460,6 +516,7 @@ PLAN.md Phase 12, "Resources". This task needs Task 1.1 on main.
 PLAN.md Phase 12, "Prompts". This task needs Task 1.1 on main.
 
 **Files:**
+
 - **Create:**
   - `cmd/studio-schedule/mcpserver/prompts.go`;
   - `mcpserver/prompts/{en,de}.json` (the texts) or a Go map;
@@ -467,12 +524,14 @@ PLAN.md Phase 12, "Prompts". This task needs Task 1.1 on main.
 - **Modify:** `mcpserver/server.go` (adds the prompts in `New`), `docs/mcp.md` (a prompts table).
 
 **Interfaces:**
+
 - **Consumes:** from Task 1.1, `New`, `Options`, `(*Server).call` (a prompt get is checked and
   audited like a tool call).
 - **Produces:** the prompt names `weekly_overview`, `waitlist_invitations` and
   `canceled_lesson_announcement`.
 
 **Prompts:**
+
 - **What a prompt is:** a template of messages that tells the model which tools to call. It contains
   no data of its own, so it reads nothing but the school's language. The language is the settings'
   UI language, `de` or `en`, through the settings service; any other value falls back to `en`.
@@ -496,6 +555,7 @@ PLAN.md Phase 12, "Prompts". This task needs Task 1.1 on main.
   - No real names in examples.
 
 **Tests:**
+
 - **Listing:** per role and `--personal-data` (`waitlist_invitations` is absent without it).
 - **Language:**
   - with a German school the text is German, and with English it is English;
@@ -515,6 +575,7 @@ PLAN.md Phase 12, "Prompts". This task needs Task 1.1 on main.
 PLAN.md Phase 12, "Write tools (opt-in)". This task needs Tasks 1.1 and 2.1 on main.
 
 **Files:**
+
 - **Create:** `cmd/studio-schedule/mcpserver/tools_writes_bookings.go`, `…_lessons.go`,
   `…_announcements.go`, `…_mail.go`, `…_jobs.go` and their tests; parity tests where a command exists,
   in `cmd/studio-schedule/mcp_writes_test.go`.
@@ -522,6 +583,7 @@ PLAN.md Phase 12, "Write tools (opt-in)". This task needs Tasks 1.1 and 2.1 on m
   writes and annotations).
 
 **Interfaces:**
+
 - **Consumes:** from Task 1.1, `tool.write`, `WriteGroup`, `Options.AllowWrites`, `(*Server).call`;
   from Task 2.1, the person IDs that `search_persons` returns.
 - **Produces:** the tool names `book_lesson`, `cancel_booking`, `cancel_lesson`,
@@ -530,14 +592,14 @@ PLAN.md Phase 12, "Write tools (opt-in)". This task needs Tasks 1.1 and 2.1 on m
 **Tools.** Each is listed only when its group is in `--allow-writes`. The service's rules, validation
 and audit events apply unchanged.
 
-| tool | group | access | personal data | annotations | mirrors |
-| --- | --- | --- | --- | --- | --- |
-| `book_lesson` `{lessonId, personId}` | bookings | office | yes | idempotent | `BookingService` as the office books for a person. No command, no parity |
-| `cancel_booking` `{lessonId, personId}` | bookings | office | yes | destructive, idempotent | `BookingService` cancel. No command, no parity |
-| `cancel_lesson` `{lessonId, note?}` | lessons | office | no | destructive, idempotent | `lessons cancel --yes` (parity; notifies those booked) |
-| `draft_announcement` `{title, body, audience…}` | announcements | office | no | not destructive | `AnnouncementService` create as a draft: it never sets a send time, and the office publishes. No command, no parity |
-| `requeue_mail` `{mailId}` | mail | admin | yes (the log names recipients) | destructive | `mail requeue <id> --yes` (parity) |
-| `run_job` `{name}` | jobs | admin | no | destructive for a job that mails or deletes, else not | `jobs run <name>` (parity) |
+| tool                                            | group         | access | personal data                  | annotations                                           | mirrors                                                                                                             |
+| ----------------------------------------------- | ------------- | ------ | ------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `book_lesson` `{lessonId, personId}`            | bookings      | office | yes                            | idempotent                                            | `BookingService` as the office books for a person. No command, no parity                                            |
+| `cancel_booking` `{lessonId, personId}`         | bookings      | office | yes                            | destructive, idempotent                               | `BookingService` cancel. No command, no parity                                                                      |
+| `cancel_lesson` `{lessonId, note?}`             | lessons       | office | no                             | destructive, idempotent                               | `lessons cancel --yes` (parity; notifies those booked)                                                              |
+| `draft_announcement` `{title, body, audience…}` | announcements | office | no                             | not destructive                                       | `AnnouncementService` create as a draft: it never sets a send time, and the office publishes. No command, no parity |
+| `requeue_mail` `{mailId}`                       | mail          | admin  | yes (the log names recipients) | destructive                                           | `mail requeue <id> --yes` (parity)                                                                                  |
+| `run_job` `{name}`                              | jobs          | admin  | no                             | destructive for a job that mails or deletes, else not | `jobs run <name>` (parity)                                                                                          |
 
 - **What the client approves:** the annotations replace the CLI's `--yes` (ADR 0022). No tool asks
   for confirmation itself.
@@ -552,6 +614,7 @@ and audit events apply unchanged.
   be forgotten.
 
 **Tests:**
+
 - **Listing:**
   - the tool list per group: `--allow-writes bookings` lists exactly the two booking tools;
   - with no groups, no write tool is listed;
