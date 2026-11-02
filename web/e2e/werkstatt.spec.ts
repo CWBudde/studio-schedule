@@ -248,7 +248,8 @@ test.describe('the schedule', () => {
     await expect(lessons(main).first()).toBeVisible();
 
     // Most adult ballet classes are for Anfänger to Mittelstufe, on every
-    // weekday but Sunday (internal/seed/werkstatt.go); the list spans 14 days.
+    // weekday from Tuesday to Saturday (internal/seed/werkstatt.go); the list
+    // spans 14 days.
     // `has` is relative to each group, so not the `main`-scoped locator.
     const card = main
       .getByRole('group', { name: /^Ballett Erwachsene, / })

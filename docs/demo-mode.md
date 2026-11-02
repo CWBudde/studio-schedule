@@ -188,7 +188,8 @@ their own data").
   its own data. One house with the rooms Oben (24), Unten (18), Online (40) and Trainingsraum (8),
   in that order; the levels Einsteiger (E), Anfänger (A), Mittelstufe (M), Fortgeschritten (F) and
   Profi (P); 70 weekly classes from Monday to Saturday, with level spans, stages and age ranges;
-  seven instructors with one kind of course each, the former instructor Werner Altmann, and the
+  seven instructors with a field each (and a few classes beside it), the former instructor
+  Werner Altmann, and the
   accompanists Konrad Flügel and Elise Hammerschlag; terms named "Schuljahr …". Its 23
   households mirror the programme school's record by record (families with children, single
   adults, the walk-in guest Ursula Tauberich without an account, the staff), with emails

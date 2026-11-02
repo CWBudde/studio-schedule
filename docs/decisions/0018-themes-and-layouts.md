@@ -96,8 +96,8 @@ builder; the design is §3 of
   JSON: same IDs, same records. The two schools' IDs no longer line up.
 - **Werkstatt is a German school of its own.** One house "Tanzhaus am Lindenhof" with the rooms
   Oben, Unten, Online and Trainingsraum (in that order), the levels Einsteiger (E) to Profi (P),
-  70 weekly classes from Monday to Saturday, seven instructors with one kind of course each and a
-  former one, two accompanists, German passes (Einzelstunde, 10er-Karte, Monatskarte) and
+  70 weekly classes from Monday to Saturday, seven instructors with a field each (and a few
+  classes beside it) and a former one, two accompanists, German passes (Einzelstunde, 10er-Karte, Monatskarte) and
   announcements, and terms named "Schuljahr …" (`schoolYear`). Its 23 households mirror the
   programme's record by record (roles, families and guardians), so the same scenarios exist: a
   member with several children, a managed teenager, single adults, a walk-in guest, a former

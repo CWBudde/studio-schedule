@@ -118,11 +118,13 @@ func werkstatt() schoolSpec {
 				{name: "Trainingsraum", capacity: 8},
 			}},
 		},
-		// Each instructor teaches one kind of course, so the plan reads:
-		// Johanna and Valentina ballet, Marlene the children's classes,
-		// Lars contemporary, Nadine jazz and the beginners' classes, Kilian
-		// step, Irish and hip-hop, Gudrun the health classes. Konrad plays
-		// for Johanna's ballet classes, Elise for Valentina's.
+		// Each instructor has a field of their own and teaches a few classes
+		// beside it: Johanna and Valentina ballet (Johanna also children's
+		// ballet and Früherziehung), Marlene the children's classes, Lars
+		// contemporary, Nadine jazz and the beginners' classes, Kilian step,
+		// Irish and hip-hop (and one beginners' class), Gudrun the health
+		// classes. Konrad plays for Johanna's ballet classes, Elise for
+		// Valentina's.
 		staff: []staffSpec{
 			{"Johanna Sternberg", "Johanna Sternberg", domain.StaffInstructor, true},
 			{"Marlene Quast", "Marlene Quast", domain.StaffInstructor, true},
