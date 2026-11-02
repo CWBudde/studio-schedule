@@ -81,7 +81,7 @@ func TestNew(t *testing.T) {
 		t.Errorf("server info %+v", info)
 	}
 
-	if names := toolNames(t, cs); len(names) != 4 {
+	if names := toolNames(t, cs); len(names) != 5 {
 		t.Errorf("an admin's tools: %v", names)
 	}
 
@@ -90,12 +90,13 @@ func TestNew(t *testing.T) {
 }
 
 // TestRegistry: the registry's tools have unique names and known access
-// levels, read only and touch nothing outside; none returns person data
-// or writes yet. Every input schema is a JSON schema object.
+// levels, read only and touch nothing outside; exactly the person tools
+// (personDataTools) return person data, and none writes yet. Every input
+// schema is a JSON schema object.
 func TestRegistry(t *testing.T) {
 	t.Parallel()
 
-	var names []string
+	var names, persons []string
 
 	for _, group := range registry {
 		for _, tl := range group {
@@ -111,10 +112,20 @@ func TestRegistry(t *testing.T) {
 
 			a := tl.annotations
 			if !a.ReadOnlyHint || !a.IdempotentHint || a.OpenWorldHint == nil || *a.OpenWorldHint || a.Title == "" ||
-				tl.personalData || tl.write != "" || tl.description == "" {
+				tl.write != "" || tl.description == "" {
 				t.Errorf("%s: %+v", tl.name, tl)
 			}
+
+			if tl.personalData {
+				persons = append(persons, tl.name)
+			}
 		}
+	}
+
+	slices.Sort(persons)
+
+	if !slices.Equal(persons, personDataTools) {
+		t.Errorf("the tools with person data are %v, want %v", persons, personDataTools)
 	}
 
 	f := newFixture(t)

@@ -187,6 +187,9 @@ func parsePrompts(files fs.FS) (map[string]map[string]string, error) {
 	return out, nil
 }
 
+// callee is the callee of p.
+func (p prompt) callee() callee { return callee{name: p.name, kind: "prompt", access: p.access} }
+
 // addPrompt registers p on s. A get runs through Server.run like a tool
 // call: the account is checked again and the get is audited
 // (mcp-tool-called with p's name), never with its arguments.
@@ -195,11 +198,11 @@ func (s *Server) addPrompt(p prompt) {
 		func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 			var res *mcp.GetPromptResult
 
-			err := s.run(ctx, "prompt", p.name, p.access, func(ctx context.Context, _ service.Principal) error {
+			_, _, err := s.run(ctx, p.callee(), func(ctx context.Context, _ service.Principal) (any, error) {
 				var err error
 				res, err = s.render(ctx, p, req.Params.Arguments)
 
-				return err
+				return nil, err
 			})
 			if err != nil {
 				return nil, promptError(err)

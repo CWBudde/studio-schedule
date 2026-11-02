@@ -153,6 +153,9 @@ func NewPersonMatchList(persons []domain.Person) PersonMatchList {
 	return PersonMatchList{Items: personMatches(persons)}
 }
 
+// NewPersonMatch is p as searchPersons lists it.
+func NewPersonMatch(p domain.Person) PersonMatch { return personMatch(p) }
+
 func personMatch(p domain.Person) PersonMatch {
 	return PersonMatch{
 		ID: p.ID, GivenName: p.GivenName, FamilyName: p.FamilyName, Email: p.Email, MemberNo: p.MemberNo,

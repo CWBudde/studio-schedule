@@ -1,0 +1,91 @@
+{
+  "lessonId": "00000000-0000-7000-8000-000000000244",
+  "capacity": 4,
+  "active": 4,
+  "held": 0,
+  "freePlaces": 0,
+  "waiting": 2,
+  "dayOverAt": "2026-10-02T22:00:00Z",
+  "bookings": [
+    {
+      "bookingId": "00000000-0000-7000-8000-000000000245",
+      "personId": "00000000-0000-7000-8000-000000000027",
+      "name": "Irene Inkwell",
+      "guest": false,
+      "contactEmail": "irene.inkwell@example.com",
+      "status": "booked",
+      "source": "self",
+      "trial": false,
+      "late": false,
+      "bookedAt": "2026-09-20T17:00:00Z",
+      "payment": {
+        "status": "pending"
+      }
+    },
+    {
+      "bookingId": "00000000-0000-7000-8000-000000000247",
+      "personId": "00000000-0000-7000-8000-000000000029",
+      "name": "Kai Lanternby",
+      "guest": false,
+      "contactEmail": "kai.lanternby@example.org",
+      "status": "booked",
+      "source": "self",
+      "trial": false,
+      "late": false,
+      "bookedAt": "2026-09-20T17:01:00Z",
+      "payment": {
+        "status": "pending"
+      }
+    },
+    {
+      "bookingId": "00000000-0000-7000-8000-000000000249",
+      "personId": "00000000-0000-7000-8000-00000000002d",
+      "name": "Oskar Nettlebury",
+      "guest": false,
+      "contactEmail": "oskar.nettlebury@example.org",
+      "status": "booked",
+      "source": "self",
+      "trial": false,
+      "late": false,
+      "bookedAt": "2026-09-20T17:02:00Z",
+      "payment": {
+        "status": "pending"
+      }
+    },
+    {
+      "bookingId": "00000000-0000-7000-8000-00000000024b",
+      "personId": "00000000-0000-7000-8000-00000000002f",
+      "name": "Rhea Pinecrest",
+      "guest": false,
+      "contactEmail": "rhea.pinecrest@example.com",
+      "status": "booked",
+      "source": "self",
+      "trial": false,
+      "late": false,
+      "bookedAt": "2026-09-20T17:03:00Z",
+      "payment": {
+        "status": "pending"
+      }
+    }
+  ],
+  "waitlist": [
+    {
+      "entryId": "00000000-0000-7000-8000-00000000024d",
+      "personId": "00000000-0000-7000-8000-000000000033",
+      "name": "Vera Rushwick",
+      "status": "waiting",
+      "position": 1,
+      "stayOnList": true,
+      "joinedAt": "2026-09-21T16:00:00Z"
+    },
+    {
+      "entryId": "00000000-0000-7000-8000-00000000024e",
+      "personId": "00000000-0000-7000-8000-000000000035",
+      "name": "Wanda Sparrowhill",
+      "status": "waiting",
+      "position": 2,
+      "stayOnList": false,
+      "joinedAt": "2026-09-21T16:30:00Z"
+    }
+  ]
+}

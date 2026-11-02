@@ -566,7 +566,7 @@ func TestPromptsFailures(t *testing.T) {
 			t.Errorf("audit events %+v", calls)
 		}
 
-		if log := f.log.String(); !strings.Contains(log, "level=ERROR") || !strings.Contains(log, "tool=weekly_overview") ||
+		if log := f.log.String(); !strings.Contains(log, "level=ERROR") || !strings.Contains(log, "prompt=weekly_overview") ||
 			!strings.Contains(log, "connection reset") {
 			t.Errorf("log %q", log)
 		}
@@ -595,7 +595,7 @@ func TestPromptsFailures(t *testing.T) {
 		wantPromptError(t, cs, "canceled_lesson_announcement", map[string]string{"lessonId": promptLesson}, jsonrpc.CodeInternalError,
 			"internal error")
 
-		if log := f.log.String(); !strings.Contains(log, "tool=canceled_lesson_announcement") ||
+		if log := f.log.String(); !strings.Contains(log, "prompt=canceled_lesson_announcement") ||
 			!strings.Contains(log, "the school's time zone") {
 			t.Errorf("log %q", log)
 		}
@@ -613,7 +613,7 @@ func TestPromptsFailures(t *testing.T) {
 		wantPromptError(t, cs, "weekly_overview", nil, jsonrpc.CodeInternalError, "internal error")
 
 		if log := f.log.String(); !strings.Contains(log, "could not be audited") ||
-			!strings.Contains(log, "tool=weekly_overview") || !strings.Contains(log, "disk full") {
+			!strings.Contains(log, "prompt=weekly_overview") || !strings.Contains(log, "disk full") {
 			t.Errorf("log %q", log)
 		}
 	})

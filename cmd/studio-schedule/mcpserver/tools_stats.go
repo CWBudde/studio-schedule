@@ -14,10 +14,11 @@ func statsTools() []tool {
 		name: "statistics",
 		description: "The school's figures of a range of school dates, as the office's statistics page " +
 			"(getStatistics; `stats`): the totals, by week (by month beyond 26 weeks), by class, room, course " +
-			"type and instructor. range picks the current week and the 3 or 11 before it (last4Weeks, the " +
-			"default; last12Weeks) or the current term up to today (term); from and to (both inclusive, at " +
-			"most " + strconv.Itoa(service.MaxStatisticsDays) + " days) give a custom range. The top " +
-			"participants are left out, as they name persons.",
+			"type and instructor, and with --personal-data the persons with the most bookings. range picks the " +
+			"current week and the 3 or 11 before it (last4Weeks, the default; last12Weeks) or the current " +
+			"term up to today (term); from and to (both inclusive, at most " +
+			strconv.Itoa(service.MaxStatisticsDays) + " days) give a custom range. Without --personal-data " +
+			"the top participants are left out, as they name persons.",
 		access:      httpapi.AccessOffice,
 		annotations: readOnly("Statistics"),
 		add:         handler(statistics),
@@ -32,7 +33,7 @@ type statisticsInput struct {
 }
 
 // statisticsBody is the body of getStatistics without the top
-// participants, who are persons. Its TopParticipants hides the embedded
+// participants, who are persons: the result without --personal-data. Its TopParticipants hides the embedded
 // field of the same JSON name: encoding/json writes the less nested one,
 // which omitempty leaves out, so the key is absent.
 type statisticsBody struct {
@@ -41,7 +42,8 @@ type statisticsBody struct {
 	TopParticipants []httpapi.ParticipantStatistics `json:"topParticipants,omitempty"`
 }
 
-// statistics is the statistics tool.
+// statistics is the statistics tool: the body of getStatistics, the top
+// participants only with --personal-data.
 func statistics(ctx context.Context, s *Server, _ service.Principal, in statisticsInput) (any, error) {
 	q, err := statisticsQuery(in)
 	if err != nil {
@@ -53,7 +55,12 @@ func statistics(ctx context.Context, s *Server, _ service.Principal, in statisti
 		return nil, err
 	}
 
-	return statisticsBody{Statistics: httpapi.NewStatistics(st)}, nil
+	body := httpapi.NewStatistics(st)
+	if s.opts.PersonalData {
+		return body, nil
+	}
+
+	return statisticsBody{Statistics: body}, nil
 }
 
 // statisticsQuery is the query of in, as `stats` reads its flags: no range

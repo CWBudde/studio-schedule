@@ -25,6 +25,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/app"
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/httpapi"
 	"github.com/cwbudde/studio-schedule/internal/service"
 )
 
@@ -110,8 +111,9 @@ type Server struct {
 
 // instructions tell the client what the tools have in common.
 const instructions = "The tools read a dance school's schedule, figures and checks as one account of " +
-	"the school, with that account's rights. School dates (YYYY-MM-DD) and times are local to the " +
-	"school's time zone, which the results name."
+	"the school, with that account's rights; the resources hold its settings, its current timetable and " +
+	"the glossary of its words. School dates (YYYY-MM-DD) and times are local to the school's time zone, " +
+	"which the results name."
 
 // New builds the server for start, the principal of --as resolved at the
 // start: the tools whose access level start's role reaches, those that
@@ -150,14 +152,20 @@ func newServer(
 
 	for _, group := range tools {
 		for _, t := range group {
-			if s.lists(t) {
+			if s.lists(t.access, t.personalData, t.write) {
 				t.add(s, t)
 			}
 		}
 	}
 
+	for _, r := range resources {
+		if s.lists(r.access, r.personalData, "") {
+			r.add(s)
+		}
+	}
+
 	for _, p := range prompts {
-		if s.lists(tool{access: p.access, personalData: p.personalData}) {
+		if s.lists(p.access, p.personalData, "") {
 			s.addPrompt(p)
 		}
 	}
@@ -165,18 +173,18 @@ func newServer(
 	return s, nil
 }
 
-// lists reports whether the session lists t: the start's role reaches its
-// access level, and the flags allow its person data and its write group.
-// A prompt is listed as a read tool of its level and person data.
-func (s *Server) lists(t tool) bool {
-	minimum, _ := t.access.MinRole() // the registry's levels are known (TestRegistry)
+// lists reports whether the session lists a tool, resource or prompt of the access
+// level with personalData and the write group: the start's role reaches
+// the level, and the flags allow its person data and its write group.
+func (s *Server) lists(access httpapi.Access, personalData bool, write WriteGroup) bool {
+	minimum, _ := access.MinRole() // the registries' levels are known (TestRegistry, TestResourceRegistry)
 
 	switch {
 	case !s.start.Role.AtLeast(minimum):
 		return false
-	case t.personalData && !s.opts.PersonalData:
+	case personalData && !s.opts.PersonalData:
 		return false
-	case t.write != "" && !slices.Contains(s.opts.AllowWrites, t.write):
+	case write != "" && !slices.Contains(s.opts.AllowWrites, write):
 		return false
 	default:
 		return true

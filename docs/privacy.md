@@ -104,18 +104,23 @@ erase it too, the office anonymizes it. A confirmation mail goes to the old addr
 
 The MCP server (`studio-schedule mcp`, [mcp.md](mcp.md), [ADR 0022](decisions/0022-mcp-server.md))
 lets an assistant such as Claude Desktop or Claude Code call tools that read, and with
-`--allow-writes` change, the school's data as one account. The assistant's provider receives
-everything the tools return, and what the assistant's user types.
+`--allow-writes` change, the school's data as one account, and read resources (the settings, the
+timetable, the glossary, a lesson's participants, a person). The assistant's provider receives
+everything the tools and resources return, and what the assistant's user types.
 
 - **Without `--personal-data`** the tools return no person data: the schedule (without who is
   booked, waiting or renting), the statistics totals (without the top participants), `doctor` and
-  `db check`.
-- **With `--personal-data`** the tools also return person data. Turn it on only once the operator
+  `db check`; the resources are the settings, the timetable and the glossary.
+- **With `--personal-data`** the tools also return person data: the person search, a lesson's
+  participants and waiting list, a person's bookings and passes, the receipts, the mail log and the
+  statistics' top participants, never a date of birth. The resources `lesson://{id}` (participants
+  and waiting list) and `person://{id}` (a person without the date of birth) are listed too. Turn
+  it on only once the operator
   has a data processing agreement (Art. 28 GDPR) with the assistant's provider, and per client: the
   flag is part of the client's configuration.
 - **Arguments** of a call (a search term, a name) are never logged or audited.
-- **Every call** is audited as `mcp-tool-called`, with the account, the OS user, the tool and the
-  outcome, and no target. Such events keep the account for 3 years, so give the assistant a
+- **Every call** and resource read is audited as `mcp-tool-called`, with the account, the OS user,
+  the tool or the resource's URI template (never the ID it read) and the outcome, and no target. Such events keep the account for 3 years, so give the assistant a
   dedicated account.
 
 ## What the operator still has to do

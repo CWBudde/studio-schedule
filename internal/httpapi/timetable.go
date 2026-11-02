@@ -109,12 +109,18 @@ func (h *handlers) listClasses(ctx context.Context, in *ClassListInput) (*ClassL
 		return nil, h.toHTTPError(ctx, err)
 	}
 
+	return &ClassListOutput{Body: NewClassList(classes)}, nil
+}
+
+// NewClassList is the response body of listClasses for classes; the MCP
+// server's school://timetable resource returns it too (ADR 0022).
+func NewClassList(classes []service.TimetableClass) ClassList {
 	items := make([]Class, 0, len(classes))
 	for _, c := range classes {
 		items = append(items, class(c))
 	}
 
-	return &ClassListOutput{Body: ClassList{Items: items}}, nil
+	return ClassList{Items: items}
 }
 
 func class(c service.TimetableClass) Class {
