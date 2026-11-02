@@ -178,7 +178,37 @@ react-i18next, Vitest, Playwright.
   fresh worktree until `just web-install`; `werkstatt.spec.ts` "a guardian's square button opens the
   lesson" failed once on desktop and passed in five repeats (flaky, the data is unchanged).
 
-- [ ] 5.1 `werkstatt-data` The Werkstatt school's own data from spec §3: German people, staff and accounts, the Online room, five levels, 23 course types, the 70-class plan, Sunday workshops, a rental, German passes and announcements; ADR 0018 amendment, docs/demo-mode.md, e2e — see "Task 5.1" below.
+- [x] 5.1 `werkstatt-data` The Werkstatt school's own data from spec §3: German people, staff and accounts, the Online room, five levels, 23 course types, the 70-class plan, Sunday workshops, a rental, German passes and announcements; ADR 0018 amendment, docs/demo-mode.md, e2e — see "Task 5.1" below.
+
+  Done: `werkstatt()` with its own tables in `werkstatt.go`: 23 households mirroring the programme's
+  record by record (logins Katrin Ahrenfeld, Johanna Sternberg, Heike Buchwald, Rainer Ostwald;
+  managed teenager Charlotte Hollerbach; walk-in Ursula Tauberich), seven instructors with one
+  kind of course each plus the former Werner Altmann, accompanists Konrad Flügel (login) and Elise
+  Hammerschlag, the rooms Oben 24, Unten 18, Online 40, Trainingsraum 8, the levels E/A/M/F/P,
+  the 70 classes of the spec's table (1–4 members each, children of the stated age), six Sunday
+  workshops, the Theatergruppe Kupferblatt in Unten on a Wednesday at 20:00, Einzelstunde,
+  10er-Karte and Monatskarte (16, 140, 79 €), German announcements and duplicates, "Schuljahr
+  2026/27". `holds` and `placeIDs` are gone; new in the builder: `onDay`/`on` (schoolSpec
+  `workshopsOn`, `rentalOn`), `schoolYear(prefix)` and `emailOf` (ä → ae, ß → ss). Tests:
+  `TestWerkstattCatalogue`, `TestWerkstattAudiences` (nine rows), `TestWerkstattChildrenOfAge`,
+  `TestWerkstattOwnPeople`, `TestWerkstattWorkshopsOnSunday` (every demo anchor),
+  `TestDemoTermNameOfOneYear` (covers the single-year branch 4.1 left uncovered),
+  `TestWerkstattPlaces` rewritten for every anchor; `TestDemoLevels`, `TestDemoClassAudience`,
+  `TestDemoRoomPositions` and `TestDemoReferences` made per school. The programme digest is
+  unchanged. e2e: four rooms in order, a phone's one list on a four-room day, a card's "A/M" read
+  out as "Anfänger–Mittelstufe", the German login page and its sign-ins (review focus 5); the
+  cases that pinned Irene Inkwell and Classical Ballet use Ingrid Kranich and Ballett Erwachsene.
+  ADR 0018 amendment, demo-mode.md, ADR 0021, README, operations.md and the `seed --school` help.
+  Coverage 99.0 % total, `internal/seed` 91.6 % → 92.2 %, every new function at 100 %. Vitest
+  1393, e2e 245 passed (5 skipped, the other project's). Deviations and discoveries: 26 course
+  types, not 23: a lesson has no title, so the spec's German workshop titles (Floor Barre, Pas de
+  deux, Yoga für Tänzerinnen und Tänzer) are three workshop-only course types; the plan's
+  Morning Workout and Spitze classes are 30 minutes, so `TestDemoReferences`' 45-minute minimum is
+  30 for Werkstatt; the workshops' day offsets alone can't hold Sunday for every anchor, hence
+  `onDay`, and each workshop has its own room and time so several offsets on one Sunday never meet;
+  misspell (US) flags the German "Stange", so the descriptions say "Ballettstange"; gosec G101
+  flags `passType: "Einzelstunde"` (a const fixes it). Residual: the Werkstatt seed's snapshot is
+  about three times the programme's (864 KB vs 289 KB before generation), noted in demo-mode.md.
 
 ---
 

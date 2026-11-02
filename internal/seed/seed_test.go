@@ -940,8 +940,11 @@ func TestDemoReferences(t *testing.T) {
 				t.Errorf("%s: class %v: the demo school is closed on Sundays", school, c.ID)
 			}
 
-			if c.Duration < 45*time.Minute || c.Duration > 90*time.Minute {
-				t.Errorf("%s: class %v: duration %v outside 45..90 minutes", school, c.ID, c.Duration)
+			// The werkstatt school's plan has half-hour classes (Spitze,
+			// Morning Workout).
+			shortest := map[seed.School]time.Duration{seed.SchoolProgramme: 45 * time.Minute, seed.SchoolWerkstatt: 30 * time.Minute}[school]
+			if c.Duration < shortest || c.Duration > 90*time.Minute {
+				t.Errorf("%s: class %v: duration %v outside %v..90 minutes", school, c.ID, c.Duration, shortest)
 			}
 		}
 
@@ -1871,8 +1874,8 @@ func TestWerkstattOwnIdentity(t *testing.T) {
 }
 
 // TestLoadDemoWerkstatt loads the werkstatt school: its own name, theme,
-// accent, language, imprint, receipt issuer and background, the programme
-// school's records, and receipts in German by its own issuer.
+// accent, language, imprint, receipt issuer and background, its own
+// records, and receipts in German by its own issuer.
 func TestLoadDemoWerkstatt(t *testing.T) {
 	t.Parallel()
 
@@ -2089,78 +2092,50 @@ func TestParseSchool(t *testing.T) {
 	}
 }
 
+// TestWerkstattPlaces: the werkstatt school has one house of its own,
+// the Tanzhaus am Lindenhof, with its four rooms; for every anchor, no two
+// of its lessons, the workshops and the rental included, meet in one room.
 func TestWerkstattPlaces(t *testing.T) {
 	t.Parallel()
 
-	programme := seed.DemoAt(seed.FixedDemoAnchor)
-
-	werkstatt, err := seed.DemoSchoolAt(seed.FixedDemoAnchor, seed.SchoolWerkstatt)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(werkstatt.Locations) != 1 || werkstatt.Locations[0].Name != "Tanzhaus am Lindenhof" {
-		t.Fatalf("werkstatt locations = %+v, want only the Tanzhaus am Lindenhof", werkstatt.Locations)
-	}
-
-	rooms := func(d seed.Dataset) map[domain.RoomID]domain.Room {
-		m := map[domain.RoomID]domain.Room{}
-		for _, r := range d.Rooms {
-			m[r.ID] = r
+	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
+		werkstatt, err := seed.DemoSchoolAt(anchor, seed.SchoolWerkstatt)
+		if err != nil {
+			t.Fatal(err)
 		}
 
-		return m
-	}
-	programmeRooms, werkstattRooms := rooms(programme), rooms(werkstatt)
-
-	var names []string
-	for _, r := range werkstatt.Rooms {
-		names = append(names, r.Name)
-	}
-
-	if want := []string{"Oben", "Unten", "Trainingsraum"}; !slices.Equal(names, want) {
-		t.Errorf("werkstatt rooms = %q, want %q", names, want)
-	}
-
-	if len(werkstatt.Classes) != len(programme.Classes) {
-		t.Fatalf("werkstatt has %d classes, programme %d", len(werkstatt.Classes), len(programme.Classes))
-	}
-
-	// Every programme room's classes move together into one werkstatt
-	// room, which has room for them.
-	inRoom := map[string]string{}
-	for i, c := range werkstatt.Classes {
-		p := programme.Classes[i]
-		pr, wr := programmeRooms[p.RoomID], werkstattRooms[c.RoomID]
-
-		if c.ID != p.ID || c.Capacity > wr.Capacity {
-			t.Errorf("class %v (%d places) in %s (%d places)", c.ID, c.Capacity, wr.Name, wr.Capacity)
+		if len(werkstatt.Locations) != 1 || werkstatt.Locations[0].Name != "Tanzhaus am Lindenhof" {
+			t.Fatalf("werkstatt locations = %+v, want only the Tanzhaus am Lindenhof", werkstatt.Locations)
 		}
 
-		if other, ok := inRoom[pr.Name]; ok && other != wr.Name {
-			t.Errorf("the classes of %s are in %s and %s", pr.Name, other, wr.Name)
+		rooms := index(werkstatt.Rooms, func(r domain.Room) domain.RoomID { return r.ID })
+
+		var names []string
+		for _, r := range werkstatt.Rooms {
+			names = append(names, r.Name)
 		}
 
-		inRoom[pr.Name] = wr.Name
-	}
+		if want := []string{"Oben", "Unten", "Online", "Trainingsraum"}; !slices.Equal(names, want) {
+			t.Errorf("werkstatt rooms = %q, want %q", names, want)
+		}
 
-	// No two lessons, workshops included, meet in one room.
-	byRoom := map[domain.RoomID][]domain.Lesson{}
-	for _, l := range werkstatt.Lessons {
-		for _, other := range byRoom[l.RoomID] {
-			if l.StartsAt.Before(other.EndsAt) && other.StartsAt.Before(l.EndsAt) {
-				t.Errorf("in %s, lesson %v (%v) meets lesson %v (%v)",
-					werkstattRooms[l.RoomID].Name, l.ID, l.StartsAt, other.ID, other.StartsAt)
+		byRoom := map[domain.RoomID][]domain.Lesson{}
+		for _, l := range werkstatt.Lessons {
+			for _, other := range byRoom[l.RoomID] {
+				if l.StartsAt.Before(other.EndsAt) && other.StartsAt.Before(l.EndsAt) {
+					t.Errorf("%v: in %s, lesson %v (%v) meets lesson %v (%v)", anchor,
+						rooms[l.RoomID].Name, l.ID, l.StartsAt, other.ID, other.StartsAt)
+				}
 			}
-		}
 
-		byRoom[l.RoomID] = append(byRoom[l.RoomID], l)
+			byRoom[l.RoomID] = append(byRoom[l.RoomID], l)
+		}
 	}
 }
 
 // TestDemoRoomPositions: every school's rooms are numbered from 1 within
-// their location in the order of its table; Werkstatt's halls come before
-// its training room.
+// their location in the order of its table; Werkstatt's halls come first,
+// then the online room, then its training room.
 func TestDemoRoomPositions(t *testing.T) {
 	t.Parallel()
 
@@ -2193,20 +2168,26 @@ func TestDemoRoomPositions(t *testing.T) {
 		got = append(got, fmt.Sprintf("%d %s", r.Position, r.Name))
 	}
 
-	if want := []string{"1 Oben", "2 Unten", "3 Trainingsraum"}; !slices.Equal(got, want) {
+	if want := []string{"1 Oben", "2 Unten", "3 Online", "4 Trainingsraum"}; !slices.Equal(got, want) {
 		t.Errorf("werkstatt rooms = %q, want %q", got, want)
 	}
 }
 
-// TestDemoLevels: every demo school has the four levels from beginner to
-// professional, at positions 1 to 4, with their codes, and loading puts them
-// into the store in that order.
+// TestDemoLevels: every demo school has its own levels, from least to most
+// advanced, at positions from 1, with their codes: the programme school four
+// in English, the werkstatt school five in German. Loading puts them into the
+// store in that order.
 func TestDemoLevels(t *testing.T) {
 	t.Parallel()
 
-	want := []string{"1 Beginner B", "2 Intermediate I", "3 Advanced A", "4 Professional P"}
+	levels := map[seed.School][]string{
+		seed.SchoolProgramme: {"1 Beginner B", "2 Intermediate I", "3 Advanced A", "4 Professional P"},
+		seed.SchoolWerkstatt: {"1 Einsteiger E", "2 Anfänger A", "3 Mittelstufe M", "4 Fortgeschritten F", "5 Profi P"},
+	}
 
 	for _, school := range seed.Schools() {
+		want := levels[school]
+
 		d, err := seed.DemoSchoolAt(seed.FixedDemoAnchor, school)
 		if err != nil {
 			t.Fatal(err)
@@ -2247,9 +2228,11 @@ func levelLines(levels []domain.Level) []string {
 	return lines
 }
 
-// TestDemoClassAudience: every class's levels are levels of its school, the
-// children's classes state ages instead of a level, and one Classical Ballet
-// class spans Beginner to Intermediate, so the demo shows a span.
+// TestDemoClassAudience: every class's levels are levels of its school; in
+// the programme school the children's classes state ages instead of a
+// level, and one Classical Ballet class spans Beginner to Intermediate, so
+// the demo shows a span (the werkstatt school's audiences:
+// TestWerkstattAudiences).
 func TestDemoClassAudience(t *testing.T) {
 	t.Parallel()
 
@@ -2295,7 +2278,7 @@ func TestDemoClassAudience(t *testing.T) {
 			}
 		}
 
-		if spans != 1 {
+		if school == seed.SchoolProgramme && spans != 1 {
 			t.Errorf("%s: %d Beginner–Intermediate Classical Ballet classes, want 1", school, spans)
 		}
 	}

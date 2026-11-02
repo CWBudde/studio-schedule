@@ -1386,7 +1386,7 @@ Load the fictional demo data set (school settings, catalog, timetable, families 
 
 The demo term and workshops lie around the anchor date: by default the fixed date 2026-09-22 (the data of the tests), with `--anchor today` the current date in the demo school's time zone (like the web demo), or a date YYYY-MM-DD.
 
-`--school` picks the demo school: programme (the default, in the app's own look) or werkstatt (the same people and timetable as a German school in the Werkstatt look, with its own imprint, German receipts and a background image).
+`--school` picks the demo school: programme (the default, in the app's own look) or werkstatt (a German school of its own in the Werkstatt look: its own people, catalog and timetable, imprint, German receipts and a background image).
 
 Flags:
 
