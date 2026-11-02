@@ -456,7 +456,7 @@ func TestMCPParity(t *testing.T) {
 			args map[string]any
 			cmd  []string
 		}{
-			{nil, nil},
+			{map[string]any{}, nil},
 			{map[string]any{"range": "term"}, []string{"--range", "term"}},
 			{map[string]any{"from": "2026-09-01", "to": "2026-09-30"}, []string{"--from", "2026-09-01", "--to", "2026-09-30"}},
 		} {
@@ -479,7 +479,7 @@ func TestMCPParity(t *testing.T) {
 			args map[string]any
 			cmd  []string
 		}{
-			{nil, nil},
+			{map[string]any{}, nil},
 			{map[string]any{"only": []string{"capacity", "passes"}}, []string{"--only", "capacity,passes"}},
 		} {
 			want := commandDocument(t, r, append([]string{"db", "check"}, tc.cmd...)...)

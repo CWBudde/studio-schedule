@@ -97,7 +97,7 @@ func TestScheduleInput(t *testing.T) {
 		args     map[string]any
 		from, to string // to is exclusive in the body
 	}{
-		{nil, "2026-09-22", "2026-09-29"},
+		{map[string]any{}, "2026-09-22", "2026-09-29"},
 		{map[string]any{"from": "2026-10-01"}, "2026-10-01", "2026-10-08"},
 		{map[string]any{"to": "2026-09-22"}, "2026-09-22", "2026-09-23"},
 		{map[string]any{"from": "2026-09-01", "to": "2026-10-12"}, "2026-09-01", "2026-10-13"},
@@ -211,7 +211,7 @@ func TestStatistics(t *testing.T) {
 		rng, from, to   string
 		hasTerm, failed bool
 	}{
-		{args: nil, rng: "last4Weeks", from: "2026-08-31", to: "2026-09-22"},
+		{args: map[string]any{}, rng: "last4Weeks", from: "2026-08-31", to: "2026-09-22"},
 		{args: map[string]any{"range": "last12Weeks"}, rng: "last12Weeks", from: "2026-07-06", to: "2026-09-22"},
 		{args: map[string]any{"range": "term"}, rng: "term", from: "2026-09-01", to: "2026-09-22", hasTerm: true},
 		{args: map[string]any{"from": "2026-09-01", "to": "2026-09-30"}, rng: "custom", from: "2026-09-01", to: "2026-09-30"},

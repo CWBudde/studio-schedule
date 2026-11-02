@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -123,6 +124,7 @@ func TestCallArguments(t *testing.T) {
 		map[string]any{"Zebulon": "x"},
 		map[string]any{"name": 42},
 		[]string{"Zebulon"},
+		json.RawMessage("null"),
 	} {
 		text, isError := callTool(t, cs, "probe", args)
 		if !isError || !strings.HasPrefix(text, "validation failed: the arguments do not fit the tool's input schema: ") {
@@ -139,8 +141,22 @@ func TestCallArguments(t *testing.T) {
 	}
 
 	calls := toolCalls(t, f.st)
-	if len(calls) != 4 || calls[0].Details.Outcome != "invalid" || calls[3].Details.Outcome != "ok" {
+	if len(calls) != 5 || calls[0].Details.Outcome != "invalid" || calls[3].Details.Outcome != "invalid" ||
+		calls[4].Details.Outcome != "ok" {
 		t.Errorf("audit events %+v", calls)
+	}
+}
+
+// TestDecodeNotAnObject: arguments that are JSON but no object, null
+// included, do not fit any tool's input, whose schema is an object; null
+// would otherwise decode to the zero input and run with the defaults.
+func TestDecodeNotAnObject(t *testing.T) {
+	t.Parallel()
+
+	for _, args := range []string{"null", " null ", "42", `"Zebulon"`, "true"} {
+		if in, err := decode[scheduleInput](json.RawMessage(args)); !errors.Is(err, errArguments) {
+			t.Errorf("decode(%s) = %+v, %v; want errArguments", args, in, err)
+		}
 	}
 }
 

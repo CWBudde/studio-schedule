@@ -88,14 +88,23 @@ func inputSchema[In any]() *jsonschema.Schema {
 // input.
 var errArguments = fmt.Errorf("%w: the arguments do not fit the tool's input schema", domain.ErrValidation)
 
+// errNotAnObject is the error of arguments that are no JSON object.
+var errNotAnObject = fmt.Errorf("%w: they are not an object", errArguments)
+
 // decode decodes the arguments of a call into In; no arguments are In's
-// zero value. Unknown properties are refused, as the schema says. The
+// zero value. Arguments that are no object, null included, are refused:
+// every input schema is an object, and null would decode to the zero
+// input. Unknown properties are refused, as the schema says. The
 // decoder's message names a property or a type, never a value.
 func decode[In any](args json.RawMessage) (In, error) {
 	var in In
 
 	if len(args) == 0 {
 		return in, nil
+	}
+
+	if trimmed := bytes.TrimSpace(args); len(trimmed) == 0 || trimmed[0] != '{' {
+		return in, errNotAnObject
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(args))
