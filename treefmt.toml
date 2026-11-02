@@ -23,6 +23,8 @@ excludes = [
     "api/openapi.json",
     # Golden files: the commands' exact output (go test ./cmd/studio-schedule -update).
     "cmd/studio-schedule/testdata/**",
+    # Golden files: the MCP tools' exact results (go test ./cmd/studio-schedule/mcpserver -update).
+    "cmd/studio-schedule/mcpserver/testdata/**",
     ".release-please-manifest.json",
 ]
 
