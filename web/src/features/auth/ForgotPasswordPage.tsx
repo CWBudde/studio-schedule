@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { requestPasswordResetMutation } from '@/api/queries';
+import { PendingIcon } from '@/components/PendingIcon';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -82,7 +83,7 @@ export function ForgotPasswordPage() {
                 {...form.register('email')}
               />
               <Button type="submit" className="w-full" disabled={request.isPending}>
-                <Send aria-hidden="true" />
+                <PendingIcon pending={request.isPending} icon={<Send aria-hidden="true" />} />
                 {request.isPending ? t('forgotPassword.submitting') : t('forgotPassword.submit')}
               </Button>
             </form>

@@ -1,8 +1,16 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api } from '@/api/client';
 import i18n from '@/i18n';
-import { mockApiGet, mockApiPost, problem, publicSettings, tooManyRequests } from '@/test/mockApi';
+import {
+  deferred,
+  mockApiGet,
+  mockApiPost,
+  problem,
+  publicSettings,
+  tooManyRequests,
+} from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { RegisterPage } from './RegisterPage';
 
@@ -60,6 +68,26 @@ describe('RegisterPage', () => {
     });
     expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
     expect(within(success).queryByText(/demo mailbox/)).not.toBeInTheDocument();
+  });
+
+  it('shows that it registers until the API answers', async () => {
+    mockApiGet(notDemo);
+    const answer = deferred<unknown>();
+    vi.spyOn(api, 'POST').mockImplementation((() => answer.promise) as unknown as typeof api.POST);
+
+    renderInRouter(<RegisterPage />, { at: '/register' });
+    await fillAndSubmit(registration);
+
+    const pending = await screen.findByRole('button', { name: 'Registering…' });
+    expect(pending).toBeDisabled();
+    expect(pending.querySelector('[data-slot="spinner"]')).not.toBeNull();
+
+    answer.resolve({
+      data: undefined,
+      error: undefined,
+      response: new Response(null, { status: 202 }),
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent('Check your inbox');
   });
 
   it('points to the demo mailbox in a demo', async () => {

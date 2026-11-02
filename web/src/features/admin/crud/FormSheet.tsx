@@ -1,6 +1,7 @@
 import { XIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PendingIcon } from '@/components/PendingIcon';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -65,22 +66,28 @@ export function FormSheetHeader({ title, description }: { title: string; descrip
   );
 }
 
-/** The submit and cancel buttons of a form sheet. */
+/**
+ * The submit and cancel buttons of a form sheet. While `pending`, the submit
+ * button is disabled and shows a spinner and `pendingLabel` ("Saving…" by
+ * default).
+ */
 export function FormSheetActions({
   pending,
   submitLabel,
+  pendingLabel,
   icon,
 }: {
   pending: boolean;
   submitLabel: string;
+  pendingLabel?: string;
   icon?: ReactNode;
 }) {
   const { t } = useTranslation('admin');
   return (
     <div className="flex flex-wrap gap-2 pt-2">
       <Button type="submit" disabled={pending}>
-        {icon}
-        {pending ? t('form.saving') : submitLabel}
+        <PendingIcon pending={pending} icon={icon} />
+        {pending ? (pendingLabel ?? t('form.saving')) : submitLabel}
       </Button>
       <SheetClose asChild>
         <Button type="button" variant="outline">

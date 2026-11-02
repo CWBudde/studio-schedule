@@ -724,6 +724,13 @@ export const auditEvents: AuditEventEntry[] = [
   },
 ];
 
+/** A promise with its resolve function, e.g. to hold an API answer back. */
+export function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
 /** A problem+json answer, as the API sends it for errors. */
 export const problem = (
   status: number,

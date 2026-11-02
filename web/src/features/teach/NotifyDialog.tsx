@@ -5,6 +5,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { maxNoticeMessage, notifyParticipantsMutation, refusedAt } from '@/api/queries';
+import { PendingIcon } from '@/components/PendingIcon';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -138,6 +139,7 @@ export function NotifyDialog({
             {t('notify.cancel')}
           </Button>
           <Button type="submit" form={formId} disabled={notify.isPending}>
+            <PendingIcon pending={notify.isPending} />
             {notify.isPending ? t('notify.sending') : t('notify.send')}
           </Button>
         </DialogFooter>

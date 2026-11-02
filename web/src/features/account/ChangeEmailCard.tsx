@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import type { z } from 'zod';
 import type { Me } from '@/api/client';
 import { requestEmailChangeMutation } from '@/api/queries';
+import { PendingIcon } from '@/components/PendingIcon';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -101,7 +102,7 @@ export function ChangeEmailCard({ me }: { me: Me }) {
             {...form.register('password')}
           />
           <Button type="submit" disabled={change.isPending}>
-            <Send aria-hidden="true" />
+            <PendingIcon pending={change.isPending} icon={<Send aria-hidden="true" />} />
             {change.isPending ? t('email.submitting') : t('email.submit')}
           </Button>
         </form>

@@ -484,7 +484,9 @@
       "emailHint": "Mit dieser Adresse meldet sich das Konto an; dorthin geht auch die Einladung.",
       "chooseRole": "Rolle wählen",
       "submit": "Anlegen und einladen",
+      "sending": "Einladung wird verschickt…",
       "created": "{{name}} hat jetzt ein Konto. Die Einladung wurde an {{email}} geschickt.",
+      "failed": "Kein Konto für {{name}}: Die Einladung wurde nicht verschickt.",
       "duplicate": "Diese E-Mail-Adresse gehört bereits zu einem anderen Konto. Wähle eine andere.",
       "hasAccount": "{{name}} hat bereits ein Konto, vielleicht inzwischen angelegt. Schließe dieses Formular, um es zu sehen.",
       "forbidden": "Nur Administratoren können Administrationskonten anlegen."

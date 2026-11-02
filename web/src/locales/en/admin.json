@@ -484,7 +484,9 @@
       "emailHint": "The account signs in with this address, and the invitation goes there.",
       "chooseRole": "Choose a role",
       "submit": "Create and invite",
+      "sending": "Sending the invitation…",
       "created": "{{name}} has an account now. The invitation has been sent to {{email}}.",
+      "failed": "No account for {{name}}: the invitation was not sent.",
       "duplicate": "Another account already uses this email address. Choose another one.",
       "hasAccount": "{{name}} has an account already, perhaps created meanwhile. Close this form to see it.",
       "forbidden": "Only administrators can create administrator accounts."

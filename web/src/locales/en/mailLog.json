@@ -70,6 +70,7 @@
     "requeuing": "Queuing…",
     "requeueHint": "Tries the delivery again from now, with every retry.",
     "requeued": "The mail to {{to}} is queued again.",
+    "requeueFailed": "The mail to {{to}} was not queued again.",
     "secretLink": "A mail with a secret link is not queued again: send a new link instead (reset password, invite again).",
     "notFailed": "Only a failed mail can be queued again."
   }

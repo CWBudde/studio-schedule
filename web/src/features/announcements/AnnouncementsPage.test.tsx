@@ -1,12 +1,14 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api } from '@/api/client';
 import type { Announcement } from '@/api/queries';
 import { Toaster } from '@/components/ui/sonner';
 import i18n from '@/i18n';
 import {
   conflict,
   courseTypes,
+  deferred,
   ids,
   meOffice,
   mockApiGet,
@@ -135,6 +137,31 @@ async function openAdd(user: ReturnType<typeof userEvent.setup>) {
   return within(await screen.findByRole('dialog', { name: 'New announcement' }));
 }
 
+/** Opens the sheet of the announcement `title`. */
+async function openEdit(user: ReturnType<typeof userEvent.setup>, title: string) {
+  await user.click((await row(title)).getByRole('button', { name: `Edit “${title}”` }));
+  return within(await screen.findByRole('dialog', { name: `Edit “${title}”` }));
+}
+
+/** Confirms the email in the dialog that asks before sending it. */
+async function confirmEmail(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    await within(await screen.findByRole('alertdialog')).findByRole('button', {
+      name: 'Publish and send',
+    }),
+  );
+}
+
+/** The toast whose title is `title`. */
+async function toastTitled(title: string) {
+  const toast = (await screen.findByText(title)).closest('[data-sonner-toast]');
+  if (!toast) throw new Error(`no toast ${title}`);
+  return toast as HTMLElement;
+}
+
+/** When the API saved an edit (after every publication time of the fixtures but the future ones). */
+const savedAt = '2026-11-02T08:00:00Z';
+
 describe('AnnouncementsPage', () => {
   it('lists the announcements with audience, window, status and email', async () => {
     mockApiGet(asOffice);
@@ -176,15 +203,17 @@ describe('AnnouncementsPage', () => {
     expect((await row('Rehearsal')).getByText('Being sent')).toBeInTheDocument();
   });
 
-  it('says that an announcement published now with email is being sent', async () => {
+  it('shows that it publishes while the request runs, then that the email is queued', async () => {
     mockApiGet(asOffice);
-    mockApiPost({
-      '/api/v1/admin/announcements/recipients': { body: { recipients: 5 } },
-      '/api/v1/admin/announcements': ({ body }) => ({
-        status: 201,
-        body: { id: id(922), emailRecipients: 0, ...written, ...(body as object) },
-      }),
-    });
+    const answer = deferred<unknown>();
+    const post = vi.spyOn(api, 'POST').mockImplementation(((path: string) =>
+      path === '/api/v1/admin/announcements/recipients'
+        ? Promise.resolve({
+            data: { recipients: 5 },
+            error: undefined,
+            response: new Response(null, { status: 200 }),
+          })
+        : answer.promise) as unknown as typeof api.POST);
     const user = userEvent.setup();
 
     renderPage();
@@ -193,14 +222,32 @@ describe('AnnouncementsPage', () => {
     await user.type(sheet.getByLabelText('Text'), 'No class outside.');
     await user.click(sheet.getByRole('switch', { name: 'Also send by email' }));
     await user.click(sheet.getByRole('button', { name: 'Publish' }));
-    await user.click(
-      await within(await screen.findByRole('alertdialog')).findByRole('button', {
-        name: 'Publish and send',
-      }),
-    );
+    await confirmEmail(user);
 
+    const publishing = await sheet.findByRole('button', { name: 'Publishing…' });
+    expect(publishing).toBeDisabled();
+    expect(publishing.querySelector('[data-slot="spinner"]')).not.toBeNull();
+    expect(post).toHaveBeenCalledWith('/api/v1/admin/announcements', {
+      body: { audience: 'everyone', title: 'Rain', body: 'No class outside.', email: true },
+    });
+
+    answer.resolve({
+      data: {
+        id: id(922),
+        audience: 'everyone',
+        title: 'Rain',
+        body: 'No class outside.',
+        email: true,
+        emailRecipients: 0,
+        ...written,
+      },
+      error: undefined,
+      response: new Response(null, { status: 201 }),
+    });
+
+    // The announcements job sends it: the toast says queued, never sent.
     expect(
-      await screen.findByText('“Rain” is published and is being sent by email.'),
+      await screen.findByText('“Rain” is published; its email is queued.'),
     ).toBeInTheDocument();
   });
 
@@ -277,7 +324,9 @@ describe('AnnouncementsPage', () => {
     expect(post).not.toHaveBeenCalledWith('/api/v1/admin/announcements', expect.anything());
     await user.click(confirm.getByRole('button', { name: 'Publish and send' }));
 
-    expect(await screen.findByText('“Admins only” is scheduled.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('“Admins only” is scheduled; its email goes out at publication.'),
+    ).toBeInTheDocument();
     expect(post).toHaveBeenCalledWith('/api/v1/admin/announcements', {
       body: {
         audience: 'role',
@@ -305,13 +354,98 @@ describe('AnnouncementsPage', () => {
     await user.type(sheet.getByLabelText('Text'), 'Hello.');
     await user.click(sheet.getByRole('switch', { name: 'Also send by email' }));
     await user.click(sheet.getByRole('button', { name: 'Publish' }));
-    await user.click(
-      await within(await screen.findByRole('alertdialog')).findByRole('button', {
-        name: 'Publish and send',
-      }),
-    );
+    await confirmEmail(user);
 
-    expect(await sheet.findByText(/has 3 emailed announcements already/)).toBeInTheDocument();
+    const limit =
+      'Today, or the day it publishes, has 3 emailed announcements already. Publish it without email or on another day.';
+    expect(await sheet.findByRole('alert')).toHaveTextContent(limit);
+    // The toast says that nothing went out, and why.
+    expect(
+      await toastTitled('“Fourth” was not published, and no email was queued.'),
+    ).toHaveTextContent(limit);
+    expect(sheet.getByRole('button', { name: 'Publish' })).toBeEnabled();
+  });
+
+  it('says that saving a published announcement with email queues it', async () => {
+    mockApiGet(asOffice);
+    mockApiPost({ '/api/v1/admin/announcements/recipients': { body: { recipients: 4 } } });
+    const put = mockApiPut({
+      '/api/v1/admin/announcements/{announcementId}': ({ body }) => ({
+        body: { ...announcements[1], ...(body as object), updatedAt: savedAt },
+      }),
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const sheet = await openEdit(user, 'Welcome');
+    await user.click(sheet.getByRole('switch', { name: 'Also send by email' }));
+    await user.click(sheet.getByRole('button', { name: 'Save changes' }));
+    await confirmEmail(user);
+
+    expect(await screen.findByText('“Welcome” is saved; its email is queued.')).toBeInTheDocument();
+    expect(put).toHaveBeenCalledWith(
+      '/api/v1/admin/announcements/{announcementId}',
+      expect.objectContaining({ body: expect.objectContaining({ email: true }) }),
+    );
+  });
+
+  it('says that the email of a scheduled announcement goes out at its publication', async () => {
+    mockApiGet(asOffice);
+    mockApiPost({ '/api/v1/admin/announcements/recipients': { body: { recipients: 4 } } });
+    mockApiPut({
+      '/api/v1/admin/announcements/{announcementId}': ({ body }) => ({
+        body: { ...announcements[0], ...(body as object), updatedAt: savedAt },
+      }),
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const sheet = await openEdit(user, 'Ballet show');
+    await user.click(sheet.getByRole('button', { name: 'Save changes' }));
+    await confirmEmail(user);
+
+    expect(
+      await screen.findByText('“Ballet show” is saved; its email goes out at publication.'),
+    ).toBeInTheDocument();
+  });
+
+  it('says that an edit that failed queued no email', async () => {
+    mockApiGet(asOffice);
+    mockApiPost({ '/api/v1/admin/announcements/recipients': { body: { recipients: 4 } } });
+    mockApiPut({
+      '/api/v1/admin/announcements/{announcementId}': {
+        status: 404,
+        body: { status: 404, title: 'Not Found', detail: 'announcement not found' },
+      },
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const sheet = await openEdit(user, 'Welcome');
+    await user.click(sheet.getByRole('switch', { name: 'Also send by email' }));
+    await user.click(sheet.getByRole('button', { name: 'Save changes' }));
+    await confirmEmail(user);
+
+    expect(
+      await toastTitled('“Welcome” was not saved, and no email was queued.'),
+    ).toHaveTextContent('This announcement no longer exists.');
+    expect(sheet.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+  });
+
+  it('says why an edit failed, and that the email of one being sent goes on', async () => {
+    mockApiGet(asOffice);
+    mockApiPut({ '/api/v1/admin/announcements/{announcementId}': conflict('expired') });
+    const user = userEvent.setup();
+
+    renderPage();
+    const sheet = await openEdit(user, 'Rehearsal');
+    await user.click(sheet.getByRole('button', { name: 'Save changes' }));
+
+    const expired = 'This announcement has expired and can no longer be edited. You can delete it.';
+    expect(await sheet.findByRole('alert')).toHaveTextContent(expired);
+    // Its mailing began before: this edit queued nothing, so the toast does not say so.
+    expect(await toastTitled('“Rehearsal” was not saved.')).toHaveTextContent(expired);
+    expect(sheet.getByRole('button', { name: 'Save changes' })).toBeEnabled();
   });
 
   it('checks the entries', async () => {

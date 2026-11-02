@@ -70,6 +70,7 @@
     "requeuing": "Wird eingereiht…",
     "requeueHint": "Versucht die Zustellung ab jetzt erneut, mit allen Wiederholungen.",
     "requeued": "Die Mail an {{to}} ist erneut eingereiht.",
+    "requeueFailed": "Die Mail an {{to}} wurde nicht erneut eingereiht.",
     "secretLink": "Eine Mail mit geheimem Link wird nicht erneut eingereiht: Schick stattdessen einen neuen Link (Passwort zurücksetzen, erneut einladen).",
     "notFailed": "Nur eine fehlgeschlagene Mail kann erneut eingereiht werden."
   }

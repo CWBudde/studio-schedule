@@ -152,7 +152,27 @@ statistics page's draft (a URL value is dropped before it gets there).
 
 ## Task 1.4
 
-- [ ] 1.4 `mail-feedback` Web: every action that sends mail shows that it is pending and then whether it worked — see "Task 1.4".
+- [x] 1.4 `mail-feedback` Web: every action that sends mail shows that it is pending and then whether it worked — see "Task 1.4".
+
+  Done: `components/PendingIcon.tsx` (the `Loader2` spinner of `ResetDemo`, `motion-safe`,
+  `data-slot="spinner"`), which `FormSheetActions` now shows on every sheet while pending, with an
+  optional `pendingLabel`; `components/problemText.ts` (`useProblemText`: ProblemAlert's title as a
+  string, which `FormError` and `ProblemAlert` now use too, so a toast and the inline alert say the
+  same). The invitation ("Sending the invitation…", error toast "No account for …: the invitation
+  was not sent."), the announcement sheet ("Publishing…"; the success toasts say the email is
+  queued or goes out at publication, for an edit too, from the response's `publishAt` against
+  `createdAt`/`updatedAt`; error toasts say whether no email was queued) and the requeue (spinner,
+  error toast "The mail to … was not queued again.") keep their inline alerts beside the toasts.
+  15 new or extended component tests (pending with the request held open, success, failure with
+  the button enabled again) and 3 unit tests of the shared parts, `deferred` moved to
+  `test/mockApi.ts`; web 126 files, 1405 tests; e2e 245 passed (the announcement toast text).
+  Discovery: there is no web action for the office to send a reset link; only the CLI's
+  `accounts reset-password --mail` has it. The self-service forgot-password page got the spinner
+  only: its inline success alert replaces the form and its failure alert was already there.
+  Adding the office action needs an API operation and was left out (no API change in this plan).
+  After review, the other buttons that send mail show the spinner too: registering, changing the
+  email address, and messaging a lesson's participants. Their failures stay inline (the form or
+  dialog stays open with its alert), as the forgot-password page's do.
 
 PLAN.md, Phase 15, "Mail feedback". The previous app shows a spinner and colours its mail
 buttons by success or failure. Here, check these actions and bring each one to the same
