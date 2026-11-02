@@ -310,6 +310,12 @@ func (h *handlers) listLessonParticipants(
 		return nil, h.participantError(ctx, err, "path.lessonId")
 	}
 
+	return &LessonParticipantsOutput{Body: NewLessonParticipants(lp)}, nil
+}
+
+// NewLessonParticipants is the response body of listLessonParticipants for
+// lp; the MCP server's lesson://{id} resource returns it too (ADR 0022).
+func NewLessonParticipants(lp service.LessonParticipants) LessonParticipants {
 	body := LessonParticipants{
 		LessonID: lp.Lesson.ID, Capacity: lp.Lesson.Capacity, Active: lp.Active, Held: lp.Held,
 		FreePlaces: lp.FreePlaces(), Waiting: lp.Waiting, DayOverAt: lp.DayOverAt.UTC(),
@@ -341,7 +347,7 @@ func (h *handlers) listLessonParticipants(
 		body.Waitlist = append(body.Waitlist, entry)
 	}
 
-	return &LessonParticipantsOutput{Body: body}, nil
+	return body
 }
 
 func (h *handlers) addLessonParticipant(ctx context.Context, in *AddParticipantInput) (*StaffBookingOutput, error) {

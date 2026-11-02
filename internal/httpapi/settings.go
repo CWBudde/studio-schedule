@@ -234,7 +234,13 @@ func (h *handlers) getPublicSettings(ctx context.Context, _ *struct{}) (*PublicS
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	return &PublicSettingsOutput{Body: PublicSettings{
+	return &PublicSettingsOutput{Body: NewPublicSettings(s)}, nil
+}
+
+// NewPublicSettings is the response body of getPublicSettings for s; the
+// MCP server's school://settings resource returns it too (ADR 0022).
+func NewPublicSettings(s service.PublicSettings) PublicSettings {
+	return PublicSettings{
 		SchoolName:      s.SchoolName,
 		LegalNotice:     s.LegalNotice,
 		AccentColor:     s.AccentColor,
@@ -245,7 +251,7 @@ func (h *handlers) getPublicSettings(ctx context.Context, _ *struct{}) (*PublicS
 		Timezone:        s.Timezone,
 		DefaultLocale:   s.DefaultLocale,
 		Currency:        s.Currency,
-	}}, nil
+	}
 }
 
 // SchoolLogoInput is the request of getSchoolLogo.
