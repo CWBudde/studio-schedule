@@ -1,16 +1,14 @@
 import { z } from 'zod';
 import type { TermData } from '@/api/queries';
 import type { Term } from '@/features/timetable/timetable';
+import { isSchoolDate } from '@/lib/schoolTime';
 import { catalogueName } from './locationForms';
 
 // Limits as in the API (TermData). Messages are keys of `auth:form.errors`
 // or `admin:form.errors` (see useAdminErrorText).
 
-/** A school date as a date input holds it: 'YYYY-MM-DD'. */
-const date = z
-  .string()
-  .min(1, 'required')
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'invalid');
+/** A school date as a date input holds it: 'YYYY-MM-DD', one that exists. */
+const date = z.string().min(1, { message: 'required', abort: true }).refine(isSchoolDate, 'date');
 
 /** A term's form: a name and its first and last day; it cannot end before it starts. */
 export const termSchema = z

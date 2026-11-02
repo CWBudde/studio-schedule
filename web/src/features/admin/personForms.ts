@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { AdminPerson, PersonAccountData, PersonRecord } from '@/api/queries';
-import type { SchoolDate } from '@/lib/schoolTime';
+import { isSchoolDate, type SchoolDate } from '@/lib/schoolTime';
 
 // Limits as in the API (PersonRecord, PersonAccountInput). Messages are keys
 // of `auth:form.errors` or `admin:form.errors` (see useAdminErrorText).
@@ -10,8 +10,8 @@ const isEmail = (value: string) => z.email().safeParse(value).success;
 
 /**
  * Every field of a person as the office edits it. Empty email, phone, birth
- * date and notes mean "none". The birth date must not be after `today` (the
- * school's date); while that is unknown, the API decides.
+ * date and notes mean "none". The birth date must exist and not be after
+ * `today` (the school's date); while that is unknown, the API decides.
  */
 export const personSchema = (today: SchoolDate | undefined) =>
   z.object({
@@ -23,7 +23,10 @@ export const personSchema = (today: SchoolDate | undefined) =>
       .max(254, 'tooLong')
       .refine((e) => e === '' || isEmail(e), 'email'),
     phone: z.string().trim().max(50, 'tooLong'),
-    birthDate: z.string().refine((d) => !today || d === '' || d <= today, 'birthDateFuture'),
+    birthDate: z
+      .string()
+      .refine((d) => d === '' || isSchoolDate(d), { message: 'date', abort: true })
+      .refine((d) => !today || d === '' || d <= today, 'birthDateFuture'),
     notes: z.string().trim().max(2000, 'tooLong'),
     memberNo: z.string().trim().max(40, 'tooLong'),
   });
