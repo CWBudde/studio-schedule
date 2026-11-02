@@ -12,7 +12,9 @@ import {
   publicSettingsQuery,
   requeueMailMutation,
 } from '@/api/queries';
+import { PendingIcon } from '@/components/PendingIcon';
 import { ProblemAlert } from '@/components/ProblemAlert';
+import { useProblemText } from '@/components/problemText';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -296,7 +298,12 @@ function MailDetails({
   const queryClient = useQueryClient();
   const detail = useQuery(mailQuery(mail.id));
   const requeue = useMutation(requeueMailMutation(queryClient));
+  const problemText = useProblemText();
   const m = detail.data ?? mail;
+  const requeueConflicts = {
+    'secret-link': t('sheet.secretLink'),
+    'not-failed': t('sheet.notFailed'),
+  };
   const at = (instant: string | undefined) =>
     instant ? formatTimestamp(instant, timeZone, lang) : undefined;
 
@@ -327,10 +334,7 @@ function MailDetails({
 
       {m.status === 'failed' && (
         <div className="space-y-2">
-          <ProblemAlert
-            error={requeue.error}
-            conflicts={{ 'secret-link': t('sheet.secretLink'), 'not-failed': t('sheet.notFailed') }}
-          />
+          <ProblemAlert error={requeue.error} conflicts={requeueConflicts} />
           {m.body === 'withheld' ? (
             <p className="text-muted-foreground">{t('sheet.secretLink')}</p>
           ) : (
@@ -341,10 +345,14 @@ function MailDetails({
                 onClick={() =>
                   requeue.mutate(m.id, {
                     onSuccess: () => toast.success(t('sheet.requeued', { to: m.to })),
+                    onError: (error) =>
+                      toast.error(t('sheet.requeueFailed', { to: m.to }), {
+                        description: problemText(error, { conflicts: requeueConflicts }),
+                      }),
                   })
                 }
               >
-                <RotateCcw aria-hidden="true" />
+                <PendingIcon pending={requeue.isPending} icon={<RotateCcw aria-hidden="true" />} />
                 {requeue.isPending ? t('sheet.requeuing') : t('sheet.requeue')}
               </Button>
               <p className="text-xs text-muted-foreground">{t('sheet.requeueHint')}</p>

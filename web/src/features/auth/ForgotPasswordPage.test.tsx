@@ -1,7 +1,15 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mockApiGet, mockApiPost, problem, publicSettings, tooManyRequests } from '@/test/mockApi';
+import { api } from '@/api/client';
+import {
+  deferred,
+  mockApiGet,
+  mockApiPost,
+  problem,
+  publicSettings,
+  tooManyRequests,
+} from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { ForgotPasswordPage } from './ForgotPasswordPage';
 
@@ -42,6 +50,46 @@ describe('ForgotPasswordPage', () => {
     expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
   });
 
+  it('shows that the link is being sent until the API answers', async () => {
+    mockApiGet(notDemo);
+    const answer = deferred<unknown>();
+    vi.spyOn(api, 'POST').mockImplementation((() => answer.promise) as unknown as typeof api.POST);
+
+    renderInRouter(<ForgotPasswordPage />, { at: '/forgot-password' });
+    await requestLink('nora.example@example.org');
+
+    const pending = await screen.findByRole('button', { name: 'Sending…' });
+    expect(pending).toBeDisabled();
+    expect(pending.querySelector('[data-slot="spinner"]')).not.toBeNull();
+
+    answer.resolve({
+      data: undefined,
+      error: undefined,
+      response: new Response(null, { status: 202 }),
+    });
+
+    const success = await screen.findByRole('status');
+    expect(within(success).getByText(/nora\.example@example\.org/)).toBeInTheDocument();
+  });
+
+  it('says when the link could not be requested and lets the visitor try again', async () => {
+    mockApiGet(notDemo);
+    const post = mockApiPost({ '/api/v1/auth/password-reset': problem(500, 'internal') });
+
+    renderInRouter(<ForgotPasswordPage />, { at: '/forgot-password' });
+    await requestLink('nora.example@example.org');
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Something went wrong. Please try again.');
+    expect(alert).not.toHaveTextContent('internal');
+    const button = screen.getByRole('button', { name: 'Send link' });
+    expect(button).toBeEnabled();
+    expect(button.querySelector('[data-slot="spinner"]')).toBeNull();
+
+    await userEvent.setup().click(button);
+    await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+  });
+
   it('points to the demo mailbox in a demo', async () => {
     mockApiGet(demo);
     mockApiPost({ '/api/v1/auth/password-reset': { status: 202 } });
@@ -77,6 +125,7 @@ describe('ForgotPasswordPage', () => {
     expect(within(alert).getByText('Too many attempts')).toBeInTheDocument();
     expect(within(alert).getByText('Please try again in 42 seconds.')).toBeInTheDocument();
     expect(screen.getByLabelText('Email')).toHaveValue('nora.example@example.org');
+    expect(screen.getByRole('button', { name: 'Send link' })).toBeEnabled();
   });
 
   it('shows the errors the API finds at their fields', async () => {

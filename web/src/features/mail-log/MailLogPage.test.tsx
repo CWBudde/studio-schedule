@@ -1,18 +1,21 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api } from '@/api/client';
 import type { MailLogDetail, MailLogItem } from '@/api/queries';
 import { Toaster } from '@/components/ui/sonner';
 import i18n from '@/i18n';
 import {
   conflict,
+  deferred,
   meAdmin,
   meOffice,
   mockApiGet,
   mockApiPost,
+  type MockRequest,
   problem,
   publicSettings,
-  type MockRequest,
 } from '@/test/mockApi';
 import { renderWithQuery } from '@/test/utils';
 import { MailLogPage } from './MailLogPage';
@@ -20,6 +23,8 @@ import { mailTemplates } from './mailTemplates';
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // Sonner keeps its toasts across tests; a later one must not find them.
+  toast.dismiss();
 });
 
 const id = (n: number) => `0190a000-0000-7000-8000-${String(n).padStart(12, '0')}`;
@@ -205,6 +210,44 @@ describe('MailLogPage', () => {
     });
   });
 
+  it('shows that a mail is being queued until the API answers', async () => {
+    mockApiGet(asAdmin);
+    const answer = deferred<unknown>();
+    // The requeue waits for the test; the page's search still answers.
+    vi.spyOn(api, 'POST').mockImplementation(((path: string, init: MockRequest) =>
+      path === '/api/v1/admin/mails/{mailId}/requeue'
+        ? answer.promise
+        : Promise.resolve({
+            data: searchMails(init).body,
+            error: undefined,
+            response: new Response(null, { status: 200 }),
+          })) as unknown as typeof api.POST);
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(
+      await screen.findByRole('button', { name: 'Show the mail to olaf.old@example.org' }),
+    );
+    const sheet = within(
+      await screen.findByRole('dialog', { name: 'Mail to olaf.old@example.org' }),
+    );
+    await user.click(sheet.getByRole('button', { name: 'Queue again' }));
+
+    const pending = await sheet.findByRole('button', { name: 'Queuing…' });
+    expect(pending).toBeDisabled();
+    expect(pending.querySelector('[data-slot="spinner"]')).not.toBeNull();
+
+    answer.resolve({
+      data: { ...mails[2], status: 'pending', attempts: 0 },
+      error: undefined,
+      response: new Response(null, { status: 200 }),
+    });
+
+    expect(
+      await screen.findByText('The mail to olaf.old@example.org is queued again.'),
+    ).toBeInTheDocument();
+  });
+
   it('says why a mail is not queued again', async () => {
     mockAdmin();
     mockApiPost({ '/api/v1/admin/mails/{mailId}/requeue': conflict('not-failed') });
@@ -219,7 +262,38 @@ describe('MailLogPage', () => {
     );
     await user.click(sheet.getByRole('button', { name: 'Queue again' }));
 
-    expect(await sheet.findByText('Only a failed mail can be queued again.')).toBeInTheDocument();
+    expect(await sheet.findByRole('alert')).toHaveTextContent(
+      'Only a failed mail can be queued again.',
+    );
+    const toast = (
+      await screen.findByText('The mail to olaf.old@example.org was not queued again.')
+    ).closest('[data-sonner-toast]');
+    expect(toast).toHaveTextContent('Only a failed mail can be queued again.');
+    const button = sheet.getByRole('button', { name: 'Queue again' });
+    expect(button).toBeEnabled();
+    expect(button.querySelector('[data-slot="spinner"]')).toBeNull();
+  });
+
+  it('says when queuing a mail again fails', async () => {
+    mockAdmin();
+    mockApiPost({ '/api/v1/admin/mails/{mailId}/requeue': problem(500, 'internal') });
+    const user = userEvent.setup();
+
+    renderPage();
+    await user.click(
+      await screen.findByRole('button', { name: 'Show the mail to olaf.old@example.org' }),
+    );
+    const sheet = within(
+      await screen.findByRole('dialog', { name: 'Mail to olaf.old@example.org' }),
+    );
+    await user.click(sheet.getByRole('button', { name: 'Queue again' }));
+
+    const toast = (
+      await screen.findByText('The mail to olaf.old@example.org was not queued again.')
+    ).closest('[data-sonner-toast]');
+    expect(toast).toHaveTextContent('Something went wrong. Please try again.');
+    expect(toast).not.toHaveTextContent('internal');
+    expect(sheet.getByRole('button', { name: 'Queue again' })).toBeEnabled();
   });
 
   it('says when the mails cannot be loaded', async () => {
