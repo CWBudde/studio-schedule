@@ -34,6 +34,7 @@
     "instructor": "Instructor",
     "accompaniedBy": "accompanied by {{name}}",
     "renter": "Rented by",
+    "audience": "Audience",
     "place": "Place",
     "for": "For",
     "loading": "Loading schedule…",

@@ -246,6 +246,10 @@ describe('ScheduleList', () => {
       await screen.findByRole('button', { name: 'Ballet, Monday, October 26, 18:00–19:30' }),
     );
     expect(card.getByText('Beginner–Intermediate · Stage 2 · 4–6 yrs')).toBeInTheDocument();
+    // The button's label hides its text: the description reads the audience.
+    expect(
+      screen.getByRole('button', { name: 'Ballet, Monday, October 26, 18:00–19:30' }),
+    ).toHaveAccessibleDescription(/^Audience: Beginner–Intermediate · Stage 2 · 4–6 yrs/);
   });
 
   it('lists canceled lessons with their status and workshops with their kind', async () => {

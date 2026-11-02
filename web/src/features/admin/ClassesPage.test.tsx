@@ -215,7 +215,7 @@ describe('ClassesPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Add class' }));
     const sheet = within(await screen.findByRole('dialog', { name: 'Add a class' }));
     await user.type(sheet.getByLabelText('Stage'), '10');
-    await user.type(sheet.getByLabelText('Age from'), '3.25');
+    await user.type(sheet.getByLabelText('Age from'), '3.1');
     await user.click(sheet.getByRole('button', { name: 'Add class' }));
 
     expect(sheet.getByLabelText('Stage')).toHaveAccessibleDescription(

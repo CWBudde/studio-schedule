@@ -34,6 +34,7 @@
     "instructor": "Lehrkraft",
     "accompaniedBy": "Korrepetition: {{name}}",
     "renter": "Gemietet von",
+    "audience": "Zielgruppe",
     "place": "Ort",
     "for": "Für",
     "loading": "Stundenplan wird geladen…",

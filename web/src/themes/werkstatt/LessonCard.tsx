@@ -37,6 +37,9 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
   const label = useLessonCardLabel()(lesson, timeZone);
   const title = useLessonTitle();
   const audience = formatAudience(lesson, t, 'short');
+  // The button's label hides the card's text, and codes say little read out:
+  // the description reads the audience with the levels' names.
+  const spokenAudience = formatAudience(lesson, t, 'long');
   const canceled = lesson.status === 'canceled';
   const quiet = canceled || past;
   // A room rental has no places and no quick action (quickAction answers none).
@@ -117,6 +120,11 @@ export function LessonCard({ lesson, timeZone, now, past, quickAction, onOpen }:
         </span>
         {/* The API has no course description: the muted line names the place, which the room column shows only from 768px. */}
         <span id={detailsId} className="flex flex-col gap-0.5">
+          {spokenAudience && (
+            <span className="sr-only">
+              {t('list.audience')}: {spokenAudience}
+            </span>
+          )}
           <span className="text-muted-foreground">
             {lesson.room.name} · {lesson.location.name}
           </span>

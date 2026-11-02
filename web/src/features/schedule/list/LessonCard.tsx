@@ -20,7 +20,8 @@ import type { CardLesson } from './cardParts';
  * whom it is for (levels, stage, ages); the time (with the date for `withDate`, its year only outside the
  * year of `today`), canceled (`canceledLabel`), kind and visibility badges
  * and `badges`; the place, the staff and the `person` it is for, under
- * `detailsId` (for the button's aria-describedby); then `children`.
+ * `detailsId` (for the button's aria-describedby, which also reads the
+ * audience: the button's label hides the card's text); then `children`.
  * `quiet` (ended or canceled) drops the accent colors.
  */
 export function LessonCardBody({
@@ -98,6 +99,11 @@ export function LessonCardBody({
       </span>
 
       <span id={detailsId} className="flex flex-col gap-1 text-muted-foreground">
+        {audience && (
+          <span className="sr-only">
+            {t('list.audience')}: {audience}
+          </span>
+        )}
         <span className="inline-flex items-start gap-1.5">
           <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span>

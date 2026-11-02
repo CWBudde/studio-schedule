@@ -106,8 +106,9 @@ describe('Werkstatt LessonCard', () => {
     // 8 places, 3 free: 5 taken, in green while places are free.
     expect(card.getByText('Participants: 5 / 8')).toHaveClass('text-(--werkstatt-green)');
     expect(card.getByText('Alex Example (Sam Pianist)')).toHaveClass('text-primary');
+    // Read out with the levels' names, which the codes stand for.
     expect(card.getByRole('button', { name: label })).toHaveAccessibleDescription(
-      /Room A · North Studio.*Participants: 5 \/ 8.*Alex Example \(Sam Pianist\)/,
+      /^Audience: Beginner–Intermediate · Stage 2 · from 3½ yrs.*Room A · North Studio.*Participants: 5 \/ 8.*Alex Example \(Sam Pianist\)/,
     );
   });
 

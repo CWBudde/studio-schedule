@@ -35,13 +35,21 @@ export const stage = z
   .refine((s) => s === '' || /^[1-9]$/.test(s), 'stage')
   .transform((s) => (s === '' ? undefined : Number(s)));
 
-/** The months of an age in years as typed, '3.5' or '3,5'; NaN if it is no number. */
-const monthsOf = (years: string) =>
-  /^\d{1,3}([.,]\d+)?$/.test(years) ? Number(years.replace(',', '.')) * 12 : NaN;
+/**
+ * The months of an age in years as typed, '3.5' or '3,5'; NaN if it is no
+ * number or no whole number of months. Up to 0.07 months off counts as whole,
+ * so the two decimals `yearsOf` shows of any month come back as it: '3.33' → 40.
+ */
+const monthsOf = (years: string) => {
+  if (!/^\d{1,3}([.,]\d+)?$/.test(years)) return NaN;
+  const months = Number(years.replace(',', '.')) * 12;
+  return Math.abs(months - Math.round(months)) < 0.07 ? Math.round(months) : NaN;
+};
 
 /**
- * An age in years as typed: empty for none, else whole or half years from
- * ½ to 100, in months (the API's 1 to 1200, by halves as the web enters them).
+ * An age in years as typed: empty for none, else 1 month to 100 years, in
+ * months (the API's 1 to 1200). The web enters half years ('3.5'); a class
+ * saved with other months through the API keeps them ('3.33').
  */
 export const ageMonths = z
   .string()
@@ -49,12 +57,13 @@ export const ageMonths = z
   .refine((s) => {
     if (s === '') return true;
     const months = monthsOf(s);
-    return months >= 6 && months <= 1200 && months % 6 === 0;
+    return months >= 1 && months <= 1200;
   }, 'age')
   .transform((s) => (s === '' ? undefined : monthsOf(s)));
 
-/** The years of an age in months, as the age inputs hold them: 42 → '3.5'. */
-const yearsOf = (months?: number) => (months === undefined ? '' : String(months / 12));
+/** The years of an age in months, as the age inputs hold them: 42 → '3.5', 40 → '3.33'. */
+const yearsOf = (months?: number) =>
+  months === undefined ? '' : String(Math.round((months / 12) * 100) / 100);
 
 /**
  * A class's form, every field as the inputs hold it: an empty `accompanistId`
