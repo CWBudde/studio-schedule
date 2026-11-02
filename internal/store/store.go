@@ -410,6 +410,13 @@ type AccountTokenRepo interface {
 // LocationRepo stores locations.
 type LocationRepo interface {
 	Get(ctx context.Context, id domain.LocationID) (domain.Location, error)
+	// Lock returns the location and locks it until the transaction ends (in
+	// PostgreSQL: SELECT … FOR NO KEY UPDATE), so the transactions that add
+	// a room to it, move one into it or reorder its rooms run one after
+	// another: a new room neither takes another's position nor slips past a
+	// reorder that misses it. It fails with store.ErrReadOnly in a read-only
+	// transaction.
+	Lock(ctx context.Context, id domain.LocationID) (domain.Location, error)
 	// Create and Update fail with domain.ErrDuplicate if another location
 	// has the name, ignoring ASCII case.
 	Create(ctx context.Context, l domain.Location) error

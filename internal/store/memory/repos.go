@@ -546,6 +546,14 @@ func (r locationRepo) Get(_ context.Context, id domain.LocationID) (domain.Locat
 	return l, nil
 }
 
+func (r locationRepo) Lock(ctx context.Context, id domain.LocationID) (domain.Location, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return domain.Location{}, err
+	}
+
+	return r.Get(ctx, id)
+}
+
 func (r locationRepo) Create(_ context.Context, l domain.Location) error {
 	if err := r.tx.checkWritable(); err != nil {
 		return err

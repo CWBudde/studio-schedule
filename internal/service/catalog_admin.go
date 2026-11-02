@@ -93,7 +93,7 @@ func (s *CatalogService) CreateRoom(ctx context.Context, d RoomData) (domain.Roo
 			return err
 		}
 
-		if err := locationExists(ctx, tx, r.LocationID); err != nil {
+		if err := lockLocation(ctx, tx, r.LocationID); err != nil {
 			return err
 		}
 
@@ -133,11 +133,16 @@ func (s *CatalogService) UpdateRoom(ctx context.Context, id domain.RoomID, d Roo
 			return err
 		}
 
-		if err := locationExists(ctx, tx, r.LocationID); err != nil {
-			return err
-		}
-
+		// A room that stays has its location: one with rooms cannot be
+		// deleted. One that moves goes last in its new location under that
+		// location's lock, as in CreateRoom. Only the new location: a lock
+		// of the old one, taken after the room's, could deadlock with a
+		// SetRoomOrder there, which takes them the other way round.
 		if r.LocationID != old.LocationID {
+			if err := lockLocation(ctx, tx, r.LocationID); err != nil {
+				return err
+			}
+
 			if r.Position, err = nextRoomPosition(ctx, tx, r.LocationID); err != nil {
 				return err
 			}
@@ -158,7 +163,9 @@ func (s *CatalogService) UpdateRoom(ctx context.Context, id domain.RoomID, d Roo
 // when a room was added or removed since the caller read the list.
 func (s *CatalogService) SetRoomOrder(ctx context.Context, location domain.LocationID, order []domain.RoomID) error {
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		if _, err := tx.Locations().Get(ctx, location); err != nil {
+		// The location's lock first, so a room added or moved in waits and
+		// goes after the reordered ones (CreateRoom, UpdateRoom).
+		if _, err := tx.Locations().Lock(ctx, location); err != nil {
 			return err
 		}
 
@@ -505,10 +512,11 @@ func (s *CatalogService) remove(ctx context.Context, fn func(context.Context, st
 // errUnknownLocation is a room's location that does not exist.
 var errUnknownLocation error = &domain.FieldError{Field: "locationId", Msg: "location does not exist"}
 
-// locationExists reports an unknown location as a validation error on the
+// lockLocation locks the location a room is added or moved to
+// (LocationRepo.Lock) and reports an unknown one as a validation error on the
 // field that names it.
-func locationExists(ctx context.Context, tx store.Tx, id domain.LocationID) error {
-	_, err := tx.Locations().Get(ctx, id)
+func lockLocation(ctx context.Context, tx store.Tx, id domain.LocationID) error {
+	_, err := tx.Locations().Lock(ctx, id)
 	if errors.Is(err, domain.ErrNotFound) {
 		return errUnknownLocation
 	}
@@ -516,7 +524,7 @@ func locationExists(ctx context.Context, tx store.Tx, id domain.LocationID) erro
 	return err
 }
 
-// roomWriteErr maps the result of a room write after locationExists. Besides
+// roomWriteErr maps the result of a room write after lockLocation. Besides
 // a taken name, the store's only conflict is a missing location: one deleted
 // by someone else in the meantime, reported like an unknown one.
 func roomWriteErr(err error) error {

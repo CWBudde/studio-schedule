@@ -1,6 +1,11 @@
 -- name: GetLocation :one
 SELECT * FROM locations WHERE id = $1;
 
+-- name: LockLocation :one
+-- NO KEY UPDATE: inserts that only reference the location (a room, a
+-- calendar feed) take KEY SHARE and need not wait for it.
+SELECT * FROM locations WHERE id = $1 FOR NO KEY UPDATE;
+
 -- name: CreateLocation :exec
 INSERT INTO locations (id, name, address) VALUES ($1, $2, $3);
 

@@ -303,10 +303,13 @@ theme's room columns. A room now has a **position** within its location.
   location's rooms); anything else is a 422 on `roomIds`, an unknown location a 404. An office that
   sends the order it read before another user added or moved a room therefore gets the 422, and
   the locations page says so and reloads the rooms instead of writing a stale order.
-- **No unique constraint.** A reorder rewrites every position of the location in one transaction,
-  and two concurrent creates may compute the same next position. A tie is harmless: it falls back
-  to the name, and the next reorder numbers the rooms 1..n again. The web shows a room's place by
-  counting in the API's order, so a tie never reads as "2, 2".
+- **Serialized per location.** `createRoom`, `updateRoom` moving a room into a location, and
+  `setRoomOrder` first take `LocationRepo.Lock` on that location (PostgreSQL: `FOR NO KEY UPDATE`
+  on its row), so a new room neither takes another's position nor slips past a reorder that
+  misses it; it waits and goes last. `updateRoom` locks only the new location, after the room: the
+  old one's lock would deadlock with a reorder there, which locks the location before its rooms.
+  There is still no unique constraint on the position, because a reorder rewrites every position
+  of the location in one transaction; the web shows a room's place by counting in the API's order.
 - **Web.** The locations page offers "move up" and "move down" buttons per room while the table
   shows the rooms in their order (not when sorted by another column or searched); each move sends
   the location's whole new order. Room pickers keep the API's order, and the Werkstatt room

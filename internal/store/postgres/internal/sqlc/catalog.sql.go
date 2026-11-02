@@ -360,6 +360,19 @@ func (q *Queries) ListStaffByPerson(ctx context.Context, personID pgtype.UUID) (
 	return items, nil
 }
 
+const lockLocation = `-- name: LockLocation :one
+SELECT id, name, address FROM locations WHERE id = $1 FOR NO KEY UPDATE
+`
+
+// NO KEY UPDATE: inserts that only reference the location (a room, a
+// calendar feed) take KEY SHARE and need not wait for it.
+func (q *Queries) LockLocation(ctx context.Context, id pgtype.UUID) (Location, error) {
+	row := q.db.QueryRow(ctx, lockLocation, id)
+	var i Location
+	err := row.Scan(&i.ID, &i.Name, &i.Address)
+	return i, err
+}
+
 const lockRoom = `-- name: LockRoom :one
 SELECT id, location_id, name, capacity, position FROM rooms WHERE id = $1 FOR UPDATE
 `

@@ -575,6 +575,14 @@ func (r *faultLocationRepo) Get(a0 context.Context, a1 domain.LocationID) (r0 do
 	return r.LocationRepo.Get(a0, a1)
 }
 
+func (r *faultLocationRepo) Lock(a0 context.Context, a1 domain.LocationID) (r0 domain.Location, err error) {
+	if err = r.f.hit("Locations.Lock"); err != nil {
+		return r0, err
+	}
+
+	return r.LocationRepo.Lock(a0, a1)
+}
+
 func (r *faultLocationRepo) Create(a0 context.Context, a1 domain.Location) (err error) {
 	if err = r.f.hit("Locations.Create"); err != nil {
 		return err

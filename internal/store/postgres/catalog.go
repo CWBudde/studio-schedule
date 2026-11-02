@@ -25,6 +25,15 @@ func (r locationRepo) Get(ctx context.Context, id domain.LocationID) (domain.Loc
 	return toLocation(row), nil
 }
 
+func (r locationRepo) Lock(ctx context.Context, id domain.LocationID) (domain.Location, error) {
+	row, err := r.q.LockLocation(ctx, pgID(id))
+	if err != nil {
+		return domain.Location{}, notFound("location", err)
+	}
+
+	return toLocation(row), nil
+}
+
 func (r locationRepo) Create(ctx context.Context, l domain.Location) error {
 	return mapErr(r.q.CreateLocation(ctx, sqlc.CreateLocationParams{
 		ID: pgID(l.ID), Name: l.Name, Address: pgText(l.Address),
