@@ -25,6 +25,7 @@ import {
   addDays,
   formatDayHeading,
   formatTimeRange,
+  isSchoolDate,
   type SchoolDate,
   schoolDateOf,
   weekdayOf,
@@ -159,7 +160,7 @@ function CloneForm({ shown, view, today, timeZone }: CloneContext) {
 
   /** The day or week a date input names, as a hint. */
   const dateHint = (date: string) => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return undefined;
+    if (!isSchoolDate(date)) return undefined;
     if (values.unit === 'day') return formatDayHeading(date, lang);
     if (weekdayOf(date) !== 1) return t('clone.mondayHint');
     return t('clone.weekRange', {

@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -120,6 +122,67 @@ func TestUpdateLessonStoreFaults(t *testing.T) {
 			}
 		}})
 	})
+}
+
+// TestUpdateLessonPlaceReads: before it writes, an edit reads the bookings
+// and the waiting list once. A lesson that becomes a rental reads all its
+// bookings, canceled ones included, for the check (ADR 0007, amendment);
+// with none, nothing is active or held, so it does not count them again.
+func TestUpdateLessonPlaceReads(t *testing.T) {
+	t.Parallel()
+
+	for name, tc := range map[string]struct {
+		edit func(d *LessonData)
+		want []string
+	}{
+		"move": {
+			func(d *LessonData) { d.StartTime = domain.TimeOfDay{Hour: 18} },
+			[]string{"Bookings.CountActive", "Waitlist.ListOpenByLessons"},
+		},
+		"becomes a rental": {
+			func(d *LessonData) {
+				d.Kind, d.InstructorID, d.Capacity = domain.LessonRental, domain.StaffID{}, 0
+				d.Visibility, d.Renter = domain.VisibilityHidden, "Fictional Choir"
+			},
+			[]string{"Bookings.ListByLesson", "Waitlist.ListOpenByLessons"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newGenFixture(t, seed.DemoSettings())
+
+			sl, err := f.lessonService(t, lessonNow).CreateLesson(t.Context(),
+				NewLesson{LessonData: f.lessonData(), CourseTypeID: f.courseType})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			fs, svc := f.faultLessons(t)
+			d := dataOf(t, sl.Lesson)
+			tc.edit(&d)
+
+			if _, err := svc.UpdateLesson(t.Context(), sl.Lesson.ID, d); err != nil {
+				t.Fatal(err)
+			}
+
+			var reads []string
+
+			for _, c := range fs.Calls() {
+				if c.Method == "Lessons.Update" {
+					break
+				}
+
+				if strings.HasPrefix(c.Method, "Bookings.") || strings.HasPrefix(c.Method, "Waitlist.") {
+					reads = append(reads, c.Method)
+				}
+			}
+
+			if !slices.Equal(reads, tc.want) {
+				t.Errorf("reads before the write %v, want %v", reads, tc.want)
+			}
+		})
+	}
 }
 
 // TestUpdateLessonRefusals: an edit with invalid fields or an unknown

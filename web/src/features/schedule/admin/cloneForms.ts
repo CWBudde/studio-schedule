@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { LessonCloneData } from '@/api/queries';
-import { addDays, type SchoolDate, startOfWeek, weekdayOf } from '@/lib/schoolTime';
+import { addDays, isSchoolDate, type SchoolDate, startOfWeek, weekdayOf } from '@/lib/schoolTime';
 
 // The rules of the API (previewLessonClone, cloneLessons). Messages are keys
 // of `auth:form.errors` or `admin:form.errors` (see useAdminErrorText).
@@ -13,8 +13,6 @@ export type CloneInput = { unit: CloneUnit; source: string; target: string };
 
 export const cloneFields = ['unit', 'source', 'target'] as const satisfies (keyof CloneInput)[];
 
-const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-const isDate = (value: string) => datePattern.test(value);
 const isMonday = (date: SchoolDate) => weekdayOf(date) === 1;
 
 /**
@@ -34,11 +32,11 @@ export const cloneSchema = (today: SchoolDate) =>
   z
     .object({
       unit: z.enum(cloneUnits),
-      source: z.string().regex(datePattern, 'date'),
-      target: z.string().regex(datePattern, 'date'),
+      source: z.string().refine(isSchoolDate, 'date'),
+      target: z.string().refine(isSchoolDate, 'date'),
     })
     .superRefine((v, ctx) => {
-      if (!isDate(v.source) || !isDate(v.target)) return;
+      if (!isSchoolDate(v.source) || !isSchoolDate(v.target)) return;
       const week = v.unit === 'week';
       if (week && !isMonday(v.source)) {
         ctx.addIssue({ code: 'custom', path: ['source'], message: 'monday' });
@@ -74,12 +72,12 @@ export function cloneDefaults(unit: CloneUnit, shown: SchoolDate, today: SchoolD
  */
 export function switchUnit(values: CloneInput, unit: CloneUnit, today: SchoolDate): CloneInput {
   if (unit === 'day') return { ...values, unit };
-  const snap = (date: string) => (isDate(date) ? startOfWeek(date) : date);
+  const snap = (date: string) => (isSchoolDate(date) ? startOfWeek(date) : date);
   const target = snap(values.target);
   const earliest = earliestTarget(unit, today);
   return {
     unit,
     source: snap(values.source),
-    target: isDate(target) && target < earliest ? earliest : target,
+    target: isSchoolDate(target) && target < earliest ? earliest : target,
   };
 }

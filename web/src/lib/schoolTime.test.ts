@@ -8,6 +8,7 @@ import {
   formatTime,
   formatTimeRange,
   instantAt,
+  isSchoolDate,
   minutesSinceMidnight,
   schoolDateOf,
   startOfWeek,
@@ -36,6 +37,39 @@ describe('schoolDateOf', () => {
     expect(schoolDateOf('2027-03-27T23:00:00Z', berlin)).toBe('2027-03-28');
     expect(schoolDateOf('2027-03-28T21:59:00Z', berlin)).toBe('2027-03-28');
     expect(schoolDateOf('2027-03-28T22:00:00Z', berlin)).toBe('2027-03-29');
+  });
+});
+
+describe('isSchoolDate', () => {
+  it('accepts a date that exists', () => {
+    expect(isSchoolDate('2026-02-28')).toBe(true);
+    expect(isSchoolDate('2028-02-29')).toBe(true);
+    expect(isSchoolDate('2026-12-31')).toBe(true);
+  });
+
+  it('refuses a date that does not exist', () => {
+    expect(isSchoolDate('2026-02-29')).toBe(false);
+    expect(isSchoolDate('2026-02-30')).toBe(false);
+    expect(isSchoolDate('2026-04-31')).toBe(false);
+    expect(isSchoolDate('2026-13-01')).toBe(false);
+    expect(isSchoolDate('2026-00-10')).toBe(false);
+    expect(isSchoolDate('2026-01-00')).toBe(false);
+    expect(isSchoolDate('2100-02-29')).toBe(false);
+  });
+
+  it('keeps to the years the API takes, 1 to 9999', () => {
+    expect(isSchoolDate('0000-02-29')).toBe(false);
+    expect(isSchoolDate('0000-01-01')).toBe(false);
+    expect(isSchoolDate('0001-01-01')).toBe(true);
+    expect(isSchoolDate('9999-12-31')).toBe(true);
+  });
+
+  it('refuses anything but YYYY-MM-DD', () => {
+    expect(isSchoolDate('')).toBe(false);
+    expect(isSchoolDate('2026-2-3')).toBe(false);
+    expect(isSchoolDate('02.03.2026')).toBe(false);
+    expect(isSchoolDate('2026-02-03T00:00')).toBe(false);
+    expect(isSchoolDate(' 2026-02-03')).toBe(false);
   });
 });
 

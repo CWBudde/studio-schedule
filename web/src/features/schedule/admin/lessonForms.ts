@@ -3,7 +3,7 @@ import type { LessonDetail } from '@/api/client';
 import type { LessonCreateData, LessonData } from '@/api/queries';
 import { chosen, durationMinutes, minutesOf, startTime } from '@/features/admin/classForms';
 import { capacity } from '@/features/admin/locationForms';
-import { minutesSinceMidnight, schoolDateOf } from '@/lib/schoolTime';
+import { isSchoolDate, minutesSinceMidnight, schoolDateOf } from '@/lib/schoolTime';
 
 // Limits as in the API (LessonData, LessonCreateData, LessonCancelData).
 // Messages are keys of `auth:form.errors` or `admin:form.errors` (see
@@ -31,7 +31,7 @@ export const isRental = (kind: string) => kind === 'rental';
 export const lessonSchema = z
   .object({
     courseTypeId: z.string(),
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date'),
+    date: z.string().refine(isSchoolDate, 'date'),
     startTime,
     durationMinutes,
     roomId: chosen,

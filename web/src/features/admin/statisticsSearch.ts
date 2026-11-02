@@ -1,11 +1,13 @@
 import { z } from 'zod';
+import { isSchoolDate } from '@/lib/schoolTime';
 
 /** The range presets of the statistics, as the API names them. */
 export const statisticsRanges = ['last4Weeks', 'last12Weeks', 'term', 'custom'] as const;
 
 export type StatisticsRange = (typeof statisticsRanges)[number];
 
-const schoolDate = z.iso.date().optional().catch(undefined);
+/** A school date that exists; anything else is dropped. */
+const schoolDate = z.string().refine(isSchoolDate).optional().catch(undefined);
 
 /**
  * Search params of /admin/statistics: the `range` (default: the last four

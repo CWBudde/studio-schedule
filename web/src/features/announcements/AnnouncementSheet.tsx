@@ -30,12 +30,12 @@ import {
 } from '@/components/ui/alert-dialog';
 import { TextField } from '@/features/auth/TextField';
 import { SelectField, SwitchField, TextareaField } from '@/features/admin/crud/fields';
-import { showServerErrors, useAdminErrorText } from '@/features/admin/crud/form';
+import { showServerErrors } from '@/features/admin/crud/form';
 import { FormSheet, FormSheetActions, FormSheetHeader } from '@/features/admin/crud/FormSheet';
 import { useClassLabel } from '@/features/admin/useClassLabel';
 import { invalidFields } from '@/features/auth/form';
 import { useLessonTitle } from '@/features/schedule/lessonLabel';
-import { addDays, formatTimestamp, formatTime } from '@/lib/schoolTime';
+import { addDays, formatTimestamp, formatTime, isSchoolDate } from '@/lib/schoolTime';
 import {
   announcementFields,
   type AnnouncementValues,
@@ -46,23 +46,11 @@ import {
   dateFields,
   mailStarted,
   roles,
+  useAnnouncementErrorText,
 } from './announcementForms';
 
 /** What the sheet edits: a new announcement or an existing one. */
 export type AnnouncementTarget = { mode: 'add' } | { mode: 'edit'; announcement: Announcement };
-
-/** Error keys of the announcement form beyond the admin forms' own. */
-const ownErrors = ['dateTime', 'expiresBeforePublish', 'titleLine'] as const;
-
-/** Translates a field error of the form: its own keys, else the admin forms'. */
-function useErrorText() {
-  const { t } = useTranslation('announcements');
-  const adminText = useAdminErrorText();
-  return (error: FieldError | undefined) =>
-    (ownErrors as readonly string[]).includes(error?.message ?? '')
-      ? t(`admin.errors.${error?.message as (typeof ownErrors)[number]}`)
-      : adminText(error);
-}
 
 /**
  * A sheet with the form of a new or an existing announcement, its dates and
@@ -104,7 +92,7 @@ function AnnouncementForm({
   const { t: tAdmin } = useTranslation('admin');
   const { t: tAuth } = useTranslation('auth');
   const lang = i18n.resolvedLanguage ?? 'en';
-  const errorText = useErrorText();
+  const errorText = useAnnouncementErrorText();
   const problemText = useProblemText();
   const queryClient = useQueryClient();
   const create = useMutation(createAnnouncementMutation(queryClient));
@@ -412,7 +400,7 @@ function LessonFields({
 }: FormProps & { date: string; timeZone: string; lang: string }) {
   const { t } = useTranslation('announcements');
   const title = useLessonTitle();
-  const valid = /^\d{4}-\d{2}-\d{2}$/.test(date);
+  const valid = isSchoolDate(date);
   const schedule = useQuery({
     ...scheduleQuery({ from: date, to: valid ? addDays(date, 1) : date }),
     enabled: valid,
@@ -425,6 +413,7 @@ function LessonFields({
       <TextField
         label={t('admin.lessonDate')}
         type="date"
+        error={errorText(errors.lessonDate)}
         {...form.register('lessonDate', { onChange: () => form.setValue('lessonId', '') })}
       />
       <Controller

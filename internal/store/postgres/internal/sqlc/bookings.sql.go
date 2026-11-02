@@ -64,18 +64,6 @@ func (q *Queries) AnonymizeGuestBookings(ctx context.Context, arg AnonymizeGuest
 	return result.RowsAffected(), nil
 }
 
-const countActiveBookingPersons = `-- name: CountActiveBookingPersons :one
-SELECT count(DISTINCT person_id) FROM bookings
-WHERE lesson_id = ANY($1::uuid[]) AND status <> 'canceled' AND person_id IS NOT NULL
-`
-
-func (q *Queries) CountActiveBookingPersons(ctx context.Context, lessons []pgtype.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countActiveBookingPersons, lessons)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countActiveBookings = `-- name: CountActiveBookings :one
 SELECT count(*) FROM bookings WHERE lesson_id = $1 AND status <> 'canceled'
 `

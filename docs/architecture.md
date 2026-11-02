@@ -179,11 +179,11 @@ The office's statistics (`GET /api/v1/admin/statistics`, `service.StatisticsServ
 live from the operational data; there is no snapshot table (ADR 0001). A request reads the lessons
 of the range (`Lessons().ListRange`), then one aggregate each: `Bookings().CountsByLessons`
 (active, trials, guests, attended, no-shows), `Bookings().CountLateCanceledByLessons`,
-`Waitlist().CountByLessons`, `Bookings().CountActivePersons`, `Bookings().CountsByPersons` (active,
-attended and late-canceled bookings by person) with one `Persons().ListByIDs` of the persons who
-booked, and `Receipts().TotalsByDay`, besides the catalog. So a year
-(about 1,500 lessons) costs the same handful of queries, which keeps the single-threaded WASM demo
-responsive.
+`Waitlist().CountByLessons`, `Bookings().CountsByPersons` (active, attended and late-canceled
+bookings by person; the persons with an active booking are the active members) with one
+`Persons().ListByIDs` of those persons for the top participants, and `Receipts().TotalsByDay`,
+besides the catalog. So a year (about 1,500 lessons) costs the same handful of queries, which keeps
+the single-threaded WASM demo responsive.
 
 - Ranges are school dates in the school time zone: the last 4 or 12 weeks and the current term end
   today; a custom range has at most 366 days (422 beyond). A lesson belongs to the school date it

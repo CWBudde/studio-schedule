@@ -604,7 +604,7 @@ type LessonRepo interface {
 	ListByEvents(ctx context.Context, events []domain.EventID) ([]domain.Lesson, error)
 	// ListByStaff returns the lessons with from <= StartsAt < to whose
 	// instructor or accompanist is one of the staff members, ordered by
-	// StartsAt and ID.
+	// StartsAt and ID. The zero ID matches no lesson.
 	ListByStaff(ctx context.Context, staff []domain.StaffID, from, to time.Time) ([]domain.Lesson, error)
 	// ListRoomOverlaps returns the lessons in the room that are not
 	// canceled and overlap [from, to) (StartsAt < to and EndsAt > from),
@@ -649,10 +649,6 @@ type BookingRepo interface {
 	// canceled late, for each of the given lessons that has one; other
 	// lessons (and those that do not exist) are left out.
 	CountLateCanceledByLessons(ctx context.Context, lessons []domain.LessonID) (map[domain.LessonID]int, error)
-	// CountActivePersons returns how many different persons have an active
-	// (not canceled) booking in any of the given lessons; guests do not
-	// count.
-	CountActivePersons(ctx context.Context, lessons []domain.LessonID) (int, error)
 	// CountsByPersons returns, by person, the counts of their bookings in
 	// any of the given lessons, for each person with an active (not
 	// canceled) or a late-canceled booking there; guests do not count.

@@ -1295,12 +1295,14 @@ func (r lessonRepo) ListByStaff(
 ) ([]domain.Lesson, error) {
 	from, to = instant(from), instant(to)
 	wanted := setOf(staff)
+	// A lesson without an instructor or accompanist holds the zero ID there
+	// (NULL in PostgreSQL, which no ID equals), so the zero ID matches none.
+	delete(wanted, domain.StaffID{})
 	lessons := r.tx.state.lessons.filter(func(l domain.Lesson) bool {
 		_, instructor := wanted[l.InstructorID]
 		_, accompanist := wanted[l.AccompanistID]
 
-		return ((instructor && !l.InstructorID.IsZero()) || (accompanist && !l.AccompanistID.IsZero())) &&
-			!l.StartsAt.Before(from) && l.StartsAt.Before(to)
+		return (instructor || accompanist) && !l.StartsAt.Before(from) && l.StartsAt.Before(to)
 	})
 
 	return sorted(lessons, func(a, b domain.Lesson) int {
@@ -1486,21 +1488,6 @@ func (r bookingRepo) CountLateCanceledByLessons(
 	}
 
 	return out, nil
-}
-
-func (r bookingRepo) CountActivePersons(_ context.Context, lessons []domain.LessonID) (int, error) {
-	wanted := setOf(lessons)
-	persons := map[domain.PersonID]struct{}{}
-
-	for _, b := range r.tx.state.bookings.filter(func(b domain.Booking) bool {
-		_, ok := wanted[b.LessonID]
-
-		return ok && active(b) && !b.PersonID.IsZero()
-	}) {
-		persons[b.PersonID] = struct{}{}
-	}
-
-	return len(persons), nil
 }
 
 func (r bookingRepo) CountsByPersons(

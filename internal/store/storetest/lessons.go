@@ -121,6 +121,9 @@ func testLessons(t *testing.T, newStore func(*testing.T) store.Store) {
 
 			wantSlice(e.t, list(newID[domain.StaffID](e)), nil)
 			wantSlice(e.t, list(), nil)
+			// The zero ID is no staff member: not the missing accompanist of own.
+			wantSlice(e.t, list(domain.StaffID{}), nil)
+			wantSlice(e.t, list(domain.StaffID{}, other.ID), []domain.Lesson{accompanied, both})
 		},
 		"ListByIDs": func(e *env) {
 			s := e.setting()
@@ -797,35 +800,6 @@ func testBookings(t *testing.T, newStore func(*testing.T) store.Store) {
 			if len(got) != 0 {
 				e.t.Fatalf("CountLateCanceledByLessons(nil) = %v", got)
 			}
-		},
-		"CountActivePersons": func(e *env) {
-			s := e.setting()
-			l1, l2, l3 := e.lesson(s, t0, 5), e.lesson(s, t0.Add(time.Hour), 5), e.lesson(s, t0.Add(2*time.Hour), 5)
-			ann, ben, cy := e.person("Ann", "One"), e.person("Ben", "Two"), e.person("Cy", "Three")
-
-			e.booking(l1, ann, t0.Add(-time.Hour))
-			e.booking(l2, ann, t0.Add(-time.Hour)) // the same person twice
-			e.booking(l3, ben, t0.Add(-time.Hour)) // a lesson not asked for
-			gone := e.booking(l2, cy, t0.Add(-time.Hour))
-			guest := domain.Booking{
-				ID: newID[domain.BookingID](e), LessonID: l1.ID, GuestName: "Gina Guest",
-				Status: domain.BookingBooked, Source: domain.BookingSourceStaff, BookedAt: t0.Add(-time.Hour),
-			}
-			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
-				gone.Status, gone.CanceledAt = domain.BookingCanceled, t0.Add(-time.Minute)
-
-				return errors.Join(tx.Bookings().Update(ctx, gone), tx.Bookings().Create(ctx, guest))
-			})
-
-			count := func(lessons ...domain.LessonID) int {
-				return mustQuery(e, func(ctx context.Context, tx store.Tx) (int, error) {
-					return tx.Bookings().CountActivePersons(ctx, lessons)
-				})
-			}
-			// Canceled bookings and guests do not count, a person once.
-			wantEqual(e.t, count(l1.ID, l2.ID), 1)
-			wantEqual(e.t, count(l1.ID, l2.ID, l3.ID, newID[domain.LessonID](e)), 2)
-			wantEqual(e.t, count(), 0)
 		},
 		"CountsByPersons": func(e *env) {
 			s := e.setting()

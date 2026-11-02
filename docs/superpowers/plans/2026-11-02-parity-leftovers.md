@@ -36,7 +36,22 @@ react-i18next, Vitest, Playwright.
 
 ## Task 1.1
 
-- [ ] 1.1 `stats-reads` Statistics: drop `Bookings().CountActivePersons`; the active members come from `CountsByPersons`, which the top list reads anyway — see "Task 1.1".
+- [x] 1.1 `stats-reads` Statistics: drop `Bookings().CountActivePersons`; the active members come from `CountsByPersons`, which the top list reads anyway — see "Task 1.1".
+  - Done: `compute` reads `CountsByPersons` once; `activePersons` picks the entries with
+    `Active > 0`, their number is `ActiveMembers`, and `addTopParticipants` takes the counts and
+    those persons (it still reads `Persons().ListByIDs` once). `CountActivePersons` is gone from
+    `store.BookingRepo`, both stores (`CountActiveBookingPersons` and its sqlc code), the storetest
+    and PostgreSQL error-path cases and `fault_gen_test.go`; the `CountsByPersons` contract case
+    already covers what its case did (a person in two lessons, guests, canceled in time, a lesson
+    not asked for, no lessons). New test `TestStatisticsActiveMembers` (guest, canceled in time,
+    late-canceled only, canceled lesson, lesson outside the range, a person in two lessons, a
+    merged person with an active booking: 3) passed on the old code before the change, and fails
+    there on its second assertion, the exact sequence of `Bookings.*` reads from the `FaultStore`
+    log. One read less per request. `just lint`, `just test-cover` (PostgreSQL included),
+    `just coverage` (99.0 %) and `just check-sqlc` green.
+  - Discovery: `ActiveMembers` counts merged and anonymized persons who kept an active booking,
+    unlike the top list, which leaves them out; kept as it was (the count comes from the counts
+    before the persons are read), pinned by the test and written into the field's doc comment.
 
 PLAN.md, Phase 15, "Review leftovers", first sub-item. `StatisticsService`
 (`internal/service/statistics.go`) reads `CountActivePersons` for `Totals.ActiveMembers` and
@@ -58,7 +73,7 @@ body.
 
 ## Task 1.2
 
-- [ ] 1.2 `lesson-update-checks` Lesson writes: `becomesRental` without a second read, the `kind` error of a course-type-less rental together with the other field errors, and the memory store's `ListByStaff` without its dead guard — see "Task 1.2".
+- [x] 1.2 `lesson-update-checks` Lesson writes: `becomesRental` without a second read, the `kind` error of a course-type-less rental together with the other field errors, and the memory store's `ListByStaff` without its dead guard — see "Task 1.2".
 
 PLAN.md, Phase 15, "Review leftovers", the sub-items on `becomesRental`, `ListByStaff` and
 `UpdateLesson`, all in `internal/service/lesson_admin.go` and `internal/store/memory/repos.go`.
@@ -79,11 +94,30 @@ PLAN.md, Phase 15, "Review leftovers", the sub-items on `becomesRental`, `ListBy
    the result; both stores then read alike. If the storetest case has no lesson without an
    accompanist among the results, add one so a regression would show.
 
+**Done (2026-11-02).** (1) `becomesRental` runs before `places()` and reports whether the lesson
+becomes a rental; then `places()` is skipped (no bookings, no waiting list: nothing active or
+held). Before the write: 2 reads instead of 4 (`TestUpdateLessonPlaceReads` pins the reads
+through `FaultStore.Calls`, and fails on the old code). (2) Discovery: nothing joined
+`FieldError`s yet. `domain.validate` stops at its first check and `toHTTPError` reported only the
+first `FieldError` (`errors.As`), so `merge.go`'s `errors.Join` of two `Validate()`s answered with
+one field too. Now `domain.FieldErrors` walks the tree (wrapping, `errors.Join`, multi-`%w`) and
+`toHTTPError` gives each its `body.<field>` detail; the web's `invalidFields` already marks every
+one. `UpdateLesson` joins the `kind` error with `timing(d)` (the date, start time and duration
+checks, moved out of `apply`). Residual: `timing` still stops at its first field, and the lesson
+is not validated as the other kind (its first error would be the missing course type again).
+Over HTTP an impossible date never reaches the service (Huma's `format:"date"`), so the app test
+pairs `kind` with a duration past midnight. The CLI's `Report` still names one field; no command
+calls `UpdateLesson`. (3) The guards were not dead: a lesson without an instructor or accompanist
+holds the zero ID in memory and NULL in PostgreSQL, so a zero ID in the list matched it in memory
+only (review). Now the zero ID is dropped from the wanted set once, and the contract case and
+`ListByStaff`'s doc pin that it matches no lesson, on both stores. Coverage 99.0 % total; every touched function
+100 %.
+
 ---
 
 ## Task 1.3
 
-- [ ] 1.3 `school-date` Web: one school-date check in `lib/schoolTime.ts`, used by every form with a date field, so that a date that does not exist (2026-02-30) is refused everywhere — see "Task 1.3".
+- [x] 1.3 `school-date` Web: one school-date check in `lib/schoolTime.ts`, used by every form with a date field, so that a date that does not exist (2026-02-30) is refused everywhere — see "Task 1.3".
 
 PLAN.md, Phase 15, "Review leftovers", the web sub-item. Today only the booking-rules card refuses
 a date that does not exist, through `isSchoolDate` in `web/src/features/admin/settingsForms.ts`.
@@ -96,6 +130,23 @@ custom range, announcements, person birth dates). A date input normally cannot p
 2026-02-30, but typed or pasted values and URL search params can; a test per form feeds one and
 expects the field's translated error. Reuse the existing `date` error key where a form has one,
 otherwise add the key to both locales.
+
+**Done** (closes PLAN.md, Phase 15, "Review leftovers", the web sub-item). `isSchoolDate` lives in
+`lib/schoolTime.ts` with its own tests, and every date-only field uses it: the booking rules, clone,
+lesson, term, pass (`validFrom`), class member (`since`), both person forms' birth date, the
+announcement's publication, expiry and lesson dates, the statistics' custom range (was
+`z.iso.date()`), and the `from` param of `/schedule` and `/teach`. Admin forms report `date` ("Enter
+a date."; term, pass and class member said `invalid` before, also for a malformed date); the
+profile and dependent forms got `account:person.errors.date` (en, de); the announcement form
+reuses the admin `date` through its error hook (now `useAnnouncementErrorText`, exported to test
+it). 43 new test cases in 16 test files; `just web-check` 138 files, 1438 tests; e2e 245 passed.
+Discoveries: a date input cannot hold 2026-02-30 (the HTML value sanitization empties it, in jsdom
+too), so the per-form tests feed the schemas, and the URL tests (schedule, statistics) the pages.
+Before, the clone form took 2026-02-30 as a Monday and switching to weeks turned it into 2026-03-02,
+and the announcement form made it an instant in March. zod 4 runs an object's `superRefine` even
+after a field failed, so the clone form's `isSchoolDate` guard there stays. Left alone: the
+cancel-following dialog (only a date input and the server's preview date reach the API), the
+statistics page's draft (a URL value is dropped before it gets there).
 
 ---
 

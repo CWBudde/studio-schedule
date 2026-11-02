@@ -1,9 +1,13 @@
+import type { FieldError } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import type { Announcement, AnnouncementAudience, AnnouncementData } from '@/api/queries';
-import { instantAt, schoolDateOf, wallClockOf } from '@/lib/schoolTime';
+import { useAdminErrorText } from '@/features/admin/crud/form';
+import { instantAt, isSchoolDate, schoolDateOf, wallClockOf } from '@/lib/schoolTime';
 
 // Limits as in the API (ADR 0014). Messages are keys of `auth:form.errors`,
-// `admin:form.errors` or `announcements:admin.errors` (see useErrorText).
+// `admin:form.errors` or `announcements:admin.errors` (see
+// useAnnouncementErrorText).
 
 /** The longest title, in characters (code points, as the API counts). */
 export const maxTitleLength = 120;
@@ -17,8 +21,6 @@ export type Audience = (typeof audiences)[number];
 
 /** The number of code points, as the API counts characters. */
 const length = (s: string) => [...s].length;
-
-const dateTime = /^(\d{4}-\d{2}-\d{2})?$/;
 
 /**
  * The form of an announcement, its dates and times in the school's time
@@ -37,9 +39,9 @@ export const announcementSchema = (timeZone: string) =>
       courseTypeId: z.string(),
       lessonDate: z.string(),
       lessonId: z.string(),
-      publishDate: z.string().regex(dateTime),
+      publishDate: z.string(),
       publishTime: z.string(),
-      expiresDate: z.string().regex(dateTime),
+      expiresDate: z.string(),
       expiresTime: z.string(),
       email: z.boolean(),
     })
@@ -68,12 +70,18 @@ export const announcementSchema = (timeZone: string) =>
         else issue('courseTypeId', 'choose');
       }
       if (v.audience === 'lesson') {
+        // The date only picks the lesson; one that does not exist is refused.
+        if (v.lessonDate && !isSchoolDate(v.lessonDate)) issue('lessonDate', 'date');
         if (v.lessonId) audience.lessonId = v.lessonId;
         else issue('lessonId', 'choose');
       }
 
       const instant = (date: string, time: string, field: 'publishDate' | 'expiresDate') => {
         if (!date && !time) return undefined;
+        if (date && !isSchoolDate(date)) {
+          issue(field, 'date');
+          return undefined;
+        }
         if (!date || !/^\d{2}:\d{2}$/.test(time)) {
           issue(field, 'dateTime');
           return undefined;
@@ -97,6 +105,19 @@ export const announcementSchema = (timeZone: string) =>
     });
 
 export type AnnouncementValues = z.input<ReturnType<typeof announcementSchema>>;
+
+/** Error keys of the announcement form beyond the admin forms' own. */
+const ownErrors = ['dateTime', 'expiresBeforePublish', 'titleLine'] as const;
+
+/** Translates a field error of the form: its own keys, else the admin forms'. */
+export function useAnnouncementErrorText() {
+  const { t } = useTranslation('announcements');
+  const adminText = useAdminErrorText();
+  return (error: FieldError | undefined) =>
+    (ownErrors as readonly string[]).includes(error?.message ?? '')
+      ? t(`admin.errors.${error?.message as (typeof ownErrors)[number]}`)
+      : adminText(error);
+}
 
 /** The fields a 422 of the API can name, as the form's fields. */
 export const announcementFields = [

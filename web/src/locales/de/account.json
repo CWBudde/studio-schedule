@@ -26,7 +26,8 @@
     "phone": "Telefon (optional)",
     "birthDate": "Geburtsdatum (optional)",
     "errors": {
-      "birthDateFuture": "Das Geburtsdatum darf nicht in der Zukunft liegen."
+      "birthDateFuture": "Das Geburtsdatum darf nicht in der Zukunft liegen.",
+      "date": "Gib ein Datum ein."
     }
   },
   "dependents": {

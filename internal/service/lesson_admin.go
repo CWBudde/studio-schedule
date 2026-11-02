@@ -204,9 +204,15 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 		}
 
 		// The course type cannot change, so a room rental without one cannot
-		// become another kind, which needs one (ADR 0007, amendment).
+		// become another kind, which needs one (ADR 0007, amendment). The
+		// request's timing is reported with it; the lesson is not validated
+		// as the other kind, whose first error would be the missing course
+		// type again.
 		if old.CourseTypeID.IsZero() && d.Kind != domain.LessonRental {
-			return &domain.FieldError{Field: "kind", Msg: "a room rental without a course type cannot become another kind"}
+			return errors.Join(
+				&domain.FieldError{Field: "kind", Msg: "a room rental without a course type cannot become another kind"},
+				timing(d),
+			)
 		}
 
 		l := old
@@ -220,13 +226,18 @@ func (s *LessonService) UpdateLesson(ctx context.Context, id domain.LessonID, d 
 
 		now := s.clock.Now()
 
-		active, held, err := places(ctx, tx, now, l.ID)
+		rental, err := becomesRental(ctx, tx, old, l)
 		if err != nil {
 			return err
 		}
 
-		if err := becomesRental(ctx, tx, old, l); err != nil {
-			return err
+		// A lesson that becomes a rental has no bookings and no waiting
+		// list, so nothing is active or held either.
+		var active, held int
+		if !rental {
+			if active, held, err = places(ctx, tx, now, l.ID); err != nil {
+				return err
+			}
 		}
 
 		if err := sessionFields(ctx, tx, l); err != nil {
@@ -515,8 +526,26 @@ func sessionInUse(ctx context.Context, tx store.Tx, l domain.Lesson) error {
 }
 
 // apply sets the fields of d on l, detaches a lesson of a class, and
-// validates the result. The lesson must end on its day.
+// validates the result. The lesson must end on its day (timing).
 func (s *LessonService) apply(l *domain.Lesson, d LessonData, loc *time.Location) error {
+	if err := timing(d); err != nil {
+		return err
+	}
+
+	start := d.Date.At(d.StartTime, loc)
+	l.StartsAt, l.EndsAt = start, start.Add(d.Duration)
+	l.RoomID, l.InstructorID, l.AccompanistID = d.RoomID, d.InstructorID, d.AccompanistID
+	l.Capacity, l.Visibility, l.Kind, l.Renter = d.Capacity, d.Visibility, d.Kind, strings.TrimSpace(d.Renter)
+	l.Detached = !l.ClassID.IsZero()
+
+	return l.Validate()
+}
+
+// timing checks the date, start time and duration of d, which the lesson
+// does not hold as such: a valid date and time, a positive number of
+// minutes, and an end on the same day. A validation error on the first
+// field that fails.
+func timing(d LessonData) error {
 	switch {
 	case !d.Date.Valid():
 		return &domain.FieldError{Field: "date", Msg: "invalid date"}
@@ -528,13 +557,7 @@ func (s *LessonService) apply(l *domain.Lesson, d LessonData, loc *time.Location
 		return &domain.FieldError{Field: "durationMinutes", Msg: "the lesson must not run past midnight"}
 	}
 
-	start := d.Date.At(d.StartTime, loc)
-	l.StartsAt, l.EndsAt = start, start.Add(d.Duration)
-	l.RoomID, l.InstructorID, l.AccompanistID = d.RoomID, d.InstructorID, d.AccompanistID
-	l.Capacity, l.Visibility, l.Kind, l.Renter = d.Capacity, d.Visibility, d.Kind, strings.TrimSpace(d.Renter)
-	l.Detached = !l.ClassID.IsZero()
-
-	return l.Validate()
+	return nil
 }
 
 // sessionFields refuses a capacity of lesson l, an event's session, other
@@ -564,30 +587,32 @@ func sessionFields(ctx context.Context, tx store.Tx, l domain.Lesson) error {
 	return nil
 }
 
-// becomesRental refuses to make old, which is no room rental, the rental
-// l while bookings (canceled ones included) or its waiting list refer to
-// it: a rental takes neither (ADR 0007, amendment). A validation error on
-// kind.
-func becomesRental(ctx context.Context, tx store.Tx, old, l domain.Lesson) error {
+// becomesRental reports whether old, which is no room rental, becomes the
+// rental l, and refuses it while bookings (canceled ones included) or its
+// waiting list refer to it: a rental takes neither (ADR 0007, amendment).
+// A validation error on kind. Otherwise it reads nothing.
+func becomesRental(ctx context.Context, tx store.Tx, old, l domain.Lesson) (bool, error) {
 	if l.Kind != domain.LessonRental || old.Kind == domain.LessonRental {
-		return nil
+		return false, nil
 	}
 
 	booked, err := hasBookings(ctx, tx, l.ID)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	open, err := tx.Waitlist().ListOpenByLessons(ctx, []domain.LessonID{l.ID})
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if booked || len(open) > 0 {
-		return &domain.FieldError{Field: "kind", Msg: "a lesson with bookings or a waiting list cannot become a room rental"}
+		return false, &domain.FieldError{
+			Field: "kind", Msg: "a lesson with bookings or a waiting list cannot become a room rental",
+		}
 	}
 
-	return nil
+	return true, nil
 }
 
 // confirmPast returns ErrLessonPast if l does not start in the future and

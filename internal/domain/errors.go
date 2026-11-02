@@ -37,3 +37,27 @@ type FieldError struct {
 func (e *FieldError) Error() string { return ErrValidation.Error() + ": " + e.Msg }
 
 func (e *FieldError) Unwrap() error { return ErrValidation }
+
+// FieldErrors returns the field errors in err's tree, in order: err itself,
+// what it wraps, and every error of a join (errors.Join, fmt.Errorf with
+// several %w), so the HTTP layer can report several fields of one request at
+// once. A FieldError's own ErrValidation is not searched.
+func FieldErrors(err error) []*FieldError {
+	switch e := err.(type) { //nolint:errorlint // walks the tree errors.As would
+	case nil:
+		return nil
+	case *FieldError:
+		return []*FieldError{e}
+	case interface{ Unwrap() []error }:
+		var out []*FieldError
+		for _, inner := range e.Unwrap() {
+			out = append(out, FieldErrors(inner)...)
+		}
+
+		return out
+	case interface{ Unwrap() error }:
+		return FieldErrors(e.Unwrap())
+	default:
+		return nil
+	}
+}

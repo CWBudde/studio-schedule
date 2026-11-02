@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AssignPassData, PersonDetail, PersonMatch, SellPassData } from '@/api/queries';
+import { isSchoolDate } from '@/lib/schoolTime';
 import { moneyValue } from './passTypeForms';
 
 // Limits as in the API (SellPassData, AssignPassData). Messages are keys of
@@ -19,7 +20,7 @@ const fields = {
   validFrom: z
     .string()
     .trim()
-    .regex(/^(\d{4}-\d{2}-\d{2})?$/, 'invalid'),
+    .refine((v) => v === '' || isSchoolDate(v), 'date'),
   note: z.string().trim().max(maxPassNote, 'tooLong'),
   payerId: z.string(),
   price: z.string().trim(),

@@ -151,6 +151,16 @@ func wantFieldError(t *testing.T, err error, field string) {
 	}
 }
 
+// fieldsOf returns the fields of the field errors in err, in order.
+func fieldsOf(err error) []string {
+	var fields []string
+	for _, fe := range domain.FieldErrors(err) {
+		fields = append(fields, fe.Field)
+	}
+
+	return fields
+}
+
 func TestCreateLesson(t *testing.T) {
 	t.Parallel()
 

@@ -337,6 +337,22 @@ describe('StatisticsPage', () => {
     expect(screen.getByLabelText('To')).toHaveValue('2026-10-26');
   });
 
+  it('drops a custom date of the URL that does not exist', async () => {
+    const asked = mockStatistics(() => ({ body: { ...stats, range: 'custom' } }));
+
+    renderInRouter(<StatisticsPage />, {
+      at: '/admin/statistics',
+      search: { range: 'custom', from: '2026-02-30', to: '2026-03-10' },
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Choose the first and the last day.',
+    );
+    expect(screen.getByLabelText('From')).toHaveValue('');
+    expect(screen.getByLabelText('To')).toHaveValue('2026-03-10');
+    expect(asked).toHaveLength(0);
+  });
+
   it('explains a term range without a current term', async () => {
     mockStatistics(() => ({ status: 404, body: { title: 'Not Found', status: 404 } }));
 
