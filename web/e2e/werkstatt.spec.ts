@@ -1,4 +1,4 @@
-import { expect, gotoDemo, lessons, type Page, signIn, signOut, test } from './fixtures';
+import { demoEmail, expect, gotoDemo, lessons, type Page, signIn, signOut, test } from './fixtures';
 
 // The Werkstatt demo school (docs/demo-mode.md, "Two demo schools") in its
 // own theme (ADR 0018). Its language is German; the visitor here chose
@@ -66,6 +66,36 @@ test('signs in and out with the header button', async ({ page }) => {
   await expect(banner.getByRole('button', { name })).toHaveCount(0);
 });
 
+test("the login page offers the school's own demo accounts, and they sign in", async ({ page }) => {
+  // Review focus 5: the Werkstatt school's logins (seed.SchoolLogins), none
+  // of the programme school's.
+  await gotoDemo(page, '/login');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'werkstatt');
+  const accounts = page.getByRole('region', { name: 'Demo accounts' });
+  const own = [
+    ['Member', 'Katrin Ahrenfeld', 'katrin.ahrenfeld@post.example'],
+    ['Instructor', 'Johanna Sternberg', 'johanna.sternberg@tanzhaus-lindenhof.example'],
+    ['Office', 'Heike Buchwald', 'heike.buchwald@tanzhaus-lindenhof.example'],
+    ['Administrator', 'Rainer Ostwald', 'rainer.ostwald@tanzhaus-lindenhof.example'],
+  ] as const;
+  await expect(accounts.getByRole('button', { name: /^Sign in as / })).toHaveCount(own.length);
+  for (const [role, name, email] of own) {
+    await expect(
+      accounts.getByRole('button', { name: `Sign in as ${name} (${role})` }),
+    ).toBeVisible();
+    expect(await demoEmail(page, role)).toBe(email);
+  }
+  for (const name of ['Clara Amberly', 'Alina Starling', 'Olga Ledgerby', 'Arno Keystone']) {
+    await expect(accounts.getByText(name)).toHaveCount(0);
+  }
+
+  const member = await signIn(page, 'Member');
+  expect(member).toBe('Katrin Ahrenfeld');
+  await signOut(page, member);
+  const office = await signIn(page, 'Office');
+  expect(office).toBe('Heike Buchwald');
+});
+
 test('the account menu still signs out too', async ({ page }) => {
   const name = await signIn(page, 'Member');
 
@@ -128,8 +158,10 @@ test.describe('the navigation', () => {
 });
 
 test.describe('the schedule', () => {
-  /** The school's rooms (internal/seed/demo.go, werkstattLocations). */
-  const rooms = /^(Oben|Unten|Trainingsraum)$/;
+  /** The school's rooms (internal/seed/werkstatt.go, its locations). */
+  const rooms = /^(Oben|Unten|Online|Trainingsraum)$/;
+  /** The rooms in the house's order (their positions). */
+  const order = ['Oben', 'Unten', 'Online', 'Trainingsraum'];
 
   test('desktop: each day in room columns, none of them empty', async ({ page, isMobile }) => {
     test.skip(isMobile, 'phones get one column');
@@ -161,10 +193,10 @@ test.describe('the schedule', () => {
     const days = page.getByRole('main').getByRole('region');
     await expect(lessons(days.first()).first()).toBeVisible();
 
-    // The rooms' positions (internal/seed/demo.go); a day shows the rooms it uses.
-    const order = ['Oben', 'Unten', 'Trainingsraum'];
+    // A day shows the rooms it uses, in the rooms' order.
     const count = await days.count();
     expect(count).toBeGreaterThan(0);
+    const seen: string[][] = [];
     for (let i = 0; i < count; i++) {
       const names = await days
         .nth(i)
@@ -179,17 +211,54 @@ test.describe('the schedule', () => {
       const places = names.map((name) => order.indexOf(name));
       expect(places).not.toContain(-1);
       expect(places).toEqual([...places].sort((a, b) => a - b));
+      seen.push(names);
     }
+    // Tuesdays and Wednesdays use all four rooms, and the list spans 14 days.
+    expect(seen).toContainEqual(order);
   });
 
   test('phone: one column of cards, no room columns', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'wider screens get room columns');
     await gotoDemo(page, '/schedule');
-    const day = page.getByRole('main').getByRole('region').first();
-    await expect(lessons(day).first()).toBeVisible();
+    const days = page.getByRole('main').getByRole('region');
+    await expect(lessons(days.first()).first()).toBeVisible();
 
-    await expect(day.getByRole('list')).toHaveCount(1);
-    await expect(day.getByRole('list', { name: rooms })).toHaveCount(0);
+    const count = await days.count();
+    expect(count).toBeGreaterThan(0);
+    for (let i = 0; i < count; i++) {
+      await expect(days.nth(i).getByRole('list')).toHaveCount(1);
+      await expect(days.nth(i).getByRole('list', { name: rooms })).toHaveCount(0);
+    }
+
+    // Even a day in all four rooms (Tuesdays and Wednesdays) stays one list:
+    // the cards name their rooms instead.
+    let busy = days;
+    for (const room of order) {
+      busy = busy.filter({
+        has: page.getByText(`${room} · Tanzhaus am Lindenhof`, { exact: true }),
+      });
+    }
+    await expect(busy.first()).toBeVisible();
+    await expect(busy.first().getByRole('list')).toHaveCount(1);
+  });
+
+  test('a card names its levels by their codes, read out by their names', async ({ page }) => {
+    await gotoDemo(page, '/schedule');
+    const main = page.getByRole('main');
+    await expect(lessons(main).first()).toBeVisible();
+
+    // Most adult ballet classes are for Anfänger to Mittelstufe, on every
+    // weekday but Sunday (internal/seed/werkstatt.go); the list spans 14 days.
+    // `has` is relative to each group, so not the `main`-scoped locator.
+    const card = main
+      .getByRole('group', { name: /^Ballett Erwachsene, / })
+      .filter({ has: page.getByText('A/M', { exact: true }) })
+      .first();
+    await expect(card).toBeVisible();
+    const label = (await card.getAttribute('aria-label')) ?? '';
+    await expect(
+      card.getByRole('button', { name: label, exact: true }),
+    ).toHaveAccessibleDescription(/Audience: Anfänger–Mittelstufe/);
   });
 
   test('days on bands in their tone, rooms named above their columns', async ({
@@ -254,10 +323,10 @@ test.describe('the schedule', () => {
 });
 
 test.describe('booking with the square button', () => {
-  // An adult of the seed without children (internal/seed/demo.go,
-  // demoHouseholds; emails are given.family@host): she books for herself
-  // only, so her cards book, cancel and join directly.
-  const member = { name: 'Irene Inkwell', email: 'irene.inkwell@example.com' };
+  // An adult of the seed without children (internal/seed/werkstatt.go, its
+  // households; emails are given.family@host): she books for herself only,
+  // so her cards book, cancel and join directly.
+  const member = { name: 'Ingrid Kranich', email: 'ingrid.kranich@mail.example' };
 
   test('books a workshop with "Book" and cancels it with "Cancel"', async ({ page }) => {
     await gotoDemo(page, '/login');
@@ -306,8 +375,8 @@ test.describe('booking with the square button', () => {
 });
 
 test("home lists the member's booked lessons and opens one in the schedule", async ({ page }) => {
-  // The demo member's family is in several weekly classes on different
-  // days (internal/seed/demo.go), so the coming week always has some.
+  // The demo member's family is in weekly classes from Monday to Saturday
+  // (internal/seed/werkstatt.go), so the coming week always has some.
   await signIn(page, 'Member');
   expect(new URL(page.url()).hash).toBe('#/');
 
@@ -354,13 +423,14 @@ test('the office marks a participant present in the table', async ({ page, isMob
   const main = page.getByRole('main');
   await expect(lessons(main).first()).toBeVisible();
 
-  // Every ballet class of the seed has members, booked into its past
-  // lessons, and nobody took the attendance of the ballet ones.
+  // Every adult ballet class of the seed has members, booked into its past
+  // lessons, and nobody took their attendance (internal/seed/werkstatt.go,
+  // attendanceSkipped).
   await main
-    .getByRole('button', { name: /^Classical Ballet, / })
+    .getByRole('button', { name: /^Ballett Erwachsene, / })
     .first()
     .click();
-  const sheet = page.getByRole('dialog', { name: 'Classical Ballet' });
+  const sheet = page.getByRole('dialog', { name: 'Ballett Erwachsene' });
   const table = sheet
     .getByRole('region', { name: 'Participants' })
     .getByRole('table', { name: 'Booked participants' });
