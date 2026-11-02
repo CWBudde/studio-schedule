@@ -316,21 +316,21 @@ func TestMigrateDownWithoutMigrations(t *testing.T) {
 }
 
 // migrateFailNewest rolls back the two newest migrations of a new database,
-// breaks the newest one (00035 adds the column classes.all_levels, which
+// breaks the newest one (00036 adds the audit action mcp-tool-called, which
 // then exists already) and runs migrate up, which must fail. It returns the
 // database, the embedded migrations, and the output and error of up.
 func migrateFailNewest(t *testing.T) (url string, embedded []string, out string, err error) {
 	t.Helper()
 
 	embedded = migrateEmbedded(t)
-	if last := embedded[len(embedded)-1]; last != "00035_class_audience.sql" {
-		t.Fatalf("the newest migration is %s; migrateFailNewest breaks 00035 on purpose and needs updating", last)
+	if last := embedded[len(embedded)-1]; last != "00036_mcp_audit.sql" {
+		t.Fatalf("the newest migration is %s; migrateFailNewest breaks 00036 on purpose and needs updating", last)
 	}
 
 	url = newTestDatabase(t)
 	migrateRun(t, url, "down")
 	migrateRun(t, url, "down")
-	execSQL(t, url, "ALTER TABLE classes ADD COLUMN all_levels boolean")
+	execSQL(t, url, "INSERT INTO audit_actions (action) VALUES ('mcp-tool-called')")
 
 	out, err = execute(map[string]string{"DATABASE_URL": url}, "migrate", "up")
 	if err == nil {
