@@ -390,7 +390,44 @@ PLAN.md Phase 12, "Read tools": the person part. This task needs Task 1.1 on mai
 
 ## Task 2.2
 
-- [ ] 2.2 `mcp-free-rooms` A service method for the rooms of a location free at a date, time and duration, and its read tool `free_rooms` — see "Task 2.2".
+- [x] 2.2 `mcp-free-rooms` A service method for the rooms of a location free at a date, time and duration, and its read tool `free_rooms` — see "Task 2.2".
+  - Done: `CatalogService.FreeRooms` and `FreeRoomsQuery` as planned (`internal/service/free_rooms.go`),
+    plus `MaxFreeRoomsDuration`. It reads with existing methods only (no repo change): the school's
+    zone (`loadSchool`), the rooms list, and per room `ListRoomOverlaps`, the overlap the office
+    meets when it places a lesson (`roomFree`), rather than the date range read. By construction
+    this also counts a lesson that started the day before and is still running, which no test
+    covers on its own. Field errors on `date`, `start` and `duration`, checked before the store is
+    touched; an unknown location and a school without settings are not found. Rentals block
+    (pinned), and so do hidden lessons.
+
+    The tool `free_rooms` is `public` like `listRooms`, has no person data, and returns
+    `{rooms: [{id, name, location: {id, name}}]}`. The location names come from `Catalog.Locations`.
+
+    Tests:
+    - `servicetest.FreeRooms` runs on both stores (`TestFreeRoomsScenarios`, memory and PostgreSQL).
+      It covers overlap on both edges (back to back is free), canceled and other-date lessons, a
+      rental, a hidden lesson, the location filter and order, and an unknown location. The
+      instants come from the school's zone, and one case fails if the date is read in UTC.
+    - Memory unit tests cover validation, `ErrNoSchool`, and a `SweepFaults` sweep over every
+      store call.
+    - The tool's tests check each time case against the office's `schedule` of that day. They
+      also cover a golden (`testdata/free_rooms.json`), the hidden rental a member cannot see,
+      the input errors, the schema, the audit row, and no settings or a failing store. The
+      `mcp_test.go` tool lists and Review focus 2 (`"Zebulon"` in each of the four arguments)
+      include it.
+
+    Coverage is 99.0 % total. `free_rooms.go`, `tools_rooms.go` and `mcpserver` are at 100 %.
+
+    Deviations and discoveries:
+    - `date`, `start` and `durationMinutes` are required. A missing `start` would otherwise
+      decode to 00:00, a valid time.
+    - `durationMinutes` is its own type `minutes`. With a plain `int`, the decoder's error
+      repeats a non-integer value, which `decode` promises never to do.
+    - The minutes are clamped before the multiplication: 2^53+60 minutes would otherwise
+      overflow to a valid 60 minutes.
+    - `handler`'s doc no longer says "plain string fields".
+    - The tool shows a member that a room is taken by a lesson they cannot see (a rental or a
+      hidden lesson), but never which lesson or who. docs/mcp.md says so.
 
 PLAN.md Phase 12, "Read tools": "rooms free at a time". This task needs Task 1.1 on main.
 

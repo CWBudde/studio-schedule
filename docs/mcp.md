@@ -115,16 +115,29 @@ nothing runs, and the refusal is audited. A tool that is not listed (for its acc
 ## Tools
 
 Every tool of this version only reads (`readOnlyHint`, `idempotentHint`) and returns no person
-data. Each returns the JSON document of the command it mirrors, which is the response body of that
-command's API operation in [api/openapi.json](../api/openapi.json); a test asserts that a tool and
-its command return the same document. Resources and prompts follow in later versions.
+data. A tool that mirrors a command returns that command's JSON document, which is the response
+body of its API operation in [api/openapi.json](../api/openapi.json); a test asserts that the tool
+and its command return the same document. `free_rooms` mirrors no command; its result is described
+below. Resources and prompts follow in later versions.
 
 | Name         | Access   | Personal data | Write group | Mirrors                                          |
 | ------------ | -------- | ------------- | ----------- | ------------------------------------------------ |
 | `schedule`   | `public` | no            | –           | `lessons list --output json` (getSchedule)       |
+| `free_rooms` | `staff`  | no            | –           | – (no command; `CatalogService.FreeRooms`)       |
 | `statistics` | `office` | no            | –           | `stats --output json` (getStatistics), see below |
 | `db_check`   | `admin`  | no            | –           | `db check --output json`                         |
 | `doctor`     | `admin`  | no            | –           | `doctor --output json`                           |
+
+**`free_rooms`**: the rooms free on `date` (a school date, YYYY-MM-DD) from `start` (the school's
+wall clock time, HH:MM) for `durationMinutes` (whole minutes, more than 0 and at most 720, which is
+12 hours), optionally only those of the location `locationId` (an ID; an unknown one is not found).
+`date`, `start` and `durationMinutes` are required. A room is taken while any lesson that is not
+canceled overlaps the time: a room rental and a hidden lesson take it too. The tool is for staff
+(`staff`): a member would learn from it that a room is taken by a hidden lesson or a rental they do
+not see in `schedule`. A lesson that ends when the time starts, or
+starts when it ends, leaves the room free. The result is
+`{rooms: [{id, name, location: {id, name}}]}`, ordered by location name, then as the location
+orders its rooms; the list is empty when no room is free.
 
 **`schedule`**: the lessons from `from` through `to` (school dates, YYYY-MM-DD, both inclusive; by
 default today and the next 6 days, at most 42 days), optionally only those of a `location`, a
