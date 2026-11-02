@@ -88,7 +88,48 @@ The inputs and conditions most likely to bite, each with its test in the owning 
 
 ## Task 1.1
 
-- [ ] 1.1 `mcp-server` The `studio-schedule mcp` server over stdio with the call wrapper (actor checked again on every call, `mcp-tool-called` audit, `domain.ChannelMCP`), `--personal-data` and `--allow-writes`, and the first read tools that return no person data — see "Task 1.1".
+- [x] 1.1 `mcp-server` The `studio-schedule mcp` server over stdio with the call wrapper (actor checked again on every call, `mcp-tool-called` audit, `domain.ChannelMCP`), `--personal-data` and `--allow-writes`, and the first read tools that return no person data — see "Task 1.1".
+  - Done: `domain.ChannelMCP`, `AuditMCPToolCalled` (actor, no target, Via mcp, `Tool` and
+    `Outcome` both set, and only on it), migration 00036, `AuthService.RecordToolCall`, and the
+    audit API's `tool`/`outcome` (`just gen-api`). `cli.Spec.Channel` and `cli.Env.Actor` (exit 3
+    after a disable, 4 after a demotion), plus `Env.Stdin`/`Env.Stdout` for the transport.
+    `cmd/studio-schedule/diagnose` now computes the `doctor` and `db check` reports for both the
+    commands and the tools; the schema errors moved to `cli.ErrSchemaOutdated`/`ErrSchemaNewer`.
+    `mcpserver` keeps the plan's names, with three deviations:
+    - `Options` also carries `Checks diagnose.Env` (the command's env, for `doctor`; `New` refuses
+      nil) and `Logger`;
+    - `tool.add` is `func(s *Server, t tool)`, built by the generic `handler[In]`;
+    - `ParseWriteGroups` validates `--allow-writes` (a field error, exit 2).
+
+    Tools: `schedule` (public; without `--personal-data` each lesson drops `bookedFor`, `waitlist`
+    and `renter`; instructors stay, as the public schedule shows them), `statistics` (office;
+    `topParticipants` absent), `doctor` and `db_check` (admin). Member and instructor get
+    `schedule`, the office also `statistics`, the admin all four. Every signed-in role reaches
+    `schedule`, so the exit 4 for "a role that reaches no tool" cannot happen and has no branch
+    (docs/mcp.md says so). Tests: `TestMCP*` in `cmd/studio-schedule/mcp_test.go` drive the real
+    `mcp` command through pipes on both stores. They cover the tool list per role and flag,
+    the audit row, Review focus 1 (disable and demotion: an error result, nothing ran, one
+    `forbidden` row) and Review focus 2 (`"Zebulon"` in five arguments; it is in neither stderr
+    nor the audit rows), the command's exit codes 2/3, and parity against `lessons list`,
+    `stats`, `doctor` and `db check`. `mcpserver`'s own tests cover the write-group and
+    personal-data filters with a test-only registry (no real write or person tools yet), every
+    input schema, each outcome kind, a failed audit write, the inputs, and goldens in
+    `mcpserver/testdata` (`-update`). Coverage 99.0 % total; `mcpserver` and `mcp.go` at 100 %.
+
+    Discoveries:
+    - The SDK's typed `mcp.AddTool` validates the arguments before the handler runs, so a bad call
+      would skip the wrapper and its audit row. The tools use `Server.AddTool` and decode the
+      arguments only after the account check; a bad call is an audited `invalid` call.
+    - A call to an unlisted tool is the SDK's JSON-RPC error `unknown tool`: nothing runs and no
+      row is written.
+    - The SDK's logger gets no request parameters, so the command shares its stderr logger.
+    - Audit events keep their actor (RESTRICT, ADR 0016), so an account that has called a tool can
+      be disabled but no longer deleted. docs/mcp.md advises a dedicated account.
+
+    Residual gaps:
+    - On PostgreSQL, the refusal row of an account deleted before its first call fails on the
+      foreign key; the call is refused all the same, with "internal error" and a log line.
+    - SIGINT or SIGTERM ends `mcp` with exit 1 ("context canceled").
 
 PLAN.md Phase 12: "Read tools", the server part ("With them the server itself …") and the tools
 without person data. The other read tools are Task 2.1.
