@@ -110,7 +110,7 @@ everything the tools and resources return, and what the assistant's user types.
 
 - **Without `--personal-data`** the tools return no person data: the schedule (without who is
   booked, waiting or renting), the statistics totals (without the top participants), `doctor` and
-  `db check`; the resources the settings, the timetable and the glossary.
+  `db check`; the resources are the settings, the timetable and the glossary.
 - **With `--personal-data`** the tools also return person data, and the resources `lesson://{id}`
   (participants and waiting list) and `person://{id}` (a person without the date of birth) are
   listed. Turn it on only once the operator
