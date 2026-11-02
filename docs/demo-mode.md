@@ -163,9 +163,11 @@ button.
 
 The demo offers one fictional school per theme (ADR 0018), on the same site: **programme**
 ("Studio Demo — Ballet & Dance", the app's own look, English) and **werkstatt** ("Tanzhaus am
-Lindenhof", the Werkstatt look, German, with a background photo). They share every person and class
-(`seed.DemoSchoolAt`); the settings differ (name, theme, accent, language, background, imprint and
-receipt issuer; the seeded receipts are the werkstatt school's own, in German), and so do the
+Lindenhof", the Werkstatt look, German, with a background photo). Each school is built from its
+own tables (`schoolSpec` in `internal/seed`: `programme()` and `werkstatt()`, `seed.DemoSchoolAt`),
+and a digest test pins the programme school's dataset. For now the werkstatt tables are the
+programme's people and classes with their own settings (name, theme, accent, language, background,
+imprint and receipt issuer; the seeded receipts are the werkstatt school's own, in German) and
 places: the werkstatt school has one house with the rooms "Oben", "Unten" and "Trainingsraum".
 
 - **Choosing:** `web/src/features/demo/school.ts`. The page address may name the school outside the
@@ -197,8 +199,8 @@ places: the werkstatt school has one house with the rooms "Oben", "Unten" and "T
 The demo is a _demo installation_ (`app.Deps.Demo`, also set for `serve` with `DEMO_MODE=true`):
 
 - **Demo accounts:** every seeded account has the published password `demo-password`, and
-  `GET /api/v1/demo/logins` lists one account per role (member, instructor, office, admin) for the
-  login page. One more is a managed dependent (ADR 0008): Sophie Hollowmere, a teenager with an
+  `GET /api/v1/demo/logins` lists one account per role (member, instructor, office, admin) of the
+  school seeded for the login page (`seed.SchoolLogins`; `serve` lists the programme school's). One more is a managed dependent (ADR 0008): Sophie Hollowmere, a teenager with an
   account of her own (`sophie.hollowmere@example.com`), who books her classes herself; the admin
   can also "sign in as" her from Accounts. Another is the accompanist Felix Keysworth
   (`felix.keysworth@example.net`, an instructor account linked to his staff record), who sees the

@@ -147,7 +147,36 @@ react-i18next, Vitest, Playwright.
   sheet edits ages in half years, so a class stored through the API with other months (e.g. 40)
   shows 3.333 and must be retyped before it saves.
 
-- [ ] 4.1 `seed-split` Each demo school is built from its own tables (`schoolSpec`); the programme dataset stays byte-identical (digest test); per-school validity, overlap and login tests replace `TestDemoSchoolSameData`; `SchoolLogins` wired into the WASM demo — see "Task 4.1" below.
+- [x] 4.1 `seed-split` Each demo school is built from its own tables (`schoolSpec`); the programme dataset stays byte-identical (digest test); per-school validity, overlap and login tests replace `TestDemoSchoolSameData`; `SchoolLogins` wired into the WASM demo — see "Task 4.1" below.
+
+  Done: `TestProgrammeDatasetUnchanged` (SHA-256 of `DemoAt(FixedDemoAnchor)` as JSON) committed
+  before the refactor; `schoolSpec` in `demo.go`, `programme()` in `programme.go` (every table
+  moved, the term name as `programmeTermName`), `werkstatt()` in `werkstatt.go` (programme's tables
+  with the Werkstatt settings, the embedded background, a fresh copy per call, and the places), and
+  `schoolOf` in place of `schoolData`; the builder reads only `b.s`. `holds` and the `placeIDs`
+  padding stay for 5.1. Both schools are byte-identical to before: a temporary digest test (not
+  committed) matched both schools at three anchors. `SchoolLogins` (and `DemoLogins` through the
+  same `loginsOf`, so no unreachable error branch), `cmd/wasm` lists the logins of the school it
+  seeds, and `TestWerkstattDemoLogins` (`internal/app`, `newSchoolAuthApp`) checks that
+  `/api/v1/demo/logins` of a Werkstatt app equals `SchoolLogins(SchoolWerkstatt)` and each signs in
+  (`cmd/wasm` itself is js-only). Per school (`forEachSchool` in `schools_test.go`):
+  `TestDemoValid`, `TestDemoReferences`, `TestDemoTimetableConflicts`, `TestDemoChildren`,
+  `TestLoadDemoRoundTrip` (the background read back too), and the new `TestDemoWorkshopsFree` (a
+  workshop or the rental against each class's weekly meeting on that date in its room, and against
+  the room's other lessons), `TestDemoInstructorsNeverDoubleBooked`, `TestSchoolLogins` (through
+  `service.AuthService` on a store loaded with the school). `TestDemoSchoolSameData` is gone; what
+  it checked beyond "same data" lives in `TestDemoSchoolProgrammeIsDemoAt` and
+  `TestDemoReceiptsIssuedWithSchoolSettings` (every school's receipts with its own locale, issuer,
+  footer, tax, currency and prefix, the line in its language). Coverage 99.0 % total;
+  `internal/seed` 91.3 % → 91.6 %, the same uncovered panic and store-error branches as before. e2e 240 passed, 1
+  flaky (below). Deviations and discoveries: `schoolSpec` also has `office` (the person whose
+  account sells passes, writes the announcements and takes attendance) and `guests`, `trialists`,
+  `trialNotes`, since the builder had those names hard-coded and 5.1 needs German ones; the test
+  helper `exampleEmail` accepts `*.example` hosts for 5.1's addresses; the single-year branch of the
+  term name ("School Year 2027") was and stays uncovered (no test uses an anchor from late January
+  to late February, whose term lies in one calendar year); the generated-files check fails in a
+  fresh worktree until `just web-install`; `werkstatt.spec.ts` "a guardian's square button opens the
+  lesson" failed once on desktop and passed in five repeats (flaky, the data is unchanged).
 
 - [ ] 5.1 `werkstatt-data` The Werkstatt school's own data from spec §3: German people, staff and accounts, the Online room, five levels, 23 course types, the 70-class plan, Sunday workshops, a rental, German passes and announcements; ADR 0018 amendment, docs/demo-mode.md, e2e — see "Task 5.1" below.
 

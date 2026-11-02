@@ -4,7 +4,6 @@ package seed
 
 import (
 	"context"
-	_ "embed"
 	"errors"
 	"fmt"
 	"slices"
@@ -50,12 +49,12 @@ func DemoSettings() domain.Settings {
 	}
 }
 
-// School selects one of the fictional demo schools (ADR 0018). They share
-// every person, class and all the history and differ in their settings
-// (their name, imprint, receipt issuer, theme, accent color, language and
-// background, and so in the receipts issued with them) and in their
-// places: the werkstatt school's one house holds the same classes in
-// fewer rooms.
+// School selects one of the fictional demo schools (ADR 0018). Each school
+// is built from its own tables (schoolSpec). For now the werkstatt school's
+// tables are the programme school's apart from its settings (its name,
+// imprint, receipt issuer, theme, accent color and language, and so the
+// receipts issued with them), its background and its places: its one house
+// holds the same classes in fewer rooms.
 // The zero School is not valid: a caller names the school it wants.
 type School string
 
@@ -88,52 +87,21 @@ func ParseSchool(name string) (school School, ok bool) {
 	return SchoolProgramme, false
 }
 
-// werkstattBackground is the Werkstatt school's background image, a CC0
-// photo (assets/README.md).
-//
-//go:embed assets/werkstatt-background.jpg
-var werkstattBackground string
-
-// schoolData returns the settings, the background and the places of school:
-// the programme school's are DemoSettings, none and demoLocations; the
-// werkstatt school has its own identity (name, imprint, receipt issuer and
-// prefix), theme, accent, language, background and places
-// (werkstattLocations), and the programme school's rules.
-func schoolData(school School) (domain.Settings, domain.Background, []locationSpec, error) {
-	settings := DemoSettings()
-
+// schoolOf returns the tables school is built from: programme() or
+// werkstatt(). An unknown school fails with domain.ErrValidation.
+func schoolOf(school School) (schoolSpec, error) {
 	switch school {
 	case SchoolProgramme:
-		return settings, domain.Background{}, demoLocations, nil
+		return programme(), nil
 	case SchoolWerkstatt:
-		// A fictional name; the accent passes the 4.5:1 contrast check,
-		// and its dark variant is derived from it (domain.DarkAccent).
-		settings.SchoolName = "Tanzhaus am Lindenhof"
-		settings.Theme = domain.ThemeWerkstatt
-		settings.AccentColor = "#9c215b"
-		settings.DefaultLocale = "de"
-		settings.ReceiptPrefix = "TL"
-		// A fictional imprint and issuer, like the programme school's: the
-		// street, the town, the tax number and the bank exist nowhere.
-		settings.LegalNotice = "Tanzhaus am Lindenhof · Lindenhofweg 12 · 10999 Beispielstadt\n" +
-			"Eine erfundene Schule: Alle Namen, Adressen und Nummern in dieser Demo sind ausgedacht."
-		settings.Receipts.Issuer = domain.ReceiptIssuer{
-			Name: "Tanzhaus am Lindenhof", Address: "Lindenhofweg 12\n10999 Beispielstadt",
-			TaxID: "99/999/99999", Email: "buero@tanzhaus-lindenhof.example", Phone: "+49 000 0000000",
-		}
-		settings.Receipts.Footer = "Bankverbindung: Beispielbank · IBAN XX00 0000 0000 0000 0000 00"
-
-		// A fresh copy: the store owns what it is given.
-		background := domain.Background{ContentType: domain.BackgroundJPEG, Data: []byte(werkstattBackground)}
-
-		return settings, background, werkstattLocations, nil
+		return werkstatt(), nil
 	default:
 		names := make([]string, 0, len(Schools()))
 		for _, s := range Schools() {
 			names = append(names, string(s))
 		}
 
-		return domain.Settings{}, domain.Background{}, nil, fmt.Errorf("seed: unknown demo school %q, want one of %s: %w",
+		return schoolSpec{}, fmt.Errorf("seed: unknown demo school %q, want one of %s: %w",
 			school, strings.Join(names, ", "), domain.ErrValidation)
 	}
 }

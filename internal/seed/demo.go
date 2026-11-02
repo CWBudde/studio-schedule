@@ -50,7 +50,7 @@ func Demo() Dataset { return DemoAt(FixedDemoAnchor) }
 // DemoAt panics if the demo time zone cannot be loaded (no zoneinfo
 // database); LoadDemoAt reports that as an error instead.
 func DemoAt(anchor domain.Date) Dataset {
-	d, err := demoAt(anchor, DemoSettings(), demoLocations)
+	d, err := demoAt(anchor, programme())
 	if err != nil {
 		panic(err)
 	}
@@ -58,51 +58,42 @@ func DemoAt(anchor domain.Date) Dataset {
 	return d
 }
 
-// DemoSchoolAt is DemoAt for the demo school school: the same data, with
-// the school's settings, background and places (School), and its receipts
+// DemoSchoolAt is DemoAt for the demo school school, built from its own
+// tables (School), with its settings and background, and its receipts
 // issued with those settings (issuer, language, number and line text). An
 // unknown school fails with domain.ErrValidation.
 func DemoSchoolAt(anchor domain.Date, school School) (Dataset, error) {
-	settings, background, locations, err := schoolData(school)
+	s, err := schoolOf(school)
 	if err != nil {
 		return Dataset{}, err
 	}
 
-	if !background.IsZero() {
-		if err := background.Validate(); err != nil {
+	if !s.background.IsZero() {
+		if err := s.background.Validate(); err != nil {
 			return Dataset{}, fmt.Errorf("seed: background of %s: %w", school, err)
 		}
 	}
 
-	// Built with the school's own settings, so its receipts name its
-	// issuer, in its language.
-	d, err := demoAt(anchor, settings, locations)
-	if err != nil {
-		return Dataset{}, err
-	}
-
-	d.Background = background
-
-	return d, nil
+	return demoAt(anchor, s)
 }
 
-// demoAt builds the demo data for anchor with the school's settings, which
-// the receipts are issued with, and its locations and rooms; everything else
-// is the same for every school.
-func demoAt(anchor domain.Date, settings domain.Settings, locations []locationSpec) (Dataset, error) {
+// demoAt builds the demo data for anchor from the school's tables s, with
+// its settings, which the receipts are issued with, and its background.
+func demoAt(anchor domain.Date, s schoolSpec) (Dataset, error) {
 	// The workshops start at wall-clock times of the school.
-	loc, err := time.LoadLocation(settings.Timezone)
+	loc, err := time.LoadLocation(s.settings.Timezone)
 	if err != nil {
-		return Dataset{}, fmt.Errorf("seed: demo time zone %q: %w", settings.Timezone, err)
+		return Dataset{}, fmt.Errorf("seed: demo time zone %q: %w", s.settings.Timezone, err)
 	}
 
 	termStart := anchor.AddDays(-termLeadDays)
 
 	b := builder{
+		s:           s,
 		loc:         loc,
 		termStart:   termStart,
 		seq:         ids.NewSequence(),
-		d:           Dataset{Settings: settings},
+		d:           Dataset{Settings: s.settings, Background: s.background},
 		persons:     map[string]domain.PersonID{},
 		rooms:       map[string]domain.RoomID{},
 		staff:       map[string]domain.StaffID{},
@@ -110,78 +101,125 @@ func demoAt(anchor domain.Date, settings domain.Settings, locations []locationSp
 		levels:      map[string]domain.LevelID{},
 	}
 
-	for _, h := range demoHouseholds {
+	for _, h := range s.households {
 		b.household(h)
 	}
 
-	for _, l := range locations {
+	for _, l := range s.locations {
 		b.location(l)
 	}
 
 	// A school with fewer places than the programme's skips the IDs they
-	// would take, so that every later entity has the same ID in both.
-	for range placeIDs(demoLocations) - placeIDs(locations) {
+	// would take, so that every later entity has the same ID in both. The
+	// padding keeps the werkstatt school's IDs aligned with the programme's
+	// until it has tables of its own (task 5.1).
+	for range placeIDs(programme().locations) - placeIDs(s.locations) {
 		b.seq.NewUUID()
 	}
 
-	for _, s := range demoStaff {
-		b.staffMember(s)
+	for _, st := range s.staff {
+		b.staffMember(st)
 	}
 
-	for _, c := range demoCourseTypes {
+	for _, c := range s.courseTypes {
 		b.courseType(c)
 	}
 
-	for _, l := range demoLevels {
+	for _, l := range s.levels {
 		b.level(l)
 	}
 
 	termEnd := termStart.AddDays(termDays - 1)
 	term := domain.Term{
 		ID:       ids.New[domain.TermID](b.seq),
-		Name:     termName(termStart, termEnd),
+		Name:     s.termName(termStart, termEnd),
 		StartsOn: termStart,
 		EndsOn:   termEnd,
 	}
 	b.d.Terms = append(b.d.Terms, term)
 
-	for _, c := range demoClasses {
+	for _, c := range s.classes {
 		b.class(term.ID, c)
 	}
 
-	for _, w := range demoWorkshops {
+	for _, w := range s.workshops {
 		b.workshop(anchor, w)
 	}
 
 	b.history(anchor)
 	b.memberBookings()
-	b.fullWorkshop(anchor, demoFullWorkshop)
-	b.staffBookings(anchor, demoStaffBookings)
+	b.fullWorkshop(anchor, s.fullWorkshop)
+	b.staffBookings(anchor, s.staffBookings)
 	b.passes(anchor)
 	b.attendance(anchor)
 	b.visitors(anchor)
 	b.announcements(anchor)
 	b.duplicates()
 	// Last, so every other entity keeps its ID.
-	b.rental(anchor, demoRental)
+	b.rental(anchor, s.rental)
 
 	return b.d, nil
 }
 
-// termName is "School Year 2026/27", or "School Year 2027" for a term
-// within one calendar year.
-func termName(start, end domain.Date) string {
-	if start.Year == end.Year {
-		return fmt.Sprintf("School Year %d", start.Year)
-	}
-
-	return fmt.Sprintf("School Year %d/%02d", start.Year, end.Year%100)
-}
-
 // ------------------------------------------------------------------ tables
-//
-// All names, addresses, phone numbers and emails are invented. Emails use
-// the reserved example domains only.
+
+// schoolSpec is everything a demo school is built from: its settings and
+// background, and the tables of its people, places, timetable and history.
+// The names in the tables are keys that the other tables refer to; a
+// person's key is "Given Family".
+type schoolSpec struct {
+	// settings are the school's settings; its receipts are issued with them.
+	settings domain.Settings
+	// background is the school's background image, zero for none.
+	background domain.Background
+	// households are the families, single adults and staff members' person
+	// records, with their accounts.
+	households []householdSpec
+	// locations are the school's places and their rooms.
+	locations []locationSpec
+	// staff are the instructors and accompanists.
+	staff []staffSpec
+	// levels is the level scale, from least to most advanced.
+	levels []levelSpec
+	// courseTypes are the course types, by name.
+	courseTypes []domain.CourseType
+	// classes are the weekly classes of the term.
+	classes []classSpec
+	// workshops are the one-off workshops after the anchor.
+	workshops []workshopSpec
+	// fullWorkshop is the workshop booked up, with a waiting list.
+	fullWorkshop fullWorkshopSpec
+	// staffBookings are the participants an instructor added to her first
+	// workshop.
+	staffBookings staffBookingsSpec
+	// rental is the room rented out to an outside renter.
+	rental rentalSpec
+	// passTypes is the pass catalog.
+	passTypes []domain.PassType
+	// passes are the passes sold and given away.
+	passes []passSpec
+	// announcements are the office's announcements.
+	announcements []announcementSpec
+	// duplicates are the persons that the duplicate detection finds in pairs.
+	duplicates []domain.Person
+	// office is the person key of the office worker whose account sells the
+	// passes, writes the announcements and records attendance for
+	// instructors without a login.
+	office string
+	// attendanceSkipped is the course type whose lessons have no attendance
+	// taken yet.
+	attendanceSkipped string
+	// guests are the walk-in guests the instructors added to past lessons,
+	// in turn.
+	guests []string
+	// trialists are the person keys of those who tried a class they are no
+	// member of, in turn.
+	trialists []string
+	// trialNotes are the notes of the trials, in turn; empty for none.
+	trialNotes []string
+	// termName names the term, e.g. "School Year 2026/27".
+	termName func(start, end domain.Date) string
+}
 
 // adultSpec is an adult of a household. A zero role means no account.
 type adultSpec struct {
@@ -208,81 +246,6 @@ type householdSpec struct {
 	children []childSpec
 }
 
-var demoHouseholds = []householdSpec{
-	// Families with children.
-	{
-		"Amberly", "example.org",
-		[]adultSpec{{"Clara", domain.RoleMember, "+49 000 0000101"}, {"Tom", domain.RoleMember, ""}},
-		[]childSpec{{"Ella", date(2016, time.April, 12), ""}, {"Finn", date(2019, time.September, 3), ""}},
-	},
-	{
-		"Birchmoor", "example.com",
-		[]adultSpec{{"Hanna", domain.RoleMember, "+49 000 0000102"}},
-		[]childSpec{{"Lotta", date(2014, time.February, 20), ""}, {"Mia", date(2020, time.June, 15), ""}},
-	},
-	{
-		"Cloudsley", "example.org",
-		[]adultSpec{{"Jan", domain.RoleMember, ""}},
-		[]childSpec{{"Noah", date(2013, time.November, 8), ""}},
-	},
-	{
-		"Dunfield", "example.com",
-		[]adultSpec{{"Sara", domain.RoleMember, "+49 000 0000104"}, {"Ali", "", ""}},
-		[]childSpec{{"Leni", date(2017, time.January, 25), ""}},
-	},
-	{
-		"Elderwick", "example.org",
-		[]adultSpec{{"Petra", domain.RoleMember, ""}},
-		[]childSpec{
-			{"Ida", date(2012, time.July, 30), ""},
-			{"Emil", date(2015, time.March, 14), ""},
-			{"Rosa", date(2018, time.October, 1), ""},
-		},
-	},
-	{
-		"Fernwhistle", "example.com",
-		[]adultSpec{{"Marta", domain.RoleMember, ""}, {"Lukas", domain.RoleMember, "+49 000 0000106"}},
-		[]childSpec{{"Jona", date(2011, time.May, 19), ""}},
-	},
-	{
-		"Gildenmoor", "example.org",
-		[]adultSpec{{"Yara", domain.RoleMember, ""}},
-		[]childSpec{{"Kira", date(2016, time.December, 2), ""}, {"Ben", date(2014, time.August, 22), ""}},
-	},
-	{
-		"Hollowmere", "example.com",
-		[]adultSpec{{"David", domain.RoleMember, ""}},
-		// Sophie is a teenager with a login of her own: a managed
-		// dependent, who books her classes herself.
-		[]childSpec{{"Sophie", date(2010, time.March, 11), domain.RoleMember}},
-	},
-	{
-		"Ivorycombe", "example.org",
-		[]adultSpec{{"Nora", domain.RoleMember, "+49 000 0000109"}},
-		[]childSpec{{"Jakob", date(2015, time.July, 7), ""}},
-	},
-
-	// Adults without children.
-	{"Inkwell", "example.com", []adultSpec{{"Irene", domain.RoleMember, ""}}, nil},
-	{"Lanternby", "example.org", []adultSpec{{"Kai", domain.RoleMember, ""}}, nil},
-	{"Mistlewood", "example.com", []adultSpec{{"Lina", domain.RoleMember, "+49 000 0000112"}}, nil},
-	{"Nettlebury", "example.org", []adultSpec{{"Oskar", domain.RoleMember, ""}}, nil},
-	{"Pinecrest", "example.com", []adultSpec{{"Rhea", domain.RoleMember, ""}}, nil},
-	{"Quarrystone", "example.org", []adultSpec{{"Tilo", domain.RoleMember, ""}}, nil},
-	{"Rushwick", "example.com", []adultSpec{{"Vera", domain.RoleMember, ""}}, nil},
-	{"Sparrowhill", "example.org", []adultSpec{{"Wanda", domain.RoleMember, ""}}, nil},
-	{"Tallowfield", "", []adultSpec{{"Ute", "", "+49 000 0000118"}}, nil}, // walk-in guest without an account
-
-	// Staff and office.
-	{"Starling", "example.net", []adultSpec{{"Alina", domain.RoleInstructor, ""}}, nil},
-	{"Quillon", "", []adultSpec{{"Sofia", "", ""}}, nil},
-	// Felix accompanies; his instructor account sees the lessons he plays
-	// for. Alina comes first, so she stays the demo's instructor login.
-	{"Keysworth", "example.net", []adultSpec{{"Felix", domain.RoleInstructor, ""}}, nil},
-	{"Ledgerby", "example.net", []adultSpec{{"Olga", domain.RoleOffice, ""}}, nil},
-	{"Keystone", "example.net", []adultSpec{{"Arno", domain.RoleAdmin, ""}}, nil},
-}
-
 type locationSpec struct {
 	name    string
 	address string
@@ -295,28 +258,6 @@ type roomSpec struct {
 	name     string
 	capacity int
 	holds    []string
-}
-
-var demoLocations = []locationSpec{
-	{"Studio North", "Example Street 12, 00000 Example Town", []roomSpec{
-		{name: "Studio A", capacity: 20}, {name: "Studio B", capacity: 14}, {name: "Studio C", capacity: 10},
-	}},
-	{"Studio South", "Sample Road 3, 00000 Example Town", []roomSpec{
-		{name: "Hall 1", capacity: 24}, {name: "Hall 2", capacity: 12},
-	}},
-}
-
-// werkstattLocations are the werkstatt school's places: one house with two
-// halls, "Oben" and "Unten", and a training room. The halls hold the
-// classes of the programme's two largest rooms; the training room those of
-// the three small ones, whose classes and workshops never meet in time
-// (TestWerkstattPlaces). The address is fictional.
-var werkstattLocations = []locationSpec{
-	{"Tanzhaus am Lindenhof", "Lindenhofweg 12, 10999 Beispielstadt", []roomSpec{
-		{name: "Oben", capacity: 20, holds: []string{"Studio A"}},
-		{name: "Unten", capacity: 24, holds: []string{"Hall 1"}},
-		{name: "Trainingsraum", capacity: 14, holds: []string{"Studio B", "Hall 2", "Studio C"}},
-	}},
 }
 
 // placeIDs is the number of IDs the places of locations take.
@@ -338,43 +279,12 @@ type staffSpec struct {
 	active bool
 }
 
-var demoStaff = []staffSpec{
-	{"Alina Starling", "Alina Starling", domain.StaffInstructor, true},
-	{"Sofia Quillon", "Sofia Quillon", domain.StaffInstructor, true},
-	{"Marco Wrenfield", "", domain.StaffInstructor, true},
-	{"Jonas Featherby", "", domain.StaffInstructor, true},
-	{"Lea Moonfield", "", domain.StaffInstructor, true},
-	{"Nina Tapworth", "", domain.StaffInstructor, true},
-	{"Quentin Oldstage", "", domain.StaffInstructor, false}, // former instructor
-	{"Felix Keysworth", "Felix Keysworth", domain.StaffAccompanist, true},
-	{"Greta Ivorylane", "", domain.StaffAccompanist, true},
-}
-
-var demoCourseTypes = []domain.CourseType{
-	{Name: "Creative Dance", Description: "Playful movement and music for children aged 4 to 6."},
-	{Name: "Pre-Ballet", Description: "First ballet steps and posture for children aged 6 to 8."},
-	{Name: "Classical Ballet", Description: "Barre, center work and allegro with live piano."},
-	{Name: "Pointe Work", Description: "Pointe technique for advanced ballet students."},
-	{Name: "Contemporary", Description: "Floor work, release technique and improvisation."},
-	{Name: "Jazz Dance", Description: "Isolations, turns and jumps to jazz and pop music."},
-	{Name: "Hip-Hop", Description: "Grooves, footwork and choreography."},
-	{Name: "Tap", Description: "Rhythm and sound with tap shoes."},
-	{Name: "Barre Fitness", Description: "Strength and stretching at the barre, no experience needed."},
-}
-
 // levelSpec is a step on the school's level scale; the table lists them
 // from least to most advanced, so a level's position is its place in it.
 type levelSpec struct{ name, code string }
 
-var demoLevels = []levelSpec{
-	{"Beginner", "B"},
-	{"Intermediate", "I"},
-	{"Advanced", "A"},
-	{"Professional", "P"},
-}
-
-// audienceSpec is who a class is for: from and to name levels of the table
-// above (both or neither), all is for every level; ages are in months.
+// audienceSpec is who a class is for: from and to name levels of the
+// school's level scale (both or neither), all is for every level; ages are in months.
 type audienceSpec struct {
 	from, to       string
 	all            bool
@@ -391,8 +301,8 @@ var allLevels = audienceSpec{all: true}
 // ages is a class for children of an age, in months, instead of a level.
 func ages(from, to domain.AgeMonths) audienceSpec { return audienceSpec{ageFrom: from, ageTo: to} }
 
-// classSpec is a weekly class. Names refer to the tables above; members are
-// "Given Family" keys of persons.
+// classSpec is a weekly class. Names refer to the school's other tables;
+// members are "Given Family" keys of persons.
 type classSpec struct {
 	day         time.Weekday
 	start       domain.TimeOfDay
@@ -404,123 +314,6 @@ type classSpec struct {
 	audience    audienceSpec
 	capacity    int
 	members     []string
-}
-
-var demoClasses = []classSpec{
-	// Monday
-	{
-		time.Monday, at(15, 30), 45, "Studio C", "Creative Dance", "Sofia Quillon", "", ages(48, 72), 10,
-		[]string{"Mia Birchmoor", "Finn Amberly"},
-	},
-	{
-		time.Monday, at(16, 30), 60, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", level("Beginner"), 16,
-		[]string{"Rosa Elderwick", "Leni Dunfield", "Ella Amberly"},
-	},
-	{
-		time.Monday, at(17, 45), 75, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", level("Intermediate"), 16,
-		[]string{"Lotta Birchmoor", "Ben Gildenmoor", "Emil Elderwick"},
-	},
-	{
-		time.Monday, at(18, 0), 60, "Hall 1", "Hip-Hop", "Jonas Featherby", "", level("Beginner"), 20,
-		[]string{"Noah Cloudsley", "Jakob Ivorycombe"},
-	},
-	{
-		time.Monday, at(19, 15), 90, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", level("Advanced"), 16,
-		[]string{"Rhea Pinecrest", "Wanda Sparrowhill"},
-	},
-
-	// Tuesday
-	{
-		time.Tuesday, at(16, 0), 45, "Studio B", "Pre-Ballet", "Sofia Quillon", "", ages(72, 96), 12,
-		[]string{"Mia Birchmoor", "Rosa Elderwick"},
-	},
-	{
-		time.Tuesday, at(17, 0), 60, "Hall 1", "Jazz Dance", "Nina Tapworth", "", level("Beginner"), 20,
-		[]string{"Kira Gildenmoor", "Ella Amberly", "Emil Elderwick"},
-	},
-	{
-		time.Tuesday, at(18, 30), 75, "Studio A", "Contemporary", "Marco Wrenfield", "", level("Intermediate"), 18,
-		[]string{"Kai Lanternby", "Lina Mistlewood", "Marta Fernwhistle"},
-	},
-	{
-		time.Tuesday, at(19, 0), 60, "Hall 2", "Barre Fitness", "Nina Tapworth", "", allLevels, 12,
-		[]string{"Clara Amberly", "Irene Inkwell", "Vera Rushwick", "Hanna Birchmoor"},
-	},
-
-	// Wednesday
-	{
-		time.Wednesday, at(15, 30), 45, "Studio C", "Creative Dance", "Sofia Quillon", "", ages(48, 72), 10,
-		[]string{"Mia Birchmoor"},
-	},
-	{
-		time.Wednesday, at(16, 30), 75, "Studio A", "Classical Ballet", "Lea Moonfield", "Greta Ivorylane", level("Intermediate"), 16,
-		[]string{"Ida Elderwick", "Kira Gildenmoor", "Lotta Birchmoor"},
-	},
-	{
-		time.Wednesday, at(18, 0), 45, "Studio B", "Pointe Work", "Lea Moonfield", "Greta Ivorylane", level("Advanced"), 12,
-		[]string{"Ida Elderwick", "Jona Fernwhistle", "Sophie Hollowmere"},
-	},
-	{
-		time.Wednesday, at(18, 30), 60, "Hall 1", "Hip-Hop", "Jonas Featherby", "", level("Intermediate"), 20,
-		[]string{"Noah Cloudsley", "Ben Gildenmoor"},
-	},
-	{
-		time.Wednesday, at(19, 0), 90, "Studio A", "Classical Ballet", "Lea Moonfield", "Greta Ivorylane", level("Professional"), 16,
-		[]string{"Wanda Sparrowhill"},
-	},
-
-	// Thursday
-	{
-		time.Thursday, at(16, 0), 60, "Hall 2", "Tap", "Nina Tapworth", "", level("Beginner"), 12,
-		[]string{"Leni Dunfield", "Jakob Ivorycombe"},
-	},
-	{
-		time.Thursday, at(17, 0), 60, "Studio A", "Contemporary", "Marco Wrenfield", "", level("Beginner"), 18,
-		[]string{"Lotta Birchmoor", "Ida Elderwick"},
-	},
-	{
-		time.Thursday, at(18, 30), 90, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth",
-		audienceSpec{from: "Beginner", to: "Intermediate"},
-		16,
-		[]string{"Oskar Nettlebury", "Tilo Quarrystone", "Sara Dunfield", "Petra Elderwick"},
-	},
-	{
-		time.Thursday, at(19, 30), 60, "Hall 1", "Jazz Dance", "Marco Wrenfield", "", level("Intermediate"), 20,
-		[]string{"Lukas Fernwhistle", "Kai Lanternby"},
-	},
-
-	// Friday
-	{
-		time.Friday, at(15, 30), 45, "Studio B", "Pre-Ballet", "Sofia Quillon", "", ages(72, 96), 12,
-		[]string{"Finn Amberly"},
-	},
-	{
-		time.Friday, at(16, 30), 60, "Studio A", "Classical Ballet", "Lea Moonfield", "Greta Ivorylane", level("Beginner"), 16,
-		[]string{"Leni Dunfield", "Kira Gildenmoor"},
-	},
-	{
-		time.Friday, at(17, 45), 60, "Hall 1", "Hip-Hop", "Jonas Featherby", "", allLevels, 24,
-		[]string{"Jan Cloudsley", "Tilo Quarrystone"},
-	},
-	{
-		time.Friday, at(18, 0), 75, "Studio B", "Pointe Work", "Lea Moonfield", "", level("Advanced"), 12,
-		[]string{"Sophie Hollowmere"},
-	},
-
-	// Saturday
-	{time.Saturday, at(10, 0), 45, "Studio C", "Creative Dance", "Sofia Quillon", "", ages(48, 72), 10, nil},
-	{
-		time.Saturday, at(10, 0), 90, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", level("Advanced"), 16,
-		[]string{"Jona Fernwhistle", "Sophie Hollowmere", "Ida Elderwick"},
-	},
-	{
-		time.Saturday, at(11, 0), 60, "Hall 2", "Tap", "Nina Tapworth", "", allLevels, 12,
-		[]string{"Irene Inkwell", "Nora Ivorycombe", "David Hollowmere"},
-	},
-	{
-		time.Saturday, at(12, 0), 75, "Studio A", "Contemporary", "Marco Wrenfield", "", allLevels, 18,
-		[]string{"Lina Mistlewood", "Yara Gildenmoor"},
-	},
 }
 
 // workshopSpec is a one-off public workshop; days counts from the anchor.
@@ -537,21 +330,6 @@ type workshopSpec struct {
 	visibility domain.LessonVisibility
 }
 
-// demoWorkshops start at 13:30 and end at 15:30, when no weekly class runs,
-// so they never clash with one on whatever weekday they fall. The demo
-// releases one week ahead (DemoSettings), so the first workshop is usually
-// released already and the others lie beyond every release window: the
-// schedule shows them because workshops are published early. Two more show
-// the other visibilities: one only signed-in members see, and one only
-// staff see.
-var demoWorkshops = []workshopSpec{
-	{3, at(13, 30), 120, "Studio A", "Contemporary", "Marco Wrenfield", "", 18, ""},
-	{17, at(13, 30), 120, "Hall 1", "Jazz Dance", "Nina Tapworth", "", 20, ""},
-	{24, at(13, 30), 120, "Studio A", "Classical Ballet", "Alina Starling", "Felix Keysworth", 16, ""},
-	{5, at(13, 30), 120, "Studio B", "Contemporary", "Marco Wrenfield", "", 12, domain.VisibilityMembers},
-	{6, at(13, 30), 120, "Hall 1", "Hip-Hop", "Nina Tapworth", "", 15, domain.VisibilityHidden},
-}
-
 // rentalSpec is a room rental (ADR 0007, amendment): a room blocked for an
 // outside renter, without a course type; days counts from the anchor.
 type rentalSpec struct {
@@ -561,10 +339,6 @@ type rentalSpec struct {
 	room    string
 	renter  string
 }
-
-// demoRental lies on the day between the first two workshops, at their
-// time, when no weekly class runs: staff see it in its room, nobody else.
-var demoRental = rentalSpec{4, at(13, 30), 120, "Studio B", "Copperleaf Theater Group"}
 
 func (b *builder) rental(anchor domain.Date, spec rentalSpec) {
 	start := anchor.AddDays(spec.days).At(spec.start, b.loc)
@@ -594,17 +368,6 @@ type waitingSpec struct {
 	stayOnList bool
 }
 
-// demoFullWorkshop lies in the second week after the anchor, after the
-// first workshops, when no other workshop takes place. Its members booked
-// it two days before the anchor and joined its waiting list the evening
-// before, so the demo shows a full lesson, its list and the places on it;
-// nobody of a demo login's family is on it.
-var demoFullWorkshop = fullWorkshopSpec{
-	workshop: workshopSpec{10, at(13, 30), 90, "Studio C", "Tap", "Nina Tapworth", "", 4, ""},
-	booked:   []string{"Irene Inkwell", "Kai Lanternby", "Oskar Nettlebury", "Rhea Pinecrest"},
-	waiting:  []waitingSpec{{"Vera Rushwick", true}, {"Wanda Sparrowhill", false}},
-}
-
 // staffBookingsSpec is what an instructor added to her first workshop: a
 // booking per participant, by her account, the evening before the anchor.
 type staffBookingsSpec struct {
@@ -621,24 +384,13 @@ type participantSpec struct {
 	note         string
 }
 
-// demoStaffBookings shows the staff actions in the participant list of
-// Alina's ballet workshop: a guest with an email, a walk-in guest without
-// one, and a trial with a note for her.
-var demoStaffBookings = staffBookingsSpec{
-	instructor: "Alina Starling",
-	participants: []participantSpec{
-		{guest: "Mara Gastfield", email: "mara.gastfield@example.com"},
-		{guest: "Pia Walkby"},
-		{person: "Ute Tallowfield", trial: true, note: "First ballet class in years; mind her left knee."},
-	},
-}
-
 // ----------------------------------------------------------------- builder
 
 // builder assigns IDs in table order and resolves the names used in the
 // tables. An unknown name is a bug in the tables and panics; the tests call
 // Demo, so it cannot reach a running server.
 type builder struct {
+	s           schoolSpec     // the school's tables
 	loc         *time.Location // school time zone
 	termStart   domain.Date
 	seq         *ids.Sequence
@@ -849,20 +601,16 @@ func (b *builder) memberBookings() {
 	}
 }
 
-// attendanceSkipped is the course type whose past lessons have no
-// attendance in the demo: their instructors are behind with it, so the
-// instructor and office views show lessons to take attendance of.
-const attendanceSkipped = "Classical Ballet"
-
 // attendance takes the attendance of the automatic member bookings of the
 // weekly classes before anchor, as their instructors (or the office, for
-// an instructor without a login) would have, except attendanceSkipped's:
-// most attended, every seventh did not show, and every eleventh canceled
-// late, which the office recorded. So the statistics have attendance,
-// no-shows and late cancellations to count.
+// an instructor without a login) would have, except the attendanceSkipped
+// course type's, so the instructor and office views show lessons to take
+// attendance of: most attended, every seventh did not show, and every
+// eleventh canceled late, which the office recorded. So the statistics
+// have attendance, no-shows and late cancellations to count.
 func (b *builder) attendance(anchor domain.Date) {
-	office := b.accountOf(lookup(b.persons, "Olga Ledgerby"))
-	skipped := lookup(b.courseTypes, attendanceSkipped)
+	office := b.accountOf(lookup(b.persons, b.s.office))
+	skipped := lookup(b.courseTypes, b.s.attendanceSkipped)
 	lessons := map[domain.LessonID]domain.Lesson{}
 
 	for _, l := range b.d.Lessons {
@@ -917,24 +665,16 @@ func (b *builder) staffAccount(id domain.StaffID, fallback domain.AccountID) dom
 	return fallback
 }
 
-// demoGuests are the walk-in guests the instructors added to past lessons,
-// in turn; demoTrialists the persons who tried a class they are no member
-// of (nobody of the member login's family).
-var (
-	demoGuests     = []string{"Theo Dropwell", "Lena Visby", "Jonte Comewell", "Ivy Passmore"}
-	demoTrialists  = []string{"Nora Ivorycombe", "Yara Gildenmoor", "Hanna Birchmoor", "Oskar Nettlebury", "Petra Elderwick"}
-	demoTrialNotes = []string{"Thinking about joining after the holidays.", "", "Wants to try a second style."}
-)
-
-// visitors adds guests and trials to the weekly classes' lessons before
-// anchor, but attendanceSkipped's: in every fourth a guest, in every fifth
-// a person on a trial, whom the instructor (or the office, for an
-// instructor without a login) added just before the start (source staff,
-// ADR 0009, amendment) and marked attended at its end, every third guest
-// as a no-show. Trials are free; the guests paid at the desk.
+// visitors adds the school's guests and trialists to the weekly classes'
+// lessons before anchor, but the attendanceSkipped course type's: in every
+// fourth a guest, in every fifth a person on a trial, whom the instructor
+// (or the office, for an instructor without a login) added just before the
+// start (source staff, ADR 0009, amendment) and marked attended at its
+// end, every third guest as a no-show. Trials are free; the guests paid at
+// the desk.
 func (b *builder) visitors(anchor domain.Date) {
-	office := b.accountOf(lookup(b.persons, "Olga Ledgerby"))
-	skipped := lookup(b.courseTypes, attendanceSkipped)
+	office := b.accountOf(lookup(b.persons, b.s.office))
+	skipped := lookup(b.courseTypes, b.s.attendanceSkipped)
 	guests, trials := 0, 0
 	i := 0
 
@@ -951,20 +691,20 @@ func (b *builder) visitors(anchor domain.Date) {
 				status = domain.BookingNoShow
 			}
 
-			b.visit(l, domain.Booking{GuestName: demoGuests[guests%len(demoGuests)], Status: status}, actor)
+			b.visit(l, domain.Booking{GuestName: b.s.guests[guests%len(b.s.guests)], Status: status}, actor)
 			guests++
 		}
 
 		if i%5 == 3 {
-			for k := range demoTrialists {
-				person := lookup(b.persons, demoTrialists[(trials+k)%len(demoTrialists)])
+			for k := range b.s.trialists {
+				person := lookup(b.persons, b.s.trialists[(trials+k)%len(b.s.trialists)])
 				if b.memberOf(l.ClassID, person) {
 					continue
 				}
 
 				b.visit(l, domain.Booking{
 					PersonID: person, Status: domain.BookingAttended, Trial: true,
-					TrialNote: demoTrialNotes[trials%len(demoTrialNotes)],
+					TrialNote: b.s.trialNotes[trials%len(b.s.trialNotes)],
 				}, actor)
 				trials++
 
@@ -1104,14 +844,6 @@ func (b *builder) staffBookings(anchor domain.Date, spec staffBookingsSpec) {
 	}
 }
 
-// demoPassTypes is the pass catalog: a drop-in, a 10-visit pass and a
-// 30-day pass, gross prices with 19 % VAT.
-var demoPassTypes = []domain.PassType{
-	{Name: "Single visit", Kind: domain.PassVisits, Visits: 1, ValidityDays: 90, Price: 1800, VATRate: 1900, Active: true},
-	{Name: "10-visit pass", Kind: domain.PassVisits, Visits: 10, ValidityDays: 180, Price: 15000, VATRate: 1900, Active: true},
-	{Name: "30-day pass", Kind: domain.PassTime, ValidityDays: 30, Price: 8900, VATRate: 1900, Active: true},
-}
-
 // passSpec is a pass of a person: sold (with an optional payer) or given
 // away (assigned, with a note) on the day soldDays from the anchor, valid
 // from that day, and perhaps voided a day later. dropIns are the classes
@@ -1136,52 +868,24 @@ type classSlot struct {
 	start domain.TimeOfDay
 }
 
-// demoPasses shows the passes of the member login's family (Clara with her
-// own card and her daughter's, which she paid for), a time pass, a pass
-// given away and one sold by mistake and voided. The demo redeems on
-// attendance (DemoSettings), so the passes paid for the drop-ins when the
-// office took their attendance.
-var demoPasses = []passSpec{
-	{
-		person: "Clara Amberly", passType: "10-visit pass", soldDays: -14, method: domain.PaymentCard,
-		dropIns: []classSlot{{time.Tuesday, at(18, 30)}, {time.Thursday, at(17, 0)}},
-	},
-	{
-		person: "Ella Amberly", passType: "10-visit pass", soldDays: -10, payer: "Clara Amberly",
-		method: domain.PaymentTransfer, dropIns: []classSlot{{time.Thursday, at(16, 0)}},
-	},
-	{
-		person: "Kai Lanternby", passType: "30-day pass", soldDays: -7, method: domain.PaymentCash,
-		dropIns: []classSlot{{time.Friday, at(17, 45)}},
-	},
-	{
-		person: "Irene Inkwell", passType: "Single visit", soldDays: -3, assigned: true,
-		note: "Goodwill: her workshop was canceled.",
-	},
-	{
-		person: "Vera Rushwick", passType: "Single visit", soldDays: -20, voided: true, method: domain.PaymentCash,
-		note: "Sold to the wrong person.",
-	},
-}
-
-// passes adds the pass catalog, created when the term starts, and the
-// passes of demoPasses, sold by the office, with their drop-in bookings
+// passes adds the school's pass catalog, created when the term starts, and
+// its passes, sold by the office, with their drop-in bookings
 // (each with its booking and attendance events) and redemptions.
 func (b *builder) passes(anchor domain.Date) {
 	created := b.termStart.At(domain.TimeOfDay{Hour: 9}, b.loc)
 	types := map[string]domain.PassType{}
 
-	for _, pt := range demoPassTypes {
+	for _, pt := range b.s.passTypes {
 		pt.ID, pt.CreatedAt = ids.New[domain.PassTypeID](b.seq), created
 		b.d.PassTypes = append(b.d.PassTypes, pt)
 		types[pt.Name] = pt
 	}
 
-	office := b.accountOf(lookup(b.persons, "Olga Ledgerby"))
+	office := b.accountOf(lookup(b.persons, b.s.office))
 
 	var issued []issue
 
-	for _, spec := range demoPasses {
+	for _, spec := range b.s.passes {
 		pt, ok := types[spec.passType]
 		if !ok {
 			panic("seed: unknown pass type " + spec.passType)

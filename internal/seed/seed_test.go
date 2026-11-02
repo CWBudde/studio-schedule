@@ -182,7 +182,7 @@ func TestDemoWorkshops(t *testing.T) {
 			t.Fatalf("%v: %d one-off lessons, want 5..6 workshops", anchor, n)
 		}
 
-		validAll(t, d.Lessons)
+		validAll(t, anchor.String(), d.Lessons)
 
 		rooms := index(d.Rooms, func(r domain.Room) domain.RoomID { return r.ID })
 		staff := index(d.Staff, func(s domain.Staff) domain.StaffID { return s.ID })
@@ -295,7 +295,7 @@ func TestDemoRental(t *testing.T) {
 		}
 
 		r := rentals[0]
-		validAll(t, rentals)
+		validAll(t, anchor.String(), rentals)
 
 		// The demo shows a rental without a course type, which only a rental
 		// may lack.
@@ -384,35 +384,58 @@ func TestDemoHistory(t *testing.T) {
 	}
 }
 
+// TestDemoValid: every record of every demo school is valid, its settings
+// and background included; the programme school has DemoSettings and no
+// background, the werkstatt school a background.
 func TestDemoValid(t *testing.T) {
 	t.Parallel()
 
-	d := seed.Demo()
+	forEachSchool(t, func(t *testing.T, school seed.School, d seed.Dataset) {
+		if err := d.Settings.Validate(); err != nil {
+			t.Errorf("%s: settings %+v: %v", school, d.Settings, err)
+		}
 
-	validAll(t, d.Lessons)
+		if !d.Background.IsZero() {
+			if err := d.Background.Validate(); err != nil {
+				t.Errorf("%s: background: %v", school, err)
+			}
+		}
 
-	if d.Settings != seed.DemoSettings() {
-		t.Fatalf("settings %+v differ from DemoSettings", d.Settings)
-	}
+		what := string(school)
+		validAll(t, what, d.Locations)
+		validAll(t, what, d.Rooms)
+		validAll(t, what, d.Staff)
+		validAll(t, what, d.CourseTypes)
+		validAll(t, what, d.Levels)
+		validAll(t, what, d.Terms)
+		validAll(t, what, d.Classes)
+		validAll(t, what, d.Persons)
+		validAll(t, what, d.Guardians)
+		validAll(t, what, d.Accounts)
+		validAll(t, what, d.Credentials)
+		validAll(t, what, d.ClassMembers)
+		validAll(t, what, d.Lessons)
+		validAll(t, what, d.Bookings)
+		validAll(t, what, d.BookingEvents)
+		validAll(t, what, d.WaitlistEntries)
+		validAll(t, what, d.PassTypes)
+		validAll(t, what, d.Passes)
+		validAll(t, what, d.Redemptions)
+		validAll(t, what, d.Receipts)
+		validAll(t, what, d.Announcements)
 
-	validAll(t, d.Locations)
-	validAll(t, d.Rooms)
-	validAll(t, d.Staff)
-	validAll(t, d.CourseTypes)
-	validAll(t, d.Levels)
-	validAll(t, d.Terms)
-	validAll(t, d.Classes)
-	validAll(t, d.Persons)
-	validAll(t, d.Guardians)
-	validAll(t, d.Accounts)
-	validAll(t, d.ClassMembers)
-	validAll(t, d.Bookings)
-	validAll(t, d.BookingEvents)
-	validAll(t, d.PassTypes)
-	validAll(t, d.Passes)
-	validAll(t, d.Redemptions)
-	validAll(t, d.Receipts)
-	validAll(t, d.Announcements)
+		switch school {
+		case seed.SchoolProgramme:
+			if d.Settings != seed.DemoSettings() || !d.Background.IsZero() {
+				t.Errorf("%s: settings %+v, background %d bytes; want DemoSettings, none",
+					school, d.Settings, len(d.Background.Data))
+			}
+		case seed.SchoolWerkstatt:
+			if d.Background.IsZero() {
+				t.Errorf("%s: no background", school)
+			}
+		}
+	})
 }
 
 // TestDemoMemberBookings checks that the class lessons of the demo have
@@ -488,8 +511,8 @@ func TestDemoAttendance(t *testing.T) {
 
 	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
 		d := seed.DemoAt(anchor)
-		validAll(t, d.Bookings)
-		validAll(t, d.BookingEvents)
+		validAll(t, anchor.String(), d.Bookings)
+		validAll(t, anchor.String(), d.BookingEvents)
 
 		ballet := d.CourseTypes[slices.IndexFunc(d.CourseTypes, func(c domain.CourseType) bool {
 			return c.Name == "Classical Ballet"
@@ -547,8 +570,8 @@ func TestDemoVisitors(t *testing.T) {
 
 	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
 		d := seed.DemoAt(anchor)
-		validAll(t, d.Bookings)
-		validAll(t, d.BookingEvents)
+		validAll(t, anchor.String(), d.Bookings)
+		validAll(t, anchor.String(), d.BookingEvents)
 
 		lessons := index(d.Lessons, func(l domain.Lesson) domain.LessonID { return l.ID })
 		staff := index(d.Staff, func(s domain.Staff) domain.StaffID { return s.ID })
@@ -635,7 +658,7 @@ func TestDemoFullWorkshop(t *testing.T) {
 	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
 		d := seed.DemoAt(anchor)
 		l := fullWorkshop(t, d)
-		validAll(t, d.WaitlistEntries)
+		validAll(t, anchor.String(), d.WaitlistEntries)
 
 		if !l.ClassID.IsZero() || l.Kind != domain.LessonWorkshop || l.Visibility != domain.VisibilityPublic ||
 			!l.StartsAt.After(anchor.AddDays(1).At(domain.TimeOfDay{}, time.UTC)) {
@@ -811,527 +834,550 @@ func TestDemoStaffBookings(t *testing.T) {
 	}
 }
 
-// TestDemoReferences checks the rules the stores enforce across rows, plus
-// the plausibility of the timetable.
+// TestDemoReferences checks, for every demo school, the rules the stores
+// enforce across rows, plus the plausibility of the timetable.
 func TestDemoReferences(t *testing.T) {
 	t.Parallel()
 
-	d := seed.Demo()
+	forEachSchool(t, func(t *testing.T, school seed.School, d seed.Dataset) {
+		persons := index(d.Persons, func(p domain.Person) domain.PersonID { return p.ID })
+		locations := index(d.Locations, func(l domain.Location) domain.LocationID { return l.ID })
+		rooms := index(d.Rooms, func(r domain.Room) domain.RoomID { return r.ID })
+		staff := index(d.Staff, func(s domain.Staff) domain.StaffID { return s.ID })
+		courseTypes := index(d.CourseTypes, func(c domain.CourseType) domain.CourseTypeID { return c.ID })
+		terms := index(d.Terms, func(t domain.Term) domain.TermID { return t.ID })
+		classes := index(d.Classes, func(c domain.Class) domain.ClassID { return c.ID })
 
-	persons := index(d.Persons, func(p domain.Person) domain.PersonID { return p.ID })
-	locations := index(d.Locations, func(l domain.Location) domain.LocationID { return l.ID })
-	rooms := index(d.Rooms, func(r domain.Room) domain.RoomID { return r.ID })
-	staff := index(d.Staff, func(s domain.Staff) domain.StaffID { return s.ID })
-	courseTypes := index(d.CourseTypes, func(c domain.CourseType) domain.CourseTypeID { return c.ID })
-	terms := index(d.Terms, func(t domain.Term) domain.TermID { return t.ID })
-	classes := index(d.Classes, func(c domain.Class) domain.ClassID { return c.ID })
-
-	for _, r := range d.Rooms {
-		if _, ok := locations[r.LocationID]; !ok {
-			t.Errorf("room %q: unknown location", r.Name)
-		}
-	}
-
-	for _, s := range d.Staff {
-		if _, ok := persons[s.PersonID]; !s.PersonID.IsZero() && !ok {
-			t.Errorf("staff %q: unknown person", s.DisplayName)
-		}
-	}
-
-	emails := map[string]bool{}
-	accountHolders := map[domain.PersonID]bool{}
-
-	for _, a := range d.Accounts {
-		if _, ok := persons[a.PersonID]; !ok {
-			t.Errorf("account %q: unknown person", a.Email)
-		}
-
-		email := strings.ToLower(a.Email)
-		if emails[email] {
-			t.Errorf("account %q: duplicate email", a.Email)
-		}
-
-		if accountHolders[a.PersonID] {
-			t.Errorf("account %q: person already has an account", a.Email)
-		}
-
-		emails[email] = true
-		accountHolders[a.PersonID] = true
-	}
-
-	for _, p := range d.Persons {
-		if !exampleEmail(p.Email) {
-			t.Errorf("person %s %s: email %q is not on an example domain", p.GivenName, p.FamilyName, p.Email)
-		}
-	}
-
-	for _, a := range d.Accounts {
-		if !exampleEmail(a.Email) {
-			t.Errorf("account email %q is not on an example domain", a.Email)
-		}
-	}
-
-	links := map[domain.Guardian]bool{}
-
-	for _, g := range d.Guardians {
-		if _, ok := persons[g.GuardianID]; !ok {
-			t.Errorf("guardian link %+v: unknown guardian", g)
-		}
-
-		if _, ok := persons[g.DependentID]; !ok {
-			t.Errorf("guardian link %+v: unknown dependent", g)
-		}
-
-		if links[g] {
-			t.Errorf("guardian link %+v: duplicate", g)
-		}
-
-		links[g] = true
-	}
-
-	for _, c := range d.Classes {
-		if _, ok := terms[c.TermID]; !ok {
-			t.Errorf("class %v: unknown term", c.ID)
-		}
-
-		if _, ok := courseTypes[c.CourseTypeID]; !ok {
-			t.Errorf("class %v: unknown course type", c.ID)
-		}
-
-		if room, ok := rooms[c.RoomID]; !ok {
-			t.Errorf("class %v: unknown room", c.ID)
-		} else if c.Capacity > room.Capacity {
-			t.Errorf("class %v: capacity %d exceeds room capacity %d", c.ID, c.Capacity, room.Capacity)
-		}
-
-		if s, ok := staff[c.InstructorID]; !ok || s.Kind != domain.StaffInstructor || !s.Active {
-			t.Errorf("class %v: instructor %+v is not an active instructor", c.ID, s)
-		}
-
-		if !c.AccompanistID.IsZero() {
-			if s, ok := staff[c.AccompanistID]; !ok || s.Kind != domain.StaffAccompanist || !s.Active {
-				t.Errorf("class %v: accompanist %+v is not an active accompanist", c.ID, s)
+		for _, r := range d.Rooms {
+			if _, ok := locations[r.LocationID]; !ok {
+				t.Errorf("%s: room %q: unknown location", school, r.Name)
 			}
 		}
 
-		if c.Weekday == time.Sunday {
-			t.Errorf("class %v: the demo school is closed on Sundays", c.ID)
+		for _, s := range d.Staff {
+			if _, ok := persons[s.PersonID]; !s.PersonID.IsZero() && !ok {
+				t.Errorf("%s: staff %q: unknown person", school, s.DisplayName)
+			}
 		}
 
-		if c.Duration < 45*time.Minute || c.Duration > 90*time.Minute {
-			t.Errorf("class %v: duration %v outside 45..90 minutes", c.ID, c.Duration)
+		emails := map[string]bool{}
+		accountHolders := map[domain.PersonID]bool{}
+
+		for _, a := range d.Accounts {
+			if _, ok := persons[a.PersonID]; !ok {
+				t.Errorf("%s: account %q: unknown person", school, a.Email)
+			}
+
+			email := strings.ToLower(a.Email)
+			if emails[email] {
+				t.Errorf("%s: account %q: duplicate email", school, a.Email)
+			}
+
+			if accountHolders[a.PersonID] {
+				t.Errorf("%s: account %q: person already has an account", school, a.Email)
+			}
+
+			emails[email] = true
+			accountHolders[a.PersonID] = true
 		}
-	}
 
-	members := map[domain.ClassMember]bool{}
-	perClass := map[domain.ClassID]int{}
-
-	for _, m := range d.ClassMembers {
-		if _, ok := classes[m.ClassID]; !ok {
-			t.Errorf("class member %+v: unknown class", m)
+		for _, p := range d.Persons {
+			if !exampleEmail(p.Email) {
+				t.Errorf("%s: person %s %s: email %q is not on an example domain", school, p.GivenName, p.FamilyName, p.Email)
+			}
 		}
 
-		if _, ok := persons[m.PersonID]; !ok {
-			t.Errorf("class member %+v: unknown person", m)
+		for _, a := range d.Accounts {
+			if !exampleEmail(a.Email) {
+				t.Errorf("%s: account email %q is not on an example domain", school, a.Email)
+			}
 		}
 
-		key := domain.ClassMember{ClassID: m.ClassID, PersonID: m.PersonID}
-		if members[key] {
-			t.Errorf("class member %+v: duplicate", m)
+		links := map[domain.Guardian]bool{}
+
+		for _, g := range d.Guardians {
+			if _, ok := persons[g.GuardianID]; !ok {
+				t.Errorf("%s: guardian link %+v: unknown guardian", school, g)
+			}
+
+			if _, ok := persons[g.DependentID]; !ok {
+				t.Errorf("%s: guardian link %+v: unknown dependent", school, g)
+			}
+
+			if links[g] {
+				t.Errorf("%s: guardian link %+v: duplicate", school, g)
+			}
+
+			links[g] = true
 		}
 
-		members[key] = true
-		perClass[m.ClassID]++
-	}
+		for _, c := range d.Classes {
+			if _, ok := terms[c.TermID]; !ok {
+				t.Errorf("%s: class %v: unknown term", school, c.ID)
+			}
 
-	for id, n := range perClass {
-		if n > classes[id].Capacity {
-			t.Errorf("class %v: %d members exceed capacity %d", id, n, classes[id].Capacity)
+			if _, ok := courseTypes[c.CourseTypeID]; !ok {
+				t.Errorf("%s: class %v: unknown course type", school, c.ID)
+			}
+
+			if room, ok := rooms[c.RoomID]; !ok {
+				t.Errorf("%s: class %v: unknown room", school, c.ID)
+			} else if c.Capacity > room.Capacity {
+				t.Errorf("%s: class %v: capacity %d exceeds room capacity %d", school, c.ID, c.Capacity, room.Capacity)
+			}
+
+			if s, ok := staff[c.InstructorID]; !ok || s.Kind != domain.StaffInstructor || !s.Active {
+				t.Errorf("%s: class %v: instructor %+v is not an active instructor", school, c.ID, s)
+			}
+
+			if !c.AccompanistID.IsZero() {
+				if s, ok := staff[c.AccompanistID]; !ok || s.Kind != domain.StaffAccompanist || !s.Active {
+					t.Errorf("%s: class %v: accompanist %+v is not an active accompanist", school, c.ID, s)
+				}
+			}
+
+			if c.Weekday == time.Sunday {
+				t.Errorf("%s: class %v: the demo school is closed on Sundays", school, c.ID)
+			}
+
+			if c.Duration < 45*time.Minute || c.Duration > 90*time.Minute {
+				t.Errorf("%s: class %v: duration %v outside 45..90 minutes", school, c.ID, c.Duration)
+			}
 		}
-	}
+
+		members := map[domain.ClassMember]bool{}
+		perClass := map[domain.ClassID]int{}
+
+		for _, m := range d.ClassMembers {
+			if _, ok := classes[m.ClassID]; !ok {
+				t.Errorf("%s: class member %+v: unknown class", school, m)
+			}
+
+			if _, ok := persons[m.PersonID]; !ok {
+				t.Errorf("%s: class member %+v: unknown person", school, m)
+			}
+
+			key := domain.ClassMember{ClassID: m.ClassID, PersonID: m.PersonID}
+			if members[key] {
+				t.Errorf("%s: class member %+v: duplicate", school, m)
+			}
+
+			members[key] = true
+			perClass[m.ClassID]++
+		}
+
+		for id, n := range perClass {
+			if n > classes[id].Capacity {
+				t.Errorf("%s: class %v: %d members exceed capacity %d", school, id, n, classes[id].Capacity)
+			}
+		}
+	})
 }
 
-// TestDemoTimetableConflicts checks that no room, instructor, accompanist or
-// member is in two classes at once.
+// TestDemoTimetableConflicts checks that in no demo school two classes meet
+// in one room at once, and no member is in two classes at once. The staff:
+// TestDemoInstructorsNeverDoubleBooked.
 func TestDemoTimetableConflicts(t *testing.T) {
 	t.Parallel()
 
-	d := seed.Demo()
+	forEachSchool(t, func(t *testing.T, school seed.School, d seed.Dataset) {
+		members := map[domain.ClassID]map[domain.PersonID]bool{}
+		for _, m := range d.ClassMembers {
+			if members[m.ClassID] == nil {
+				members[m.ClassID] = map[domain.PersonID]bool{}
+			}
 
-	overlap := func(a, b domain.Class) bool {
-		if a.TermID != b.TermID || a.Weekday != b.Weekday {
-			return false
+			members[m.ClassID][m.PersonID] = true
 		}
 
-		aStart, bStart := a.StartTime.SinceMidnight(), b.StartTime.SinceMidnight()
+		for i, a := range d.Classes {
+			for _, b := range d.Classes[i+1:] {
+				if !classesOverlap(a, b) {
+					continue
+				}
 
-		return aStart < bStart+b.Duration && bStart < aStart+a.Duration
-	}
+				if a.RoomID == b.RoomID {
+					t.Errorf("%s: classes %v and %v overlap in the same room", school, a.ID, b.ID)
+				}
 
-	members := map[domain.ClassID]map[domain.PersonID]bool{}
-	for _, m := range d.ClassMembers {
-		if members[m.ClassID] == nil {
-			members[m.ClassID] = map[domain.PersonID]bool{}
-		}
-
-		members[m.ClassID][m.PersonID] = true
-	}
-
-	for i, a := range d.Classes {
-		for _, b := range d.Classes[i+1:] {
-			if !overlap(a, b) {
-				continue
-			}
-
-			if a.RoomID == b.RoomID {
-				t.Errorf("classes %v and %v overlap in the same room", a.ID, b.ID)
-			}
-
-			if a.InstructorID == b.InstructorID {
-				t.Errorf("classes %v and %v overlap for the same instructor", a.ID, b.ID)
-			}
-
-			if !a.AccompanistID.IsZero() && a.AccompanistID == b.AccompanistID {
-				t.Errorf("classes %v and %v overlap for the same accompanist", a.ID, b.ID)
-			}
-
-			for p := range members[a.ID] {
-				if members[b.ID][p] {
-					t.Errorf("classes %v and %v overlap for member %v", a.ID, b.ID, p)
+				for p := range members[a.ID] {
+					if members[b.ID][p] {
+						t.Errorf("%s: classes %v and %v overlap for member %v", school, a.ID, b.ID, p)
+					}
 				}
 			}
 		}
-	}
+	})
 }
 
-// TestDemoChildren checks that children (dependents) are minors with a
-// guardian, only share classes with children, and that only one teenager
-// holds an account (a managed dependent).
+// classesOverlap reports whether two weekly classes of one term meet at the
+// same time.
+func classesOverlap(a, b domain.Class) bool {
+	if a.TermID != b.TermID || a.Weekday != b.Weekday {
+		return false
+	}
+
+	aStart, bStart := a.StartTime.SinceMidnight(), b.StartTime.SinceMidnight()
+
+	return aStart < bStart+b.Duration && bStart < aStart+a.Duration
+}
+
+// TestDemoChildren checks that in every demo school children (dependents)
+// are minors with a guardian, only share classes with children, and that
+// children with an account are members with their own email (managed
+// dependents); in the programme school exactly one teenager has one.
 func TestDemoChildren(t *testing.T) {
 	t.Parallel()
 
-	d := seed.Demo()
-	termStart := d.Terms[0].StartsOn
+	forEachSchool(t, func(t *testing.T, school seed.School, d seed.Dataset) {
+		termStart := d.Terms[0].StartsOn
 
-	children := map[domain.PersonID]bool{}
-	guardians := map[domain.PersonID]bool{}
+		children := map[domain.PersonID]bool{}
+		guardians := map[domain.PersonID]bool{}
 
-	for _, g := range d.Guardians {
-		children[g.DependentID] = true
-		guardians[g.GuardianID] = true
-	}
-
-	for _, p := range d.Persons {
-		if !children[p.ID] {
-			continue
+		for _, g := range d.Guardians {
+			children[g.DependentID] = true
+			guardians[g.GuardianID] = true
 		}
 
-		if guardians[p.ID] {
-			t.Errorf("child %s is also a guardian", p.GivenName)
+		for _, p := range d.Persons {
+			if !children[p.ID] {
+				continue
+			}
+
+			if guardians[p.ID] {
+				t.Errorf("%s: child %s is also a guardian", school, p.GivenName)
+			}
+
+			adult := domain.Date{Year: p.BirthDate.Year + 18, Month: p.BirthDate.Month, Day: p.BirthDate.Day}
+			if p.BirthDate.IsZero() || adult.Compare(termStart) <= 0 {
+				t.Errorf("%s: child %s %s: birth date %v is not a minor's", school, p.GivenName, p.FamilyName, p.BirthDate)
+			}
+
+			// Only a teenager has an email and an account of their own (a
+			// managed dependent, ADR 0008).
+			teen := domain.Date{Year: p.BirthDate.Year + 14, Month: p.BirthDate.Month, Day: p.BirthDate.Day}
+			if p.Email != "" && teen.Compare(termStart) > 0 {
+				t.Errorf("%s: child %s %s under 14 has an email", school, p.GivenName, p.FamilyName)
+			}
 		}
 
-		adult := domain.Date{Year: p.BirthDate.Year + 18, Month: p.BirthDate.Month, Day: p.BirthDate.Day}
-		if p.BirthDate.IsZero() || adult.Compare(termStart) <= 0 {
-			t.Errorf("child %s %s: birth date %v is not a minor's", p.GivenName, p.FamilyName, p.BirthDate)
+		if len(children) == 0 {
+			t.Fatalf("%s: no children in the demo data", school)
 		}
 
-		// Only a teenager has an email and an account of their own (a
-		// managed dependent, ADR 0008).
-		teen := domain.Date{Year: p.BirthDate.Year + 14, Month: p.BirthDate.Month, Day: p.BirthDate.Day}
-		if p.Email != "" && teen.Compare(termStart) > 0 {
-			t.Errorf("child %s %s under 14 has an email", p.GivenName, p.FamilyName)
-		}
-	}
+		managed := 0
 
-	if len(children) == 0 {
-		t.Fatal("no children in the demo data")
-	}
+		for _, a := range d.Accounts {
+			if !children[a.PersonID] {
+				continue
+			}
 
-	managed := 0
+			managed++
 
-	for _, a := range d.Accounts {
-		if !children[a.PersonID] {
-			continue
+			p := d.Persons[slices.IndexFunc(d.Persons, func(p domain.Person) bool { return p.ID == a.PersonID })]
+			if a.Role != domain.RoleMember || p.Email != a.Email {
+				t.Errorf("%s: child account %+v, want a member account with the child's email", school, a)
+			}
 		}
 
-		managed++
-
-		p := d.Persons[slices.IndexFunc(d.Persons, func(p domain.Person) bool { return p.ID == a.PersonID })]
-		if a.Role != domain.RoleMember || p.Email != a.Email {
-			t.Errorf("child account %+v, want a member account with the child's email", a)
-		}
-	}
-
-	if managed != 1 {
-		t.Errorf("%d children with an account, want one managed dependent", managed)
-	}
-
-	// A class is either a children's or an adults' class.
-	kind := map[domain.ClassID]bool{}
-	seen := map[domain.ClassID]bool{}
-
-	for _, m := range d.ClassMembers {
-		child := children[m.PersonID]
-		if seen[m.ClassID] && kind[m.ClassID] != child {
-			t.Errorf("class %v mixes children and adults", m.ClassID)
+		if school == seed.SchoolProgramme && managed != 1 {
+			t.Errorf("%s: %d children with an account, want one managed dependent", school, managed)
 		}
 
-		seen[m.ClassID] = true
-		kind[m.ClassID] = child
-	}
+		// A class is either a children's or an adults' class.
+		kind := map[domain.ClassID]bool{}
+		seen := map[domain.ClassID]bool{}
+
+		for _, m := range d.ClassMembers {
+			child := children[m.PersonID]
+			if seen[m.ClassID] && kind[m.ClassID] != child {
+				t.Errorf("%s: class %v mixes children and adults", school, m.ClassID)
+			}
+
+			seen[m.ClassID] = true
+			kind[m.ClassID] = child
+		}
+	})
 }
 
+// TestLoadDemoRoundTrip loads every demo school into a memory store and
+// reads every record back, the background included.
 func TestLoadDemoRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	st := memory.New()
-	if err := seed.LoadDemo(t.Context(), st); err != nil {
-		t.Fatal(err)
-	}
-
-	want := seed.Demo()
-
-	err := st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
-		settings, err := tx.Settings().Get(ctx)
-		if err != nil {
-			return err
+	forEachSchool(t, func(t *testing.T, school seed.School, want seed.Dataset) {
+		st := memory.New()
+		if err := seed.LoadDemoSchoolAt(t.Context(), st, seed.FixedDemoAnchor, school); err != nil {
+			t.Fatalf("%s: %v", school, err)
 		}
 
-		if settings != want.Settings {
-			t.Errorf("settings: got %+v, want %+v", settings, want.Settings)
-		}
+		// name prefixes a record kind with the school for the failures.
+		name := func(kind string) string { return string(school) + ": " + kind }
 
-		persons, err := tx.Persons().List(ctx)
-		if err != nil {
-			return err
-		}
-
-		sameSet(t, "persons", persons, want.Persons)
-
-		accounts, err := tx.Accounts().List(ctx)
-		if err != nil {
-			return err
-		}
-
-		sameSet(t, "accounts", accounts, want.Accounts)
-
-		for _, c := range want.Credentials {
-			got, err := tx.Credentials().Get(ctx, c.AccountID)
+		err := st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
+			settings, err := tx.Settings().Get(ctx)
 			if err != nil {
 				return err
 			}
 
-			if got != c {
-				t.Errorf("credential: got %+v, want %+v", got, c)
+			if settings != want.Settings {
+				t.Errorf("%s: settings: got %+v, want %+v", school, settings, want.Settings)
 			}
-		}
 
-		for _, a := range want.Accounts {
-			got, err := tx.Accounts().GetByEmail(ctx, strings.ToUpper(a.Email))
+			info, err := tx.Settings().BackgroundInfo(ctx)
 			if err != nil {
 				return err
 			}
 
-			if got != a {
-				t.Errorf("GetByEmail(%q): got %+v, want %+v", a.Email, got, a)
-			}
-		}
-
-		var guardians []domain.Guardian
-
-		for _, p := range persons {
-			deps, err := tx.Persons().ListDependents(ctx, p.ID)
-			if err != nil {
-				return err
-			}
-
-			for _, dep := range deps {
-				guardians = append(guardians, domain.Guardian{GuardianID: p.ID, DependentID: dep.ID})
-			}
-		}
-
-		sameSet(t, "guardians", guardians, want.Guardians)
-
-		locations, err := tx.Locations().List(ctx)
-		if err != nil {
-			return err
-		}
-
-		sameSet(t, "locations", locations, want.Locations)
-
-		rooms, err := tx.Rooms().List(ctx, domain.LocationID{})
-		if err != nil {
-			return err
-		}
-
-		sameSet(t, "rooms", rooms, want.Rooms)
-
-		staff, err := tx.Staff().List(ctx)
-		if err != nil {
-			return err
-		}
-
-		sameSet(t, "staff", staff, want.Staff)
-
-		courseTypes, err := tx.CourseTypes().List(ctx)
-		if err != nil {
-			return err
-		}
-
-		sameSet(t, "course types", courseTypes, want.CourseTypes)
-
-		levels, err := tx.Levels().List(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Listed by position, the order of the scale.
-		sameSlice(t, "levels", levels, want.Levels)
-
-		terms, err := tx.Terms().List(ctx)
-		if err != nil {
-			return err
-		}
-
-		sameSet(t, "terms", terms, want.Terms)
-
-		var (
-			classes []domain.Class
-			members []domain.ClassMember
-		)
-
-		for _, term := range terms {
-			cs, err := tx.Classes().ListByTerm(ctx, term.ID)
-			if err != nil {
-				return err
-			}
-
-			classes = append(classes, cs...)
-
-			for _, c := range cs {
-				ms, err := tx.Classes().ListMembers(ctx, c.ID)
+			if want.Background.IsZero() {
+				if !info.IsZero() {
+					t.Errorf("%s: background info %+v, want none", school, info)
+				}
+			} else {
+				bg, err := tx.Settings().Background(ctx)
 				if err != nil {
 					return err
 				}
 
-				members = append(members, ms...)
+				if bg.ContentType != want.Background.ContentType || !slices.Equal(bg.Data, want.Background.Data) {
+					t.Errorf("%s: background %s of %d bytes, want %s of %d bytes", school,
+						bg.ContentType, len(bg.Data), want.Background.ContentType, len(want.Background.Data))
+				}
 			}
-		}
 
-		sameSet(t, "classes", classes, want.Classes)
-		sameSet(t, "class members", members, want.ClassMembers)
-
-		from, to := allTime()
-
-		lessons, err := tx.Lessons().ListRange(ctx, from, to)
-		if err != nil {
-			return err
-		}
-
-		if len(want.Lessons) == 0 {
-			t.Error("the demo has no lessons")
-		}
-
-		sameSet(t, "lessons", lessons, want.Lessons)
-
-		var (
-			bookings []domain.Booking
-			events   []domain.BookingEvent
-		)
-
-		for _, l := range lessons {
-			bs, err := tx.Bookings().ListByLesson(ctx, l.ID)
+			persons, err := tx.Persons().List(ctx)
 			if err != nil {
 				return err
 			}
 
-			bookings = append(bookings, bs...)
+			sameSet(t, name("persons"), persons, want.Persons)
 
-			for _, b := range bs {
-				es, err := tx.Bookings().ListEvents(ctx, b.ID)
+			accounts, err := tx.Accounts().List(ctx)
+			if err != nil {
+				return err
+			}
+
+			sameSet(t, name("accounts"), accounts, want.Accounts)
+
+			for _, c := range want.Credentials {
+				got, err := tx.Credentials().Get(ctx, c.AccountID)
 				if err != nil {
 					return err
 				}
 
-				events = append(events, es...)
+				if got != c {
+					t.Errorf("%s: credential: got %+v, want %+v", school, got, c)
+				}
 			}
-		}
 
-		sameSet(t, "bookings", bookings, want.Bookings)
-		sameSet(t, "booking events", events, want.BookingEvents)
+			for _, a := range want.Accounts {
+				got, err := tx.Accounts().GetByEmail(ctx, strings.ToUpper(a.Email))
+				if err != nil {
+					return err
+				}
 
-		var entries []domain.WaitlistEntry
+				if got != a {
+					t.Errorf("%s: GetByEmail(%q): got %+v, want %+v", school, a.Email, got, a)
+				}
+			}
 
-		for _, l := range lessons {
-			es, err := tx.Waitlist().ListByLesson(ctx, l.ID)
+			var guardians []domain.Guardian
+
+			for _, p := range persons {
+				deps, err := tx.Persons().ListDependents(ctx, p.ID)
+				if err != nil {
+					return err
+				}
+
+				for _, dep := range deps {
+					guardians = append(guardians, domain.Guardian{GuardianID: p.ID, DependentID: dep.ID})
+				}
+			}
+
+			sameSet(t, name("guardians"), guardians, want.Guardians)
+
+			locations, err := tx.Locations().List(ctx)
 			if err != nil {
 				return err
 			}
 
-			entries = append(entries, es...)
-		}
+			sameSet(t, name("locations"), locations, want.Locations)
 
-		sameSet(t, "waitlist entries", entries, want.WaitlistEntries)
-
-		passTypes, err := tx.PassTypes().List(ctx)
-		if err != nil {
-			return err
-		}
-
-		sameSet(t, "pass types", passTypes, want.PassTypes)
-
-		personIDs := make([]domain.PersonID, len(persons))
-		for i, p := range persons {
-			personIDs[i] = p.ID
-		}
-
-		passes, err := tx.Passes().ListByPersons(ctx, personIDs)
-		if err != nil {
-			return err
-		}
-
-		sameSet(t, "passes", passes, want.Passes)
-
-		passIDs := make([]domain.PassID, len(passes))
-		for i, p := range passes {
-			passIDs[i] = p.ID
-		}
-
-		redemptions, err := tx.Redemptions().ListByPasses(ctx, passIDs, 0)
-		if err != nil {
-			return err
-		}
-
-		sameSet(t, "redemptions", redemptions, want.Redemptions)
-
-		receipts, total, err := tx.Receipts().List(ctx, store.ReceiptFilter{Limit: 100})
-		if err != nil {
-			return err
-		}
-
-		if total != len(want.Receipts) {
-			t.Errorf("%d receipts stored, want %d", total, len(want.Receipts))
-		}
-
-		for _, r := range receipts {
-			if i := slices.IndexFunc(want.Receipts, func(w domain.Receipt) bool { return w.ID == r.ID }); i < 0 ||
-				!reflect.DeepEqual(r, want.Receipts[i]) {
-				t.Errorf("stored receipt %+v is not the seed's", r)
+			rooms, err := tx.Rooms().List(ctx, domain.LocationID{})
+			if err != nil {
+				return err
 			}
-		}
 
-		announcements, err := tx.Announcements().List(ctx)
+			sameSet(t, name("rooms"), rooms, want.Rooms)
+
+			staff, err := tx.Staff().List(ctx)
+			if err != nil {
+				return err
+			}
+
+			sameSet(t, name("staff"), staff, want.Staff)
+
+			courseTypes, err := tx.CourseTypes().List(ctx)
+			if err != nil {
+				return err
+			}
+
+			sameSet(t, name("course types"), courseTypes, want.CourseTypes)
+
+			levels, err := tx.Levels().List(ctx)
+			if err != nil {
+				return err
+			}
+
+			// Listed by position, the order of the scale.
+			sameSlice(t, name("levels"), levels, want.Levels)
+
+			terms, err := tx.Terms().List(ctx)
+			if err != nil {
+				return err
+			}
+
+			sameSet(t, name("terms"), terms, want.Terms)
+
+			var (
+				classes []domain.Class
+				members []domain.ClassMember
+			)
+
+			for _, term := range terms {
+				cs, err := tx.Classes().ListByTerm(ctx, term.ID)
+				if err != nil {
+					return err
+				}
+
+				classes = append(classes, cs...)
+
+				for _, c := range cs {
+					ms, err := tx.Classes().ListMembers(ctx, c.ID)
+					if err != nil {
+						return err
+					}
+
+					members = append(members, ms...)
+				}
+			}
+
+			sameSet(t, name("classes"), classes, want.Classes)
+			sameSet(t, name("class members"), members, want.ClassMembers)
+
+			from, to := allTime()
+
+			lessons, err := tx.Lessons().ListRange(ctx, from, to)
+			if err != nil {
+				return err
+			}
+
+			if len(want.Lessons) == 0 {
+				t.Errorf("%s: the demo has no lessons", school)
+			}
+
+			sameSet(t, name("lessons"), lessons, want.Lessons)
+
+			var (
+				bookings []domain.Booking
+				events   []domain.BookingEvent
+			)
+
+			for _, l := range lessons {
+				bs, err := tx.Bookings().ListByLesson(ctx, l.ID)
+				if err != nil {
+					return err
+				}
+
+				bookings = append(bookings, bs...)
+
+				for _, b := range bs {
+					es, err := tx.Bookings().ListEvents(ctx, b.ID)
+					if err != nil {
+						return err
+					}
+
+					events = append(events, es...)
+				}
+			}
+
+			sameSet(t, name("bookings"), bookings, want.Bookings)
+			sameSet(t, name("booking events"), events, want.BookingEvents)
+
+			var entries []domain.WaitlistEntry
+
+			for _, l := range lessons {
+				es, err := tx.Waitlist().ListByLesson(ctx, l.ID)
+				if err != nil {
+					return err
+				}
+
+				entries = append(entries, es...)
+			}
+
+			sameSet(t, name("waitlist entries"), entries, want.WaitlistEntries)
+
+			passTypes, err := tx.PassTypes().List(ctx)
+			if err != nil {
+				return err
+			}
+
+			sameSet(t, name("pass types"), passTypes, want.PassTypes)
+
+			personIDs := make([]domain.PersonID, len(persons))
+			for i, p := range persons {
+				personIDs[i] = p.ID
+			}
+
+			passes, err := tx.Passes().ListByPersons(ctx, personIDs)
+			if err != nil {
+				return err
+			}
+
+			sameSet(t, name("passes"), passes, want.Passes)
+
+			passIDs := make([]domain.PassID, len(passes))
+			for i, p := range passes {
+				passIDs[i] = p.ID
+			}
+
+			redemptions, err := tx.Redemptions().ListByPasses(ctx, passIDs, 0)
+			if err != nil {
+				return err
+			}
+
+			sameSet(t, name("redemptions"), redemptions, want.Redemptions)
+
+			receipts, total, err := tx.Receipts().List(ctx, store.ReceiptFilter{Limit: 100})
+			if err != nil {
+				return err
+			}
+
+			if total != len(want.Receipts) {
+				t.Errorf("%s: %d receipts stored, want %d", school, total, len(want.Receipts))
+			}
+
+			for _, r := range receipts {
+				if i := slices.IndexFunc(want.Receipts, func(w domain.Receipt) bool { return w.ID == r.ID }); i < 0 ||
+					!reflect.DeepEqual(r, want.Receipts[i]) {
+					t.Errorf("%s: stored receipt %+v is not the seed's", school, r)
+				}
+			}
+
+			announcements, err := tx.Announcements().List(ctx)
+			if err != nil {
+				return err
+			}
+
+			sameSet(t, name("announcements"), announcements, want.Announcements)
+
+			return nil
+		})
 		if err != nil {
-			return err
+			t.Fatalf("%s: %v", school, err)
 		}
-
-		sameSet(t, "announcements", announcements, want.Announcements)
-
-		return nil
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 }
 
 // TestLoadDemoAt checks that the web demo's data, built for the visit date,
@@ -1482,12 +1528,14 @@ func TestLoadDemoRefusesStoreWithLevels(t *testing.T) {
 	}
 }
 
-func validAll[T interface{ Validate() error }](t *testing.T, items []T) {
+// validAll checks that every item is valid; what names the dataset (the
+// school or the anchor) in the failure.
+func validAll[T interface{ Validate() error }](t *testing.T, what string, items []T) {
 	t.Helper()
 
 	for _, v := range items {
 		if err := v.Validate(); err != nil {
-			t.Errorf("invalid %+v: %v", v, err)
+			t.Errorf("%s: invalid %T %+v: %v", what, v, v, err)
 		}
 	}
 }
@@ -1541,6 +1589,9 @@ func index[K comparable, T any](items []T, key func(T) K) map[K]T {
 	return m
 }
 
+// exampleEmail reports whether email is empty or on a domain reserved for
+// examples (RFC 2606): example.org, .com or .net, or a host under the
+// .example top-level domain.
 func exampleEmail(email string) bool {
 	if email == "" {
 		return true
@@ -1552,7 +1603,10 @@ func exampleEmail(email string) bool {
 		}
 	}
 
-	return false
+	at := strings.LastIndex(email, "@")
+	host := email[at+1:]
+
+	return at > 0 && strings.HasSuffix(host, ".example") && len(host) > len(".example")
 }
 
 func TestDemoLogins(t *testing.T) {
@@ -1612,7 +1666,7 @@ func TestDemoLogins(t *testing.T) {
 		t.Errorf("%d credentials for %d accounts", len(d.Credentials), len(d.Accounts))
 	}
 
-	validAll(t, d.Credentials)
+	validAll(t, string(seed.SchoolProgramme), d.Credentials)
 }
 
 // TestDemoPasses checks the passes of every demo (ADR 0012): the catalog,
@@ -1769,97 +1823,6 @@ func TestSchoolValid(t *testing.T) {
 var werkstattIssuer = domain.ReceiptIssuer{
 	Name: "Tanzhaus am Lindenhof", Address: "Lindenhofweg 12\n10999 Beispielstadt",
 	TaxID: "99/999/99999", Email: "buero@tanzhaus-lindenhof.example", Phone: "+49 000 0000000",
-}
-
-// TestDemoSchoolSameData: the werkstatt school is the programme school with
-// its own settings and a background, and receipts issued with those
-// settings (issuer, language, number, line text); every other record is the
-// same.
-func TestDemoSchoolSameData(t *testing.T) {
-	t.Parallel()
-
-	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
-		programme, err := seed.DemoSchoolAt(anchor, seed.SchoolProgramme)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !reflect.DeepEqual(programme, seed.DemoAt(anchor)) {
-			t.Fatalf("%v: the programme school differs from DemoAt", anchor)
-		}
-
-		if programme.Settings != seed.DemoSettings() || !programme.Background.IsZero() {
-			t.Fatalf("%v: programme settings %+v, background %d bytes; want DemoSettings, none",
-				anchor, programme.Settings, len(programme.Background.Data))
-		}
-
-		werkstatt, err := seed.DemoSchoolAt(anchor, seed.SchoolWerkstatt)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if err := werkstatt.Settings.Validate(); err != nil {
-			t.Fatalf("werkstatt settings: %v", err)
-		}
-
-		if err := werkstatt.Background.Validate(); err != nil {
-			t.Fatalf("werkstatt background: %v", err)
-		}
-
-		if len(werkstatt.Receipts) != len(programme.Receipts) || len(werkstatt.Receipts) == 0 {
-			t.Fatalf("%v: %d werkstatt receipts, %d programme receipts", anchor, len(werkstatt.Receipts), len(programme.Receipts))
-		}
-
-		// The receipts differ in what the school's settings put on them;
-		// copy those fields over, after checking them.
-		for i := range werkstatt.Receipts {
-			w, p := &werkstatt.Receipts[i], programme.Receipts[i]
-			s := werkstatt.Settings
-
-			if w.Locale != "de" || w.Issuer != s.Receipts.Issuer || w.Footer != s.Receipts.Footer ||
-				w.TaxNote != s.Receipts.TaxNote || w.TaxMode != s.Receipts.TaxMode || w.Currency != s.Currency ||
-				w.Number != domain.ReceiptNumber(s.ReceiptPrefix, w.Year, w.Sequence) {
-				t.Fatalf("%v: werkstatt receipt %+v not issued with the werkstatt settings", anchor, *w)
-			}
-
-			if len(w.Lines) != len(p.Lines) {
-				t.Fatalf("%v: receipt %s has %d lines, the programme's %d", anchor, w.Number, len(w.Lines), len(p.Lines))
-			}
-
-			for j := range w.Lines {
-				if w.Lines[j].Description == p.Lines[j].Description {
-					t.Errorf("%v: receipt %s line %q is not translated", anchor, w.Number, w.Lines[j].Description)
-				}
-
-				w.Lines[j].Description = p.Lines[j].Description
-			}
-
-			w.Number, w.Locale, w.Issuer, w.Footer = p.Number, p.Locale, p.Issuer, p.Footer
-		}
-
-		// The places differ too (TestWerkstattPlaces): each programme room
-		// is one werkstatt room, which may hold several. Move the
-		// programme's classes and lessons into the werkstatt rooms.
-		inRoom := map[domain.RoomID]domain.RoomID{}
-		for i, c := range programme.Classes {
-			inRoom[c.RoomID] = werkstatt.Classes[i].RoomID
-		}
-
-		for i := range programme.Classes {
-			programme.Classes[i].RoomID = inRoom[programme.Classes[i].RoomID]
-		}
-
-		for i := range programme.Lessons {
-			programme.Lessons[i].RoomID = inRoom[programme.Lessons[i].RoomID]
-		}
-
-		werkstatt.Locations, werkstatt.Rooms = programme.Locations, programme.Rooms
-
-		werkstatt.Settings, werkstatt.Background = programme.Settings, programme.Background
-		if !reflect.DeepEqual(werkstatt, programme) {
-			t.Fatalf("%v: the werkstatt school differs from the programme school beyond its settings, receipts and places", anchor)
-		}
-	}
 }
 
 // TestWerkstattOwnIdentity: nothing of the programme school's identity

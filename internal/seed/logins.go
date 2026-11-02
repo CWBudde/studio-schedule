@@ -24,11 +24,25 @@ type Login struct {
 	FamilyName string
 }
 
-// DemoLogins returns the first seeded account of each role, from least to
-// most privileged role.
-func DemoLogins() []Login {
-	d := Demo()
+// DemoLogins returns the first seeded account of each role of the
+// programme school, from least to most privileged role:
+// SchoolLogins(SchoolProgramme).
+func DemoLogins() []Login { return loginsOf(Demo()) }
 
+// SchoolLogins returns the first seeded account of each role of school's
+// dataset, from least to most privileged role, like DemoLogins. An unknown
+// school fails with domain.ErrValidation.
+func SchoolLogins(school School) ([]Login, error) {
+	d, err := DemoSchoolAt(FixedDemoAnchor, school)
+	if err != nil {
+		return nil, err
+	}
+
+	return loginsOf(d), nil
+}
+
+// loginsOf returns the first account of each role of d.
+func loginsOf(d Dataset) []Login {
 	var logins []Login
 
 	for _, role := range domain.Roles() {

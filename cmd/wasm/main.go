@@ -83,6 +83,14 @@ func main() {
 		}
 	}
 
+	// The login page lists the accounts of the school seeded, never another
+	// school's (ParseSchool returns a known school).
+	logins, err := seed.SchoolLogins(school)
+	if err != nil {
+		logger.Error("listing the demo logins failed", slog.Any("err", err))
+		os.Exit(1)
+	}
+
 	deps := app.Deps{
 		Store:   st,
 		Clock:   clk,
@@ -96,7 +104,7 @@ func main() {
 		// Web push notifications show on the page (ADR 0017).
 		Pusher:     wasmbridge.PushSender{},
 		Demo:       true,
-		DemoLogins: seed.DemoLogins(),
+		DemoLogins: logins,
 		// Requests wake the background jobs started below.
 		Wake: jobs.NewWaker(),
 	}
