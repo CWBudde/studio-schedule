@@ -110,7 +110,9 @@ everything the tools return, and what the assistant's user types.
 - **Without `--personal-data`** the tools return no person data: the schedule (without who is
   booked, waiting or renting), the statistics totals (without the top participants), `doctor` and
   `db check`.
-- **With `--personal-data`** the tools also return person data. Turn it on only once the operator
+- **With `--personal-data`** the tools also return person data: the person search, a lesson's
+  participants and waiting list, a person's bookings and passes, the receipts, the mail log and the
+  statistics' top participants, never a date of birth. Turn it on only once the operator
   has a data processing agreement (Art. 28 GDPR) with the assistant's provider, and per client: the
   flag is part of the client's configuration.
 - **Arguments** of a call (a search term, a name) are never logged or audited.
