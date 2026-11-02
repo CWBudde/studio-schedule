@@ -12,6 +12,7 @@ import { showServerErrors, useAdminErrorText } from './crud/form';
 import { FormSheet, FormSheetActions, FormSheetHeader } from './crud/FormSheet';
 import { personName } from '@/lib/personName';
 import { ProblemAlert } from '@/components/ProblemAlert';
+import { type ProblemTexts, useProblemText } from '@/components/problemText';
 import { accountRoles, accountSchema, type AccountValues } from './personForms';
 
 /**
@@ -37,6 +38,7 @@ function AccountForm({ person, onDone }: { person: PersonDetail; onDone: () => v
   const { t } = useTranslation('admin');
   const { t: tAuth } = useTranslation('auth');
   const errorText = useAdminErrorText();
+  const problemText = useProblemText();
   const queryClient = useQueryClient();
   const me = useQuery(meQuery);
   const create = useMutation(createPersonAccountMutation(queryClient));
@@ -47,6 +49,20 @@ function AccountForm({ person, onDone }: { person: PersonDetail; onDone: () => v
   const { errors } = form.formState;
   const name = personName(person);
   const roles = accountRoles.filter((role) => role !== 'admin' || me.data?.role === 'admin');
+  // Why creating the account failed, for the alert and the toast alike.
+  const problems: ProblemTexts = {
+    conflicts: {
+      // The email belongs to another account; the field says so too.
+      duplicate: t('persons.account.duplicate'),
+      // Someone created an account meanwhile; the page behind is asked again.
+      'has-account': t('persons.account.hasAccount', { name }),
+    },
+    messages: {
+      403: t('persons.account.forbidden'),
+      404: t('persons.notFound'),
+      422: tAuth('form.checkEntries'),
+    },
+  };
 
   const onSubmit = (body: AccountValues) => {
     create.mutate(
@@ -62,6 +78,9 @@ function AccountForm({ person, onDone }: { person: PersonDetail; onDone: () => v
           if (conflictReason(error) === 'duplicate') {
             form.setError('email', { type: 'server', message: 'emailTaken' });
           }
+          toast.error(t('persons.account.failed', { name }), {
+            description: problemText(error, problems),
+          });
         },
       },
     );
@@ -78,20 +97,7 @@ function AccountForm({ person, onDone }: { person: PersonDetail; onDone: () => v
         className="flex flex-col gap-4 px-4 pb-4"
         onSubmit={form.handleSubmit(onSubmit)}
       >
-        <ProblemAlert
-          error={create.error}
-          conflicts={{
-            // The email belongs to another account; the field says so too.
-            duplicate: t('persons.account.duplicate'),
-            // Someone created an account meanwhile; the page behind is asked again.
-            'has-account': t('persons.account.hasAccount', { name }),
-          }}
-          messages={{
-            403: t('persons.account.forbidden'),
-            404: t('persons.notFound'),
-            422: tAuth('form.checkEntries'),
-          }}
-        />
+        <ProblemAlert error={create.error} {...problems} />
         <TextField
           label={t('persons.fields.email')}
           type="email"
@@ -118,6 +124,7 @@ function AccountForm({ person, onDone }: { person: PersonDetail; onDone: () => v
         <FormSheetActions
           pending={create.isPending}
           submitLabel={t('persons.account.submit')}
+          pendingLabel={t('persons.account.sending')}
           icon={<MailPlus aria-hidden="true" />}
         />
       </form>

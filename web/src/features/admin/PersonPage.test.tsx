@@ -5,6 +5,8 @@ import { Toaster } from '@/components/ui/sonner';
 import i18n from '@/i18n';
 import {
   conflict,
+  deferred,
+  expectOnlySearches,
   ids,
   meAdmin,
   meOffice,
@@ -18,7 +20,6 @@ import {
   problem,
   publicSettings,
   searchQueryOf,
-  expectOnlySearches,
 } from '@/test/mockApi';
 import { renderInRouter } from '@/test/utils';
 import { PersonPage } from './PersonPage';
@@ -467,6 +468,43 @@ describe('PersonPage', () => {
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     });
 
+    it('disables the button with a spinner while the invitation is being sent', async () => {
+      mockApiGet(fixtures());
+      const post = mockApiPost({});
+      type Post = (path: string, init?: MockRequest) => Promise<unknown>;
+      const searches = post.getMockImplementation() as unknown as Post;
+      const answer = deferred<unknown>();
+      // The account's answer waits for the test; searches still answer.
+      const held: Post = (path, init) =>
+        path === '/api/v1/admin/persons/{personId}/account' ? answer.promise : searches(path, init);
+      post.mockImplementation(held as unknown as Parameters<typeof post.mockImplementation>[0]);
+      const user = userEvent.setup();
+
+      renderPage(ids.personNoah);
+      await user.click((await region('Account')).getByRole('button', { name: 'Create account' }));
+      const sheet = within(
+        await screen.findByRole('dialog', { name: 'Create an account for Noah Sample' }),
+      );
+      await user.type(sheet.getByLabelText('Email'), 'noah.sample@example.org');
+      await user.click(sheet.getByRole('button', { name: 'Create and invite' }));
+
+      const sending = await sheet.findByRole('button', { name: 'Sending the invitation…' });
+      expect(sending).toBeDisabled();
+      expect(sending.querySelector('[data-slot="spinner"]')).not.toBeNull();
+
+      answer.resolve({
+        data: { id: 'account-new', status: 'pending', email: 'noah.sample@example.org' },
+        error: undefined,
+        response: new Response(null, { status: 201 }),
+      });
+
+      expect(
+        await screen.findByText(
+          'Noah Sample has an account now. The invitation has been sent to noah.sample@example.org.',
+        ),
+      ).toBeInTheDocument();
+    });
+
     it('starts with the person’s email and offers admins every role', async () => {
       mockApiGet({
         ...fixtures(meAdmin),
@@ -491,7 +529,7 @@ describe('PersonPage', () => {
       ]);
     });
 
-    it('says when the email belongs to another account', async () => {
+    it('says in the form and a toast when the email belongs to another account', async () => {
       mockApiGet(fixtures());
       mockApiPost({ '/api/v1/admin/persons/{personId}/account': conflict('duplicate') });
       const user = userEvent.setup();
@@ -511,6 +549,14 @@ describe('PersonPage', () => {
       expect(
         sheet.getByText('Another account already uses this email address.'),
       ).toBeInTheDocument();
+      // The toast says that no invitation went out, and why.
+      const toast = (
+        await screen.findByText('No account for Noah Sample: the invitation was not sent.')
+      ).closest('[data-sonner-toast]');
+      expect(toast).toHaveTextContent(
+        'Another account already uses this email address. Choose another one.',
+      );
+      expect(sheet.getByRole('button', { name: 'Create and invite' })).toBeEnabled();
     });
 
     it('says when the person got an account meanwhile and asks for the person again', async () => {
