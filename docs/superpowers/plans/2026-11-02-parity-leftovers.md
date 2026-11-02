@@ -58,7 +58,7 @@ body.
 
 ## Task 1.2
 
-- [ ] 1.2 `lesson-update-checks` Lesson writes: `becomesRental` without a second read, the `kind` error of a course-type-less rental together with the other field errors, and the memory store's `ListByStaff` without its dead guard — see "Task 1.2".
+- [x] 1.2 `lesson-update-checks` Lesson writes: `becomesRental` without a second read, the `kind` error of a course-type-less rental together with the other field errors, and the memory store's `ListByStaff` without its dead guard — see "Task 1.2".
 
 PLAN.md, Phase 15, "Review leftovers", the sub-items on `becomesRental`, `ListByStaff` and
 `UpdateLesson`, all in `internal/service/lesson_admin.go` and `internal/store/memory/repos.go`.
@@ -78,6 +78,23 @@ PLAN.md, Phase 15, "Review leftovers", the sub-items on `becomesRental`, `ListBy
    `!l.AccompanistID.IsZero()` guards. No caller asks for a zero staff ID, so they cannot change
    the result; both stores then read alike. If the storetest case has no lesson without an
    accompanist among the results, add one so a regression would show.
+
+**Done (2026-11-02).** (1) `becomesRental` runs before `places()` and reports whether the lesson
+becomes a rental; then `places()` is skipped (no bookings, no waiting list: nothing active or
+held). Before the write: 2 reads instead of 4 (`TestUpdateLessonPlaceReads` pins the reads
+through `FaultStore.Calls`, and fails on the old code). (2) Discovery: nothing joined
+`FieldError`s yet. `domain.validate` stops at its first check and `toHTTPError` reported only the
+first `FieldError` (`errors.As`), so `merge.go`'s `errors.Join` of two `Validate()`s answered with
+one field too. Now `domain.FieldErrors` walks the tree (wrapping, `errors.Join`, multi-`%w`) and
+`toHTTPError` gives each its `body.<field>` detail; the web's `invalidFields` already marks every
+one. `UpdateLesson` joins the `kind` error with `timing(d)` (the date, start time and duration
+checks, moved out of `apply`). Residual: `timing` still stops at its first field, and the lesson
+is not validated as the other kind (its first error would be the missing course type again).
+Over HTTP an impossible date never reaches the service (Huma's `format:"date"`), so the app test
+pairs `kind` with a duration past midnight. The CLI's `Report` still names one field; no command
+calls `UpdateLesson`. (3) The guards are gone; the contract case already lists lessons without an
+accompanist (`own`, `foreign`), so no case was added. Coverage 99.0 % total; every touched function
+100 %.
 
 ---
 
