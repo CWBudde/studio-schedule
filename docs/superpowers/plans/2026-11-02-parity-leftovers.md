@@ -36,7 +36,22 @@ react-i18next, Vitest, Playwright.
 
 ## Task 1.1
 
-- [ ] 1.1 `stats-reads` Statistics: drop `Bookings().CountActivePersons`; the active members come from `CountsByPersons`, which the top list reads anyway — see "Task 1.1".
+- [x] 1.1 `stats-reads` Statistics: drop `Bookings().CountActivePersons`; the active members come from `CountsByPersons`, which the top list reads anyway — see "Task 1.1".
+  - Done: `compute` reads `CountsByPersons` once; `activePersons` picks the entries with
+    `Active > 0`, their number is `ActiveMembers`, and `addTopParticipants` takes the counts and
+    those persons (it still reads `Persons().ListByIDs` once). `CountActivePersons` is gone from
+    `store.BookingRepo`, both stores (`CountActiveBookingPersons` and its sqlc code), the storetest
+    and PostgreSQL error-path cases and `fault_gen_test.go`; the `CountsByPersons` contract case
+    already covers what its case did (a person in two lessons, guests, canceled in time, a lesson
+    not asked for, no lessons). New test `TestStatisticsActiveMembers` (guest, canceled in time,
+    late-canceled only, canceled lesson, lesson outside the range, a person in two lessons, a
+    merged person with an active booking: 3) passed on the old code before the change, and fails
+    there on its second assertion, the exact sequence of `Bookings.*` reads from the `FaultStore`
+    log. One read less per request. `just lint`, `just test-cover` (PostgreSQL included),
+    `just coverage` (99.0 %) and `just check-sqlc` green.
+  - Discovery: `ActiveMembers` counts merged and anonymized persons who kept an active booking,
+    unlike the top list, which leaves them out; kept as it was (the count comes from the counts
+    before the persons are read), pinned by the test and written into the field's doc comment.
 
 PLAN.md, Phase 15, "Review leftovers", first sub-item. `StatisticsService`
 (`internal/service/statistics.go`) reads `CountActivePersons` for `Totals.ActiveMembers` and
