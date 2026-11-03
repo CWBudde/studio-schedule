@@ -1985,7 +1985,7 @@ func TestWerkstattOwnIdentity(t *testing.T) {
 	}
 
 	if len(fees) == 0 {
-		t.Error("no werkstatt receipt is an event fee's")
+		t.Error("no werkstatt receipt is for an event fee")
 	}
 }
 
