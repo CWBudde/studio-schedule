@@ -19,7 +19,8 @@ func lessonWriteTools() []tool {
 			"The bookings stay but cost nothing: their passes get the visits back. The waiting list's invites " +
 			"go back to waiting. A lesson canceled already stays as it is, and nobody is mailed again; a " +
 			"lesson that has started is refused. There is no way to cancel without the mails. Returns the " +
-			"lesson as the schedule shows it to the office.",
+			"lesson as the schedule shows it to the office; without --personal-data the server leaves out " +
+			"the account that canceled it and a room rental's renter.",
 		access:      httpapi.AccessOffice,
 		write:       WriteLessons,
 		annotations: writeAnnotations("Cancel a lesson", true, true),
@@ -47,5 +48,17 @@ func cancelLesson(ctx context.Context, s *Server, p service.Principal, in cancel
 		return nil, err
 	}
 
-	return httpapi.NewLessonDetail(sl), nil
+	body := httpapi.NewLessonDetail(sl)
+	if !s.opts.PersonalData {
+		// Person data, left out without the flag as the schedule tool
+		// does (ADR 0022): a rental's renter, and the account that
+		// canceled the lesson, this one or an earlier one. The fields are
+		// omitempty, so their keys go.
+		body.Renter = ""
+		if body.Admin != nil {
+			body.Admin.CanceledBy = nil
+		}
+	}
+
+	return body, nil
 }

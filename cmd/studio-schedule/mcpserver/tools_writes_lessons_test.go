@@ -98,10 +98,11 @@ func TestCancelLesson(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Without --personal-data the document does not name the account that
+	// canceled the lesson (TestCancelLessonPersonalData).
 	admin := clAdmin(t, text)
-	if by, _ := admin["canceledBy"].(map[string]any); doc["id"] != clJazz || doc["status"] != "canceled" ||
-		admin["cancelNote"] != "The teacher is ill." || admin["activeBookings"] != 3.0 ||
-		by["id"] != office.AccountID.String() {
+	if _, by := admin["canceledBy"]; doc["id"] != clJazz || doc["status"] != "canceled" ||
+		admin["cancelNote"] != "The teacher is ill." || admin["activeBookings"] != 3.0 || by {
 		t.Errorf("lesson %v", doc)
 	}
 
@@ -132,6 +133,42 @@ func TestCancelLesson(t *testing.T) {
 // TestCancelLessonNote: a note of domain.MaxCancelNoteLength characters
 // is taken, trimmed; one longer is invalid and changes nothing; no note
 // cancels with none.
+// TestCancelLessonPersonalData: without --personal-data the result leaves
+// out the account that canceled the lesson and a rental's renter, as the
+// schedule tool does; with it, both show. The second call finds the rental
+// canceled already and returns it as it is.
+func TestCancelLessonPersonalData(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	office := f.principal(t, demoOffice)
+	args := map[string]any{"lessonId": bkRental}
+
+	for _, tc := range []struct {
+		opts Options
+		want bool
+	}{
+		{clOptions, false},
+		{Options{PersonalData: true, AllowWrites: clOptions.AllowWrites}, true},
+	} {
+		text, isError := callTool(t, f.session(t, demoOffice, tc.opts, registry), "cancel_lesson", args)
+		if isError {
+			t.Fatalf("cancel_lesson with %+v: error result %q", tc.opts, text)
+		}
+
+		var doc map[string]any
+		if err := json.Unmarshal([]byte(text), &doc); err != nil {
+			t.Fatal(err)
+		}
+
+		by, _ := clAdmin(t, text)["canceledBy"].(map[string]any)
+		if renter, _ := doc["renter"].(string); doc["status"] != "canceled" || (renter != "") != tc.want ||
+			(by != nil) != tc.want || (tc.want && by["id"] != office.AccountID.String()) {
+			t.Errorf("with %+v: lesson %v", tc.opts, doc)
+		}
+	}
+}
+
 func TestCancelLessonNote(t *testing.T) {
 	t.Parallel()
 

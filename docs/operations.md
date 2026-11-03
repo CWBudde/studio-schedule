@@ -232,10 +232,10 @@ with 0 when the data is consistent.
 
 ### Commands and flags: mcp
 
-| Command | Flag              | Meaning                                                                                                                      |
-| ------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `mcp`   | `--personal-data` | list the tools that return person data; the assistant's provider receives what they return                                   |
-| `mcp`   | `--allow-writes`  | list the write tools of these groups (repeatable or comma-separated): `bookings`, `lessons`, `announcements`, `mail`, `jobs` |
+| Command | Flag              | Meaning                                                                                                     |
+| ------- | ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| `mcp`   | `--personal-data` | list the tools that return person data; the assistant's provider receives what they return                  |
+| `mcp`   | `--allow-writes`  | list the write tools of these groups (repeatable or comma-separated): `bookings`, `lessons`, `mail`, `jobs` |
 
 `mcp` is the MCP server for an assistant ([mcp.md](mcp.md), [ADR 0022](decisions/0022-mcp-server.md)):
 it acts as the account of `--as`, speaks MCP on stdin and stdout, and audits every tool call.

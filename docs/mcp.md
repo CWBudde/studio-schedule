@@ -219,7 +219,9 @@ A write tool is listed only when `--allow-writes` has its group, and a write too
 only with `--personal-data` too. Called by name without its group, it fails like an unknown tool
 and changes nothing. Each calls the service of the operation it mirrors, so the operation's rules,
 its validation and its own records apply unchanged: a refusal is an error result with the
-service's reason, and nothing is written.
+service's reason, and the requested write is not applied. What the service settles on its way
+still commits, as it does for the office's page: `book_lesson` ends the expired waiting-list
+invites of the lesson before it refuses a full lesson or a person booked already.
 
 | Group      | Tools                           | What it may change                                                |
 | ---------- | ------------------------------- | ----------------------------------------------------------------- |
@@ -272,7 +274,9 @@ booking, the body of removeLessonParticipant.
 **`cancel_lesson`**: cancels the lesson `lessonId` with an optional `note` (at most 500
 characters), as `lessons cancel` does: everyone with an active booking is mailed, the bookings cost
 nothing, and the waiting list's invites go back to waiting. A lesson canceled already stays as it
-is and nobody is mailed again; a lesson that has started is refused.
+is and nobody is mailed again; a lesson that has started is refused. Without `--personal-data`
+the result leaves out `admin.canceledBy`, the account that canceled the lesson, and a room
+rental's `renter`, as `schedule` does; with it, the result is that of `lessons cancel`.
 
 **`requeue_mail`**: queues the failed mail `mailId` (from `mail_log`) again, as `mail requeue`
 does, recorded as `mail-requeued` with `via` mcp. A mail with a secret link, and a pending or sent

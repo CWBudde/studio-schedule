@@ -42,10 +42,6 @@
     "detached": true,
     "activeBookings": 3,
     "cancelNote": "The teacher is ill.",
-    "canceledAt": "2026-09-22T08:00:00Z",
-    "canceledBy": {
-      "id": "00000000-0000-7000-8000-00000000003e",
-      "name": "Olga Ledgerby"
-    }
+    "canceledAt": "2026-09-22T08:00:00Z"
   }
 }

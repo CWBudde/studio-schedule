@@ -78,9 +78,11 @@ func TestMCPWriteParity(t *testing.T) {
 		toolStore := storeOf(t, toolRun)
 
 		// cancel_lesson: today's Jazz Dance lesson, with its three bookings.
+		// The command's document names the account that canceled it, which
+		// the tool shows only with --personal-data.
 		want := commandDocument(t, r, "lessons", "cancel", "--as", demoOffice, "--yes", "--note", mwNote, demoJazz)
 
-		s := mcpSession(t, toolRun, "--as", demoOffice, "--allow-writes", "lessons")
+		s := mcpSession(t, toolRun, "--as", demoOffice, "--personal-data", "--allow-writes", "lessons")
 		if got := s.document(t, "cancel_lesson", map[string]any{"lessonId": demoJazz, "note": mwNote}); !reflect.DeepEqual(
 			got, want) {
 			t.Errorf("cancel_lesson:\n%v\nlessons cancel:\n%v", got, want)
