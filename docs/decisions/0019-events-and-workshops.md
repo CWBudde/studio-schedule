@@ -253,3 +253,102 @@ not `cancelable`.
 
 **Not yet.** The event waiting list, which offers freed places (the Public API item), the
 registration confirmation mails, and moving registrations when persons are merged (ADR 0015).
+
+## Amendment (2026-11-03): public API
+
+These choices were made while building the public and the members' side of events
+(`service/event_public.go`, `httpapi/events.go`).
+
+**Operations.**
+
+- `public`: `listEvents` (`GET /api/v1/events`), `getEvent` (`/events/{slug}`) and `getEventImage`
+  (`/events/{slug}/image`, cached by its ETag like the office's).
+- `signedIn`: `registerForEvent` (`POST /events/{slug}/registrations`, body `{personId}`),
+  `cancelEventRegistration` (`POST /event-registrations/{registrationId}/cancel`) and
+  `listMyEvents` (`GET /my/events`).
+
+**Who sees what.**
+
+- `listEvents` lists the published events with a scheduled session that has not ended, in the
+  order of `Events().List`.
+- `getEvent` finds a published or canceled event by slug, past ones too. A draft is a 404 for
+  everyone, members and staff included, by slug and by image; registering for it is a 404 too.
+- **The public `Event` document names nobody.** It has `slug`, `title`, `description`, `courseType`,
+  `capacity`, `freePlaces` (the capacity minus registrations with a place and open invites, at
+  least 0), `price`, `vatRate`, `status`, `signupOpensAt`, `signupClosesAt`, `cancelUntil`,
+  `signupOpen`, `hasImage`, and every session as a `LessonSummary`, canceled ones included, so a
+  canceled event still shows its dates. It has no ID and no counts beyond `freePlaces`.
+
+**The defaults.**
+
+- The window opens at publishing when `signupOpensAt` is unset.
+- It closes at `signupClosesAt`, else at the first scheduled session's start.
+- `cancelUntil` defaults to that close.
+- The public document gives the effective close and deadline. An event with neither its own close
+  nor a scheduled session has neither: its window is shut, and a member's cancellation is
+  `too-late`.
+
+**Registering.**
+
+- **Lock order:** the event first (`Events().Lock`), then the person (`lockLivePerson`). The full
+  order is event → persons → term → class → lesson → passes, recorded in architecture.md. A write
+  that starts from a person (anonymize, merge) reads that person's open registrations first, locks
+  their events in ID order, and only then locks the persons.
+- **Order of the checks:**
+  - a person outside the caller's family (or merged, or anonymized) is a 404 before any other
+    refusal, so nobody learns about another family;
+  - then a draft, canceled or out-of-window event is a 409 `closed`;
+  - a full one is a 409 `full`;
+  - a person with an open registration is a 409 `duplicate`.
+- The registration is built like the office's: a price snapshot, and a free one is paid.
+- It is audited as `event-registration-added` with the principal's `Via`.
+- **The `event-registered` mail** (EN/DE) goes to the acting account, as a booking's confirmation
+  does. It lists the scheduled sessions, the fee to pay at the desk (unpaid only) and the
+  cancellation deadline.
+
+**Canceling.**
+
+- A member cancels a registration of their family that has a place, before `cancelUntil`. After it
+  the answer is a 409 **`too-late`**, the new reason.
+- A canceled registration is a 409 `already-canceled`. One on the waiting list is a 409
+  `not-registered`: leaving the waiting list is the waiting list's own operation.
+- A guest's or another family's registration is a 404.
+- A paid fee is refunded by a Storno of its receipt, so the registration becomes `refunded`. The
+  renderer is awaited first, as for the office's refunds.
+- It is audited as `event-registration-canceled` with `refund`. The `event-registration-canceled`
+  mail (EN/DE) goes to the acting account and says whether the fee is refunded.
+
+**Responses.** `registerForEvent` and `cancelEventRegistration` answer a `MyEvent`:
+
+- the registration: `id`, the person `{id, name, anonymized}`, `status`, `payment`, `price`,
+  `receiptId`, `cancellationReceiptId`, `cancelable`, `createdAt` and `canceledAt`;
+- the event as it is after the write, read in the same transaction.
+
+`cancelable` means the registration has a place, the event is published and the deadline has not
+passed.
+
+**My events.**
+
+- `listMyEvents` returns the registrations of the signed-in person and their dependents, canceled
+  ones included, but not those of draft events.
+- The order: open ones first, then by the event's first session (events without sessions last),
+  then by when they were made.
+- **Receipt access by registration.** `getMyReceiptPdf` serves the receipt of an event fee, and its
+  Storno (found through the receipt it cancels), when the registration is the caller's own or a
+  dependent's, whoever paid. Pass receipts stay the payer's only.
+
+**`eventSlug` on lessons.**
+
+- A session's `LessonSummary` carries its event's slug in `getSchedule`, `getLesson` (every role)
+  and the teach view.
+- One read of the sessions' events per response serves both the draft filter and the slugs; a
+  response without sessions reads none.
+- Staff also get the slug of a draft's session, whose public page is a 404.
+- The other lesson views (lesson writes, my lessons, the waiting list, pass usage) leave it out.
+
+**Reads.** `listEvents` and `listMyEvents` read a constant number of queries plus one image info
+per event.
+
+**Not yet.** The event waiting list (joining it after `full`, the invites and their expiry) follows
+in its own amendment. Of the office administration's "Not yet", this amendment adds the
+registration confirmation mails.
