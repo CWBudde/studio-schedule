@@ -120,7 +120,8 @@ func runJob(ctx context.Context, s *Server, _ service.Principal, in runJobInput)
 
 	switch {
 	case run.ID.IsZero():
-		// No such job (not found), or its run could not be recorded.
+		// No such job (not found): nothing ran. A run whose record fails
+		// keeps its ID; the runner only logs the failure, as for `jobs run`.
 		names := make([]string, 0, len(runner.Jobs()))
 		for _, info := range runner.Jobs() {
 			names = append(names, info.Name)
