@@ -9,4 +9,7 @@
 00000000-0000-7000-8000-0000000000cf  2026-09-22  19:00-20:00  Barre Fitness (all levels)             Nina Tapworth    Hall 2    4/12  scheduled
 00000000-0000-7000-8000-000000000079  2026-09-25  13:30-15:30  Contemporary (workshop)                Marco Wrenfield  Studio A  0/18  scheduled
 00000000-0000-7000-8000-00000000032e  2026-09-26  13:30-15:30  room rental: Copperleaf Theater Group  -                Studio B  -     scheduled
+00000000-0000-7000-8000-000000000330  2026-09-26  16:00-18:30  Contemporary (workshop)                Marco Wrenfield  Hall 1    0/12  scheduled
+00000000-0000-7000-8000-000000000331  2026-09-27  10:00-12:30  Contemporary (workshop)                Marco Wrenfield  Hall 1    0/12  scheduled
 00000000-0000-7000-8000-00000000007c  2026-09-27  13:30-15:30  Contemporary (workshop)                Marco Wrenfield  Studio B  0/12  scheduled
+00000000-0000-7000-8000-000000000332  2026-09-27  16:00-18:00  Contemporary (workshop)                Marco Wrenfield  Hall 1    0/12  scheduled

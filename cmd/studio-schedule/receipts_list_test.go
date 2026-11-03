@@ -96,19 +96,19 @@ func TestReceiptsList(t *testing.T) {
 
 		golden(t, "receipts/list.json", got.stdout)
 
-		all := []string{"SD-2026-0005", "SD-2026-0004", "SD-2026-0003", "SD-2026-0002", "SD-2026-0001"}
+		all := []string{"SD-2026-0006", "SD-2026-0005", "SD-2026-0004", "SD-2026-0003", "SD-2026-0002", "SD-2026-0001"}
 		if n := rlistTNumbers(t, r); !slices.Equal(n, all) {
 			t.Errorf("by default: %v, want %v", n, all)
 		}
 
-		// The demo issued them from 2026-09-02 to 2026-09-15.
+		// The demo issued them from 2026-09-02 to 2026-09-20 (the event fee).
 		for _, c := range []struct {
 			args []string
 			want []string
 		}{
 			{[]string{"--from", "2026-09-03", "--to", "2026-09-12"}, []string{"SD-2026-0004", "SD-2026-0003", "SD-2026-0002"}},
 			{[]string{"--from", "2026-09-08", "--to", "2026-09-08"}, []string{"SD-2026-0003"}},
-			{[]string{"--from", "2026-09-15"}, []string{"SD-2026-0005"}},
+			{[]string{"--from", "2026-09-15"}, []string{"SD-2026-0006", "SD-2026-0005"}},
 			{[]string{"--to", "2026-09-02"}, []string{"SD-2026-0001"}},
 			{[]string{"--from", "2026-01-01", "--to", "2026-08-31"}, []string{}},
 			{[]string{"--to", "2025-12-31"}, []string{}},

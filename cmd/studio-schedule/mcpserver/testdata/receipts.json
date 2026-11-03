@@ -1,6 +1,46 @@
 {
   "items": [
     {
+      "id": "00000000-0000-7000-8000-000000000335",
+      "number": "SD-2026-0006",
+      "kind": "sale",
+      "issuedAt": "2026-09-20T08:30:00Z",
+      "issueDate": "2026-09-20",
+      "issuer": {
+        "name": "Studio Demo Dance School",
+        "address": "Pirouette Lane 7\n10999 Exampletown",
+        "taxNumber": "99/999/99999",
+        "email": "office@studio-demo.example",
+        "phone": "+49 000 0000000"
+      },
+      "taxMode": "standard",
+      "payer": {
+        "id": "00000000-0000-7000-8000-00000000002b",
+        "name": "Lina Mistlewood"
+      },
+      "recipientName": "Lina Mistlewood",
+      "paymentMethod": "card",
+      "currency": "EUR",
+      "net": 10084,
+      "vat": 1916,
+      "gross": 12000,
+      "lines": [
+        {
+          "position": 1,
+          "description": "Contemporary Weekend Intensive for Lina Mistlewood, 26 Sep 2026 – 27 Sep 2026",
+          "quantity": 1,
+          "unitPrice": 12000,
+          "vatRate": 1900,
+          "net": 10084,
+          "vat": 1916,
+          "gross": 12000
+        }
+      ],
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "eventTitle": "Contemporary Weekend Intensive",
+      "cancelable": false
+    },
+    {
       "id": "00000000-0000-7000-8000-00000000026d",
       "number": "SD-2026-0005",
       "kind": "sale",
@@ -206,7 +246,7 @@
       "cancelable": false
     }
   ],
-  "total": 5,
+  "total": 6,
   "years": [
     2026
   ]

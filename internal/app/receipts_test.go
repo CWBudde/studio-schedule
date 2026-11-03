@@ -36,13 +36,14 @@ func TestReceipts(t *testing.T) {
 	arno := a.login("arno.keystone@example.net")
 	clara := a.login("clara.amberly@example.org")
 
-	// The seed has five: four sales and the cancellation of one.
+	// The seed has six: five sales (four passes, one event fee) and the
+	// cancellation of one.
 	list := unmarshal[struct {
 		Items []receiptBody
 		Total int
 		Years []int
 	}](t, a.expect(http.StatusOK, http.MethodPost, "/api/v1/admin/receipts/search", `{"limit":2}`, olga))
-	if list.Total != 5 || len(list.Items) != 2 || list.Items[0].Number != "SD-2026-0005" || len(list.Years) != 1 ||
+	if list.Total != 6 || len(list.Items) != 2 || list.Items[0].Number != "SD-2026-0006" || len(list.Years) != 1 ||
 		list.Years[0] != 2026 {
 		t.Fatalf("receipts %+v", list)
 	}
@@ -72,7 +73,7 @@ func TestReceipts(t *testing.T) {
 
 	r := unmarshal[receiptBody](t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/admin/receipts/"+sold.ReceiptID, "", olga))
 
-	if r.Number != "SD-2026-0006" || r.Kind != "sale" || r.PaymentMethod != "card" || r.Gross != 1800 || r.Net != 1513 ||
+	if r.Number != "SD-2026-0007" || r.Kind != "sale" || r.PaymentMethod != "card" || r.Gross != 1800 || r.Net != 1513 ||
 		r.VAT != 287 || r.Payer == nil || r.Payer.Name != "Clara Amberly" || !r.Cancelable || r.PassID == "" ||
 		len(r.Lines) != 1 || r.Lines[0].VATRate != 1900 || !strings.HasPrefix(r.Lines[0].Description, "Single visit for Finn Amberly") {
 		t.Fatalf("receipt %+v", r)
@@ -80,14 +81,14 @@ func TestReceipts(t *testing.T) {
 
 	res, pdf := a.call(http.MethodGet, "/api/v1/admin/receipts/"+r.ID+"/pdf", "", olga)
 	if res.StatusCode != http.StatusOK || res.Header.Get("Content-Type") != "application/pdf" ||
-		res.Header.Get("Content-Disposition") != `attachment; filename="SD-2026-0006.pdf"` || !bytes.HasPrefix(pdf, []byte("%PDF")) {
+		res.Header.Get("Content-Disposition") != `attachment; filename="SD-2026-0007.pdf"` || !bytes.HasPrefix(pdf, []byte("%PDF")) {
 		t.Fatalf("PDF: %d %v", res.StatusCode, res.Header)
 	}
 
 	// Clara sees her receipts (her own card, her daughter's and Finn's),
 	// not Kai's.
 	mine := unmarshal[struct{ Items []receiptBody }](t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/my/receipts", "", clara))
-	if len(mine.Items) != 3 || mine.Items[0].Number != "SD-2026-0006" {
+	if len(mine.Items) != 3 || mine.Items[0].Number != "SD-2026-0007" {
 		t.Fatalf("Clara's receipts %+v", mine)
 	}
 
@@ -110,7 +111,7 @@ func TestReceipts(t *testing.T) {
 			Attachment *struct{ Filename, ContentType string }
 		}
 	}](t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/demo/mailbox", "", olga))
-	if len(box.Mails) == 0 || box.Mails[0].Attachment == nil || box.Mails[0].Attachment.Filename != "SD-2026-0006.pdf" ||
+	if len(box.Mails) == 0 || box.Mails[0].Attachment == nil || box.Mails[0].Attachment.Filename != "SD-2026-0007.pdf" ||
 		box.Mails[0].To != "clara.amberly@example.org" {
 		t.Fatalf("mailbox %+v", box)
 	}
@@ -123,7 +124,7 @@ func TestReceipts(t *testing.T) {
 	// The Storno, once.
 	c := unmarshal[receiptBody](t, a.expect(http.StatusCreated, http.MethodPost, "/api/v1/admin/receipts/"+r.ID+"/cancel",
 		`{"reason":"Wrong pass"}`, olga))
-	if c.Kind != "cancellation" || c.Number != "SD-2026-0007" || c.Gross != -1800 || c.Cancels == nil ||
+	if c.Kind != "cancellation" || c.Number != "SD-2026-0008" || c.Gross != -1800 || c.Cancels == nil ||
 		c.Cancels.Number != r.Number || c.Reason != "Wrong pass" || c.Cancelable {
 		t.Fatalf("cancellation %+v", c)
 	}
@@ -141,7 +142,7 @@ func TestReceipts(t *testing.T) {
 	used := ""
 
 	for _, it := range mine.Items {
-		if it.Number != "SD-2026-0006" && strings.Contains(it.Lines[0].Description, "for Clara Amberly") {
+		if it.Number != "SD-2026-0007" && strings.Contains(it.Lines[0].Description, "for Clara Amberly") {
 			used = it.ID
 		}
 	}
