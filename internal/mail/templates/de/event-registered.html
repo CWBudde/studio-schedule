@@ -1,0 +1,15 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>deine Anmeldung für diese Veranstaltung bei {{.SchoolName}} ist bestätigt:</p>
+<p><strong>{{.Title}}</strong><br>Angemeldet: {{.Participant}}</p>
+{{- range .Sessions}}
+<p>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr<br>{{.Room}}, {{.Location}}</p>
+{{- end}}
+{{- with .Fee}}
+<p>Bitte bezahle die Gebühr von {{.}} am Empfang; dort bekommst du auch den Beleg.</p>
+{{- end}}
+{{- if not .CancelUntil.IsZero}}
+<p>Falls es doch nicht passt, kannst du die Anmeldung bis {{date .CancelUntil}}, {{clock .CancelUntil}} Uhr selbst stornieren. Danach wende dich bitte an {{.SchoolName}}.</p>
+{{- end}}
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

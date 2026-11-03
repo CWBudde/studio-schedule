@@ -73,6 +73,16 @@ const (
 	// school canceled it, and whether their fee was refunded. Data:
 	// EventCanceledData.
 	TemplateEventCanceled = "event-canceled"
+	// TemplateEventRegistered confirms to the account that registered a
+	// person of its family for an event (ADR 0019) the registration, the
+	// sessions, the fee to pay at the desk and the cancellation deadline.
+	// Data: EventRegistrationData.
+	TemplateEventRegistered = "event-registered"
+	// TemplateEventRegistrationCanceled confirms to the account that
+	// canceled a registration of its family for an event (ADR 0019) the
+	// cancellation, and whether the fee is refunded. Data:
+	// EventRegistrationData.
+	TemplateEventRegistrationCanceled = "event-registration-canceled"
 	// TemplateTest is the test mail of `studio-schedule mail test`, which
 	// checks that the mail server delivers. It goes straight to the mail
 	// server, never through the outbox, so it is no template of the mail
@@ -88,6 +98,7 @@ func TemplateNames() []string {
 		TemplateLessonCanceled, TemplateLessonRestored, TemplateLessonChanged, TemplateBookingConfirmed,
 		TemplateBookingCanceled, TemplateWaitlistInvite, TemplateWaitlistExpired, TemplateLessonNotice,
 		TemplateReceipt, TemplateAnnouncement, TemplateAccountDeleted, TemplatePasswordChanged, TemplateEventCanceled,
+		TemplateEventRegistered, TemplateEventRegistrationCanceled,
 	}
 }
 
@@ -540,6 +551,56 @@ func (d EventCanceledData) Validate() error {
 		return fmt.Errorf("%w: an event mail needs a participant", domain.ErrValidation)
 	case d.FirstDay.IsZero() != d.LastDay.IsZero() || d.LastDay.Before(d.FirstDay):
 		return fmt.Errorf("%w: the event's last day must not come before its first", domain.ErrValidation)
+	}
+
+	return nil
+}
+
+// EventRegistrationData is the data of TemplateEventRegistered and
+// TemplateEventRegistrationCanceled. The templates format the instants in
+// their own location, which must be the school's time zone.
+type EventRegistrationData struct {
+	// SchoolName is the school that sends the mail.
+	SchoolName string
+	// GivenName greets the recipient; empty means a greeting without name.
+	GivenName string
+	// Participant names the registered person: the recipient or a
+	// dependent.
+	Participant string
+	// Title names the event.
+	Title string
+	// Sessions are the event's scheduled sessions, ordered by start (Late
+	// is unused); empty if none is left.
+	Sessions []BookedLesson
+	// Fee is the registration's price formatted with its currency, which
+	// is paid at the desk: only in TemplateEventRegistered and only for an
+	// unpaid registration; empty for a free one.
+	Fee string
+	// CancelUntil is the deadline of the member's own cancellation; only
+	// in TemplateEventRegistered, optional.
+	CancelUntil time.Time
+	// Refunded tells that the fee paid is refunded by a Storno of its
+	// receipt, which is mailed apart; only in
+	// TemplateEventRegistrationCanceled.
+	Refunded bool
+}
+
+// Validate checks the data before rendering. All errors wrap
+// domain.ErrValidation.
+func (d EventRegistrationData) Validate() error {
+	switch {
+	case strings.TrimSpace(d.SchoolName) == "":
+		return fmt.Errorf("%w: school name must not be empty", domain.ErrValidation)
+	case strings.TrimSpace(d.Title) == "":
+		return fmt.Errorf("%w: the event's title must not be empty", domain.ErrValidation)
+	case strings.TrimSpace(d.Participant) == "":
+		return fmt.Errorf("%w: an event mail needs a participant", domain.ErrValidation)
+	}
+
+	for _, l := range d.Sessions {
+		if !l.EndsAt.After(l.StartsAt) {
+			return fmt.Errorf("%w: a session must end after it starts", domain.ErrValidation)
+		}
 	}
 
 	return nil

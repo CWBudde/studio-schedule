@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;">
+<div style="max-width:560px;margin:0 auto;padding:24px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;color:#18181b;background-color:#ffffff;">
+<p>Hello Anna,</p>
+<p>your registration for this event at Studio Example is confirmed:</p>
+<p><strong>Imaginary Workshop</strong><br>Registered: Mia Example</p>
+<p>Saturday, 4 July 2026, 10:00–13:00<br>Studio 1, Example Street 1</p>
+<p>Sunday, 5 July 2026, 10:00–13:00<br>Studio 1, Example Street 1</p>
+<p>Please pay the fee of €45.00 at the desk; you get the receipt there.</p>
+<p>If it does not suit after all, you can cancel the registration yourself until Wednesday, 1 July 2026, 23:59. After that, please contact Studio Example.</p>
+<p>Kind regards,<br>Studio Example</p>
+</div>
+</body>
+</html>

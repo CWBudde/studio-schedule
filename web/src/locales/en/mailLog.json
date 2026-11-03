@@ -46,7 +46,9 @@
     "announcement": "Announcement",
     "account-deleted": "Account deleted",
     "password-changed": "Password changed",
-    "event-canceled": "Event canceled"
+    "event-canceled": "Event canceled",
+    "event-registered": "Event registration confirmed",
+    "event-registration-canceled": "Event registration canceled"
   },
   "attempts_one": "{{count}} attempt",
   "attempts_other": "{{count}} attempts",
