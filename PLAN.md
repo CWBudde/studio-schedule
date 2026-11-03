@@ -1198,31 +1198,63 @@ resources and prompts, then opt-in writes, then the remote transport if the ADR 
         arguments)
   - [x] SDK: the official `github.com/modelcontextprotocol/go-sdk` (server side only, kept out of
         `cmd/wasm` by `check-wasm-deps`) (2026-11-01) — as proposed, v1.8.0
-- [ ] Read tools: the schedule (date range, location, course type), a lesson with participants
+- [x] Read tools: the schedule (date range, location, course type), a lesson with participants
       and waitlist (staff and office), free places, rooms free at a time, person search, a
       person's bookings and passes, statistics, receipts, the mail log, `doctor`, `db check`. With
       them the server itself (ADR 0022): `studio-schedule mcp --as` on the command layer, the
       per-call account check, `domain.ChannelMCP`, the `mcp-tool-called` audit action (migration,
       constant, audit page strings), and the `--personal-data` split of the tool list
-- [ ] Resources: the school settings, the current term's timetable, the glossary (so the model
+      (2026-11-02) — #19, #20, #23: `cmd/studio-schedule/mcpserver` with the registry and the call
+      wrapper `(*Server).run` (`Actor` and the role checked on every call, then the audit row with
+      the outcome only). Without `--personal-data`: `schedule` (free places; booked-for, waiting
+      list and renter left out), `free_rooms` (`CatalogService.FreeRooms`, no command, so no
+      parity test), `statistics` (no top participants), `doctor` and `db_check` (admin, from
+      `cmd/studio-schedule/diagnose`). With it: `lesson`, `search_persons` (the term is an
+      argument, never logged), `person_bookings`, `person_passes`, `receipts`, `mail_log`, and
+      the top participants. No tool returns a date of birth
+- [x] Resources: the school settings, the current term's timetable, the glossary (so the model
       uses the school's words), and templates for `lesson://{id}` and `person://{id}` (office)
-- [ ] Prompts in the school's language: "weekly overview", "whom to invite from the waiting
-      list", "draft an announcement for a canceled lesson"
-- [ ] Write tools (opt-in): book or cancel for a person (the booking rules apply), cancel a
-      lesson with notification, create an announcement as a draft (the tool never sends one; the
-      office publishes it), requeue failed mail, run a job. Listed per group of `--allow-writes`
-      (ADR 0022), annotated `destructiveHint`/`idempotentHint`
-- [ ] Remote transport (if decided): `/mcp` behind the access middleware, with rate limits,
+      (2026-11-02) — #21: `school://settings` (the public part), `school://timetable`,
+      `school://glossary` (docs/glossary.md, embedded by `package docs`); the templates are listed
+      for the office with `--personal-data` only. Reads go through `run` and are audited under
+      their URI template, never with the ID
+- [x] Prompts in the school's language: "weekly overview", "whom to invite from the waiting
+      list", "draft an announcement for a canceled lesson" (2026-11-02) — #22: `weekly_overview`,
+      `waitlist_invitations`, `canceled_lesson_announcement`, texts in
+      `mcpserver/prompts/{en,de}.json` in the school's language; listed under the tools' rules,
+      every get goes through `run`. The announcement prompt drafts the text in the chat; nothing
+      saves it
+- [x] Write tools (opt-in): book or cancel for a person (the booking rules apply), cancel a
+      lesson with notification, requeue failed mail, run a job. Listed per group of
+      `--allow-writes` (ADR 0022), annotated `destructiveHint`/`idempotentHint` (2026-11-03) — #24:
+      `book_lesson` and `cancel_booking` (`bookings`, office, through `ParticipantService`),
+      `cancel_lesson` (`lessons`, office; without `--personal-data` the renter and `canceledBy`
+      are left out), `requeue_mail` (`mail`, admin, audited `mail-requeued` with Via mcp) and
+      `run_job` (`jobs`, admin; a failed run is an ok result with `result: failed`). Changed by
+      decision (ADR 0022, amendment 2026-11-03): no announcement draft, because announcements
+      have no draft state; the `announcements` group is gone (`--allow-writes announcements`
+      exits 2)
+- [ ] Announcement drafts for the assistant: a draft state for announcements (saved, never
+      mailed or shown until the office publishes it), then a `draft_announcement` tool in an
+      `announcements` write group. Its own item by the ADR 0022 amendment; decide the draft state
+      first, and ask
+- [x] Remote transport (if decided): `/mcp` behind the access middleware, with rate limits,
       request IDs and the ADR's authentication. The WASM demo has no MCP server (its transport
       is the browser), and it shows nothing that suggests one (2026-11-01) — not chosen: ADR 0022
       settles on stdio only; a remote transport waits for a remote mode with its own ADR
-- [ ] Tests: an in-process MCP client (go-sdk) against the server on both stores. They cover the
+- [x] Tests: an in-process MCP client (go-sdk) against the server on both stores. They cover the
       tool list per access level, valid input schemas, golden results, refused writes and audit
       rows, and each tool against the CLI command it mirrors where one exists (ADR 0022); the tool
       list with and without `--personal-data` and per `--allow-writes` group; a demoted or disabled
-      account refused on its next call; the coverage gate of Phase 9 applies
-- [ ] Docs: docs/mcp.md (setup for Claude Desktop, `claude mcp add` for Claude Code, other
-      clients; the tool list; privacy); the CLAUDE.md code map
+      account refused on its next call; the coverage gate of Phase 9 applies (2026-11-03) —
+      `mcpserver` tests with an in-process go-sdk client (registry, filters per role and flag,
+      refusals by name, audit rows, goldens in `mcpserver/testdata`, store faults), and the parity
+      tests in `cmd/studio-schedule/mcp*_test.go` on the memory store and PostgreSQL (`stores`)
+- [x] Docs: docs/mcp.md (setup for Claude Desktop, `claude mcp add` for Claude Code, other
+      clients; the tool list; privacy); the CLAUDE.md code map (2026-11-03) — docs/mcp.md (setup
+      for Claude Desktop, Claude Code and over SSH, flags, exit codes, tools, write tools,
+      resources, prompts, audit, privacy), the docs/privacy.md section "The assistant (MCP)",
+      docs/cli.md, the CLAUDE.md code map
 
 ## Phase 13 — PHP backend
 
