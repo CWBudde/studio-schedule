@@ -166,13 +166,14 @@ func TestDraftSessionsHidden(t *testing.T) {
 }
 
 // TestDraftSessionStoreFaults: a failing read of the sessions' events is
-// returned by every path that hides draft sessions.
+// returned by every path that hides draft sessions or gives a session its
+// event's slug.
 func TestDraftSessionStoreFaults(t *testing.T) {
 	t.Parallel()
 
 	f := newFeedFixture(t)
 	session := f.storeSession(t, f.storeEvent(t, domain.EventPublished, 0), "2026-10-23T16:00:00Z")
-	anna := f.principal(t, f.anna)
+	anna, office := f.principal(t, f.anna), f.principal(t, f.olga)
 	feed := createFeed(t, f.feeds(t, bookingNow), anna, domain.FeedSchedule, domain.LocationID{})
 	now := clock.NewFixed(mustInstant(t, bookingNow))
 	fs := NewFaultStore(f.st)
@@ -187,6 +188,23 @@ func TestDraftSessionStoreFaults(t *testing.T) {
 		},
 		"Lesson": func() error {
 			_, err := NewScheduleService(fs, now).Lesson(t.Context(), anna, session.ID)
+
+			return err
+		},
+		"Schedule by the office": func() error {
+			_, err := NewScheduleService(fs, now).Schedule(t.Context(), office, ScheduleQuery{
+				From: mustDate(t, "2026-10-21"), To: mustDate(t, "2026-10-28"),
+			})
+
+			return err
+		},
+		"Lesson by the office": func() error {
+			_, err := NewScheduleService(fs, now).Lesson(t.Context(), office, session.ID)
+
+			return err
+		},
+		"Teach": func() error {
+			_, err := NewTeachService(fs, now, f.seq, newTestRenderer(t)).Lessons(t.Context(), office, TeachQuery{})
 
 			return err
 		},
@@ -228,5 +246,99 @@ func TestCloneSkipsSessions(t *testing.T) {
 
 	if len(got.Created) != 1 || got.Created[0].Source.Lesson.ID != plain.ID || len(got.Skipped) != 0 {
 		t.Errorf("clone %+v, want only %v copied (not %v)", got, plain.ID, session.ID)
+	}
+}
+
+// TestSessionEventSlug: the schedule, a lesson and the instructor view give
+// a session its event's slug and a plain lesson none, for a member and for
+// staff, with one read of the events per response that has a session and
+// none for a response without one.
+func TestSessionEventSlug(t *testing.T) {
+	t.Parallel()
+
+	f := newStaffFixture(t)
+	ev := f.storeEvent(t, domain.EventPublished, 0)
+	session := f.storeSession(t, ev, "2026-10-23T16:00:00Z")
+	plain := f.regular(t, "2026-10-24T18:00:00Z")
+	want := map[domain.LessonID]string{session.ID: ev.Slug, plain.ID: ""}
+	fs := NewFaultStore(f.st)
+	now := clock.NewFixed(mustInstant(t, bookingNow))
+	schedule := NewScheduleService(fs, now)
+	teach := NewTeachService(fs, now, f.seq, newTestRenderer(t))
+	week := ScheduleQuery{From: mustDate(t, "2026-10-21"), To: mustDate(t, "2026-10-28")}
+	saturday := ScheduleQuery{From: mustDate(t, "2026-10-24"), To: mustDate(t, "2026-10-25")}
+
+	// reads runs op and returns how often it read events.
+	reads := func(op func() error) int {
+		t.Helper()
+
+		before := fs.Count("Events.ListByIDs")
+		if err := op(); err != nil {
+			t.Fatal(err)
+		}
+
+		return fs.Count("Events.ListByIDs") - before
+	}
+
+	// slugs checks the slugs of the lessons of want among got, which must
+	// have them all.
+	slugs := func(name string, got []ScheduledLesson) {
+		t.Helper()
+
+		found := 0
+
+		for _, sl := range got {
+			if slug, ok := want[sl.Lesson.ID]; ok {
+				found++
+
+				if sl.EventSlug != slug {
+					t.Errorf("%s: lesson %v has the slug %q, want %q", name, sl.Lesson.ID, sl.EventSlug, slug)
+				}
+			}
+		}
+
+		if found != len(want) {
+			t.Errorf("%s: %d of the lessons %v, want all", name, found, want)
+		}
+	}
+
+	ivy, olga := f.principal(t, f.ivy), f.principal(t, f.olga)
+
+	for name, p := range map[string]Principal{"member": f.principal(t, f.anna), "instructor": ivy, "office": olga} {
+		var got Schedule
+
+		if n := reads(func() (err error) { got, err = schedule.Schedule(t.Context(), p, week); return err }); n != 1 {
+			t.Errorf("%s: the schedule read events %d times, want once", name, n)
+		}
+
+		slugs(name+"'s schedule", got.Lessons)
+
+		if n := reads(func() (err error) { got, err = schedule.Schedule(t.Context(), p, saturday); return err }); n != 0 {
+			t.Errorf("%s: a schedule without a session read events %d times", name, n)
+		}
+
+		for id, slug := range want {
+			var sl ScheduledLesson
+
+			n := reads(func() (err error) { sl, err = schedule.Lesson(t.Context(), p, id); return err })
+			if sl.EventSlug != slug || n != min(len(slug), 1) {
+				t.Errorf("%s: lesson %v has the slug %q after %d reads, want %q", name, id, sl.EventSlug, n, slug)
+			}
+		}
+	}
+
+	for name, p := range map[string]Principal{"instructor": ivy, "office": olga} {
+		var got TeachLessons
+
+		if n := reads(func() (err error) { got, err = teach.Lessons(t.Context(), p, TeachQuery{}); return err }); n != 1 {
+			t.Errorf("%s: the instructor view read events %d times, want once", name, n)
+		}
+
+		slugs(name+"'s instructor view", mapSlice(got.Lessons, func(l TeachLesson) ScheduledLesson { return l.ScheduledLesson }))
+
+		q := TeachQuery{From: saturday.From, To: saturday.To}
+		if n := reads(func() (err error) { got, err = teach.Lessons(t.Context(), p, q); return err }); n != 0 || len(got.Lessons) == 0 {
+			t.Errorf("%s: an instructor view of %d lessons without a session read events %d times", name, len(got.Lessons), n)
+		}
 	}
 }

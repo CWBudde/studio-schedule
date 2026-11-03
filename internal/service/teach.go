@@ -217,14 +217,19 @@ func (s *TeachService) lessonsOf(
 	}
 }
 
-// teachLessons adds the references, the counts and the attendance state
-// to the lessons, which start in the school dates [from, to), as p sees
-// them at now.
+// teachLessons adds the references, the slugs of the sessions' events, the
+// counts and the attendance state to the lessons, which start in the
+// school dates [from, to), as p sees them at now.
 func teachLessons(
 	ctx context.Context, tx store.Tx, p Principal, loc *time.Location, now time.Time, own []domain.Staff,
 	from, to domain.Date, lessons []domain.Lesson,
 ) ([]TeachLesson, error) {
 	refs, err := loadRangeRefs(ctx, tx, from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	events, err := sessionEvents(ctx, tx, lessons)
 	if err != nil {
 		return nil, err
 	}
@@ -262,6 +267,7 @@ func teachLessons(
 			return nil, err
 		}
 
+		sl.EventSlug = events[l.EventID].Slug
 		c := counts[l.ID]
 		sl.FreePlaces = max(0, l.Capacity-c.Active-held[l.ID])
 		started := l.Status != domain.LessonCanceled && !now.Before(l.StartsAt)
