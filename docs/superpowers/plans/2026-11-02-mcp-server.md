@@ -721,45 +721,52 @@ PLAN.md Phase 12, "Prompts". This task needs Task 1.1 on main.
 
 ## Task 3.1
 
-- [ ] 3.1 `mcp-writes` The write tools, listed per `--allow-writes` group: book or cancel for a person, cancel a lesson with notification, create an announcement draft, requeue failed mail, run a job — see "Task 3.1".
+- [ ] 3.1 `mcp-writes` The write tools, listed per `--allow-writes` group: book or cancel for a person, cancel a lesson with notification, requeue failed mail, run a job; the `announcements` group goes (no draft tool) — see "Task 3.1".
 
 PLAN.md Phase 12, "Write tools (opt-in)". This task needs Tasks 1.1 and 2.1 on main.
 
 **Files:**
 
 - **Create:** `cmd/studio-schedule/mcpserver/tools_writes_bookings.go`, `…_lessons.go`,
-  `…_announcements.go`, `…_mail.go`, `…_jobs.go` and their tests; parity tests where a command exists,
+  `…_mail.go`, `…_jobs.go` and their tests; parity tests where a command exists,
   in `cmd/studio-schedule/mcp_writes_test.go`.
 - **Modify:** `mcpserver/tool.go` (the registry entries), `docs/mcp.md` (rows, and a section on
-  writes and annotations).
+  writes and annotations). For the `announcements` group's removal (below): `mcpserver/server.go`
+  and `server_test.go`, `cmd/studio-schedule/mcp.go` (the flag's help) and `mcp_test.go`,
+  `docs/cli.md` (`just cli-docs`), the prompt texts `mcpserver/prompts/{en,de}.json` and
+  `docs/mcp.md`.
 
 **Interfaces:**
 
 - **Consumes:** from Task 1.1, `tool.write`, `WriteGroup`, `Options.AllowWrites`, `(*Server).call`;
   from Task 2.1, the person IDs that `search_persons` returns.
-- **Produces:** the tool names `book_lesson`, `cancel_booking`, `cancel_lesson`,
-  `draft_announcement`, `requeue_mail` and `run_job`.
+- **Produces:** the tool names `book_lesson`, `cancel_booking`, `cancel_lesson`, `requeue_mail`
+  and `run_job`; the write groups `bookings`, `lessons`, `mail` and `jobs`.
 
 **Tools.** Each is listed only when its group is in `--allow-writes`. The service's rules, validation
 and audit events apply unchanged.
 
-| tool                                            | group         | access | personal data                  | annotations                                           | mirrors                                                                                                             |
-| ----------------------------------------------- | ------------- | ------ | ------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `book_lesson` `{lessonId, personId}`            | bookings      | office | yes                            | idempotent                                            | `BookingService` as the office books for a person. No command, no parity                                            |
-| `cancel_booking` `{lessonId, personId}`         | bookings      | office | yes                            | destructive, idempotent                               | `BookingService` cancel. No command, no parity                                                                      |
-| `cancel_lesson` `{lessonId, note?}`             | lessons       | office | no                             | destructive, idempotent                               | `lessons cancel --yes` (parity; notifies those booked)                                                              |
-| `draft_announcement` `{title, body, audience…}` | announcements | office | no                             | not destructive                                       | `AnnouncementService` create as a draft: it never sets a send time, and the office publishes. No command, no parity |
-| `requeue_mail` `{mailId}`                       | mail          | admin  | yes (the log names recipients) | destructive                                           | `mail requeue <id> --yes` (parity)                                                                                  |
-| `run_job` `{name}`                              | jobs          | admin  | no                             | destructive for a job that mails or deletes, else not | `jobs run <name>` (parity)                                                                                          |
+| tool                                    | group    | access | personal data                  | annotations                                           | mirrors                                                                  |
+| --------------------------------------- | -------- | ------ | ------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------ |
+| `book_lesson` `{lessonId, personId}`    | bookings | office | yes                            | idempotent                                            | `BookingService` as the office books for a person. No command, no parity |
+| `cancel_booking` `{lessonId, personId}` | bookings | office | yes                            | destructive, idempotent                               | `BookingService` cancel. No command, no parity                           |
+| `cancel_lesson` `{lessonId, note?}`     | lessons  | office | no                             | destructive, idempotent                               | `lessons cancel --yes` (parity; notifies those booked)                   |
+| `requeue_mail` `{mailId}`               | mail     | admin  | yes (the log names recipients) | destructive                                           | `mail requeue <id> --yes` (parity)                                       |
+| `run_job` `{name}`                      | jobs     | admin  | no                             | destructive for a job that mails or deletes, else not | `jobs run <name>` (parity)                                               |
 
 - **What the client approves:** the annotations replace the CLI's `--yes` (ADR 0022). No tool asks
   for confirmation itself.
-- **Announcements: an open decision.** `domain.Announcement` has no draft state today. `PublishAt` is
-  required and the announcement shows from then on, yet ADR 0022 says the tool "saves a draft and
-  never sends one; the office publishes it in the app". Until the plan here names the chosen draft
-  model, leave `draft_announcement` out and say so in the PR. That model would be a domain field, a
-  migration and a web "publish" action. Never invent a draft state, and never create an announcement
-  that publishes.
+- **Announcements: decided (2026-11-03), no draft tool.** `domain.Announcement` has no draft
+  state (`PublishAt` is required and the announcement shows from then on), and the user chose to
+  leave drafts out for now ([ADR 0022](../../decisions/0022-mcp-server.md), amendment of
+  2026-11-03). Unimplemented means absent, so the `announcements` write group goes too:
+  - drop `WriteAnnouncements` from `WriteGroups()`, so `--allow-writes announcements` exits 2 as an
+    unknown group, and update the group lists in the flag's help, `docs/cli.md` (`just cli-docs`),
+    `docs/mcp.md` ("Flags") and the tests that quote them;
+  - the last paragraph of `canceled_lesson_announcement` (`prompts/en.json`, `prompts/de.json`)
+    and its paragraph in `docs/mcp.md` stop speaking of a tool that saves a draft: no tool saves
+    an announcement, the model gives the text only, and the office publishes it in the app;
+  - never create an announcement from a tool, not even one dated far ahead.
 - **Which jobs:** tell a mailing or deleting job from the job list (`app.Jobs`). Mark it `destructive`
   per job in a small map next to the tool, and test the map against `app.Jobs` so a new job cannot
   be forgotten.
@@ -777,7 +784,9 @@ and audit events apply unchanged.
   and the booking count is unchanged.
 - **Audit:** every write leaves its own audit events (e.g. `mail-requeued`) with
   `Via.Channel == mcp`, plus the `mcp-tool-called` row.
-- **Draft announcement:** after `draft_announcement`, the `announcements` job sends nothing.
+- **No announcements group:** `--allow-writes announcements` is refused at start (exit 2), and
+  no tool, whatever the flags, writes an announcement (the store's announcements are unchanged
+  after a session that calls every listed tool's happy path).
 - **Both stores**, plus the parity tests for `cancel_lesson`, `requeue_mail` and `run_job`.
 
 **Verify:** `go build ./...`, `just test`, `just test-pg`, `PATH=$HOME/go/bin:$PATH just lint`,

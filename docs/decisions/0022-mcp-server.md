@@ -141,3 +141,14 @@ only. Its in-memory transport lets the tests run a real client against the serve
 - The go-sdk is a new dependency, in the server binary only.
 - Each tool comes with a parity test against its command, and the tools count towards the coverage
   gate (Phase 9).
+
+## Amendment (2026-11-03): no announcement drafts yet
+
+An announcement has no draft state: `PublishAt` is required, and the announcement shows from then
+on. A tool that "saves a draft and never sends one" would need that state first (a domain field, a
+migration, a "publish" action in the office's page), and an announcement dated far ahead would only
+pretend to be a draft. So the write tools leave announcements out for now, and the `announcements`
+group goes with them: `--allow-writes` takes `bookings`, `lessons`, `mail` and `jobs`, and
+`announcements` is an unknown group (exit 2). The prompt `canceled_lesson_announcement` still
+drafts the text, which the office publishes in the app. A draft state, and the group with it, can
+come back as its own item.
