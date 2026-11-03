@@ -183,6 +183,8 @@ func toolCalls(t *testing.T, st store.Store) []domain.AuditEvent {
 // starts without a tool. --personal-data adds the person tools the role
 // reaches: the staff's lesson, the office's person search, a person's
 // bookings and passes, and the receipts, and the admins' mail log.
+// --allow-writes bookings,jobs adds the admins' run_job only: the booking
+// tools need --personal-data too.
 func TestMCPTools(t *testing.T) {
 	t.Parallel()
 
@@ -215,8 +217,12 @@ func TestMCPTools(t *testing.T) {
 				s := mcpSession(t, r, append([]string{"--as", tc.as}, flags...)...)
 
 				want := tc.tools
-				if slices.Contains(flags, "--personal-data") {
+
+				switch {
+				case slices.Contains(flags, "--personal-data"):
 					want = tc.personal
+				case slices.Contains(flags, "--allow-writes") && tc.as == demoAdmin:
+					want = slices.Sorted(slices.Values(append(slices.Clone(tc.tools), "run_job")))
 				}
 
 				if got := s.toolNames(t); !slices.Equal(got, want) {

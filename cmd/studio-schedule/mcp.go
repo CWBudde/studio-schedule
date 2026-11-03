@@ -13,6 +13,7 @@ import (
 	"github.com/cwbudde/studio-schedule/cmd/studio-schedule/mcpserver"
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/httpapi"
+	"github.com/cwbudde/studio-schedule/internal/jobs"
 )
 
 // The flags of mcp.
@@ -47,7 +48,10 @@ func newMCPCmd(app *cli.App) *cobra.Command {
 			"refused on its next call. Every call and read is audited as mcp-tool-called with the tool's name " +
 			"or the resource's URI template and its outcome, never with its arguments or a record's ID. Without " +
 			"--personal-data neither tools nor resources return person data; write tools " +
-			"are listed only for the groups of --allow-writes (" + strings.Join(names, ", ") + "). Nothing " +
+			"are listed only for the groups of --allow-writes (" + strings.Join(names, ", ") + "): bookings " +
+			"books a person into a lesson and cancels that booking, lessons cancels a lesson and mails those " +
+			"booked, mail queues a failed mail again, jobs runs a background job; no tool writes an " +
+			"announcement. Nothing " +
 			"but MCP goes to stdout; warnings and errors go to stderr. The command takes no --output json and " +
 			"no --yes: the client asks its user before a write.",
 		Example: "  studio-schedule mcp --as office@example.org\n" +
@@ -85,6 +89,13 @@ func newMCPCmd(app *cli.App) *cobra.Command {
 
 			server, err := mcpserver.New(env.Services, env.Actor, env.Principal, env.Clock, mcpserver.Options{
 				PersonalData: personalData, AllowWrites: groups, Checks: env, Logger: logger,
+				Jobs: func() (*jobs.Runner, error) {
+					// The renderer it shares with the services stops with the
+					// command, not after a run.
+					runner, _, err := env.Jobs()
+
+					return runner, err
+				},
 			}, version)
 			if err == nil { // New fails only without Checks
 				err = server.Run(ctx, &mcp.IOTransport{

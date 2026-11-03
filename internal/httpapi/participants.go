@@ -405,7 +405,7 @@ func (h *handlers) markAllAttended(ctx context.Context, in *LessonRefInput) (*St
 	out.Body.Items = make([]StaffBooking, 0, len(changed))
 
 	for _, b := range changed {
-		out.Body.Items = append(out.Body.Items, staffBookingBody(b))
+		out.Body.Items = append(out.Body.Items, NewStaffBooking(b))
 	}
 
 	return out, nil
@@ -464,11 +464,14 @@ func (h *handlers) staffBookingOutput(
 			return nil, h.participantError(ctx, err, at)
 		}
 
-		return &StaffBookingOutput{Body: staffBookingBody(b)}, nil
+		return &StaffBookingOutput{Body: NewStaffBooking(b)}, nil
 	}
 }
 
-func staffBookingBody(b domain.Booking) StaffBooking {
+// NewStaffBooking is the body of the staff actions on one booking
+// (addLessonParticipant, removeLessonParticipant, …), which the MCP tools
+// book_lesson and cancel_booking return too.
+func NewStaffBooking(b domain.Booking) StaffBooking {
 	return StaffBooking{
 		ID: b.ID, LessonID: b.LessonID, PersonID: b.PersonID, GuestName: b.GuestName, GuestEmail: b.GuestEmail,
 		Status: string(b.Status), Source: string(b.Source), Trial: b.Trial, TrialNote: b.TrialNote,

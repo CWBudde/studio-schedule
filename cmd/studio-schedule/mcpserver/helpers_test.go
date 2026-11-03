@@ -23,6 +23,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/config"
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/ids"
+	"github.com/cwbudde/studio-schedule/internal/jobs"
 	"github.com/cwbudde/studio-schedule/internal/seed"
 	"github.com/cwbudde/studio-schedule/internal/service"
 	"github.com/cwbudde/studio-schedule/internal/store"
@@ -51,6 +52,7 @@ var via = domain.AuditVia{Channel: domain.ChannelMCP, OSUser: "operator"}
 // log of the servers built on them.
 type fixture struct {
 	st  store.Store
+	ids ids.Source
 	svc app.Services
 	log *syncBuffer
 }
@@ -70,14 +72,24 @@ func newFixture(t *testing.T) *fixture {
 // fixtureOn returns the fixture of st. Its services have the web app's
 // URL, which the links of the mails they write need.
 func fixtureOn(st store.Store) *fixture {
+	src := offsetIDs{ids.NewSequence()}
+
 	return &fixture{
-		st: st,
+		st: st, ids: src,
 		svc: app.NewServices(app.Deps{
-			Store: st, Clock: clock.NewFixed(testNow), IDs: offsetIDs{ids.NewSequence()},
-			AppURL: "https://studio.example.test/",
+			Store: st, Clock: clock.NewFixed(testNow), IDs: src, AppURL: "https://studio.example.test/",
 		}),
 		log: &syncBuffer{},
 	}
+}
+
+// jobs are the background jobs on the fixture's store as `jobs run`
+// builds them without a mail server or VAPID keys: no deliver-mail, no
+// deliver-push. They share the services' IDs, as the command's do.
+func (f *fixture) jobs() (*jobs.Runner, error) {
+	return app.Jobs(app.Deps{
+		Store: f.st, Clock: clock.NewFixed(testNow), IDs: f.ids, AppURL: "https://studio.example.test/",
+	}), nil
 }
 
 // offsetIDs are a sequence apart from the demo data's, whose sequence has
@@ -108,10 +120,15 @@ func (f *fixture) actorOf(email string) Actor {
 	return func(ctx context.Context) (service.Principal, error) { return f.svc.Auth.Actor(ctx, email, via) }
 }
 
-// options are opts with the fixture's checks and logger where unset.
+// options are opts with the fixture's checks, jobs and logger where
+// unset.
 func (f *fixture) options(opts Options) Options {
 	if opts.Checks == nil {
 		opts.Checks = checksEnv{f}
+	}
+
+	if opts.Jobs == nil {
+		opts.Jobs = f.jobs
 	}
 
 	if opts.Logger == nil {

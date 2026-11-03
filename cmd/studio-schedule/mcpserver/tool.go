@@ -37,6 +37,7 @@ type tool struct {
 // registry holds the tools, one list per file.
 var registry = [][]tool{
 	scheduleTools(), roomTools(), lessonTools(), personTools(), statsTools(), receiptTools(), mailTools(), checkTools(),
+	bookingWriteTools(), lessonWriteTools(), mailWriteTools(), jobWriteTools(),
 }
 
 // readOnly are the annotations of a tool that only reads the school's own
@@ -45,6 +46,21 @@ func readOnly(title string) mcp.ToolAnnotations {
 	closed := false
 
 	return mcp.ToolAnnotations{Title: title, ReadOnlyHint: true, IdempotentHint: true, OpenWorldHint: &closed}
+}
+
+// writeAnnotations are the annotations of a write tool, which take the
+// place of the command line's --yes: the client asks its user before a
+// call (ADR 0022). destructive tells that the write cannot be taken back
+// (it cancels, mails or deletes), idempotent that a repeat with the same
+// arguments changes nothing more. The tools write the school's own data
+// and queue mails for the server's deliver-mail job; one that reaches
+// beyond (run_job) sets OpenWorldHint itself.
+func writeAnnotations(title string, destructive, idempotent bool) mcp.ToolAnnotations {
+	closed := false
+
+	return mcp.ToolAnnotations{
+		Title: title, DestructiveHint: &destructive, IdempotentHint: idempotent, OpenWorldHint: &closed,
+	}
 }
 
 // handler returns the add of a tool whose arguments are In: a struct of
