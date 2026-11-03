@@ -93,9 +93,10 @@ func registerReceipts(api huma.API, h *handlers) {
 		Method:      http.MethodGet,
 		Path:        BasePath + "/my/receipts/{receiptId}/pdf",
 		Summary:     "Download my receipt",
-		Description: "Returns the PDF of a receipt the signed-in person paid; any other is a 404.",
-		Tags:        tags,
-		Responses:   pdfResponses("The receipt's PDF."),
+		Description: "Returns the PDF of a receipt the signed-in person paid, or of the receipt or Storno of an event " +
+			"fee whose registration is the signed-in person's or a dependent's, whoever paid it; any other is a 404.",
+		Tags:      tags,
+		Responses: pdfResponses("The receipt's PDF."),
 	}, h.getMyReceiptPdf)
 
 	register(api, AccessOffice, huma.Operation{

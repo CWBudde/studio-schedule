@@ -516,6 +516,12 @@ func (h *handlers) getAdminEventImage(ctx context.Context, in *EventImageInput) 
 		return nil, h.toHTTPError(ctx, err)
 	}
 
+	return imageOutput(img, in.IfNoneMatch)
+}
+
+// imageOutput answers an event's image img, a 404 without one, or a 304
+// when ifNoneMatch has its ETag.
+func imageOutput(img domain.Background, ifNoneMatch string) (*SchoolLogoOutput, error) {
 	if img.IsZero() {
 		return nil, huma.Error404NotFound("no image")
 	}
@@ -527,7 +533,7 @@ func (h *handlers) getAdminEventImage(ctx context.Context, in *EventImageInput) 
 		Status: http.StatusNotModified,
 	}
 
-	if !etagMatches(in.IfNoneMatch, out.ETag) {
+	if !etagMatches(ifNoneMatch, out.ETag) {
 		out.Status, out.ContentType, out.Body = http.StatusOK, img.ContentType, img.Data
 	}
 
