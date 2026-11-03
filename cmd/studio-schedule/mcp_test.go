@@ -183,6 +183,8 @@ func toolCalls(t *testing.T, st store.Store) []domain.AuditEvent {
 // starts without a tool. --personal-data adds the person tools the role
 // reaches: the staff's lesson, the office's person search, a person's
 // bookings and passes, and the receipts, and the admins' mail log.
+// --allow-writes bookings,jobs adds the admins' run_job only: the booking
+// tools need --personal-data too.
 func TestMCPTools(t *testing.T) {
 	t.Parallel()
 
@@ -215,8 +217,12 @@ func TestMCPTools(t *testing.T) {
 				s := mcpSession(t, r, append([]string{"--as", tc.as}, flags...)...)
 
 				want := tc.tools
-				if slices.Contains(flags, "--personal-data") {
+
+				switch {
+				case slices.Contains(flags, "--personal-data"):
 					want = tc.personal
+				case slices.Contains(flags, "--allow-writes") && tc.as == demoAdmin:
+					want = slices.Sorted(slices.Values(append(slices.Clone(tc.tools), "run_job")))
 				}
 
 				if got := s.toolNames(t); !slices.Equal(got, want) {
@@ -456,8 +462,15 @@ func TestMCPCommandErrors(t *testing.T) {
 			{
 				[]string{"--as", demoOffice, "--allow-writes", "bookings,zebras"},
 				cli.ExitUsage,
-				`error: --allow-writes: unknown group "zebras"; the groups are bookings, lessons, announcements, ` +
-					"mail, jobs\n",
+				`error: --allow-writes: unknown group "zebras"; the groups are bookings, lessons, mail, jobs` + "\n",
+			},
+			{
+				// No tool writes an announcement, so there is no such group
+				// (ADR 0022, amendment of 2026-11-03).
+				[]string{"--as", demoAdmin, "--allow-writes", "announcements"},
+				cli.ExitUsage,
+				`error: --allow-writes: unknown group "announcements"; the groups are bookings, lessons, mail, jobs` +
+					"\n",
 			},
 			{[]string{"--as", demoOffice, "--output", "json"}, cli.ExitUsage, ""},
 			{

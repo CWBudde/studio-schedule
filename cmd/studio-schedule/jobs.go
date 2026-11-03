@@ -119,7 +119,7 @@ func runJob(ctx context.Context, env *cli.Env, runner *jobs.Runner, name string)
 		return err // another holder has the lock: a conflict
 	}
 
-	err = env.Out.Print(newJobRun(run), func(t *cli.Text) {
+	err = env.Out.Print(cli.NewJobRun(run), func(t *cli.Text) {
 		t.Table("Job", "Started", "Duration", "Result", "Error")
 		t.Row(append([]string{run.Job}, runCells(t, run)...)...)
 	})
@@ -176,33 +176,17 @@ func every(d time.Duration) string {
 
 // jobStatus is a job of `jobs list --output json` (jobsListJSON).
 type jobStatus struct {
-	Name         string  `json:"name"`
-	EverySeconds int64   `json:"everySeconds"`
-	LastRun      *jobRun `json:"lastRun,omitempty"`
+	Name         string      `json:"name"`
+	EverySeconds int64       `json:"everySeconds"`
+	LastRun      *cli.JobRun `json:"lastRun,omitempty"`
 }
 
 func newJobStatus(s jobs.Status) jobStatus {
 	out := jobStatus{Name: s.Name, EverySeconds: int64(s.Every / time.Second)}
 	if !s.Last.ID.IsZero() {
-		run := newJobRun(s.Last)
+		run := cli.NewJobRun(s.Last)
 		out.LastRun = &run
 	}
 
 	return out
-}
-
-// jobRun is a recorded run (jobRunJSON).
-type jobRun struct {
-	Job       string    `json:"job"`
-	StartedAt time.Time `json:"startedAt"`
-	EndedAt   time.Time `json:"endedAt"`
-	Result    string    `json:"result"`
-	Error     string    `json:"error,omitempty"`
-}
-
-func newJobRun(run domain.JobRun) jobRun {
-	return jobRun{
-		Job: run.Job, StartedAt: run.StartedAt.UTC(), EndedAt: run.EndedAt.UTC(), Result: string(run.Result),
-		Error: run.Error,
-	}
 }

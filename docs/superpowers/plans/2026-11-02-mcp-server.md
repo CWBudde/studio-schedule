@@ -721,7 +721,61 @@ PLAN.md Phase 12, "Prompts". This task needs Task 1.1 on main.
 
 ## Task 3.1
 
-- [ ] 3.1 `mcp-writes` The write tools, listed per `--allow-writes` group: book or cancel for a person, cancel a lesson with notification, requeue failed mail, run a job; the `announcements` group goes (no draft tool) — see "Task 3.1".
+- [x] 3.1 `mcp-writes` The write tools, listed per `--allow-writes` group: book or cancel for a person, cancel a lesson with notification, requeue failed mail, run a job; the `announcements` group goes (no draft tool) — see "Task 3.1".
+  - Done: `book_lesson`, `cancel_booking` (bookings, office, personal data), `cancel_lesson` (lessons,
+    office), `requeue_mail` (mail, admin, personal data) and `run_job` (jobs, admin) in
+    `mcpserver/tools_writes_{bookings,lessons,mail,jobs}.go`, with `writeAnnotations` (destructive,
+    idempotent and open-world per the table; none read-only). The `announcements` group is gone:
+    `--allow-writes announcements` exits 2 as an unknown group, and `canceled_lesson_announcement`
+    says no tool saves an announcement (texts and goldens in both languages). Deviations:
+    - The office books for a person through `ParticipantService.Add` (addLessonParticipant, source
+      staff), not `BookingService.Book`, which takes only the caller's own family. The tool never
+      sets `ConfirmOverCapacity`, so a full lesson is `ErrLessonFull`. `cancel_booking` finds the
+      person's active booking among `Participants` and calls `ParticipantService.Remove`
+      (removeLessonParticipant: never late, the date released); without one it is not found. Both
+      return the new `httpapi.NewStaffBooking`.
+    - Annotations are per tool, not per argument, so `run_job` is destructive (and open-world) as a
+      whole. `jobEffects` marks each job (only `generate-lessons` neither mails nor deletes); the
+      description names them and `TestJobEffects` compares the keys with `app.Jobs` built with a
+      mailer and a pusher.
+    - `run_job` gets the runner from the new `Options.Jobs` (`cli.Env.Jobs`, built per call; `New`
+      refuses a nil one when the jobs group is allowed). The command does not call the release per
+      run: it would stop the renderer the services share, which stops with the command anyway.
+      `jobs run`'s document moved to `cli.JobRun`/`cli.NewJobRun`. A failed run is the run with
+      `result: failed`, not an error result (audited `ok`); unknown is not found, a held lock a
+      conflict.
+
+    Tests: `mcpserver/tools_writes_*_test.go` (each tool's happy path with goldens `book_lesson`,
+    `cancel_booking`, `cancel_lesson`, `requeue_mail`, `run_job`; the full lesson with the bookings
+    unchanged; already booked, canceled, rental, unknown person or lesson; the second
+    `cancel_booking` not found, the second `cancel_lesson` unchanged without mails; a started lesson;
+    a note over `domain.MaxCancelNoteLength`, pinned in the schema's description; pending, sent and
+    secret-link mails; failed, locked and unknown jobs; input errors with `"Zebulon"` in neither log
+    nor audit; store failures). `tools_writes_test.go`: the list per group, role and
+    `--personal-data`, the annotations, Review focus 5 (`TestWriteToolsNeedTheirGroup`: unknown tool,
+    no audit row, a store snapshot unchanged) and `TestWriteToolsNoAnnouncements` (every listed
+    tool's happy path, the table must cover the list; the announcements unchanged). On both stores,
+    `cmd/studio-schedule/mcp_writes_test.go`: parity of `cancel_lesson`, `requeue_mail` and `run_job`
+    with `lessons cancel --yes`, `mail requeue --yes` and `jobs run` (whole documents, the clock is
+    fixed), the audit, Review focus 5 and the lists through the real command. Coverage 99.0 % total;
+    the new files and `mcpserver` at 100 %.
+
+    Discoveries:
+    - Only `requeue_mail` writes an audit event of its own with `Via` mcp (`mail-requeued`). A
+      booking's trace is its booking event and a canceled lesson's its `canceledBy`, both with the
+      account as actor and no channel; the `mcp-tool-called` row gives the channel.
+    - The errors' kinds: an unknown person in `book_lesson` is `invalid` (a field error on
+      personId), a canceled lesson or a rental a `conflict` (`BookingClosedError`), a started lesson
+      in `cancel_lesson` `invalid` (`ErrLessonStarted`). Pinned.
+    - A run whose record fails keeps its ID (the runner only logs it), so `run_job` returns it as
+      `ok` while the store has no run, as `jobs run` does (`TestRunJobUnrecorded`).
+    - A requeued mail keeps its `lastError` until the next attempt.
+    - `just check-generated` cannot run in a worktree without `web/node_modules` (pnpm installs into
+      the temp copy and fails); `api/openapi.json` was compared by hand and `docs/cli.md` by
+      `TestCLIReference`.
+
+    Residual gaps: no tool for `mail requeue --failed` or for booking over the capacity; `run_job`
+    has no per-job annotation (MCP has none).
 
 PLAN.md Phase 12, "Write tools (opt-in)". This task needs Tasks 1.1 and 2.1 on main.
 

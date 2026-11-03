@@ -20,12 +20,15 @@ import (
 func TestWriteGroups(t *testing.T) {
 	t.Parallel()
 
-	want := []WriteGroup{"bookings", "lessons", "announcements", "mail", "jobs"}
+	// No announcements group: no tool writes an announcement (ADR 0022,
+	// amendment of 2026-11-03).
+	want := []WriteGroup{"bookings", "lessons", "mail", "jobs"}
 	if got := WriteGroups(); !slices.Equal(got, want) {
 		t.Errorf("WriteGroups() = %v, want %v", got, want)
 	}
 
-	if WriteGroup("deletes").Valid() || WriteGroup("").Valid() || !WriteJobs.Valid() {
+	if WriteGroup("deletes").Valid() || WriteGroup("announcements").Valid() || WriteGroup("").Valid() ||
+		!WriteJobs.Valid() {
 		t.Error("Valid is wrong")
 	}
 
@@ -42,7 +45,7 @@ func TestWriteGroups(t *testing.T) {
 
 	var field *domain.FieldError
 	if !errors.As(err, &field) || field.Field != "allowWrites" ||
-		field.Msg != `unknown group "deletes"; the groups are bookings, lessons, announcements, mail, jobs` {
+		field.Msg != `unknown group "deletes"; the groups are bookings, lessons, mail, jobs` {
 		t.Errorf("unknown group: %v", err)
 	}
 }
@@ -90,13 +93,15 @@ func TestNew(t *testing.T) {
 }
 
 // TestRegistry: the registry's tools have unique names and known access
-// levels, read only and touch nothing outside; exactly the person tools
-// (personDataTools) return person data, and none writes yet. Every input
-// schema is a JSON schema object.
+// levels. A read tool reads only and touches nothing outside; a write tool
+// (writeTools) has its group and says whether it is destructive and
+// whether it reaches outside. Exactly the person tools (personDataTools,
+// personDataWriteTools) return person data. Every input schema is a JSON
+// schema object.
 func TestRegistry(t *testing.T) {
 	t.Parallel()
 
-	var names, persons []string
+	var names, persons, writes []string
 
 	for _, group := range registry {
 		for _, tl := range group {
@@ -111,9 +116,18 @@ func TestRegistry(t *testing.T) {
 			}
 
 			a := tl.annotations
-			if !a.ReadOnlyHint || !a.IdempotentHint || a.OpenWorldHint == nil || *a.OpenWorldHint || a.Title == "" ||
-				tl.write != "" || tl.description == "" {
+			if a.Title == "" || tl.description == "" || a.OpenWorldHint == nil {
 				t.Errorf("%s: %+v", tl.name, tl)
+			}
+
+			if tl.write != "" {
+				writes = append(writes, tl.name)
+
+				if !tl.write.Valid() || a.ReadOnlyHint || a.DestructiveHint == nil {
+					t.Errorf("write tool %s: %+v", tl.name, tl)
+				}
+			} else if !a.ReadOnlyHint || !a.IdempotentHint || *a.OpenWorldHint {
+				t.Errorf("read tool %s: %+v", tl.name, tl)
 			}
 
 			if tl.personalData {
@@ -123,9 +137,14 @@ func TestRegistry(t *testing.T) {
 	}
 
 	slices.Sort(persons)
+	slices.Sort(writes)
 
-	if !slices.Equal(persons, personDataTools) {
-		t.Errorf("the tools with person data are %v, want %v", persons, personDataTools)
+	if want := slices.Sorted(slices.Values(append(slices.Clone(personDataTools), personDataWriteTools...))); !slices.Equal(persons, want) {
+		t.Errorf("the tools with person data are %v, want %v", persons, want)
+	}
+
+	if !slices.Equal(writes, writeTools) {
+		t.Errorf("the write tools are %v, want %v", writes, writeTools)
 	}
 
 	f := newFixture(t)

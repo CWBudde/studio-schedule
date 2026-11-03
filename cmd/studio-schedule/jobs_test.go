@@ -287,7 +287,7 @@ func TestJobsRunFailed(t *testing.T) {
 	res = r.exec(t, "jobs", "run", "generate-lessons", "--output", "json")
 
 	var (
-		run     jobRun
+		run     cli.JobRun
 		problem struct{ Status int }
 	)
 

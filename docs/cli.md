@@ -989,7 +989,7 @@ Serve the Model Context Protocol on stdin and stdout for an assistant.
 studio-schedule mcp [flags]
 ```
 
-Run an MCP server over stdio (ADR 0022), for an assistant's client such as Claude Desktop or Claude Code, which starts the command and speaks MCP on its stdin and stdout; over SSH, the client runs it on the school's host. Its tools and resources act as the account of `--as` with that account's rights: a session lists those whose access level the account's role reaches, and every call or read resolves the account again, so an account disabled or demoted since the start is refused on its next call. Every call and read is audited as mcp-tool-called with the tool's name or the resource's URI template and its outcome, never with its arguments or a record's ID. Without `--personal-data` neither tools nor resources return person data; write tools are listed only for the groups of `--allow-writes` (bookings, lessons, announcements, mail, jobs). Nothing but MCP goes to stdout; warnings and errors go to stderr. The command takes no `--output json` and no `--yes`: the client asks its user before a write.
+Run an MCP server over stdio (ADR 0022), for an assistant's client such as Claude Desktop or Claude Code, which starts the command and speaks MCP on its stdin and stdout; over SSH, the client runs it on the school's host. Its tools and resources act as the account of `--as` with that account's rights: a session lists those whose access level the account's role reaches, and every call or read resolves the account again, so an account disabled or demoted since the start is refused on its next call. Every call and read is audited as mcp-tool-called with the tool's name or the resource's URI template and its outcome, never with its arguments or a record's ID. Without `--personal-data` neither tools nor resources return person data; write tools are listed only for the groups of `--allow-writes` (bookings, lessons, mail, jobs): bookings books a person into a lesson and cancels that booking, lessons cancels a lesson and mails those booked, mail queues a failed mail again, jobs runs a background job; no tool writes an announcement. Nothing but MCP goes to stdout; warnings and errors go to stderr. The command takes no `--output json` and no `--yes`: the client asks its user before a write.
 
 Examples:
 
@@ -1001,7 +1001,7 @@ ssh school.example.org studio-schedule mcp --as office@example.org --personal-da
 
 Flags:
 
-- `--allow-writes` (stringSlice): list the write tools of these groups (repeatable or comma-separated): bookings, lessons, announcements, mail, jobs
+- `--allow-writes` (stringSlice): list the write tools of these groups (repeatable or comma-separated): bookings, lessons, mail, jobs
 - `--personal-data` (bool): list the tools and resources that return person data; the assistant's provider receives what they return
 
 Access: `signedIn`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `member` or above.

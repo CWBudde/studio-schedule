@@ -26,6 +26,7 @@ import (
 	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/httpapi"
+	"github.com/cwbudde/studio-schedule/internal/jobs"
 	"github.com/cwbudde/studio-schedule/internal/service"
 )
 
@@ -40,6 +41,10 @@ type Options struct {
 	// Checks is not a flag: it is the command's environment, which the
 	// doctor tool checks as `doctor` does. New refuses a nil one.
 	Checks diagnose.Env
+	// Jobs is not a flag either: it builds the background jobs of the
+	// command's database as `jobs run` does (cli.Env.Jobs), for run_job, on
+	// each call. New refuses a nil one when AllowWrites has the jobs group.
+	Jobs func() (*jobs.Runner, error)
 	// Logger is not a flag either: it gets the server's warnings and
 	// errors, never a call's arguments (stderr in the command). Nil
 	// discards them.
@@ -50,18 +55,19 @@ type Options struct {
 // 0022).
 type WriteGroup string
 
-// The write groups.
+// The write groups. There is no announcements group: an announcement has
+// no draft state, so no tool writes one (ADR 0022, amendment of
+// 2026-11-03).
 const (
-	WriteBookings      WriteGroup = "bookings"
-	WriteLessons       WriteGroup = "lessons"
-	WriteAnnouncements WriteGroup = "announcements"
-	WriteMail          WriteGroup = "mail"
-	WriteJobs          WriteGroup = "jobs"
+	WriteBookings WriteGroup = "bookings"
+	WriteLessons  WriteGroup = "lessons"
+	WriteMail     WriteGroup = "mail"
+	WriteJobs     WriteGroup = "jobs"
 )
 
 // WriteGroups returns the write groups in their documented order.
 func WriteGroups() []WriteGroup {
-	return []WriteGroup{WriteBookings, WriteLessons, WriteAnnouncements, WriteMail, WriteJobs}
+	return []WriteGroup{WriteBookings, WriteLessons, WriteMail, WriteJobs}
 }
 
 // Valid reports whether g is a write group.
@@ -111,7 +117,7 @@ type Server struct {
 
 // instructions tell the client what the tools have in common.
 const instructions = "The tools read a dance school's schedule, figures and checks as one account of " +
-	"the school, with that account's rights; the resources hold its settings, its current timetable and " +
+	"the school, with that account's rights, and write only what the operator allowed; the resources hold its settings, its current timetable and " +
 	"the glossary of its words. School dates (YYYY-MM-DD) and times are local to the school's time zone, " +
 	"which the results name."
 
@@ -136,6 +142,10 @@ func newServer(
 ) (*Server, error) {
 	if opts.Checks == nil {
 		return nil, errors.New("mcpserver: Options.Checks is nil")
+	}
+
+	if opts.Jobs == nil && slices.Contains(opts.AllowWrites, WriteJobs) {
+		return nil, errors.New("mcpserver: Options.Jobs is nil, and the jobs group is allowed")
 	}
 
 	logger := opts.Logger

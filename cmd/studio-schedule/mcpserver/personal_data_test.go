@@ -10,10 +10,18 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// personDataTools are the registry's tools that return person data, sorted.
+// personDataTools are the registry's read tools that return person data,
+// sorted.
 var personDataTools = []string{
 	"lesson", "mail_log", "person_bookings", "person_passes", "receipts", "search_persons",
 }
+
+// writeTools are the registry's write tools, sorted, and
+// personDataWriteTools those of them that return person data.
+var (
+	writeTools           = []string{"book_lesson", "cancel_booking", "cancel_lesson", "requeue_mail", "run_job"}
+	personDataWriteTools = []string{"book_lesson", "cancel_booking", "requeue_mail"}
+)
 
 // TestPersonalDataUnlisted pins Review focus 3, "unlisted means
 // uncallable": without --personal-data a session lists none of the person

@@ -85,8 +85,9 @@ prompt, since the client cannot answer one. The audit log names the remote OS us
   data (the "Personal data" columns of [Tools](#tools), [Resources](#resources) and
   [Prompts](#prompts)), and the statistics' top participants. Read [Privacy](#privacy) first.
 - `--allow-writes` (string list, comma-separated): also list the write tools of these groups:
-  `bookings`, `lessons`, `announcements`, `mail`, `jobs`. The groups are checked at start; this
-  version has no write tools yet.
+  `bookings`, `lessons`, `mail`, `jobs`. The groups are checked at start: any other, `announcements`
+  too, is an unknown group (exit 2). No tool writes an announcement: an announcement has no draft
+  state yet ([ADR 0022](decisions/0022-mcp-server.md), amendment of 2026-11-03).
 
 `mcp` takes no `--output` and no `--yes`; both are usage errors. The client asks its user before a
 write, which takes the place of `--yes` ([ADR 0022](decisions/0022-mcp-server.md)). Logs go to
@@ -120,18 +121,22 @@ prompt as `unknown prompt`.
 
 ## Tools
 
-Every tool of this version only reads (`readOnlyHint`, `idempotentHint`). Those marked "yes" under
+A tool without a write group only reads (`readOnlyHint`, `idempotentHint`); a write tool is listed
+only with its group in `--allow-writes` ([Write tools](#write-tools)). Those marked "yes" under
 "Personal data" are listed only with `--personal-data`. Each tool that mirrors a command returns
 that command's JSON document, which is the response body of that command's API operation in
 [api/openapi.json](../api/openapi.json); a test asserts that a tool and its command return the same
-document. `free_rooms` mirrors no command; its result is described below. No tool returns a date of
-birth.
+document. `free_rooms`, `book_lesson` and `cancel_booking` mirror no command; their results are
+described below. No tool returns a date of birth.
 
 | Name              | Access   | Personal data | Write group | Mirrors                                                          |
 | ----------------- | -------- | ------------- | ----------- | ---------------------------------------------------------------- |
 | `schedule`        | `public` | no            | –           | `lessons list --output json` (getSchedule)                       |
 | `free_rooms`      | `staff`  | no            | –           | – (no command; `CatalogService.FreeRooms`)                       |
 | `lesson`          | `staff`  | yes           | –           | no command (listLessonParticipants), see below                   |
+| `book_lesson`     | `office` | yes           | `bookings`  | no command (addLessonParticipant), see below                     |
+| `cancel_booking`  | `office` | yes           | `bookings`  | no command (removeLessonParticipant), see below                  |
+| `cancel_lesson`   | `office` | no            | `lessons`   | `lessons cancel --yes --output json` (cancelLesson)              |
 | `person_bookings` | `office` | yes           | –           | part of `persons export --output json` (exportPerson), see below |
 | `person_passes`   | `office` | yes           | –           | `passes list --person --output json` (listPersonPasses)          |
 | `receipts`        | `office` | yes           | –           | `receipts list --output json` (searchReceipts)                   |
@@ -140,6 +145,8 @@ birth.
 | `db_check`        | `admin`  | no            | –           | `db check --output json`                                         |
 | `doctor`          | `admin`  | no            | –           | `doctor --output json`                                           |
 | `mail_log`        | `admin`  | yes           | –           | `mail list --output json` (searchMails)                          |
+| `requeue_mail`    | `admin`  | yes           | `mail`      | `mail requeue <id> --yes --output json` (requeueMail)            |
+| `run_job`         | `admin`  | no            | `jobs`      | `jobs run <name> --output json`, see below                       |
 
 **`free_rooms`**: the rooms free on `date` (a school date, YYYY-MM-DD) from `start` (the school's
 wall clock time, HH:MM) for `durationMinutes` (whole minutes, more than 0 and at most 720, which is
@@ -205,6 +212,81 @@ environment the client starts `mcp` with (`BASE_URL`, `SMTP_HOST`, `VAPID_*` and
 **`mail_log`**: the mail log, as `mail list` lists it: a page of the newest mails, optionally only
 those of a `status` (`pending`, `sent`, `failed`) or a `template`; a page's `nextCursor` is the
 `cursor` of the next. Bodies are never returned.
+
+### Write tools
+
+A write tool is listed only when `--allow-writes` has its group, and a write tool with person data
+only with `--personal-data` too. Called by name without its group, it fails like an unknown tool
+and changes nothing. Each calls the service of the operation it mirrors, so the operation's rules,
+its validation and its own records apply unchanged: a refusal is an error result with the
+service's reason, and the requested write is not applied. What the service settles on its way
+still commits, as it does for the office's page: `book_lesson` ends the expired waiting-list
+invites of the lesson before it refuses a full lesson or a person booked already.
+
+| Group      | Tools                           | What it may change                                                |
+| ---------- | ------------------------------- | ----------------------------------------------------------------- |
+| `bookings` | `book_lesson`, `cancel_booking` | a person's booking of a lesson, and the mail about it             |
+| `lessons`  | `cancel_lesson`                 | a lesson's status, and the mails to those booked                  |
+| `mail`     | `requeue_mail`                  | a failed mail of the outbox, sent again by the deliver-mail job   |
+| `jobs`     | `run_job`                       | whatever the job does: lessons, mails and pushes, or deleted data |
+
+No tool writes an announcement: an announcement has no draft state yet, so there is no
+`announcements` group ([ADR 0022](decisions/0022-mcp-server.md), amendment of 2026-11-03).
+
+**Annotations.** The tool annotations take the place of the command line's `--yes`: the client
+reads them and asks its user before a call, and no tool asks for a confirmation itself. A write tool
+has `readOnlyHint: false` and sets the others as follows.
+
+| Tool             | `destructiveHint` | `idempotentHint` | `openWorldHint` |
+| ---------------- | ----------------- | ---------------- | --------------- |
+| `book_lesson`    | false             | true             | false           |
+| `cancel_booking` | true              | true             | false           |
+| `cancel_lesson`  | true              | true             | false           |
+| `requeue_mail`   | true              | false            | false           |
+| `run_job`        | true              | false            | true            |
+
+The tools that mail only queue the mails in the outbox, which the server's deliver-mail job sends,
+so they stay within the school's data (`openWorldHint: false`). An annotation belongs to a tool,
+not to its arguments: `run_job` is destructive because most jobs mail or delete
+(`announcements`, `deliver-mail`, `deliver-push` and `waitlist-expiry` mail or push to people;
+`purge-mail`, `purge-personal-data` and `purge-sessions` delete), although `generate-lessons` only
+writes lessons. Its description names them, and `deliver-mail` and `deliver-push` reach outside
+(`openWorldHint: true`).
+
+**`book_lesson`**: books the person `personId` (an ID from `search_persons`) into the lesson
+`lessonId` (from `schedule`) as the office does on the participants page: the booking's source is
+`staff`, the release window and the booking cutoff do not apply, and the lesson may have started.
+Refused: a lesson the school canceled, a room rental, an event's session, a person booked already,
+and a full lesson; the tool never books over the capacity, which the app allows the office with a
+confirmation. A person whose own waiting-list invite holds a place takes it. Before the lesson
+starts, the person's mail recipients get the confirmation. The result is the booking, the body of
+addLessonParticipant: `id`, `lessonId`, `personId`, `status`, `source`, `trial`, `bookedAt`,
+`canceledAt` and `late`.
+
+**`cancel_booking`**: cancels the active booking of the person `personId` on the lesson `lessonId`
+as the office's "remove participant" does: never late, the place goes to the waiting list, and the
+person's date is released, so a later change of a class membership does not book them in again.
+It works after the start and on a lesson the school canceled. Before the start of a lesson that
+takes place, the person's mail recipients get the cancellation. A person without an active booking
+on the lesson is not found, so a repeated call changes nothing. The result is the canceled
+booking, the body of removeLessonParticipant.
+
+**`cancel_lesson`**: cancels the lesson `lessonId` with an optional `note` (at most 500
+characters), as `lessons cancel` does: everyone with an active booking is mailed, the bookings cost
+nothing, and the waiting list's invites go back to waiting. A lesson canceled already stays as it
+is and nobody is mailed again; a lesson that has started is refused. Without `--personal-data`
+the result leaves out `admin.canceledBy`, the account that canceled the lesson, and a room
+rental's `renter`, as `schedule` does; with it, the result is that of `lessons cancel`.
+
+**`requeue_mail`**: queues the failed mail `mailId` (from `mail_log`) again, as `mail requeue`
+does, recorded as `mail-requeued` with `via` mcp. A mail with a secret link, and a pending or sent
+mail, is a conflict. There is no tool for `mail requeue --failed`.
+
+**`run_job`**: runs the job `name` now and waits for it, as `jobs run` does, with the jobs of the
+same configuration (deliver-mail only with `SMTP_HOST`, deliver-push only with the `VAPID_*` keys).
+The result is the run, `{job, startedAt, endedAt, result, error}`. A run that failed is a result
+too, with `result: failed` and its `error`, not an error result: the job ran. An unknown job is not
+found (the message lists the jobs), and a job another process runs at the moment is a conflict.
 
 ## Resources
 
@@ -274,8 +356,8 @@ that week.
 **`canceled_lesson_announcement`**: a draft announcement about the canceled lesson `lessonId`: a
 title and a plain-text body within the announcements' length limits, and a suggestion whom it is
 for. The model finds the lesson with `schedule` and stops if it is not canceled. The prompt asks
-for the text only: it tells the model to publish nothing, since an announcement tool saves a draft
-and never sends it, and the office reviews and publishes it in the app.
+for the text only: it tells the model to publish nothing, since no tool saves an announcement, and
+the office reviews the text and publishes it in the app.
 
 **`waitlist_invitations`**: whom to invite from the waiting list of the lesson `lessonId`: the free
 places, the places that open invites hold, and the waiting entries next in line. It tells the model
@@ -299,8 +381,9 @@ the tool's or prompt's name or the resource's URI, and the outcome: `ok`, `forbi
 `invalid` (also a get with invalid arguments), `conflict` or `error`. A template's read records the
 template (`person://{id}`), never the ID it read. The event never records the arguments and has no
 target, so the log does not reveal whom a call looked for. A read of an unlisted resource fails
-before it reaches the server's code and writes no event. A write keeps its own audit events as
-well. The audit page shows the event as "Assistant tool called", via MCP.
+before it reaches the server's code and writes no event. A write keeps its own records as
+well: `requeue_mail` its `mail-requeued` event with `via` mcp, a booking its booking event and a
+canceled lesson its `canceledBy`, both with the account as the actor. The audit page shows the event as "Assistant tool called", via MCP.
 
 The audit log keeps the events that name an account for 3 years
 ([ADR 0016](decisions/0016-privacy-and-account-administration.md)). Once an account has called a

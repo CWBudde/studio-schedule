@@ -260,7 +260,10 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   listed under the tools' rules and every get goes through `run` too. The tools (`tools_*.go`) call
   the services and return the `httpapi.New…` documents of the commands they mirror (parity tests in
   `cmd/studio-schedule/mcp_test.go`, goldens in `mcpserver/testdata`); `cmd/studio-schedule/diagnose`
-  computes the `doctor` and `db check` reports for both. The resources (`resources.go`: `school://`
+  computes the `doctor` and `db check` reports for both. The write tools (`tools_writes_*.go`) are
+  listed per `--allow-writes` group (`bookings`, `lessons`, `mail`, `jobs`; no `announcements`) with
+  `writeAnnotations` in place of `--yes`; `run_job` runs `Options.Jobs` (`cli.Env.Jobs`) and marks
+  each job's effect in `jobEffects`, tested against `app.Jobs`. The resources (`resources.go`: `school://`
   settings, timetable and glossary, the templates `lesson://{id}` and `person://{id}`) are listed
   and read through the same wrapper (`run`), audited under their URI template; the glossary is
   `docs/glossary.md`, embedded by `package docs` (`docs/glossary.go`).
