@@ -410,7 +410,7 @@ func (s *EventService) mailRegistration(
 func (s *EventService) CancelOwn(ctx context.Context, p Principal, id domain.EventRegistrationID) (MyEvent, error) {
 	var out MyEvent
 
-	if err := s.awaitRefund(ctx, id); err != nil {
+	if err := s.awaitRefund(ctx, p, id); err != nil {
 		return MyEvent{}, fmt.Errorf("cancel registration %v: %w", id, err)
 	}
 
@@ -483,15 +483,25 @@ func (s *EventService) CancelOwn(ctx context.Context, p Principal, id domain.Eve
 
 // awaitRefund waits for the receipt renderer before registration id is
 // canceled if its fee was paid with a receipt, which the cancellation
-// refunds by a Storno.
-func (s *EventService) awaitRefund(ctx context.Context, id domain.EventRegistrationID) error {
+// refunds by a Storno. A registration of anyone outside p's family is
+// domain.ErrNotFound before anything is waited for, so its payment shows
+// nowhere.
+func (s *EventService) awaitRefund(ctx context.Context, p Principal, id domain.EventRegistrationID) error {
 	paid := false
 
 	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 		r, err := tx.EventRegistrations().Get(ctx, id)
+		if err != nil {
+			return err
+		}
+
+		if _, err := familyMember(ctx, tx, p, r.PersonID); err != nil {
+			return err
+		}
+
 		paid = paidWithReceipt(r)
 
-		return err
+		return nil
 	})
 	if err != nil {
 		return err

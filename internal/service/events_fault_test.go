@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -341,5 +342,12 @@ func TestEventRendererNotReady(t *testing.T) {
 
 	if _, err := svc.Cancel(t.Context(), f.office, s.bare.ID, ""); err != nil {
 		t.Errorf("Cancel without a fee paid: %v", err)
+	}
+
+	// Another family's paid registration is a 404 before the renderer is
+	// waited for, so its payment shows nowhere.
+	_, sven := f.stranger(t)
+	if _, err := svc.CancelOwn(t.Context(), sven, s.mia.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("CancelOwn of another family = %v, want ErrNotFound", err)
 	}
 }
