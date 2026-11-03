@@ -456,8 +456,15 @@ func TestMCPCommandErrors(t *testing.T) {
 			{
 				[]string{"--as", demoOffice, "--allow-writes", "bookings,zebras"},
 				cli.ExitUsage,
-				`error: --allow-writes: unknown group "zebras"; the groups are bookings, lessons, announcements, ` +
-					"mail, jobs\n",
+				`error: --allow-writes: unknown group "zebras"; the groups are bookings, lessons, mail, jobs` + "\n",
+			},
+			{
+				// No tool writes an announcement, so there is no such group
+				// (ADR 0022, amendment of 2026-11-03).
+				[]string{"--as", demoAdmin, "--allow-writes", "announcements"},
+				cli.ExitUsage,
+				`error: --allow-writes: unknown group "announcements"; the groups are bookings, lessons, mail, jobs` +
+					"\n",
 			},
 			{[]string{"--as", demoOffice, "--output", "json"}, cli.ExitUsage, ""},
 			{

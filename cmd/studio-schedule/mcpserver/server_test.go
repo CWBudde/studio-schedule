@@ -20,12 +20,15 @@ import (
 func TestWriteGroups(t *testing.T) {
 	t.Parallel()
 
-	want := []WriteGroup{"bookings", "lessons", "announcements", "mail", "jobs"}
+	// No announcements group: no tool writes an announcement (ADR 0022,
+	// amendment of 2026-11-03).
+	want := []WriteGroup{"bookings", "lessons", "mail", "jobs"}
 	if got := WriteGroups(); !slices.Equal(got, want) {
 		t.Errorf("WriteGroups() = %v, want %v", got, want)
 	}
 
-	if WriteGroup("deletes").Valid() || WriteGroup("").Valid() || !WriteJobs.Valid() {
+	if WriteGroup("deletes").Valid() || WriteGroup("announcements").Valid() || WriteGroup("").Valid() ||
+		!WriteJobs.Valid() {
 		t.Error("Valid is wrong")
 	}
 
@@ -42,7 +45,7 @@ func TestWriteGroups(t *testing.T) {
 
 	var field *domain.FieldError
 	if !errors.As(err, &field) || field.Field != "allowWrites" ||
-		field.Msg != `unknown group "deletes"; the groups are bookings, lessons, announcements, mail, jobs` {
+		field.Msg != `unknown group "deletes"; the groups are bookings, lessons, mail, jobs` {
 		t.Errorf("unknown group: %v", err)
 	}
 }

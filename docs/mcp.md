@@ -85,8 +85,9 @@ prompt, since the client cannot answer one. The audit log names the remote OS us
   data (the "Personal data" columns of [Tools](#tools), [Resources](#resources) and
   [Prompts](#prompts)), and the statistics' top participants. Read [Privacy](#privacy) first.
 - `--allow-writes` (string list, comma-separated): also list the write tools of these groups:
-  `bookings`, `lessons`, `announcements`, `mail`, `jobs`. The groups are checked at start; this
-  version has no write tools yet.
+  `bookings`, `lessons`, `mail`, `jobs`. The groups are checked at start: any other, `announcements`
+  too, is an unknown group (exit 2). No tool writes an announcement: an announcement has no draft
+  state yet ([ADR 0022](decisions/0022-mcp-server.md), amendment of 2026-11-03).
 
 `mcp` takes no `--output` and no `--yes`; both are usage errors. The client asks its user before a
 write, which takes the place of `--yes` ([ADR 0022](decisions/0022-mcp-server.md)). Logs go to
@@ -274,8 +275,8 @@ that week.
 **`canceled_lesson_announcement`**: a draft announcement about the canceled lesson `lessonId`: a
 title and a plain-text body within the announcements' length limits, and a suggestion whom it is
 for. The model finds the lesson with `schedule` and stops if it is not canceled. The prompt asks
-for the text only: it tells the model to publish nothing, since an announcement tool saves a draft
-and never sends it, and the office reviews and publishes it in the app.
+for the text only: it tells the model to publish nothing, since no tool saves an announcement, and
+the office reviews the text and publishes it in the app.
 
 **`waitlist_invitations`**: whom to invite from the waiting list of the lesson `lessonId`: the free
 places, the places that open invites hold, and the waiting entries next in line. It tells the model
