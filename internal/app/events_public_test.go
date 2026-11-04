@@ -152,12 +152,26 @@ func TestPublicEvents(t *testing.T) {
 		t.Errorf("events with a canceled one %v", list)
 	}
 
-	// My events: the family's own, nobody else's.
+	// My events: the family's own, nobody else's. The demo seed registers some
+	// persons for its own events, so only this event's entries are counted.
 	for cookie, want := range map[*http.Cookie]string{a.member: "Finn Amberly", kai: "Kai Lanternby"} {
 		got := decode(t, a.expect(http.StatusOK, http.MethodGet, "/api/v1/my/events", "", cookie))
-		if items, _ := got["items"].([]any); len(items) != 1 ||
-			items[0].(map[string]any)["registration"].(map[string]any)["person"].(map[string]any)["name"] != want {
-			t.Errorf("my events %v, want %s", got, want)
+		items, _ := got["items"].([]any)
+		here := 0
+
+		for _, raw := range items {
+			item := raw.(map[string]any)
+			if item["registration"].(map[string]any)["person"].(map[string]any)["name"] != want {
+				t.Errorf("my events %v, want only %s", got, want)
+			}
+
+			if item["event"].(map[string]any)["slug"] == slug {
+				here++
+			}
+		}
+
+		if here != 1 {
+			t.Errorf("my events %v, want %s once for %s", got, want, slug)
 		}
 	}
 
