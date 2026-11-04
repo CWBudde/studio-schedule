@@ -280,6 +280,60 @@ func programme() schoolSpec {
 		// time, when no weekly class runs: staff see it in its room, nobody
 		// else.
 		rental: rentalSpec{4, at(13, 30), 120, "Studio B", "Copperleaf Theater Group"},
+		// The events (ADR 0019), with their sessions at times and in rooms
+		// no class, workshop or the rental uses on whatever day they fall:
+		// the intensive on the weekend after the anchor, booked up but one
+		// place, which the member login can take for a child; the free taster
+		// in the second week, with a guest the office added at the desk; and
+		// a draft that only the office sees. Nobody of a demo login's family
+		// is registered.
+		events: []eventSpec{
+			{
+				slug: "contemporary-weekend-intensive", title: "Contemporary Weekend Intensive",
+				description: "Three sessions over one weekend: floor work, release technique and a short piece " +
+					"to take home. For dancers with some contemporary experience.",
+				courseType: "Contemporary", capacity: 12, price: 12000, vatRate: 1900, status: domain.EventPublished,
+				on: on(time.Saturday), days: 1,
+				sessions: []sessionSpec{
+					{days: 0, start: at(16, 0), minutes: 150, room: "Hall 1", instructor: "Marco Wrenfield"},
+					{days: 1, start: at(10, 0), minutes: 150, room: "Hall 1", instructor: "Marco Wrenfield"},
+					{days: 1, start: at(16, 0), minutes: 120, room: "Hall 1", instructor: "Marco Wrenfield"},
+				},
+				registered: []string{
+					"Kai Lanternby", "Lina Mistlewood", "Marta Fernwhistle", "Jona Fernwhistle", "Sophie Hollowmere",
+					"Ida Elderwick", "Lotta Birchmoor", "Yara Gildenmoor", "Rhea Pinecrest", "Wanda Sparrowhill",
+					"Irene Inkwell",
+				},
+				paid: "Lina Mistlewood", method: domain.PaymentCard,
+			},
+			{
+				slug: "open-ballet-taster", title: "Open Ballet Taster",
+				description: "A free ballet class with live piano for anyone who wants to try ballet. " +
+					"No experience needed; comfortable clothes are fine.",
+				courseType: "Classical Ballet", capacity: 20, vatRate: 1900, status: domain.EventPublished,
+				on: on(time.Sunday), days: 10,
+				sessions: []sessionSpec{
+					{
+						days: 0, start: at(10, 30), minutes: 90, room: "Hall 1", instructor: "Lea Moonfield",
+						accompanist: "Greta Ivorylane",
+					},
+				},
+				registered: []string{"Kira Gildenmoor", "Tilo Quarrystone"},
+				guests:     []participantSpec{{guest: "Juna Firstlight", email: "juna.firstlight@example.org"}},
+			},
+			{
+				slug: "summer-showcase-rehearsal", title: "Summer Showcase Rehearsal",
+				description: "The first rehearsal for the summer showcase.",
+				courseType:  "Classical Ballet", capacity: 16, vatRate: 1900, status: domain.EventDraft,
+				on: on(time.Sunday), days: 21,
+				sessions: []sessionSpec{
+					{
+						days: 0, start: at(10, 0), minutes: 120, room: "Studio A", instructor: "Alina Starling",
+						accompanist: "Felix Keysworth",
+					},
+				},
+			},
+		},
 		// The pass catalog: a drop-in, a 10-visit pass and a 30-day pass, gross
 		// prices with 19 % VAT.
 		passTypes: []domain.PassType{

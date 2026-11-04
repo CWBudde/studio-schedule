@@ -43,12 +43,29 @@ func TestLoadDemo(t *testing.T) {
 	var (
 		bookings, events int
 		levels           []domain.Level
+		evs              []domain.Event
+		sessions         = map[domain.EventID][]domain.Lesson{}
+		regs             = map[domain.EventID][]domain.EventRegistration{}
 	)
 
 	err := st.InTx(t.Context(), store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
 		var err error
 		if levels, err = tx.Levels().List(ctx); err != nil {
 			return err
+		}
+
+		if evs, err = tx.Events().List(ctx); err != nil {
+			return err
+		}
+
+		for _, e := range want.Events {
+			if sessions[e.ID], err = tx.Lessons().ListByEvent(ctx, e.ID); err != nil {
+				return err
+			}
+
+			if regs[e.ID], err = tx.EventRegistrations().ListByEvent(ctx, e.ID); err != nil {
+				return err
+			}
 		}
 
 		for _, l := range want.Lessons {
@@ -81,6 +98,55 @@ func TestLoadDemo(t *testing.T) {
 
 	if !slices.Equal(levels, want.Levels) || len(levels) == 0 {
 		t.Fatalf("levels %+v, want %+v", levels, want.Levels)
+	}
+
+	// The events with their sessions and registrations, the seed's
+	// instants being UTC already (domain.Date.At).
+	if len(evs) != len(want.Events) || len(evs) == 0 {
+		t.Fatalf("%d events, want %d", len(evs), len(want.Events))
+	}
+
+	for _, e := range want.Events {
+		if !slices.Contains(evs, e) {
+			t.Errorf("event %+v is not stored as seeded", e)
+		}
+
+		var wantSessions []domain.Lesson
+
+		for _, l := range want.Lessons {
+			if l.EventID == e.ID {
+				wantSessions = append(wantSessions, l)
+			}
+		}
+
+		if len(sessions[e.ID]) != len(wantSessions) {
+			t.Errorf("event %q: %d sessions, want %d", e.Slug, len(sessions[e.ID]), len(wantSessions))
+		}
+
+		for _, l := range wantSessions {
+			if !slices.Contains(sessions[e.ID], l) {
+				t.Errorf("event %q: session %+v is not stored as seeded", e.Slug, l)
+			}
+		}
+
+		var wantRegs []domain.EventRegistration
+
+		for _, r := range want.EventRegistrations {
+			if r.EventID == e.ID {
+				wantRegs = append(wantRegs, r)
+			}
+		}
+
+		got := regs[e.ID]
+		if len(got) != len(wantRegs) {
+			t.Errorf("event %q: %d registrations, want %d", e.Slug, len(got), len(wantRegs))
+		}
+
+		for _, r := range wantRegs {
+			if !slices.Contains(got, r) {
+				t.Errorf("event %q: registration %+v is not stored as seeded", e.Slug, r)
+			}
+		}
 	}
 }
 

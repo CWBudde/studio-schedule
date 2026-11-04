@@ -352,3 +352,22 @@ per event.
 **Not yet.** The event waiting list (joining it after `full`, the invites and their expiry) follows
 in its own amendment. Of the office administration's "Not yet", this amendment adds the
 registration confirmation mails.
+
+## Amendment (2026-11-03): demo seed
+
+Both demo schools (`programme`, `werkstatt`; ADR 0018) get three events of their own, built from
+their tables like everything else (`internal/seed/events.go`), so the Werkstatt theme has events
+to show too:
+
+- a published intensive, Contemporary, with three sessions on the first Saturday after the visit
+  day and the Sunday after it, 12 places at 120.00 (19 % VAT): 11 persons registered, one of them
+  paid by card two days before the visit day, with a receipt;
+- a published free ballet taster with one session on the first Sunday ten or more days after the
+  visit day, 20 places: two persons and a guest whom the office registered at the desk;
+- a draft with one session on the first Sunday three or more weeks after the visit day and no
+  registrations.
+
+The sessions lie at times and in rooms that no class, workshop or rental uses on whatever day they
+fall. Nobody of a demo login's family is registered, so the member login can register a child for
+the intensive's last place. The events are built after every other record, so the records of
+the demo keep their IDs, and the fee's receipt takes the next number after the passes' receipts.

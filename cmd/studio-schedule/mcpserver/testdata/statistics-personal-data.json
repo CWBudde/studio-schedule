@@ -18,8 +18,8 @@
     "trials": 11,
     "guests": 14,
     "waitlistEntries": 0,
-    "passesSold": 3,
-    "salesGross": 38900,
+    "passesSold": 4,
+    "salesGross": 50900,
     "canceledLessons": 0,
     "activeMembers": 32
   },
@@ -72,8 +72,8 @@
       "trials": 3,
       "guests": 4,
       "waitlistEntries": 0,
-      "passesSold": 1,
-      "salesGross": 8900
+      "passesSold": 2,
+      "salesGross": 20900
     },
     {
       "start": "2026-09-21",

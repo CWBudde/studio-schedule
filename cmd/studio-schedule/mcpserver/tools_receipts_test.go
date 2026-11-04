@@ -29,7 +29,7 @@ func receiptNumbers(t *testing.T, doc map[string]any) []string {
 }
 
 // TestReceiptsGolden: by default the receipts of this year up to today in
-// the school's time zone (the demo's five of September 2026), newest
+// the school's time zone (the demo's six of September 2026), newest
 // first, with the storno and the receipt it cancels.
 func TestReceiptsGolden(t *testing.T) {
 	t.Parallel()
@@ -42,7 +42,7 @@ func TestReceiptsGolden(t *testing.T) {
 
 	doc := document(t, cs, "receipts", map[string]any{})
 	if got := strings.Join(receiptNumbers(t, doc), " "); got !=
-		"SD-2026-0005 SD-2026-0004 SD-2026-0003 SD-2026-0002 SD-2026-0001" || doc["total"] != float64(5) {
+		"SD-2026-0006 SD-2026-0005 SD-2026-0004 SD-2026-0003 SD-2026-0002 SD-2026-0001" || doc["total"] != float64(6) {
 		t.Errorf("the default range: %s, total %v", got, doc["total"])
 	}
 }
@@ -62,10 +62,10 @@ func TestReceiptsRange(t *testing.T) {
 	}{
 		{map[string]any{"from": "2026-09-08", "to": "2026-09-12"}, "SD-2026-0004 SD-2026-0003"},
 		{map[string]any{"from": "2026-09-12", "to": "2026-09-12"}, "SD-2026-0004"},
-		{map[string]any{"from": "2026-09-13"}, "SD-2026-0005"},
+		{map[string]any{"from": "2026-09-13"}, "SD-2026-0006 SD-2026-0005"},
 		{map[string]any{"to": "2026-09-07"}, "SD-2026-0002 SD-2026-0001"},
 		{map[string]any{"to": "2025-12-31"}, ""},
-		{map[string]any{"from": "2026-09-16", "to": "2026-12-31"}, ""},
+		{map[string]any{"from": "2026-09-21", "to": "2026-12-31"}, ""},
 	} {
 		doc := document(t, cs, "receipts", tc.args)
 		if got := strings.Join(receiptNumbers(t, doc), " "); got != tc.numbers ||

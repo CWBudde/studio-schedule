@@ -158,10 +158,10 @@ func TestDemoAtTerm(t *testing.T) {
 	}
 }
 
-// TestDemoWorkshops checks the one-off workshops: valid, without a class,
-// free of clashes with the weekly classes, and placed so that the demo shows
-// one beyond the release window (published early). One is for members and
-// one hidden (staff only); the others are public.
+// TestDemoWorkshops checks the one-off workshops of no event: valid,
+// without a class, free of clashes with the weekly classes, and placed so
+// that the demo shows one beyond the release window (published early). One
+// is for members and one hidden (staff only); the others are public.
 func TestDemoWorkshops(t *testing.T) {
 	t.Parallel()
 
@@ -174,8 +174,9 @@ func TestDemoWorkshops(t *testing.T) {
 
 	for _, anchor := range append([]domain.Date{seed.FixedDemoAnchor}, demoAnchors...) {
 		d := seed.DemoAt(anchor)
+		// The events' sessions are workshops too: TestDemoEvents.
 		d.Lessons = slices.DeleteFunc(d.Lessons, func(l domain.Lesson) bool {
-			return !l.ClassID.IsZero() || l.Kind == domain.LessonRental
+			return !l.ClassID.IsZero() || l.Kind == domain.LessonRental || !l.EventID.IsZero()
 		})
 
 		if n := len(d.Lessons); n < 5 || n > 6 {
@@ -974,6 +975,51 @@ func TestDemoReferences(t *testing.T) {
 				t.Errorf("%s: class %v: %d members exceed capacity %d", school, id, n, classes[id].Capacity)
 			}
 		}
+
+		accounts := index(d.Accounts, func(a domain.Account) domain.AccountID { return a.ID })
+		events := index(d.Events, func(e domain.Event) domain.EventID { return e.ID })
+		receipts := index(d.Receipts, func(r domain.Receipt) domain.ReceiptID { return r.ID })
+
+		for _, e := range d.Events {
+			if _, ok := courseTypes[e.CourseTypeID]; !ok {
+				t.Errorf("%s: event %q: unknown course type", school, e.Slug)
+			}
+
+			if _, ok := accounts[e.CreatedBy]; !ok {
+				t.Errorf("%s: event %q: unknown creator", school, e.Slug)
+			}
+		}
+
+		for _, l := range d.Lessons {
+			if _, ok := events[l.EventID]; !l.EventID.IsZero() && !ok {
+				t.Errorf("%s: lesson %v: unknown event", school, l.ID)
+			}
+		}
+
+		for _, r := range d.EventRegistrations {
+			if _, ok := events[r.EventID]; !ok {
+				t.Errorf("%s: event registration %v: unknown event", school, r.ID)
+			}
+
+			if _, ok := persons[r.PersonID]; !r.PersonID.IsZero() && !ok {
+				t.Errorf("%s: event registration %v: unknown person", school, r.ID)
+			}
+
+			if _, ok := accounts[r.RegisteredBy]; !ok {
+				t.Errorf("%s: event registration %v: unknown account", school, r.ID)
+			}
+
+			for _, id := range []domain.ReceiptID{r.ReceiptID, r.CancellationReceiptID} {
+				if _, ok := receipts[id]; !id.IsZero() && !ok {
+					t.Errorf("%s: event registration %v: unknown receipt %v", school, r.ID, id)
+				}
+			}
+
+			if !exampleEmail(r.GuestEmail) {
+				t.Errorf("%s: event registration %v: guest email %q is not on an example domain", school, r.ID,
+					r.GuestEmail)
+			}
+		}
 	})
 }
 
@@ -1375,12 +1421,64 @@ func TestLoadDemoRoundTrip(t *testing.T) {
 
 			sameSet(t, name("announcements"), announcements, want.Announcements)
 
-			return nil
+			return checkStoredEvents(ctx, t, name, tx, want)
 		})
 		if err != nil {
 			t.Fatalf("%s: %v", school, err)
 		}
 	})
+}
+
+// checkStoredEvents compares the events in tx, with their sessions and
+// registrations, to want's. The stores keep instants in UTC, as the seed
+// makes them (domain.Date.At).
+func checkStoredEvents(ctx context.Context, t *testing.T, name func(string) string, tx store.Tx, want seed.Dataset) error {
+	t.Helper()
+
+	events, err := tx.Events().List(ctx)
+	if err != nil {
+		return err
+	}
+
+	if len(want.Events) == 0 {
+		t.Errorf("%s", name("the demo has no events"))
+	}
+
+	sameSet(t, name("events"), events, want.Events)
+
+	for _, e := range want.Events {
+		sessions, err := tx.Lessons().ListByEvent(ctx, e.ID)
+		if err != nil {
+			return err
+		}
+
+		var wantSessions []domain.Lesson
+
+		for _, l := range want.Lessons {
+			if l.EventID == e.ID {
+				wantSessions = append(wantSessions, l)
+			}
+		}
+
+		sameSet(t, name("sessions of "+e.Slug), sessions, wantSessions)
+
+		regs, err := tx.EventRegistrations().ListByEvent(ctx, e.ID)
+		if err != nil {
+			return err
+		}
+
+		var wantRegs []domain.EventRegistration
+
+		for _, r := range want.EventRegistrations {
+			if r.EventID == e.ID {
+				wantRegs = append(wantRegs, r)
+			}
+		}
+
+		sameSet(t, name("registrations for "+e.Slug), regs, wantRegs)
+	}
+
+	return nil
 }
 
 // TestLoadDemoAt checks that the web demo's data, built for the visit date,
@@ -1862,14 +1960,32 @@ func TestWerkstattOwnIdentity(t *testing.T) {
 		t.Errorf("werkstatt receipt settings incomplete: %v", err)
 	}
 
+	fees := map[domain.ReceiptID]bool{}
+	for _, reg := range d.EventRegistrations {
+		if !reg.ReceiptID.IsZero() {
+			fees[reg.ReceiptID] = true
+		}
+	}
+
 	for _, r := range d.Receipts {
 		if r.Locale != "de" || r.Issuer != werkstattIssuer || !strings.HasPrefix(r.Number, "TL-") {
 			t.Errorf("receipt %+v: want German, issued by %s, numbered TL-…", r, werkstattIssuer.Name)
 		}
 
-		if r.Kind == domain.ReceiptSale && !strings.Contains(r.Lines[0].Description, "gültig") {
+		// A pass's line says how long it is valid, an event fee's names the
+		// participant: "<event> für <person>, <first> – <last>".
+		word := "gültig"
+		if fees[r.ID] {
+			word = " für "
+		}
+
+		if r.Kind == domain.ReceiptSale && !strings.Contains(r.Lines[0].Description, word) {
 			t.Errorf("receipt %s line %q is not German", r.Number, r.Lines[0].Description)
 		}
+	}
+
+	if len(fees) == 0 {
+		t.Error("no werkstatt receipt is for an event fee")
 	}
 }
 

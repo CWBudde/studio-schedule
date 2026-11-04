@@ -101,7 +101,8 @@ func TestAdminEvents(t *testing.T) {
 	// Reads.
 	a.expect(http.StatusNotFound, http.MethodGet, events+unknown, "", a.office)
 
-	if list := decode(t, a.expect(http.StatusOK, http.MethodGet, events, "", a.office)); len(list["items"].([]any)) != 1 {
+	// The demo seed's three events and this one.
+	if list := decode(t, a.expect(http.StatusOK, http.MethodGet, events, "", a.office)); len(list["items"].([]any)) != 4 {
 		t.Errorf("list %v", list)
 	}
 
