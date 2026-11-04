@@ -107,10 +107,10 @@ func rverifyTInYear(r domain.Receipt, day domain.Date) domain.Receipt {
 }
 
 // rverifyTBreak writes the broken receipts of the findings golden files: a
-// storno of the storno SD-2026-0002 (6), a number that does not end in its
-// sequence (7), a storno of SD-2026-0003 that does not negate it after the
-// missing 8 (9), and totals that are not the sum of the lines after the
-// missing 10 and 11 (12).
+// storno of the storno SD-2026-0002 (7), a number that does not end in its
+// sequence (8), a storno of SD-2026-0003 that does not negate it after the
+// missing 9 (10), and totals that are not the sum of the lines after the
+// missing 11 and 12 (13).
 func rverifyTBreak(k rverifyTKit) error {
 	storno, err := k.get("SD-2026-0002")
 	if err != nil {
@@ -122,16 +122,16 @@ func rverifyTBreak(k rverifyTKit) error {
 		return err
 	}
 
-	wrong := k.storno("SD-2026-0009", 9, sale)
+	wrong := k.storno("SD-2026-0010", 10, sale)
 	wrong.Lines = []domain.ReceiptLine{rverifyTLine(1, "Fictional pass", -1000)}
 	wrong.Net, wrong.VAT, wrong.Gross = -840, -160, -1000
 
-	totals := k.sale("SD-2026-0012", 12, rverifyTLine(1, "Fictional pass", 1000))
+	totals := k.sale("SD-2026-0013", 13, rverifyTLine(1, "Fictional pass", 1000))
 	totals.Net, totals.VAT, totals.Gross = 1008, 192, 1200
 
 	return k.create(
-		k.storno("SD-2026-0006", 6, storno),
-		k.sale("SD-2026-0099", 7, rverifyTLine(1, "Fictional pass", 1500)),
+		k.storno("SD-2026-0007", 7, storno),
+		k.sale("SD-2026-0099", 8, rverifyTLine(1, "Fictional pass", 1500)),
 		wrong,
 		totals,
 	)
@@ -169,13 +169,13 @@ func TestReceiptsVerifyDemo(t *testing.T) {
 
 		golden(t, "receipts/verify-clean.json", got.stdout)
 
-		want := receiptsVerifyReport{OK: true, Years: []int{2026}, Receipts: 5, Findings: []receiptsVerifyFinding{}}
+		want := receiptsVerifyReport{OK: true, Years: []int{2026}, Receipts: 6, Findings: []receiptsVerifyFinding{}}
 		if report := rverifyTReport(t, got); !rverifyTSame(report, want) {
 			t.Errorf("report %+v, want %+v", report, want)
 		}
 
 		got = r.exec(t, "receipts", "verify", "--year", "2026")
-		if got.code != 0 || got.stdout != "5 receipts of 2026 checked: no findings\n" {
+		if got.code != 0 || got.stdout != "6 receipts of 2026 checked: no findings\n" {
 			t.Errorf("--year 2026: exit %d, stdout %q", got.code, got.stdout)
 		}
 	})
@@ -207,8 +207,8 @@ func TestReceiptsVerifyFindings(t *testing.T) {
 		golden(t, "receipts/verify-findings.json", got.stdout)
 
 		report := rverifyTReport(t, got)
-		if report.OK || report.Receipts != 9 || !slices.Equal(report.Years, []int{2026}) || len(report.Findings) != 6 {
-			t.Errorf("report %+v, want 6 findings in 9 receipts of 2026", report)
+		if report.OK || report.Receipts != 10 || !slices.Equal(report.Years, []int{2026}) || len(report.Findings) != 6 {
+			t.Errorf("report %+v, want 6 findings in 10 receipts of 2026", report)
 		}
 	})
 }
@@ -238,35 +238,35 @@ func TestReceiptsVerifyCases(t *testing.T) {
 		"one and several numbers missing": {
 			write: func(_ *testing.T, k rverifyTKit) error {
 				return k.create(
-					k.sale("SD-2026-0007", 7, rverifyTLine(1, desc, 1500)),
-					k.sale("SD-2026-0010", 10, rverifyTLine(1, desc, 1500)),
+					k.sale("SD-2026-0008", 8, rverifyTLine(1, desc, 1500)),
+					k.sale("SD-2026-0011", 11, rverifyTLine(1, desc, 1500)),
 				)
 			},
-			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 7, Findings: []receiptsVerifyFinding{
-				{Year: 2026, Check: "sequence", Message: "the number with sequence 6 is missing"},
-				{Year: 2026, Check: "sequence", Message: "the numbers with sequences 8 to 9 are missing"},
+			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 8, Findings: []receiptsVerifyFinding{
+				{Year: 2026, Check: "sequence", Message: "the number with sequence 7 is missing"},
+				{Year: 2026, Check: "sequence", Message: "the numbers with sequences 9 to 10 are missing"},
 			}},
-			summary: "7 receipts of 2026 checked: 2 findings",
+			summary: "8 receipts of 2026 checked: 2 findings",
 		},
 		"a number not of its sequence": {
 			write: func(_ *testing.T, k rverifyTKit) error {
-				return k.create(k.sale("SD-2026-0099", 6, rverifyTLine(1, desc, 1500)))
+				return k.create(k.sale("SD-2026-0099", 7, rverifyTLine(1, desc, 1500)))
 			},
-			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 6, Findings: []receiptsVerifyFinding{{
+			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 7, Findings: []receiptsVerifyFinding{{
 				Year: 2026, Number: "SD-2026-0099", Check: "number",
-				Message: "the number does not end in its year 2026 and sequence 6",
+				Message: "the number does not end in its year 2026 and sequence 7",
 			}}},
-			summary: "6 receipts of 2026 checked: 1 findings",
+			summary: "7 receipts of 2026 checked: 1 findings",
 		},
 		"a number of another year": {
 			write: func(_ *testing.T, k rverifyTKit) error {
-				return k.create(k.sale("SD-2025-0006", 6, rverifyTLine(1, desc, 1500)))
+				return k.create(k.sale("SD-2025-0007", 7, rverifyTLine(1, desc, 1500)))
 			},
-			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 6, Findings: []receiptsVerifyFinding{{
-				Year: 2026, Number: "SD-2025-0006", Check: "number",
-				Message: "the number does not end in its year 2026 and sequence 6",
+			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 7, Findings: []receiptsVerifyFinding{{
+				Year: 2026, Number: "SD-2025-0007", Check: "number",
+				Message: "the number does not end in its year 2026 and sequence 7",
 			}}},
-			summary: "6 receipts of 2026 checked: 1 findings",
+			summary: "7 receipts of 2026 checked: 1 findings",
 		},
 		"a storno of a storno": {
 			write: func(_ *testing.T, k rverifyTKit) error {
@@ -275,13 +275,13 @@ func TestReceiptsVerifyCases(t *testing.T) {
 					return err
 				}
 
-				return k.create(k.storno("SD-2026-0006", 6, storno))
+				return k.create(k.storno("SD-2026-0007", 7, storno))
 			},
-			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 6, Findings: []receiptsVerifyFinding{{
-				Year: 2026, Number: "SD-2026-0006", Check: "cancellation",
+			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 7, Findings: []receiptsVerifyFinding{{
+				Year: 2026, Number: "SD-2026-0007", Check: "cancellation",
 				Message: "the cancellation cancels no sale receipt",
 			}}},
-			summary: "6 receipts of 2026 checked: 1 findings",
+			summary: "7 receipts of 2026 checked: 1 findings",
 		},
 		"a storno with other amounts": {
 			write: func(_ *testing.T, k rverifyTKit) error {
@@ -290,19 +290,19 @@ func TestReceiptsVerifyCases(t *testing.T) {
 					return err
 				}
 
-				r := k.storno("SD-2026-0006", 6, sale)
+				r := k.storno("SD-2026-0007", 7, sale)
 				r.Lines = []domain.ReceiptLine{rverifyTLine(1, desc, -1000)}
 				r.Net, r.VAT, r.Gross = -840, -160, -1000
 
 				return k.create(r)
 			},
 			args: []string{"--year", "2026"},
-			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 6, Findings: []receiptsVerifyFinding{{
-				Year: 2026, Number: "SD-2026-0006", Check: "cancellation",
+			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 7, Findings: []receiptsVerifyFinding{{
+				Year: 2026, Number: "SD-2026-0007", Check: "cancellation",
 				Message: "the cancellation does not negate SD-2026-0003: net, VAT and gross -840, -160, -1000 EUR " +
 					"against %d, %d, %d EUR",
 			}}},
-			summary: "6 receipts of 2026 checked: 1 findings",
+			summary: "7 receipts of 2026 checked: 1 findings",
 		},
 		"a storno in another currency": {
 			write: func(_ *testing.T, k rverifyTKit) error {
@@ -311,41 +311,41 @@ func TestReceiptsVerifyCases(t *testing.T) {
 					return err
 				}
 
-				r := k.storno("SD-2026-0006", 6, sale)
+				r := k.storno("SD-2026-0007", 7, sale)
 				r.Currency = "CHF"
 
 				return k.create(r)
 			},
-			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 6, Findings: []receiptsVerifyFinding{{
-				Year: 2026, Number: "SD-2026-0006", Check: "cancellation",
+			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 7, Findings: []receiptsVerifyFinding{{
+				Year: 2026, Number: "SD-2026-0007", Check: "cancellation",
 				Message: "the cancellation does not negate SD-2026-0003: net, VAT and gross -%d, -%d, -%d CHF " +
 					"against %d, %d, %d EUR",
 			}}},
-			summary: "6 receipts of 2026 checked: 1 findings",
+			summary: "7 receipts of 2026 checked: 1 findings",
 		},
 		"totals not the sum of the lines": {
 			write: func(_ *testing.T, k rverifyTKit) error {
-				r := k.sale("SD-2026-0006", 6, rverifyTLine(1, desc, 1000))
+				r := k.sale("SD-2026-0007", 7, rverifyTLine(1, desc, 1000))
 				r.Net, r.VAT, r.Gross = 1008, 192, 1200
 
 				return k.create(r)
 			},
-			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 6, Findings: []receiptsVerifyFinding{{
-				Year: 2026, Number: "SD-2026-0006", Check: "totals",
+			want: receiptsVerifyReport{Years: []int{2026}, Receipts: 7, Findings: []receiptsVerifyFinding{{
+				Year: 2026, Number: "SD-2026-0007", Check: "totals",
 				Message: "net, VAT and gross are 1008, 192, 1200; the lines sum to 840, 160, 1000",
 			}}},
-			summary: "6 receipts of 2026 checked: 1 findings",
+			summary: "7 receipts of 2026 checked: 1 findings",
 		},
 		"a storno of a sale of the year before, --year": {
 			write:   rverifyTAcrossYears,
 			args:    []string{"--year", "2026"},
-			want:    receiptsVerifyReport{OK: true, Years: []int{2026}, Receipts: 6},
-			summary: "6 receipts of 2026 checked: no findings",
+			want:    receiptsVerifyReport{OK: true, Years: []int{2026}, Receipts: 7},
+			summary: "7 receipts of 2026 checked: no findings",
 		},
 		"a storno of a sale of the year before, every year": {
 			write:   rverifyTAcrossYears,
-			want:    receiptsVerifyReport{OK: true, Years: []int{2025, 2026}, Receipts: 7},
-			summary: "7 receipts of 2025, 2026 checked: no findings",
+			want:    receiptsVerifyReport{OK: true, Years: []int{2025, 2026}, Receipts: 8},
+			summary: "8 receipts of 2025, 2026 checked: no findings",
 		},
 		"a year without receipts": {
 			args:    []string{"--year", "2024"},
@@ -444,8 +444,8 @@ func rverifyTAcrossYears(_ *testing.T, k rverifyTKit) error {
 		return err
 	}
 
-	if seq25 != 1 || seq26 != 6 {
-		return fmt.Errorf("the counters gave %d for 2025 and %d for 2026, want 1 and 6", seq25, seq26)
+	if seq25 != 1 || seq26 != 7 {
+		return fmt.Errorf("the counters gave %d for 2025 and %d for 2026, want 1 and 7", seq25, seq26)
 	}
 
 	sale := rverifyTInYear(k.sale(domain.ReceiptNumber("SD", 2025, seq25), seq25, rverifyTLine(1, "Fictional pass", 1500)),

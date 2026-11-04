@@ -24,7 +24,7 @@ import (
 // programmeDigest is the SHA-256 of the programme school's dataset for
 // FixedDemoAnchor, JSON-encoded. A deliberate change to the programme data
 // updates it: the test prints the new digest when it fails.
-const programmeDigest = "9d702f81c06732ac2bdf25322460fac9bdc91502d04a5a6f2f7336cf0b143155"
+const programmeDigest = "09d2f6bf0d50573bc23ac88224e7b9ca7bb1af0ff65e3c06a6661e2da421e59f"
 
 // TestProgrammeDatasetUnchanged pins every field of the programme school's
 // dataset, so that building the demo schools from their own tables leaves
@@ -92,7 +92,9 @@ func TestDemoSchoolProgrammeIsDemoAt(t *testing.T) {
 }
 
 // receiptLineWords are the words of a pass's receipt line in each demo
-// school's language: "<pass> for <person>, valid <from> – <to>".
+// school's language: "<pass> for <person>, valid <from> – <to>". An event
+// fee's line has the first word but not the second: "<event> for <person>,
+// <first> – <last>".
 var receiptLineWords = map[string][]string{
 	"en": {" for ", ", valid "},
 	"de": {" für ", ", gültig "},
@@ -100,9 +102,10 @@ var receiptLineWords = map[string][]string{
 
 // TestDemoReceiptsIssuedWithSchoolSettings: for every anchor, each demo
 // school's receipts are issued with its own settings: its language (the
-// line text too), issuer, footer, tax note and mode, currency and number
-// prefix, numbered from 1 per year. The werkstatt school's are German, by
-// its own issuer (TestWerkstattOwnIdentity, TestLoadDemoWerkstatt).
+// line text too, a pass's or an event fee's), issuer, footer, tax note and
+// mode, currency and number prefix, numbered from 1 per year. The werkstatt
+// school's are German, by its own issuer (TestWerkstattOwnIdentity,
+// TestLoadDemoWerkstatt).
 func TestDemoReceiptsIssuedWithSchoolSettings(t *testing.T) {
 	t.Parallel()
 
@@ -127,6 +130,13 @@ func TestDemoReceiptsIssuedWithSchoolSettings(t *testing.T) {
 					t.Errorf("%s %v: no receipts", school, anchor)
 				}
 
+				fees := map[domain.ReceiptID]bool{}
+				for _, reg := range d.EventRegistrations {
+					if !reg.ReceiptID.IsZero() {
+						fees[reg.ReceiptID] = true
+					}
+				}
+
 				next := map[int]int{}
 
 				for _, r := range d.Receipts {
@@ -143,10 +153,12 @@ func TestDemoReceiptsIssuedWithSchoolSettings(t *testing.T) {
 					}
 
 					for _, l := range r.Lines {
-						for _, w := range words {
-							if !strings.Contains(l.Description, w) {
-								t.Errorf("%s %v: receipt %s line %q lacks %q (%s)", school, anchor, r.Number,
-									l.Description, w, s.DefaultLocale)
+						for i, w := range words {
+							// An event fee's line has no validity.
+							if want := !fees[r.ID] || i == 0; strings.Contains(l.Description, w) != want {
+								t.Errorf("%s %v: receipt %s (event fee %v) line %q: contains %q is %v, want %v (%s)",
+									school, anchor, r.Number, fees[r.ID], l.Description, w, !want, want,
+									s.DefaultLocale)
 							}
 						}
 					}
@@ -707,9 +719,9 @@ func TestWerkstattOwnPeople(t *testing.T) {
 }
 
 // TestWerkstattWorkshopsOnSunday: for every anchor, the werkstatt
-// school's workshops lie on the Sunday on or after their day, the one day
-// without classes, and its rental on a Wednesday evening in Unten, after
-// the anchor.
+// school's workshops of no event lie on the Sunday on or after their day,
+// the one day without classes, and its rental on a Wednesday evening in
+// Unten, after the anchor.
 func TestWerkstattWorkshopsOnSunday(t *testing.T) {
 	t.Parallel()
 
@@ -724,6 +736,11 @@ func TestWerkstattWorkshopsOnSunday(t *testing.T) {
 			day := domain.DateOf(l.StartsAt, loc)
 			if day.Compare(anchor) <= 0 {
 				t.Errorf("%v: %s on %v, not after the anchor", anchor, l.Kind, day)
+			}
+
+			// The events' sessions have their own days: TestDemoEvents.
+			if !l.EventID.IsZero() {
+				continue
 			}
 
 			switch l.Kind {

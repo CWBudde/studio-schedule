@@ -13,12 +13,12 @@ trials                11
 guests                14
 waiting-list entries  0
 active members        32
-passes sold           3
-sales                 389.00 EUR
+passes sold           4
+sales                 509.00 EUR
 by week:
 2026-09-01 to 2026-09-06  21  322  50  16%  31  6  16%  3  3  4  0  0  0.00 EUR
 2026-09-07 to 2026-09-13  26  400  64  16%  37  6  14%  3  4  5  0  2  300.00 EUR
-2026-09-14 to 2026-09-20  26  400  65  16%  38  6  14%  4  3  4  0  1  89.00 EUR
+2026-09-14 to 2026-09-20  26  400  65  16%  38  6  14%  4  3  4  0  2  209.00 EUR
 2026-09-21 to 2026-09-22  9   140  26  19%  5   1  17%  0  1  1  0  0  0.00 EUR
 by class:
 Mon 15:30 Creative Dance (4–6 yrs)                  3  30  5   17%  4   1  20%  1  0  0  0

@@ -412,6 +412,66 @@
       "lateCancelFrom": "2026-09-25T09:30:00Z"
     },
     {
+      "id": "00000000-0000-7000-8000-000000000330",
+      "startsAt": "2026-09-26T14:00:00Z",
+      "endsAt": "2026-09-26T16:30:00Z",
+      "status": "scheduled",
+      "kind": "workshop",
+      "visibility": "public",
+      "capacity": 12,
+      "courseType": {
+        "id": "00000000-0000-7000-8000-000000000055",
+        "name": "Contemporary"
+      },
+      "room": {
+        "id": "00000000-0000-7000-8000-000000000046",
+        "name": "Hall 1",
+        "position": 1
+      },
+      "location": {
+        "id": "00000000-0000-7000-8000-000000000045",
+        "name": "Studio South"
+      },
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004a",
+        "displayName": "Marco Wrenfield"
+      },
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "freePlaces": 12,
+      "bookingClosesAt": "2026-09-26T14:00:00Z",
+      "lateCancelFrom": "2026-09-26T12:00:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000331",
+      "startsAt": "2026-09-27T08:00:00Z",
+      "endsAt": "2026-09-27T10:30:00Z",
+      "status": "scheduled",
+      "kind": "workshop",
+      "visibility": "public",
+      "capacity": 12,
+      "courseType": {
+        "id": "00000000-0000-7000-8000-000000000055",
+        "name": "Contemporary"
+      },
+      "room": {
+        "id": "00000000-0000-7000-8000-000000000046",
+        "name": "Hall 1",
+        "position": 1
+      },
+      "location": {
+        "id": "00000000-0000-7000-8000-000000000045",
+        "name": "Studio South"
+      },
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004a",
+        "displayName": "Marco Wrenfield"
+      },
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "freePlaces": 12,
+      "bookingClosesAt": "2026-09-27T08:00:00Z",
+      "lateCancelFrom": "2026-09-27T06:00:00Z"
+    },
+    {
       "id": "00000000-0000-7000-8000-00000000007c",
       "startsAt": "2026-09-27T11:30:00Z",
       "endsAt": "2026-09-27T13:30:00Z",
@@ -439,6 +499,36 @@
       "freePlaces": 12,
       "bookingClosesAt": "2026-09-27T11:30:00Z",
       "lateCancelFrom": "2026-09-27T09:30:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000332",
+      "startsAt": "2026-09-27T14:00:00Z",
+      "endsAt": "2026-09-27T16:00:00Z",
+      "status": "scheduled",
+      "kind": "workshop",
+      "visibility": "public",
+      "capacity": 12,
+      "courseType": {
+        "id": "00000000-0000-7000-8000-000000000055",
+        "name": "Contemporary"
+      },
+      "room": {
+        "id": "00000000-0000-7000-8000-000000000046",
+        "name": "Hall 1",
+        "position": 1
+      },
+      "location": {
+        "id": "00000000-0000-7000-8000-000000000045",
+        "name": "Studio South"
+      },
+      "instructor": {
+        "id": "00000000-0000-7000-8000-00000000004a",
+        "displayName": "Marco Wrenfield"
+      },
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "freePlaces": 12,
+      "bookingClosesAt": "2026-09-27T14:00:00Z",
+      "lateCancelFrom": "2026-09-27T12:00:00Z"
     }
   ]
 }

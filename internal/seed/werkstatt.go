@@ -210,6 +210,60 @@ func werkstatt() schoolSpec {
 		// class: staff see it in its room, nobody else.
 		rental:   rentalSpec{4, at(20, 0), 120, "Unten", "Theatergruppe Kupferblatt"},
 		rentalOn: on(time.Wednesday),
+		// The events (ADR 0019), like the programme school's, with their
+		// sessions at times and in rooms no class, workshop or the rental
+		// uses on whatever day they fall: the intensive on the weekend after
+		// the anchor, booked up but one place, which the member login can
+		// take for a child; the free taster on a Sunday in the second week,
+		// with a guest the office added at the desk; and a draft that only
+		// the office sees. Nobody of a demo login's family is registered.
+		events: []eventSpec{
+			{
+				slug: "contemporary-intensivwochenende", title: "Contemporary-Intensivwochenende",
+				description: "Drei Einheiten an einem Wochenende: Bodenarbeit, Release-Technik und eine kleine " +
+					"Choreografie zum Mitnehmen. Für Tänzerinnen und Tänzer mit etwas Contemporary-Erfahrung.",
+				courseType: "Contemporary", capacity: 12, price: 12000, vatRate: 1900, status: domain.EventPublished,
+				on: on(time.Saturday), days: 1,
+				sessions: []sessionSpec{
+					{days: 0, start: at(15, 30), minutes: 150, room: "Oben", instructor: "Lars Feldkamp"},
+					{days: 1, start: at(12, 30), minutes: 120, room: "Oben", instructor: "Lars Feldkamp"},
+					{days: 1, start: at(15, 0), minutes: 120, room: "Oben", instructor: "Lars Feldkamp"},
+				},
+				registered: []string{
+					"Florian Lerchenfeld", "Miriam Mohnhaupt", "Ulrike Fährmann", "Jannik Fährmann",
+					"Charlotte Hollerbach", "Greta Eichhorst", "Hannah Birkholz", "Yasemin Grünhagen",
+					"Ronja Pappelstein", "Wiebke Weißdorn", "Ingrid Kranich",
+				},
+				paid: "Miriam Mohnhaupt", method: domain.PaymentCard,
+			},
+			{
+				slug: "ballett-zum-ausprobieren", title: "Ballett zum Ausprobieren",
+				description: "Eine kostenlose Ballettstunde mit Klavierbegleitung für alle, die Ballett einmal " +
+					"ausprobieren möchten. Keine Vorkenntnisse nötig; bequeme Kleidung genügt.",
+				courseType: "Ballett Erwachsene", capacity: 20, vatRate: 1900, status: domain.EventPublished,
+				on: on(time.Sunday), days: 10,
+				sessions: []sessionSpec{
+					{
+						days: 0, start: at(16, 0), minutes: 90, room: "Oben", instructor: "Valentina Rossbach",
+						accompanist: "Elise Hammerschlag",
+					},
+				},
+				registered: []string{"Torsten Quendel", "Daniela Imhoff"},
+				guests:     []participantSpec{{guest: "Svea Neugier", email: "svea.neugier@example.org"}},
+			},
+			{
+				slug: "probe-sommerauffuehrung", title: "Probe für die Sommeraufführung",
+				description: "Die erste Probe für die Sommeraufführung.",
+				courseType:  "Kinderballett", capacity: 16, vatRate: 1900, status: domain.EventDraft,
+				on: on(time.Sunday), days: 21,
+				sessions: []sessionSpec{
+					{
+						days: 0, start: at(16, 0), minutes: 120, room: "Oben", instructor: "Johanna Sternberg",
+						accompanist: "Konrad Flügel",
+					},
+				},
+			},
+		},
 		// The pass catalog: a single lesson, a card of ten and a monthly
 		// pass, invented gross prices in whole euros with 19 % VAT.
 		passTypes: []domain.PassType{

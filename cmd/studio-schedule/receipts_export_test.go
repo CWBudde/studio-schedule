@@ -85,7 +85,7 @@ func TestReceiptsExportDemo(t *testing.T) {
 			numbers = append(numbers, rec[number])
 		}
 
-		if want := []string{"SD-2026-0001", "SD-2026-0002", "SD-2026-0003", "SD-2026-0004", "SD-2026-0005"}; !slices.Equal(numbers, want) {
+		if want := []string{"SD-2026-0001", "SD-2026-0002", "SD-2026-0003", "SD-2026-0004", "SD-2026-0005", "SD-2026-0006"}; !slices.Equal(numbers, want) {
 			t.Errorf("numbers %q, want %q", numbers, want)
 		}
 
@@ -107,7 +107,7 @@ func TestReceiptsExportDemo(t *testing.T) {
 		file := filepath.Join(t.TempDir(), "receipts-2026.csv")
 
 		got = r.exec(t, "receipts", "export", "--as", demoOffice, "--year", "2026", "--file", file)
-		if got.code != 0 || got.stderr != "" || got.stdout != "wrote 5 lines of 5 receipts of 2026 to "+file+"\n" {
+		if got.code != 0 || got.stderr != "" || got.stdout != "wrote 6 lines of 6 receipts of 2026 to "+file+"\n" {
 			t.Fatalf("--file: exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
 		}
 
@@ -130,7 +130,7 @@ func TestReceiptsExportDemo(t *testing.T) {
 		}
 
 		got = r.exec(t, "receipts", "export", "--as", demoOffice, "--year", "2026", "--file", file, "--force")
-		if got.code != 0 || got.stdout != "wrote 5 lines of 5 receipts of 2026 to "+file+"\n" {
+		if got.code != 0 || got.stdout != "wrote 6 lines of 6 receipts of 2026 to "+file+"\n" {
 			t.Fatalf("--force: exit %d, stdout %q, stderr %q", got.code, got.stdout, got.stderr)
 		}
 
@@ -163,7 +163,7 @@ func TestReceiptsExportFormulas(t *testing.T) {
 
 		rverifyTWrite(t, r, func(k rverifyTKit) error {
 			for i, p := range prefixes {
-				rc := k.sale(domain.ReceiptNumber("SD", 2026, 6+i), 6+i,
+				rc := k.sale(domain.ReceiptNumber("SD", 2026, 7+i), 7+i,
 					rverifyTLine(1, string(p)+"HYPERLINK(\"https://example.org\")", 1500),
 					rverifyTLine(2, "Fictional pass", 1000))
 				rc.RecipientName = string(p) + "SUM(A1:A9) Example"
@@ -182,8 +182,8 @@ func TestReceiptsExportFormulas(t *testing.T) {
 		}
 
 		records := rexportTParse(t, got.stdout)
-		if len(records) != 5+2*len(prefixes) {
-			t.Fatalf("%d records, want %d", len(records), 5+2*len(prefixes))
+		if len(records) != 6+2*len(prefixes) {
+			t.Fatalf("%d records, want %d", len(records), 6+2*len(prefixes))
 		}
 
 		recipient, item := rexportTColumn(t, "recipient"), rexportTColumn(t, "item")
@@ -191,7 +191,7 @@ func TestReceiptsExportFormulas(t *testing.T) {
 
 		for i, p := range prefixes {
 			for j, wantItem := range []string{"'" + string(p) + "HYPERLINK(\"https://example.org\")", "Fictional pass"} {
-				rec := records[5+2*i+j]
+				rec := records[6+2*i+j]
 				if rec[recipient] != "'"+string(p)+"SUM(A1:A9) Example" || rec[item] != wantItem ||
 					rec[position] != strconv.Itoa(j+1) {
 					t.Errorf("record %q: want recipient %q, item %q", rec, "'"+string(p)+"SUM(A1:A9) Example", wantItem)

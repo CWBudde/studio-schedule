@@ -142,12 +142,18 @@ type Dataset struct {
 	PassTypes   []domain.PassType
 	Passes      []domain.Pass
 	Redemptions []domain.PassRedemption
-	// Receipts are the receipts of the sold passes and the cancellation of
-	// the pass sold by mistake, in the order they were issued; their PDFs
-	// are rendered when first read (ADR 0012).
+	// Receipts are the receipts of the sold passes, the cancellation of the
+	// pass sold by mistake and the paid event fee, in the order they were
+	// issued; their PDFs are rendered when first read (ADR 0012).
 	Receipts []domain.Receipt
 	// Announcements are the office's announcements, not emailed (ADR 0014).
 	Announcements []domain.Announcement
+	// Events are the school's events (ADR 0019); their sessions are
+	// workshop lessons in Lessons with EventID set.
+	Events []domain.Event
+	// EventRegistrations are the registrations of persons and guests for
+	// the events; a paid fee's receipt is in Receipts.
+	EventRegistrations []domain.EventRegistration
 }
 
 // LoadDemo writes the complete demo data set for FixedDemoAnchor (Demo)
@@ -271,6 +277,13 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 		}
 	}
 
+	// Events before the lessons, their sessions.
+	for _, e := range d.Events {
+		if err := tx.Events().Create(ctx, e); err != nil {
+			return fmt.Errorf("event %v: %w", e.ID, err)
+		}
+	}
+
 	for _, l := range d.Lessons {
 		if err := tx.Lessons().Create(ctx, l); err != nil {
 			return fmt.Errorf("lesson %v: %w", l.ID, err)
@@ -327,6 +340,13 @@ func write(ctx context.Context, tx store.Tx, d Dataset) error {
 	for _, r := range d.Redemptions {
 		if err := tx.Redemptions().Create(ctx, r); err != nil {
 			return fmt.Errorf("redemption of booking %v: %w", r.BookingID, err)
+		}
+	}
+
+	// Registrations after the receipts of their fees.
+	for _, r := range d.EventRegistrations {
+		if err := tx.EventRegistrations().Create(ctx, r); err != nil {
+			return fmt.Errorf("event registration %v: %w", r.ID, err)
 		}
 	}
 

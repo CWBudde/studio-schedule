@@ -147,8 +147,11 @@ func demoAt(anchor domain.Date, s schoolSpec) (Dataset, error) {
 	b.visitors(anchor)
 	b.announcements(anchor)
 	b.duplicates()
-	// Last, so every other entity keeps its ID.
+	// After the other entities, so they keep their IDs.
 	b.rental(anchor, s.rental)
+	// Last, so the entities before them keep their IDs; the fees' receipts
+	// follow the passes'.
+	b.events(anchor)
 
 	return b.d, nil
 }
@@ -186,6 +189,9 @@ type schoolSpec struct {
 	staffBookings staffBookingsSpec
 	// rental is the room rented out to an outside renter.
 	rental rentalSpec
+	// events are the school's events (ADR 0019): one free, one nearly
+	// full with a paid registration, one draft.
+	events []eventSpec
 	// passTypes is the pass catalog.
 	passTypes []domain.PassType
 	// passes are the passes sold and given away.
@@ -972,28 +978,11 @@ type issue struct {
 func (b *builder) receipts(issued []issue, office domain.AccountID) {
 	slices.SortStableFunc(issued, func(a, b issue) int { return a.at.Compare(b.at) })
 
-	settings := b.d.Settings
 	byPass := map[int]domain.Receipt{}
 
 	for _, is := range issued {
 		p := &b.d.Passes[is.pass]
-		day := domain.DateOf(is.at, b.loc)
-		seq := 1
-
-		for _, r := range b.d.Receipts {
-			if r.Year == day.Year {
-				seq++
-			}
-		}
-
-		payer := cmp.Or(p.PayerID, p.PersonID)
-		r := domain.Receipt{
-			ID: ids.New[domain.ReceiptID](b.seq), Number: domain.ReceiptNumber(settings.ReceiptPrefix, day.Year, seq),
-			Year: day.Year, Sequence: seq, Kind: domain.ReceiptSale, IssuedAt: is.at, IssueDate: day,
-			Locale: settings.DefaultLocale, Issuer: settings.Receipts.Issuer, TaxMode: settings.Receipts.TaxMode,
-			TaxNote: settings.Receipts.TaxNote, Footer: settings.Receipts.Footer, PayerID: payer,
-			RecipientName: b.name(payer), PaymentMethod: is.method, Currency: settings.Currency, CreatedBy: office,
-		}
+		r := b.newReceipt(is.at, cmp.Or(p.PayerID, p.PersonID), is.method, office)
 
 		if is.cancel {
 			orig := byPass[is.pass]
@@ -1008,6 +997,31 @@ func (b *builder) receipts(issued []issue, office domain.AccountID) {
 
 		r.Net, r.VAT, r.Gross = r.Lines[0].Net, r.Lines[0].VAT, r.Lines[0].Gross
 		b.d.Receipts = append(b.d.Receipts, r)
+	}
+}
+
+// newReceipt returns a sale receipt issued at by office with the school's
+// settings and the next number of its year, paid by payer, the recipient,
+// by method; the caller adds its lines and totals.
+func (b *builder) newReceipt(
+	at time.Time, payer domain.PersonID, method domain.PaymentMethod, office domain.AccountID,
+) domain.Receipt {
+	settings := b.d.Settings
+	day := domain.DateOf(at, b.loc)
+	seq := 1
+
+	for _, r := range b.d.Receipts {
+		if r.Year == day.Year {
+			seq++
+		}
+	}
+
+	return domain.Receipt{
+		ID: ids.New[domain.ReceiptID](b.seq), Number: domain.ReceiptNumber(settings.ReceiptPrefix, day.Year, seq),
+		Year: day.Year, Sequence: seq, Kind: domain.ReceiptSale, IssuedAt: at, IssueDate: day,
+		Locale: settings.DefaultLocale, Issuer: settings.Receipts.Issuer, TaxMode: settings.Receipts.TaxMode,
+		TaxNote: settings.Receipts.TaxNote, Footer: settings.Receipts.Footer, PayerID: payer,
+		RecipientName: b.name(payer), PaymentMethod: method, Currency: settings.Currency, CreatedBy: office,
 	}
 }
 
