@@ -553,41 +553,76 @@ func (s *EventService) admins(ctx context.Context, tx store.Tx, events []domain.
 		return out, nil
 	}
 
-	ids := mapSlice(events, func(e domain.Event) domain.EventID { return e.ID })
-
-	lessons, err := tx.Lessons().ListByEvents(ctx, ids)
+	parts, err := readEventParts(ctx, tx, events, s.clock.Now(), false)
 	if err != nil {
-		return nil, fmt.Errorf("sessions: %w", err)
-	}
-
-	counts, err := tx.EventRegistrations().CountsByEvents(ctx, ids, s.clock.Now())
-	if err != nil {
-		return nil, fmt.Errorf("registrations: %w", err)
-	}
-
-	sessions := map[domain.EventID][]ScheduledLesson{}
-
-	if len(lessons) > 0 {
-		refs, err := loadCatalogRefs(ctx, tx)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, l := range lessons {
-			sl, err := refs.resolve(l)
-			if err != nil {
-				return nil, err
-			}
-
-			sessions[l.EventID] = append(sessions[l.EventID], sl)
-		}
+		return nil, err
 	}
 
 	for i, e := range events {
-		out[i] = EventAdmin{Event: e, Sessions: sessions[e.ID], Counts: counts[e.ID]}
-		if out[i].Sessions == nil {
-			out[i].Sessions = []ScheduledLesson{}
+		out[i] = EventAdmin{Event: e, Sessions: parts.sessionsOf(e.ID), Counts: parts.counts[e.ID]}
+	}
+
+	return out, nil
+}
+
+// eventParts are what the views of events read beside the events: their
+// sessions, resolved and with their event's slug, and their counts.
+type eventParts struct {
+	sessions map[domain.EventID][]ScheduledLesson
+	counts   map[domain.EventID]store.EventRegistrationCounts
+	// refs are the catalog's records; loaded only when there are
+	// sessions, unless asked for.
+	refs lessonRefs
+}
+
+// sessionsOf returns the sessions of the event, ordered by start; empty,
+// not nil, without one.
+func (p eventParts) sessionsOf(id domain.EventID) []ScheduledLesson {
+	if s := p.sessions[id]; s != nil {
+		return s
+	}
+
+	return []ScheduledLesson{}
+}
+
+// readEventParts reads the sessions of the events, canceled ones included,
+// and their counts at now, with a constant number of queries; the catalog
+// always when withRefs, else only for the sessions.
+func readEventParts(
+	ctx context.Context, tx store.Tx, events []domain.Event, now time.Time, withRefs bool,
+) (eventParts, error) {
+	ids := mapSlice(events, func(e domain.Event) domain.EventID { return e.ID })
+	slugs := make(map[domain.EventID]string, len(events))
+
+	for _, e := range events {
+		slugs[e.ID] = e.Slug
+	}
+
+	lessons, err := tx.Lessons().ListByEvents(ctx, ids)
+	if err != nil {
+		return eventParts{}, fmt.Errorf("sessions: %w", err)
+	}
+
+	out := eventParts{sessions: map[domain.EventID][]ScheduledLesson{}, refs: newLessonRefs()}
+
+	if out.counts, err = tx.EventRegistrations().CountsByEvents(ctx, ids, now); err != nil {
+		return eventParts{}, fmt.Errorf("registrations: %w", err)
+	}
+
+	if len(lessons) > 0 || withRefs {
+		if out.refs, err = loadCatalogRefs(ctx, tx); err != nil {
+			return eventParts{}, err
 		}
+	}
+
+	for _, l := range lessons {
+		sl, err := out.refs.resolve(l)
+		if err != nil {
+			return eventParts{}, err
+		}
+
+		sl.EventSlug = slugs[l.EventID]
+		out.sessions[l.EventID] = append(out.sessions[l.EventID], sl)
 	}
 
 	return out, nil
@@ -716,6 +751,7 @@ func (s *EventService) AddSession(ctx context.Context, id domain.EventID, d Sess
 
 		// A session has no bookings and no waiting list.
 		out, err = adminLesson(ctx, tx, settings, l, 0, 0)
+		out.EventSlug = e.Slug
 
 		return err
 	})

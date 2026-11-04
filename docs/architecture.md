@@ -80,6 +80,12 @@ Both targets run the identical `internal/app.New` handler. Only these pieces dif
   cancels; the account administration locks the account's person, and every admin's with it when
   the account is an admin's, so the last-admin guard sees concurrent changes
   ([ADR 0016](decisions/0016-privacy-and-account-administration.md)).
+  An event's capacity and registrations are checked under its lock (`Events().Lock`), which comes
+  before everything else: event → persons → term → class → lesson → passes
+  ([ADR 0019](decisions/0019-events-and-workshops.md)). A registration, the office's or a member's,
+  locks the event and then the person (`lockLivePerson`); a write that starts from a person
+  (anonymizing, merging) reads that person's open registrations first, locks their events in ID
+  order, and only then locks the persons.
   Serialization and deadlock failures are retried. Constraints are backstops: a partial unique index for active bookings
   (a booking a merge kept as history, `merged_from`, is left out of it),
   `visits_remaining >= 0`, and a unique redemption per booking.

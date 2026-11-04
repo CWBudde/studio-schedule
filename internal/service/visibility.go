@@ -97,14 +97,9 @@ func publishedEarly(l domain.Lesson) bool {
 	return l.Kind != domain.LessonRegular
 }
 
-// draftEvents returns which of the events of the sessions among lessons
-// are drafts (ADR 0019): only staff see a draft event and its sessions, so
-// for staff none is, and lessons without a session cost no read.
-func draftEvents(ctx context.Context, tx store.Tx, v viewer, lessons []domain.Lesson) (map[domain.EventID]bool, error) {
-	if v.role.Staff() {
-		return nil, nil
-	}
-
+// sessionEvents returns the events of the sessions among lessons by ID
+// (ADR 0019) with one read; lessons without a session cost no read.
+func sessionEvents(ctx context.Context, tx store.Tx, lessons []domain.Lesson) (map[domain.EventID]domain.Event, error) {
 	var events []domain.EventID
 
 	for _, l := range lessons {
@@ -122,26 +117,54 @@ func draftEvents(ctx context.Context, tx store.Tx, v viewer, lessons []domain.Le
 		return nil, fmt.Errorf("events: %w", err)
 	}
 
-	out := map[domain.EventID]bool{}
+	out := make(map[domain.EventID]domain.Event, len(found))
 
 	for _, e := range found {
-		if e.Status == domain.EventDraft {
-			out[e.ID] = true
-		}
+		out[e.ID] = e
 	}
 
 	return out, nil
 }
 
+// hidesSession reports whether v may not see l for being a session of a
+// draft event, which events has by ID: only staff see a draft event and its
+// sessions (ADR 0019).
+func (v viewer) hidesSession(l domain.Lesson, events map[domain.EventID]domain.Event) bool {
+	return !v.role.Staff() && events[l.EventID].Status == domain.EventDraft
+}
+
 // withoutDraftSessions returns lessons without the sessions of draft
-// events, unless v is staff (draftEvents). It may reuse the backing array.
+// events, unless v is staff, who see them all without a read
+// (sessionEvents). It may reuse the backing array.
 func withoutDraftSessions(ctx context.Context, tx store.Tx, v viewer, lessons []domain.Lesson) ([]domain.Lesson, error) {
-	drafts, err := draftEvents(ctx, tx, v, lessons)
-	if err != nil || len(drafts) == 0 {
+	if v.role.Staff() {
+		return lessons, nil
+	}
+
+	events, err := sessionEvents(ctx, tx, lessons)
+	if err != nil {
 		return lessons, err
 	}
 
-	return slices.DeleteFunc(lessons, func(l domain.Lesson) bool { return drafts[l.EventID] }), nil
+	return slices.DeleteFunc(lessons, func(l domain.Lesson) bool { return v.hidesSession(l, events) }), nil
+}
+
+// withSessionEvents returns lessons without the sessions of draft events
+// unless v is staff, and sets the EventSlug of the sessions it keeps
+// (ADR 0019), with one read of their events (sessionEvents). It may reuse
+// the backing array.
+func withSessionEvents(ctx context.Context, tx store.Tx, v viewer, lessons []ScheduledLesson) ([]ScheduledLesson, error) {
+	events, err := sessionEvents(ctx, tx, mapSlice(lessons, func(sl ScheduledLesson) domain.Lesson { return sl.Lesson }))
+	if err != nil {
+		return nil, err
+	}
+
+	lessons = slices.DeleteFunc(lessons, func(sl ScheduledLesson) bool { return v.hidesSession(sl.Lesson, events) })
+	for i := range lessons {
+		lessons[i].EventSlug = events[lessons[i].Lesson.EventID].Slug
+	}
+
+	return lessons, nil
 }
 
 // notSession refuses to book lesson l, or to put someone on its waiting

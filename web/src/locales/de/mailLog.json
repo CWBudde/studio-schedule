@@ -46,7 +46,9 @@
     "announcement": "Mitteilung",
     "account-deleted": "Konto gelöscht",
     "password-changed": "Passwort geändert",
-    "event-canceled": "Veranstaltung abgesagt"
+    "event-canceled": "Veranstaltung abgesagt",
+    "event-registered": "Veranstaltungsanmeldung bestätigt",
+    "event-registration-canceled": "Veranstaltungsanmeldung storniert"
   },
   "attempts_one": "{{count}} Versuch",
   "attempts_other": "{{count}} Versuche",

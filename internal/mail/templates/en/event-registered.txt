@@ -1,0 +1,23 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+your registration for this event at {{.SchoolName}} is confirmed:
+
+{{.Title}}
+Registered: {{.Participant}}
+{{- range .Sessions}}
+
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}
+{{.Room}}, {{.Location}}
+{{- end}}
+{{- with .Fee}}
+
+Please pay the fee of {{.}} at the desk; you get the receipt there.
+{{- end}}
+{{- if not .CancelUntil.IsZero}}
+
+If it does not suit after all, you can cancel the registration yourself until
+{{date .CancelUntil}}, {{clock .CancelUntil}}. After that, please contact {{.SchoolName}}.
+{{- end}}
+
+Kind regards,
+{{.SchoolName}}

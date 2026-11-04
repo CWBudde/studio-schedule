@@ -925,7 +925,10 @@ func (s *ReceiptService) PDF(ctx context.Context, id domain.ReceiptID) (ReceiptF
 }
 
 // MyPDF returns the PDF of a receipt the signed-in person paid, or a person
-// merged into them paid; any other is domain.ErrNotFound.
+// merged into them paid, and of the receipt or Storno of an event fee whose
+// registration is of the person's family, the person's own or a
+// dependent's, whoever paid it (ADR 0019, "My events"); any other is
+// domain.ErrNotFound.
 func (s *ReceiptService) MyPDF(ctx context.Context, p Principal, id domain.ReceiptID) (ReceiptFile, error) {
 	return s.pdf(ctx, id, func(ctx context.Context, tx store.Tx, r domain.Receipt) (bool, error) {
 		if p.PersonID.IsZero() {
@@ -933,9 +936,31 @@ func (s *ReceiptService) MyPDF(ctx context.Context, p Principal, id domain.Recei
 		}
 
 		payers, err := payersOf(ctx, tx, p.PersonID)
+		if err != nil || slices.Contains(payers, r.PayerID) {
+			return err == nil, err
+		}
 
-		return slices.Contains(payers, r.PayerID), err
+		// A Storno finds the registration through the receipt it cancels.
+		reg, err := tx.EventRegistrations().GetByReceipt(ctx, cmp.Or(r.CancelsReceiptID, r.ID))
+		if err != nil {
+			return false, notFoundAsHidden(err)
+		}
+
+		// A guest's registration has no person: nobody's family.
+		_, err = familyMember(ctx, tx, p, reg.PersonID)
+
+		return err == nil, notFoundAsHidden(err)
 	})
+}
+
+// notFoundAsHidden returns nil for domain.ErrNotFound, which hides a
+// receipt, and other errors unchanged.
+func notFoundAsHidden(err error) error {
+	if errors.Is(err, domain.ErrNotFound) {
+		return nil
+	}
+
+	return err
 }
 
 // payersOf returns person and the persons merged into it (ADR 0015), whose

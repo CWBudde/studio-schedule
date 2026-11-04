@@ -1,0 +1,13 @@
+Hello{{with .GivenName}} {{.}}{{end}},
+
+the registration for this event at {{.SchoolName}} is canceled:
+
+{{.Title}}
+Registered: {{.Participant}}
+{{- if .Refunded}}
+
+The fee you paid is refunded. You get the cancellation receipt in a separate email.
+{{- end}}
+
+Kind regards,
+{{.SchoolName}}

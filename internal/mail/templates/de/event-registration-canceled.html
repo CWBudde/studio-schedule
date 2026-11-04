@@ -1,0 +1,9 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>die Anmeldung für diese Veranstaltung bei {{.SchoolName}} ist storniert:</p>
+<p><strong>{{.Title}}</strong><br>Angemeldet: {{.Participant}}</p>
+{{- if .Refunded}}
+<p>Die gezahlte Gebühr wird erstattet. Den Stornobeleg bekommst du mit einer eigenen E-Mail.</p>
+{{- end}}
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

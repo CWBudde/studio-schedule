@@ -19,8 +19,10 @@ func Events(t *testing.T, newStore func(t *testing.T) store.Store) {
 	t.Helper()
 
 	scenarios := map[string]func(t *testing.T, w *world){
-		"LastPlaceOnce": eventLastPlace,
-		"Lifecycle":     eventLifecycle,
+		"LastPlaceOnce":        eventLastPlace,
+		"Lifecycle":            eventLifecycle,
+		"MembersLastPlaceOnce": eventMembersLastPlace,
+		"Privacy":              eventPrivacy,
 	}
 
 	for name, run := range scenarios {

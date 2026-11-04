@@ -1912,6 +1912,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/event-registrations/{registrationId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a registration
+         * @description Cancels a registration of the signed-in person or one of their dependents before the event's `cancelUntil` (default: the sign-up close); a paid fee is refunded by a Storno of its receipt. Anyone else's registration, a guest's included, is a 404. After the deadline it is a 409 `too-late` (the office still cancels); a canceled registration a 409 `already-canceled`, one on the waiting list a 409 `not-registered`; incomplete receipt settings for a refund a 409 `receipt-settings-incomplete`. The signed-in account gets a mail.
+         */
+        post: operations["cancelEventRegistration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List upcoming events
+         * @description Returns the published events with a scheduled session that has not ended, ordered by the start of their first session, with their sessions and free places. Drafts and canceled events are left out. It names nobody: no registrant and no count but the free places.
+         */
+        get: operations["listEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an event
+         * @description Returns a published or canceled event by its slug, past ones too, with its sessions (canceled ones included) and free places. A draft is a 404, as an unknown slug is.
+         */
+        get: operations["getEvent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{slug}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Event image
+         * @description Returns the image of a published or canceled event; a 404 without one, for a draft and for an unknown slug. Cacheable: with the `ETag` in `If-None-Match` an unchanged image is a 304.
+         */
+        get: operations["getEventImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{slug}/registrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register for an event
+         * @description Registers the signed-in person or one of their dependents for the whole event. A person outside the family, a draft and an unknown slug are a 404. An event that is canceled, or whose sign-up window is not open (from `signupOpensAt`, or publishing, until `signupClosesAt`, or the first session's start), is a 409 `closed`; one whose registrations and open invites fill its capacity a 409 `full`; a person registered (or waiting) already a 409 `duplicate`. A free registration is paid at once; a priced one is unpaid until the fee is paid at the desk. The signed-in account gets a confirmation mail.
+         */
+        post: operations["registerForEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/family": {
         parameters: {
             query?: never;
@@ -2408,6 +2508,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/my/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List my events
+         * @description Returns the registrations of the signed-in person and their dependents, canceled ones included, each with its event: open ones first, then by the event's first session. Their receipts and Stornos are downloaded with `getMyReceiptPdf`, whoever paid.
+         */
+        get: operations["listMyEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/my/export": {
         parameters: {
             query?: never;
@@ -2561,7 +2681,7 @@ export interface paths {
         };
         /**
          * Download my receipt
-         * @description Returns the PDF of a receipt the signed-in person paid; any other is a 404.
+         * @description Returns the PDF of a receipt the signed-in person paid, or of the receipt or Storno of an event fee whose registration is the signed-in person's or a dependent's, whoever paid it; any other is a 404.
          */
         get: operations["getMyReceiptPdf"];
         put?: never;
@@ -4355,10 +4475,10 @@ export interface components {
             /** @description The lesson that uses the room; only with reason room-taken. */
             lesson?: components["schemas"]["ConflictLesson"];
             /**
-             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, the members fill the class's capacity, or the registrations and open invites fill the event's capacity; closed: the lesson cannot be booked (see why), or the event takes no registrations or sessions (a draft or canceled event, without why); already-canceled: the booking, the receipt, or the event registration is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead; two-accounts: both persons of a merge have an account, so one is disabled first; guardian-cycle: after the merge a guardian of the survivor would also be its dependent; anonymized: the person is anonymized already; sole-guardian: the person is the only guardian of a dependent, so another guardian is linked or the link removed first; last-admin: the account is the last admin who can sign in (enabled and confirmed), which is not disabled, demoted or deleted; own-account: an admin does not disable, demote or delete their own account (another admin does); event-session: the lesson is a session of an event, for which people register as a whole, so it is not booked and has no waiting list of its own; no-sessions: the event has no scheduled session, so it is not published; not-draft: the event is published or canceled already; not-published: the event is not published, so it is not taken back; already-paid: the registration is paid already (a free one from the start) or refunded; event-attended: a session of the event has started, so the receipt of its fee is canceled only with the registration (with a refund); registration-open: the registration of the fee is open, so the office cancels it with a refund (officeCancelEventRegistration) instead of its receipt; not-registered: the registration is on the waiting list, so it has no place whose fee could be taken yet.
+             * @description in-use: something still refers to the record; duplicate: the record, or a value that must be unique such as a name, exists already; managed: a dependent with its own account, a staff link or dependents of its own, which its guardians may not edit; has-account: the person has an account already; room-taken: another lesson uses the room at that time (see lesson), the request may be repeated with confirmRoomOverlap; past: the lesson would start in the past, the request may be repeated with confirmPast; generated: a lesson of a class is canceled, not deleted; already-booked: the person has an active booking for the lesson; full: the active bookings and the places reserved for the waiting list fill the lesson's capacity, the members fill the class's capacity, or the registrations and open invites fill the event's capacity; closed: the lesson cannot be booked (see why), or the event takes no registrations or sessions (a draft or canceled event, without why); already-canceled: the booking, the receipt, or the event registration is canceled already; not-full: the lesson has a free place, so it is booked rather than waited for; already-waiting: the person is on the lesson's waiting list already; not-invited: the waiting-list entry has no invite to accept or decline; invite-expired: the invite ran out, was declined, or the lesson started; invite-used: the invite was accepted, or its entry left the list; not-waiting: the entry is no longer on the waiting list; already-voided: the pass is voided already; receipt-settings-incomplete: receipts cannot be issued, so passes not sold, until an admin completes the receipt settings (the detail names what is missing); pass-used: the pass of the receipt paid for visits, so its sale cannot be canceled (void the pass instead); cancellation: the receipt is a cancellation, which cannot be canceled; timezone-locked: lessons exist, so the school's time zone cannot change; currency-locked: prices or receipts exist, so the currency cannot change; mail-limit: the school day has as many emailed announcements as allowed (sent and scheduled); expired: the announcement has expired, so it is no longer edited (it can be deleted); not-failed: only a failed mail is queued again; secret-link: a mail with a secret link (a confirmation, password reset, invite or waiting-list invite) is not queued again, the flow that sends a new link is used instead; two-accounts: both persons of a merge have an account, so one is disabled first; guardian-cycle: after the merge a guardian of the survivor would also be its dependent; anonymized: the person is anonymized already; sole-guardian: the person is the only guardian of a dependent, so another guardian is linked or the link removed first; last-admin: the account is the last admin who can sign in (enabled and confirmed), which is not disabled, demoted or deleted; own-account: an admin does not disable, demote or delete their own account (another admin does); event-session: the lesson is a session of an event, for which people register as a whole, so it is not booked and has no waiting list of its own; no-sessions: the event has no scheduled session, so it is not published; not-draft: the event is published or canceled already; not-published: the event is not published, so it is not taken back; already-paid: the registration is paid already (a free one from the start) or refunded; event-attended: a session of the event has started, so the receipt of its fee is canceled only with the registration (with a refund); registration-open: the registration of the fee is open, so the office cancels it with a refund (officeCancelEventRegistration) instead of its receipt; not-registered: the registration is on the waiting list, so it has no place whose fee could be taken yet; too-late: the event's cancellation deadline (cancelUntil) has passed, so only the office cancels the registration.
              * @enum {string}
              */
-            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation" | "timezone-locked" | "currency-locked" | "mail-limit" | "expired" | "not-failed" | "secret-link" | "two-accounts" | "guardian-cycle" | "anonymized" | "sole-guardian" | "last-admin" | "own-account" | "event-session" | "no-sessions" | "not-draft" | "not-published" | "already-paid" | "event-attended" | "registration-open" | "not-registered";
+            reason: "in-use" | "duplicate" | "managed" | "has-account" | "room-taken" | "past" | "generated" | "already-booked" | "full" | "closed" | "already-canceled" | "not-full" | "already-waiting" | "not-invited" | "invite-expired" | "invite-used" | "not-waiting" | "already-voided" | "receipt-settings-incomplete" | "pass-used" | "cancellation" | "timezone-locked" | "currency-locked" | "mail-limit" | "expired" | "not-failed" | "secret-link" | "two-accounts" | "guardian-cycle" | "anonymized" | "sole-guardian" | "last-admin" | "own-account" | "event-session" | "no-sessions" | "not-draft" | "not-published" | "already-paid" | "event-attended" | "registration-open" | "not-registered" | "too-late";
             /** @description The ID of the request (the X-Request-Id response header), for finding it in the server's logs. */
             requestId?: string;
             /**
@@ -4635,6 +4755,62 @@ export interface components {
              */
             type: string;
         };
+        Event: {
+            /**
+             * Format: date-time
+             * @description Until when members cancel their own registrations: the event's own deadline, else the sign-up close; absent without one.
+             */
+            cancelUntil?: string;
+            /**
+             * Format: int64
+             * @description Places for the whole event.
+             */
+            capacity: number;
+            /** @description Course type of the event and its sessions. */
+            courseType: components["schemas"]["CourseTypeRef"];
+            /** @description Description, plain text; absent if none. */
+            description?: string;
+            /**
+             * Format: int64
+             * @description Places left: the capacity minus the registrations with a place and the open invites, at least 0.
+             */
+            freePlaces: number;
+            /** @description Whether getEventImage has an image. */
+            hasImage: boolean;
+            /**
+             * Format: int64
+             * @description Gross price in minor units of the school currency; 0 for a free event.
+             */
+            price: number;
+            /** @description The sessions, canceled ones included, ordered by start. */
+            sessions: components["schemas"]["LessonSummary"][];
+            /**
+             * Format: date-time
+             * @description When registering closes: the event's own close, else the first scheduled session's start; absent without a scheduled session.
+             */
+            signupClosesAt?: string;
+            /** @description Whether registering is possible now: published and within the window, full or not. */
+            signupOpen: boolean;
+            /**
+             * Format: date-time
+             * @description When registering opens; absent: it is open since publishing.
+             */
+            signupOpensAt?: string;
+            /** @description Slug, used in /events/{slug}. */
+            slug: string;
+            /**
+             * @description published: open for registration within its window; canceled: canceled by the school, it takes no registration.
+             * @enum {string}
+             */
+            status: "published" | "canceled";
+            /** @description Title. */
+            title: string;
+            /**
+             * Format: int64
+             * @description VAT rate of the price in basis points.
+             */
+            vatRate: number;
+        };
         EventData: {
             /**
              * Format: date-time
@@ -4695,6 +4871,9 @@ export interface components {
             contentType: "image/jpeg" | "image/png" | "image/webp";
             /** @description The image, base64 encoded; at most 1 MiB. */
             data: string;
+        };
+        EventList: {
+            items: components["schemas"]["Event"][];
         };
         EventPayment: {
             /** @description The receipt issued. */
@@ -5848,6 +6027,8 @@ export interface components {
              * @description The event whose session the lesson is (ADR 0019): it is not booked one by one; absent otherwise.
              */
             eventId?: string;
+            /** @description The slug of that event, for its page /events/{slug}; absent for other lessons. */
+            eventSlug?: string;
             /**
              * Format: int64
              * @description Places left: the capacity minus the active bookings and the places that waiting-list invites reserve, at least 0. A lesson without one is full: members may join its waiting list.
@@ -6035,6 +6216,8 @@ export interface components {
              * @description The event whose session the lesson is (ADR 0019): it is not booked one by one; absent otherwise.
              */
             eventId?: string;
+            /** @description The slug of that event, for its page /events/{slug}; absent for other lessons. */
+            eventSlug?: string;
             /**
              * Format: uuid
              * @description Lesson ID.
@@ -6233,7 +6416,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled" | "event-registered" | "event-registration-canceled";
             /** @description Plain text body; only with body shown. */
             text?: string;
             /** @description Recipient address. */
@@ -6253,7 +6436,7 @@ export interface components {
              * @description Only mails of this template; absent: all.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled" | "event-registered" | "event-registration-canceled";
         };
         MailLogItem: {
             /** @description File name of the attached PDF; absent if none. */
@@ -6303,7 +6486,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled" | "event-registered" | "event-registration-canceled";
             /** @description Recipient address. */
             to: string;
         };
@@ -6350,7 +6533,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled" | "event-registered" | "event-registration-canceled";
             /** @description Plain text body. */
             text: string;
             /** @description Recipient address. */
@@ -6526,6 +6709,59 @@ export interface components {
             name?: boolean;
             /** @description The phone. */
             phone?: boolean;
+        };
+        MyEvent: {
+            event: components["schemas"]["Event"];
+            registration: components["schemas"]["MyEventRegistration"];
+        };
+        MyEventList: {
+            items: components["schemas"]["MyEvent"][];
+        };
+        MyEventRegistration: {
+            /** @description Whether cancelEventRegistration cancels it now: registered, and before the event's cancelUntil. */
+            cancelable: boolean;
+            /**
+             * Format: date-time
+             * @description When it was canceled; only if canceled.
+             */
+            canceledAt?: string;
+            /**
+             * Format: uuid
+             * @description The Storno of a refund, for getMyReceiptPdf.
+             */
+            cancellationReceiptId?: string;
+            /**
+             * Format: date-time
+             * @description When it was made.
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Registration ID.
+             */
+            id: string;
+            /**
+             * @description unpaid: the fee is owed at the desk; paid: paid with a receipt, or free; refunded: the receipt was canceled by a Storno.
+             * @enum {string}
+             */
+            payment: "unpaid" | "paid" | "refunded";
+            /** @description The registered person. */
+            person: components["schemas"]["PassPerson"];
+            /**
+             * Format: int64
+             * @description The gross price when the registration was made, in minor units.
+             */
+            price: number;
+            /**
+             * Format: uuid
+             * @description The receipt of the payment, for getMyReceiptPdf; absent if unpaid or free.
+             */
+            receiptId?: string;
+            /**
+             * @description waiting and invited: on the waiting list; registered: has a place; canceled.
+             * @enum {string}
+             */
+            status: "waiting" | "invited" | "registered" | "canceled";
         };
         MyLessonBooking: {
             booking: components["schemas"]["Booking"];
@@ -7394,6 +7630,13 @@ export interface components {
             /** @description IANA time zone of the school, e.g. Europe/Berlin; fixed once lessons exist. */
             timezone: string;
         };
+        RegisterForEventInputBody: {
+            /**
+             * Format: uuid
+             * @description The signed-in person or one of their dependents.
+             */
+            personId: string;
+        };
         RegisterInputBody: {
             /**
              * Format: email
@@ -7668,6 +7911,8 @@ export interface components {
              * @description The event whose session the lesson is (ADR 0019): it is not booked one by one; absent otherwise.
              */
             eventId?: string;
+            /** @description The slug of that event, for its page /events/{slug}; absent for other lessons. */
+            eventSlug?: string;
             /**
              * Format: int64
              * @description Places left: the capacity minus the active bookings and the places that waiting-list invites reserve, at least 0. A lesson without one is full: members may join its waiting list.
@@ -8178,6 +8423,8 @@ export interface components {
              * @description The event whose session the lesson is (ADR 0019): it is not booked one by one; absent otherwise.
              */
             eventId?: string;
+            /** @description The slug of that event, for its page /events/{slug}; absent for other lessons. */
+            eventSlug?: string;
             /**
              * Format: int64
              * @description Capacity minus active bookings and held places, at least 0.
@@ -12652,6 +12899,201 @@ export interface operations {
             };
         };
     };
+    cancelEventRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The registration. */
+                registrationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyEvent"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event's slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Event"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getEventImage: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag of the image the client has; unchanged: a 304. */
+                "If-None-Match"?: string;
+            };
+            path: {
+                /** @description The event's slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
+                };
+            };
+            /** @description The image did not change since the ETag in If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    registerForEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event's slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterForEventInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyEvent"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     getMyFamily: {
         parameters: {
             query?: never;
@@ -13902,6 +14344,35 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMyEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyEventList"];
+                };
             };
             /** @description Error */
             default: {

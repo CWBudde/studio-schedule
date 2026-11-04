@@ -76,7 +76,11 @@ func coversLevel(sl ScheduledLesson, levels map[domain.LevelID]domain.Level, id 
 // its class's (zero for one-off lessons); Instructor is zero for a room
 // rental, Accompanist if the lesson has none.
 type ScheduledLesson struct {
-	Lesson                  domain.Lesson
+	Lesson domain.Lesson
+	// EventSlug is the slug of the event whose session the lesson is
+	// (Lesson.EventID, ADR 0019), for a link to its page; empty for any
+	// other lesson, and where the view does not fill it in.
+	EventSlug               string
 	Audience                Audience
 	CourseType              domain.CourseType
 	Room                    domain.Room
@@ -160,8 +164,9 @@ func NewScheduleService(st store.Store, clk clock.Clock) *ScheduleService {
 
 // Schedule returns the lessons p may see that start in the school dates
 // [q.From, q.To) and match the filters of q; a zero p is a guest. The
-// sessions of a draft event are staff's only (ADR 0019). An
-// invalid query fails with an error wrapping domain.ErrValidation.
+// sessions of a draft event are staff's only, and a session carries its
+// event's slug (ADR 0019). An invalid query fails with an error wrapping
+// domain.ErrValidation.
 func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQuery) (Schedule, error) {
 	if err := q.validate(); err != nil {
 		return Schedule{}, err
@@ -185,10 +190,6 @@ func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQ
 		lessons, err := tx.Lessons().ListRange(ctx, q.From.At(domain.TimeOfDay{}, loc), q.To.At(domain.TimeOfDay{}, loc))
 		if err != nil {
 			return fmt.Errorf("lessons: %w", err)
-		}
-
-		if lessons, err = withoutDraftSessions(ctx, tx, v, lessons); err != nil {
-			return err
 		}
 
 		refs, err := loadRangeRefs(ctx, tx, q.From, q.To)
@@ -215,6 +216,12 @@ func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQ
 			}
 		}
 
+		// Only of the lessons shown: a schedule without a session reads no
+		// event.
+		if out.Lessons, err = withSessionEvents(ctx, tx, v, out.Lessons); err != nil {
+			return err
+		}
+
 		return addAvailability(ctx, tx, p, settings, out.Now, out.Lessons)
 	})
 	if err != nil {
@@ -228,7 +235,8 @@ func (s *ScheduleService) Schedule(ctx context.Context, p Principal, q ScheduleQ
 // does not exist or is not visible (a session of a draft event for anyone
 // but staff, too) fails alike with domain.ErrNotFound, so
 // the response does not reveal hidden or unreleased lessons. Office and
-// admin accounts also get the lesson's Admin details.
+// admin accounts also get the lesson's Admin details, and a session its
+// event's slug.
 func (s *ScheduleService) Lesson(ctx context.Context, p Principal, id domain.LessonID) (ScheduledLesson, error) {
 	now := s.clock.Now()
 
@@ -251,9 +259,12 @@ func (s *ScheduleService) Lesson(ctx context.Context, p Principal, id domain.Les
 		}
 
 		// A session of a draft event is staff's only (ADR 0019).
-		if seen, err := withoutDraftSessions(ctx, tx, v, []domain.Lesson{l}); err != nil {
+		events, err := sessionEvents(ctx, tx, []domain.Lesson{l})
+		if err != nil {
 			return err
-		} else if len(seen) == 0 {
+		}
+
+		if v.hidesSession(l, events) {
 			return domain.ErrNotFound
 		}
 
@@ -271,6 +282,8 @@ func (s *ScheduleService) Lesson(ctx context.Context, p Principal, id domain.Les
 		if out, err = s.resolveLesson(ctx, tx, p, settings, l, active[l.ID], heldPlaces(open, now)[l.ID]); err != nil {
 			return err
 		}
+
+		out.EventSlug = events[l.EventID].Slug
 
 		lessons := []ScheduledLesson{out}
 		if err := addFamily(ctx, tx, p, now, lessons, open); err != nil {

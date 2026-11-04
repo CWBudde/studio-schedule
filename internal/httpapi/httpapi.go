@@ -84,7 +84,8 @@ type Deps struct {
 	Imports *service.ImportService
 	// Push are the web push subscriptions of accounts (ADR 0017).
 	Push *service.PushService
-	// Events is the office's event administration (ADR 0019).
+	// Events is the office's event administration and the public and
+	// members' side of events (ADR 0019).
 	Events *service.EventService
 }
 
@@ -133,6 +134,7 @@ func Register(api huma.API, deps Deps) {
 	registerPasses(api, h)
 	registerReceipts(api, h)
 	registerEventAdmin(api, h)
+	registerEvents(api, h)
 	registerAuth(api, h)
 	registerCredentials(api, h)
 	registerFamily(api, h)

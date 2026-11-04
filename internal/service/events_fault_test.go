@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -174,6 +175,51 @@ func TestEventStoreFaults(t *testing.T) {
 
 			return err
 		},
+		"Published": func(t *testing.T, _ *eventFixture, _ eventScene, svc *EventService, _ *ReceiptService) error {
+			_, err := svc.Published(t.Context())
+
+			return err
+		},
+		"BySlug": func(t *testing.T, _ *eventFixture, s eventScene, svc *EventService, _ *ReceiptService) error {
+			_, err := svc.BySlug(t.Context(), s.event.Slug)
+
+			return err
+		},
+		"PublicImage": func(t *testing.T, _ *eventFixture, s eventScene, svc *EventService, _ *ReceiptService) error {
+			_, err := svc.PublicImage(t.Context(), s.event.Slug)
+
+			return err
+		},
+		"PublicEventID": func(t *testing.T, _ *eventFixture, s eventScene, svc *EventService, _ *ReceiptService) error {
+			_, err := svc.PublicEventID(t.Context(), s.event.Slug)
+
+			return err
+		},
+		"Register": func(t *testing.T, f *eventFixture, s eventScene, svc *EventService, _ *ReceiptService) error {
+			_, err := svc.Register(t.Context(), f.principal(t, f.anna), s.bare.ID, f.mia.ID)
+
+			return err
+		},
+		"CancelOwn": func(t *testing.T, f *eventFixture, s eventScene, svc *EventService, _ *ReceiptService) error {
+			_, err := svc.CancelOwn(t.Context(), f.principal(t, f.anna), s.mia.ID)
+
+			return err
+		},
+		"CancelOwn unpaid": func(t *testing.T, f *eventFixture, s eventScene, svc *EventService, _ *ReceiptService) error {
+			_, err := svc.CancelOwn(t.Context(), f.principal(t, f.anna), s.tom.ID)
+
+			return err
+		},
+		"Mine": func(t *testing.T, f *eventFixture, _ eventScene, svc *EventService, _ *ReceiptService) error {
+			_, err := svc.Mine(t.Context(), f.principal(t, f.anna))
+
+			return err
+		},
+		"MyPDF of the family": func(t *testing.T, f *eventFixture, s eventScene, _ *EventService, receipts *ReceiptService) error {
+			_, err := receipts.MyPDF(t.Context(), f.principal(t, f.anna), s.mia.ReceiptID)
+
+			return err
+		},
 	}
 
 	for name, op := range ops {
@@ -267,6 +313,11 @@ func TestEventRendererNotReady(t *testing.T) {
 
 			return err
 		},
+		"CancelOwn": func() error {
+			_, err := svc.CancelOwn(t.Context(), f.principal(t, f.anna), s.mia.ID)
+
+			return err
+		},
 	} {
 		before := fs.Count("InTx")
 
@@ -274,8 +325,8 @@ func TestEventRendererNotReady(t *testing.T) {
 			t.Errorf("%s = %v, want the renderer's failure", name, err)
 		}
 
-		// Cancel reads whether it refunds first.
-		if n := fs.Count("InTx") - before; n != map[string]int{"Cancel": 1}[name] {
+		// Cancel and CancelOwn read whether they refund first.
+		if n := fs.Count("InTx") - before; n != map[string]int{"Cancel": 1, "CancelOwn": 1}[name] {
 			t.Errorf("%s: %d transactions", name, n)
 		}
 	}
@@ -285,7 +336,18 @@ func TestEventRendererNotReady(t *testing.T) {
 		t.Errorf("CancelRegistration without a refund: %v", err)
 	}
 
+	if _, err := svc.CancelOwn(t.Context(), f.principal(t, f.anna), s.tom.ID); err != nil {
+		t.Errorf("CancelOwn without a fee paid: %v", err)
+	}
+
 	if _, err := svc.Cancel(t.Context(), f.office, s.bare.ID, ""); err != nil {
 		t.Errorf("Cancel without a fee paid: %v", err)
+	}
+
+	// Another family's paid registration is a 404 before the renderer is
+	// waited for, so its payment shows nowhere.
+	_, sven := f.stranger(t)
+	if _, err := svc.CancelOwn(t.Context(), sven, s.mia.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("CancelOwn of another family = %v, want ErrNotFound", err)
 	}
 }

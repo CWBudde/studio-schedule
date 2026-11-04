@@ -1,0 +1,23 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+deine Anmeldung für diese Veranstaltung bei {{.SchoolName}} ist bestätigt:
+
+{{.Title}}
+Angemeldet: {{.Participant}}
+{{- range .Sessions}}
+
+{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}} Uhr
+{{.Room}}, {{.Location}}
+{{- end}}
+{{- with .Fee}}
+
+Bitte bezahle die Gebühr von {{.}} am Empfang; dort bekommst du auch den Beleg.
+{{- end}}
+{{- if not .CancelUntil.IsZero}}
+
+Falls es doch nicht passt, kannst du die Anmeldung bis {{date .CancelUntil}},
+{{clock .CancelUntil}} Uhr selbst stornieren. Danach wende dich bitte an {{.SchoolName}}.
+{{- end}}
+
+Viele Grüße
+{{.SchoolName}}

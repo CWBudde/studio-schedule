@@ -1,0 +1,15 @@
+{{define "content" -}}
+<p>Hello{{with .GivenName}} {{.}}{{end}},</p>
+<p>your registration for this event at {{.SchoolName}} is confirmed:</p>
+<p><strong>{{.Title}}</strong><br>Registered: {{.Participant}}</p>
+{{- range .Sessions}}
+<p>{{date .StartsAt}}, {{clock .StartsAt}}–{{clock .EndsAt}}<br>{{.Room}}, {{.Location}}</p>
+{{- end}}
+{{- with .Fee}}
+<p>Please pay the fee of {{.}} at the desk; you get the receipt there.</p>
+{{- end}}
+{{- if not .CancelUntil.IsZero}}
+<p>If it does not suit after all, you can cancel the registration yourself until {{date .CancelUntil}}, {{clock .CancelUntil}}. After that, please contact {{.SchoolName}}.</p>
+{{- end}}
+<p>Kind regards,<br>{{.SchoolName}}</p>
+{{- end}}
