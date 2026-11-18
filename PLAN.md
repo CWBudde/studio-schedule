@@ -1423,7 +1423,12 @@ backends.
       UI for administration.
   - [x] `init` sets up a school on a current schema and prints the one-time first-admin link.
   - [x] `healthcheck` probes the liveness endpoint at the configured base path.
-  - [ ] `migrate`, `seed`, `import`, `jobs:run`, `vapid-keys`, `doctor`, and `db check`.
+  - [x] `migrate` applies, rolls back and lists migrations on all three engines. PostgreSQL
+        shares its Goose history with Go. MySQL and MariaDB require `--backup-verified` before
+        changing an existing schema.
+  - [x] `db check` runs the four Go integrity checks in one read-only transaction. The text
+        and JSON reports match Go, with exit status 1 when a check finds an inconsistency.
+  - [ ] `seed`, `import`, `jobs:run`, `vapid-keys`, and `doctor`.
 - [ ] `db:copy` (command and installer action): copies a complete database into an empty one of
       another kind, MySQL/MariaDB → PostgreSQL and back, at the same schema version, in one
       transaction on the target, then runs the `db check` checks there and rolls back on a

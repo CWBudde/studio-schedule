@@ -6,7 +6,6 @@ namespace StudioSchedule\Store;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
-use RuntimeException;
 use UnexpectedValueException;
 
 final readonly class Schema
@@ -54,37 +53,63 @@ final readonly class Schema
 
     /**
      * @param array<int,string> $files Ordered by migration version.
-     * @return array{applied:list<int>,pending:array<int,string>,hasHistory:bool}
+     * @return array{applied:list<int>,pending:array<int,string>,hasHistory:bool,appliedAt:array<int,int>}
      */
-    public function migrationState(array $files): array
+    public function migrationState(array $files, bool $includeTimestamps = false): array
     {
         if ($files === []) {
-            throw new RuntimeException('The release has no migration files');
+            throw new MigrationError('The release has no migration files');
         }
 
         $relations = $this->relations();
         $hasHistory = in_array('goose_db_version', $relations, true);
-        $applied = $hasHistory ? $this->appliedVersions() : [];
+        $history = $hasHistory ? $this->appliedHistory($includeTimestamps) : [];
+        $applied = array_keys($history);
         $versions = array_keys($files);
         if ($applied !== array_slice($versions, 0, count($applied))) {
-            throw new RuntimeException('Database migration history does not match this release');
+            throw new MigrationError('Database migration history does not match this release');
         }
-        if ($applied === [] && array_diff($relations, ['goose_db_version']) !== []) {
-            throw new RuntimeException('An existing database is missing its migration history');
+        if ($applied === []) {
+            $other = array_diff($relations, ['goose_db_version']);
+            if ($other !== [] && $hasHistory && $this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+                // Goose's primary key sequence remains after the last migration is reverted.
+                $sequence = $this->connection->fetchOne(
+                    "SELECT relname FROM pg_catalog.pg_class WHERE oid = pg_get_serial_sequence('goose_db_version', 'id')::regclass",
+                );
+                if (is_string($sequence)) {
+                    $other = array_diff($other, [$sequence]);
+                }
+            }
+            if ($other !== []) {
+                throw new MigrationError('An existing database is missing its migration history');
+            }
         }
 
         return [
             'applied' => $applied,
             'pending' => array_slice($files, count($applied), preserve_keys: true),
             'hasHistory' => $hasHistory,
+            'appliedAt' => $includeTimestamps ? $history : [],
         ];
     }
 
     /** @return list<int> */
     public function appliedVersions(): array
     {
+        return array_keys($this->appliedHistory(includeTimestamps: false));
+    }
+
+    /** @return array<int,int> Applied versions, with Unix timestamps when requested. */
+    private function appliedHistory(bool $includeTimestamps): array
+    {
+        $epoch = '0';
+        if ($includeTimestamps) {
+            $epoch = $this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform
+                ? 'FLOOR(EXTRACT(EPOCH FROM tstamp))'
+                : 'UNIX_TIMESTAMP(tstamp)';
+        }
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT version_id, is_applied FROM goose_db_version WHERE version_id <> 0 ORDER BY id DESC',
+            "SELECT version_id, is_applied, $epoch AS applied_at FROM goose_db_version WHERE version_id <> 0 ORDER BY id DESC",
         );
         $latest = [];
         foreach ($rows as $row) {
@@ -96,12 +121,21 @@ final readonly class Schema
             if ($version === self::UPGRADE_IN_PROGRESS) {
                 throw new MigrationRecoveryRequired();
             }
-            $latest[$version] ??= in_array($row['is_applied'], [true, 1, '1', 't', 'true'], true);
+            if (!array_key_exists($version, $latest)) {
+                if (!in_array($row['is_applied'], [true, 1, '1', 't', 'true'], true)) {
+                    $latest[$version] = null;
+                    continue;
+                }
+                $timestamp = $row['applied_at'];
+                if (!is_numeric($timestamp)) {
+                    throw new MigrationError('Invalid applied migration timestamp');
+                }
+                $latest[$version] = (int) $timestamp;
+            }
         }
 
-        $versions = array_keys(array_filter($latest));
-        sort($versions, SORT_NUMERIC);
+        ksort($latest, SORT_NUMERIC);
 
-        return $versions;
+        return array_filter($latest, static fn(?int $time): bool => $time !== null);
     }
 }

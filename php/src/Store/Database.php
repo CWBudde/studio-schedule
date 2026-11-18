@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Store;
 
+use Closure;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Tools\DsnParser;
 use InvalidArgumentException;
 use PDO;
 
 final class Database
 {
+    private const string READ_SNAPSHOT = 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY';
+
     private const DRIVERS = [
         'postgres' => 'pdo_pgsql',
         'postgresql' => 'pdo_pgsql',
@@ -38,5 +42,29 @@ final class Database
         }
 
         return DriverManager::getConnection($params);
+    }
+
+    /**
+     * @template T
+     * @param Closure():T $read
+     * @return T
+     */
+    public static function inReadSnapshot(Connection $connection, Closure $read): mixed
+    {
+        $postgres = $connection->getDatabasePlatform() instanceof PostgreSQLPlatform;
+        // MySQL and MariaDB apply SET TRANSACTION to the next transaction.
+        if (!$postgres) {
+            $connection->executeStatement(self::READ_SNAPSHOT);
+        }
+
+        return $connection->transactional(static function (Connection $connection) use ($postgres, $read): mixed {
+            if ($postgres) {
+                $connection->executeStatement(self::READ_SNAPSHOT);
+                // PDO reads date and timestamp text in the server's DateStyle.
+                $connection->executeStatement("SET LOCAL DateStyle TO 'ISO, YMD'");
+            }
+
+            return $read();
+        });
     }
 }

@@ -23,7 +23,6 @@ use Symfony\Component\Uid\Uuid;
 /** @phpstan-import-type LevelRef from PublishedLesson */
 final readonly class ScheduleStore implements SchedulePersistence
 {
-    private const string TRANSACTION = 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY';
     private const string LESSONS = <<<'SQL'
         SELECT l.id, l.class_id, l.starts_at, l.ends_at, l.status, l.kind, l.visibility, l.renter, l.event_id,
                COALESCE(e.capacity, l.capacity) AS capacity, e.slug AS event_slug, e.status AS event_status,
@@ -51,21 +50,7 @@ final readonly class ScheduleStore implements SchedulePersistence
 
     public function inReadSnapshot(Closure $read): mixed
     {
-        $postgres = $this->isPostgres();
-        // MySQL and MariaDB apply SET TRANSACTION to the next transaction.
-        if (!$postgres) {
-            $this->connection->executeStatement(self::TRANSACTION);
-        }
-
-        return $this->connection->transactional(static function (Connection $connection) use ($postgres, $read): mixed {
-            if ($postgres) {
-                $connection->executeStatement(self::TRANSACTION);
-                // PDO reads date and timestamp text in the server's DateStyle.
-                $connection->executeStatement("SET LOCAL DateStyle TO 'ISO, YMD'");
-            }
-
-            return $read();
-        });
+        return Database::inReadSnapshot($this->connection, $read);
     }
 
     public function rules(): ScheduleRules

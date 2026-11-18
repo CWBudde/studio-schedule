@@ -27,12 +27,23 @@ final class MigrationSqlTest extends TestCase
             END;
             -- +goose StatementEnd
             -- +goose Down
-            DROP TABLE examples;
+            -- +goose StatementBegin
+            DO $$
+            BEGIN
+                DROP TABLE examples;
+            END;
+            $$;
+            -- +goose StatementEnd
+            DROP TABLE attachments;
             SQL);
         self::assertSame([
             "CREATE TABLE examples (id INTEGER PRIMARY KEY);\n",
             "CREATE TRIGGER example_trigger BEFORE INSERT ON examples FOR EACH ROW\nBEGIN\n    SET NEW.id = 1;\nEND;\n",
         ], MigrationSql::up($file));
+        self::assertSame([
+            "DO $$\nBEGIN\n    DROP TABLE examples;\nEND;\n$$;\n",
+            "DROP TABLE attachments;\n",
+        ], MigrationSql::down($file));
     }
 
     public function testTrailingCommentsAndMultilineContentMatchGoose(): void

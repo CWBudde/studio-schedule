@@ -9,6 +9,9 @@ ALTER TABLE lessons
 -- The older schema has no place for rentals without a course type.
 DELETE FROM lessons WHERE course_type_id IS NULL;
 
+ALTER TABLE lessons DROP FOREIGN KEY lessons_course_type_id_fkey;
+
 ALTER TABLE lessons
     DROP CONSTRAINT lessons_course_type,
-    MODIFY COLUMN course_type_id BINARY(16) NOT NULL;
+    MODIFY COLUMN course_type_id BINARY(16) NOT NULL,
+    ADD CONSTRAINT lessons_course_type_id_fkey FOREIGN KEY (course_type_id) REFERENCES course_types(id) ON DELETE RESTRICT;

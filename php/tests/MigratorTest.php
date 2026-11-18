@@ -11,6 +11,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use StudioSchedule\Config;
+use StudioSchedule\Console\Operator;
 use StudioSchedule\Http\Application;
 use RuntimeException;
 use StudioSchedule\Service\DatabaseReadiness;
@@ -25,6 +26,8 @@ final class MigratorTest extends TestCase
     private Connection $database;
     private Migrator $migrator;
     private string $migrations;
+    private string $appDirectory;
+    private string $dsn;
 
     protected function setUp(): void
     {
@@ -33,11 +36,13 @@ final class MigratorTest extends TestCase
             self::markTestSkipped('Requires the database provisioned by just php-test');
         }
 
+        $this->dsn = $dsn;
         $this->database = Database::connect($dsn);
         self::assertSame([], (new Schema($this->database))->relations(), 'The migration tests require a disposable, empty database');
         $this->migrator = new Migrator($dsn);
-        $this->migrations = sys_get_temp_dir() . '/studio-migrator-' . bin2hex(random_bytes(8));
-        self::assertTrue(mkdir($this->migrations));
+        $this->appDirectory = sys_get_temp_dir() . '/studio-migrator-' . bin2hex(random_bytes(8));
+        $this->migrations = $this->appDirectory . '/migrations/mysql';
+        self::assertTrue(mkdir($this->migrations, 0700, true));
     }
 
     protected function tearDown(): void
@@ -54,6 +59,8 @@ final class MigratorTest extends TestCase
                 unlink($file);
             }
             rmdir($this->migrations);
+            rmdir(dirname($this->migrations));
+            rmdir($this->appDirectory);
         }
     }
 
@@ -222,7 +229,235 @@ final class MigratorTest extends TestCase
         self::assertSame([], $this->database->createSchemaManager()->listTableNames());
     }
 
+    public function testCliReportsAndAppliesMigrationsAndRevertsGooseHistory(): void
+    {
+        $this->writeBasicMigration();
+        $postgres = $this->database->getDatabasePlatform() instanceof PostgreSQLPlatform;
+        $this->writeUpgrade('INSERT INTO upgrade_extra VALUES (1);');
+
+        [$code, $out, $error] = $this->command(['migrate', 'status']);
+        self::assertSame(0, $code, $error);
+        self::assertSame("VERSION  STATE    APPLIED AT  NAME\n1        pending  -           00001_baseline.sql\n2        pending  -           00002_upgrade.sql\n", $out);
+        self::assertSame([], (new Schema($this->database))->relations());
+
+        [$code, $out, $error] = $this->command(['migrate', 'down']);
+        self::assertSame(1, $code);
+        self::assertSame('', $out);
+        self::assertStringContainsString('no migration to roll back', $error);
+
+        [$code, $out, $error] = $this->command(['migrate', 'up']);
+        self::assertSame(0, $code, $error);
+        self::assertMatchesRegularExpression('/^up   00001_baseline\.sql \(.+\)\nup   00002_upgrade\.sql \(.+\)\n$/D', $out);
+        $this->database->executeStatement("UPDATE goose_db_version SET tstamp = '2026-01-02 03:04:05' WHERE version_id = 1");
+
+        [$code, $out, $error] = $this->command(['migrate', 'status']);
+        self::assertSame(0, $code, $error);
+        self::assertMatchesRegularExpression('/^1 {8}applied  2026-01-02T03:04:05Z  00001_baseline\.sql$/m', $out);
+        self::assertMatchesRegularExpression('/^2 {8}applied  .+Z  00002_upgrade\.sql$/m', $out);
+        self::assertSame([0, "schema is up to date\n", ''], $this->command(['migrate', 'up']));
+
+        if (!$postgres) {
+            [$code, $out, $error] = $this->command(['migrate', 'down', '--backup-verified=false']);
+            self::assertSame(1, $code);
+            self::assertSame('', $out);
+            self::assertStringContainsString('--backup-verified', $error);
+            self::assertTrue($this->database->createSchemaManager()->tablesExist(['upgrade_extra']));
+        }
+
+        [$code, $out, $error] = $this->command($postgres ? ['migrate', 'down'] : ['migrate', 'down', '--backup-verified']);
+        self::assertSame(0, $code, $error);
+        self::assertMatchesRegularExpression('/^down 00002_upgrade\.sql \(.+\)\n$/D', $out);
+        self::assertFalse($this->database->createSchemaManager()->tablesExist(['upgrade_extra']));
+        $history = array_map(static fn(mixed $version): string => is_int($version) ? (string) $version : (is_string($version) ? $version : ''), $this->database->fetchFirstColumn('SELECT version_id FROM goose_db_version ORDER BY id'));
+        self::assertSame(['0', '1'], $history);
+
+        [$code, $out, $error] = $this->command(['migrate', 'status']);
+        self::assertSame(0, $code, $error);
+        self::assertMatchesRegularExpression('/^2 {8}pending  - {21}00002_upgrade\.sql$/m', $out);
+        if (!$postgres) {
+            [$code, $out, $error] = $this->command(['migrate', 'up']);
+            self::assertSame(1, $code);
+            self::assertSame('', $out);
+            self::assertStringContainsString('--backup-verified', $error);
+        }
+        [$code, $out, $error] = $this->command(['migrate', 'up', '--backup-verified=true']);
+        self::assertSame(0, $code, $error);
+        self::assertMatchesRegularExpression('/^up   00002_upgrade\.sql \(.+\)\n$/D', $out);
+        self::assertSame([1, 2], (new Schema($this->database))->appliedVersions());
+    }
+
+    public function testRevertingTheLastMigrationLeavesAnEmptyGooseHistoryThatCanApplyAgain(): void
+    {
+        $this->installBaseline();
+        [$code, $out, $error] = $this->command(['migrate', 'down', '--backup-verified']);
+        self::assertSame(0, $code, $error);
+        self::assertMatchesRegularExpression('/^down 00001_baseline\.sql \(.+\)\n$/D', $out);
+        self::assertSame([], (new Schema($this->database))->appliedVersions());
+
+        if ($this->database->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            $this->database->executeStatement('CREATE SEQUENCE unrelated_sequence');
+            try {
+                [$code, , $error] = $this->command(['migrate', 'up']);
+                self::assertSame(1, $code);
+                self::assertStringContainsString('missing its migration history', $error);
+            } finally {
+                $this->database->executeStatement('DROP SEQUENCE unrelated_sequence');
+            }
+        }
+
+        [$code, $out, $error] = $this->command(['migrate', 'up']);
+        self::assertSame(0, $code, $error);
+        self::assertMatchesRegularExpression('/^up   00001_baseline\.sql \(.+\)\n$/D', $out);
+        self::assertSame([1], (new Schema($this->database))->appliedVersions());
+    }
+
+    public function testFailedDownIsTransactionalOrRequiresRestoration(): void
+    {
+        $this->installBaseline();
+        file_put_contents($this->migrations . '/00002_upgrade.sql', <<<'SQL'
+            -- +goose Up
+            CREATE TABLE upgrade_extra (id INTEGER PRIMARY KEY);
+            -- +goose Down
+            DROP TABLE upgrade_extra;
+            INSERT INTO missing_table VALUES (1);
+            SQL);
+        $this->migrator->up($this->migrations, backupVerified: true);
+        $postgres = $this->database->getDatabasePlatform() instanceof PostgreSQLPlatform;
+        [$code, $out, $error] = $this->command(['migrate', 'down', '--backup-verified']);
+        self::assertSame(1, $code);
+        self::assertSame('', $out);
+        self::assertSame($postgres, $this->database->createSchemaManager()->tablesExist(['upgrade_extra']));
+
+        if ($postgres) {
+            self::assertSame([1, 2], (new Schema($this->database))->appliedVersions());
+            self::assertStringNotContainsString('missing_table', $error);
+        } else {
+            self::assertStringContainsString('Replace the database', $error);
+            self::assertFalse((new DatabaseReadiness(new Schema($this->database), [1, 2], new NullLogger()))->ready());
+            foreach ([['migrate', 'status'], ['migrate', 'up', '--backup-verified'], ['migrate', 'down', '--backup-verified']] as $command) {
+                self::assertSame([1, '', $error], $this->command($command));
+            }
+        }
+    }
+
+    public function testCourseTypeRollbackRestoresTheRequiredForeignKey(): void
+    {
+        if ($this->database->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            self::markTestSkipped('MySQL and MariaDB have their own rollback SQL for this foreign key');
+        }
+        $shippedMigrations = dirname(__DIR__) . '/migrations/mysql';
+        foreach (Schema::migrationFiles($shippedMigrations) as $version => $file) {
+            if ($version > 30) {
+                break;
+            }
+            self::assertTrue(copy($file, $this->migrations . '/' . basename($file)));
+        }
+
+        try {
+            self::assertSame(range(1, 30), $this->migrator->up($this->migrations));
+            [$code, $out, $error] = $this->command(['migrate', 'down', '--backup-verified']);
+            self::assertSame(0, $code, $error);
+            self::assertStringContainsString('down 00030_lesson_rental_course_type.sql', $out);
+            $lessons = $this->database->createSchemaManager()->introspectTable('lessons');
+            self::assertTrue($lessons->getColumn('course_type_id')->getNotnull());
+            $courseType = $lessons->getForeignKey('lessons_course_type_id_fkey');
+            self::assertSame(['course_type_id'], $courseType->getLocalColumns());
+            self::assertSame('course_types', $courseType->getForeignTableName());
+            self::assertContains($courseType->onDelete(), [null, 'RESTRICT']);
+            self::assertSame(range(1, 29), (new Schema($this->database))->appliedVersions());
+        } finally {
+            $this->database->executeStatement('SET FOREIGN_KEY_CHECKS = 0');
+            try {
+                foreach ($this->database->createSchemaManager()->listTableNames() as $table) {
+                    $this->database->executeStatement('DROP TABLE ' . $this->database->quoteSingleIdentifier($table));
+                }
+            } finally {
+                $this->database->executeStatement('SET FOREIGN_KEY_CHECKS = 1');
+            }
+        }
+    }
+
+    public function testMalformedDownLeavesSchemaAndHistoryUntouched(): void
+    {
+        $this->installBaseline();
+        file_put_contents($this->migrations . '/00002_upgrade.sql', <<<'SQL'
+            -- +goose Up
+            CREATE TABLE upgrade_extra (id INTEGER PRIMARY KEY);
+            -- +goose Down
+            DROP TABLE upgrade_extra
+            SQL);
+        $this->migrator->up($this->migrations, backupVerified: true);
+
+        [$code, $out, $error] = $this->command(['migrate', 'down', '--backup-verified']);
+        self::assertSame(1, $code);
+        self::assertSame('', $out);
+        self::assertStringContainsString('Invalid Down section in migration 00002_upgrade.sql', $error);
+        self::assertTrue($this->database->createSchemaManager()->tablesExist(['upgrade_extra']));
+        self::assertSame([1, 2], (new Schema($this->database))->appliedVersions());
+    }
+
+    public function testMigrationCommandRejectsInvalidOptionsBeforeConnecting(): void
+    {
+        $invalid = [
+            [['migrate', 'status', '--backup-verified'], 'unknown flag'],
+            [['migrate', 'down', '--backup-verified=maybe'], '--backup-verified'],
+            [['migrate', 'unknown'], 'unknown migration command'],
+            [['migrate', 'up', '--database-url='], 'no database URL'],
+            [['--database-url=unsupported://fixture:secret@invalid.invalid/db', 'migrate', 'status'], 'DATABASE_URL must name PostgreSQL, MySQL or MariaDB'],
+            [['migrate', 'status', '--output=json'], 'prints text only'],
+        ];
+        foreach ($invalid as [$command, $message]) {
+            [$code, $out, $error] = $this->command($command);
+            self::assertSame(2, $code);
+            self::assertSame('', $out);
+            self::assertStringContainsString($message, $error);
+        }
+        [$code, $out, $error] = $this->command(['migrate', '--help']);
+        self::assertSame(0, $code);
+        self::assertSame('', $error);
+        self::assertStringContainsString('migrate <up|down|status>', $out);
+        self::assertSame([], (new Schema($this->database))->relations());
+    }
+
+    /**
+     * @param list<string> $arguments
+     * @return array{int,string,string}
+     */
+    private function command(array $arguments): array
+    {
+        $stdin = fopen('php://memory', 'w+');
+        $stdout = fopen('php://memory', 'w+');
+        $stderr = fopen('php://memory', 'w+');
+        self::assertIsResource($stdin);
+        self::assertIsResource($stdout);
+        self::assertIsResource($stderr);
+
+        try {
+            $code = (new Operator($this->appDirectory, $this->migrations))->run(
+                $arguments,
+                $stdin,
+                $stdout,
+                $stderr,
+                fn(string $name): ?string => $name === 'DATABASE_URL' ? $this->dsn : null,
+            );
+            rewind($stdout);
+            rewind($stderr);
+
+            return [$code, (string) stream_get_contents($stdout), (string) stream_get_contents($stderr)];
+        } finally {
+            fclose($stdin);
+            fclose($stdout);
+            fclose($stderr);
+        }
+    }
+
     private function installBaseline(): void
+    {
+        $this->writeBasicMigration();
+        self::assertSame([1], $this->migrator->up($this->migrations));
+    }
+
+    private function writeBasicMigration(): void
     {
         file_put_contents($this->migrations . '/00001_baseline.sql', <<<'SQL'
             -- Baseline and a data row from an earlier release.
@@ -235,7 +470,6 @@ final class MigratorTest extends TestCase
             -- +goose Down
             DROP TABLE upgrade_base;
             SQL);
-        self::assertSame([1], $this->migrator->up($this->migrations));
     }
 
     private function writeUpgrade(string $statement): void

@@ -6,9 +6,9 @@ namespace StudioSchedule\Store;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
-use RuntimeException;
 use Throwable;
 
+/** @phpstan-type MigrationResult array{version:int,name:string,microseconds:int} */
 final readonly class Migrator
 {
     public function __construct(#[\SensitiveParameter] private string $databaseURL) {}
@@ -21,11 +21,86 @@ final readonly class Migrator
      */
     public function up(string $directory, bool $backupVerified = false): array
     {
+        return array_column($this->upWithResults($directory, $backupVerified), 'version');
+    }
+
+    /** @return list<MigrationResult> */
+    public function upWithResults(string $directory, bool $backupVerified = false): array
+    {
+        $files = self::files($directory);
+
+        return $this->locked(static function (Connection $connection, bool $postgres) use ($files, $backupVerified): array {
+            ['applied' => $applied, 'pending' => $pending, 'hasHistory' => $hasHistory] = (new Schema($connection))->migrationState($files);
+            if ($pending === []) {
+                return [];
+            }
+            if (!$postgres && $applied !== [] && !$backupVerified) {
+                throw new MigrationError('Confirm a verified full pre-upgrade backup before upgrading MySQL or MariaDB', needsBackup: true);
+            }
+
+            // Validate every pending file before any persistent change.
+            $statements = array_map(MigrationSql::up(...), $pending);
+
+            return self::change($connection, $postgres, $hasHistory, $pending, $statements, reverting: false);
+        });
+    }
+
+    /** @return MigrationResult */
+    public function down(string $directory, bool $backupVerified = false): array
+    {
+        $files = self::files($directory);
+
+        return $this->locked(static function (Connection $connection, bool $postgres) use ($files, $backupVerified): array {
+            ['applied' => $applied] = (new Schema($connection))->migrationState($files);
+            if ($applied === []) {
+                throw new MigrationError('no migration to roll back');
+            }
+            if (!$postgres && !$backupVerified) {
+                throw new MigrationError('Confirm a verified full backup before rolling back MySQL or MariaDB', needsBackup: true);
+            }
+
+            $version = $applied[count($applied) - 1];
+            $file = $files[$version];
+            $statements = [$version => MigrationSql::down($file)];
+
+            return self::change($connection, $postgres, true, [$version => $file], $statements, reverting: true)[0];
+        });
+    }
+
+    /** @return list<array{version:int,name:string,appliedAt:?int}> */
+    public function status(string $directory): array
+    {
+        $files = self::files($directory);
+
+        return $this->locked(static function (Connection $connection) use ($files): array {
+            ['appliedAt' => $appliedAt] = (new Schema($connection))->migrationState($files, includeTimestamps: true);
+            $rows = [];
+            foreach ($files as $version => $file) {
+                $rows[] = ['version' => $version, 'name' => basename($file), 'appliedAt' => $appliedAt[$version] ?? null];
+            }
+
+            return $rows;
+        });
+    }
+
+    /** @return non-empty-array<int,string> */
+    private static function files(string $directory): array
+    {
         $files = Schema::migrationFiles($directory);
         if ($files === []) {
-            throw new RuntimeException('The release has no migration files');
+            throw new MigrationError('The release has no migration files');
         }
 
+        return $files;
+    }
+
+    /**
+     * @template Result
+     * @param callable(Connection,bool):Result $operation
+     * @return Result
+     */
+    private function locked(callable $operation): mixed
+    {
         $connection = Database::connect($this->databaseURL, dedicated: true);
         try {
             $postgres = $connection->getDatabasePlatform() instanceof PostgreSQLPlatform;
@@ -34,35 +109,61 @@ final readonly class Migrator
                 ? 'SELECT pg_try_advisory_lock(4097083626)'
                 : "SELECT GET_LOCK(SHA2(CONCAT('studio-schedule:', DATABASE(), ':migrations'), 256), 0)";
             if (!in_array($connection->fetchOne($lock), [true, 't', 1, '1'], true)) {
-                throw new RuntimeException('A database migration is already running');
+                throw new MigrationError('A database migration is already running');
             }
 
-            $state = (new Schema($connection))->migrationState($files);
-            ['applied' => $applied, 'pending' => $pending, 'hasHistory' => $hasHistory] = $state;
-            if ($pending === []) {
-                return [];
-            }
-            if (!$postgres && $applied !== [] && !$backupVerified) {
-                throw new RuntimeException('Confirm a verified full pre-upgrade backup before upgrading MySQL or MariaDB');
-            }
-
-            // Validate every pending file before any persistent change.
-            $statements = array_map(MigrationSql::up(...), $pending);
-            if ($postgres) {
-                $connection->transactional(static function (Connection $connection) use ($statements, $hasHistory): void {
-                    if (!$hasHistory) {
-                        self::initializeHistory($connection, true);
-                    }
-                    self::apply($connection, $statements);
-                });
-            } else {
-                self::applyNonTransactional($connection, $statements, $hasHistory);
-            }
-
-            return array_keys($pending);
+            return $operation($connection, $postgres);
         } finally {
             // Release the session lock even when a statement or connection fails.
             $connection->close();
+        }
+    }
+
+    /**
+     * @param non-empty-array<int,string> $files
+     * @param non-empty-array<int,non-empty-list<string>> $statements
+     * @return non-empty-list<MigrationResult>
+     */
+    private static function change(
+        Connection $connection,
+        bool $postgres,
+        bool $hasHistory,
+        array $files,
+        array $statements,
+        bool $reverting,
+    ): array {
+        if ($postgres) {
+            return $connection->transactional(static function (Connection $connection) use ($files, $statements, $hasHistory, $reverting): array {
+                if (!$hasHistory) {
+                    self::initializeHistory($connection, true);
+                }
+
+                return self::apply($connection, $files, $statements, $reverting);
+            });
+        }
+
+        $connection->executeStatement('SET autocommit = 1');
+        if (!$hasHistory) {
+            self::initializeHistory($connection, false);
+        }
+
+        // Commit the marker before executing any DDL. Only the completion of
+        // the entire batch can remove it. Restoring the backup also restores
+        // the migration history, including the absence of this marker.
+        try {
+            $connection->executeStatement(
+                'INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, TRUE)',
+                [Schema::UPGRADE_IN_PROGRESS],
+            );
+            $results = self::apply($connection, $files, $statements, $reverting);
+            $connection->executeStatement(
+                'DELETE FROM goose_db_version WHERE version_id = ?',
+                [Schema::UPGRADE_IN_PROGRESS],
+            );
+
+            return $results;
+        } catch (Throwable $error) {
+            throw new MigrationRecoveryRequired($error);
         }
     }
 
@@ -77,43 +178,31 @@ final readonly class Migrator
         $connection->executeStatement('INSERT INTO goose_db_version (version_id, is_applied) VALUES (0, TRUE)');
     }
 
-    /** @param array<int, non-empty-list<string>> $statements */
-    private static function applyNonTransactional(Connection $connection, array $statements, bool $hasHistory): void
+    /**
+     * @param array<int,string> $files
+     * @param non-empty-array<int,non-empty-list<string>> $statements
+     * @return non-empty-list<MigrationResult>
+     */
+    private static function apply(Connection $connection, array $files, array $statements, bool $reverting): array
     {
-        $connection->executeStatement('SET autocommit = 1');
-        if (!$hasHistory) {
-            self::initializeHistory($connection, false);
-        }
-
-        // Commit the marker before executing any DDL. Only the completion of
-        // the entire batch can remove it. Restoring the backup also restores
-        // the migration history, including the absence of this marker.
-        try {
-            $connection->executeStatement(
-                'INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, TRUE)',
-                [Schema::UPGRADE_IN_PROGRESS],
-            );
-            self::apply($connection, $statements);
-            $connection->executeStatement(
-                'DELETE FROM goose_db_version WHERE version_id = ?',
-                [Schema::UPGRADE_IN_PROGRESS],
-            );
-        } catch (Throwable $error) {
-            throw new MigrationRecoveryRequired($error);
-        }
-    }
-
-    /** @param array<int, non-empty-list<string>> $statements */
-    private static function apply(Connection $connection, array $statements): void
-    {
+        $results = [];
+        $history = $reverting
+            ? 'DELETE FROM goose_db_version WHERE version_id = ?'
+            : 'INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, TRUE)';
         foreach ($statements as $version => $migration) {
+            $start = hrtime(true);
             foreach ($migration as $sql) {
                 $connection->executeStatement($sql);
             }
-            $connection->executeStatement(
-                'INSERT INTO goose_db_version (version_id, is_applied) VALUES (?, TRUE)',
-                [$version],
-            );
+            // The Go Goose provider deletes rolled-back entries.
+            $connection->executeStatement($history, [$version]);
+            $results[] = [
+                'version' => $version,
+                'name' => basename($files[$version]),
+                'microseconds' => (int) round((hrtime(true) - $start) / 1000),
+            ];
         }
+
+        return $results;
     }
 }

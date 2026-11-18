@@ -14,6 +14,7 @@ use StudioSchedule\Service\SchoolSetup;
 use StudioSchedule\Service\SetupInput;
 use StudioSchedule\Service\SystemClock;
 use StudioSchedule\Store\Database;
+use StudioSchedule\Store\IntegrityStore;
 use StudioSchedule\Store\MigrationRecoveryRequired;
 use StudioSchedule\Store\Schema;
 use StudioSchedule\Store\SetupStore;
@@ -33,7 +34,9 @@ final readonly class Operator
     ];
     private const string HELP = "Usage: studio-schedule [--database-url URL] <command> [flags]\n\n"
         . "  init          Set up a new school and print the first admin's setup link\n"
-        . "  healthcheck   Check the local server's liveness endpoint\n";
+        . "  healthcheck   Check the local server's liveness endpoint\n"
+        . "  migrate       Apply, roll back or list database migrations\n"
+        . "  db check      Check the data for inconsistencies\n";
 
     public function __construct(
         private string $appDirectory,
@@ -56,14 +59,38 @@ final readonly class Operator
         ?callable $environment = null,
     ): int {
         try {
-            [$command, $flags, $help] = self::parse($arguments);
-            if ($help || $command === '') {
+            [$command, $flags, $help, $only] = self::parse($arguments);
+            if ($help || in_array($command, ['', 'migrate', 'db'], true)) {
                 fwrite($output, self::help($command));
 
                 return 0;
             }
 
             $get = Config::lookup($this->appDirectory . '/config/.env', $environment);
+            if (str_starts_with($command, 'migrate ')) {
+                MigrationCommand::run(
+                    substr($command, strlen('migrate ')),
+                    SetupInput::trim($flags['database-url'] ?? $get('DATABASE_URL')),
+                    $this->postgresDirectory(),
+                    $this->appDirectory . '/migrations/mysql',
+                    ($flags['backup-verified'] ?? 'false') === 'true',
+                    $output,
+                );
+
+                return 0;
+            }
+
+            if ($command === 'db check') {
+                return (new DbCheck($this->postgresDirectory(), $this->appDirectory . '/migrations/mysql'))->run(
+                    SetupInput::trim($flags['database-url'] ?? $get('DATABASE_URL')),
+                    $only,
+                    $flags['output'] ?? 'text',
+                    $output,
+                    $errors,
+                    isset($flags['as']),
+                );
+            }
+
             $baseSetting = isset($flags['base-url']) ? '--base-url' : 'BASE_URL';
             $baseInput = SetupInput::trim($flags['base-url'] ?? $get('BASE_URL'));
             try {
@@ -106,13 +133,14 @@ final readonly class Operator
 
     /**
      * @param list<string> $arguments
-     * @return array{string,array<string,string>,bool}
+     * @return array{string,array<string,string>,bool,list<string>}
      */
     private static function parse(#[\SensitiveParameter] array $arguments): array
     {
         $command = '';
         $flags = [];
         $help = false;
+        $only = [];
         for ($index = 0; $index < count($arguments); $index++) {
             $arg = $arguments[$index];
             if ($arg === '--help' || $arg === '-h') {
@@ -123,10 +151,24 @@ final readonly class Operator
                 break;
             }
             if (!str_starts_with($arg, '-')) {
+                if ($command === 'migrate') {
+                    if (!in_array($arg, ['up', 'down', 'status'], true)) {
+                        throw new CommandError('unknown migration command', 2);
+                    }
+                    $command .= ' ' . $arg;
+                    continue;
+                }
+                if ($command === 'db') {
+                    if ($arg !== 'check') {
+                        throw new CommandError('unknown database command', 2);
+                    }
+                    $command = 'db check';
+                    continue;
+                }
                 if ($command !== '') {
                     throw new CommandError('unexpected argument', 2);
                 }
-                if (!in_array($arg, ['init', 'healthcheck'], true)) {
+                if (!in_array($arg, ['init', 'healthcheck', 'migrate', 'db'], true)) {
                     throw new CommandError('unknown command', 2);
                 }
                 $command = $arg;
@@ -136,10 +178,18 @@ final readonly class Operator
             $parts = explode('=', $arg, 2);
             $name = $parts[0];
             $value = $parts[1] ?? null;
+            if ($name === '--backup-verified' && in_array($command, ['migrate up', 'migrate down'], true)) {
+                if ($value !== null && $value !== 'true' && $value !== 'false') {
+                    throw new CommandError('--backup-verified accepts true or false', 2);
+                }
+                $flags['backup-verified'] = $value ?? 'true';
+                continue;
+            }
             $known = match ($name) {
                 '--database-url', '--output', '-o' => true,
-                '--base-url' => $command !== '',
+                '--base-url' => in_array($command, ['init', 'healthcheck'], true),
                 '--addr' => $command === 'healthcheck',
+                '--only', '--as' => $command === 'db check',
                 default => $command === 'init' && str_starts_with($name, '--') && isset(self::INIT_FIELDS[substr($name, 2)]),
             };
             if (!$known) {
@@ -151,14 +201,26 @@ final readonly class Operator
                     throw new CommandError("$name needs a value", 2);
                 }
             }
+            if ($name === '--only') {
+                if ($value !== '') {
+                    foreach (str_getcsv($value, ',', '"', '') as $check) {
+                        $only[] = $check ?? '';
+                    }
+                }
+                continue;
+            }
             $flags[$name === '-o' ? 'output' : substr($name, 2)] = $value;
         }
 
-        if (($flags['output'] ?? 'text') !== 'text') {
+        $format = $flags['output'] ?? 'text';
+        if ($command === 'db check' && !in_array($format, ['text', 'json'], true)) {
+            throw new CommandError('output format must be text or json', 2);
+        }
+        if ($command !== 'db check' && $format !== 'text') {
             throw new CommandError('this command prints text only', 2);
         }
 
-        return [$command, $flags, $help];
+        return [$command, $flags, $help, $only];
     }
 
     private static function help(string $command): string
@@ -168,6 +230,12 @@ final readonly class Operator
                 . '  ' . implode('  ', array_map(static fn(string $name): string => "--$name VALUE", array_keys(self::INIT_FIELDS))) . "\n"
                 . "Values omitted from the command line are prompted for.\n",
             'healthcheck' => "Usage: studio-schedule healthcheck [--addr HOST:PORT] [--base-url URL]\n",
+            'migrate' => "Usage: studio-schedule migrate <up|down|status> [--database-url URL]\n"
+                . "MySQL and MariaDB upgrades and rollbacks require --backup-verified after verifying a full backup.\n",
+            'migrate up', 'migrate down' => "Usage: studio-schedule $command [--database-url URL] [--backup-verified]\n",
+            'migrate status' => "Usage: studio-schedule migrate status [--database-url URL]\n",
+            'db', 'db check' => "Usage: studio-schedule db check [--database-url URL] [--only CHECKS] [--output text|json]\n"
+                . '  Checks: ' . implode(', ', IntegrityStore::CHECKS) . "\n",
             default => self::HELP,
         };
     }
