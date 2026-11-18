@@ -564,6 +564,46 @@ func (q *Queries) ListPersonsByIDs(ctx context.Context, ids []pgtype.UUID) ([]Pe
 	return items, nil
 }
 
+const lockAccount = `-- name: LockAccount :one
+SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at, locale FROM accounts WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockAccount(ctx context.Context, id pgtype.UUID) (Account, error) {
+	row := q.db.QueryRow(ctx, lockAccount, id)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.PersonID,
+		&i.Email,
+		&i.Role,
+		&i.VisibleDays,
+		&i.DisabledAt,
+		&i.ConfirmedAt,
+		&i.Locale,
+	)
+	return i, err
+}
+
+const lockAccountByEmail = `-- name: LockAccountByEmail :one
+SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at, locale FROM accounts WHERE lower(email) = lower($1::text COLLATE "C") FOR UPDATE
+`
+
+func (q *Queries) LockAccountByEmail(ctx context.Context, email string) (Account, error) {
+	row := q.db.QueryRow(ctx, lockAccountByEmail, email)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.PersonID,
+		&i.Email,
+		&i.Role,
+		&i.VisibleDays,
+		&i.DisabledAt,
+		&i.ConfirmedAt,
+		&i.Locale,
+	)
+	return i, err
+}
+
 const lockPersons = `-- name: LockPersons :many
 SELECT id FROM persons WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE
 `

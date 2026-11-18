@@ -55,6 +55,8 @@ var (
 	ErrInvalidToken = fmt.Errorf("%w: the link is invalid or has expired", domain.ErrValidation)
 	// ErrNoSession reports a request without a valid session.
 	ErrNoSession = fmt.Errorf("%w: not signed in", domain.ErrUnauthorized)
+
+	errRegistrationRace = errors.New("the account changed during registration")
 )
 
 // PasswordHasher hashes and verifies passwords; package auth/password
@@ -171,10 +173,10 @@ func (s *AuthService) Register(ctx context.Context, r Registration) error {
 
 	token := newToken()
 
-	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+	write := func(ctx context.Context, tx store.Tx) error {
 		now := s.clock.Now()
 
-		acc, err := tx.Accounts().GetByEmail(ctx, r.Email)
+		acc, err := lockRegistrationAccount(ctx, tx, r.Email)
 
 		switch {
 		case err == nil:
@@ -188,6 +190,10 @@ func (s *AuthService) Register(ctx context.Context, r Registration) error {
 			}
 		case errors.Is(err, domain.ErrNotFound):
 			if acc, err = s.createPending(ctx, tx, r); err != nil {
+				if errors.Is(err, domain.ErrDuplicate) {
+					return fmt.Errorf("%w: %w", errRegistrationRace, err)
+				}
+
 				return err
 			}
 		default:
@@ -200,12 +206,45 @@ func (s *AuthService) Register(ctx context.Context, r Registration) error {
 		}
 
 		return s.sendConfirmation(ctx, tx, acc, r, token)
-	})
+	}
+
+	// A missing row cannot be locked. Retry in a new transaction after a
+	// concurrent insert so the normal pending-account check runs again.
+	for range 3 {
+		err = s.store.InTx(ctx, store.ReadWrite, write)
+		if !errors.Is(err, errRegistrationRace) {
+			break
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("register: %w", err)
 	}
 
 	return nil
+}
+
+func lockRegistrationAccount(ctx context.Context, tx store.Tx, email string) (domain.Account, error) {
+	observed, err := tx.Accounts().GetByEmail(ctx, email)
+	if err != nil {
+		return domain.Account{}, err
+	}
+
+	// Renewing a registration can update the person's name. Take the person
+	// lock first, as account administration and person merge do.
+	if err := tx.Persons().Lock(ctx, observed.PersonID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.Account{}, errRegistrationRace
+		}
+
+		return domain.Account{}, err
+	}
+
+	current, err := tx.Accounts().LockByEmail(ctx, email)
+	if errors.Is(err, domain.ErrNotFound) || (err == nil && current.PersonID != observed.PersonID) {
+		return domain.Account{}, errRegistrationRace
+	}
+
+	return current, err
 }
 
 func checkRegistrationName(field, label, name string) error {
@@ -329,6 +368,12 @@ func (s *AuthService) Confirm(ctx context.Context, token, password string) (Sign
 	}
 
 	return s.signIn(ctx, acc, password, cred, func(ctx context.Context, tx store.Tx, now time.Time) error {
+		// Take the same account lock as registration before reading the token
+		// and credentials again or consuming the link.
+		if _, err := tx.Accounts().Lock(ctx, acc.ID); err != nil {
+			return mapTokenErr(err)
+		}
+
 		// The password must still be the one just verified: a registration
 		// in between replaces it and sends a new link.
 		cur, curCred, err := s.tokenAccount(ctx, tx, token)
@@ -338,6 +383,9 @@ func (s *AuthService) Confirm(ctx context.Context, token, password string) (Sign
 
 		if curCred.PasswordHash != cred.PasswordHash {
 			return ErrInvalidToken
+		}
+		if !cur.DisabledAt.IsZero() {
+			return ErrInvalidCredentials
 		}
 
 		// The token is used up here; a concurrent use finds it gone.

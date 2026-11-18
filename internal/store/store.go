@@ -321,8 +321,12 @@ func TombstoneRefKinds() []TombstoneRefKind {
 // one account.
 type AccountRepo interface {
 	Get(ctx context.Context, id domain.AccountID) (domain.Account, error)
+	// Lock reads the current account and holds its write lock until commit.
+	Lock(ctx context.Context, id domain.AccountID) (domain.Account, error)
 	// GetByEmail finds an account by email, ignoring ASCII case.
 	GetByEmail(ctx context.Context, email string) (domain.Account, error)
+	// LockByEmail finds and locks an existing account, ignoring ASCII case.
+	LockByEmail(ctx context.Context, email string) (domain.Account, error)
 	// GetByPerson finds the account of a person.
 	GetByPerson(ctx context.Context, person domain.PersonID) (domain.Account, error)
 	// Create fails with domain.ErrDuplicate if the email or the person has

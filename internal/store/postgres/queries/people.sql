@@ -61,10 +61,16 @@ ORDER BY p.family_name, p.given_name, p.id;
 -- name: GetAccount :one
 SELECT * FROM accounts WHERE id = $1;
 
+-- name: LockAccount :one
+SELECT * FROM accounts WHERE id = $1 FOR UPDATE;
+
 -- name: GetAccountByEmail :one
 -- The parameter needs collation "C" as well, so that lower() folds ASCII
 -- letters only and the expression matches accounts_email_key.
 SELECT * FROM accounts WHERE lower(email) = lower(sqlc.arg(email)::text COLLATE "C");
+
+-- name: LockAccountByEmail :one
+SELECT * FROM accounts WHERE lower(email) = lower(sqlc.arg(email)::text COLLATE "C") FOR UPDATE;
 
 -- name: GetAccountByPerson :one
 SELECT * FROM accounts WHERE person_id = $1;

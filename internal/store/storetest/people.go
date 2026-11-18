@@ -400,6 +400,44 @@ func testAccounts(t *testing.T, newStore func(*testing.T) store.Store) {
 	}
 
 	cases(t, newStore, map[string]func(e *env){
+		"Lock": func(e *env) {
+			a := e.account(e.person("Ada", "Account"), "ada@example.org")
+			wantErr(e.t, e.read(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Accounts().Lock(ctx, a.ID)
+
+				return err
+			}), store.ErrReadOnly)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				got, err := tx.Accounts().Lock(ctx, a.ID)
+				wantEqual(e.t, got, a)
+
+				return err
+			})
+			wantErr(e.t, e.write(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Accounts().Lock(ctx, newID[domain.AccountID](e))
+
+				return err
+			}), domain.ErrNotFound)
+		},
+		"LockByEmail": func(e *env) {
+			a := e.account(e.person("Ada", "Account"), "Ada@Example.org")
+			wantErr(e.t, e.read(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Accounts().LockByEmail(ctx, a.Email)
+
+				return err
+			}), store.ErrReadOnly)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				got, err := tx.Accounts().LockByEmail(ctx, "ada@example.org")
+				wantEqual(e.t, got, a)
+
+				return err
+			})
+			wantErr(e.t, e.write(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Accounts().LockByEmail(ctx, "other@example.org")
+
+				return err
+			}), domain.ErrNotFound)
+		},
 		"MaxVisibleDays": func(e *env) {
 			maxDays := func() int {
 				n, err := query(e, func(ctx context.Context, tx store.Tx) (int, error) {

@@ -51,7 +51,7 @@ func TestSetupRefusesConcurrentSettingsInsert(t *testing.T) {
 		done <- err
 	}()
 
-	waitForSetupInsert(ctx, t, st, firstPID)
+	waitForBlockedTransaction(ctx, t, st, firstPID)
 	if err := first.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestSetupRefusesConcurrentSettingsInsert(t *testing.T) {
 	}
 }
 
-func waitForSetupInsert(ctx context.Context, t *testing.T, st *Store, firstPID int32) {
+func waitForBlockedTransaction(ctx context.Context, t *testing.T, st *Store, firstPID int32) {
 	t.Helper()
 
 	poll := time.NewTicker(10 * time.Millisecond)
@@ -92,7 +92,7 @@ func waitForSetupInsert(ctx context.Context, t *testing.T, st *Store, firstPID i
 
 		select {
 		case <-ctx.Done():
-			t.Fatal("setup never waited for the competing settings insert")
+			t.Fatal("no transaction waited for the competing write")
 		case <-poll.C:
 		}
 	}

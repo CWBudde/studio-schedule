@@ -336,6 +336,14 @@ func (r accountRepo) Get(_ context.Context, id domain.AccountID) (domain.Account
 	return a, nil
 }
 
+func (r accountRepo) Lock(ctx context.Context, id domain.AccountID) (domain.Account, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return domain.Account{}, err
+	}
+
+	return r.Get(ctx, id)
+}
+
 func (r accountRepo) GetByEmail(_ context.Context, email string) (domain.Account, error) {
 	found := r.tx.state.accounts.filter(func(a domain.Account) bool { return foldASCII(a.Email) == foldASCII(email) })
 	if len(found) == 0 {
@@ -343,6 +351,14 @@ func (r accountRepo) GetByEmail(_ context.Context, email string) (domain.Account
 	}
 
 	return found[0], nil
+}
+
+func (r accountRepo) LockByEmail(ctx context.Context, email string) (domain.Account, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return domain.Account{}, err
+	}
+
+	return r.GetByEmail(ctx, email)
 }
 
 func (r accountRepo) GetByPerson(_ context.Context, person domain.PersonID) (domain.Account, error) {

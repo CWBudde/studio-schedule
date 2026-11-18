@@ -371,12 +371,28 @@ func (r *faultAccountRepo) Get(a0 context.Context, a1 domain.AccountID) (r0 doma
 	return r.AccountRepo.Get(a0, a1)
 }
 
+func (r *faultAccountRepo) Lock(a0 context.Context, a1 domain.AccountID) (r0 domain.Account, err error) {
+	if err = r.f.hit("Accounts.Lock"); err != nil {
+		return r0, err
+	}
+
+	return r.AccountRepo.Lock(a0, a1)
+}
+
 func (r *faultAccountRepo) GetByEmail(a0 context.Context, a1 string) (r0 domain.Account, err error) {
 	if err = r.f.hit("Accounts.GetByEmail"); err != nil {
 		return r0, err
 	}
 
 	return r.AccountRepo.GetByEmail(a0, a1)
+}
+
+func (r *faultAccountRepo) LockByEmail(a0 context.Context, a1 string) (r0 domain.Account, err error) {
+	if err = r.f.hit("Accounts.LockByEmail"); err != nil {
+		return r0, err
+	}
+
+	return r.AccountRepo.LockByEmail(a0, a1)
 }
 
 func (r *faultAccountRepo) GetByPerson(a0 context.Context, a1 domain.PersonID) (r0 domain.Account, err error) {

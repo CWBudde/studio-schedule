@@ -380,8 +380,26 @@ func (r accountRepo) Get(ctx context.Context, id domain.AccountID) (domain.Accou
 	return toAccount(row), nil
 }
 
+func (r accountRepo) Lock(ctx context.Context, id domain.AccountID) (domain.Account, error) {
+	row, err := r.q.LockAccount(ctx, pgID(id))
+	if err != nil {
+		return domain.Account{}, notFound("account", err)
+	}
+
+	return toAccount(row), nil
+}
+
 func (r accountRepo) GetByEmail(ctx context.Context, email string) (domain.Account, error) {
 	row, err := r.q.GetAccountByEmail(ctx, email)
+	if err != nil {
+		return domain.Account{}, notFound("account", err)
+	}
+
+	return toAccount(row), nil
+}
+
+func (r accountRepo) LockByEmail(ctx context.Context, email string) (domain.Account, error) {
+	row, err := r.q.LockAccountByEmail(ctx, email)
 	if err != nil {
 		return domain.Account{}, notFound("account", err)
 	}
