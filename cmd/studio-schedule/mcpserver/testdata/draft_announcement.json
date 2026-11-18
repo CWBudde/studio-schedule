@@ -1,0 +1,11 @@
+{
+  "id": "00000000-0001-7000-8000-000000000001",
+  "audience": "everyone",
+  "title": "Studio closed on Monday",
+  "body": "The studio stays closed on Monday.\nSee you on Tuesday.",
+  "email": true,
+  "draft": true,
+  "emailRecipients": 0,
+  "createdAt": "2026-09-22T08:00:00Z",
+  "updatedAt": "2026-09-22T08:00:00Z"
+}

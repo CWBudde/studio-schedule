@@ -85,9 +85,9 @@ prompt, since the client cannot answer one. The audit log names the remote OS us
   data (the "Personal data" columns of [Tools](#tools), [Resources](#resources) and
   [Prompts](#prompts)), and the statistics' top participants. Read [Privacy](#privacy) first.
 - `--allow-writes` (string list, comma-separated): also list the write tools of these groups:
-  `bookings`, `lessons`, `mail`, `jobs`. The groups are checked at start: any other, `announcements`
-  too, is an unknown group (exit 2). No tool writes an announcement: an announcement has no draft
-  state yet ([ADR 0022](decisions/0022-mcp-server.md), amendment of 2026-11-03).
+  `bookings`, `lessons`, `announcements`, `mail`, `jobs`. The groups are checked at start: any
+  other is an unknown group (exit 2). `announcements` only saves drafts, which the office publishes
+  in the app ([ADR 0022](decisions/0022-mcp-server.md), amendment of 2026-11-18).
 
 `mcp` takes no `--output` and no `--yes`; both are usage errors. The client asks its user before a
 write, which takes the place of `--yes` ([ADR 0022](decisions/0022-mcp-server.md)). Logs go to
@@ -126,27 +126,28 @@ only with its group in `--allow-writes` ([Write tools](#write-tools)). Those mar
 "Personal data" are listed only with `--personal-data`. Each tool that mirrors a command returns
 that command's JSON document, which is the response body of that command's API operation in
 [api/openapi.json](../api/openapi.json); a test asserts that a tool and its command return the same
-document. `free_rooms`, `book_lesson` and `cancel_booking` mirror no command; their results are
-described below. No tool returns a date of birth.
+document. `free_rooms`, `book_lesson`, `cancel_booking` and `draft_announcement` mirror no
+command; their results are described below. No tool returns a date of birth.
 
-| Name              | Access   | Personal data | Write group | Mirrors                                                          |
-| ----------------- | -------- | ------------- | ----------- | ---------------------------------------------------------------- |
-| `schedule`        | `public` | no            | –           | `lessons list --output json` (getSchedule)                       |
-| `free_rooms`      | `staff`  | no            | –           | – (no command; `CatalogService.FreeRooms`)                       |
-| `lesson`          | `staff`  | yes           | –           | no command (listLessonParticipants), see below                   |
-| `book_lesson`     | `office` | yes           | `bookings`  | no command (addLessonParticipant), see below                     |
-| `cancel_booking`  | `office` | yes           | `bookings`  | no command (removeLessonParticipant), see below                  |
-| `cancel_lesson`   | `office` | no            | `lessons`   | `lessons cancel --yes --output json` (cancelLesson)              |
-| `person_bookings` | `office` | yes           | –           | part of `persons export --output json` (exportPerson), see below |
-| `person_passes`   | `office` | yes           | –           | `passes list --person --output json` (listPersonPasses)          |
-| `receipts`        | `office` | yes           | –           | `receipts list --output json` (searchReceipts)                   |
-| `search_persons`  | `office` | yes           | –           | `persons search --output json` (searchPersons)                   |
-| `statistics`      | `office` | no            | –           | `stats --output json` (getStatistics), see below                 |
-| `db_check`        | `admin`  | no            | –           | `db check --output json`                                         |
-| `doctor`          | `admin`  | no            | –           | `doctor --output json`                                           |
-| `mail_log`        | `admin`  | yes           | –           | `mail list --output json` (searchMails)                          |
-| `requeue_mail`    | `admin`  | yes           | `mail`      | `mail requeue <id> --yes --output json` (requeueMail)            |
-| `run_job`         | `admin`  | no            | `jobs`      | `jobs run <name> --output json`, see below                       |
+| Name                 | Access   | Personal data | Write group     | Mirrors                                                          |
+| -------------------- | -------- | ------------- | --------------- | ---------------------------------------------------------------- |
+| `schedule`           | `public` | no            | –               | `lessons list --output json` (getSchedule)                       |
+| `free_rooms`         | `staff`  | no            | –               | – (no command; `CatalogService.FreeRooms`)                       |
+| `lesson`             | `staff`  | yes           | –               | no command (listLessonParticipants), see below                   |
+| `book_lesson`        | `office` | yes           | `bookings`      | no command (addLessonParticipant), see below                     |
+| `cancel_booking`     | `office` | yes           | `bookings`      | no command (removeLessonParticipant), see below                  |
+| `cancel_lesson`      | `office` | no            | `lessons`       | `lessons cancel --yes --output json` (cancelLesson)              |
+| `draft_announcement` | `office` | no            | `announcements` | no command (createAnnouncement with `draft`), see below          |
+| `person_bookings`    | `office` | yes           | –               | part of `persons export --output json` (exportPerson), see below |
+| `person_passes`      | `office` | yes           | –               | `passes list --person --output json` (listPersonPasses)          |
+| `receipts`           | `office` | yes           | –               | `receipts list --output json` (searchReceipts)                   |
+| `search_persons`     | `office` | yes           | –               | `persons search --output json` (searchPersons)                   |
+| `statistics`         | `office` | no            | –               | `stats --output json` (getStatistics), see below                 |
+| `db_check`           | `admin`  | no            | –               | `db check --output json`                                         |
+| `doctor`             | `admin`  | no            | –               | `doctor --output json`                                           |
+| `mail_log`           | `admin`  | yes           | –               | `mail list --output json` (searchMails)                          |
+| `requeue_mail`       | `admin`  | yes           | `mail`          | `mail requeue <id> --yes --output json` (requeueMail)            |
+| `run_job`            | `admin`  | no            | `jobs`          | `jobs run <name> --output json`, see below                       |
 
 **`free_rooms`**: the rooms free on `date` (a school date, YYYY-MM-DD) from `start` (the school's
 wall clock time, HH:MM) for `durationMinutes` (whole minutes, more than 0 and at most 720, which is
@@ -223,27 +224,30 @@ service's reason, and the requested write is not applied. What the service settl
 still commits, as it does for the office's page: `book_lesson` ends the expired waiting-list
 invites of the lesson before it refuses a full lesson or a person booked already.
 
-| Group      | Tools                           | What it may change                                                |
-| ---------- | ------------------------------- | ----------------------------------------------------------------- |
-| `bookings` | `book_lesson`, `cancel_booking` | a person's booking of a lesson, and the mail about it             |
-| `lessons`  | `cancel_lesson`                 | a lesson's status, and the mails to those booked                  |
-| `mail`     | `requeue_mail`                  | a failed mail of the outbox, sent again by the deliver-mail job   |
-| `jobs`     | `run_job`                       | whatever the job does: lessons, mails and pushes, or deleted data |
+| Group           | Tools                           | What it may change                                                           |
+| --------------- | ------------------------------- | ---------------------------------------------------------------------------- |
+| `bookings`      | `book_lesson`, `cancel_booking` | a person's booking of a lesson, and the mail about it                        |
+| `lessons`       | `cancel_lesson`                 | a lesson's status, and the mails to those booked                             |
+| `announcements` | `draft_announcement`            | a new announcement draft, shown and mailed only once the office publishes it |
+| `mail`          | `requeue_mail`                  | a failed mail of the outbox, sent again by the deliver-mail job              |
+| `jobs`          | `run_job`                       | whatever the job does: lessons, mails and pushes, or deleted data            |
 
-No tool writes an announcement: an announcement has no draft state yet, so there is no
-`announcements` group ([ADR 0022](decisions/0022-mcp-server.md), amendment of 2026-11-03).
+No tool publishes, edits or deletes an announcement: `draft_announcement` saves a draft, which the
+office reviews and publishes in the app ([ADR 0022](decisions/0022-mcp-server.md), amendment of
+2026-11-18).
 
 **Annotations.** The tool annotations take the place of the command line's `--yes`: the client
 reads them and asks its user before a call, and no tool asks for a confirmation itself. A write tool
 has `readOnlyHint: false` and sets the others as follows.
 
-| Tool             | `destructiveHint` | `idempotentHint` | `openWorldHint` |
-| ---------------- | ----------------- | ---------------- | --------------- |
-| `book_lesson`    | false             | true             | false           |
-| `cancel_booking` | true              | true             | false           |
-| `cancel_lesson`  | true              | true             | false           |
-| `requeue_mail`   | true              | false            | false           |
-| `run_job`        | true              | false            | true            |
+| Tool                 | `destructiveHint` | `idempotentHint` | `openWorldHint` |
+| -------------------- | ----------------- | ---------------- | --------------- |
+| `book_lesson`        | false             | true             | false           |
+| `cancel_booking`     | true              | true             | false           |
+| `cancel_lesson`      | true              | true             | false           |
+| `draft_announcement` | false             | false            | false           |
+| `requeue_mail`       | true              | false            | false           |
+| `run_job`            | true              | false            | true            |
 
 The tools that mail only queue the mails in the outbox, which the server's deliver-mail job sends,
 so they stay within the school's data (`openWorldHint: false`). An annotation belongs to a tool,
@@ -277,6 +281,17 @@ nothing, and the waiting list's invites go back to waiting. A lesson canceled al
 is and nobody is mailed again; a lesson that has started is refused. Without `--personal-data`
 the result leaves out `admin.canceledBy`, the account that canceled the lesson, and a room
 rental's `renter`, as `schedule` does; with it, the result is that of `lessons cancel`.
+
+**`draft_announcement`**: saves an announcement draft for the office: a one-line `title` (at most
+120 characters), a plain-text `body` (at most 4000), an `audience` (`everyone`, `role` with `role`,
+`class` with `classId`, `course-type` with `courseTypeId`, `lesson` with `lessonId`, or `event`
+with `eventId`), an optional `expiresAt` (an RFC 3339 instant in the future) and `email`, which
+mails it once when the office publishes it. It takes no publish time. A draft is neither shown nor
+mailed, and takes no place in the daily limit of emailed announcements, until the office publishes
+it in the app ([ADR 0014](decisions/0014-announcements-and-mail-log.md), amendment of 2026-11-18).
+Each call saves a new draft. The result is the draft as the office's announcement list shows it,
+the body of createAnnouncement with `draft: true` and no `publishAt`. Without `--personal-data`
+it leaves out the author's name.
 
 **`requeue_mail`**: queues the failed mail `mailId` (from `mail_log`) again, as `mail requeue`
 does, recorded as `mail-requeued` with `via` mcp. A mail with a secret link, and a pending or sent
@@ -356,8 +371,9 @@ that week.
 **`canceled_lesson_announcement`**: a draft announcement about the canceled lesson `lessonId`: a
 title and a plain-text body within the announcements' length limits, and a suggestion whom it is
 for. The model finds the lesson with `schedule` and stops if it is not canceled. The prompt asks
-for the text only: it tells the model to publish nothing, since no tool saves an announcement, and
-the office reviews the text and publishes it in the app.
+for the text only and tells the model to publish nothing. With `draft_announcement` listed, the
+model saves the text as a draft with it; without it, the model gives the text only. Either way the
+office reviews the text and publishes it in the app.
 
 **`waitlist_invitations`**: whom to invite from the waiting list of the lesson `lessonId`: the free
 places, the places that open invites hold, and the waiting entries next in line. It tells the model

@@ -19,7 +19,9 @@ var personDataTools = []string{
 // writeTools are the registry's write tools, sorted, and
 // personDataWriteTools those of them that return person data.
 var (
-	writeTools           = []string{"book_lesson", "cancel_booking", "cancel_lesson", "requeue_mail", "run_job"}
+	writeTools = []string{
+		"book_lesson", "cancel_booking", "cancel_lesson", "draft_announcement", "requeue_mail", "run_job",
+	}
 	personDataWriteTools = []string{"book_lesson", "cancel_booking", "requeue_mail"}
 )
 

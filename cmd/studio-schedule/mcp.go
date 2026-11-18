@@ -50,9 +50,8 @@ func newMCPCmd(app *cli.App) *cobra.Command {
 			"--personal-data neither tools nor resources return person data; write tools " +
 			"are listed only for the groups of --allow-writes (" + strings.Join(names, ", ") + "): bookings " +
 			"books a person into a lesson and cancels that booking, lessons cancels a lesson and mails those " +
-			"booked, mail queues a failed mail again, jobs runs a background job; no tool writes an " +
-			"announcement. Nothing " +
-			"but MCP goes to stdout; warnings and errors go to stderr. The command takes no --output json and " +
+			"booked, announcements saves an announcement draft, which the office publishes in the app, mail " +
+			"queues a failed mail again, jobs runs a background job. Nothing but MCP goes to stdout; warnings and errors go to stderr. The command takes no --output json and " +
 			"no --yes: the client asks its user before a write.",
 		Example: "  studio-schedule mcp --as office@example.org\n" +
 			"  claude mcp add studio-schedule -- studio-schedule mcp --as office@example.org\n" +
