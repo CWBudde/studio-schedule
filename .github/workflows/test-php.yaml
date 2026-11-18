@@ -39,3 +39,17 @@ jobs:
           path: ${{ runner.temp }}/studio-schedule-php.zip
           if-no-files-found: error
           compression-level: 0
+      - name: Build and check the PHP container image
+        run: |
+          ./scripts/build-php-image.sh "$RUNNER_TEMP/studio-schedule-php.zip" studio-schedule-php:artifact
+          ./scripts/check-php-image.sh studio-schedule-php:artifact
+      - name: Export the verified PHP container image
+        shell: bash
+        run: docker save studio-schedule-php:artifact | gzip -1 > "$RUNNER_TEMP/studio-schedule-php-image.tar.gz"
+      - name: Store the verified PHP container image
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-schedule-php-image
+          path: ${{ runner.temp }}/studio-schedule-php-image.tar.gz
+          if-no-files-found: error
+          compression-level: 0

@@ -1463,12 +1463,14 @@ backends.
       transaction on the target, then runs the `db check` checks there and rolls back on a
       finding. The demo seed matched in every application table after both round trips, and
       integrity findings rolled back copies into PostgreSQL and MariaDB.
-- [ ] PHP release artifacts built by CI.
+- [x] Configure CI to build, check and export the PHP release artifacts.
   - [x] Build and check the shared-hosting ZIP with `public/`, `app/`, production Composer
         dependencies, the built web UI, both migration sets, a GPL-2.0 notice and mPDF's licence.
         The extracted ZIP serves the UI at the root and under a path, and the packaged CLI can
         migrate PostgreSQL, MySQL and MariaDB.
-  - [ ] Build and check the PHP-FPM + nginx container image.
+  - [x] Build and check the PHP-FPM + nginx container image from the shared-hosting ZIP. Verify
+        liveness and maintenance before migration, and readiness and CLI jobs after migration,
+        on PostgreSQL, MySQL and MariaDB.
 - [ ] Tests.
   - [x] Run PHPUnit service and store tests on PostgreSQL, MySQL 8.0 and MariaDB 10.6 via Docker,
         with PHPStan at max level, PHP-CS-Fixer, and PCOV coverage gates of 95 % of all statements

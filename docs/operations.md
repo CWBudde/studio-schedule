@@ -429,6 +429,28 @@ in the environment passed to PHP. If a shared Apache host requires `app/` to sit
 subdirectory under the document root, enable access overrides there so `app/.htaccess` denies
 every HTTP request into it. On nginx, keep the application directory outside every document root.
 
+### PHP container
+
+The PHP CI job also checks a PHP-FPM and nginx image on PostgreSQL, MySQL and MariaDB. Download
+the `studio-schedule-php-image` workflow artifact and load the image with
+`docker load -i studio-schedule-php-image.tar.gz`. To build the same image from a local release
+ZIP, run `./scripts/build-php-image.sh studio-schedule-php.zip studio-schedule-php:artifact`.
+
+Put `DATABASE_URL`, `BASE_URL` and the other PHP settings in an environment file. Connect the
+container to a network that can reach the database. The image listens on port 8080.
+
+```sh
+docker run -d --name studio-schedule-php --env-file ./studio-php.env \
+  --read-only --tmpfs /tmp:rw,nosuid,nodev,mode=1777 \
+  --publish 127.0.0.1:8080:8080 studio-schedule-php:artifact
+```
+
+Use the [upgrade procedure](#upgrades) before applying migrations. An upgrade of an existing
+MySQL or MariaDB schema requires a verified full backup. The container health check probes
+`/healthz`. Use `/readyz` at the configured base path to check whether the database is ready for
+traffic. Run the installer or the CLI explicitly to change the schema, and schedule
+`docker exec studio-schedule-php studio-schedule jobs:run` from the host's cron every minute.
+
 ### Mail (SMTP)
 
 The app sends mail through any SMTP server, e.g. that of the school's mail provider or a sending
