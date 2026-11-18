@@ -242,6 +242,7 @@ func TestBackendConformance(t *testing.T) {
 		{"schedule release and visibility", publicSchedule},
 		{"registration and session", registrationSession},
 		{"password recovery", recoverPassword},
+		{"credential changes", changeCredentials},
 		{"login rate limit", loginRateLimit},
 		{"admin impersonation", adminImpersonation},
 		{"member booking and cancellation", memberBooking},

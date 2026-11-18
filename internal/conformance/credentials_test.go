@@ -77,6 +77,95 @@ func recoverPassword(t *testing.T, b *backend) {
 	}
 }
 
+func changeCredentials(t *testing.T, b *backend) {
+	t.Helper()
+
+	const newPassword = "different fixture credentials"
+	const abandoned = "abandoned-change@example.test"
+	const newEmail = "changed-address@example.test"
+	current, other, guest := browser(t), browser(t), browser(t)
+	login(t, b, current, demoMember, demoPassword)
+	login(t, b, other, demoMember, demoPassword)
+	me := request{method: http.MethodGet, path: "/api/v1/auth/me"}
+	locale := request{method: http.MethodPut, path: "/api/v1/auth/locale", body: `{"locale":"fr"}`}
+	b.call(t, guest, locale, http.StatusUnauthorized)
+	b.call(t, current, locale, http.StatusUnprocessableEntity)
+	locale.body = `{"locale":"en"}`
+	b.call(t, current, locale, http.StatusNoContent)
+	if profile := read[struct{ Locale string }](t, b.call(t, current, me, http.StatusOK)); profile.Locale != "en" {
+		t.Errorf("set account mail locale to %q, want en", profile.Locale)
+	}
+	locale.body = `{}`
+	b.call(t, current, locale, http.StatusNoContent)
+	if profile := read[struct{ Locale string }](t, b.call(t, current, me, http.StatusOK)); profile.Locale != "" {
+		t.Errorf("reset account mail locale to %q, want the school default", profile.Locale)
+	}
+
+	email := request{
+		method: http.MethodPost, path: "/api/v1/auth/email",
+		body: `{"newEmail":"` + abandoned + `","password":"` + demoPassword + `"}`,
+	}
+	b.call(t, guest, email, http.StatusUnauthorized)
+	b.call(t, current, email, http.StatusAccepted)
+	abandonedToken := mailToken(t, b, abandoned, "change-email", "/confirm-email-change")
+
+	password := request{
+		method: http.MethodPost, path: "/api/v1/auth/password",
+		body: `{"currentPassword":"wrong fixture password","newPassword":"` + newPassword + `"}`,
+	}
+	b.call(t, guest, password, http.StatusUnauthorized)
+	wrong := b.call(t, current, password, http.StatusUnprocessableEntity)
+	if !bytes.Contains(wrong.body, []byte("body.currentPassword")) {
+		t.Error("wrong password error must identify currentPassword")
+	}
+	password.body = `{"currentPassword":"` + demoPassword + `","newPassword":"` + newPassword + `"}`
+	b.call(t, current, password, http.StatusNoContent)
+	b.call(t, current, me, http.StatusOK)
+	b.call(t, other, me, http.StatusUnauthorized)
+	confirm := request{
+		method: http.MethodPost, path: "/api/v1/auth/email/confirm",
+		body: `{"token":"` + abandonedToken + `"}`,
+	}
+	b.call(t, guest, confirm, http.StatusGone)
+
+	email.body = `{"newEmail":"` + demoAdmin + `","password":"` + newPassword + `"}`
+	taken := b.call(t, current, email, http.StatusAccepted)
+	email.body = `{"newEmail":" ` + newEmail + ` ","password":"` + newPassword + `","locale":null}`
+	free := b.call(t, current, email, http.StatusAccepted)
+	if !bytes.Equal(taken.body, free.body) {
+		t.Error("email change response depends on whether the address is already taken")
+	}
+	if profile := read[struct{ Email string }](t, b.call(t, current, me, http.StatusOK)); profile.Email != demoMember {
+		t.Fatalf("email before confirmation: %q, want %q", profile.Email, demoMember)
+	}
+	token := mailToken(t, b, newEmail, "change-email", "/confirm-email-change")
+	confirm.body = `{"token":"` + token + `"}`
+	b.call(t, guest, confirm, http.StatusNoContent)
+	b.call(t, guest, confirm, http.StatusGone)
+	if profile := read[struct{ Email string }](t, b.call(t, current, me, http.StatusOK)); profile.Email != newEmail {
+		t.Fatalf("email after confirmation: %q, want %q", profile.Email, newEmail)
+	}
+	login(t, b, guest, newEmail, newPassword)
+
+	outbox := read[struct {
+		Mails []struct{ To, Template string }
+	}](t, b.fixture(t, http.MethodGet, "outbox", "", http.StatusOK))
+	var passwordNotices, emailNotices int
+	for _, mail := range outbox.Mails {
+		switch {
+		case mail.Template == "change-email" && mail.To == demoAdmin:
+			t.Error("email change queued a link to a taken address")
+		case mail.Template == "password-changed" && mail.To == demoMember:
+			passwordNotices++
+		case mail.Template == "email-changed" && mail.To == demoMember:
+			emailNotices++
+		}
+	}
+	if passwordNotices != 1 || emailNotices != 1 {
+		t.Errorf("old address received %d password and %d email change notices, want one of each", passwordNotices, emailNotices)
+	}
+}
+
 func loginRateLimit(t *testing.T, b *backend) {
 	t.Helper()
 
