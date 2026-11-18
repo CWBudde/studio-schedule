@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StudioSchedule;
 
+use Closure;
 use InvalidArgumentException;
 use RuntimeException;
 use StudioSchedule\Http\TrustedProxies;
@@ -30,15 +31,9 @@ final readonly class Config
     /** @param (callable(string): ?string)|null $environment */
     public static function load(string $file, ?callable $environment = null): self
     {
-        $fileValues = self::readFile($file);
-        $environment ??= static function (string $key): ?string {
-            $value = getenv($key);
-            return $value === false ? null : $value;
-        };
+        $get = self::lookup($file, $environment);
 
-        $get = static fn(string $key): string => trim($environment($key) ?? $fileValues[$key] ?? '');
-
-        [$baseURL, $basePath, $secure] = self::base($get('BASE_URL'));
+        [$baseURL, $basePath, $secure] = self::parseBaseURL($get('BASE_URL'));
         $logFormat = $get('LOG_FORMAT') ?: 'text';
         if (!in_array($logFormat, ['text', 'json'], true)) {
             throw new InvalidArgumentException('LOG_FORMAT must be text or json');
@@ -61,6 +56,21 @@ final readonly class Config
             $logLevel,
             TrustedProxies::parse($get('TRUSTED_PROXIES')),
         );
+    }
+
+    /**
+     * @param (callable(string): ?string)|null $environment
+     * @return Closure(string): string
+     */
+    public static function lookup(string $file, ?callable $environment = null): Closure
+    {
+        $fileValues = self::readFile($file);
+        $environment ??= static function (string $key): ?string {
+            $value = getenv($key);
+            return $value === false ? null : $value;
+        };
+
+        return static fn(string $key): string => trim($environment($key) ?? $fileValues[$key] ?? '');
     }
 
     public function cookieName(): string
@@ -90,7 +100,7 @@ final readonly class Config
     }
 
     /** @return array{string,string,bool} */
-    private static function base(string $raw): array
+    public static function parseBaseURL(string $raw): array
     {
         if ($raw === '') {
             return ['', '', false];

@@ -1423,7 +1423,9 @@ backends.
       `vapid-keys`, `healthcheck`, `doctor`, `db check`) as PHP console commands in
       `bin/studio-schedule`. The admin commands of Phase 11 and the MCP server of Phase 12 stay
       Go-only (ADR 0023: no remote mode; a school on PostgreSQL runs the Go binary against its
-      database, a school on MySQL uses the web UI)
+      database, a school on MySQL uses the web UI). The PHP executable provides `init` against a
+      current schema and `healthcheck` at the configured base path. The other operator commands
+      are open.
 - [ ] `db:copy` (command and installer action): copies a complete database into an empty one of
       another kind, MySQL/MariaDB → PostgreSQL and back, at the same schema version, in one
       transaction on the target, then runs the `db check` checks there and rolls back on a

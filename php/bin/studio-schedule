@@ -1,0 +1,21 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use StudioSchedule\Console\Operator;
+
+if (version_compare(PHP_VERSION, '8.3.0', '<') || PHP_INT_SIZE < 8) {
+    fwrite(STDERR, "error: Studio Schedule requires 64-bit PHP 8.3 or later.\n");
+    exit(1);
+}
+
+$appDirectory = dirname(__DIR__);
+$autoload = $appDirectory . '/vendor/autoload.php';
+if (!is_file($autoload)) {
+    fwrite(STDERR, "error: Studio Schedule's PHP dependencies are not installed.\n");
+    exit(1);
+}
+require $autoload;
+
+exit((new Operator($appDirectory))->run(array_slice($argv, 1), STDIN, STDOUT, STDERR));
