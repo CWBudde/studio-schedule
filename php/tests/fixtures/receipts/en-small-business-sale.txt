@@ -1,0 +1,17 @@
+Studio Demo Dance School
+Pirouette Lane 7
+10999 Exampletown
+Payment received from
+Anna Example
+Number SD-2026-0001
+Date 21 Oct 2026
+Payment Cash
+Receipt
+We confirm receipt of the following payment:
+Item Description Qty Unit price Amount
+1 10-visit pass for Anna Example, valid 21 Oct 2026 – 18 Apr 2027 1 €120.00 €120.00
+Total €120.00
+No VAT is charged under the small business rule (§ 19 UStG).
+Paid in cash.
+Studio Demo Dance School · Pirouette Lane 7, 10999 Exampletown · Tax number 99/999/99999 · Email office@studio-demo.example · Phone
++49 000 0000000 · Bank: Example Bank · IBAN XX00 0000 0000 0000 0000 00

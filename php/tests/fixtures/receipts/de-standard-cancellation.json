@@ -1,0 +1,50 @@
+{
+  "title": "Stornobeleg SD-2026-0002",
+  "date": {
+    "year": 2026,
+    "month": 10,
+    "day": 21
+  },
+  "lang": "de",
+  "heading": "Stornobeleg",
+  "issuer": {
+    "name": "Studio Demo Dance School",
+    "lines": ["Pirouette Lane 7", "10999 Exampletown"]
+  },
+  "logo": "",
+  "recipientLabel": "Erstattet an",
+  "recipient": ["Anna Example"],
+  "meta": [
+    ["Nummer", "SD-2026-0002"],
+    ["Datum", "21.10.2026"],
+    ["Zahlungsart", "Überweisung"],
+    ["Storno zu", "SD-2026-0001 vom 21.10.2026"]
+  ],
+  "intro": "Hiermit stornieren wir die Quittung SD-2026-0001 vom 21.10.2026:",
+  "showVat": true,
+  "columns": ["Pos.", "Beschreibung", "Menge", "Einzelpreis", "USt.", "Betrag"],
+  "lines": [
+    {
+      "pos": "1",
+      "description": "10-visit pass für Mia Example, gültig 21.10.2026 – 18.04.2027",
+      "quantity": "1",
+      "unit": "−120,00 €",
+      "vat": "19 %",
+      "total": "−120,00 €"
+    }
+  ],
+  "summary": [
+    ["Nettobetrag (19 % USt.)", "−100,84 €"],
+    ["Umsatzsteuer 19 %", "−19,16 €"]
+  ],
+  "total": ["Gesamtbetrag", "−120,00 €"],
+  "notes": ["Per Überweisung erstattet.", "Grund: Doppelt verkauft"],
+  "footer": [
+    "Studio Demo Dance School",
+    "Pirouette Lane 7, 10999 Exampletown",
+    "Steuernummer 99/999/99999",
+    "E-Mail office@studio-demo.example",
+    "Tel. +49 000 0000000",
+    "Bank: Example Bank · IBAN XX00 0000 0000 0000 0000 00"
+  ]
+}

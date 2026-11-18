@@ -1384,7 +1384,9 @@ backends.
       The PSR-20 system clock and the money, date and wall-time values have parity tests,
       including DST gaps and repeated times. The Twig renderer and iCalendar writer match the Go
       golden files. Web Push transport uses the upstream encryption and VAPID code and passes the RFC
-      8291 test vector. Receipt rendering and push subscription and delivery jobs are open.
+      8291 test vector. The Twig/mPDF receipt renderer uses the matching Libertinus 7.051
+      TrueType fonts and matches 12 Go text-extraction cases. The receipt API and ledger, push
+      subscriptions and delivery jobs are open.
 - [ ] Web installer at `<base>/setup`, only while `SETUP_TOKEN` is set and with the token on every
       request: checks PHP version, extensions, the database and a writable log directory, migrates
       an empty database, creates the settings and the first admin as `init` does, then refuses a

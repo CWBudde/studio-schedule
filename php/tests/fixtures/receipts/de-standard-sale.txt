@@ -1,0 +1,18 @@
+Studio Demo Dance School
+Pirouette Lane 7
+10999 Exampletown
+Zahlung erhalten von
+Anna Example
+Nummer SD-2026-0001
+Datum 21.10.2026
+Zahlungsart Überweisung
+Quittung
+Wir bestätigen den Erhalt folgender Zahlung:
+Pos. Beschreibung Menge Einzelpreis USt. Betrag
+1 10-visit pass für Mia Example, gültig 21.10.2026 – 18.04.2027 1 120,00 € 19 % 120,00 €
+Nettobetrag (19 % USt.) 100,84 €
+Umsatzsteuer 19 % 19,16 €
+Gesamtbetrag 120,00 €
+Per Überweisung bezahlt.
+Studio Demo Dance School · Pirouette Lane 7, 10999 Exampletown · Steuernummer 99/999/99999 · E-Mail office@studio-demo.example · Tel.
++49 000 0000000 · Bank: Example Bank · IBAN XX00 0000 0000 0000 0000 00

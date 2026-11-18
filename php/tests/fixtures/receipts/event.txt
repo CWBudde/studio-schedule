@@ -1,0 +1,21 @@
+Tanzstudio Beispiel
+Übungsweg 12
+12345 Musterstadt
+Zahlung erhalten von
+Jürgen Öztürk
+Musterstraße 3
+12345 Musterstadt
+Nummer SD-2026-0001
+Datum 24.10.2026
+Zahlungsart Bar
+Quittung
+Wir bestätigen den Erhalt folgender Zahlung:
+Pos. Beschreibung Menge Einzelpreis USt. Betrag
+1 Contemporary-Intensivkurs für Lea Öztürk, 24.10.2026–
+25.10.2026
+1 150,00 € 19 % 150,00 €
+Nettobetrag (19 %) 126,05 €
+Umsatzsteuer 19 % 23,95 €
+Gesamtbetrag 150,00 €
+Betrag bar erhalten. Vielen Dank!
+Tanzstudio Beispiel · Übungsweg 12, 12345 Musterstadt · Steuernummer 12/345/67890 · info@example.org

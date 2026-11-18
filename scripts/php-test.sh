@@ -42,8 +42,10 @@ run_php() {
 		-e STUDIO_PHP_TEST_COMMON_PASSWORDS=/common-passwords.txt \
 		-v "$PWD/internal/mail/testdata:/mail-goldens:ro" \
 		-v "$PWD/internal/service/testdata/feeds:/calendar-feeds:ro" \
+		-v "$PWD/internal/pdf/typstwasm/testdata:/receipt-goldens:ro" \
 		-e STUDIO_PHP_TEST_MAIL_GOLDENS=/mail-goldens \
 		-e STUDIO_PHP_TEST_CALENDAR_FEEDS=/calendar-feeds \
+		-e STUDIO_PHP_TEST_RECEIPT_GOLDENS=/receipt-goldens \
 		-e STUDIO_PHP_TEST_POSTGRES_MIGRATIONS=/postgres-migrations \
 		-e COMPOSER_HOME=/tmp/composer -e COMPOSER_CACHE_DIR=/composer-cache \
 		-w /app "$@"

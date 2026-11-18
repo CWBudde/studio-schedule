@@ -1,0 +1,50 @@
+{
+  "title": "Cancellation SD-2026-0002",
+  "date": {
+    "year": 2026,
+    "month": 10,
+    "day": 21
+  },
+  "lang": "en",
+  "heading": "Cancellation",
+  "issuer": {
+    "name": "Studio Demo Dance School",
+    "lines": ["Pirouette Lane 7", "10999 Exampletown"]
+  },
+  "logo": "",
+  "recipientLabel": "Refunded to",
+  "recipient": ["Anna Example"],
+  "meta": [
+    ["Number", "SD-2026-0002"],
+    ["Date", "21 Oct 2026"],
+    ["Payment", "Cash"],
+    ["Cancels", "SD-2026-0001 of 21 Oct 2026"]
+  ],
+  "intro": "This cancels receipt SD-2026-0001 of 21 Oct 2026:",
+  "showVat": false,
+  "columns": ["Item", "Description", "Qty", "Unit price", "VAT", "Amount"],
+  "lines": [
+    {
+      "pos": "1",
+      "description": "10-visit pass for Anna Example, valid 21 Oct 2026 – 18 Apr 2027",
+      "quantity": "1",
+      "unit": "−€120.00",
+      "vat": "0%",
+      "total": "−€120.00"
+    }
+  ],
+  "summary": [],
+  "total": ["Total", "−€120.00"],
+  "notes": [
+    "No VAT is charged under the small business rule (§ 19 UStG).",
+    "Refunded in cash."
+  ],
+  "footer": [
+    "Studio Demo Dance School",
+    "Pirouette Lane 7, 10999 Exampletown",
+    "Tax number 99/999/99999",
+    "Email office@studio-demo.example",
+    "Phone +49 000 0000000",
+    "Bank: Example Bank · IBAN XX00 0000 0000 0000 0000 00"
+  ]
+}

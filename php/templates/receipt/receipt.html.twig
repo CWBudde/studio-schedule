@@ -1,0 +1,99 @@
+{% block body %}
+<style>
+    body { font-family: libertinusserif; font-size: 10.5pt; color: #000; }
+    table { border-collapse: collapse; }
+    .issuer { font-size: 14pt; font-weight: bold; }
+    .muted { color: #5a5a5a; }
+    .company { font-size: 9.5pt; }
+    .recipient-label { font-size: 8.5pt; }
+    .top { width: 100%; }
+    .top td { vertical-align: top; }
+    .meta td { padding: 2.5pt 0 2.5pt 10.5pt; }
+    h1 { font-size: 18pt; margin: 0 0 2pt; }
+    p { margin: 0 0 6pt; }
+    .items { width: 100%; }
+    .items td, .items th { border-bottom: 0.5pt solid #969696; padding: 6pt 4pt; }
+    .items th { border-bottom: 0.8pt solid #000; font-size: 9.5pt; }
+    .totals td { padding: 3pt 4pt; }
+    .totals .total { border-top: 0.8pt solid #000; font-weight: bold; }
+</style>
+<div lang="{{ lang }}">
+    <table class="top"><tr>
+        <td>
+            <span class="issuer">{{ issuer.name }}</span><br>
+            <span class="muted company">{% for line in issuer.lines ?? [] %}{{ line }}<br>{% endfor %}</span>
+        </td>
+        {% if logoDimensions %}
+        <td style="text-align: right; width: 50mm;">
+            <img src="var:receiptLogo" width="{{ logoDimensions.width|number_format(2, '.', '') }}mm"
+                height="{{ logoDimensions.height|number_format(2, '.', '') }}mm">
+        </td>
+        {% endif %}
+    </tr></table>
+
+    <div style="height: 16mm;"></div>
+    <table class="top"><tr>
+        <td>
+            <span class="muted recipient-label">{{ recipientLabel }}</span><br>
+            {% for line in recipient ?? [] %}{{ line }}<br>{% endfor %}
+        </td>
+        <td style="text-align: right;">
+            <table class="meta" align="right">
+                {% for pair in meta ?? [] %}
+                <tr><td class="muted" style="text-align: left;">{{ pair[0] }}</td><td>{{ pair[1] }}</td></tr>
+                {% endfor %}
+            </table>
+        </td>
+    </tr></table>
+
+    <div style="height: 12mm;"></div>
+    <h1>{{ heading }}</h1>
+    {% if intro ?? false %}<p>{{ intro }}</p>{% endif %}
+
+    <table class="items">
+        <thead><tr>
+            {% for column in columns %}
+                {% if showVat or loop.index0 != 4 %}
+                <th style="text-align: {{ loop.index0 < 2 ? 'left' : 'right' }};">{{ column }}</th>
+                {% endif %}
+            {% endfor %}
+        </tr></thead>
+        <tbody>
+            {% for line in lines ?? [] %}
+            <tr>
+                <td>{{ line.pos }}</td>
+                <td>{{ line.description }}</td>
+                <td style="text-align: right;">{{ line.quantity }}</td>
+                <td style="text-align: right; white-space: nowrap;">{{ line.unit }}</td>
+                {% if showVat %}<td style="text-align: right; white-space: nowrap;">{{ line.vat }}</td>{% endif %}
+                <td style="text-align: right; white-space: nowrap;">{{ line.total }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <table class="totals" align="right">
+        {% for row in summary ?? [] %}
+        <tr><td class="muted">{{ row[0] }}</td><td style="text-align: right;">{{ row[1] }}</td></tr>
+        {% endfor %}
+        <tr><td class="total">{{ total[0] }}</td><td class="total" style="text-align: right;">{{ total[1] }}</td></tr>
+    </table>
+
+    <div style="height: 8mm;"></div>
+    {% for note in notes ?? [] %}<p>{{ note }}</p>{% endfor %}
+</div>
+{% endblock %}
+
+{% block footer %}
+<div style="border-top: 0.5pt solid #969696; padding-top: 2pt; font-size: 8pt; color: #5a5a5a;">
+    {% set footerText = (footer ?? [])|join(' · ') %}
+    {% if numberPages %}
+    <table style="width: 100%;"><tr>
+        <td>{{ footerText }}</td>
+        <td style="text-align: right; white-space: nowrap;">{PAGENO} / {nbpg}</td>
+    </tr></table>
+    {% else %}
+    {{ footerText }}
+    {% endif %}
+</div>
+{% endblock %}
