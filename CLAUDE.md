@@ -311,7 +311,9 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   (`just check-wasm-deps`). Keep request
   handlers cheap: the WASM runtime is single-threaded.
 - **Layering:** `httpapi` → `service` → `store` interfaces. Services never import a concrete store.
-  No SQL outside `internal/store/postgres`. `httpapi` maps domain errors (`internal/domain`) to
+  Keep Go SQL in `internal/store/postgres` and PHP SQL in the store layer. A PostgreSQL
+  migration needs a same-version MySQL/MariaDB twin in `php/migrations/mysql`. Run `just php-test`
+  to migrate and compare both schemas on each supported engine. `httpapi` maps domain errors (`internal/domain`) to
   problem+json and holds no business logic.
 - **Transactions:** use `Store.InTx` and never nest it. Helpers take a `store.Tx`; work that must
   wait for the commit (waking a job) goes through `tx.AfterCommit`. Capacity checks

@@ -49,6 +49,17 @@ unique indexes → a generated column that is `NULL` outside the condition plus 
 (MariaDB has no functional indexes); the triggers that keep issued receipts immutable → MySQL
 triggers with `SIGNAL`; advisory locks → `GET_LOCK`/`RELEASE_LOCK` on one dedicated connection.
 
+The shared MySQL/MariaDB migrations store UUIDs as 16 bytes, clock times as microsecond-precision
+`TIME`, and intervals as signed microseconds. Generated binary keys fold ASCII letters only, as
+PostgreSQL does under collation `"C"`, and enforce conditional uniqueness. InnoDB index limits
+bound indexed byte strings. MySQL needs 8.0.19 or later for common CHECK constraint syntax.
+The installation account must be able to create triggers. A host with MySQL binary logging
+enabled must permit this for the installation account. The receipt triggers reject `UPDATE`
+and `DELETE`. Protect archived receipts from `TRUNCATE` by keeping the `DROP` privilege out of
+the account used to serve requests.
+A populated upgrade from before migration 8 needs database time-zone data for named school
+zones. That legacy backfill fails if the database cannot perform the local date conversion.
+
 ### Switching backends and databases: `db:copy`
 
 On PostgreSQL a school switches between Go and PHP without touching its data: both read and write

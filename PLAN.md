@@ -1367,7 +1367,9 @@ backends.
       partial unique indexes, `SIGNAL` triggers for the immutable receipts), the tables for rate
       limits and the readiness cache in both sets, and a CI test that migrates PostgreSQL and
       MySQL to the latest version and compares tables, columns, nullability, keys, unique
-      constraints and checks
+      constraints and checks. The 38 existing PostgreSQL versions have MySQL/MariaDB twins
+      and CI runs the catalog and write-constraint comparisons on both engines. The shared
+      rate-limit and readiness-cache tables are still open.
 - [ ] Shared building blocks: PSR-20 clock and school time zone (never the server zone), UUIDv7
       IDs, `Money`/`Date`/`TimeOfDay` value objects, argon2id through `password_verify` (or
       `sodium_crypto_pwhash_str_verify` where PHP lacks Argon2) on the existing PHC hashes, new

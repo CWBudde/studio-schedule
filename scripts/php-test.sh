@@ -16,10 +16,15 @@ esac
 image=studio-schedule-php-tests
 network="studio-schedule-php-$$"
 container=
+postgres_container=
+postgres_dsn=
 coverage_dir=$(mktemp -d "${TMPDIR:-/tmp}/studio-schedule-php-coverage.XXXXXXXX")
 cleanup() {
 	if [[ -n $container ]]; then
 		docker rm -f "$container" >/dev/null 2>&1 || true
+	fi
+	if [[ -n $postgres_container ]]; then
+		docker rm -f "$postgres_container" >/dev/null 2>&1 || true
 	fi
 	docker network rm "$network" >/dev/null 2>&1 || true
 	rm -rf -- "$coverage_dir"
@@ -32,6 +37,8 @@ mkdir -p "$cache"
 run_php() {
 	docker run --rm --user "$(id -u):$(id -g)" \
 		-v "$PWD/php:/app" -v "$cache:/composer-cache" \
+		-v "$PWD/internal/store/postgres/migrations:/postgres-migrations:ro" \
+		-e STUDIO_PHP_TEST_POSTGRES_MIGRATIONS=/postgres-migrations \
 		-e COMPOSER_HOME=/tmp/composer -e COMPOSER_CACHE_DIR=/composer-cache \
 		-w /app "$@"
 }
@@ -55,7 +62,7 @@ for engine in "${engines[@]}"; do
 	mysql)
 		docker run -d --rm --network "$network" --name "$container" \
 			-e MYSQL_DATABASE=studio -e MYSQL_USER=studio -e MYSQL_PASSWORD=fixture -e MYSQL_ROOT_PASSWORD=fixture \
-			mysql:8.0 >/dev/null
+			mysql:8.0 --skip-log-bin >/dev/null
 		dsn="mysql://studio:fixture@$container:3306/studio"
 		;;
 	mariadb)
@@ -85,8 +92,19 @@ for engine in "${engines[@]}"; do
 	echo "PHP 8.3 on $engine"
 	report="/coverage/$engine.php"
 	run_php --network "$network" -e "STUDIO_PHP_TEST_DATABASE_URL=$dsn" \
-		-v "$coverage_dir:/coverage" "$image" php vendor/bin/phpunit --coverage-php "$report"
+		-v "$coverage_dir:/coverage" "$image" php vendor/bin/phpunit --exclude-group schema-equivalence --coverage-php "$report"
 	reports+=("$report")
+	if [[ $engine == postgres ]]; then
+		postgres_container=$container
+		postgres_dsn=$dsn
+		container=
+		continue
+	fi
+	if [[ -n $postgres_dsn ]]; then
+		echo "Compare postgres and $engine migration schemas"
+		run_php --network "$network" -e "STUDIO_PHP_TEST_POSTGRES_URL=$postgres_dsn" \
+			-e "STUDIO_PHP_TEST_DATABASE_URL=$dsn" "$image" php vendor/bin/phpunit --group schema-equivalence
+	fi
 	docker rm -f "$container" >/dev/null
 	container=
 done
