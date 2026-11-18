@@ -79,6 +79,20 @@ final class InstallerView
             . $backup . '<button type="submit">Apply migrations</button></form>';
     }
 
+    public static function copy(string $path, #[\SensitiveParameter] string $token): string
+    {
+        return self::message('The school is set up and all migrations are applied.')
+            . '<h2>Copy the database</h2>'
+            . self::message('Stop site and scheduled writes before copying. The target must be empty and migrated to this release. Copy between PostgreSQL and either MySQL or MariaDB.')
+            . self::form($path, $token, 'copy')
+            . <<<'HTML'
+                <label>Administrator email<input type="email" name="email" maxlength="254" required autocomplete="username"></label>
+                <label>Administrator password<input type="password" name="password" maxlength="512" required autocomplete="current-password"></label>
+                <label>Target database URL<input type="password" name="targetDatabaseUrl" required autocomplete="off" spellcheck="false"></label>
+                <button type="submit">Copy database</button></form>
+                HTML;
+    }
+
     public static function setupLink(#[\SensitiveParameter] string $url, string $expires): string
     {
         return '<p>The school and its first administrator are set up.</p><p><a href="' . self::escape($url)

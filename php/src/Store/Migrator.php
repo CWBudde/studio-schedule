@@ -104,11 +104,7 @@ final readonly class Migrator
         $connection = Database::connect($this->databaseURL, dedicated: true);
         try {
             $postgres = $connection->getDatabasePlatform() instanceof PostgreSQLPlatform;
-            $lock = $postgres
-                // The default session lock used by the Go Goose provider.
-                ? 'SELECT pg_try_advisory_lock(4097083626)'
-                : "SELECT GET_LOCK(SHA2(CONCAT('studio-schedule:', DATABASE(), ':migrations'), 256), 0)";
-            if (!in_array($connection->fetchOne($lock), [true, 't', 1, '1'], true)) {
+            if (!Database::lockMigrations($connection)) {
                 throw new MigrationError('A database migration is already running');
             }
 

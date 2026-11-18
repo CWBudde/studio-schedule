@@ -26,6 +26,7 @@ final class OperatorTest extends TestCase
         self::assertSame(0, proc_close($process), (string) $error);
         self::assertStringContainsString('init', (string) $out);
         self::assertStringContainsString('healthcheck', (string) $out);
+        self::assertStringContainsString('db:copy', (string) $out);
         self::assertSame('', $error);
     }
 
@@ -69,6 +70,8 @@ final class OperatorTest extends TestCase
             [['init', '--something'], [], 'unknown flag'],
             [['init', '--admin-email'], [], '--admin-email needs a value'],
             [['init'], [], 'no database URL'],
+            [['db:copy'], [], '--target-database-url'],
+            [['db:copy', '--target-database-url=mysql://fixture:secret@db/target'], [], 'no source database URL'],
             [['init', '--database-url='], ['DATABASE_URL' => 'postgresql://fixture:secret@db/studio'], 'no database URL'],
             [['healthcheck'], ['HTTP_ADDR' => 'bad'], 'HTTP_ADDR'],
             [['healthcheck'], ['HTTP_ADDR' => '0'], 'HTTP_ADDR'],

@@ -13,7 +13,9 @@ use StudioSchedule\Service\InvalidSetupInput;
 use StudioSchedule\Service\SchoolSetup;
 use StudioSchedule\Service\SetupInput;
 use StudioSchedule\Service\SystemClock;
+use StudioSchedule\Store\CopyError;
 use StudioSchedule\Store\Database;
+use StudioSchedule\Store\DatabaseCopy;
 use StudioSchedule\Store\IntegrityStore;
 use StudioSchedule\Store\MigrationRecoveryRequired;
 use StudioSchedule\Store\Schema;
@@ -36,7 +38,8 @@ final readonly class Operator
         . "  init          Set up a new school and print the first admin's setup link\n"
         . "  healthcheck   Check the local server's liveness endpoint\n"
         . "  migrate       Apply, roll back or list database migrations\n"
-        . "  db check      Check the data for inconsistencies\n";
+        . "  db check      Check the data for inconsistencies\n"
+        . "  db:copy       Copy the data to an empty database on another engine\n";
 
     public function __construct(
         private string $appDirectory,
@@ -91,6 +94,22 @@ final readonly class Operator
                 );
             }
 
+            if ($command === 'db:copy') {
+                $target = SetupInput::trim($flags['target-database-url'] ?? '');
+                if ($target === '') {
+                    throw new CommandError('db:copy requires --target-database-url', 2);
+                }
+                $source = SetupInput::trim($flags['database-url'] ?? $get('DATABASE_URL'));
+                if ($source === '') {
+                    throw new CommandError('no source database URL. Set DATABASE_URL or use --database-url.', 2);
+                }
+                $copy = new DatabaseCopy($this->postgresDirectory(), $this->appDirectory . '/migrations/mysql');
+                $rows = $copy->copy($source, $target);
+                fwrite($output, "Copied $rows rows. Database integrity checks passed.\n");
+
+                return 0;
+            }
+
             $baseSetting = isset($flags['base-url']) ? '--base-url' : 'BASE_URL';
             $baseInput = SetupInput::trim($flags['base-url'] ?? $get('BASE_URL'));
             try {
@@ -115,7 +134,7 @@ final readonly class Operator
             fwrite($errors, 'error: ' . $error->getMessage() . "\n");
 
             return $error->status;
-        } catch (MigrationRecoveryRequired $error) {
+        } catch (MigrationRecoveryRequired|CopyError $error) {
             fwrite($errors, 'error: ' . $error->getMessage() . "\n");
 
             return 1;
@@ -168,7 +187,7 @@ final readonly class Operator
                 if ($command !== '') {
                     throw new CommandError('unexpected argument', 2);
                 }
-                if (!in_array($arg, ['init', 'healthcheck', 'migrate', 'db'], true)) {
+                if (!in_array($arg, ['init', 'healthcheck', 'migrate', 'db', 'db:copy'], true)) {
                     throw new CommandError('unknown command', 2);
                 }
                 $command = $arg;
@@ -188,6 +207,7 @@ final readonly class Operator
             $known = match ($name) {
                 '--database-url', '--output', '-o' => true,
                 '--base-url' => in_array($command, ['init', 'healthcheck'], true),
+                '--target-database-url' => $command === 'db:copy',
                 '--addr' => $command === 'healthcheck',
                 '--only', '--as' => $command === 'db check',
                 default => $command === 'init' && str_starts_with($name, '--') && isset(self::INIT_FIELDS[substr($name, 2)]),
@@ -236,6 +256,8 @@ final readonly class Operator
             'migrate status' => "Usage: studio-schedule migrate status [--database-url URL]\n",
             'db', 'db check' => "Usage: studio-schedule db check [--database-url URL] [--only CHECKS] [--output text|json]\n"
                 . '  Checks: ' . implode(', ', IntegrityStore::CHECKS) . "\n",
+            'db:copy' => "Usage: studio-schedule db:copy [--database-url URL] --target-database-url URL\n"
+                . "Stop writes to the source and migrate the empty target to the same release before copying.\n",
             default => self::HELP,
         };
     }

@@ -117,7 +117,7 @@ for engine in "${engines[@]}"; do
 	report="/coverage/$engine.php"
 	run_php --network "$network" -e "STUDIO_PHP_TEST_DATABASE_URL=$dsn" \
 		-e "STUDIO_PHP_TEST_INSTALLER_URL=$installer_dsn" \
-		-v "$coverage_dir:/coverage" "$image" php vendor/bin/phpunit --exclude-group schema-equivalence --coverage-php "$report"
+		-v "$coverage_dir:/coverage" "$image" php vendor/bin/phpunit --exclude-group schema-equivalence --exclude-group database-copy --coverage-php "$report"
 	reports+=("$report")
 	if [[ $engine == postgres ]]; then
 		postgres_container=$container
@@ -129,6 +129,12 @@ for engine in "${engines[@]}"; do
 		echo "Compare postgres and $engine migration schemas"
 		run_php --network "$network" -e "STUDIO_PHP_TEST_POSTGRES_URL=$postgres_dsn" \
 			-e "STUDIO_PHP_TEST_DATABASE_URL=$dsn" "$image" php vendor/bin/phpunit --group schema-equivalence
+		echo "Copy database between postgres and $engine"
+		copy_report="/coverage/copy-$engine.php"
+		run_php --network "$network" -e "STUDIO_PHP_TEST_POSTGRES_URL=$postgres_dsn" \
+			-e "STUDIO_PHP_TEST_DATABASE_URL=$dsn" -v "$coverage_dir:/coverage" \
+			"$image" php vendor/bin/phpunit --group database-copy --coverage-php "$copy_report"
+		reports+=("$copy_report")
 	fi
 	docker rm -f "$container" >/dev/null
 	container=

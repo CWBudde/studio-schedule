@@ -44,6 +44,16 @@ final class Database
         return DriverManager::getConnection($params);
     }
 
+    /** The lock shared by PHP migrations and copies and by Go Goose on PostgreSQL. */
+    public static function lockMigrations(Connection $connection): bool
+    {
+        $lock = $connection->getDatabasePlatform() instanceof PostgreSQLPlatform
+            ? 'SELECT pg_try_advisory_lock(4097083626)'
+            : "SELECT GET_LOCK(SHA2(CONCAT('studio-schedule:', DATABASE(), ':migrations'), 256), 0)";
+
+        return in_array($connection->fetchOne($lock), [true, 't', 1, '1'], true);
+    }
+
     /**
      * @template T
      * @param Closure():T $read

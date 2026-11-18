@@ -17,7 +17,9 @@ use StudioSchedule\Service\PasswordHash;
 use StudioSchedule\Service\SchoolSetup;
 use StudioSchedule\Service\SetupInput;
 use StudioSchedule\Service\SystemClock;
+use StudioSchedule\Store\CopyError;
 use StudioSchedule\Store\Database;
+use StudioSchedule\Store\DatabaseCopy;
 use StudioSchedule\Store\JobLocks;
 use StudioSchedule\Store\MigrationRecoveryRequired;
 use StudioSchedule\Store\Migrator;
@@ -31,6 +33,7 @@ final readonly class Installer
         private Config $config,
         private string $migrations,
         private LoggerInterface $logger,
+        private DatabaseCopy $databaseCopy,
     ) {}
 
     public function __invoke(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -71,7 +74,7 @@ final readonly class Installer
             $content = match (true) {
                 !$status['initialized'] => InstallerView::install($path, $token),
                 $status['pending'] !== [] => InstallerView::upgrade($path, $token, $status['pending'], $backupRequired),
-                default => InstallerView::message('The school is set up and all migrations are applied.'),
+                default => InstallerView::copy($path, $token),
             };
 
             return InstallerView::page($response, $content);
@@ -79,7 +82,7 @@ final readonly class Installer
             $this->logError($error);
 
             return self::message($response, $error->getMessage(), 503);
-        } catch (InvalidSetupInput $error) {
+        } catch (InvalidSetupInput|CopyError $error) {
             return self::message($response, $error->getMessage(), 422);
         } catch (AlreadyInitialized) {
             return self::message($response, 'The school is set up already.', 409);
@@ -110,6 +113,8 @@ final readonly class Installer
                 $reply = $this->install($response, $store, $body);
             } elseif ($action === 'upgrade' && $state['initialized'] && $state['pending'] !== []) {
                 $reply = $this->upgrade($response, $store, $body, $backupRequired);
+            } elseif ($action === 'copy' && $state['initialized'] && $state['pending'] === []) {
+                $reply = $this->copy($response, $store, $body);
             } else {
                 $reply = self::message($response, 'The installation state changed. Reload the setup page.', 409);
             }
@@ -146,10 +151,7 @@ final readonly class Installer
         array $body,
         bool $backupRequired,
     ): ResponseInterface {
-        $email = trim(self::field($body, 'email'));
-        $password = self::field($body, 'password');
-        $hash = $email === '' || $password === '' ? null : $store->adminPasswordHash($email);
-        if ($hash === null || strlen($password) > 1024 || !(new PasswordHash())->verify($hash, $password)) {
+        if (!self::authenticated($store, $body)) {
             return self::message($response, 'Enter the email and password of an active administrator.', 403);
         }
 
@@ -161,6 +163,35 @@ final readonly class Installer
         (new Migrator($this->config->databaseURL))->up($this->migrations, backupVerified: $backup);
 
         return self::message($response, 'All migrations were applied.');
+    }
+
+    /** @param array<array-key,mixed> $body */
+    private function copy(ResponseInterface $response, SetupStore $store, #[\SensitiveParameter] array $body): ResponseInterface
+    {
+        if (!self::authenticated($store, $body)) {
+            return self::message($response, 'Enter the email and password of an active administrator.', 403);
+        }
+
+        $target = SetupInput::trim(self::field($body, 'targetDatabaseUrl'));
+        if ($target === '') {
+            return self::message($response, 'Enter the target database URL.', 422);
+        }
+        $rows = $this->databaseCopy->copy($this->config->databaseURL, $target);
+
+        return self::message($response, "Copied $rows rows. Database integrity checks passed.");
+    }
+
+    /** @param array<array-key,mixed> $body */
+    private static function authenticated(SetupStore $store, #[\SensitiveParameter] array $body): bool
+    {
+        $email = trim(self::field($body, 'email'));
+        $password = self::field($body, 'password');
+        if ($email === '' || $password === '' || strlen($password) > 1024) {
+            return false;
+        }
+        $hash = $store->adminPasswordHash($email);
+
+        return $hash !== null && (new PasswordHash())->verify($hash, $password);
     }
 
     /** @return array{initialized:bool,pending:list<string>} */

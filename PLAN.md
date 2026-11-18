@@ -1429,10 +1429,11 @@ backends.
   - [x] `db check` runs the four Go integrity checks in one read-only transaction. The text
         and JSON reports match Go, with exit status 1 when a check finds an inconsistency.
   - [ ] `seed`, `import`, `jobs:run`, `vapid-keys`, and `doctor`.
-- [ ] `db:copy` (command and installer action): copies a complete database into an empty one of
+- [x] `db:copy` (command and installer action): copies a complete database into an empty one of
       another kind, MySQL/MariaDB → PostgreSQL and back, at the same schema version, in one
       transaction on the target, then runs the `db check` checks there and rolls back on a
-      finding. Tested on every direction with the demo seed
+      finding. The demo seed matched in every application table after both round trips, and
+      integrity findings rolled back copies into PostgreSQL and MariaDB.
 - [ ] Release zip, built by CI: `public/` and `app/` (production `vendor/`, the built web UI, both
       migration sets), a GPL-2.0 notice and mPDF's licence (the zip bundles mPDF; `php/` stays
       MIT), and the container image (PHP-FPM + nginx)

@@ -95,10 +95,30 @@ final class InstallerLifecycleTest extends TestCase
             self::assertIsString($hash);
             self::assertTrue((new PasswordHash())->verify($hash, self::PASSWORD));
 
+            $copyPage = $this->request($app, $dsn, 'GET', '/dance/setup', query: ['token' => self::ACCESS_TOKEN]);
+            self::assertSame(200, $copyPage->getStatusCode());
+            self::assertStringContainsString('name="targetDatabaseUrl"', (string) $copyPage->getBody());
+            $copy = ['action' => 'copy', 'token' => self::ACCESS_TOKEN, 'email' => 'FIRST-ADMIN@example.invalid'];
+            $refused = $this->request($app, $dsn, 'POST', '/dance/setup', $copy + [
+                'password' => 'wrong password', 'targetDatabaseUrl' => 'invalid://fixture:copy-secret@example.invalid',
+            ]);
+            self::assertSame(403, $refused->getStatusCode());
+            self::assertStringNotContainsString('copy-secret', (string) $refused->getBody());
+            $missing = $this->request($app, $dsn, 'POST', '/dance/setup', $copy + ['password' => self::PASSWORD]);
+            self::assertSame(422, $missing->getStatusCode());
+            $invalidTarget = $this->request($app, $dsn, 'POST', '/dance/setup', $copy + [
+                'password' => self::PASSWORD, 'targetDatabaseUrl' => 'invalid://fixture:copy-secret@example.invalid',
+            ]);
+            self::assertSame(422, $invalidTarget->getStatusCode());
+            self::assertStringNotContainsString('copy-secret', (string) $invalidTarget->getBody());
+
             file_put_contents($migrations . '/99000_installer_probe.sql', "-- +goose Up\nCREATE TABLE installer_probe (id INTEGER PRIMARY KEY);\n");
             $pending = $this->request($app, $dsn, 'GET', '/dance/setup', query: ['token' => self::ACCESS_TOKEN]);
             self::assertSame(200, $pending->getStatusCode(), (string) $pending->getBody());
             self::assertStringContainsString('99000_installer_probe.sql', (string) $pending->getBody());
+            self::assertStringNotContainsString('name="targetDatabaseUrl"', (string) $pending->getBody());
+            $pendingCopy = $this->request($app, $dsn, 'POST', '/dance/setup', $copy + ['password' => self::PASSWORD]);
+            self::assertSame(409, $pendingCopy->getStatusCode());
             $upgrade = ['action' => 'upgrade', 'token' => self::ACCESS_TOKEN, 'email' => 'FIRST-ADMIN@example.invalid'];
             $bad = $this->request($app, $dsn, 'POST', '/dance/setup', $upgrade + ['password' => 'wrong password']);
             self::assertSame(403, $bad->getStatusCode(), (string) $bad->getBody());

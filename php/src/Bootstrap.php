@@ -30,6 +30,7 @@ use StudioSchedule\Service\PublicSettings;
 use StudioSchedule\Service\SessionAuthentication;
 use StudioSchedule\Service\SystemClock;
 use StudioSchedule\Store\Database;
+use StudioSchedule\Store\DatabaseCopy;
 use StudioSchedule\Store\PasswordResetStore;
 use StudioSchedule\Store\PublicSettingsStore;
 use StudioSchedule\Store\ScheduleStore;
@@ -77,10 +78,13 @@ final class Bootstrap
             $schema = $connection === null ? null : new Schema($connection);
             $scheme = parse_url($config->databaseURL, PHP_URL_SCHEME);
             $postgres = is_string($scheme) && in_array(strtolower($scheme), ['postgresql', 'postgres'], true);
-            $migrations = $postgres ? $postgresMigrations : $appDirectory . '/migrations/mysql';
+            $mysqlMigrations = $appDirectory . '/migrations/mysql';
+            $migrations = $postgres ? $postgresMigrations : $mysqlMigrations;
             $readiness = new DatabaseReadiness($schema, Schema::migrationVersions($migrations), $logger);
 
-            $installer = $config->setupToken === '' ? null : new Installer($config, $migrations, $logger);
+            $installer = $config->setupToken === ''
+                ? null
+                : new Installer($config, $migrations, $logger, new DatabaseCopy($postgresMigrations, $mysqlMigrations));
 
             $commonPasswordFile ??= is_file($appDirectory . '/common-passwords.txt')
                 ? $appDirectory . '/common-passwords.txt'
