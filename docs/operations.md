@@ -417,6 +417,18 @@ A request ID from a trusted proxy is kept when it is 1 to 128 characters of lett
 `-._~:+/=@` (so the proxy's and the app's logs match); otherwise, and from anyone else, the app
 generates one. When a user reports an error, the request ID from the error leads to the log lines.
 
+### PHP shared-hosting archive
+
+The PHP CI job checks `studio-schedule-php.zip` and stores it as the `studio-schedule-php` workflow
+artifact. Extract the ZIP and use `public/` as the document root with `app/` beside it. Configure
+the application through the server environment or `app/config/.env`.
+
+For a subdirectory install, place the public files at the configured `BASE_URL` path. Keep `app/`
+outside the parent website's document root and set `STUDIO_SCHEDULE_APP_DIR` to its absolute path
+in the environment passed to PHP. If a shared Apache host requires `app/` to sit next to the public
+subdirectory under the document root, enable access overrides there so `app/.htaccess` denies
+every HTTP request into it. On nginx, keep the application directory outside every document root.
+
 ### Mail (SMTP)
 
 The app sends mail through any SMTP server, e.g. that of the school's mail provider or a sending

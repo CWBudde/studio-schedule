@@ -15,8 +15,15 @@ if (version_compare(PHP_VERSION, '8.3.0', '<') || PHP_INT_SIZE < 8) {
     exit('Studio Schedule requires 64-bit PHP 8.3 or later.');
 }
 
-$bundle = dirname(__DIR__) . '/app';
+$privateDirectory = (string) getenv('STUDIO_SCHEDULE_APP_DIR');
+$bundle = $privateDirectory === '' ? dirname(__DIR__) . '/app' : $privateDirectory;
 $packaged = is_file($bundle . '/vendor/autoload.php');
+if ($privateDirectory !== '' && !$packaged) {
+    http_response_code(503);
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store');
+    exit('The configured Studio Schedule app directory is unavailable.');
+}
 $appDirectory = $packaged ? $bundle : dirname(__DIR__);
 require $appDirectory . '/vendor/autoload.php';
 
