@@ -437,24 +437,51 @@ func registrationSession(t *testing.T, b *backend) {
 	t.Helper()
 
 	const email = "conformance-new@example.test"
-	const password = "conformance-new-password"
+	const oldPassword = "conformance-first-password"
+	const password = "conformance-renewed-password"
 	client := browser(t)
 	me := request{method: http.MethodGet, path: "/api/v1/auth/me"}
 	b.call(t, client, me, http.StatusUnauthorized)
-	b.call(t, client, request{
+	register := request{
 		method: http.MethodPost, path: "/api/v1/auth/register",
-		body: `{"email":"` + email + `","password":"` + password + `","givenName":"Fixture","familyName":"Member","locale":"en"}`,
-	}, http.StatusAccepted)
+		body: `{"email":"` + demoMember + `","password":"` + oldPassword + `","givenName":"Fixture","familyName":"Member","locale":"en"}`,
+	}
+	known := b.call(t, client, register, http.StatusAccepted)
+	outbox := read[struct {
+		Mails []struct{ To, Template string }
+	}](t, b.fixture(t, http.MethodGet, "outbox", "", http.StatusOK))
+	for _, mail := range outbox.Mails {
+		if mail.To == demoMember && mail.Template == "confirm-email" {
+			t.Fatal("registering an existing account queued a confirmation mail")
+		}
+	}
+	register.body = strings.Replace(register.body, demoMember, email, 1)
+	created := b.call(t, client, register, http.StatusAccepted)
+	if string(known.body) != string(created.body) {
+		t.Fatal("the registration response depends on whether the account was already confirmed")
+	}
+	staleToken := mailToken(t, b, email, "confirm-email", "/confirm")
 
+	b.fixture(t, http.MethodPut, "clock", `{"now":"2026-10-23T16:00:01Z"}`, http.StatusNoContent)
+	register.body = `{"email":"` + email + `","password":"` + password + `","givenName":"Renewed","familyName":"Member","locale":"de"}`
+	b.call(t, client, register, http.StatusAccepted)
 	token := mailToken(t, b, email, "confirm-email", "/confirm")
+	if token == staleToken {
+		t.Fatal("registering a pending account must issue a different confirmation link")
+	}
 
 	confirm := request{
 		method: http.MethodPost, path: "/api/v1/auth/confirm",
-		body: `{"token":"` + token + `","password":"` + password + `"}`,
+		body: `{"token":"` + staleToken + `","password":"` + password + `"}`,
 	}
+	b.call(t, client, confirm, http.StatusGone)
+	confirm.body = `{"token":"` + token + `","password":"` + oldPassword + `"}`
+	b.call(t, client, confirm, http.StatusUnauthorized)
+	b.call(t, client, me, http.StatusUnauthorized)
+	confirm.body = `{"token":"` + token + `","password":"` + password + `"}`
 	b.call(t, client, confirm, http.StatusOK)
-	account := read[struct{ Email, Role string }](t, b.call(t, client, me, http.StatusOK))
-	if account.Email != email || account.Role != "member" {
+	account := read[struct{ Email, Role, GivenName, Locale string }](t, b.call(t, client, me, http.StatusOK))
+	if account.Email != email || account.Role != "member" || account.GivenName != "Renewed" || account.Locale != "de" {
 		t.Fatalf("signed-in account: %+v", account)
 	}
 
