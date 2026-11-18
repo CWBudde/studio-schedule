@@ -36,3 +36,17 @@ jobs:
           go-version-file: go.mod
       - name: Run conformance tests at the root and under a prefix
         run: ./scripts/conformance-go.sh
+
+  php-fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Pull Git LFS files
+        uses: ./.github/actions/lfs-pull
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Check PHP test controls and seeded reads on all three databases
+        run: ./scripts/conformance-php.sh all --controls-only

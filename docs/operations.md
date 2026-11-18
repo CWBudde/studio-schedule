@@ -325,6 +325,11 @@ shutdown. It uses the PostgreSQL connection from `DATABASE_URL` and needs permis
 a schema. Set `HTTP_ADDR` to a loopback address for the fixture listener. The control routes require
 `Authorization: Bearer <TEST_CONTROL_TOKEN>` and use the app's mount path.
 
+Run `./scripts/conformance-php.sh all --controls-only` on a Linux Docker host to exercise the
+PHP controls and seeded reads on PostgreSQL, MySQL and MariaDB, at both mount paths. The runner
+provisions disposable databases and uses Go's demo seeder as the fixture source. Omit
+`--controls-only` to run the full API conformance suite against PHP.
+
 | Method | Path               | Input and result                                                                         |
 | ------ | ------------------ | ---------------------------------------------------------------------------------------- |
 | PUT    | `/api/test/clock`  | `{"now":"2026-10-23T16:00:00Z"}` sets the test clock and returns 204.                    |

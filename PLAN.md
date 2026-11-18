@@ -1346,8 +1346,10 @@ backends.
       `BASE_URL`, and keep it out of `api/openapi.json`.
   - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 20
         scenarios at the domain root and under `/dance/schedule`.
-  - [ ] PHP test controls and the complete CI runs against both backends, with PHP tested on
-        PostgreSQL, MySQL 8.0 and MariaDB 10.6.
+  - [x] PHP test controls for clock, reset, demo seed and outbox. The CI fixture job exercises
+        them on PostgreSQL, MySQL 8.0 and MariaDB 10.6 at the root and under `/dance/schedule`.
+  - [ ] Run the full API conformance suite in CI against both backends, with PHP tested on all
+        three database engines.
 - [ ] PHP skeleton (Slim 4, 64-bit PHP 8.3+): config from the environment with the names of
       docs/operations.md, else from `app/config/.env` (the environment wins), PSR-3 logging with
       request IDs, problem+json in the shape of `httpapi.ErrorModel`, the middleware chain of
