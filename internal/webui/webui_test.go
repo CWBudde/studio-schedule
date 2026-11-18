@@ -20,7 +20,7 @@ func TestHandler(t *testing.T) {
 		"favicon.svg":      {Data: []byte("<svg/>")},
 		"assets/nested/xx": {Data: []byte("x")},
 	}
-	h := webui.NewHandler(files)
+	h := webui.NewHandler(files, "")
 
 	tests := []struct {
 		method, path string
@@ -85,7 +85,7 @@ func TestPWAFiles(t *testing.T) {
 		"sw.js":                {Data: []byte("self.addEventListener('fetch', () => {})")},
 		"manifest.webmanifest": {Data: []byte(`{"name":"Studio Schedule (demo)"}`)},
 		"icons/icon-192.png":   {Data: []byte("\x89PNG\r\n\x1a\n")},
-	})
+	}, "")
 
 	for path, want := range map[string][2]string{
 		"/sw.js":                {"text/javascript; charset=utf-8", "no-cache"},

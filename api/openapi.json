@@ -7250,7 +7250,7 @@
             "$ref": "#/components/schemas/CalendarFeed"
           },
           "path": {
-            "description": "The feed's path below the app's origin, /ical/{token}.ics.",
+            "description": "The feed's path below the app's origin, including the app's base path.",
             "type": "string"
           },
           "token": {

@@ -22,14 +22,14 @@ const healthcheckTimeout = 3 * time.Second
 const healthPath = "/healthz"
 
 func newHealthcheckCmd(env config.LookupFunc) *cobra.Command {
-	var addr string
+	var addr, baseURL string
 
 	cmd := &cobra.Command{
 		Use:   "healthcheck",
 		Short: "Check that the local server answers (for container health checks)",
 		Long: "Request " + healthPath + " from the server on this host, at the port of the listen address " +
 			"(" + config.EnvHTTPAddr + " or --addr, as for serve), and exit with status 0 if it answers 200 " +
-			"OK, 1 otherwise. The container image's HEALTHCHECK runs it.",
+			"OK, 1 otherwise. The path follows " + config.EnvBaseURL + " or --base-url. The container image's HEALTHCHECK runs it.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			var flags config.Flags
@@ -37,17 +37,24 @@ func newHealthcheckCmd(env config.LookupFunc) *cobra.Command {
 				flags.HTTPAddr = &addr
 			}
 
+			if cmd.Flags().Changed(config.FlagBaseURL) {
+				flags.BaseURL = &baseURL
+			}
+
 			cfg, err := config.LoadWithoutLog(env, flags)
 			if err != nil {
 				return err
 			}
 
-			return healthcheck(cmd.Context(), healthURL(cfg.HTTPAddr))
+			return healthcheck(cmd.Context(), healthURL(cfg.HTTPAddr, cfg.BasePath()))
 		},
 	}
 
 	cmd.Flags().StringVar(&addr, config.FlagHTTPAddr, config.DefaultHTTPAddr,
 		"listen address host:port of the server (env "+config.EnvHTTPAddr+")")
+
+	cmd.Flags().StringVar(&baseURL, config.FlagBaseURL, "",
+		"public URL of the app, for its base path (env "+config.EnvBaseURL+")")
 
 	return cmd
 }
@@ -55,14 +62,14 @@ func newHealthcheckCmd(env config.LookupFunc) *cobra.Command {
 // healthURL is the health endpoint of a server listening on the validated
 // address addr: an unspecified host (":8080", "0.0.0.0:8080", "[::]:8080")
 // is reached on 127.0.0.1, a specific one directly.
-func healthURL(addr string) string {
+func healthURL(addr, basePath string) string {
 	host, port, _ := net.SplitHostPort(addr) // validated by config.Load
 
 	if ip, err := netip.ParseAddr(host); host == "" || err == nil && ip.IsUnspecified() {
 		host = "127.0.0.1"
 	}
 
-	return (&url.URL{Scheme: "http", Host: net.JoinHostPort(host, port), Path: healthPath}).String()
+	return (&url.URL{Scheme: "http", Host: net.JoinHostPort(host, port), Path: basePath + healthPath}).String()
 }
 
 // healthcheck requests target and fails unless it answers 200 OK in time.

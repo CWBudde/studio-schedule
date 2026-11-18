@@ -570,7 +570,7 @@ studio-schedule config check --base-url https://schedule.example.org --output js
 Flags:
 
 - `--addr` (string, default `:8080`): listen address host:port (env `HTTP_ADDR`)
-- `--base-url` (string): public origin of the app, e.g. https://schedule.example.org (env `BASE_URL`)
+- `--base-url` (string): public URL of the app, e.g. https://example.org/schedule (env `BASE_URL`)
 - `--log-format` (string, default `text`): log format: text or json (env `LOG_FORMAT`)
 - `--log-level` (string, default `info`): log level: debug, info, warn or error (env `LOG_LEVEL`)
 - `--metrics-addr` (string): listen address host:port of the Prometheus metrics (/metrics); empty: no metrics (env `METRICS_ADDR`)
@@ -636,7 +636,7 @@ studio-schedule doctor --output json
 Flags:
 
 - `--addr` (string, default `:8080`): listen address host:port (env `HTTP_ADDR`)
-- `--base-url` (string): public origin of the app, e.g. https://schedule.example.org (env `BASE_URL`)
+- `--base-url` (string): public URL of the app, e.g. https://example.org/schedule (env `BASE_URL`)
 - `--log-format` (string, default `text`): log format: text or json (env `LOG_FORMAT`)
 - `--log-level` (string, default `info`): log level: debug, info, warn or error (env `LOG_LEVEL`)
 - `--metrics-addr` (string): listen address host:port of the Prometheus metrics (/metrics); empty: no metrics (env `METRICS_ADDR`)
@@ -737,11 +737,12 @@ Check that the local server answers (for container health checks).
 studio-schedule healthcheck [flags]
 ```
 
-Request /healthz from the server on this host, at the port of the listen address (`HTTP_ADDR` or `--addr`, as for serve), and exit with status 0 if it answers 200 OK, 1 otherwise. The container image's HEALTHCHECK runs it.
+Request /healthz from the server on this host, at the port of the listen address (`HTTP_ADDR` or `--addr`, as for serve), and exit with status 0 if it answers 200 OK, 1 otherwise. The path follows `BASE_URL` or `--base-url`. The container image's HEALTHCHECK runs it.
 
 Flags:
 
 - `--addr` (string, default `:8080`): listen address host:port of the server (env `HTTP_ADDR`)
+- `--base-url` (string): public URL of the app, for its base path (env `BASE_URL`)
 
 Access: an operator command. It acts as no account and refuses `--as`.
 
@@ -789,7 +790,7 @@ Flags:
 - `--admin-email` (string): Email address of the first admin
 - `--admin-family-name` (string): Family name of the first admin
 - `--admin-given-name` (string): Given name of the first admin
-- `--base-url` (string): public origin of the app that the setup link points to (env `BASE_URL`)
+- `--base-url` (string): public URL of the app that the setup link points to (env `BASE_URL`)
 - `--currency` (string): Currency (ISO 4217)
 - `--locale` (string): Default language (en or de)
 - `--school-name` (string): School name
@@ -1523,7 +1524,7 @@ Run the HTTP server (API and web UI). Every setting can also be given as an envi
 Flags:
 
 - `--addr` (string, default `:8080`): listen address host:port (env `HTTP_ADDR`)
-- `--base-url` (string): public origin of the app, e.g. https://schedule.example.org (env `BASE_URL`)
+- `--base-url` (string): public URL of the app, e.g. https://example.org/schedule (env `BASE_URL`)
 - `--log-format` (string, default `text`): log format: text or json (env `LOG_FORMAT`)
 - `--log-level` (string, default `info`): log level: debug, info, warn or error (env `LOG_LEVEL`)
 - `--metrics-addr` (string): listen address host:port of the Prometheus metrics (/metrics); empty: no metrics (env `METRICS_ADDR`)

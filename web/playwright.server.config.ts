@@ -10,7 +10,8 @@ import { defineConfig, devices } from '@playwright/test';
 // MAILPIT_SMTP (host:port). The script hands the database to this config as
 // DATABASE_URL.
 const port = Number(process.env.E2E_SERVER_PORT ?? 8090);
-const baseURL = `http://localhost:${port}`;
+const basePath = process.env.E2E_BASE_PATH ?? '';
+const baseURL = `http://localhost:${port}${basePath}/`;
 const ci = !!process.env.CI;
 
 const databaseURL = process.env.DATABASE_URL;
@@ -48,7 +49,7 @@ export default defineConfig({
       // Warnings and errors show in the test output.
       LOG_LEVEL: process.env.LOG_LEVEL ?? 'warn',
     },
-    url: `${baseURL}/readyz`,
+    url: `${baseURL}readyz`,
     // A server left running would be one without this run's database.
     reuseExistingServer: false,
     stderr: 'pipe',

@@ -1331,12 +1331,13 @@ backends.
         level, PHP-CS-Fixer), and a release zip with `vendor/` and the built web UI (2026-11-18)
         — as written; the zip has `public/` (document root or subdirectory) and `app/` (code,
         `vendor/`, both migration sets, `config/.env` where the host sets no environment)
-- [ ] Base path, in Go and the web UI first: `BASE_URL` may carry a path
+- [x] Base path, in Go and the web UI first: `BASE_URL` may carry a path
       (`https://example.org/schedule`), which prefixes `/api/v1`, `/ical`, `/healthz`, `/readyz`,
       the SPA and its assets, the web manifest, the service worker's scope, and the links in mails,
       feeds and `init`'s output. Under a path the cookie is `studio_session` with `Path=<prefix>`
       and `Secure` (`__Host-` needs `Path=/`). Unit tests, an e2e run under a prefix
-      (`web/e2e-server`), docs/operations.md (ADR 0023)
+      (`web/e2e-server`), docs/operations.md (ADR 0023). The same production build passes the server
+      suite at the domain root and under `/dance/schedule`, including the offline app shell.
 - [ ] Conformance suite (Go, black-box, against a `BASE_URL`): it ports the scenarios of
       `internal/app/*_test.go` and `servicetest` to HTTP and checks every response against
       `api/openapi.json`. It needs a test control API under `/api/test/…`, registered only with

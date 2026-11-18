@@ -63,6 +63,8 @@ type Deps struct {
 	// HostCookie names the session cookie HostSessionCookie instead of
 	// SessionCookie; it needs SecureCookies.
 	HostCookie bool
+	// BasePath is the mount path without a trailing slash. Empty means root.
+	BasePath string
 	// Demo enables the demo endpoints: the outbox as a public mailbox and
 	// the list of DemoLogins.
 	Demo       bool

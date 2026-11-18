@@ -11,6 +11,14 @@ jobs:
   # with Mailpit catching the mails (scripts/e2e-server.sh).
   test-e2e-server:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - install: root
+            base-path: ""
+          - install: subdirectory
+            base-path: /dance/schedule
     services:
       postgres:
         image: postgres:18-alpine
@@ -31,6 +39,7 @@ jobs:
           - 1025:1025
           - 8025:8025
     env:
+      E2E_BASE_PATH: ${{ matrix.base-path }}
       E2E_DATABASE_URL: postgres://studio:smoke@localhost:5432/studio?sslmode=disable
       MAILPIT_URL: http://localhost:8025
       MAILPIT_SMTP: localhost:1025
@@ -85,7 +94,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-server
+          name: playwright-report-server-${{ matrix.install }}
           path: |
             web/playwright-report
             web/test-results

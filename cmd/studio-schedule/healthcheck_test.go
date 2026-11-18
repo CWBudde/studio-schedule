@@ -71,6 +71,28 @@ func TestHealthcheck(t *testing.T) {
 	}
 }
 
+func TestHealthcheckUnderBasePath(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/dance/schedule/healthz" {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := execute(map[string]string{
+		"HTTP_ADDR": srv.Listener.Addr().String(),
+		"BASE_URL":  "https://school.example.test/dance/schedule/",
+	}, "healthcheck")
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestHealthcheckTimesOut(t *testing.T) {
 	t.Parallel()
 
@@ -94,7 +116,7 @@ func TestHealthURL(t *testing.T) {
 		"10.0.0.5:8080":  "http://10.0.0.5:8080/healthz",
 		"localhost:8080": "http://localhost:8080/healthz",
 	} {
-		if got := healthURL(addr); got != want {
+		if got := healthURL(addr, ""); got != want {
 			t.Errorf("healthURL(%q) = %q, want %q", addr, got, want)
 		}
 	}

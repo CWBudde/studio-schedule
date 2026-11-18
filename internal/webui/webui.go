@@ -7,8 +7,10 @@
 package webui
 
 import (
+	"bytes"
 	"embed"
 	"errors"
+	"html"
 	"io/fs"
 	"net/http"
 	"path"
@@ -30,7 +32,7 @@ func FS() fs.FS {
 
 // Handler serves the embedded UI.
 func Handler() http.Handler {
-	return NewHandler(FS())
+	return NewHandler(FS(), "")
 }
 
 // NewHandler serves the single-page app in files:
@@ -40,8 +42,14 @@ func Handler() http.Handler {
 //     is revalidated on every load (setFileHeaders);
 //   - paths below /api/ and missing files under /assets/ get 404;
 //   - every other GET/HEAD request gets index.html, so client-side routes
-//     survive a reload.
-func NewHandler(files fs.FS) http.Handler {
+//     survive a reload. Its base element points to the given mount path.
+func NewHandler(files fs.FS, basePath string) http.Handler {
+	index, indexErr := fs.ReadFile(files, "index.html")
+	// The production build's asset references are relative to this element.
+	// Resolve them from the app root on every page, including deep links.
+	index = bytes.Replace(index, []byte(`<base href="./">`),
+		[]byte(`<base href="`+html.EscapeString(basePath+"/")+`">`), 1)
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
@@ -73,7 +81,7 @@ func NewHandler(files fs.FS) http.Handler {
 			return
 		}
 
-		serveIndex(w, r, files)
+		serveIndex(w, r, index, indexErr)
 	})
 }
 
@@ -102,8 +110,7 @@ func isFile(files fs.FS, name string) bool {
 	return err == nil && !info.IsDir()
 }
 
-func serveIndex(w http.ResponseWriter, r *http.Request, files fs.FS) {
-	index, err := fs.ReadFile(files, "index.html")
+func serveIndex(w http.ResponseWriter, r *http.Request, index []byte, err error) {
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, fs.ErrNotExist) {

@@ -25,6 +25,6 @@ export function webcalUrl(url: string): string {
  * worker bridge answers.
  */
 export function downloadCalendarFeed(created: NewCalendarFeed): Promise<void> {
-  const address = transport === 'wasm' ? created.path : (created.url ?? created.path);
+  const address = subscriptionUrl(created) ?? created.path;
   return openDownload(`${address}${address.includes('?') ? '&' : '?'}download=true`);
 }

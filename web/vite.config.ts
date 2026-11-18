@@ -25,14 +25,14 @@ const themeColor = '#7f1f35';
 const backgroundColor = '#faf7f2';
 
 /**
- * Links the server's manifest (`GET /manifest.webmanifest`, built from the
- * school's settings) into index.html. The demo has a static one instead,
- * which the PWA plugin generates and links itself.
+ * Gives the server one point to set the mount path for all the relative
+ * assets and for the manifest built from the school's settings.
  */
-function serverManifestLink(base: string): Plugin {
+function serverHead(base: string): Plugin {
   return {
-    name: 'studio-schedule:server-manifest-link',
+    name: 'studio-schedule:server-head',
     transformIndexHtml: () => [
+      { tag: 'base', attrs: { href: base }, injectTo: 'head-prepend' },
       {
         tag: 'link',
         attrs: { rel: 'manifest', href: `${base}manifest.webmanifest` },
@@ -43,10 +43,11 @@ function serverManifestLink(base: string): Plugin {
 }
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
-  // GitHub Pages serves the demo from a sub path, e.g. VITE_BASE=/studio-schedule/
-  const base = process.env.VITE_BASE ?? '/';
+export default defineConfig(({ command, mode }) => {
   const demo = mode === 'demo';
+  // The hosted server build gets its base element from the server at runtime.
+  // GitHub Pages can use a fixed path because it serves the demo directly.
+  const base = demo ? (process.env.VITE_BASE ?? '/') : command === 'build' ? './' : '/';
 
   return {
     base,
@@ -100,7 +101,7 @@ export default defineConfig(({ mode }) => {
         },
         devOptions: { enabled: false },
       }),
-      ...(demo ? [] : [serverManifestLink(base)]),
+      ...(demo ? [] : [serverHead(base)]),
     ],
     resolve: {
       alias: {

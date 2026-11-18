@@ -79,8 +79,8 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   password reset/change and email change in `service/credentials.go`, rate limits in
   `httpapi/ratelimit.go`; ADR 0006; the account's mail language in `SetLocale`, ADR 0008),
   the session cookie middleware in `httpapi/auth.go` (`principalFrom(ctx)`, `sessionTokenFrom(ctx)`;
-  the cookie is `__Host-studio_session` with an https `BASE_URL` (`Deps.HostCookie`), else
-  `studio_session`, so never read it as a Huma `cookie:` input), argon2id in
+  the cookie is `__Host-studio_session` with an HTTPS `BASE_URL` at the root, otherwise
+  `studio_session` scoped to the app's path, so never read it as a Huma `cookie:` input), argon2id in
   `internal/auth/password`. Every new password goes through `checkPassword` (8–256 characters, not
   in the embedded common list `password.IsCommon`; a field error), and a change or reset mails
   `password-changed` (ADR 0004, amendment). Mails: render with `internal/mail` and call `enqueueMail` inside the

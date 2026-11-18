@@ -143,7 +143,7 @@ type NewCalendarFeed struct {
 	Feed CalendarFeed `json:"feed"`
 	// The secret is shown only here.
 	Token string `doc:"The feed's secret token; it is not shown again."                                          json:"token"`
-	Path  string `doc:"The feed's path below the app's origin, /ical/{token}.ics."                             json:"path"`
+	Path  string `doc:"The feed's path below the app's origin, including the app's base path."                             json:"path"`
 	URL   string `doc:"The feed's absolute URL to subscribe to; absent if the server does not know its own URL, and in a demo installation (calendars cannot reach the web demo): download the path instead." json:"url,omitempty"`
 }
 
@@ -161,7 +161,7 @@ func (h *handlers) createCalendarFeed(ctx context.Context, in *CreateCalendarFee
 	}
 
 	return &NewCalendarFeedOutput{Body: NewCalendarFeed{
-		Feed: calendarFeedBody(feed.CalendarFeedInfo), Token: feed.Token, Path: feed.Path, URL: feed.URL,
+		Feed: calendarFeedBody(feed.CalendarFeedInfo), Token: feed.Token, Path: h.deps.BasePath + feed.Path, URL: feed.URL,
 	}}, nil
 }
 

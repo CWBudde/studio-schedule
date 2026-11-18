@@ -1,6 +1,9 @@
 import { accounts, expect, signIn, test, waitForMail } from './fixtures';
 
-test('resets a forgotten password with the link from the mail and signs in', async ({ page }) => {
+test('resets a forgotten password with the link from the mail and signs in', async ({
+  page,
+  baseURL,
+}) => {
   // The server delivers its outbox once a minute.
   test.setTimeout(180_000);
   const { email, name } = accounts.reset;
@@ -8,7 +11,7 @@ test('resets a forgotten password with the link from the mail and signs in', asy
   const password = `smoke-reset-${Date.now()}`;
   const since = new Date(Date.now() - 1_000);
 
-  await page.goto('/login');
+  await page.goto('./login');
   await page.getByRole('link', { name: 'Forgot password?' }).click();
   await expect(
     page.getByRole('heading', { level: 1, name: 'Forgot your password?' }),
@@ -20,8 +23,8 @@ test('resets a forgotten password with the link from the mail and signs in', asy
   const text = await waitForMail(email, since);
   const link = /https?:\/\/\S+reset-password\?token=[\w-]+/.exec(text)?.[0];
   expect(link, 'the reset link in the mail').toBeDefined();
-  // The link points to BASE_URL, without the hash routing of the demo.
-  expect(new URL(link!).origin).toBe(new URL(page.url()).origin);
+  // Follow the external link directly, including the production mount path.
+  expect(new URL(link!).pathname).toBe(new URL('./reset-password', baseURL).pathname);
 
   await page.goto(link!);
   await expect(page.getByRole('heading', { level: 1, name: 'Set a new password' })).toBeVisible();

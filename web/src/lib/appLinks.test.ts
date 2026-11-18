@@ -4,6 +4,25 @@ import { appPathOf, splitLinks } from './appLinks';
 describe('appPathOf', () => {
   const here = { origin: 'https://demo.example.org', pathname: '/studio-schedule/' };
 
+  it('matches browser routes within the configured base', () => {
+    expect(
+      appPathOf(
+        'https://demo.example.org/dance/schedule/confirm?token=x',
+        here,
+        'browser',
+        '/dance/schedule/',
+      ),
+    ).toBe('/confirm?token=x');
+    expect(
+      appPathOf(
+        'https://demo.example.org/dance/schedule-other/confirm',
+        here,
+        'browser',
+        '/dance/schedule/',
+      ),
+    ).toBeNull();
+  });
+
   it('maps a hash-routed link of the app to its route', () => {
     expect(
       appPathOf('https://demo.example.org/studio-schedule/#/confirm?token=a%2Bb', here, 'hash'),

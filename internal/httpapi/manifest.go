@@ -99,13 +99,20 @@ func (h *handlers) getWebManifest(ctx context.Context, _ *struct{}) (*WebManifes
 		return nil, h.toHTTPError(ctx, err)
 	}
 
+	root := h.deps.BasePath + "/"
+	icons := make([]ManifestIcon, len(ManifestIcons))
+	for i, icon := range ManifestIcons {
+		icon.Src = h.deps.BasePath + icon.Src
+		icons[i] = icon
+	}
+
 	// Strings only: encoding the manifest cannot fail.
 	body, _ := json.Marshal(WebManifest{
-		ID: "/", Name: s.SchoolName, ShortName: s.SchoolName,
+		ID: root, Name: s.SchoolName, ShortName: s.SchoolName,
 		Description: cmp.Or(manifestDescriptions[s.DefaultLocale], manifestDescriptions["en"]),
-		Lang:        s.DefaultLocale, StartURL: "/", Scope: "/", Display: "standalone",
+		Lang:        s.DefaultLocale, StartURL: root, Scope: root, Display: "standalone",
 		ThemeColor: cmp.Or(s.AccentColor, DefaultThemeColor), BackgroundColor: manifestBackground,
-		Icons: ManifestIcons,
+		Icons: icons,
 	})
 
 	return &WebManifestOutput{ContentType: ManifestContentType, CacheControl: ManifestCacheControl, Body: body}, nil

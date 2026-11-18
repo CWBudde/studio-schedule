@@ -2,6 +2,7 @@ import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persi
 import type { Query, QueryClient } from '@tanstack/react-query';
 import type { Persister, PersistQueryClientOptions } from '@tanstack/react-query-persist-client';
 import { createStore, del, get, set, type UseStore } from 'idb-keyval';
+import { appPath, isDemo } from '@/lib/env';
 
 /**
  * The offline cache (ADR 0017): the last public schedule and the family's
@@ -73,7 +74,7 @@ export function indexedDbStorage() {
 export function indexedDbPersister(): Persister {
   return createAsyncStoragePersister({
     storage: indexedDbStorage(),
-    key: CACHE_KEY,
+    key: isDemo || appPath === '/' ? CACHE_KEY : `${CACHE_KEY}:${appPath}`,
     throttleTime: OFFLINE_CACHE_THROTTLE_MS,
   });
 }

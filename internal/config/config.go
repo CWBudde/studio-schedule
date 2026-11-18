@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"path"
 	"regexp"
 	"slices"
 	"strconv"
@@ -115,8 +116,8 @@ type Config struct {
 	DatabaseURL string
 	// HTTPAddr is the host:port the HTTP server listens on.
 	HTTPAddr string
-	// BaseURL is the public origin of the app (scheme://host[:port], no
-	// trailing slash), used to build absolute links. Empty means unset.
+	// BaseURL is the app's public URL, with an optional path and no trailing
+	// slash. It is used to build absolute links. Empty means unset.
 	BaseURL string
 	// Demo explicitly allows running without a database on the in-memory
 	// store with the demo data (DEMO_MODE). The default is false: without a
@@ -522,8 +523,11 @@ func listenHosts(host string) []string {
 	return []string{addr.String()}
 }
 
-// normalizeBaseURL accepts an absolute http(s) origin and strips a trailing
-// slash. Paths are rejected because the app is served from the root.
+// basePathPattern uses unreserved URL characters, which keep the same
+// spelling in links, cookie paths and browser navigation.
+var basePathPattern = regexp.MustCompile(`^(/[a-zA-Z0-9._~-]+)*$`)
+
+// normalizeBaseURL accepts an absolute HTTP(S) URL and strips its trailing slash.
 func normalizeBaseURL(v setting) (string, error) {
 	s, name := v.value, v.source
 	if s == "" {
@@ -541,11 +545,23 @@ func normalizeBaseURL(v setting) (string, error) {
 		return "", fmt.Errorf("%s: has no host", name)
 	case u.User != nil:
 		return "", fmt.Errorf("%s: must not contain credentials", name)
-	case u.Path != "" && u.Path != "/", u.RawQuery != "", u.ForceQuery, u.Fragment != "":
-		return "", fmt.Errorf("%s: must be an origin without path, query or fragment", name)
+	case u.RawQuery != "", u.ForceQuery, strings.Contains(s, "#"):
+		return "", fmt.Errorf("%s: must not contain a query or fragment", name)
+	}
+
+	prefix := strings.TrimSuffix(u.EscapedPath(), "/")
+	if !basePathPattern.MatchString(prefix) || prefix != "" && path.Clean(prefix) != prefix {
+		return "", fmt.Errorf("%s: must have a clean path using only letters, digits, dot, underscore, tilde and hyphen in its segments", name)
 	}
 
 	return strings.TrimSuffix(s, "/"), nil
+}
+
+// BasePath is the URL path at which the server mounts the app, without a
+// trailing slash. It is empty for a root installation.
+func (c Config) BasePath() string {
+	u, _ := url.Parse(c.BaseURL) // validated by Load
+	return u.Path
 }
 
 // Redacted returns a copy of c with passwords in DatabaseURL and SMTP

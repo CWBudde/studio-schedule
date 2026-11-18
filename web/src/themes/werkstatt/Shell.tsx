@@ -53,6 +53,10 @@ export function Shell({ children, banners, announcements, header, footer }: Shel
     <div className="flex min-h-svh flex-col">
       <a
         href="#main"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById('main')?.focus();
+        }}
         className="sr-only z-50 rounded-[3px] bg-primary px-3 py-2 text-primary-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2"
       >
         {t('a11y.skipToContent')}

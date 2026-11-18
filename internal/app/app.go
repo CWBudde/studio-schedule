@@ -43,6 +43,9 @@ type Deps struct {
 	// UI, if set, handles every request that matches no API route
 	// (typically the embedded single-page app).
 	UI http.Handler
+	// BasePath mounts every route below this path, e.g. "/schedule".
+	// Empty mounts the app at the root.
+	BasePath string
 
 	// AppURL is the absolute URL of the web app that links in mails point
 	// to, ending in "/" (or "#/" with hash routing). Registration fails
@@ -74,8 +77,8 @@ type Deps struct {
 	InsecureCookies bool
 	// HostCookie names the session cookie __Host-studio_session instead of
 	// studio_session (ADR 0004, amendment). Set it when the app is served
-	// over HTTPS (BASE_URL is https://); the prefix needs the Secure
-	// attribute, so InsecureCookies turns it off.
+	// over HTTPS at the root. Subdirectory installs need a path-scoped
+	// cookie, and plain HTTP disables the Secure attribute.
 	HostCookie bool
 	// HSTS sends Strict-Transport-Security on every response, telling
 	// browsers to use only HTTPS for a year. Set it only when the app is
@@ -170,6 +173,9 @@ func New(deps Deps) (http.Handler, huma.API) {
 	registerHealth(router, deps)
 
 	cfg := httpapi.NewConfig()
+	if deps.BasePath != "" {
+		cfg.Servers = []*huma.Server{{URL: deps.BasePath}}
+	}
 	cfg.Transformers = append(cfg.Transformers, maskServerErrors(deps.Logger))
 	api := humachi.New(router, cfg)
 
@@ -198,6 +204,7 @@ func New(deps Deps) (http.Handler, huma.API) {
 		Logger:         deps.Logger,
 		SecureCookies:  !deps.InsecureCookies,
 		HostCookie:     deps.HostCookie,
+		BasePath:       deps.BasePath,
 		Demo:           deps.Demo,
 		DemoLogins:     demoLogins(deps.DemoLogins),
 		TrustedProxies: deps.TrustedProxies,
@@ -229,8 +236,11 @@ func New(deps Deps) (http.Handler, huma.API) {
 	h = crossOriginProtection(h)
 	h = recoverer(h, deps.Logger, paths)
 	h = accessLog(h, deps.Logger, deps.Clock, deps.Metrics, paths)
+	if deps.BasePath != "" {
+		h = underBasePath(h, deps.BasePath)
+	}
 	h = requestIDs(h, deps.RequestIDs, deps.TrustedProxies)
-	h = securityHeaders(h, hstsHeader(deps.HSTS, deps.HSTSIncludeSubdomains))
+	h = securityHeaders(h, deps.BasePath, hstsHeader(deps.HSTS, deps.HSTSIncludeSubdomains))
 
 	return h, api
 }
@@ -355,7 +365,7 @@ const contentSecurityPolicy = "default-src 'self'; " +
 // without frame-ancestors), no URL in the Referer of cross-origin requests
 // (reset and confirmation tokens are in URLs), Strict-Transport-Security
 // when hsts is not empty, and no caching on the API's answers.
-func securityHeaders(next http.Handler, hsts string) http.Handler {
+func securityHeaders(next http.Handler, basePath, hsts string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Content-Security-Policy", contentSecurityPolicy)
@@ -367,7 +377,7 @@ func securityHeaders(next http.Handler, hsts string) http.Handler {
 			h.Set("Strict-Transport-Security", hsts)
 		}
 
-		if isAPIAnswer(r.URL.Path) {
+		if isAPIAnswer(strings.TrimPrefix(r.URL.Path, basePath)) {
 			// Personal data must not stay in a browser's or proxy's cache, and
 			// a JSON answer opened as a page is a file to save, never content
 			// to render (reflected file download). Operations that serve a

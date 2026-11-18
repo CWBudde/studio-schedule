@@ -78,7 +78,7 @@ func (f *serveFlags) register(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.httpAddr, config.FlagHTTPAddr, config.DefaultHTTPAddr,
 		"listen address host:port (env "+config.EnvHTTPAddr+")")
 	cmd.Flags().StringVar(&f.baseURL, config.FlagBaseURL, "",
-		"public origin of the app, e.g. https://schedule.example.org (env "+config.EnvBaseURL+")")
+		"public URL of the app, e.g. https://example.org/schedule (env "+config.EnvBaseURL+")")
 	cmd.Flags().StringVar(&f.metricsAddr, config.FlagMetricsAddr, "",
 		"listen address host:port of the Prometheus metrics (/metrics); empty: no metrics (env "+
 			config.EnvMetricsAddr+")")
@@ -138,17 +138,19 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	pdf := newPDFRenderer(ctx, clk, logger)
 	defer func() { _ = pdf.Close(context.WithoutCancel(ctx)) }()
 
+	basePath := cfg.BasePath()
 	deps := app.Deps{
-		Store:   st,
-		Clock:   clk,
-		Version: version,
-		Logger:  logger,
-		UI:      webui.Handler(),
-		AppURL:  appURL(cfg),
-		Mailer:  delivery.Mailer,
-		Pusher:  delivery.Pusher,
-		PDF:     pdf,
-		Demo:    demo,
+		Store:    st,
+		Clock:    clk,
+		Version:  version,
+		Logger:   logger,
+		UI:       webui.NewHandler(webui.FS(), basePath),
+		BasePath: basePath,
+		AppURL:   appURL(cfg),
+		Mailer:   delivery.Mailer,
+		Pusher:   delivery.Pusher,
+		PDF:      pdf,
+		Demo:     demo,
 		// Requests wake the background jobs started below.
 		Wake: jobs.NewWaker(),
 
@@ -158,7 +160,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if !demo && !isHTTPS(cfg.BaseURL) {
 		logger.Warn("BASE_URL is not an https:// origin: mail links point to "+deps.AppURL+
 			" and session cookies are not Secure; only acceptable for local development",
-			slog.String("hint", "set "+config.EnvBaseURL+" to the public https origin"))
+			slog.String("hint", "set "+config.EnvBaseURL+" to the public https URL"))
 	}
 	if demo {
 		deps.DemoLogins = seed.DemoLogins()
@@ -295,15 +297,15 @@ func setUpMetrics(ctx context.Context, cfg config.Config, deps *app.Deps, logger
 	}
 }
 
-// setTransportSecurity sets Secure session cookies with the __Host- prefix
-// and HSTS (for the subdomains too with subdomains, HSTS_INCLUDE_SUBDOMAINS)
+// setTransportSecurity sets Secure session cookies (with the __Host-
+// prefix at the root) and HSTS (for the subdomains too with subdomains, HSTS_INCLUDE_SUBDOMAINS)
 // when BASE_URL is https. Plain HTTP is only for local development, where
 // BASE_URL is unset or http://: browsers drop Secure cookies there, and HSTS
 // must not pin the host to HTTPS.
 func setTransportSecurity(deps *app.Deps, baseURL string, subdomains bool) {
 	https := isHTTPS(baseURL)
 	deps.InsecureCookies = !https
-	deps.HostCookie = https
+	deps.HostCookie = https && deps.BasePath == ""
 	deps.HSTS = https
 	deps.HSTSIncludeSubdomains = subdomains
 }

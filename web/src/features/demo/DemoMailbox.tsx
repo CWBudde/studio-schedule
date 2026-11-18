@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { appPathOf, splitLinks } from '@/lib/appLinks';
-import { routerHistory } from '@/lib/env';
+import { appPath, routerHistory } from '@/lib/env';
 import { formatDateTime } from '@/lib/schoolTime';
 import { setDemoMailboxOpen, useDemoMailboxOpen } from './mailboxOpen';
 
@@ -217,7 +217,7 @@ function MailText({ text }: { text: string }) {
     <p className="text-sm break-words whitespace-pre-wrap">
       {splitLinks(text).map((part, i) => {
         if ('text' in part) return part.text;
-        const path = appPathOf(part.url, window.location, routerHistory);
+        const path = appPathOf(part.url, window.location, routerHistory, appPath);
         if (path === null) {
           return (
             <a

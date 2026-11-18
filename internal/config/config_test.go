@@ -161,6 +161,8 @@ func TestLoadValid(t *testing.T) {
 		{"BASE_URL": "http://localhost:8080"},
 		{"BASE_URL": "https://schedule.example.test/"},
 		{"BASE_URL": "HTTPS://schedule.example.test"},
+		{"BASE_URL": "https://schedule.example.test/studio/schedule/"},
+		{"BASE_URL": "https://schedule.example.test/dance-studio_2026/schedule~v1"},
 	} {
 		if _, err := config.Load(env(vars), config.Flags{}); err != nil {
 			t.Errorf("%v: %v", vars, err)
@@ -189,7 +191,14 @@ func TestLoadInvalid(t *testing.T) {
 		{"base url relative", map[string]string{"BASE_URL": "/schedule"}, "BASE_URL"},
 		{"base url no host", map[string]string{"BASE_URL": "https://"}, "BASE_URL"},
 		{"base url scheme", map[string]string{"BASE_URL": "ftp://schedule.example.test"}, "BASE_URL"},
-		{"base url path", map[string]string{"BASE_URL": "https://schedule.example.test/app"}, "BASE_URL"},
+		{"base url dot segment", map[string]string{"BASE_URL": "https://schedule.example.test/app/../studio"}, "BASE_URL"},
+		{"base url double slash", map[string]string{"BASE_URL": "https://schedule.example.test//app"}, "BASE_URL"},
+		{"base url escaped unreserved", map[string]string{"BASE_URL": "https://schedule.example.test/%73tudio"}, "BASE_URL"},
+		{"base url reserved punctuation", map[string]string{"BASE_URL": "https://schedule.example.test/dance!studio"}, "BASE_URL"},
+		{"base url escaped punctuation", map[string]string{"BASE_URL": "https://schedule.example.test/dance%21studio"}, "BASE_URL"},
+		{"base url encoded slash", map[string]string{"BASE_URL": "https://schedule.example.test/app%2Fsub"}, "BASE_URL"},
+		{"base url backslash", map[string]string{"BASE_URL": "https://schedule.example.test/app%5Csub"}, "BASE_URL"},
+		{"base url empty fragment", map[string]string{"BASE_URL": "https://schedule.example.test/app#"}, "BASE_URL"},
 		{"base url query", map[string]string{"BASE_URL": "https://schedule.example.test/?a=b"}, "BASE_URL"},
 		{"base url fragment", map[string]string{"BASE_URL": "https://schedule.example.test/#top"}, "BASE_URL"},
 		{"base url userinfo", map[string]string{"BASE_URL": "https://admin:change-me@schedule.example.test"}, "BASE_URL"},

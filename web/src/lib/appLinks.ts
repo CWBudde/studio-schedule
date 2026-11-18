@@ -14,9 +14,14 @@ export interface Here {
  * The route of the app that url points to, as the router's history takes it
  * (e.g. '/confirm?token=x'), or null for a link elsewhere. With hash history
  * the route is in the hash of the app's own page; with browser history it is
- * any same-origin path.
+ * a same-origin path under the app root.
  */
-export function appPathOf(url: string, here: Here, history: 'hash' | 'browser'): string | null {
+export function appPathOf(
+  url: string,
+  here: Here,
+  history: 'hash' | 'browser',
+  base = '/',
+): string | null {
   let u: URL;
   try {
     u = new URL(url);
@@ -24,7 +29,10 @@ export function appPathOf(url: string, here: Here, history: 'hash' | 'browser'):
     return null;
   }
   if ((u.protocol !== 'http:' && u.protocol !== 'https:') || u.origin !== here.origin) return null;
-  if (history === 'browser') return `${u.pathname}${u.search}${u.hash}`;
+  if (history === 'browser') {
+    if (!u.pathname.startsWith(base)) return null;
+    return `/${u.pathname.slice(base.length)}${u.search}${u.hash}`;
+  }
   if (u.pathname !== here.pathname || !u.hash.startsWith('#/')) return null;
   return u.hash.slice(1);
 }

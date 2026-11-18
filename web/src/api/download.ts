@@ -1,4 +1,4 @@
-import { transport } from '@/lib/env';
+import { appPath, transport } from '@/lib/env';
 import { transportFetch } from './transport';
 
 /**
@@ -10,7 +10,8 @@ import { transportFetch } from './transport';
  */
 export async function openDownload(path: string): Promise<void> {
   if (transport !== 'wasm') {
-    window.open(path, '_blank', 'noopener');
+    const url = path.startsWith('/api/') ? `${appPath}${path.slice(1)}` : path;
+    window.open(url, '_blank', 'noopener');
     return;
   }
 

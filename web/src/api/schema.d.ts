@@ -7034,7 +7034,7 @@ export interface components {
         };
         NewCalendarFeed: {
             feed: components["schemas"]["CalendarFeed"];
-            /** @description The feed's path below the app's origin, /ical/{token}.ics. */
+            /** @description The feed's path below the app's origin, including the app's base path. */
             path: string;
             /** @description The feed's secret token; it is not shown again. */
             token: string;

@@ -354,8 +354,8 @@ func TestInitConfig(t *testing.T) {
 	}{
 		"flag over env": {
 			env:  map[string]string{"DATABASE_URL": "postgres://db.example.test/studio", "BASE_URL": "https://old.example.test"},
-			args: []string{"--base-url", "https://schedule.example.test"},
-			link: "https://schedule.example.test/reset-password?token=",
+			args: []string{"--base-url", "https://schedule.example.test/sub/schedule/"},
+			link: "https://schedule.example.test/sub/schedule/reset-password?token=",
 		},
 		"local server": {
 			env:  map[string]string{"DATABASE_URL": "postgres://db.example.test/studio", "HTTP_ADDR": ":9000"},

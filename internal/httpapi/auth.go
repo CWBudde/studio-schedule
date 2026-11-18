@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
@@ -123,7 +124,7 @@ func sessionTokenFrom(ctx context.Context) string {
 // cookieName is the name of the session cookie of this installation. A
 // cookie of the other name is ignored.
 func (h *handlers) cookieName() string {
-	if h.deps.HostCookie && h.deps.SecureCookies {
+	if h.deps.HostCookie && h.deps.SecureCookies && h.deps.BasePath == "" {
 		return HostSessionCookie
 	}
 
@@ -187,7 +188,7 @@ func (h *handlers) sessionCookie(s service.SignedIn) http.Cookie {
 	return http.Cookie{
 		Name:     h.cookieName(),
 		Value:    s.Token,
-		Path:     "/",
+		Path:     cmp.Or(h.deps.BasePath, "/"),
 		Expires:  s.ExpiresAt.UTC(),
 		HttpOnly: true,
 		Secure:   h.deps.SecureCookies,
@@ -205,7 +206,7 @@ func (h *handlers) expiredCookie(name string) http.Cookie {
 	//nolint:gosec // G124: Secure is off only with InsecureCookies, for local development over HTTP.
 	return http.Cookie{
 		Name:     name,
-		Path:     "/",
+		Path:     cmp.Or(h.deps.BasePath, "/"),
 		Expires:  time.Unix(0, 0).UTC(),
 		MaxAge:   -1,
 		HttpOnly: true,

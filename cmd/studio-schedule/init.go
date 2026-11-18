@@ -107,7 +107,7 @@ func newInitCmdWith(env config.LookupFunc, open storeOpener) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&o.baseURL, config.FlagBaseURL, "",
-		"public origin of the app that the setup link points to (env "+config.EnvBaseURL+")")
+		"public URL of the app that the setup link points to (env "+config.EnvBaseURL+")")
 
 	for _, f := range o.fields() {
 		cmd.Flags().StringVar(f.value, f.flag, "", f.prompt)

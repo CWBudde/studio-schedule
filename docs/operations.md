@@ -32,7 +32,7 @@ Prefer the environment for secrets: flags are visible in the process list.
 | `DATABASE_URL`            | `--database-url` | empty                         | PostgreSQL connection (below); the flag is the global `--database-url` ([Global flags](#global-flags)). Empty: `serve` refuses to start unless `DEMO_MODE=true`. `migrate`, `seed`, `init`, `import`, `doctor` and the commands that act as an account need it.                                                                     |
 | `DEMO_MODE`               | –                | `false`                       | `true` or `false`. Explicit opt-in to run `serve` without a database, on an in-memory store with the fictional demo data and its published demo logins; changes are lost on exit. Never set it in production: a missing `DATABASE_URL` must fail loudly instead of silently becoming the public demo.                               |
 | `HTTP_ADDR`               | `--addr`         | `:8080`                       | Listen address `host:port` of the app (API, web UI, `/healthz`, `/readyz`). `healthcheck` requests this port on the local host.                                                                                                                                                                                                     |
-| `BASE_URL`                | `--base-url`     | `http://localhost:<port>`     | The public origin `scheme://host[:port]`, without path. Links in mails, calendar feed URLs and the link `init` prints point to it. With `https://` the session cookie is `Secure` and every answer carries `Strict-Transport-Security`; with `http://` or unset, `serve` warns at startup.                                          |
+| `BASE_URL`                | `--base-url`     | `http://localhost:<port>`     | The public URL, with an optional path such as `https://example.test/schedule`. Links in mails, calendar feed URLs and the link `init` prints point to it. With `https://` the session cookie is `Secure` and every answer carries `Strict-Transport-Security`; with `http://` or unset, `serve` warns at startup.                   |
 | `TRUSTED_PROXIES`         | –                | empty                         | Reverse proxies in front of the app, as addresses or CIDR prefixes, comma-separated (`10.0.0.0/8,192.0.2.10`). Only their `X-Forwarded-For` and `X-Request-Id` headers are believed. Empty: the connection's address is the client.                                                                                                 |
 | `HSTS_INCLUDE_SUBDOMAINS` | –                | `true`                        | `true` or `false`. With an `https://` `BASE_URL`, `Strict-Transport-Security` covers every subdomain of the host too (`includeSubDomains`); `false` limits it to the app's own host. Turn it off when the app runs on a domain whose other subdomains still serve plain HTTP (see [Reverse proxy and TLS](#reverse-proxy-and-tls)). |
 | `METRICS_ADDR`            | `--metrics-addr` | empty                         | Listen address `host:port` of a separate server for Prometheus metrics at `/metrics`. Empty: no metrics. Must not be the port of `HTTP_ADDR`. Never expose it to the internet.                                                                                                                                                      |
@@ -98,7 +98,8 @@ These go before or after the command, as `studio-schedule --output json doctor` 
 | `import`       | `--map`               | `field=Header`: the column of a field (repeatable), instead of matching the headers by name                                                                                                                             |
 | `import`       | `--notes`             | a further column whose values go into the notes (repeatable)                                                                                                                                                            |
 | `import`       | `--apply`             | import; without it, a dry run that writes nothing                                                                                                                                                                       |
-| `healthcheck`  | `--addr`              | as `HTTP_ADDR`: the port to request `/healthz` at                                                                                                                                                                       |
+| `healthcheck`  | `--addr`              | as `HTTP_ADDR`: the local port for the liveness probe                                                                                                                                                                   |
+| `healthcheck`  | `--base-url`          | as `BASE_URL`: the path of the local liveness probe                                                                                                                                                                     |
 | `config check` | `--addr`              | as for `serve`: the value to check instead of `HTTP_ADDR`                                                                                                                                                               |
 | `config check` | `--base-url`          | as for `serve`, instead of `BASE_URL`                                                                                                                                                                                   |
 | `config check` | `--metrics-addr`      | as for `serve`, instead of `METRICS_ADDR`                                                                                                                                                                               |
@@ -360,6 +361,20 @@ server {
 Keep the `Host` header: the cross-origin protection compares the browser's `Origin` with it, and
 refuses a state-changing request (POST, PUT, DELETE) from any other origin with 403. Don't add
 `Access-Control-Allow-*` headers at the proxy; the app needs none.
+
+#### Hosting at a subdirectory
+
+Set `BASE_URL=https://example.test/schedule` to serve the app at `/schedule/`. Use clean path
+segments made of letters, digits, dots, underscores, tildes or hyphens. Omit query strings and fragments. Forward the
+path to Go intact. In nginx, use `location /schedule/` with `proxy_pass http://127.0.0.1:8080;`
+without a URI and redirect `/schedule` to `/schedule/` at the proxy if it doesn't forward the exact
+path. In Caddy, route `/schedule/*` to `reverse_proxy` without stripping the prefix.
+
+Use paths such as `/schedule/healthz` and `/schedule/readyz` in probes. The `healthcheck` command
+reads `BASE_URL` (or `--base-url`) for the path and connects locally using `HTTP_ADDR` (or `--addr`).
+The browser installs the app and registers the service worker at `/schedule/`. Over HTTPS the
+session cookie is `studio_session` with `Path=/schedule` and `Secure`; at the domain root the
+cookie is `__Host-studio_session`. The same production build supports both layouts.
 
 **`TRUSTED_PROXIES`** lists the proxy's address as the app sees it (`127.0.0.1` for a proxy on the
 same host, the Docker network's prefix such as `172.16.0.0/12` for a proxy container). The app then
@@ -780,7 +795,7 @@ So the order is: migrate, then start the new binary. The old binary stops servin
 restart once the schema is newer, which is why the update replaces it right after `migrate up`.
 
 **Signing in again after the session-cookie upgrade.** From the release that adds the
-`__Host-` prefix, an installation whose `BASE_URL` is `https://` names its session cookie
+`__Host-` prefix, an installation at the root with an `https://` `BASE_URL` names its session cookie
 `__Host-studio_session` instead of `studio_session` ([ADR 0004](decisions/0004-accounts-sessions-and-mail.md),
 amendment). The old cookie is ignored, so everyone signs in again once after that upgrade, and the
 browser is told to delete it on its next request; nothing else changes. The same release ends sessions 30 days after the sign-in (was 90).

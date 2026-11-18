@@ -46,7 +46,7 @@ export async function signIn(
   account: { email: string; name: string },
   password = seedPassword,
 ): Promise<void> {
-  await page.goto('/login');
+  await page.goto('./login');
   await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();
   await page.getByLabel('Email').fill(account.email);
   await page.getByLabel('Password').fill(password);
