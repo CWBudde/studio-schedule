@@ -16,6 +16,8 @@ use RuntimeException;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Response;
 use Slim\Psr7\Stream;
+use StudioSchedule\Bootstrap;
+use StudioSchedule\Http\AfterResponse;
 use StudioSchedule\Http\PasswordResetEndpoint;
 use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Service\CommonPasswords;
@@ -67,7 +69,7 @@ final class PasswordResetTest extends TestCase
     {
         try {
             if (self::$migrated) {
-                foreach (['audit_events', 'outbox_mails', 'push_subscriptions', 'sessions', 'account_tokens', 'account_credentials', 'accounts', 'persons', 'settings'] as $table) {
+                foreach (['job_runs', 'audit_events', 'outbox_mails', 'push_subscriptions', 'sessions', 'account_tokens', 'account_credentials', 'accounts', 'persons', 'settings'] as $table) {
                     $this->db->executeStatement('DELETE FROM ' . $table);
                 }
             }
@@ -135,13 +137,7 @@ final class PasswordResetTest extends TestCase
         $id = $this->id(self::ACCOUNT);
         $other = $this->id(self::OTHER);
         $this->db->executeStatement("UPDATE accounts SET locale = 'de' WHERE id = ?", [$id]);
-        $duration = $this->postgres ? "'0 seconds'" : '0';
-        $expiry = $this->postgres ? "'12 hours'" : '43200000000';
-        $this->db->executeStatement(
-            'INSERT INTO settings (school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time, '
-            . 'release_weeks_ahead, default_visible_days, booking_cutoff, cancellation_cutoff, waitlist_invite_expiry) '
-            . "VALUES ('Beispielstudio', 'UTC', 'en', 'EUR', 'R', 0, '18:00:00', 2, 14, $duration, $duration, $expiry)",
-        );
+        $this->addSettings();
         $this->addCredential();
         $this->addToken('reset-token');
         $this->addToken('other-credential-link', 'change-email');
@@ -162,8 +158,15 @@ final class PasswordResetTest extends TestCase
         );
 
         $this->makeOutboxInsertRetryOnce();
+        $wakes = 0;
+        $wakeMail = function () use (&$wakes): void {
+            self::assertFalse($this->db->isTransactionActive());
+            self::assertSame(1, $this->countRows('outbox_mails'));
+            ++$wakes;
+        };
         try {
-            self::assertSame(204, $this->confirm('reset-token')->getStatusCode());
+            self::assertSame(204, $this->confirm('reset-token', wakeMail: $wakeMail)->getStatusCode());
+            self::assertSame(1, $wakes);
             $attempts = $this->db->fetchOne(
                 $this->postgres ? 'SELECT last_value FROM fixture_reset_attempts' : 'SELECT attempts FROM fixture_reset_attempts',
             );
@@ -178,7 +181,8 @@ final class PasswordResetTest extends TestCase
                 $this->db->executeStatement('DROP TABLE fixture_reset_attempts');
             }
         }
-        self::assertSame(410, $this->confirm('reset-token')->getStatusCode());
+        self::assertSame(410, $this->confirm('reset-token', wakeMail: $wakeMail)->getStatusCode());
+        self::assertSame(1, $wakes);
         self::assertSame('2026-03-25', gmdate('Y-m-d', $this->timestamp('SELECT confirmed_at FROM accounts WHERE id = ?', [$id])));
         $hash = $this->db->fetchOne('SELECT password_hash FROM account_credentials');
         self::assertIsString($hash);
@@ -226,6 +230,65 @@ final class PasswordResetTest extends TestCase
         self::assertSame(410, $this->confirm('disabled')->getStatusCode(), 'An unconfirmed registration needs its confirmation link');
         self::assertNull($this->db->fetchOne('SELECT confirmed_at FROM accounts'));
         self::assertSame(4, $this->countRows('account_tokens'));
+    }
+
+    public function testMountedPasswordResetWakesDeliveryAfterTheResponseIsFinished(): void
+    {
+        $this->migrate();
+        $this->addSettings();
+        $this->addAccount(self::ACCOUNT, self::EMAIL, true);
+        $this->addCredential();
+        $this->addToken('reset-token');
+
+        // Reserve a local port without listening so the attempt is retryable.
+        $socket = stream_socket_server('tcp://127.0.0.1:0', flags: STREAM_SERVER_BIND);
+        self::assertIsResource($socket);
+        try {
+            $address = stream_socket_get_name($socket, false);
+            self::assertIsString($address);
+            $port = parse_url('tcp://' . $address, PHP_URL_PORT);
+            self::assertIsInt($port);
+            $values = [
+                'BASE_URL' => 'http://example.test/dance/schedule',
+                'DATABASE_URL' => self::dsn(),
+                'SMTP_HOST' => '127.0.0.1',
+                'SMTP_PORT' => (string) $port,
+                'SMTP_TLS' => 'none',
+                'SMTP_FROM' => 'studio@example.test',
+                'SMTP_USERNAME' => '',
+                'SMTP_PASSWORD' => '',
+            ];
+            $request = (new ServerRequestFactory())->createServerRequest('POST', $values['BASE_URL'] . '/api/v1/auth/password-reset/confirm')
+                ->withHeader('Content-Type', 'application/json');
+            $request->getBody()->write(json_encode(['token' => 'reset-token', 'password' => self::PASSWORD], JSON_THROW_ON_ERROR));
+            $request->getBody()->rewind();
+            $after = new AfterResponse();
+            $response = Bootstrap::handle(
+                static fn() => $request,
+                dirname(__DIR__),
+                '/missing/studio-web',
+                getenv('STUDIO_PHP_TEST_POSTGRES_MIGRATIONS') ?: dirname(__DIR__, 2) . '/internal/store/postgres/migrations',
+                static fn(string $key): ?string => $values[$key] ?? null,
+                getenv('STUDIO_PHP_TEST_COMMON_PASSWORDS') ?: dirname(__DIR__, 2) . '/internal/auth/password/common-passwords.txt',
+                self::clock(),
+                $after,
+            );
+            self::assertSame(204, $response->getStatusCode());
+            self::assertContains($this->db->fetchOne('SELECT attempts FROM outbox_mails'), [0, '0']);
+            $flushed = false;
+            $after->run(function () use (&$flushed): bool {
+                self::assertSame(0, $this->countRows('job_runs'));
+                $flushed = true;
+
+                return true;
+            });
+            self::assertTrue($flushed);
+            self::assertContains($this->db->fetchOne('SELECT attempts FROM outbox_mails'), [1, '1']);
+            self::assertNull($this->db->fetchOne('SELECT sent_at FROM outbox_mails'));
+            self::assertSame(['ok'], $this->db->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'deliver-mail'"));
+        } finally {
+            fclose($socket);
+        }
     }
 
     public function testResetRechecksTheTokenIfAnotherRequestAlreadySetThePassword(): void
@@ -346,8 +409,9 @@ final class PasswordResetTest extends TestCase
         string $password = self::PASSWORD,
         ?ClockInterface $clock = null,
         ?Connection $connection = null,
+        ?Closure $wakeMail = null,
     ): ResponseInterface {
-        return $this->request(json_encode(['token' => $token, 'password' => $password], JSON_THROW_ON_ERROR), $clock, $connection);
+        return $this->request(json_encode(['token' => $token, 'password' => $password], JSON_THROW_ON_ERROR), $clock, $connection, wakeMail: $wakeMail);
     }
 
     private function request(
@@ -356,6 +420,7 @@ final class PasswordResetTest extends TestCase
         ?Connection $connection = null,
         string $contentType = 'application/json',
         ?StreamInterface $stream = null,
+        ?Closure $wakeMail = null,
     ): ResponseInterface {
         $controller = new PasswordResetEndpoint(new PasswordReset(
             new PasswordResetStore($connection ?? $this->db),
@@ -363,6 +428,7 @@ final class PasswordResetTest extends TestCase
             new CommonPasswords(getenv('STUDIO_PHP_TEST_COMMON_PASSWORDS') ?: __DIR__ . '/../../internal/auth/password/common-passwords.txt'),
             $clock ?? self::clock(),
             new Renderer(),
+            $wakeMail,
         ));
         $request = (new ServerRequestFactory())->createServerRequest('POST', '/api/v1/auth/password-reset/confirm')
             ->withHeader('Content-Type', $contentType)
@@ -402,6 +468,17 @@ final class PasswordResetTest extends TestCase
         $this->db->executeStatement(
             "INSERT INTO accounts (id, person_id, email, role, confirmed_at) VALUES (?, ?, ?, 'admin', ?)",
             [$id, $id, $email, $confirmed ? '2026-03-25 10:15:27' : null],
+        );
+    }
+
+    private function addSettings(): void
+    {
+        $duration = $this->postgres ? "'0 seconds'" : '0';
+        $expiry = $this->postgres ? "'12 hours'" : '43200000000';
+        $this->db->executeStatement(
+            'INSERT INTO settings (school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time, '
+            . 'release_weeks_ahead, default_visible_days, booking_cutoff, cancellation_cutoff, waitlist_invite_expiry) '
+            . "VALUES ('Beispielstudio', 'UTC', 'en', 'EUR', 'R', 0, '18:00:00', 2, 14, $duration, $duration, $expiry)",
         );
     }
 

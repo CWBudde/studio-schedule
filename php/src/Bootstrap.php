@@ -13,6 +13,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
+use StudioSchedule\Http\AfterResponse;
 use StudioSchedule\Http\Application;
 use StudioSchedule\Http\CatalogRoutes;
 use StudioSchedule\Http\EventRoutes;
@@ -24,6 +25,8 @@ use StudioSchedule\Http\Responses;
 use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Http\SessionMiddleware;
 use StudioSchedule\Mail\Renderer;
+use StudioSchedule\Mail\SmtpMailer;
+use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\CommonPasswords;
 use StudioSchedule\Service\DatabaseReadiness;
 use StudioSchedule\Service\PasswordHash;
@@ -57,6 +60,7 @@ final class Bootstrap
         ?callable $environment = null,
         ?string $commonPasswordFile = null,
         ?ClockInterface $clock = null,
+        ?AfterResponse $afterResponse = null,
     ): ResponseInterface {
         $request = null;
         $connection = null;
@@ -84,7 +88,26 @@ final class Bootstrap
             $postgres = is_string($scheme) && in_array(strtolower($scheme), ['postgresql', 'postgres'], true);
             $mysqlMigrations = $appDirectory . '/migrations/mysql';
             $migrations = $postgres ? $postgresMigrations : $mysqlMigrations;
-            $readiness = new DatabaseReadiness($schema, Schema::migrationVersions($migrations), $logger);
+            $expectedVersions = Schema::migrationVersions($migrations);
+            $readiness = new DatabaseReadiness($schema, $expectedVersions, $logger);
+
+            $wakeMail = $afterResponse === null ? null : static function () use ($afterResponse, $appDirectory, $environment, $config, $expectedVersions, $clock, $logger): void {
+                $afterResponse->wake(BackgroundJobs::DELIVER_MAIL, static function () use ($appDirectory, $environment, $config, $expectedVersions, $clock, $logger): void {
+                    $mailer = SmtpMailer::fromEnvironment(Config::lookup($appDirectory . '/config/.env', $environment));
+                    if ($mailer === null) {
+                        return;
+                    }
+
+                    $database = Database::connect($config->databaseURL, dedicated: true);
+                    try {
+                        if ((new DatabaseReadiness(new Schema($database), $expectedVersions, $logger))->ready()) {
+                            (new BackgroundJobs($database, $config->databaseURL, $clock, $logger))->deliverMail($mailer, immediate: true);
+                        }
+                    } finally {
+                        $database->close();
+                    }
+                });
+            };
 
             $installer = $config->setupToken === ''
                 ? null
@@ -96,13 +119,14 @@ final class Bootstrap
             $resetPassword = $connection === null ? null : static function (
                 ServerRequestInterface $request,
                 ResponseInterface $response,
-            ) use ($connection, $commonPasswordFile, $clock): ResponseInterface {
+            ) use ($connection, $commonPasswordFile, $clock, $wakeMail): ResponseInterface {
                 $reset = new PasswordReset(
                     new PasswordResetStore($connection),
                     new PasswordHash(),
                     new CommonPasswords($commonPasswordFile),
                     $clock,
                     new Renderer(),
+                    $wakeMail,
                 );
                 return (new PasswordResetEndpoint($reset))($request, $response);
             };

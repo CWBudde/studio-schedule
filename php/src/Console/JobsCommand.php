@@ -5,23 +5,16 @@ declare(strict_types=1);
 namespace StudioSchedule\Console;
 
 use Closure;
-use DateInterval;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use InvalidArgumentException;
 use Psr\Log\NullLogger;
 use SensitiveParameter;
 use StudioSchedule\Mail\SmtpMailer;
-use StudioSchedule\Receipt\AttachmentStore;
+use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\JobResult;
-use StudioSchedule\Service\JobRunner;
-use StudioSchedule\Service\OutboxDelivery;
 use StudioSchedule\Service\SystemClock;
 use StudioSchedule\Store\Database;
-use StudioSchedule\Store\JobLocks;
-use StudioSchedule\Store\JobRunStore;
-use StudioSchedule\Store\OutboxStore;
 use StudioSchedule\Store\Schema;
-use StudioSchedule\Store\SessionStore;
 
 final readonly class JobsCommand
 {
@@ -59,22 +52,14 @@ final readonly class JobsCommand
                 throw new CommandError($error->getMessage(), 2);
             }
 
-            $clock = new SystemClock();
-            $sessions = new SessionStore($database);
-            $runner = new JobRunner(new JobLocks($dsn), new JobRunStore($database), $clock, new NullLogger());
-            $plan = ['purge-sessions' => ['PT1H', static function () use ($sessions, $clock): void {
-                $sessions->purgeExpired($clock->now());
-            }]];
+            $jobs = new BackgroundJobs($database, $dsn, new SystemClock(), new NullLogger());
+            $plan = [BackgroundJobs::PURGE_SESSIONS => $jobs->purgeSessions(...)];
             if ($mailer !== null) {
-                $attachments = new AttachmentStore($database);
-                $delivery = new OutboxDelivery(new OutboxStore($database), $clock, $mailer, $attachments->find(...));
-                $plan['deliver-mail'] = ['PT1M', static function () use ($delivery): void {
-                    $delivery->deliver();
-                }];
+                $plan[BackgroundJobs::DELIVER_MAIL] = static fn(): ?JobResult => $jobs->deliverMail($mailer);
             }
             $status = 0;
-            foreach ($plan as $name => [$interval, $callback]) {
-                $result = $runner->runDue($name, new DateInterval($interval), $callback);
+            foreach ($plan as $name => $run) {
+                $result = $run();
                 if ($result === JobResult::Failed) {
                     fwrite($errors, "error: $name failed\n");
                     $status = 1;

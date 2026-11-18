@@ -27,10 +27,22 @@ final readonly class JobRunner
             return null;
         }
 
+        return $this->run($name, $job, $every);
+    }
+
+    /** @param callable():void $job */
+    public function runNow(string $name, callable $job): ?JobResult
+    {
+        return $this->run($name, $job, null);
+    }
+
+    /** @param callable():void $job */
+    private function run(string $name, callable $job, ?DateInterval $every): ?JobResult
+    {
         $result = null;
         $acquired = $this->locks->runIfFree($name, function () use ($name, $every, $job, &$result): void {
             $start = $this->clock->now();
-            if ($this->runs->ranSince($name, $start->sub($every))) {
+            if ($every !== null && $this->runs->ranSince($name, $start->sub($every))) {
                 return; // a competing scheduler may just have completed it
             }
 

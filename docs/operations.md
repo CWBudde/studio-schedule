@@ -445,6 +445,10 @@ It purges expired sessions and account links hourly, and processes the mail outb
 `SMTP_HOST` is set. Receipt mail needs a cached PDF. A missing PDF is recorded as a failed
 delivery attempt and follows the outbox retry schedule.
 
+On PHP-FPM, a completed password reset that queues a notification wakes mail delivery after the
+HTTP response has been sent. Cron handles queued mail on other PHP hosts and when the mail job
+is already running.
+
 ### One instance
 
 Run exactly one instance of `serve` per database. The rate limits are counted in the process's

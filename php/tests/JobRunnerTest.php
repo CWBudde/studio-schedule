@@ -64,6 +64,8 @@ final class JobRunnerTest extends TestCase
             });
             self::assertSame(JobResult::Failed, $failed);
             self::assertNull($runner->runDue($name, $interval, $unexpected));
+            self::assertSame(JobResult::Ok, $runner->runNow($name, static function (): void {}));
+            self::assertNull($runner->runDue($name, $interval, $unexpected));
             $clock->time = $clock->time->add($interval);
             $successful = $runner->runDue($name, $interval, static function (): void {});
             self::assertSame(JobResult::Ok, $successful);
@@ -71,6 +73,7 @@ final class JobRunnerTest extends TestCase
             self::assertSame([
                 ['result' => 'skipped', 'error' => null],
                 ['result' => 'failed', 'error' => 'background job failed'],
+                ['result' => 'ok', 'error' => null],
                 ['result' => 'ok', 'error' => null],
             ], $database->fetchAllAssociative('SELECT result, error FROM job_runs ORDER BY started_at, id'));
         } finally {

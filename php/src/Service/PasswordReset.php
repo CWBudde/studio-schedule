@@ -4,18 +4,21 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Service;
 
+use Closure;
 use DateTimeImmutable;
 use Psr\Clock\ClockInterface;
 use StudioSchedule\Mail\Renderer;
 
 final readonly class PasswordReset
 {
+    /** @param (Closure():void)|null $wakeMail */
     public function __construct(
         private PasswordResetPersistence $store,
         private PasswordHash $hasher,
         private CommonPasswords $commonPasswords,
         private ClockInterface $clock,
         private Renderer $mail,
+        private ?Closure $wakeMail = null,
     ) {}
 
     /** Consume a reset link with a password that passed request length validation. */
@@ -33,7 +36,9 @@ final readonly class PasswordReset
 
         $passwordHash = $this->hasher->hash($password);
 
-        return $this->store->transactional(function () use ($candidate, $tokenHash, $passwordHash): PasswordResetResult {
+        $queuedMail = false;
+        $result = $this->store->transactional(function () use ($candidate, $tokenHash, $passwordHash, &$queuedMail): PasswordResetResult {
+            $queuedMail = false;
             // Serialize all reset links for this account. Re-read the token after
             // locking because a competing reset may have consumed it while we hashed.
             $this->store->lockAccount($candidate->id);
@@ -51,10 +56,16 @@ final readonly class PasswordReset
                     'GivenName' => $data['givenName'],
                 ]);
                 $this->store->queuePasswordChanged($account->email, $mail, $now);
+                $queuedMail = true;
             }
 
             return PasswordResetResult::Completed;
         });
+        if ($queuedMail && $this->wakeMail !== null) {
+            ($this->wakeMail)();
+        }
+
+        return $result;
     }
 
     /** @phpstan-assert-if-true !null $account */

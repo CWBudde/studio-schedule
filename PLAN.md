@@ -1363,12 +1363,14 @@ backends.
       `fastcgi_finish_request()`. PHP 8.3 now serves the mounted HTTP shell, validates the Goose
       migration history, and tests the DBAL connection and job lock on PostgreSQL, MySQL 8.0 and
       MariaDB 10.6. PHP accepts existing session cookies, checks impersonation and expires and renews
-      sessions on all three engines. Shared caches, the readiness deadline, metrics, and the
-      after-response job wake are open.
+      sessions on all three engines. Shared caches, the readiness deadline, metrics, and
+      after-response wakes for the remaining jobs are open.
   - [x] Schedule `purge-sessions` and `deliver-mail` through `jobs:run`, with per-job locks and
         history in `job_runs`. SMTP delivery uses the outbox and attaches cached receipt PDFs.
         A deadline for the entire SMTP attempt, receipt generation on cache miss, and the
         remaining jobs are open.
+  - [x] Wake `deliver-mail` after password reset queues a notice and PHP-FPM finishes the HTTP
+        response. Hosts without `fastcgi_finish_request()` deliver the notice through cron.
 - [ ] MySQL/MariaDB schema: `php/migrations/mysql` has one twin per Go migration at the same
       version. Use `DATETIME(6)` in UTC for `timestamptz`, generated columns with unique indexes
       for partial unique indexes, and `SIGNAL` triggers for immutable receipts.

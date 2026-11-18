@@ -164,16 +164,19 @@ final class OperatorTest extends TestCase
             self::assertContains($database->fetchOne('SELECT COUNT(*) FROM accounts'), [1, '1']);
 
             $database->executeStatement("UPDATE account_tokens SET created_at = '2000-01-01 00:00:00', expires_at = '2000-01-01 01:00:00'");
-            [$jobCode, $jobOutput, $jobError] = self::execute(['jobs:run'], ['SMTP_HOST' => '', 'DATABASE_URL' => $dsn], postgresMigrations: $postgresMigrations);
+            $jobEnv = ['SMTP_HOST' => 'localhost', 'SMTP_FROM' => 'cron@example.test', 'SMTP_TLS' => 'none', 'DATABASE_URL' => $dsn];
+            [$jobCode, $jobOutput, $jobError] = self::execute(['jobs:run'], $jobEnv, postgresMigrations: $postgresMigrations);
             self::assertSame(0, $jobCode, $jobError);
             self::assertStringContainsString('purge-sessions', $jobOutput);
+            self::assertStringContainsString('deliver-mail', $jobOutput);
             self::assertSame('', $jobError);
             self::assertSame([], $database->fetchFirstColumn('SELECT account_id FROM account_tokens'));
             self::assertSame(['ok'], $database->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'purge-sessions'"));
-            [$jobCode, $jobOutput, $jobError] = self::execute(['jobs:run'], ['SMTP_HOST' => '', 'DATABASE_URL' => $dsn], postgresMigrations: $postgresMigrations);
+            [$jobCode, $jobOutput, $jobError] = self::execute(['jobs:run'], $jobEnv, postgresMigrations: $postgresMigrations);
             self::assertSame(0, $jobCode, $jobError);
             self::assertSame('', $jobOutput);
             self::assertSame(['ok'], $database->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'purge-sessions'"));
+            self::assertSame(['ok'], $database->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'deliver-mail'"));
         } finally {
             if (!$postgres) {
                 $database->executeStatement('SET FOREIGN_KEY_CHECKS = 0');
