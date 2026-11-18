@@ -21,11 +21,13 @@ use StudioSchedule\Http\Installer;
 use StudioSchedule\Http\MeEndpoint;
 use StudioSchedule\Http\PasswordResetEndpoint;
 use StudioSchedule\Http\PublicSettingsEndpoint;
+use StudioSchedule\Http\PushRoutes;
 use StudioSchedule\Http\Responses;
 use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Http\SessionMiddleware;
 use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Mail\SmtpMailer;
+use StudioSchedule\Push\Sender;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\CommonPasswords;
 use StudioSchedule\Service\DatabaseReadiness;
@@ -40,6 +42,7 @@ use StudioSchedule\Store\DatabaseCopy;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\PasswordResetStore;
 use StudioSchedule\Store\PublicSettingsStore;
+use StudioSchedule\Store\PushSubscriptionStore;
 use StudioSchedule\Store\ScheduleStore;
 use StudioSchedule\Store\Schema;
 use StudioSchedule\Store\SessionStore;
@@ -136,12 +139,16 @@ final class Bootstrap
             if ($connection !== null) {
                 $sessionStore = new SessionStore($connection);
                 $sessions = new SessionMiddleware($config, new SessionAuthentication($sessionStore, $clock));
-                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock): void {
+                $pushSender = static fn(): ?Sender => Sender::fromEnvironment(Config::lookup($appDirectory . '/config/.env', $environment), $clock);
+                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $pushSender): void {
                     $app->get('/api/v1/auth/me', new MeEndpoint($sessionStore));
                     (new PublicSettingsEndpoint(new PublicSettings(new PublicSettingsStore($connection))))->register($app);
                     CatalogRoutes::register($app, new CatalogStore($connection));
                     EventRoutes::register($app, new EventStore($connection), $clock);
                     ScheduleRoutes::register($app, new ScheduleStore($connection), $clock);
+                    $pushRoutes = new PushRoutes(new PushSubscriptionStore($connection), $clock, $pushSender);
+                    $app->get('/api/v1/my/push', $pushRoutes);
+                    $app->map(['POST', 'DELETE'], '/api/v1/my/push/subscriptions', $pushRoutes);
                 };
             }
 

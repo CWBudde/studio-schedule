@@ -1378,7 +1378,7 @@ backends.
         registrations for history.
   - [x] Run `deliver-push` from cron when VAPID is configured. Claim and send up to 50 messages
         per run, apply Go's retry and expiry rules, and remove a subscription on a current 404
-        or 410 response. Subscription endpoints and notification producers are open.
+        or 410 response.
 - [ ] MySQL/MariaDB schema: `php/migrations/mysql` has one twin per Go migration at the same
       version. Use `DATETIME(6)` in UTC for `timestamptz`, generated columns with unique indexes
       for partial unique indexes, and `SIGNAL` triggers for immutable receipts.
@@ -1438,6 +1438,9 @@ backends.
   - [ ] Import, duplicates and merge (ADR 0015)
   - [ ] Privacy, export, anonymisation, retention jobs (ADR 0016)
   - [ ] Web push with VAPID (ADR 0017)
+    - [x] Serve signed-in push status, subscription saves and removal. Refreshing a device keeps
+          its queued messages. Moving it to another account clears them in the same transaction.
+          Waiting-list invite queueing and after-response delivery are open.
   - [ ] Events and workshops (Phase 10)
 - [ ] CLI parity: port the operator commands to the PHP `bin/studio-schedule` executable.
       The Phase 11 admin commands and Phase 12 MCP server stay Go-only (ADR 0023). On PostgreSQL

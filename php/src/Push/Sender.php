@@ -97,15 +97,8 @@ final readonly class Sender
             throw new InvalidArgumentException('webpush: payload exceeds 3993 bytes');
         }
 
-        $point = KeyEncoding::decode($p256dh, 65);
+        $point = KeyEncoding::browserPublicKey($p256dh);
         $auth = KeyEncoding::decode($auth, 16);
-        if ($point[0] !== "\x04" || openssl_pkey_new(['ec' => [
-            'curve_name' => KeyEncoding::CURVE,
-            'x' => substr($point, 1, 32),
-            'y' => substr($point, 33, 32),
-        ]]) === false) {
-            throw new InvalidArgumentException('webpush: browser key is not an uncompressed P-256 point');
-        }
 
         $encoding = ContentEncoding::aes128gcm;
         /** @var array{salt:string,localPublicKey:string,cipherText:string} $encrypted */
