@@ -10,6 +10,7 @@ use InvalidArgumentException;
 use Psr\Log\NullLogger;
 use SensitiveParameter;
 use StudioSchedule\Mail\SmtpMailer;
+use StudioSchedule\Push\Sender;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\JobResult;
 use StudioSchedule\Service\SystemClock;
@@ -46,13 +47,15 @@ final readonly class JobsCommand
                 throw new CommandError('database schema is not up to date: run studio-schedule migrate status');
             }
 
+            $clock = new SystemClock();
             try {
                 $mailer = SmtpMailer::fromEnvironment($environment);
+                $pusher = Sender::fromEnvironment($environment, $clock);
             } catch (InvalidArgumentException $error) {
                 throw new CommandError($error->getMessage(), 2);
             }
 
-            $jobs = new BackgroundJobs($database, $dsn, new SystemClock(), new NullLogger());
+            $jobs = new BackgroundJobs($database, $dsn, $clock, new NullLogger());
             $plan = [
                 BackgroundJobs::PURGE_SESSIONS => $jobs->purgeSessions(...),
                 BackgroundJobs::PURGE_MAIL => $jobs->purgeMail(...),
@@ -60,6 +63,9 @@ final readonly class JobsCommand
             ];
             if ($mailer !== null) {
                 $plan[BackgroundJobs::DELIVER_MAIL] = static fn(): ?JobResult => $jobs->deliverMail($mailer);
+            }
+            if ($pusher !== null) {
+                $plan[BackgroundJobs::DELIVER_PUSH] = static fn(): ?JobResult => $jobs->deliverPush($pusher);
             }
             $status = 0;
             foreach ($plan as $name => $run) {

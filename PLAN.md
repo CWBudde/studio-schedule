@@ -1376,6 +1376,9 @@ backends.
   - [x] Run `purge-mail` and `purge-personal-data` daily from cron, with each purge in one
         transaction. Match Go's retention cutoffs and keep anonymized guest bookings and event
         registrations for history.
+  - [x] Run `deliver-push` from cron when VAPID is configured. Claim and send up to 50 messages
+        per run, apply Go's retry and expiry rules, and remove a subscription on a current 404
+        or 410 response. Subscription endpoints and notification producers are open.
 - [ ] MySQL/MariaDB schema: `php/migrations/mysql` has one twin per Go migration at the same
       version. Use `DATETIME(6)` in UTC for `timestamptz`, generated columns with unique indexes
       for partial unique indexes, and `SIGNAL` triggers for immutable receipts.

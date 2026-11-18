@@ -285,6 +285,7 @@ final class OperatorTest extends TestCase
             self::assertStringContainsString('purge-mail ok', $jobOutput);
             self::assertStringContainsString('purge-personal-data ok', $jobOutput);
             self::assertStringNotContainsString('deliver-mail', $jobOutput);
+            self::assertStringNotContainsString('deliver-push', $jobOutput);
             self::assertSame('', $jobError);
             self::assertSame([], $database->fetchFirstColumn('SELECT account_id FROM account_tokens'));
             self::assertSame(['ok'], $database->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'purge-sessions'"));
@@ -296,6 +297,17 @@ final class OperatorTest extends TestCase
             self::assertSame('', $jobOutput);
             self::assertSame(['ok'], $database->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'purge-sessions'"));
             self::assertSame(['ok'], $database->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'deliver-mail'"));
+            $keys = VapidKeys::generate();
+            $pushEnv = ['DATABASE_URL' => $dsn, 'VAPID_PUBLIC_KEY' => $keys->publicKey(), 'VAPID_SUBJECT' => 'mailto:admin@example.test'];
+            [$jobCode, $jobOutput, $jobError] = self::execute(['jobs:run'], $pushEnv + ['VAPID_PRIVATE_KEY' => 'fixture-secret'], postgresMigrations: $postgresMigrations);
+            self::assertSame(2, $jobCode);
+            self::assertSame('', $jobOutput);
+            self::assertStringContainsString('VAPID_PRIVATE_KEY', $jobError);
+            self::assertStringNotContainsString('fixture-secret', $jobError);
+            [$jobCode, $jobOutput, $jobError] = self::execute(['jobs:run'], $pushEnv + ['VAPID_PRIVATE_KEY' => $keys->privateKey()], postgresMigrations: $postgresMigrations);
+            self::assertSame(0, $jobCode, $jobError);
+            self::assertSame("deliver-push ok\n", $jobOutput);
+            self::assertSame(['ok'], $database->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'deliver-push'"));
         } finally {
             if (!$postgres) {
                 $database->executeStatement('SET FOREIGN_KEY_CHECKS = 0');

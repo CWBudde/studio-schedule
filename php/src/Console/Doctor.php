@@ -14,7 +14,6 @@ use StudioSchedule\Domain\Currency;
 use StudioSchedule\Mail\DeliveryFailure;
 use StudioSchedule\Mail\SmtpMailer;
 use StudioSchedule\Push\Sender;
-use StudioSchedule\Push\VapidKeys;
 use StudioSchedule\Receipt\Document;
 use StudioSchedule\Receipt\Renderer;
 use StudioSchedule\Service\InstallationEnvironment;
@@ -103,29 +102,7 @@ final readonly class Doctor
         }
         $smtp = SmtpMailer::fromEnvironment($get);
 
-        return [$config, $port, $smtp, $smtpHost, $smtpUsername, self::vapid($get)];
-    }
-
-    /** @param Closure(string):string $get */
-    private static function vapid(Closure $get): bool
-    {
-        $public = $get('VAPID_PUBLIC_KEY');
-        $private = $get('VAPID_PRIVATE_KEY');
-        $subject = $get('VAPID_SUBJECT');
-        if ($public === '' && $private === '' && $subject === '') {
-            return false;
-        }
-        if ($public === '' || $private === '' || $subject === '') {
-            throw new InvalidArgumentException('Set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT together');
-        }
-        try {
-            VapidKeys::parse($public, $private);
-        } catch (InvalidArgumentException) {
-            throw new InvalidArgumentException('VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be a matching pair');
-        }
-        Sender::validateSubject($subject);
-
-        return true;
+        return [$config, $port, $smtp, $smtpHost, $smtpUsername, Sender::fromEnvironment($get) !== null];
     }
 
     /** @return list<Check> */

@@ -451,6 +451,11 @@ off. It clears bodies of sent mail older than 30 days and deletes mail records o
 The personal data purge uses the same UTC cutoffs as Go and anonymizes expired guests while
 keeping their bookings and event registrations. Receipt PDFs stay in the database.
 
+With `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` configured, PHP cron also runs
+`deliver-push` for queued notifications. A run takes at most 50 messages, stops retrying a message
+at expiry or after its fifth attempt, and removes subscriptions that the push service reports
+as gone.
+
 On PHP-FPM, a completed password reset that queues a notification wakes mail delivery after the
 HTTP response has been sent. Cron handles queued mail on other PHP hosts and when the mail job
 is already running.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace StudioSchedule\Push;
 
 use Base64Url\Base64Url;
+use Closure;
 use InvalidArgumentException;
 use Minishlink\WebPush\ContentEncoding;
 use Minishlink\WebPush\Encryption;
@@ -35,6 +36,27 @@ final readonly class Sender
     public function publicKey(): string
     {
         return $this->keys->publicKey();
+    }
+
+    /** @param Closure(string):string $get */
+    public static function fromEnvironment(#[SensitiveParameter] Closure $get, ClockInterface $clock = new SystemClock()): ?self
+    {
+        $public = $get('VAPID_PUBLIC_KEY');
+        $private = $get('VAPID_PRIVATE_KEY');
+        $subject = $get('VAPID_SUBJECT');
+        if ($public === '' && $private === '' && $subject === '') {
+            return null;
+        }
+        if ($public === '' || $private === '' || $subject === '') {
+            throw new InvalidArgumentException('Set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT together');
+        }
+        try {
+            $keys = VapidKeys::parse($public, $private);
+        } catch (InvalidArgumentException) {
+            throw new InvalidArgumentException('VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be a matching pair');
+        }
+
+        return new self($keys, $subject, $clock);
     }
 
     public static function validateEndpoint(#[SensitiveParameter] string $endpoint): void
