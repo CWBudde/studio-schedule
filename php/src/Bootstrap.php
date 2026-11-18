@@ -54,6 +54,7 @@ final class Bootstrap
         ?ClockInterface $clock = null,
     ): ResponseInterface {
         $request = null;
+        $connection = null;
         try {
             $request = $makeRequest();
             $clock ??= new SystemClock();
@@ -127,6 +128,8 @@ final class Bootstrap
             $response = Responses::problem($request->withAttribute('requestId', $id), 500, 'internal server error');
 
             return Responses::secure($response, $id);
+        } finally {
+            $connection?->close();
         }
     }
 }
