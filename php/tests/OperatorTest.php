@@ -7,6 +7,7 @@ namespace StudioSchedule\Tests;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\TestCase;
 use StudioSchedule\Console\Operator;
+use StudioSchedule\Push\VapidKeys;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\Migrator;
 use StudioSchedule\Store\Schema;
@@ -28,6 +29,8 @@ final class OperatorTest extends TestCase
         self::assertStringContainsString('healthcheck', (string) $out);
         self::assertStringContainsString('db:copy', (string) $out);
         self::assertStringContainsString('jobs:run', (string) $out);
+        self::assertStringContainsString('doctor', (string) $out);
+        self::assertStringContainsString('vapid-keys', (string) $out);
         self::assertSame('', $error);
     }
 
@@ -72,6 +75,9 @@ final class OperatorTest extends TestCase
             [['init', '--admin-email'], [], '--admin-email needs a value'],
             [['init'], [], 'no database URL'],
             [['jobs:run'], [], 'no database URL'],
+            [['doctor', '--as=private@example.test'], [], 'acts as no account'],
+            [['doctor', '--output=xml'], [], 'output format must be text or json'],
+            [['vapid-keys', 'extra'], [], 'unexpected argument'],
             [['db:copy'], [], '--target-database-url'],
             [['db:copy', '--target-database-url=mysql://fixture:secret@db/target'], [], 'no source database URL'],
             [['init', '--database-url='], ['DATABASE_URL' => 'postgresql://fixture:secret@db/studio'], 'no database URL'],
@@ -90,6 +96,70 @@ final class OperatorTest extends TestCase
         }
     }
 
+    public function testVapidKeysWritesOneMatchingPairInEnvironmentFileFormat(): void
+    {
+        [$code, $output, $error] = self::execute(['vapid-keys'], ['DATABASE_URL' => 'unsupported://fixture:secret@localhost/studio']);
+        self::assertSame(0, $code, $error);
+        self::assertSame('', $error);
+        if (preg_match('/\AVAPID_PUBLIC_KEY=([A-Za-z0-9_-]{87})\nVAPID_PRIVATE_KEY=([A-Za-z0-9_-]{43})\n\z/', $output, $match) !== 1) {
+            self::fail('Expected two VAPID environment assignments');
+        }
+        $pair = VapidKeys::parse($match[1], $match[2]);
+        self::assertSame($match[1], $pair->publicKey());
+        self::assertSame($match[2], $pair->privateKey());
+    }
+
+    public function testDoctorReportsOrderedChecksWithOpaqueConfigAndConnectionErrors(): void
+    {
+        [$report, $code] = self::doctor(['LOG_FORMAT' => 'fixture-secret']);
+        self::assertSame(1, $code);
+        self::assertSame([
+            'config' => 'fail', 'database' => 'skip', 'schema' => 'skip', 'settings' => 'skip',
+            'smtp' => 'skip', 'vapid' => 'skip', 'base-url' => 'skip', 'receipts' => 'ok',
+        ], array_column($report, 'result', 'name'));
+        self::assertStringContainsString('LOG_FORMAT', $report[0]['detail']);
+        self::assertStringNotContainsString('fixture-secret', json_encode($report, JSON_THROW_ON_ERROR));
+
+        [$report, $code] = self::doctor([
+            'DATABASE_URL' => 'postgresql://fixture:fixture-secret@127.0.0.1:1/studio?connect_timeout=1',
+            'BASE_URL' => 'http://public.example.test/dance',
+        ], ['--base-url=http://[::1]:8080/dance']);
+        self::assertSame(1, $code);
+        self::assertSame([
+            'config' => 'ok', 'database' => 'fail', 'schema' => 'skip', 'settings' => 'skip',
+            'smtp' => 'skip', 'vapid' => 'skip', 'base-url' => 'warn', 'receipts' => 'ok',
+        ], array_column($report, 'result', 'name'));
+        self::assertStringNotContainsString('fixture-secret', json_encode($report, JSON_THROW_ON_ERROR));
+    }
+
+    public function testDoctorUsesTheEffectiveBaseUrlAndValidatesThePushPairWithoutDisclosingIt(): void
+    {
+        $keys = VapidKeys::generate();
+        $environment = [
+            'VAPID_PUBLIC_KEY' => $keys->publicKey(), 'VAPID_PRIVATE_KEY' => $keys->privateKey(),
+            'VAPID_SUBJECT' => 'mailto:admin@example.test', 'BASE_URL' => 'http://public.example.test',
+        ];
+        [$report, $code] = self::doctor($environment);
+        self::assertSame(1, $code);
+        self::assertStringContainsString('no database', $report[1]['detail']);
+        self::assertSame('ok', $report[5]['result']);
+        self::assertSame('fail', $report[6]['result']);
+        self::assertStringNotContainsString($keys->privateKey(), json_encode($report, JSON_THROW_ON_ERROR));
+
+        [$report] = self::doctor($environment, ['--base-url=', '--addr=:9876']);
+        self::assertSame('warn', $report[6]['result']);
+        self::assertStringContainsString('http://localhost:9876/', $report[6]['detail']);
+
+        [$report] = self::doctor(['VAPID_PRIVATE_KEY' => 'fixture-secret'] + $environment);
+        self::assertSame('fail', $report[0]['result']);
+        self::assertStringContainsString('matching pair', $report[0]['detail']);
+        self::assertStringNotContainsString('fixture-secret', json_encode($report, JSON_THROW_ON_ERROR));
+
+        [$report] = self::doctor(['VAPID_SUBJECT' => ''] + $environment);
+        self::assertSame('fail', $report[0]['result']);
+        self::assertStringContainsString('VAPID_SUBJECT', $report[0]['detail']);
+    }
+
     public function testInitWritesAOneTimeSetupLinkOnAllSupportedDatabases(): void
     {
         $dsn = getenv('STUDIO_PHP_TEST_DATABASE_URL');
@@ -105,6 +175,12 @@ final class OperatorTest extends TestCase
         $env = ['DATABASE_URL' => $dsn, 'BASE_URL' => 'https://wrong.example', 'LOG_LEVEL' => 'invalid'];
 
         try {
+            $doctorEnv = ['DATABASE_URL' => $dsn, 'BASE_URL' => 'https://schedule.example.org/dance'];
+            [$report, $doctorCode] = self::doctor($doctorEnv, postgresMigrations: $postgresMigrations);
+            self::assertSame(1, $doctorCode);
+            self::assertSame('ok', $report[1]['result']);
+            self::assertSame('fail', $report[2]['result']);
+            self::assertSame('skip', $report[3]['result']);
             $maintenance = self::execute(['jobs:run'], ['SMTP_HOST' => '', 'DATABASE_URL' => $dsn], postgresMigrations: $postgresMigrations);
             self::assertSame(1, $maintenance[0]);
             self::assertStringContainsString('database schema is not up to date', $maintenance[2]);
@@ -114,6 +190,11 @@ final class OperatorTest extends TestCase
             self::assertSame([], $schema->relations());
 
             (new Migrator($dsn))->up($migrations);
+            [$report, $doctorCode] = self::doctor($doctorEnv, postgresMigrations: $postgresMigrations);
+            self::assertSame(1, $doctorCode);
+            self::assertSame('ok', $report[2]['result']);
+            self::assertSame('fail', $report[3]['result']);
+            self::assertStringContainsString('run init', $report[3]['detail']);
             $result = self::execute(['init'], $env, stdin: "Fictional Dance Hall\n", postgresMigrations: $postgresMigrations);
             self::assertSame(1, $result[0]);
             self::assertStringContainsString('missing --timezone', $result[2]);
@@ -153,6 +234,39 @@ final class OperatorTest extends TestCase
             self::assertSame('EUR', $database->fetchOne('SELECT currency FROM settings'));
             self::assertSame('admin', $database->fetchOne('SELECT role FROM accounts'));
             self::assertSame('ada@example.test', $database->fetchOne('SELECT email FROM accounts'));
+            [$report, $doctorCode] = self::doctor($doctorEnv, postgresMigrations: $postgresMigrations);
+            self::assertSame(0, $doctorCode);
+            self::assertSame([
+                'config' => 'ok', 'database' => 'ok', 'schema' => 'ok', 'settings' => 'ok',
+                'smtp' => 'skip', 'vapid' => 'skip', 'base-url' => 'ok', 'receipts' => 'ok',
+            ], array_column($report, 'result', 'name'));
+            self::assertSame('Europe/Berlin, EUR', $report[3]['detail']);
+            self::assertSame('https://schedule.example.org/dance', $report[6]['detail']);
+            [$doctorCode, $doctorText, $doctorError] = self::execute(['doctor'], $doctorEnv, postgresMigrations: $postgresMigrations);
+            self::assertSame(0, $doctorCode);
+            self::assertSame('', $doctorError);
+            self::assertStringStartsWith("config    ok    valid\ndatabase  ok    connected\n", $doctorText);
+
+            $database->executeStatement("UPDATE settings SET timezone = 'Mars/Olympus_Mons'");
+            [$report, $doctorCode] = self::doctor($doctorEnv, postgresMigrations: $postgresMigrations);
+            self::assertSame(1, $doctorCode);
+            self::assertSame('fail', $report[3]['result']);
+            self::assertStringContainsString('unknown timezone', $report[3]['detail']);
+            $database->executeStatement("UPDATE settings SET timezone = 'Europe/Berlin'");
+
+            $database->insert('goose_db_version', ['version_id' => 99999, 'is_applied' => true]);
+            [$report, $doctorCode] = self::doctor($doctorEnv, postgresMigrations: $postgresMigrations);
+            self::assertSame(1, $doctorCode);
+            self::assertStringContainsString('schema is newer', $report[2]['detail']);
+            $database->delete('goose_db_version', ['version_id' => 99999]);
+            if (!$postgres) {
+                $database->insert('goose_db_version', ['version_id' => Schema::UPGRADE_IN_PROGRESS, 'is_applied' => true]);
+                [$report, $doctorCode] = self::doctor($doctorEnv, postgresMigrations: $postgresMigrations);
+                self::assertSame(1, $doctorCode);
+                self::assertStringContainsString('verified pre-upgrade backup', $report[2]['detail']);
+                self::assertSame('skip', $report[3]['result']);
+                $database->delete('goose_db_version', ['version_id' => Schema::UPGRADE_IN_PROGRESS]);
+            }
             self::assertSame(hash('sha256', $token), $database->fetchOne($postgres
                 ? "SELECT encode(token_hash, 'hex') FROM account_tokens"
                 : 'SELECT LOWER(HEX(token_hash)) FROM account_tokens'));
@@ -258,5 +372,21 @@ final class OperatorTest extends TestCase
             fclose($out);
             fclose($error);
         }
+    }
+
+    /**
+     * @param array<string,string> $environment
+     * @param list<string> $arguments
+     * @return array{list<array{name:string,result:string,detail:string}>, int}
+     */
+    private static function doctor(array $environment, array $arguments = [], ?string $postgresMigrations = null): array
+    {
+        [$code, $output, $error] = self::execute(['doctor', '--output=json', ...$arguments], $environment, postgresMigrations: $postgresMigrations);
+        self::assertSame('', $error, $output);
+        /** @var array{ok:bool,checks:list<array{name:string,result:string,detail:string}>} $report */
+        $report = json_decode($output, true, flags: JSON_THROW_ON_ERROR);
+        self::assertSame($code === 0, $report['ok']);
+
+        return [$report['checks'], $code];
     }
 }

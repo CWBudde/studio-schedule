@@ -31,8 +31,12 @@ final readonly class Config
     /** @param (callable(string): ?string)|null $environment */
     public static function load(string $file, ?callable $environment = null): self
     {
-        $get = self::lookup($file, $environment);
+        return self::fromLookup(self::lookup($file, $environment));
+    }
 
+    /** @param Closure(string):string $get */
+    public static function fromLookup(Closure $get): self
+    {
         [$baseURL, $basePath, $secure] = self::parseBaseURL($get('BASE_URL'));
         $logFormat = $get('LOG_FORMAT') ?: 'text';
         if (!in_array($logFormat, ['text', 'json'], true)) {

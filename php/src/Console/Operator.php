@@ -8,6 +8,7 @@ use Doctrine\DBAL\Exception as DatabaseError;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use InvalidArgumentException;
 use StudioSchedule\Config;
+use StudioSchedule\Push\VapidKeys;
 use StudioSchedule\Service\AlreadyInitialized;
 use StudioSchedule\Service\InvalidSetupInput;
 use StudioSchedule\Service\SchoolSetup;
@@ -37,6 +38,8 @@ final readonly class Operator
     private const string HELP = "Usage: studio-schedule [--database-url URL] <command> [flags]\n\n"
         . "  init          Set up a new school and print the first admin's setup link\n"
         . "  healthcheck   Check the local server's liveness endpoint\n"
+        . "  doctor        Check the configuration, database, mail, push keys and PDF renderer\n"
+        . "  vapid-keys    Print a new VAPID key pair for web push\n"
         . "  migrate       Apply, roll back or list database migrations\n"
         . "  db check      Check the data for inconsistencies\n"
         . "  jobs:run      Run due background jobs\n"
@@ -68,6 +71,20 @@ final readonly class Operator
                 fwrite($output, self::help($command));
 
                 return 0;
+            }
+
+            if ($command === 'vapid-keys') {
+                $keys = VapidKeys::generate();
+                $lines = 'VAPID_PUBLIC_KEY=' . $keys->publicKey() . "\nVAPID_PRIVATE_KEY=" . $keys->privateKey() . "\n";
+
+                return fwrite($output, $lines) === strlen($lines) ? 0 : 1;
+            }
+            if ($command === 'doctor') {
+                if (isset($flags['as'])) {
+                    throw new CommandError('--as: studio-schedule doctor acts as no account', 2);
+                }
+
+                return (new Doctor($this->appDirectory, $this->postgresDirectory()))->run($flags, $environment, self::address(...), $output);
             }
 
             $get = Config::lookup($this->appDirectory . '/config/.env', $environment);
@@ -197,7 +214,7 @@ final readonly class Operator
                 if ($command !== '') {
                     throw new CommandError('unexpected argument', 2);
                 }
-                if (!in_array($arg, ['init', 'healthcheck', 'migrate', 'db', 'db:copy', 'jobs:run'], true)) {
+                if (!in_array($arg, ['init', 'healthcheck', 'doctor', 'vapid-keys', 'migrate', 'db', 'db:copy', 'jobs:run'], true)) {
                     throw new CommandError('unknown command', 2);
                 }
                 $command = $arg;
@@ -216,10 +233,12 @@ final readonly class Operator
             }
             $known = match ($name) {
                 '--database-url', '--output', '-o' => true,
-                '--base-url' => in_array($command, ['init', 'healthcheck'], true),
+                '--base-url' => in_array($command, ['init', 'healthcheck', 'doctor'], true),
                 '--target-database-url' => $command === 'db:copy',
-                '--addr' => $command === 'healthcheck',
-                '--only', '--as' => $command === 'db check',
+                '--addr' => in_array($command, ['healthcheck', 'doctor'], true),
+                '--log-format', '--log-level' => $command === 'doctor',
+                '--as' => in_array($command, ['db check', 'doctor'], true),
+                '--only' => $command === 'db check',
                 default => $command === 'init' && str_starts_with($name, '--') && isset(self::INIT_FIELDS[substr($name, 2)]),
             };
             if (!$known) {
@@ -243,10 +262,11 @@ final readonly class Operator
         }
 
         $format = $flags['output'] ?? 'text';
-        if ($command === 'db check' && !in_array($format, ['text', 'json'], true)) {
+        $canPrintJson = in_array($command, ['db check', 'doctor'], true);
+        if ($canPrintJson && !in_array($format, ['text', 'json'], true)) {
             throw new CommandError('output format must be text or json', 2);
         }
-        if ($command !== 'db check' && $format !== 'text') {
+        if (!$canPrintJson && $format !== 'text') {
             throw new CommandError('this command prints text only', 2);
         }
 
@@ -260,6 +280,9 @@ final readonly class Operator
                 . '  ' . implode('  ', array_map(static fn(string $name): string => "--$name VALUE", array_keys(self::INIT_FIELDS))) . "\n"
                 . "Values omitted from the command line are prompted for.\n",
             'healthcheck' => "Usage: studio-schedule healthcheck [--addr HOST:PORT] [--base-url URL]\n",
+            'doctor' => "Usage: studio-schedule doctor [--database-url URL] [--base-url URL] [--addr HOST:PORT] [--output text|json]\n"
+                . "  --log-format text|json  --log-level debug|info|warn|error\n",
+            'vapid-keys' => "Usage: studio-schedule vapid-keys\n",
             'migrate' => "Usage: studio-schedule migrate <up|down|status> [--database-url URL]\n"
                 . "MySQL and MariaDB upgrades and rollbacks require --backup-verified after verifying a full backup.\n",
             'migrate up', 'migrate down' => "Usage: studio-schedule $command [--database-url URL] [--backup-verified]\n",

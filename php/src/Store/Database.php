@@ -23,7 +23,7 @@ final class Database
         'mariadb' => 'pdo_mysql',
     ];
 
-    public static function connect(#[\SensitiveParameter] string $url, bool $dedicated = false): Connection
+    public static function connect(#[\SensitiveParameter] string $url, bool $dedicated = false, ?int $timeoutSeconds = null): Connection
     {
         $driver = self::driverForURL($url);
         if ($driver === null) {
@@ -38,6 +38,9 @@ final class Database
         if ($dedicated) {
             $params['persistent'] = false;
             $params['driverOptions'][PDO::ATTR_PERSISTENT] = false;
+        }
+        if ($timeoutSeconds !== null) {
+            $params['driverOptions'][PDO::ATTR_TIMEOUT] = $timeoutSeconds;
         }
 
         return DriverManager::getConnection($params);

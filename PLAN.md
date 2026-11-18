@@ -1444,7 +1444,11 @@ backends.
         changing an existing schema.
   - [x] `db check` runs the four Go integrity checks in one read-only transaction. The text
         and JSON reports match Go, with exit status 1 when a check finds an inconsistency.
-  - [ ] `seed`, `import`, the remaining `jobs:run` jobs, `vapid-keys`, and `doctor`.
+  - [x] `doctor` checks the PHP configuration, database and migration history, school settings,
+        SMTP login, VAPID keys, the public URL, and sample receipt rendering. It prints the same
+        check order and report format as Go and never sends mail.
+  - [x] `vapid-keys` prints a matching key pair in the environment-file format shared with Go.
+  - [ ] `seed`, `import`, and the remaining `jobs:run` jobs.
 - [x] `db:copy` (command and installer action): copies a complete database into an empty one of
       another kind, MySQL/MariaDB → PostgreSQL and back, at the same schema version, in one
       transaction on the target, then runs the `db check` checks there and rolls back on a

@@ -131,8 +131,19 @@ final class SmtpMailerTest extends TestCase
         self::assertSame(['EHLO'], $commands);
     }
 
+    public function testHealthProbeAuthenticatesAndClosesWithoutSendingMail(): void
+    {
+        [$commands, $failure] = self::exchange('none', 'auth', authenticate: true, verify: true);
+        self::assertNull($failure);
+        self::assertSame(['EHLO', 'AUTH', 'QUIT'], $commands);
+
+        [$commands, $failure] = self::exchange('none', 'plain', authenticate: true, verify: true);
+        self::assertInstanceOf(DeliveryFailure::class, $failure);
+        self::assertSame(['EHLO'], $commands);
+    }
+
     /** @return array{list<string>, ?DeliveryFailure} */
-    private static function exchange(string $mode, string $fixture, bool $authenticate = false): array
+    private static function exchange(string $mode, string $fixture, bool $authenticate = false, bool $verify = false): array
     {
         $server = <<<'PHP_SERVER'
             $listener = stream_socket_server('tcp://127.0.0.1:0');
@@ -197,7 +208,11 @@ final class SmtpMailerTest extends TestCase
             self::assertNotNull($mailer);
             $failure = null;
             try {
-                $mailer->send('member@example.test', 'Subject', 'Plain message.', '');
+                if ($verify) {
+                    $mailer->verify();
+                } else {
+                    $mailer->send('member@example.test', 'Subject', 'Plain message.', '');
+                }
             } catch (DeliveryFailure $error) {
                 $failure = $error;
             }

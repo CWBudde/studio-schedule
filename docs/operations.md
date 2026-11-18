@@ -740,6 +740,12 @@ records it as made via the command line, with the OS user.
   Each exits with status 0 when everything is fine and 1 on a failed check or a finding, which it
   names by record ID, never by personal data. They only read, so they are safe on a live database.
 
+  On PHP, run `php /path/to/app/bin/studio-schedule doctor --output json` to get the deployment
+  report on PostgreSQL, MySQL, or MariaDB. The SMTP check connects and authenticates without
+  sending mail. An interrupted MySQL or MariaDB upgrade appears as a failed `schema` check with
+  backup and restore guidance. `php /path/to/app/bin/studio-schedule vapid-keys` prints the two
+  environment assignments for a new Web Push key pair.
+
 ## Scripted tasks
 
 The commands are made for scripts: text output has one record per line and no header off a

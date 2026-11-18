@@ -6,6 +6,7 @@ namespace StudioSchedule\Mail;
 
 use Closure;
 use InvalidArgumentException;
+use LogicException;
 use SensitiveParameter;
 use Symfony\Component\Mailer\Exception\InvalidArgumentException as TransportArgumentException;
 use Symfony\Component\Mailer\Exception\TransportException;
@@ -125,6 +126,22 @@ final readonly class SmtpMailer implements Mailer
             if ($this->transport instanceof EsmtpTransport) {
                 $this->transport->stop();
             }
+        }
+    }
+
+    /** Open, negotiate TLS and authenticate without creating a mail envelope. */
+    public function verify(): void
+    {
+        if (!$this->transport instanceof EsmtpTransport) {
+            throw new LogicException('An SMTP connection is required for verification.');
+        }
+
+        try {
+            $this->transport->start();
+        } catch (TransportExceptionInterface) {
+            throw new DeliveryFailure('SMTP connection or login failed.');
+        } finally {
+            $this->transport->stop();
         }
     }
 
