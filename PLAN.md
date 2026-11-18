@@ -1358,7 +1358,10 @@ backends.
       `maintenance` problem while the schema is behind, and the SPA fallback serving the built
       `web/dist`; the store layer on Doctrine DBAL for the three databases, the job lock
       (`pg_advisory_lock` / `GET_LOCK`) and `jobs:run` with the wake after
-      `fastcgi_finish_request()`
+      `fastcgi_finish_request()`. PHP 8.3 now serves the mounted HTTP shell, validates the Goose
+      migration history, and tests the DBAL connection and job lock on PostgreSQL, MySQL 8.0 and
+      MariaDB 10.6. Session access, shared caches, the readiness deadline, metrics and the job
+      runner are open.
 - [ ] MySQL/MariaDB schema: `php/migrations/mysql`, one twin per Go migration with the same
       version (`DATETIME(6)` in UTC for `timestamptz`, generated columns plus unique indexes for
       partial unique indexes, `SIGNAL` triggers for the immutable receipts), the tables for rate

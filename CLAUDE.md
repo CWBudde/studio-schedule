@@ -46,6 +46,8 @@ just demo-serve  # WASM demo locally
 just wasm-smoke  # builds app.wasm, smoke-tests the bridge and the receipt renderer in Node
 just e2e         # builds the demo, runs the Playwright tests in web/e2e (once: just e2e-install)
 just e2e-server  # builds the server, smoke-tests `serve` on PostgreSQL + Mailpit (web/e2e-server; Docker)
+just conformance # black-box Go API checks at the root and under a prefix (PostgreSQL; Docker)
+just php-test    # PHP 8.3 PHPUnit, PHPStan, formatting and coverage on PostgreSQL, MySQL and MariaDB (Docker)
 just restore-drill  # pg_dump a seeded database, pg_restore it, check the copy serves (Docker)
 just ci          # everything CI runs, except `just vuln` (govulncheck + pnpm audit, needs network); needs Docker
 ```

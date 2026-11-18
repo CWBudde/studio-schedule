@@ -141,6 +141,10 @@ e2e-server *args: build
 conformance:
     if [[ -n "${BASE_URL:-}" ]]; then ./scripts/conformance-test.sh; else ./scripts/conformance-go.sh; fi
 
+# Check the PHP backend with PHP 8.3 and its supported database engines (requires Docker)
+php-test engine="all":
+    ./scripts/php-test.sh {{engine}}
+
 # Back up a seeded database with pg_dump, restore it into a new one and check that the copy serves
 # (PostgreSQL in Docker; see docs/operations.md, "Backups and restore")
 restore-drill:
@@ -149,6 +153,7 @@ restore-drill:
 # Everything CI runs but `just vuln`, then the coverage report and gate (needs Docker; e2e needs `just e2e-install`)
 ci: check-tidy check-formatted check-sqlc lint test-cover check-wasm-deps typst-wasm-check web-check wasm-smoke e2e e2e-server restore-drill
     ./scripts/conformance-go.sh
+    ./scripts/php-test.sh
     @just coverage
 
 # ---------------------------------------------------------------- build & run

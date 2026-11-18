@@ -1,0 +1,20 @@
+name: test-php
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [postgres, mysql, mariadb]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Check PHP on ${{ matrix.engine }}
+        run: ./scripts/php-test.sh ${{ matrix.engine }}

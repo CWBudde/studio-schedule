@@ -34,6 +34,9 @@ jobs:
   test-conformance:
     uses: ./.github/workflows/test-conformance.yaml
 
+  test-php:
+    uses: ./.github/workflows/test-php.yaml
+
   test-restore:
     uses: ./.github/workflows/test-restore.yaml
 
@@ -54,6 +57,7 @@ jobs:
       - test-e2e
       - test-e2e-server
       - test-conformance
+      - test-php
       - test-restore
       - test-typst
       - test-vuln
