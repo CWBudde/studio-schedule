@@ -39,6 +39,7 @@ final readonly class Operator
         . "  healthcheck   Check the local server's liveness endpoint\n"
         . "  migrate       Apply, roll back or list database migrations\n"
         . "  db check      Check the data for inconsistencies\n"
+        . "  jobs:run      Run due background jobs\n"
         . "  db:copy       Copy the data to an empty database on another engine\n";
 
     public function __construct(
@@ -91,6 +92,15 @@ final readonly class Operator
                     $output,
                     $errors,
                     isset($flags['as']),
+                );
+            }
+
+            if ($command === 'jobs:run') {
+                return (new JobsCommand($this->postgresDirectory(), $this->appDirectory . '/migrations/mysql'))->run(
+                    SetupInput::trim($flags['database-url'] ?? $get('DATABASE_URL')),
+                    $get,
+                    $output,
+                    $errors,
                 );
             }
 
@@ -187,7 +197,7 @@ final readonly class Operator
                 if ($command !== '') {
                     throw new CommandError('unexpected argument', 2);
                 }
-                if (!in_array($arg, ['init', 'healthcheck', 'migrate', 'db', 'db:copy'], true)) {
+                if (!in_array($arg, ['init', 'healthcheck', 'migrate', 'db', 'db:copy', 'jobs:run'], true)) {
                     throw new CommandError('unknown command', 2);
                 }
                 $command = $arg;
@@ -258,6 +268,7 @@ final readonly class Operator
                 . '  Checks: ' . implode(', ', IntegrityStore::CHECKS) . "\n",
             'db:copy' => "Usage: studio-schedule db:copy [--database-url URL] --target-database-url URL\n"
                 . "Stop writes to the source and migrate the empty target to the same release before copying.\n",
+            'jobs:run' => "Usage: studio-schedule jobs:run [--database-url URL]\n",
             default => self::HELP,
         };
     }

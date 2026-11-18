@@ -27,6 +27,7 @@ final class OperatorTest extends TestCase
         self::assertStringContainsString('init', (string) $out);
         self::assertStringContainsString('healthcheck', (string) $out);
         self::assertStringContainsString('db:copy', (string) $out);
+        self::assertStringContainsString('jobs:run', (string) $out);
         self::assertSame('', $error);
     }
 
@@ -70,6 +71,7 @@ final class OperatorTest extends TestCase
             [['init', '--something'], [], 'unknown flag'],
             [['init', '--admin-email'], [], '--admin-email needs a value'],
             [['init'], [], 'no database URL'],
+            [['jobs:run'], [], 'no database URL'],
             [['db:copy'], [], '--target-database-url'],
             [['db:copy', '--target-database-url=mysql://fixture:secret@db/target'], [], 'no source database URL'],
             [['init', '--database-url='], ['DATABASE_URL' => 'postgresql://fixture:secret@db/studio'], 'no database URL'],
@@ -103,6 +105,9 @@ final class OperatorTest extends TestCase
         $env = ['DATABASE_URL' => $dsn, 'BASE_URL' => 'https://wrong.example', 'LOG_LEVEL' => 'invalid'];
 
         try {
+            $maintenance = self::execute(['jobs:run'], ['SMTP_HOST' => '', 'DATABASE_URL' => $dsn], postgresMigrations: $postgresMigrations);
+            self::assertSame(1, $maintenance[0]);
+            self::assertStringContainsString('database schema is not up to date', $maintenance[2]);
             $result = self::execute(['init'], $env, postgresMigrations: $postgresMigrations);
             self::assertSame(1, $result[0]);
             self::assertStringContainsString('database schema is not up to date', $result[2]);
@@ -157,6 +162,18 @@ final class OperatorTest extends TestCase
             self::assertSame('', $again[1]);
             self::assertStringContainsString('the school is set up already', $again[2]);
             self::assertContains($database->fetchOne('SELECT COUNT(*) FROM accounts'), [1, '1']);
+
+            $database->executeStatement("UPDATE account_tokens SET created_at = '2000-01-01 00:00:00', expires_at = '2000-01-01 01:00:00'");
+            [$jobCode, $jobOutput, $jobError] = self::execute(['jobs:run'], ['SMTP_HOST' => '', 'DATABASE_URL' => $dsn], postgresMigrations: $postgresMigrations);
+            self::assertSame(0, $jobCode, $jobError);
+            self::assertStringContainsString('purge-sessions', $jobOutput);
+            self::assertSame('', $jobError);
+            self::assertSame([], $database->fetchFirstColumn('SELECT account_id FROM account_tokens'));
+            self::assertSame(['ok'], $database->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'purge-sessions'"));
+            [$jobCode, $jobOutput, $jobError] = self::execute(['jobs:run'], ['SMTP_HOST' => '', 'DATABASE_URL' => $dsn], postgresMigrations: $postgresMigrations);
+            self::assertSame(0, $jobCode, $jobError);
+            self::assertSame('', $jobOutput);
+            self::assertSame(['ok'], $database->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'purge-sessions'"));
         } finally {
             if (!$postgres) {
                 $database->executeStatement('SET FOREIGN_KEY_CHECKS = 0');

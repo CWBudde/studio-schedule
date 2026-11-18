@@ -439,6 +439,12 @@ SMTP_FROM=Studio Example <schedule@example.test>
 - Without `SMTP_HOST` nothing is sent. Docker Compose sends to its Mailpit instead, which shows
   each mail at http://localhost:8025 and delivers nothing.
 
+For PHP, run `php /path/to/app/bin/studio-schedule jobs:run` from cron once a minute. The
+command checks that the schema matches the release and records job outcomes in `job_runs`.
+It purges expired sessions and account links hourly, and processes the mail outbox when
+`SMTP_HOST` is set. Receipt mail needs a cached PDF. A missing PDF is recorded as a failed
+delivery attempt and follows the outbox retry schedule.
+
 ### One instance
 
 Run exactly one instance of `serve` per database. The rate limits are counted in the process's

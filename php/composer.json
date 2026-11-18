@@ -20,6 +20,7 @@
     "slim/slim": "^4.15",
     "spomky-labs/base64url": "^2.0",
     "symfony/dotenv": "^7.4",
+    "symfony/mailer": "^7.4",
     "symfony/uid": "^7.4",
     "twig/twig": "^3.19"
   },

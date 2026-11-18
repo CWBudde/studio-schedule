@@ -17,6 +17,15 @@ final readonly class SessionStore
 {
     public function __construct(private Connection $connection) {}
 
+    public function purgeExpired(DateTimeImmutable $now): void
+    {
+        $cutoff = $this->timestamp($now);
+        $this->connection->transactional(static function (Connection $database) use ($cutoff): void {
+            $database->executeStatement('DELETE FROM sessions WHERE expires_at <= ?', [$cutoff]);
+            $database->executeStatement('DELETE FROM account_tokens WHERE expires_at <= ?', [$cutoff]);
+        });
+    }
+
     public function findActiveAccount(#[\SensitiveParameter] string $hash): ?SessionRecord
     {
         $row = $this->connection->fetchAssociative(

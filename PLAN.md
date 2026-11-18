@@ -1363,8 +1363,12 @@ backends.
       `fastcgi_finish_request()`. PHP 8.3 now serves the mounted HTTP shell, validates the Goose
       migration history, and tests the DBAL connection and job lock on PostgreSQL, MySQL 8.0 and
       MariaDB 10.6. PHP accepts existing session cookies, checks impersonation and expires and renews
-      sessions on all three engines. Shared caches, the readiness deadline, metrics and the job
-      runner are open.
+      sessions on all three engines. Shared caches, the readiness deadline, metrics, and the
+      after-response job wake are open.
+  - [x] Schedule `purge-sessions` and `deliver-mail` through `jobs:run`, with per-job locks and
+        history in `job_runs`. SMTP delivery uses the outbox and attaches cached receipt PDFs.
+        A deadline for the entire SMTP attempt, receipt generation on cache miss, and the
+        remaining jobs are open.
 - [ ] MySQL/MariaDB schema: `php/migrations/mysql` has one twin per Go migration at the same
       version. Use `DATETIME(6)` in UTC for `timestamptz`, generated columns with unique indexes
       for partial unique indexes, and `SIGNAL` triggers for immutable receipts.
@@ -1436,7 +1440,7 @@ backends.
         changing an existing schema.
   - [x] `db check` runs the four Go integrity checks in one read-only transaction. The text
         and JSON reports match Go, with exit status 1 when a check finds an inconsistency.
-  - [ ] `seed`, `import`, `jobs:run`, `vapid-keys`, and `doctor`.
+  - [ ] `seed`, `import`, the remaining `jobs:run` jobs, `vapid-keys`, and `doctor`.
 - [x] `db:copy` (command and installer action): copies a complete database into an empty one of
       another kind, MySQL/MariaDB → PostgreSQL and back, at the same schema version, in one
       transaction on the target, then runs the `db check` checks there and rolls back on a
