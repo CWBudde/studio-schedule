@@ -223,6 +223,33 @@ describe('AnnouncementsPage', () => {
     });
   });
 
+  it('saves a draft whatever its unfinished publication date says', async () => {
+    mockApiGet(asOffice);
+    const post = mockApiPost({
+      '/api/v1/admin/announcements': ({ body }) => ({
+        status: 201,
+        body: { id: id(926), emailRecipients: 0, ...written, ...(body as object) },
+      }),
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const sheet = await openAdd(user);
+    await user.type(sheet.getByLabelText('Title'), 'Summer show');
+    await user.type(sheet.getByLabelText('Text'), 'The date follows.');
+    // A date without its time, and later than the expiry.
+    await user.type(sheet.getByLabelText('Publish on'), '2099-05-01');
+    await user.type(sheet.getByLabelText('Expires on'), '2099-04-01');
+    await user.type(sheet.getByLabelText('Expiry time'), '18:00');
+    await user.click(sheet.getByRole('button', { name: 'Save as draft' }));
+
+    expect(await screen.findByText('“Summer show” is saved as a draft.')).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith('/api/v1/admin/announcements', {
+      body: expect.objectContaining({ draft: true, expiresAt: '2099-04-01T16:00:00.000Z' }),
+    });
+    expect(post.mock.calls[0]?.[1]).not.toHaveProperty('body.publishAt');
+  });
+
   it('publishes a draft, asking before its email', async () => {
     mockApiGet(withDraft);
     mockApiPost({ '/api/v1/admin/announcements/recipients': { body: { recipients: 5 } } });

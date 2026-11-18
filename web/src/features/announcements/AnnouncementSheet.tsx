@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FilePenLine, Megaphone, Save } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { type BaseSyntheticEvent, useMemo, useRef, useState } from 'react';
 import { Controller, type FieldError, useForm, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -110,9 +110,20 @@ function AnnouncementForm({
   /** Whether the running write saves a draft (which button shows it pending). */
   const [draftPending, setDraftPending] = useState(false);
   const save = editing ? update : create;
-  const schema = useMemo(() => announcementSchema(timeZone), [timeZone]);
+  const resolvers = useMemo(
+    () => ({
+      publish: zodResolver(announcementSchema(timeZone)),
+      draft: zodResolver(announcementSchema(timeZone, true)),
+    }),
+    [timeZone],
+  );
+  /**
+   * Whether the form is checked as a draft, which ignores the publication
+   * fields: set by the button pressed last, so revalidation follows it.
+   */
+  const asDraft = useRef(false);
   const form = useForm<AnnouncementValues, unknown, AnnouncementData>({
-    resolver: zodResolver(schema),
+    resolver: (...args) => (asDraft.current ? resolvers.draft : resolvers.publish)(...args),
     defaultValues: announcementValues(timeZone, editing),
   });
   const { errors } = form.formState;
@@ -193,9 +204,17 @@ function AnnouncementForm({
     else send(body);
   };
 
-  // A draft has no publication time (the API refuses one): it is chosen
-  // when the draft is published. Nothing is mailed, so nothing to confirm.
-  const saveDraft = ({ publishAt: _, ...body }: AnnouncementData) => send({ ...body, draft: true });
+  // A draft has no publication time (the API refuses one, and the draft
+  // schema leaves it out): it is chosen when the draft is published.
+  // Nothing is mailed, so nothing to confirm.
+  const submitPublish = (event?: BaseSyntheticEvent) => {
+    asDraft.current = false;
+    return form.handleSubmit(onSubmit)(event);
+  };
+  const submitDraft = (event?: BaseSyntheticEvent) => {
+    asDraft.current = true;
+    return form.handleSubmit(send)(event);
+  };
 
   return (
     <>
@@ -203,11 +222,7 @@ function AnnouncementForm({
         title={editing ? t('admin.editTitle', { title: editing.title }) : t('admin.addTitle')}
         description={t('admin.sheetDescription')}
       />
-      <form
-        noValidate
-        className="flex flex-col gap-4 px-4 pb-4"
-        onSubmit={form.handleSubmit(onSubmit)}
-      >
+      <form noValidate className="flex flex-col gap-4 px-4 pb-4" onSubmit={submitPublish}>
         <ProblemAlert error={save.error} {...problems} />
         <TextField
           label={t('admin.titleField')}
@@ -327,7 +342,7 @@ function AnnouncementForm({
                 type="button"
                 variant="secondary"
                 disabled={save.isPending}
-                onClick={form.handleSubmit(saveDraft)}
+                onClick={submitDraft}
               >
                 <PendingIcon
                   pending={save.isPending && draftPending}

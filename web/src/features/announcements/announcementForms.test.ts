@@ -59,6 +59,33 @@ describe('announcementSchema', () => {
     expect(parse({ expiresDate: '2026-12-01' })).toEqual([['expiresDate', 'dateTime']]);
   });
 
+  it('saves a draft without its publication fields, its expiry checked against now', () => {
+    const draft = (v: Partial<AnnouncementValues>) => {
+      const r = announcementSchema(timeZone, true).safeParse(values(v));
+      return r.success ? r.data : r.error.issues.map((i) => [i.path.join('.'), i.message]);
+    };
+    // Half a publication time, or one after the expiry, is left out.
+    expect(draft({ publishDate: '2099-05-01' })).toEqual({
+      audience: 'everyone',
+      title: 'Studio closed',
+      body: 'The studio stays closed on Monday.',
+      draft: true,
+    });
+    expect(
+      draft({
+        publishDate: '2099-05-01',
+        publishTime: '09:00',
+        expiresDate: '2099-04-01',
+        expiresTime: '18:00',
+      }),
+    ).toMatchObject({ expiresAt: '2099-04-01T16:00:00.000Z', draft: true });
+    expect(draft({ expiresDate: '2020-01-01', expiresTime: '18:00' })).toEqual([
+      ['expiresDate', 'expiresBeforePublish'],
+    ]);
+    // A publication's fields are still checked.
+    expect(parse({ publishDate: '2099-05-01' })).toEqual([['publishDate', 'dateTime']]);
+  });
+
   it('refuses a lesson date that does not exist', () => {
     expect(parse({ audience: 'lesson', lessonDate: '2026-02-30' })).toEqual([
       ['lessonDate', 'date'],
