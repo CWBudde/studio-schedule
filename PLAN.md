@@ -1258,70 +1258,123 @@ resources and prompts, then opt-in writes, then the remote transport if the ADR 
 
 ## Phase 13 — PHP backend
 
-Goal: a second, equal backend in PHP for schools whose hosting runs PHP, not a Go binary. It
-serves the same `/api/v1` contract and the same embedded web UI on the same PostgreSQL schema. A
-school can switch between the Go and the PHP backend without migrating data. The Go app stays the
-reference implementation: it owns `api/openapi.json` and the migrations, and it alone runs the WASM
-demo.
+Goal: a second, equal backend in PHP for schools whose web space runs PHP but no Go binary, no
+container and no Kubernetes: shared hosting with PHP-FPM, cron, no daemon, no `exec` and possibly
+no shell. It serves the same `/api/v1` contract and the same web UI, on PostgreSQL (the Go schema),
+MySQL 8.0 or MariaDB 10.6. On PostgreSQL a school can switch between the Go and the PHP backend
+without migrating data; from MySQL/MariaDB, `db:copy` moves it. The Go app stays the reference
+implementation: it owns `api/openapi.json`, the PostgreSQL migrations and the golden files, and it
+alone runs the WASM demo. [ADR 0023](docs/decisions/0023-php-backend.md) records every decision.
 
 The previous system had two backends whose role numbers and fields drifted apart (see
 [Lessons](#lessons-from-the-previous-attempt)). So the PHP backend writes no contract of its own.
 A black-box conformance suite runs against both backends in CI, and a PHP feature counts as done
-only when its cases pass there.
+only when its cases pass there, on all three databases.
 
-Order: the ADR, then the conformance suite (proven against the Go server first), then the PHP
-skeleton, then the API areas in the order of the phases. From then on, every new feature (Phase 14
-included) lands in both backends.
+Order: the ADR, then the base path in Go and the web UI, then the conformance suite (proven
+against the Go server first), then the PHP skeleton with the MySQL schema, the building blocks,
+the installer, then the API areas in the order of the phases, then commands, `db:copy`, the
+release zip and the docs. From then on, every new feature (Phase 14 included) lands in both
+backends.
 
-- [ ] ADR "PHP backend" (0023) settles the open decisions, each one asked first:
-  - [ ] Target hosting: shared hosting (Apache/nginx + PHP-FPM, cron, no daemon, often no
-        `exec`), a container, or both. This decides the next three questions
-  - [ ] Database: PostgreSQL only (same schema, data portable between the backends) or also
+- [x] ADR "PHP backend" (0023) settles the open decisions, each one asked first (2026-11-18) —
+      [ADR 0023](docs/decisions/0023-php-backend.md); the answers raised more questions (MySQL
+      ownership, switching databases, installing without a shell, a subdirectory install, the PDF
+      licence, web push, the coverage floor), asked and recorded there too:
+  - [x] Target hosting: shared hosting (Apache/nginx + PHP-FPM, cron, no daemon, often no
+        `exec`), a container, or both. This decides the next three questions (2026-11-18) — both;
+        shared hosting is the target and sets the constraints, the container image (PHP-FPM +
+        nginx) gets no feature shared hosting lacks
+  - [x] Database: PostgreSQL only (same schema, data portable between the backends) or also
         MySQL/MariaDB, which shared hosts offer more often. MySQL means a second dialect: no
         `timestamptz`, no partial unique indexes, other triggers for the immutable receipts, and a
-        second set of store tests
-  - [ ] PHP version and framework: plain PSR-7/15 with small libraries (Slim or similar,
+        second set of store tests (2026-11-18) — PostgreSQL, MySQL 8.0+ and MariaDB 10.6+, all
+        from the start: every store method and API area is done only when green on all three. PHP
+        owns the MySQL set `php/migrations/mysql` (one twin per Go migration, a CI
+        schema-equivalence test); Go stays PostgreSQL-only; `db:copy` moves a school between them
+  - [x] PHP version and framework: plain PSR-7/15 with small libraries (Slim or similar,
         Doctrine DBAL, symfony/mailer, symfony/uid, Twig), Symfony, or Laravel. The layering
-        `http` → `service` → `store` interfaces must carry over
-  - [ ] Receipt PDF: the typst module (`tools/receipt-pdf`) runs on wazero in Go. PHP options: a
+        `http` → `service` → `store` interfaces must carry over (2026-11-18) — PHP 8.3+, Slim 4,
+        Doctrine DBAL (no ORM), symfony/mailer (SMTP only), symfony/uid, Twig, PSR-3/PSR-20
+  - [x] Receipt PDF: the typst module (`tools/receipt-pdf`) runs on wazero in Go. PHP options: a
         WebAssembly runtime extension, the typst CLI binary (only where `exec` is allowed, never
         with user input in the command), or a PHP PDF library with a ported template checked
-        against the same text-extraction golden tests
-  - [ ] Jobs without a daemon: a `bin/studio-schedule jobs:run` called by cron every minute,
+        against the same text-extraction golden tests (2026-11-18) — mPDF with a Twig/HTML port of
+        `receipt.typ` and the same fonts, checked against the text-extraction goldens; `php/` stays
+        MIT, the release zip is GPL-2.0 because it bundles mPDF
+  - [x] Jobs without a daemon: a `bin/studio-schedule jobs:run` called by cron every minute,
         under a DB advisory lock so runs never overlap; how `Deps.Wake` (mail now, announcement
-        due now) maps to "run this job at the end of the request"
-  - [ ] Process-local state: the rate limits, the `/readyz` cache and the metrics keep state in
+        due now) maps to "run this job at the end of the request" (2026-11-18) — cron every
+        minute under `pg_advisory_lock`/`GET_LOCK`, runs in `job_runs`; a wake runs the job after
+        `fastcgi_finish_request()` where present, else at the next cron run
+  - [x] Process-local state: the rate limits, the `/readyz` cache and the metrics keep state in
         the Go process. PHP keeps them in the database (or APCu where present). Are Prometheus
-        metrics dropped for PHP?
-  - [ ] Migrations: the PHP command reads the goose SQL files from
+        metrics dropped for PHP? (2026-11-18) — rate limits and the readiness cache in the
+        database (tables from both migration sets), APCu instead where present; metrics kept,
+        counted in the database, served at `/metrics` on the main host behind
+        `Authorization: Bearer <METRICS_TOKEN>`
+  - [x] Migrations: the PHP command reads the goose SQL files from
         `internal/store/postgres/migrations` and writes the same `goose_db_version` table, so
         either backend can migrate and refuse a mismatched schema. A copy or a release artifact
-        keeps them in step
-  - [ ] Repository and release: `php/` in this repository (composer, PHPUnit, PHPStan at max
-        level, PHP-CS-Fixer), and a release zip with `vendor/` and the built web UI
+        keeps them in step (2026-11-18) — read in place in the repository, copied into the release
+        zip by CI; never run on their own (the installer applies them after an admin signs in)
+  - [x] Repository and release: `php/` in this repository (composer, PHPUnit, PHPStan at max
+        level, PHP-CS-Fixer), and a release zip with `vendor/` and the built web UI (2026-11-18)
+        — as written; the zip has `public/` (document root or subdirectory) and `app/` (code,
+        `vendor/`, both migration sets, `config/.env` where the host sets no environment)
+- [ ] Base path, in Go and the web UI first: `BASE_URL` may carry a path
+      (`https://example.org/schedule`), which prefixes `/api/v1`, `/ical`, `/healthz`, `/readyz`,
+      the SPA and its assets, the web manifest, the service worker's scope, and the links in mails,
+      feeds and `init`'s output. Under a path the cookie is `studio_session` with `Path=<prefix>`
+      and `Secure` (`__Host-` needs `Path=/`). Unit tests, an e2e run under a prefix
+      (`web/e2e-server`), docs/operations.md (ADR 0023)
 - [ ] Conformance suite (Go, black-box, against a `BASE_URL`): it ports the scenarios of
       `internal/app/*_test.go` and `servicetest` to HTTP and checks every response against
-      `api/openapi.json`. It needs a test control API that is off unless the environment enables
-      it, in both backends: set the clock, reset the database, load the demo seed, read the
-      outbox. It runs first against `serve`, then in CI against both (`just conformance`)
-- [ ] PHP skeleton: config from env (the same names as docs/operations.md), PSR-3 logging with
+      `api/openapi.json`. It needs a test control API under `/api/test/…`, registered only with
+      `TEST_CONTROL=true` and refused at start with an `https://` `BASE_URL`, not part of
+      `api/openapi.json`, in both backends: set the clock, reset the database, load the demo
+      seed, read the outbox. It runs first against `serve` (at the root and under a base path),
+      then in CI against Go and against PHP on PostgreSQL, MySQL 8.0 and MariaDB 10.6
+      (`just conformance`)
+- [ ] PHP skeleton (Slim 4, PHP 8.3+): config from the environment with the names of
+      docs/operations.md, else from `app/config/.env` (the environment wins), PSR-3 logging with
       request IDs, problem+json in the shape of `httpapi.ErrorModel`, the middleware chain of
       `internal/app/observe.go` (security headers, request ID, access log with redacted `token`
       parameters, recovery, cross-origin protection), the access levels of ADR 0005, the session
-      cookie (`__Host-studio_session` / `studio_session`), `/healthz` and `/readyz`, and the SPA
-      fallback serving the built `web/dist`
+      cookie (`__Host-studio_session` / `studio_session`, with the base path), `/healthz` and
+      `/readyz` (cached in the database or APCu), `/metrics` behind `METRICS_TOKEN`, the 503
+      `maintenance` problem while the schema is behind, and the SPA fallback serving the built
+      `web/dist`; the store layer on Doctrine DBAL for the three databases, the job lock
+      (`pg_advisory_lock` / `GET_LOCK`) and `jobs:run` with the wake after
+      `fastcgi_finish_request()`
+- [ ] MySQL/MariaDB schema: `php/migrations/mysql`, one twin per Go migration with the same
+      version (`DATETIME(6)` in UTC for `timestamptz`, generated columns plus unique indexes for
+      partial unique indexes, `SIGNAL` triggers for the immutable receipts), the tables for rate
+      limits and the readiness cache in both sets, and a CI test that migrates PostgreSQL and
+      MySQL to the latest version and compares tables, columns, nullability, keys, unique
+      constraints and checks
 - [ ] Shared building blocks: PSR-20 clock and school time zone (never the server zone), UUIDv7
-      IDs, `Money`/`Date`/`TimeOfDay` value objects, argon2id through `password_verify` on the
-      existing PHC hashes (a test with hashes made by Go), the common-password list, the mail
-      templates ported to Twig and checked against the Go golden files in
-      `internal/mail/testdata`, the iCal writer against the golden feeds in
-      `internal/service/testdata/feeds`
-- [ ] API areas, each done when its conformance cases pass on PHP:
+      IDs, `Money`/`Date`/`TimeOfDay` value objects, argon2id through `password_verify` (or
+      `sodium_crypto_pwhash_str_verify` where PHP lacks Argon2) on the existing PHC hashes, new
+      hashes with Go's parameters (a test with hashes made by Go, and Go verifying hashes made by
+      PHP), the common-password list, the mail templates ported to Twig and checked against the Go
+      golden files in `internal/mail/testdata`, the iCal writer against the golden feeds in
+      `internal/service/testdata/feeds`, the receipt template ported to Twig/HTML for mPDF
+      against the text-extraction goldens of `tools/receipt-pdf`, web push through
+      `minishlink/web-push` against the RFC 8291 vectors of `internal/webpush`
+- [ ] Web installer at `<base>/setup`, only while `SETUP_TOKEN` is set and with the token on every
+      request: checks PHP version, extensions, the database and a writable log directory, migrates
+      an empty database, creates the settings and the first admin as `init` does, then refuses a
+      second admin. Upgrades: lists pending migrations and applies them after an admin signs in
+      there (token plus an admin's email and password against the existing tables); migrations
+      never run on their own. Offers `db:copy`
+- [ ] API areas, each done when its conformance cases pass on PHP with PostgreSQL, MySQL and
+      MariaDB:
   - [ ] Public settings, schedule and visibility, release window (ADR 0003)
   - [ ] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006)
   - [ ] Family, persons, invitations, catalogue and timetable administration (ADR 0007, 0008)
   - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
-        order (`SELECT … FOR UPDATE`, term → class → lesson → passes)
+        order (`SELECT … FOR UPDATE` on all three databases, term → class → lesson → passes)
   - [ ] Calendar feeds (ADR 0011)
   - [ ] Passes, redemption ledger, receipts with the gapless counter and PDF (ADR 0012)
   - [ ] Settings, branding, themes, `init` (ADR 0013, 0018)
@@ -1331,17 +1384,27 @@ included) lands in both backends.
   - [ ] Web push with VAPID (ADR 0017)
   - [ ] Events and workshops (Phase 10)
 - [ ] CLI parity: the operator commands (`migrate`, `seed`, `init`, `import`, `jobs:run`,
-      `vapid-keys`, `healthcheck`) as PHP console commands. The admin commands of Phase 11 and the
-      MCP server of Phase 12 work against PHP through their remote mode, if their ADRs choose it.
-      Otherwise they are ported too
-- [ ] Tests: PHPUnit for services and stores (PostgreSQL via Docker, like `just test-pg`),
-      concurrency cases for capacity, redemption and receipt numbers against the real database,
-      the Playwright suite `web/e2e-server` against the PHP backend, `just ci` and CI running all
-      of it; PHP coverage (PHPUnit with PCOV) reported after every run and gated at 90 % like Go
-      (Phase 9)
-- [ ] Docs: deployment on shared hosting and in a container (docs/operations.md), choosing a
-      backend, ADR 0001 amended (the WASM demo stays Go), CLAUDE.md rules for changes in both
-      backends
+      `vapid-keys`, `healthcheck`, `doctor`, `db check`) as PHP console commands in
+      `bin/studio-schedule`. The admin commands of Phase 11 and the MCP server of Phase 12 stay
+      Go-only (ADR 0023: no remote mode; a school on PostgreSQL runs the Go binary against its
+      database, a school on MySQL uses the web UI)
+- [ ] `db:copy` (command and installer action): copies a complete database into an empty one of
+      another kind, MySQL/MariaDB → PostgreSQL and back, at the same schema version, in one
+      transaction on the target, then runs the `db check` checks there and rolls back on a
+      finding. Tested on every direction with the demo seed
+- [ ] Release zip, built by CI: `public/` and `app/` (production `vendor/`, the built web UI, both
+      migration sets), a GPL-2.0 notice and mPDF's licence (the zip bundles mPDF; `php/` stays
+      MIT), and the container image (PHP-FPM + nginx)
+- [ ] Tests: PHPUnit for services and stores on PostgreSQL, MySQL 8.0 and MariaDB 10.6 via Docker
+      (like `just test-pg`), concurrency cases for capacity, redemption and receipt numbers
+      against each real database, the Playwright suite `web/e2e-server` against the PHP backend,
+      PHPStan at max level, PHP-CS-Fixer, `just ci` and CI running all of it; PHP coverage
+      (PHPUnit with PCOV) reported after every run and gated like Go: 95 % of all statements, 80 %
+      per namespace
+- [ ] Docs: deployment on shared hosting (upload, document root or subdirectory, cron,
+      `SETUP_TOKEN` and the installer, upgrades) and in a container (docs/operations.md), choosing
+      a backend and a database, switching with `db:copy`, ADR 0001 amended (the WASM demo stays
+      Go), CLAUDE.md rules for changes in both backends (a Go migration needs its MySQL twin)
 
 ## Phase 14 — Optional modules
 
@@ -1475,3 +1538,4 @@ Issues found in the previous system that this rewrite must avoid:
 | release-please with `GITHUB_TOKEN` doesn't trigger CI on release PRs/tags | Add a PAT/GitHub App secret `RELEASE_PLEASE_TOKEN` when needed (workflow already prefers it)                        |
 | Personal data of minors                                                   | GDPR features in Phase 8; fictional seed data only; no real data in this repo                                       |
 | Go and PHP backends drift apart (as in the previous system)               | One contract from Go; black-box conformance suite against both in CI; shared migrations and golden files (Phase 13) |
+| The MySQL/MariaDB schema drifts from the PostgreSQL one                   | One MySQL twin per Go migration; CI schema-equivalence test; conformance on all three databases (ADR 0023)          |
