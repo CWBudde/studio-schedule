@@ -25,7 +25,8 @@ final readonly class ScheduleStore implements SchedulePersistence
 {
     private const string LESSONS = <<<'SQL'
         SELECT l.id, l.class_id, l.starts_at, l.ends_at, l.status, l.kind, l.visibility, l.renter, l.event_id,
-               COALESCE(e.capacity, l.capacity) AS capacity, e.slug AS event_slug, e.status AS event_status,
+               l.capacity AS lesson_capacity, COALESCE(e.capacity, l.capacity) AS capacity,
+               e.slug AS event_slug, e.status AS event_status,
                ct.id AS course_type_id, ct.name AS course_type_name, ct.description AS course_type_description,
                r.id AS room_id, r.name AS room_name, r.position AS room_position,
                lc.id AS location_id, lc.name AS location_name, lc.address AS location_address,
@@ -121,6 +122,21 @@ final readonly class ScheduleStore implements SchedulePersistence
         );
 
         return $row === false ? null : $this->publishedLesson($row);
+    }
+
+    /**
+     * @param list<string> $eventIds
+     * @return list<PublishedLesson>
+     */
+    public function eventSessions(array $eventIds): array
+    {
+        $rows = $this->connection->fetchAllAssociative(
+            self::LESSONS . ' WHERE l.event_id IN (?) ORDER BY l.starts_at, l.id',
+            [$this->encodeIds($eventIds)],
+            [$this->idListType()],
+        );
+
+        return array_map(fn(array $row): PublishedLesson => $this->publishedLesson(['capacity' => $row['lesson_capacity']] + $row), $rows);
     }
 
     public function activeBookings(array $lessonIds): array

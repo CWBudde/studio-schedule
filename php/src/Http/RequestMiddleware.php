@@ -100,7 +100,7 @@ final readonly class RequestMiddleware implements MiddlewareInterface
         if (self::crossOrigin($request)) {
             return Responses::problem($request, 403, 'cross-origin request rejected');
         }
-        if (self::apiPath($path) && !$this->readiness->ready()) {
+        if ((self::apiPath($path) || $path === PublicSettingsEndpoint::MANIFEST_PATH) && !$this->readiness->ready()) {
             return Responses::problem($request, 503, 'maintenance', 'urn:studio-schedule:maintenance');
         }
 

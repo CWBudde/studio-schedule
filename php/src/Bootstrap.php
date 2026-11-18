@@ -14,6 +14,8 @@ use Psr\Http\Message\ServerRequestInterface;
 use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use StudioSchedule\Http\Application;
+use StudioSchedule\Http\CatalogRoutes;
+use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\Installer;
 use StudioSchedule\Http\MeEndpoint;
 use StudioSchedule\Http\PasswordResetEndpoint;
@@ -29,8 +31,10 @@ use StudioSchedule\Service\PasswordReset;
 use StudioSchedule\Service\PublicSettings;
 use StudioSchedule\Service\SessionAuthentication;
 use StudioSchedule\Service\SystemClock;
+use StudioSchedule\Store\CatalogStore;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\DatabaseCopy;
+use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\PasswordResetStore;
 use StudioSchedule\Store\PublicSettingsStore;
 use StudioSchedule\Store\ScheduleStore;
@@ -111,6 +115,8 @@ final class Bootstrap
                 $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock): void {
                     $app->get('/api/v1/auth/me', new MeEndpoint($sessionStore));
                     (new PublicSettingsEndpoint(new PublicSettings(new PublicSettingsStore($connection))))->register($app);
+                    CatalogRoutes::register($app, new CatalogStore($connection));
+                    EventRoutes::register($app, new EventStore($connection), $clock);
                     ScheduleRoutes::register($app, new ScheduleStore($connection), $clock);
                 };
             }

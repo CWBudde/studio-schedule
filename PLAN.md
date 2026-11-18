@@ -1405,6 +1405,8 @@ backends.
         settings, branding images, schedule and lesson reads on all three database engines. The
         settings, schedule and lesson JSON matched Go on a shared PostgreSQL fixture at the root
         and under a prefix.
+    - [x] Public catalogue lists, upcoming events, and the web manifest.
+          The shared OpenAPI scenario passes on PostgreSQL, MySQL and MariaDB at both mount paths.
   - [ ] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006). PHP serves
         `/api/v1/auth/me` and reads sessions issued by Go. Sign-in, rate limits and the remaining
         account operations are open, including requesting a replacement password reset link by

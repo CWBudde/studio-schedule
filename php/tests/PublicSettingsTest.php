@@ -13,6 +13,7 @@ use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
 use Psr\Log\AbstractLogger;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ResponseFactory;
@@ -153,6 +154,44 @@ final class PublicSettingsTest extends TestCase
         ], self::decoded($response));
     }
 
+    public function testWebManifestReflectsAccentsLanguageAndTheMountPath(): void
+    {
+        $request = (new ServerRequestFactory())->createServerRequest('GET', '/studio/manifest.webmanifest');
+        $missing = $this->bootstrapRequest($request);
+        self::assertSame(404, $missing->getStatusCode());
+        self::assertSame('resource not found', self::decoded($missing)['detail'] ?? null);
+
+        $this->initialize();
+        $response = $this->bootstrapRequest($request);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('application/manifest+json', $response->getHeaderLine('Content-Type'));
+        self::assertSame('public, max-age=300', $response->getHeaderLine('Cache-Control'));
+        $body = self::decoded($response);
+        self::assertEquals([
+            'id' => '/studio/',
+            'name' => 'Example Studio',
+            'short_name' => 'Example Studio',
+            'description' => 'Class schedule and booking',
+            'lang' => 'en',
+            'start_url' => '/studio/',
+            'scope' => '/studio/',
+            'display' => 'standalone',
+            'theme_color' => '#7f1f35',
+            'background_color' => '#faf7f2',
+            'icons' => [
+                ['src' => '/studio/icons/icon-192.png', 'sizes' => '192x192', 'type' => 'image/png'],
+                ['src' => '/studio/icons/icon-512.png', 'sizes' => '512x512', 'type' => 'image/png'],
+                ['src' => '/studio/icons/icon-maskable-512.png', 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'maskable'],
+            ],
+        ], $body);
+
+        $this->db->executeStatement("UPDATE settings SET default_locale = 'de', accent_color = '#7a1f3d'");
+        $changed = self::decoded($this->bootstrapRequest($request));
+        self::assertSame('de', $changed['lang'] ?? null);
+        self::assertSame('Stundenplan und Buchung', $changed['description'] ?? null);
+        self::assertSame('#7a1f3d', $changed['theme_color'] ?? null);
+    }
+
     /** @return iterable<string, array{string, string, string}> */
     public static function imageExamples(): iterable
     {
@@ -287,18 +326,7 @@ final class PublicSettingsTest extends TestCase
         $request = (new ServerRequestFactory())->createServerRequest('GET', '/studio/api/v1/settings/' . $path)
             ->withHeader('If-None-Match', $ifNoneMatch);
         if ($connection === null) {
-            return Bootstrap::handle(
-                static fn() => $request,
-                dirname(__DIR__),
-                __DIR__ . '/../public',
-                self::postgresMigrations(),
-                static fn(string $key): string => match ($key) {
-                    'BASE_URL' => 'http://localhost/studio',
-                    'DATABASE_URL' => self::fixtureDsn(),
-                    'LOG_LEVEL' => 'error',
-                    default => '',
-                },
-            );
+            return $this->bootstrapRequest($request);
         }
 
         $service = new PublicSettings(new PublicSettingsStore($connection));
@@ -308,6 +336,22 @@ final class PublicSettingsTest extends TestCase
         $app->addRoutingMiddleware();
 
         return $app->handle($request);
+    }
+
+    private function bootstrapRequest(ServerRequestInterface $request): ResponseInterface
+    {
+        return Bootstrap::handle(
+            static fn() => $request,
+            dirname(__DIR__),
+            __DIR__ . '/../public',
+            self::postgresMigrations(),
+            static fn(string $key): string => match ($key) {
+                'BASE_URL' => 'http://localhost/studio',
+                'DATABASE_URL' => self::fixtureDsn(),
+                'LOG_LEVEL' => 'error',
+                default => '',
+            },
+        );
     }
 
     private static function postgresMigrations(): string

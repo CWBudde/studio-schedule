@@ -14,9 +14,11 @@ use Psr\Container\ContainerInterface;
 use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
+use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Store\Database;
+use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\Migrator;
 use StudioSchedule\Store\ScheduleStore;
 use StudioSchedule\Store\Schema;
@@ -73,6 +75,72 @@ final class ScheduleStoreTest extends TestCase
         } finally {
             $this->database->close();
         }
+    }
+
+    public function testPublicEventsIncludeOnlyUpcomingPublishedEventsAndUseTheirOwnSignupWindows(): void
+    {
+        $this->insertLesson(108, '2026-10-27', 'workshop', 'public', [
+            'event_id' => 120, 'status' => 'canceled', 'canceled_at' => '2026-10-25 13:00:00',
+        ]);
+        $create = [
+            'course_type_id' => 22, 'capacity' => 4, 'price' => 2500, 'vat_rate_bp' => 1900,
+            'created_at' => '2026-10-24 10:00:00', 'updated_at' => '2026-10-24 10:00:00',
+        ];
+        $this->insert('events', [
+            'id' => 122, 'slug' => 'evening-workshop', 'title' => 'Evening workshop', 'description' => 'A fictional event',
+            'status' => 'published', 'signup_opens_at' => '2026-10-25 17:00:00',
+            'signup_closes_at' => '2026-10-26 17:00:00', 'cancel_until' => '2026-10-26 16:00:00',
+        ] + $create);
+        $this->insertLesson(109, '2026-10-30', 'workshop', 'public', ['event_id' => 122]);
+        $this->insert('event_images', [
+            'event_id' => 122, 'image' => 'synthetic image', 'image_type' => 'image/png',
+            'image_digest' => str_repeat('0', 64),
+        ]);
+        $this->insert('events', [
+            'id' => 123, 'slug' => 'canceled-workshop', 'title' => 'Canceled workshop', 'status' => 'canceled',
+        ] + $create);
+        $this->insertLesson(110, '2026-11-02', 'workshop', 'public', ['event_id' => 123]);
+        $this->insert('events', [
+            'id' => 124, 'slug' => 'canceled-session', 'title' => 'Canceled session', 'status' => 'published',
+        ] + $create);
+        $this->insertLesson(111, '2026-11-02', 'workshop', 'public', [
+            'event_id' => 124, 'status' => 'canceled', 'canceled_at' => '2026-10-25 13:00:00',
+        ]);
+
+        $before = self::get($this->app(self::BEFORE_RELEASE), '/events');
+        $items = $before['items'];
+        self::assertIsArray($items);
+        self::assertSame(['winter-workshop', 'evening-workshop'], array_column($items, 'slug'));
+        [$winter, $evening] = $items;
+        self::assertIsArray($winter);
+        self::assertIsArray($evening);
+        self::assertSame(7, $winter['capacity']);
+        self::assertSame(5, $winter['freePlaces']);
+        self::assertSame('2026-11-03T10:00:00.5Z', $winter['signupClosesAt']);
+        self::assertSame($winter['signupClosesAt'], $winter['cancelUntil']);
+        self::assertTrue($winter['signupOpen']);
+        self::assertFalse($winter['hasImage']);
+        self::assertArrayNotHasKey('signupOpensAt', $winter);
+        self::assertArrayNotHasKey('description', $winter);
+        self::assertArrayNotHasKey('registered', $winter);
+        self::assertIsArray($winter['sessions']);
+        self::assertSame(self::ids(108, 106), array_column($winter['sessions'], 'id'));
+        self::assertSame(['canceled', 'scheduled'], array_column($winter['sessions'], 'status'));
+        self::assertSame([4, 4], array_column($winter['sessions'], 'capacity'));
+        self::assertSame(['winter-workshop', 'winter-workshop'], array_column($winter['sessions'], 'eventSlug'));
+        self::assertSame('A fictional event', $evening['description']);
+        self::assertSame(2500, $evening['price']);
+        self::assertSame(1900, $evening['vatRate']);
+        self::assertFalse($evening['signupOpen']);
+        self::assertTrue($evening['hasImage']);
+        self::assertSame('2026-10-25T17:00:00Z', $evening['signupOpensAt']);
+        self::assertSame('2026-10-26T17:00:00Z', $evening['signupClosesAt']);
+        self::assertSame('2026-10-26T16:00:00Z', $evening['cancelUntil']);
+
+        $whenOpen = self::get($this->app(self::AT_RELEASE), '/events');
+        self::assertIsArray($whenOpen['items']);
+        self::assertSame([true, true], array_column($whenOpen['items'], 'signupOpen'));
+        self::assertSame(['items' => []], self::get($this->app('2026-11-03T11:00:00.5Z'), '/events'));
     }
 
     public function testReleaseVisibilityFiltersAndAvailabilityThroughPublishedRoutes(): void
@@ -336,14 +404,16 @@ final class ScheduleStoreTest extends TestCase
     private function app(string $now): App
     {
         $app = AppFactory::create();
-        ScheduleRoutes::register($app, new ScheduleStore($this->database), new class ($now) implements ClockInterface {
+        $clock = new class ($now) implements ClockInterface {
             public function __construct(private string $now) {}
 
             public function now(): DateTimeImmutable
             {
                 return new DateTimeImmutable($this->now);
             }
-        });
+        };
+        ScheduleRoutes::register($app, new ScheduleStore($this->database), $clock);
+        EventRoutes::register($app, new EventStore($this->database), $clock);
         $app->addRoutingMiddleware();
 
         return $app;

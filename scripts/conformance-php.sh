@@ -3,22 +3,31 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+usage() {
+	echo "usage: $0 [all|postgres|mysql|mariadb] [--controls-only | --scenario NAME]" >&2
+	exit 2
+}
+
 case "${1:-all}" in
 all) engines=(postgres mysql mariadb) ;;
 postgres | mysql | mariadb) engines=("$1") ;;
-*)
-	echo "usage: $0 [all|postgres|mysql|mariadb] [--controls-only]" >&2
-	exit 2
-	;;
+*) usage ;;
 esac
+scenario=
 case "${2:-}" in
 "") test_name=TestBackendConformance ;;
 --controls-only) test_name=TestPHPFixtureControls ;;
-*)
-	echo "usage: $0 [all|postgres|mysql|mariadb] [--controls-only]" >&2
-	exit 2
+--scenario)
+	scenario=${3:-}
+	[[ $scenario =~ ^[a-z0-9_]+$ && $# == 3 ]] || usage
+	test_name=TestBackendConformance
 	;;
+*) usage ;;
 esac
+filter="^${test_name}\$"
+if [[ -n $scenario ]]; then
+	filter+="/^${scenario}\$"
+fi
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/studio-php-conformance.XXXXXXXX")
 prefix="studio-conformance-php-$$"
@@ -151,9 +160,13 @@ for engine in "${engines[@]}"; do
 		done
 		echo "PHP conformance on $engine at ${base_path:-/}"
 		if [[ $ready != true ]] ||
-			! go test ./internal/conformance -run "^${test_name}\$" -count=1 -v -args -conformance; then
+			! go test ./internal/conformance -run "$filter" -count=1 -v -args -conformance | tee "$work/go-test.log"; then
 			docker logs --tail 40 "$php_container" >&2
 			exit 1
+		fi
+		if [[ -n $scenario ]] && ! grep -Fq -- "PASS: $test_name/$scenario " "$work/go-test.log"; then
+			echo "Unknown conformance scenario: $scenario" >&2
+			exit 2
 		fi
 		if [[ $test_name == TestPHPFixtureControls ]]; then
 			queue_fixture_mail

@@ -291,13 +291,76 @@ func publicCatalog(t *testing.T, b *backend) {
 		}
 	}
 
+	verifyPublicRoomFilter(t, b, client)
+
+	response := get(t, b, client, "/manifest.webmanifest")
 	manifest := read[struct {
-		Name  string
-		Scope string
-	}](t, get(t, b, client, "/manifest.webmanifest"))
+		ID          string
+		Name        string
+		ShortName   string `json:"short_name"`
+		Description string
+		Lang        string
+		StartURL    string `json:"start_url"`
+		Scope       string
+		Display     string
+		ThemeColor  string `json:"theme_color"`
+		Background  string `json:"background_color"`
+		Icons       []struct{ Src, Sizes, Type, Purpose string }
+	}](t, response)
 	u, _ := url.Parse(b.base)
-	if manifest.Name != settings.SchoolName || manifest.Scope != u.Path+"/" {
+	root := u.Path + "/"
+	if manifest.Name != settings.SchoolName || manifest.ShortName != settings.SchoolName ||
+		manifest.ID != root || manifest.Scope != root || manifest.StartURL != root ||
+		manifest.Lang != settings.DefaultLocale || manifest.Description != "Class schedule and booking" ||
+		manifest.Display != "standalone" || manifest.ThemeColor != "#7f1f35" || manifest.Background != "#faf7f2" {
 		t.Errorf("installed app manifest: %+v", manifest)
+	}
+	if response.header.Get("Cache-Control") != "public, max-age=300" ||
+		len(manifest.Icons) != 3 || manifest.Icons[0].Src != root+"icons/icon-192.png" ||
+		manifest.Icons[1].Src != root+"icons/icon-512.png" ||
+		manifest.Icons[2].Src != root+"icons/icon-maskable-512.png" || manifest.Icons[2].Purpose != "maskable" {
+		t.Errorf("manifest cache or icons: %v %+v", response.header, manifest.Icons)
+	}
+}
+
+func verifyPublicRoomFilter(t *testing.T, b *backend, client *http.Client) {
+	t.Helper()
+
+	type room struct{ ID, LocationID string }
+	all := read[struct{ Items []room }](t, get(t, b, client, "/api/v1/rooms")).Items
+	if len(all) == 0 {
+		t.Fatal("fixture has no rooms")
+	}
+	in := request{method: http.MethodGet, path: "/api/v1/rooms", query: url.Values{"location": {all[0].LocationID}}}
+	filtered := read[struct{ Items []room }](t, b.call(t, client, in, http.StatusOK)).Items
+	want := slices.DeleteFunc(slices.Clone(all), func(r room) bool { return r.LocationID != all[0].LocationID })
+	if !slices.Equal(filtered, want) {
+		t.Errorf("rooms at one location: %+v, want %+v", filtered, want)
+	}
+
+	in.query.Set("location", "")
+	unfiltered := read[struct{ Items []room }](t, b.call(t, client, in, http.StatusOK)).Items
+	if !slices.Equal(unfiltered, all) {
+		t.Errorf("empty location should leave rooms unfiltered: %+v", unfiltered)
+	}
+	in.query.Set("location", "00000000-0000-0000-0000-000000000001")
+	b.call(t, client, in, http.StatusNotFound)
+	for _, invalid := range []string{"not-a-uuid", "00000000-0000-0000-0000-000000000000"} {
+		in.query.Set("location", invalid)
+		b.call(t, client, in, http.StatusUnprocessableEntity)
+	}
+
+	for _, rawQuery := range []string{"location=%ZZ", "location&x=y"} {
+		got, status := b.send(t, client, request{method: http.MethodGet, path: "/api/v1/rooms?" + rawQuery})
+		if status != http.StatusOK {
+			t.Fatalf("raw room query %q: got %d, want 200 (%s)", rawQuery, status, got.body)
+		}
+		if err := b.contract.validate(http.MethodGet, "/api/v1/rooms", status, got.header, got.body); err != nil {
+			t.Fatal(err)
+		}
+		if decoded := read[struct{ Items []room }](t, got).Items; !slices.Equal(decoded, all) {
+			t.Errorf("raw room query %q returned %+v, want all rooms", rawQuery, decoded)
+		}
 	}
 }
 

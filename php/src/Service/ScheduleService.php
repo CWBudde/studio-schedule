@@ -186,7 +186,7 @@ final readonly class ScheduleService
 
             $activeBookings = $active[$id] ?? 0;
             $occupied = $lesson->eventId === null ? $activeBookings + $held : ($eventPlaces[$lesson->eventId] ?? 0);
-            $body = self::summary($lesson) + [
+            $body = self::lessonSummary($lesson) + [
                 'freePlaces' => max(0, $lesson->capacity - $occupied),
                 'bookingClosesAt' => self::cutoff($lesson->startsAt, $rules->bookingCutoffMicros),
             ] + self::present([
@@ -217,7 +217,7 @@ final readonly class ScheduleService
     }
 
     /** @return array<string, mixed> */
-    private static function summary(PublishedLesson $lesson): array
+    public static function lessonSummary(PublishedLesson $lesson): array
     {
         return [
             'id' => $lesson->id,

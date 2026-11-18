@@ -327,8 +327,9 @@ a schema. Set `HTTP_ADDR` to a loopback address for the fixture listener. The co
 
 Run `./scripts/conformance-php.sh all --controls-only` on a Linux Docker host to exercise the
 PHP controls and seeded reads on PostgreSQL, MySQL and MariaDB, at both mount paths. The runner
-provisions disposable databases and uses Go's demo seeder as the fixture source. Omit
-`--controls-only` to run the full API conformance suite against PHP.
+provisions disposable databases and uses Go's demo seeder as the fixture source. Use
+`--scenario public_settings_and_catalog` for the public catalogue, or omit the mode to run the
+full API conformance suite against PHP.
 
 | Method | Path               | Input and result                                                                         |
 | ------ | ------------------ | ---------------------------------------------------------------------------------------- |

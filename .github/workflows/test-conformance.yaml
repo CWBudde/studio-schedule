@@ -50,3 +50,5 @@ jobs:
           go-version-file: go.mod
       - name: Check PHP test controls and seeded reads on all three databases
         run: ./scripts/conformance-php.sh all --controls-only
+      - name: Check PHP public catalogue against OpenAPI on all three databases
+        run: ./scripts/conformance-php.sh all --scenario public_settings_and_catalog

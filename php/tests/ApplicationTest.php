@@ -65,9 +65,11 @@ final class ApplicationTest extends TestCase
         $base = 'https://example.test' . self::PREFIX;
         self::assertSame(200, $app->handle($req->createServerRequest('GET', $base . '/healthz'))->getStatusCode());
         $this->assertProblem($app->handle($req->createServerRequest('GET', $base . '/readyz')), 503);
-        $maintenance = $app->handle($req->createServerRequest('GET', $base . '/api/v1/settings/public'));
-        $this->assertProblem($maintenance, 503);
-        self::assertStringContainsString('"type":"urn:studio-schedule:maintenance"', (string) $maintenance->getBody());
+        foreach (['/api/v1/settings/public', '/manifest.webmanifest'] as $path) {
+            $maintenance = $app->handle($req->createServerRequest('GET', $base . $path));
+            $this->assertProblem($maintenance, 503);
+            self::assertStringContainsString('"type":"urn:studio-schedule:maintenance"', (string) $maintenance->getBody());
+        }
     }
 
     public function testStaticFilesAndDeepLinks(): void
