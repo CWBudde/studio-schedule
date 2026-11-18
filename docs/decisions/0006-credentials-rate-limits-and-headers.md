@@ -51,9 +51,11 @@ password or email is refused (403): an admin who acts as someone never changes t
 | login attempts                                   | client IP | 20 per 15 min |
 | mails on request (register, reset, email change) | client IP | 5 per hour    |
 
-A blocked request answers 429 problem+json with `Retry-After`. A successful login clears the email's
-failures. An email change counts against the mail limit only when it passes the password check. The
-per-email limit lets anyone block an account's login for 15 minutes by sending wrong passwords; that
+A blocked request answers 429 problem+json with `Retry-After`. Operations that count only on certain
+outcomes reserve a slot while they run and release it when the result does not count. A successful
+login clears completed failures and preserves slots held by concurrent requests. An email change
+counts against the mail limit only when it passes the password check. The per-email limit lets
+anyone block an account's login for 15 minutes by sending wrong passwords. That trade-off
 is accepted in exchange for a hard bound on guesses per account. The client IP is the connection's
 address; behind a reverse proxy, the proxies are listed in `TRUSTED_PROXIES` and `X-Forwarded-For`
 is read from the right, skipping them (`internal/clientip`). A request with `X-Forwarded-For` and no

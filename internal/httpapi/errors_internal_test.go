@@ -223,14 +223,14 @@ func TestNilLimiterImposesNoLimit(t *testing.T) {
 			t.Fatalf("allow with a nil limiter: %v", err)
 		}
 
-		record(limits.PasswordFailures, "ada@example.org")
-
-		if err := notBlocked(limits.PasswordFailures, "ada@example.org"); err != nil {
-			t.Fatalf("notBlocked with a nil limiter: %v", err)
+		attempt, err := reserve(limits.PasswordFailures, "ada@example.org")
+		if err != nil {
+			t.Fatalf("reserve with a nil limiter: %v", err)
 		}
+		attempt.Count()
+		attempt.ClearFailures()
+		attempt.Release()
 	}
-
-	forget(limits.PasswordFailures, "ada@example.org") // no limiter, nothing to forget
 
 	// The same calls with a limiter do limit, so the above is the nil case.
 	l := ratelimit.New(clock.NewFixed(time.Date(2026, time.October, 23, 8, 0, 0, 0, time.UTC)), 1, time.Minute)
@@ -243,8 +243,8 @@ func TestNilLimiterImposesNoLimit(t *testing.T) {
 		t.Errorf("second request: %v, want a 429", err)
 	}
 
-	if err := notBlocked(l, "203.0.113.7"); !errors.As(err, &se) || se.GetStatus() != http.StatusTooManyRequests {
-		t.Errorf("notBlocked after the limit: %v, want a 429", err)
+	if _, err := reserve(l, "203.0.113.7"); !errors.As(err, &se) || se.GetStatus() != http.StatusTooManyRequests {
+		t.Errorf("reserve after the limit: %v, want a 429", err)
 	}
 }
 

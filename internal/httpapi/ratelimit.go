@@ -104,32 +104,18 @@ func allow(l *ratelimit.Limiter, key string) error {
 	return nil
 }
 
-// notBlocked returns a 429 when key has used up its limit in l, without
-// counting.
-func notBlocked(l *ratelimit.Limiter, key string) error {
+// reserve reserves a slot for an operation that counts only on some outcomes.
+func reserve(l *ratelimit.Limiter, key string) (*ratelimit.Reservation, error) {
 	if l == nil {
-		return nil
+		return nil, nil
 	}
 
-	if blocked, retry := l.Blocked(key); blocked {
-		return tooManyRequests(retry)
+	slot, retry := l.Reserve(key)
+	if slot == nil {
+		return nil, tooManyRequests(retry)
 	}
 
-	return nil
-}
-
-// record counts one event of key in l, e.g. a wrong password.
-func record(l *ratelimit.Limiter, key string) {
-	if l != nil {
-		l.Add(key)
-	}
-}
-
-// forget forgets the events of key in l.
-func forget(l *ratelimit.Limiter, key string) {
-	if l != nil {
-		l.Reset(key)
-	}
+	return slot, nil
 }
 
 func tooManyRequests(retry time.Duration) error { return tooMany("attempts", retry) }

@@ -169,6 +169,51 @@ func TestAdd(t *testing.T) {
 	mustAllow(t, l, "user@example.org")
 }
 
+func mustReserve(t *testing.T, l *ratelimit.Limiter, key string) *ratelimit.Reservation {
+	t.Helper()
+
+	slot, retry := l.Reserve(key)
+	if slot == nil {
+		t.Fatalf("Reserve(%q) denied with retry %v", key, retry)
+	}
+	return slot
+}
+
+func TestReservationsPreserveConcurrentFailuresAfterLogin(t *testing.T) {
+	t.Parallel()
+
+	l := ratelimit.New(newFakeClock(), 3, time.Minute)
+	mustAllow(t, l, "account")
+	login := mustReserve(t, l, "account")
+	other := mustReserve(t, l, "account")
+	mustDeny(t, l, "account", time.Minute)
+	login.ClearFailures()
+	login.Count() // a deferred or repeated settlement has no effect
+	mustAllow(t, l, "account")
+	mustAllow(t, l, "account")
+	mustDeny(t, l, "account", time.Minute)
+	copyOfOther := *other
+	other.Count()
+	copyOfOther.Release()
+	mustDeny(t, l, "account", time.Minute)
+}
+
+func TestReservationCannotSettleIntoAnotherWindow(t *testing.T) {
+	t.Parallel()
+
+	clk := newFakeClock()
+	l := ratelimit.New(clk, 1, time.Minute)
+	old := mustReserve(t, l, "address")
+	clk.Advance(time.Minute)
+	current := mustReserve(t, l, "address")
+	old.ClearFailures()
+	mustDeny(t, l, "address", time.Minute)
+	clk.Advance(30 * time.Second)
+	current.Release()
+	mustAllow(t, l, "address")
+	mustDeny(t, l, "address", time.Minute) // only discarded work occupied the earlier window
+}
+
 func TestMaxKeysEvictsEarliestWindow(t *testing.T) {
 	t.Parallel()
 

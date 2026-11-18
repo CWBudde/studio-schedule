@@ -153,18 +153,20 @@ func (h *handlers) requestEmailChange(ctx context.Context, in *RequestEmailChang
 
 	// Only a request that passes the checks counts: a mistyped password
 	// sends no mail.
-	if err := notBlocked(mails, ip); err != nil {
+	mail, err := reserve(mails, ip)
+	if err != nil {
 		return nil, err
 	}
+	defer mail.Release()
 
-	err := h.checkingPassword(ctx, p, "body.password", func() error {
+	err = h.checkingPassword(ctx, p, "body.password", func() error {
 		return h.deps.Auth.RequestEmailChange(ctx, p, in.Body.Password, in.Body.NewEmail, in.Body.Locale)
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	record(mails, ip)
+	mail.Count()
 
 	return &struct{}{}, nil
 }
@@ -177,15 +179,17 @@ func (h *handlers) checkingPassword(
 ) error {
 	limit, email := h.deps.RateLimits.PasswordFailures, emailKey(p.Email)
 
-	if err := notBlocked(limit, email); err != nil {
+	attempt, err := reserve(limit, email)
+	if err != nil {
 		return err
 	}
+	defer attempt.Release()
 
 	switch err := change(); {
 	case err == nil:
 		return nil
 	case errors.Is(err, service.ErrWrongPassword):
-		record(limit, email)
+		attempt.Count()
 
 		return huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
 			Message: "the password is wrong", Location: location,

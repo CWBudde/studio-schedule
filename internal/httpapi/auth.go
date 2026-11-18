@@ -319,20 +319,22 @@ func (h *handlers) login(ctx context.Context, in *LoginInput) (*SignedInOutput, 
 		return nil, err
 	}
 
-	if err := notBlocked(limits.PasswordFailures, email); err != nil {
+	attempt, err := reserve(limits.PasswordFailures, email)
+	if err != nil {
 		return nil, err
 	}
+	defer attempt.Release()
 
 	s, err := h.deps.Auth.Login(ctx, in.Body.Email, in.Body.Password)
 	if errors.Is(err, service.ErrInvalidCredentials) {
-		record(limits.PasswordFailures, email)
+		attempt.Count()
 	}
 
 	if err != nil {
 		return nil, h.authError(ctx, err)
 	}
 
-	forget(limits.PasswordFailures, email)
+	attempt.ClearFailures()
 
 	h.endPrevious(ctx)
 

@@ -42,9 +42,21 @@ type Limiter struct {
 }
 
 type entry struct {
-	key   string
-	start time.Time
-	count int
+	key     string
+	start   time.Time
+	count   int
+	pending int
+}
+
+// Reservation holds one slot while an operation decides whether to count it.
+// The first resolution wins. Resolution after the window ends has no effect.
+type Reservation struct {
+	slot *reservationSlot
+}
+
+type reservationSlot struct {
+	limiter *Limiter
+	window  *entry
 }
 
 // New returns a limiter that allows limit events per key within each
@@ -78,13 +90,85 @@ func (l *Limiter) Allow(key string) (ok bool, retryAfter time.Duration) {
 	l.sweep(now)
 
 	e := l.get(key, now)
-	if e.count >= l.limit {
+	if e.count+e.pending >= l.limit {
 		return false, l.remaining(e, now)
 	}
 
 	e.count++
 
 	return true, 0
+}
+
+// Reserve admits an operation without committing its slot to the count yet.
+// A denied reservation returns nil and the retry delay. The caller must resolve
+// an admitted reservation even when its operation fails.
+func (l *Limiter) Reserve(key string) (*Reservation, time.Duration) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := l.clk.Now()
+	l.sweep(now)
+	e := l.get(key, now)
+	if e.count+e.pending >= l.limit {
+		return nil, l.remaining(e, now)
+	}
+	e.pending++
+
+	return &Reservation{slot: &reservationSlot{limiter: l, window: e}}, 0
+}
+
+// Count settles the reservation as an event in its admission window.
+func (r *Reservation) Count() { r.finish(countEvent) }
+
+// Release settles the reservation without counting an event.
+func (r *Reservation) Release() { r.finish(releaseSlot) }
+
+// ClearFailures clears completed failures after a successful login. Other
+// in-flight operations keep their reservations and can still count failures.
+func (r *Reservation) ClearFailures() { r.finish(clearEvents) }
+
+type resolution uint8
+
+const (
+	releaseSlot resolution = iota
+	countEvent
+	clearEvents
+)
+
+func (r *Reservation) finish(how resolution) {
+	if r == nil || r.slot == nil {
+		return // a nil limiter imposes no limit
+	}
+
+	l := r.slot.limiter
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	e := r.slot.window
+	if e == nil {
+		return
+	}
+	r.slot.window = nil
+	el := l.entries[e.key]
+	if el == nil || el.Value != e {
+		return
+	}
+	if l.expired(e, l.clk.Now()) {
+		l.remove(el)
+
+		return
+	}
+
+	e.pending--
+	switch how {
+	case countEvent:
+		e.count++
+	case clearEvents:
+		e.count = 0
+	}
+	if e.count == 0 && e.pending == 0 {
+		l.remove(el)
+	}
 }
 
 // Blocked reports, without counting, whether key has used up its limit in
@@ -103,7 +187,7 @@ func (l *Limiter) Blocked(key string) (blocked bool, retryAfter time.Duration) {
 	}
 
 	e := el.Value.(*entry)
-	if l.expired(e, now) || e.count < l.limit {
+	if l.expired(e, now) || e.count+e.pending < l.limit {
 		return false, 0
 	}
 
@@ -122,13 +206,17 @@ func (l *Limiter) Add(key string) {
 	l.get(key, now).count++
 }
 
-// Reset forgets key, e.g. after a successful login.
+// Reset forgets completed events of key without releasing in-flight slots.
 func (l *Limiter) Reset(key string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	if el, found := l.entries[key]; found {
-		l.remove(el)
+		e := el.Value.(*entry)
+		e.count = 0
+		if e.pending == 0 {
+			l.remove(el)
+		}
 	}
 }
 
@@ -138,14 +226,12 @@ func (l *Limiter) Reset(key string) {
 func (l *Limiter) get(key string, now time.Time) *entry {
 	if el, found := l.entries[key]; found {
 		e := el.Value.(*entry)
-		if l.expired(e, now) {
-			// Only reachable if the clock went backwards and broke the
-			// order sweep relies on; start a new window either way.
-			e.start, e.count = now, 0
-			l.order.MoveToBack(el)
+		if !l.expired(e, now) {
+			return e
 		}
-
-		return e
+		// A clock change can leave an expired entry in the middle of the
+		// list. Replace it so its reservations cannot affect the new window.
+		l.remove(el)
 	}
 
 	for len(l.entries) >= max(l.MaxKeys, 1) {

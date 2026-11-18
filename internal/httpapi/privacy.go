@@ -263,13 +263,15 @@ func (h *handlers) deleteMyAccount(ctx context.Context, in *DeleteMyAccountInput
 	// Under the limit of wrong passwords per email, like changePassword.
 	limit, email := h.deps.RateLimits.PasswordFailures, emailKey(p.Email)
 
-	if err := notBlocked(limit, email); err != nil {
+	attempt, err := reserve(limit, email)
+	if err != nil {
 		return nil, err
 	}
+	defer attempt.Release()
 
 	switch err := h.deps.Auth.DeleteOwnAccount(ctx, p, in.Body.Password, in.Body.Locale); {
 	case errors.Is(err, service.ErrWrongPassword):
-		record(limit, email)
+		attempt.Count()
 
 		return nil, huma.Error422UnprocessableEntity("validation failed", &huma.ErrorDetail{
 			Message: "the password is wrong", Location: "body.password",
