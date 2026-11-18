@@ -490,6 +490,14 @@ func registrationSession(t *testing.T, b *backend) {
 	b.call(t, client, me, http.StatusUnauthorized)
 	login(t, b, client, email, password)
 	b.call(t, client, me, http.StatusOK)
+
+	for _, address := range []string{email, "unregistered@example.test"} {
+		register.body = `{"email":"` + address + `","password":"` + password + `","givenName":"  ","familyName":"Member"}`
+		invalid := b.call(t, client, register, http.StatusUnprocessableEntity)
+		if !strings.Contains(string(invalid.body), "body.givenName") {
+			t.Error("blank name did not produce a givenName validation error")
+		}
+	}
 }
 
 func mailToken(t *testing.T, b *backend, email, template, route string) string {

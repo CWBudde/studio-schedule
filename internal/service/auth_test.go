@@ -341,6 +341,9 @@ func TestAuthRegisterValidates(t *testing.T) {
 		"long password":  {GivenName: "Ada", FamilyName: "L", Email: "ada@example.org", Password: strings.Repeat("x", 257)},
 		"bad email":      {GivenName: "Ada", FamilyName: "L", Email: "ada", Password: "correct horse"},
 		"no name":        {GivenName: " ", FamilyName: "L", Email: "ada@example.org", Password: "correct horse"},
+		"no family name": {GivenName: "Ada", FamilyName: "\t\u00a0", Email: "ada@example.org", Password: "correct horse"},
+		"null byte":      {GivenName: "Ada\x00", FamilyName: "L", Email: "ada@example.org", Password: "correct horse"},
+		"invalid UTF-8":  {GivenName: "Ada", FamilyName: "\xff", Email: "ada@example.org", Password: "correct horse"},
 	} {
 		err := f.svc.Register(t.Context(), r)
 		if !errors.Is(err, domain.ErrValidation) {

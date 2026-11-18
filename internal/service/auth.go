@@ -155,6 +155,13 @@ func (s *AuthService) Register(ctx context.Context, r Registration) error {
 	if err := checkPassword("password", r.Password); err != nil {
 		return err
 	}
+	// Reject malformed names consistently before checking whether the address exists.
+	if err := checkRegistrationName("givenName", "given name", r.GivenName); err != nil {
+		return err
+	}
+	if err := checkRegistrationName("familyName", "family name", r.FamilyName); err != nil {
+		return err
+	}
 
 	// Hashing is slow; it runs before the transaction, which may be retried.
 	hash, err := s.hasher.Hash(r.Password)
@@ -196,6 +203,17 @@ func (s *AuthService) Register(ctx context.Context, r Registration) error {
 	})
 	if err != nil {
 		return fmt.Errorf("register: %w", err)
+	}
+
+	return nil
+}
+
+func checkRegistrationName(field, label, name string) error {
+	if name == "" {
+		return &domain.FieldError{Field: field, Msg: label + " must not be empty"}
+	}
+	if !utf8.ValidString(name) || strings.IndexByte(name, 0) >= 0 {
+		return &domain.FieldError{Field: field, Msg: label + " must be valid UTF-8 text"}
 	}
 
 	return nil
