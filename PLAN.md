@@ -1366,11 +1366,13 @@ backends.
       sessions on all three engines. Shared caches, the readiness deadline, metrics, and
       after-response wakes for the remaining jobs are open.
   - [x] Schedule `purge-sessions` and `deliver-mail` through `jobs:run`, with per-job locks and
-        history in `job_runs`. SMTP delivery uses the outbox and attaches cached receipt PDFs.
-        A deadline for the entire SMTP attempt, receipt generation on cache miss, and the
-        remaining jobs are open.
+        history in `job_runs`. SMTP delivery uses the outbox. A deadline for the entire SMTP
+        attempt and the remaining jobs are open.
   - [x] Wake `deliver-mail` after password reset queues a notice and PHP-FPM finishes the HTTP
         response. Hosts without `fastcgi_finish_request()` deliver the notice through cron.
+  - [x] Attach the stored receipt PDF to outbox mail. On a cache miss, render a sale or
+        cancellation from its receipt snapshot and store the first PDF as the immutable original.
+        Actual SMTP attachments matched the stored bytes on PostgreSQL, MySQL and MariaDB.
 - [ ] MySQL/MariaDB schema: `php/migrations/mysql` has one twin per Go migration at the same
       version. Use `DATETIME(6)` in UTC for `timestamptz`, generated columns with unique indexes
       for partial unique indexes, and `SIGNAL` triggers for immutable receipts.

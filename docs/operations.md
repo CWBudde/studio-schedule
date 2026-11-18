@@ -442,8 +442,9 @@ SMTP_FROM=Studio Example <schedule@example.test>
 For PHP, run `php /path/to/app/bin/studio-schedule jobs:run` from cron once a minute. The
 command checks that the schema matches the release and records job outcomes in `job_runs`.
 It purges expired sessions and account links hourly, and processes the mail outbox when
-`SMTP_HOST` is set. Receipt mail needs a cached PDF. A missing PDF is recorded as a failed
-delivery attempt and follows the outbox retry schedule.
+`SMTP_HOST` is set. Receipt mail attaches the original PDF from the database. If a receipt
+has no PDF yet, PHP renders it from the saved receipt and caches it before sending. If
+rendering fails, the delivery attempt follows the outbox retry schedule.
 
 On PHP-FPM, a completed password reset that queues a notification wakes mail delivery after the
 HTTP response has been sent. Cron handles queued mail on other PHP hosts and when the mail job

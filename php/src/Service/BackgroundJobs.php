@@ -11,6 +11,7 @@ use Psr\Log\LoggerInterface;
 use SensitiveParameter;
 use StudioSchedule\Mail\Mailer;
 use StudioSchedule\Receipt\AttachmentStore;
+use StudioSchedule\Receipt\Attachments;
 use StudioSchedule\Store\JobLocks;
 use StudioSchedule\Store\JobRunStore;
 use StudioSchedule\Store\OutboxStore;
@@ -43,7 +44,7 @@ final readonly class BackgroundJobs
     public function deliverMail(Mailer $mailer, bool $immediate = false): ?JobResult
     {
         $work = function () use ($mailer): void {
-            $attachments = new AttachmentStore($this->database);
+            $attachments = new Attachments(new AttachmentStore($this->database));
             (new OutboxDelivery(new OutboxStore($this->database), $this->clock, $mailer, $attachments->find(...)))->deliver();
         };
 
