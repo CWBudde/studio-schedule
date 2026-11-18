@@ -53,7 +53,11 @@ final readonly class JobsCommand
             }
 
             $jobs = new BackgroundJobs($database, $dsn, new SystemClock(), new NullLogger());
-            $plan = [BackgroundJobs::PURGE_SESSIONS => $jobs->purgeSessions(...)];
+            $plan = [
+                BackgroundJobs::PURGE_SESSIONS => $jobs->purgeSessions(...),
+                BackgroundJobs::PURGE_MAIL => $jobs->purgeMail(...),
+                BackgroundJobs::PURGE_PERSONAL_DATA => $jobs->purgePersonalData(...),
+            ];
             if ($mailer !== null) {
                 $plan[BackgroundJobs::DELIVER_MAIL] = static fn(): ?JobResult => $jobs->deliverMail($mailer);
             }

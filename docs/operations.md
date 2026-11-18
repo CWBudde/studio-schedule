@@ -446,6 +446,11 @@ It purges expired sessions and account links hourly, and processes the mail outb
 has no PDF yet, PHP renders it from the saved receipt and caches it before sending. If
 rendering fails, the delivery attempt follows the outbox retry schedule.
 
+The same cron command runs `purge-mail` and `purge-personal-data` daily, including when SMTP is
+off. It clears bodies of sent mail older than 30 days and deletes mail records older than 180 days.
+The personal data purge uses the same UTC cutoffs as Go and anonymizes expired guests while
+keeping their bookings and event registrations. Receipt PDFs stay in the database.
+
 On PHP-FPM, a completed password reset that queues a notification wakes mail delivery after the
 HTTP response has been sent. Cron handles queued mail on other PHP hosts and when the mail job
 is already running.

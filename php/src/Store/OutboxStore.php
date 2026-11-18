@@ -21,6 +21,25 @@ final readonly class OutboxStore
 
     public function __construct(private Connection $connection) {}
 
+    /** @return array{bodies:int,deleted:int} */
+    public function purge(DateTimeImmutable $now): array
+    {
+        $now = $now->setTimezone(new DateTimeZone('UTC'));
+
+        return $this->connection->transactional(function (Connection $connection) use ($now): array {
+            $bodies = (int) $connection->executeStatement(
+                'UPDATE outbox_mails SET body_text = NULL, body_html = NULL WHERE sent_at < ? AND body_text IS NOT NULL',
+                [$this->timestamp($now->sub(new DateInterval('P30D')))],
+            );
+            $deleted = (int) $connection->executeStatement(
+                'DELETE FROM outbox_mails WHERE created_at < ?',
+                [$this->timestamp($now->sub(new DateInterval('P180D')))],
+            );
+
+            return ['bodies' => $bodies, 'deleted' => $deleted];
+        });
+    }
+
     public function retireExpiredLastAttempts(DateTimeImmutable $now): void
     {
         // A crashed worker may leave its final attempt leased but unrecorded.

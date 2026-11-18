@@ -1373,6 +1373,9 @@ backends.
   - [x] Attach the stored receipt PDF to outbox mail. On a cache miss, render a sale or
         cancellation from its receipt snapshot and store the first PDF as the immutable original.
         Actual SMTP attachments matched the stored bytes on PostgreSQL, MySQL and MariaDB.
+  - [x] Run `purge-mail` and `purge-personal-data` daily from cron, with each purge in one
+        transaction. Match Go's retention cutoffs and keep anonymized guest bookings and event
+        registrations for history.
 - [ ] MySQL/MariaDB schema: `php/migrations/mysql` has one twin per Go migration at the same
       version. Use `DATETIME(6)` in UTC for `timestamptz`, generated columns with unique indexes
       for partial unique indexes, and `SIGNAL` triggers for immutable receipts.

@@ -15,12 +15,15 @@ use StudioSchedule\Receipt\Attachments;
 use StudioSchedule\Store\JobLocks;
 use StudioSchedule\Store\JobRunStore;
 use StudioSchedule\Store\OutboxStore;
+use StudioSchedule\Store\RetentionStore;
 use StudioSchedule\Store\SessionStore;
 
 final readonly class BackgroundJobs
 {
     public const string DELIVER_MAIL = 'deliver-mail';
     public const string PURGE_SESSIONS = 'purge-sessions';
+    public const string PURGE_MAIL = 'purge-mail';
+    public const string PURGE_PERSONAL_DATA = 'purge-personal-data';
 
     private JobRunner $runner;
 
@@ -29,7 +32,7 @@ final readonly class BackgroundJobs
         #[SensitiveParameter]
         string $dsn,
         private ClockInterface $clock,
-        LoggerInterface $logger,
+        private LoggerInterface $logger,
     ) {
         $this->runner = new JobRunner(new JobLocks($dsn), new JobRunStore($database), $clock, $logger);
     }
@@ -38,6 +41,26 @@ final readonly class BackgroundJobs
     {
         return $this->runner->runDue(self::PURGE_SESSIONS, new DateInterval('PT1H'), function (): void {
             (new SessionStore($this->database))->purgeExpired($this->clock->now());
+        });
+    }
+
+    public function purgeMail(): ?JobResult
+    {
+        return $this->runner->runDue(self::PURGE_MAIL, new DateInterval('PT24H'), function (): void {
+            $counts = (new OutboxStore($this->database))->purge($this->clock->now());
+            if (array_sum($counts) > 0) {
+                $this->logger->info('old mails purged', $counts);
+            }
+        });
+    }
+
+    public function purgePersonalData(): ?JobResult
+    {
+        return $this->runner->runDue(self::PURGE_PERSONAL_DATA, new DateInterval('PT24H'), function (): void {
+            $counts = (new RetentionStore($this->database))->purge($this->clock->now());
+            if (array_sum($counts) > 0) {
+                $this->logger->info('personal data purged', $counts);
+            }
         });
     }
 
