@@ -822,3 +822,107 @@ func TestAnnouncementDismissNotShown(t *testing.T) {
 		t.Errorf("Anna sees %q, %v; want the later one, not dismissed", titles(got), err)
 	}
 }
+
+// TestAnnouncementDraft: a draft is saved but never shown, mailed or
+// counted in the daily limit, and publishing it makes it an announcement
+// like a new one (ADR 0014, amendment).
+func TestAnnouncementDraft(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	f := newAnnouncementFixture(t)
+	now := mustInstant(t, bookingNow)
+	wakes := 0
+	svc := NewAnnouncementService(f.st, clock.NewFixed(now), f.seq, newTestRenderer(t), func() { wakes++ })
+	olga, anna := f.principal(t, f.olga), f.principal(t, f.anna)
+	emailed := func(title string, draft bool) AnnouncementInput {
+		return AnnouncementInput{
+			AnnouncementAudience: audience(domain.AudienceEveryone), Title: title, Body: "Hi.", Email: true, Draft: draft,
+		}
+	}
+
+	// The day's three emailed announcements leave room for a draft.
+	for _, title := range []string{"One", "Two", "Three"} {
+		f.create(t, svc, emailed(title, false))
+	}
+
+	wakes = 0
+	draft := f.create(t, svc, emailed("Draft", true))
+
+	if !draft.Draft() || !draft.PublishAt.IsZero() || wakes != 0 {
+		t.Fatalf("draft = %+v, %d wakes; want no publish time and no wake", draft, wakes)
+	}
+
+	f.sendDue(t, svc)
+
+	if got := f.get(t, draft.ID); !got.EmailedAt.IsZero() || got.EmailRecipients != 0 {
+		t.Errorf("the job mailed the draft: %+v", got)
+	}
+
+	if err := svc.Dismiss(ctx, anna, draft.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("dismiss draft = %v, want not found", err)
+	}
+
+	got, err := svc.ForAccount(ctx, anna)
+	if err != nil || slices.Contains(titles(got), "Draft") {
+		t.Errorf("Anna sees %q, %v; want no draft", titles(got), err)
+	}
+
+	// The office lists it first.
+	entries, err := svc.List(ctx)
+	if err != nil || len(entries) != 4 || entries[0].Announcement.ID != draft.ID {
+		t.Fatalf("list = %d entries, %v; want the draft first of 4", len(entries), err)
+	}
+
+	// A draft has no publish time, and a published one stays published.
+	in := emailed("Dated draft", true)
+	in.PublishAt = now.Add(time.Hour)
+	_, err = svc.Create(ctx, olga, in)
+	wantFieldError(t, err, "publishAt")
+
+	published := f.create(t, svc, AnnouncementInput{
+		AnnouncementAudience: audience(domain.AudienceEveryone), Title: "Published", Body: "Hi.",
+	})
+	_, err = svc.Update(ctx, published.ID, AnnouncementInput{
+		AnnouncementAudience: audience(domain.AudienceEveryone), Title: "Published", Body: "Hi.", Draft: true,
+	})
+	wantFieldError(t, err, "draft")
+
+	// Edited as a draft, it stays one; published, it takes its place in
+	// the day's limit, which is full today.
+	if e, err := svc.Update(ctx, draft.ID, emailed("Draft, edited", true)); err != nil || !e.Announcement.Draft() {
+		t.Fatalf("edit draft = %+v, %v; want a draft", e.Announcement, err)
+	}
+
+	var limited *TooManyAnnouncementMailsError
+
+	_, err = svc.Update(ctx, draft.ID, emailed("Draft, edited", false))
+	if !errors.As(err, &limited) {
+		t.Fatalf("publish today = %v, want the limit", err)
+	}
+
+	// Published for tomorrow it is scheduled; published now (without
+	// email), it shows at once.
+	tomorrow := emailed("Draft, edited", false)
+	tomorrow.PublishAt = mustInstant(t, "2026-10-22T08:00:00Z")
+
+	e, err := svc.Update(ctx, draft.ID, tomorrow)
+	if err != nil || !e.Announcement.PublishAt.Equal(tomorrow.PublishAt) || wakes != 0 {
+		t.Fatalf("publish tomorrow = %+v, %v, %d wakes; want scheduled, no wake", e.Announcement, err, wakes)
+	}
+
+	other := f.create(t, svc, AnnouncementInput{
+		AnnouncementAudience: audience(domain.AudienceEveryone), Title: "Other draft", Body: "Hi.", Draft: true,
+	})
+
+	if _, err := svc.Update(ctx, other.ID, AnnouncementInput{
+		AnnouncementAudience: audience(domain.AudienceEveryone), Title: "Other draft", Body: "Hi.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err = svc.ForAccount(ctx, anna)
+	if err != nil || !slices.Contains(titles(got), "Other draft") {
+		t.Errorf("Anna sees %q, %v; want the published draft", titles(got), err)
+	}
+}

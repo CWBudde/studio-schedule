@@ -151,3 +151,19 @@ The mail job uses the existing person and guardian recipient chain and also emai
 at their supplied addresses in the school's default language. The same address receives one copy.
 Waiting, invited and canceled registrations do not qualify. An event referenced by an announcement
 cannot be deleted until the office removes the announcement or changes its audience.
+
+## Amendment (2026-11-18): drafts
+
+An announcement without a publish time is a draft (`domain.Announcement.Draft`: the zero
+`PublishAt`, ADR 0002's "zero value = absent"; `publish_at` is nullable since migration 00039). A
+draft is saved, but it is not shown to anyone, cannot be dismissed (404), is not mailed, and takes
+no place in the daily limit of emailed announcements. It has no mail state (a check constraint).
+The office's list puts the drafts first.
+
+The office saves one with "Save as draft" in the announcement form (`draft: true` on
+`createAnnouncement` or `updateAnnouncement`; a `publishAt` beside it is a 422 on `body.publishAt`).
+It edits the draft like any announcement and publishes it with the form's "Publish" (a write
+without `draft`). Publishing takes `publishAt`, or now when there is none, checks the expiry and
+the daily limit like a new announcement, and wakes the mail job if it is due now. A published
+announcement never becomes a draft again (422 on `body.draft`). The assistant saves drafts too, and
+only drafts (ADR 0022, amendment of 2026-11-18).

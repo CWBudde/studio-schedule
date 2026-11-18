@@ -36,7 +36,9 @@
     "status": "Status",
     "email": "Email",
     "never": "Never",
+    "notPublished": "Not yet",
     "statuses": {
+      "draft": "Draft",
       "scheduled": "Scheduled",
       "shown": "Shown",
       "expired": "Expired"
@@ -87,6 +89,7 @@
     "publishDate": "Publish on",
     "publishTime": "Publication time",
     "publishHint": "Empty: now. Dates and times are in the school’s time zone.",
+    "publishHintDraft": "Empty: now. A draft keeps no date: you choose it when you publish.",
     "expiresDate": "Expires on",
     "expiresTime": "Expiry time",
     "expiresHint": "Empty: it never expires.",
@@ -96,6 +99,9 @@
     "emailSendingHint": "Being sent by email: edits reach only the addresses that do not have it yet.",
     "publish": "Publish",
     "publishing": "Publishing…",
+    "saveDraft": "Save as draft",
+    "draftSaved": "“{{title}}” is saved as a draft.",
+    "draftSaveFailed": "“{{title}}” was not saved as a draft.",
     "added": "“{{title}}” is published.",
     "addedSending": "“{{title}}” is published; its email is queued.",
     "scheduled": "“{{title}}” is scheduled.",

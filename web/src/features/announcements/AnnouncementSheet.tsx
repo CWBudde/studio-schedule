@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Megaphone, Save } from 'lucide-react';
+import { FilePenLine, Megaphone, Save } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Controller, type FieldError, useForm, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +17,7 @@ import {
   termsQuery,
   updateAnnouncementMutation,
 } from '@/api/queries';
+import { PendingIcon } from '@/components/PendingIcon';
 import { ProblemAlert } from '@/components/ProblemAlert';
 import { type ProblemTexts, useProblemText } from '@/components/problemText';
 import {
@@ -29,6 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 import { TextField } from '@/features/auth/TextField';
 import { SelectField, SwitchField, TextareaField } from '@/features/admin/crud/fields';
 import { showServerErrors } from '@/features/admin/crud/form';
@@ -99,7 +101,14 @@ function AnnouncementForm({
   const create = useMutation(createAnnouncementMutation(queryClient));
   const update = useMutation(updateAnnouncementMutation(queryClient));
   const editing = target.mode === 'edit' ? target.announcement : undefined;
+  // A new announcement or a draft can be saved as a draft, and is
+  // published by the submit button; a published one is only saved.
+  const draftable = !editing || editing.draft === true;
+  /** An edit of an announcement that is published already. */
+  const editingPublished = editing !== undefined && !draftable;
   const emailStarted = editing ? mailStarted(editing) : false;
+  /** Whether the running write saves a draft (which button shows it pending). */
+  const [draftPending, setDraftPending] = useState(false);
   const save = editing ? update : create;
   const schema = useMemo(() => announcementSchema(timeZone), [timeZone]);
   const form = useForm<AnnouncementValues, unknown, AnnouncementData>({
@@ -120,9 +129,10 @@ function AnnouncementForm({
   };
 
   const send = (body: AnnouncementData) => {
-    // Whether this write would queue its email: one whose mailing has
-    // begun is never mailed again.
-    const mails = body.email === true && !emailStarted;
+    setDraftPending(body.draft === true);
+    // Whether this write would queue its email: a draft's waits for its
+    // publication, and one whose mailing has begun is never mailed again.
+    const mails = body.email === true && !emailStarted && body.draft !== true;
     const onError = (error: Error) => {
       showServerErrors(error, form, announcementFields);
       for (const [api, field] of Object.entries(dateFields)) {
@@ -130,13 +140,15 @@ function AnnouncementForm({
           form.setError(field, { type: 'server', message: 'invalid' });
         }
       }
-      const title = editing
-        ? mails
-          ? 'admin.saveFailedEmail'
-          : 'admin.saveFailed'
-        : mails
-          ? 'admin.publishFailedEmail'
-          : 'admin.publishFailed';
+      const title = body.draft
+        ? 'admin.draftSaveFailed'
+        : editingPublished
+          ? mails
+            ? 'admin.saveFailedEmail'
+            : 'admin.saveFailed'
+          : mails
+            ? 'admin.publishFailedEmail'
+            : 'admin.publishFailed';
       toast.error(t(title, { title: body.title }), {
         description: problemText(error, problems),
       });
@@ -151,19 +163,21 @@ function AnnouncementForm({
       const later = Date.parse(a.publishAt ?? a.createdAt) > written;
       // A mailing begun before (or meanwhile) is not this write's.
       const queued = a.email === true && !mailStarted(a);
-      const message = editing
-        ? queued
-          ? later
-            ? 'admin.savedSendingLater'
-            : 'admin.savedSending'
-          : 'admin.saved'
-        : later
+      const message = a.draft
+        ? 'admin.draftSaved'
+        : editingPublished
           ? queued
-            ? 'admin.scheduledSending'
-            : 'admin.scheduled'
-          : queued
-            ? 'admin.addedSending'
-            : 'admin.added';
+            ? later
+              ? 'admin.savedSendingLater'
+              : 'admin.savedSending'
+            : 'admin.saved'
+          : later
+            ? queued
+              ? 'admin.scheduledSending'
+              : 'admin.scheduled'
+            : queued
+              ? 'admin.addedSending'
+              : 'admin.added';
       toast.success(t(message, { title: a.title }));
       onDone();
     };
@@ -178,6 +192,10 @@ function AnnouncementForm({
     if (body.email && !emailStarted) setConfirming(body);
     else send(body);
   };
+
+  // A draft has no publication time (the API refuses one): it is chosen
+  // when the draft is published. Nothing is mailed, so nothing to confirm.
+  const saveDraft = ({ publishAt: _, ...body }: AnnouncementData) => send({ ...body, draft: true });
 
   return (
     <>
@@ -259,7 +277,7 @@ function AnnouncementForm({
           <TextField
             label={t('admin.publishDate')}
             type="date"
-            hint={t('admin.publishHint')}
+            hint={t(draftable ? 'admin.publishHintDraft' : 'admin.publishHint')}
             error={errorText(errors.publishDate)}
             {...form.register('publishDate')}
           />
@@ -298,10 +316,27 @@ function AnnouncementForm({
           )}
         />
         <FormSheetActions
-          pending={save.isPending}
-          submitLabel={editing ? tAdmin('form.save') : t('admin.publish')}
-          pendingLabel={editing ? undefined : t('admin.publishing')}
-          icon={editing ? <Save aria-hidden="true" /> : <Megaphone aria-hidden="true" />}
+          pending={save.isPending && !draftPending}
+          disabled={save.isPending}
+          submitLabel={editingPublished ? tAdmin('form.save') : t('admin.publish')}
+          pendingLabel={editingPublished ? undefined : t('admin.publishing')}
+          icon={editingPublished ? <Save aria-hidden="true" /> : <Megaphone aria-hidden="true" />}
+          extra={
+            draftable && (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={save.isPending}
+                onClick={form.handleSubmit(saveDraft)}
+              >
+                <PendingIcon
+                  pending={save.isPending && draftPending}
+                  icon={<FilePenLine aria-hidden="true" />}
+                />
+                {save.isPending && draftPending ? tAdmin('form.saving') : t('admin.saveDraft')}
+              </Button>
+            )
+          }
         />
       </form>
       <ConfirmEmail

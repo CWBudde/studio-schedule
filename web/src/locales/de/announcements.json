@@ -36,7 +36,9 @@
     "status": "Status",
     "email": "E-Mail",
     "never": "Nie",
+    "notPublished": "Noch nicht",
     "statuses": {
+      "draft": "Entwurf",
       "scheduled": "Geplant",
       "shown": "Sichtbar",
       "expired": "Abgelaufen"
@@ -87,6 +89,7 @@
     "publishDate": "Veröffentlichen am",
     "publishTime": "Uhrzeit der Veröffentlichung",
     "publishHint": "Leer: sofort. Datum und Uhrzeit gelten in der Zeitzone der Schule.",
+    "publishHintDraft": "Leer: sofort. Ein Entwurf behält kein Datum: Sie wählen es beim Veröffentlichen.",
     "expiresDate": "Läuft ab am",
     "expiresTime": "Uhrzeit des Ablaufs",
     "expiresHint": "Leer: läuft nie ab.",
@@ -96,6 +99,9 @@
     "emailSendingHint": "Wird gerade per E-Mail verschickt: Änderungen erreichen nur die Adressen, die sie noch nicht haben.",
     "publish": "Veröffentlichen",
     "publishing": "Wird veröffentlicht…",
+    "saveDraft": "Als Entwurf speichern",
+    "draftSaved": "„{{title}}“ ist als Entwurf gespeichert.",
+    "draftSaveFailed": "„{{title}}“ wurde nicht als Entwurf gespeichert.",
     "added": "„{{title}}“ ist veröffentlicht.",
     "addedSending": "„{{title}}“ ist veröffentlicht; die E-Mail ist eingereiht.",
     "scheduled": "„{{title}}“ ist geplant.",

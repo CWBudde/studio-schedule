@@ -140,14 +140,29 @@ func (r announcementRepo) ListShown(_ context.Context, now time.Time) ([]domain.
 	})), nil
 }
 
+// newestFirst orders like PostgreSQL's publish_at DESC NULLS FIRST, id
+// DESC: the drafts first.
 func (announcementRepo) newestFirst(as []domain.Announcement) []domain.Announcement {
 	return sorted(as, func(a, b domain.Announcement) int {
-		return cmp.Or(b.PublishAt.Compare(a.PublishAt), compareID(b.ID, a.ID))
+		return cmp.Or(draftsFirst(a, b), b.PublishAt.Compare(a.PublishAt), compareID(b.ID, a.ID))
 	})
 }
 
-// dueForMail reports whether a is to be emailed and is not yet.
-func dueForMail(a domain.Announcement) bool { return a.Email && a.EmailedAt.IsZero() }
+// draftsFirst orders a draft before a published announcement.
+func draftsFirst(a, b domain.Announcement) int {
+	switch {
+	case a.Draft() == b.Draft():
+		return 0
+	case a.Draft():
+		return -1
+	default:
+		return 1
+	}
+}
+
+// dueForMail reports whether a is to be emailed and is not yet: a draft is
+// not, until it is published.
+func dueForMail(a domain.Announcement) bool { return a.MailPending() }
 
 func (r announcementRepo) ListDueForMail(_ context.Context, now time.Time, limit int) ([]domain.Announcement, error) {
 	// Like the PostgreSQL store, which locks the announcements it returns.

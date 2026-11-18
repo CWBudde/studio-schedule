@@ -126,15 +126,16 @@ type AnnouncementData struct {
 
 	Title     string    `doc:"One line." json:"title" maxLength:"500" minLength:"1"`
 	Body      string    `doc:"Plain text with line breaks." json:"body" maxLength:"20000" minLength:"1"`
-	PublishAt time.Time `doc:"When it shows; default: now. It may lie in the future." json:"publishAt,omitzero" required:"false"`
+	PublishAt time.Time `doc:"When it shows; default: now. It may lie in the future. Absent for a draft, which must not have one (a 422)." json:"publishAt,omitzero" required:"false"`
 	ExpiresAt time.Time `doc:"When it stops showing; absent: never." json:"expiresAt,omitzero" required:"false"`
-	Email     bool      `doc:"Whether it is mailed to its audience once, at publishAt." json:"email,omitempty" required:"false"`
+	Email     bool      `doc:"Whether it is mailed to its audience once, at publishAt (a draft's once it is published)." json:"email,omitempty" required:"false"`
+	Draft     bool      `doc:"A draft: saved, but neither shown nor mailed, and not counted in the daily mail limit, until a write without draft publishes it. A published announcement cannot become a draft again (a 422)." json:"draft,omitempty" required:"false"`
 }
 
 func (d AnnouncementData) service() service.AnnouncementInput {
 	return service.AnnouncementInput{
 		AnnouncementAudience: d.AnnouncementAudienceData.service(), Title: d.Title, Body: d.Body,
-		PublishAt: d.PublishAt, ExpiresAt: d.ExpiresAt, Email: d.Email,
+		PublishAt: d.PublishAt, ExpiresAt: d.ExpiresAt, Email: d.Email, Draft: d.Draft,
 	}
 }
 
@@ -194,7 +195,7 @@ type Announcement struct {
 
 // AnnouncementList is the response body of listAllAnnouncements.
 type AnnouncementList struct {
-	Items []Announcement `doc:"All announcements, newest publication first." json:"items" nullable:"false"`
+	Items []Announcement `doc:"All announcements: the drafts first, then newest publication first." json:"items" nullable:"false"`
 }
 
 // AnnouncementListOutput is the response of listAllAnnouncements.
@@ -274,7 +275,7 @@ func (h *handlers) listAllAnnouncements(ctx context.Context, _ *struct{}) (*Anno
 
 	items := make([]Announcement, 0, len(entries))
 	for _, e := range entries {
-		items = append(items, announcementBody(e))
+		items = append(items, NewAnnouncement(e))
 	}
 
 	return &AnnouncementListOutput{Body: AnnouncementList{Items: items}}, nil
@@ -330,11 +331,13 @@ func (h *handlers) announcementOutput(
 			return nil, h.toHTTPError(ctx, err)
 		}
 
-		return &AnnouncementOutput{Body: announcementBody(e)}, nil
+		return &AnnouncementOutput{Body: NewAnnouncement(e)}, nil
 	}
 }
 
-func announcementBody(e service.AnnouncementEntry) Announcement {
+// NewAnnouncement is an announcement as the office lists it (the body of
+// createAnnouncement and the items of listAllAnnouncements).
+func NewAnnouncement(e service.AnnouncementEntry) Announcement {
 	a := e.Announcement
 	out := Announcement{
 		ID: a.ID, EventTitle: e.Event.Title,
@@ -344,6 +347,7 @@ func announcementBody(e service.AnnouncementEntry) Announcement {
 				LessonID: a.LessonID, EventID: a.EventID,
 			},
 			Title: a.Title, Body: a.Body, PublishAt: a.PublishAt, ExpiresAt: a.ExpiresAt, Email: a.Email,
+			Draft: a.Draft(),
 		},
 		EmailedAt: a.EmailedAt, EmailRecipients: a.EmailRecipients, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 	}

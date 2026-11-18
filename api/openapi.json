@@ -524,8 +524,12 @@
             "format": "date-time",
             "type": "string"
           },
+          "draft": {
+            "description": "A draft: saved, but neither shown nor mailed, and not counted in the daily mail limit, until a write without draft publishes it. A published announcement cannot become a draft again (a 422).",
+            "type": "boolean"
+          },
           "email": {
-            "description": "Whether it is mailed to its audience once, at publishAt.",
+            "description": "Whether it is mailed to its audience once, at publishAt (a draft's once it is published).",
             "type": "boolean"
           },
           "emailRecipients": {
@@ -567,7 +571,7 @@
             "type": "string"
           },
           "publishAt": {
-            "description": "When it shows; default: now. It may lie in the future.",
+            "description": "When it shows; default: now. It may lie in the future. Absent for a draft, which must not have one (a 422).",
             "format": "date-time",
             "type": "string"
           },
@@ -728,8 +732,12 @@
             "format": "uuid",
             "type": "string"
           },
+          "draft": {
+            "description": "A draft: saved, but neither shown nor mailed, and not counted in the daily mail limit, until a write without draft publishes it. A published announcement cannot become a draft again (a 422).",
+            "type": "boolean"
+          },
           "email": {
-            "description": "Whether it is mailed to its audience once, at publishAt.",
+            "description": "Whether it is mailed to its audience once, at publishAt (a draft's once it is published).",
             "type": "boolean"
           },
           "eventId": {
@@ -748,7 +756,7 @@
             "type": "string"
           },
           "publishAt": {
-            "description": "When it shows; default: now. It may lie in the future.",
+            "description": "When it shows; default: now. It may lie in the future. Absent for a draft, which must not have one (a 422).",
             "format": "date-time",
             "type": "string"
           },
@@ -866,7 +874,7 @@
         "additionalProperties": false,
         "properties": {
           "items": {
-            "description": "All announcements, newest publication first.",
+            "description": "All announcements: the drafts first, then newest publication first.",
             "items": {
               "$ref": "#/components/schemas/Announcement"
             },

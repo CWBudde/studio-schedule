@@ -2,7 +2,9 @@ import { expect, gotoDemo, type Page, signIn, signOut, test } from './fixtures';
 
 // The demo seed has two announcements of the office: one for everyone, and
 // one for the members of the Creative Dance classes, which the member login
-// (Clara Amberly) sees through her son. Neither was emailed.
+// (Clara Amberly) sees through her son. Neither was emailed. Beside them is
+// a draft for everyone, "Open day in spring", which nobody sees until the
+// office publishes it.
 
 /** Opens a section of the administration from the account menu. */
 async function openAdmin(page: Page, name: string, section: string, heading = section) {
@@ -101,4 +103,41 @@ test('the mail log lists the mails of an emailed announcement', async ({ page })
     .click();
   const sheet = page.getByRole('dialog', { name: /^Mail to / });
   await expect(sheet.getByText(/The rehearsals start next week\./)).toBeVisible();
+});
+
+test('a draft of the office is shown to nobody until the office publishes it', async ({ page }) => {
+  const office = await signIn(page, 'Office');
+  await openAdmin(page, office, 'Announcements');
+  // A table on the desktop, a list of cards on a phone.
+  const draft = page
+    .getByRole('table', { name: 'Announcements' })
+    .getByRole('row')
+    .or(page.getByRole('list', { name: 'Announcements' }).getByRole('listitem'))
+    .filter({ hasText: 'Open day in spring' });
+  await expect(draft).toContainText('Draft');
+  await expect(draft).toContainText('Not yet');
+  await signOut(page, office);
+
+  const member = await signIn(page, 'Member');
+  const banner = page.getByRole('region', { name: 'New announcements' });
+  await expect(banner).toContainText('and 1 more');
+  await expect(banner).not.toContainText('Open day in spring');
+  await signOut(page, member);
+
+  await signIn(page, 'Office');
+  await openAdmin(page, office, 'Announcements');
+  await draft.getByRole('button', { name: 'Edit “Open day in spring”' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Edit “Open day in spring”' });
+  await sheet.getByRole('button', { name: 'Publish' }).click();
+  await expect(page.getByText('“Open day in spring” is published.')).toBeVisible();
+  // Published now: its status follows the page's clock, which ticks each
+  // minute, so it is no longer a draft rather than shown already.
+  await expect(draft).not.toContainText('Draft');
+  await expect(draft).not.toContainText('Not yet');
+  await signOut(page, office);
+
+  await signIn(page, 'Member');
+  await expect(page.getByRole('region', { name: 'New announcements' })).toContainText(
+    'Open day in spring',
+  );
 });

@@ -254,13 +254,17 @@ func testAnnouncements(t *testing.T, newStore func(*testing.T) store.Store) {
 			sameTime := e.newAnnouncement(olga, "Same time", t0.Add(-time.Hour))
 			edge := e.newAnnouncement(olga, "Edge", t0)
 			future := e.newAnnouncement(olga, "Future", t0.Add(time.Microsecond))
-			e.createAnnouncements(future, live, past, edge, sameTime)
+			// Drafts have no publish time: listed first, never shown.
+			draft := e.newAnnouncement(olga, "Draft", time.Time{})
+			draft.ExpiresAt = t0.Add(time.Hour)
+			otherDraft := e.newAnnouncement(olga, "Other draft", time.Time{})
+			e.createAnnouncements(future, draft, live, past, edge, otherDraft, sameTime)
 
 			all := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Announcement, error) {
 				return tx.Announcements().List(ctx)
 			})
-			// Newest first; equal times by ID descending.
-			wantSlice(e.t, all, []domain.Announcement{future, edge, sameTime, live, past})
+			// Drafts first, then newest first; equal times by ID descending.
+			wantSlice(e.t, all, []domain.Announcement{otherDraft, draft, future, edge, sameTime, live, past})
 
 			shown := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.Announcement, error) {
 				return tx.Announcements().ListShown(ctx, t0)
@@ -275,13 +279,15 @@ func testAnnouncements(t *testing.T, newStore func(*testing.T) store.Store) {
 			sent := e.newAnnouncement(olga, "Sent", t0.Add(-2*time.Hour))
 			sent.EmailedAt, sent.EmailRecipients = t0.Add(-2*time.Hour), 3
 			inApp := e.newAnnouncement(olga, "In the app", t0.Add(-time.Hour))
+			// A draft is mailed only once it is published.
+			draft := e.newAnnouncement(olga, "Draft", time.Time{})
 
-			for _, a := range []*domain.Announcement{&later, &due, &edge, &sent} {
+			for _, a := range []*domain.Announcement{&later, &due, &edge, &sent, &draft} {
 				a.Email = true
 				valid(e.t, *a)
 			}
 
-			e.createAnnouncements(later, due, edge, sent, inApp)
+			e.createAnnouncements(later, due, edge, sent, inApp, draft)
 
 			listDue := func(now time.Time, limit int) []domain.Announcement {
 				e.t.Helper()

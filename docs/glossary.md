@@ -51,6 +51,7 @@ where it differs.
 | Release window      | Release             | Freischaltung               | Next weeks become bookable at a configured weekday/time                            |
 | Visible days        | Visible days        | Sichtbare Tage              | Per-account override of how far ahead lessons are visible                          |
 | `Announcement`      | Announcement        | Mitteilung                  | Banner and home list; dismissed per account; emailed once (ADR 0014)               |
+| Draft               | Draft               | Entwurf                     | An announcement without a publish time: not shown or mailed until published (0014) |
 | Mail log            | Mail log            | Mail-Protokoll              | The outbox for admins; no bodies of secret-link mails (ADR 0014)                   |
 | Member number       | Member number       | Mitgliedsnummer             | `persons.member_no`, unique; the import's key (ADR 0015)                           |
 | Import              | Import members      | Mitglieder importieren      | CSV import with a column mapping, trial (dry run) and run history (0015)           |

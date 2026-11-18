@@ -3515,7 +3515,9 @@ export interface components {
              * @description When it was written.
              */
             createdAt: string;
-            /** @description Whether it is mailed to its audience once, at publishAt. */
+            /** @description A draft: saved, but neither shown nor mailed, and not counted in the daily mail limit, until a write without draft publishes it. A published announcement cannot become a draft again (a 422). */
+            draft?: boolean;
+            /** @description Whether it is mailed to its audience once, at publishAt (a draft's once it is published). */
             email?: boolean;
             /**
              * Format: int64
@@ -3553,7 +3555,7 @@ export interface components {
             lessonId?: string;
             /**
              * Format: date-time
-             * @description When it shows; default: now. It may lie in the future.
+             * @description When it shows; default: now. It may lie in the future. Absent for a draft, which must not have one (a 422).
              */
             publishAt?: string;
             /**
@@ -3641,7 +3643,9 @@ export interface components {
              * @description The course type; only with audience course-type.
              */
             courseTypeId?: string;
-            /** @description Whether it is mailed to its audience once, at publishAt. */
+            /** @description A draft: saved, but neither shown nor mailed, and not counted in the daily mail limit, until a write without draft publishes it. A published announcement cannot become a draft again (a 422). */
+            draft?: boolean;
+            /** @description Whether it is mailed to its audience once, at publishAt (a draft's once it is published). */
             email?: boolean;
             /**
              * Format: uuid
@@ -3660,7 +3664,7 @@ export interface components {
             lessonId?: string;
             /**
              * Format: date-time
-             * @description When it shows; default: now. It may lie in the future.
+             * @description When it shows; default: now. It may lie in the future. Absent for a draft, which must not have one (a 422).
              */
             publishAt?: string;
             /**
@@ -3717,7 +3721,7 @@ export interface components {
             startsAt: string;
         };
         AnnouncementList: {
-            /** @description All announcements, newest publication first. */
+            /** @description All announcements: the drafts first, then newest publication first. */
             items: components["schemas"]["Announcement"][];
         };
         AnonymizeResult: {

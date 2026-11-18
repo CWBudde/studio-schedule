@@ -182,7 +182,6 @@ export const audienceOf = ({
   ...(eventId ? { eventId } : {}),
 });
 
-/** Whether an announcement is scheduled, shown or expired at `now`. */
 /**
  * Whether the mailing of the announcement has begun: it is emailed, or being
  * sent (some addresses have it). Its email can no longer be turned off.
@@ -191,8 +190,13 @@ export function mailStarted(a: Pick<Announcement, 'emailedAt' | 'emailRecipients
   return Boolean(a.emailedAt) || a.emailRecipients > 0;
 }
 
+/**
+ * Whether an announcement is a draft (no publication time: neither shown nor
+ * mailed until the office publishes it), scheduled, shown or expired at `now`.
+ */
 export function statusAt(a: Pick<Announcement, 'publishAt' | 'expiresAt'>, now: number) {
-  if (a.publishAt && Date.parse(a.publishAt) > now) return 'scheduled' as const;
+  if (!a.publishAt) return 'draft' as const;
+  if (Date.parse(a.publishAt) > now) return 'scheduled' as const;
   if (a.expiresAt && Date.parse(a.expiresAt) <= now) return 'expired' as const;
   return 'shown' as const;
 }

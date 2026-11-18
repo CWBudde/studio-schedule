@@ -79,12 +79,18 @@ type AnnouncementInput struct {
 	// Body is plain text (plainText rules, up to
 	// domain.MaxAnnouncementBodyLen characters).
 	Body string
-	// PublishAt is when it shows; zero means now.
+	// PublishAt is when it shows; zero means now. A draft has none.
 	PublishAt time.Time
 	// ExpiresAt is when it stops showing (optional).
 	ExpiresAt time.Time
-	// Email mails it to its audience once, at PublishAt.
+	// Email mails it to its audience once, at PublishAt (a draft's once it
+	// is published).
 	Email bool
+	// Draft saves it as a draft (ADR 0014, amendment): neither shown nor
+	// mailed, and not counted in the daily limit, until a write without
+	// Draft publishes it. A published announcement cannot become a draft
+	// again.
+	Draft bool
 }
 
 // AnnouncementEntry is an announcement as the office lists it, with what
@@ -163,11 +169,13 @@ func (s *AnnouncementService) List(ctx context.Context) ([]AnnouncementEntry, er
 	return out, nil
 }
 
-// Create publishes an announcement by p (the admin while impersonating). If
-// it asks for email, it takes its place in the daily limit at once
-// (*TooManyAnnouncementMailsError beyond it), and the announcements job
-// emails it from PublishAt on: right after this returns if it publishes
-// now.
+// Create publishes an announcement by p (the admin while impersonating),
+// or saves it as a draft (in.Draft), which takes no place in the daily
+// limit and is neither shown nor mailed until Update publishes it. If a
+// published one asks for email, it takes its place in the daily limit at
+// once (*TooManyAnnouncementMailsError beyond it), and the announcements
+// job emails it from PublishAt on: right after this returns if it
+// publishes now.
 func (s *AnnouncementService) Create(ctx context.Context, p Principal, in AnnouncementInput) (AnnouncementEntry, error) {
 	var (
 		out AnnouncementEntry
@@ -196,7 +204,9 @@ func (s *AnnouncementService) Create(ctx context.Context, p Principal, in Announ
 }
 
 // Update changes an announcement that has not expired
-// (ErrAnnouncementExpired otherwise). One whose mailing has begun (emailed,
+// (ErrAnnouncementExpired otherwise). A draft stays one while in.Draft is
+// set, and is published like a new one without it; a published one never
+// becomes a draft again (a field error on draft). One whose mailing has begun (emailed,
 // or being sent) stays emailed and is not emailed again, whatever in.Email
 // says; one that is not, is emailed like a new one. It locks the
 // announcement against a concurrent mailing, and an edit never changes
@@ -246,6 +256,14 @@ func (s *AnnouncementService) Update(
 // errExpiresPast refuses an announcement that would have expired already.
 var errExpiresPast error = &domain.FieldError{Field: "expiresAt", Msg: "the expiry must lie in the future"}
 
+// Refusals of the draft state (ADR 0014, amendment).
+var (
+	errDraftPublishAt error = &domain.FieldError{Field: "publishAt", Msg: "a draft has no publish time"}
+	errPublishedDraft error = &domain.FieldError{
+		Field: "draft", Msg: "a published announcement cannot become a draft",
+	}
+)
+
 // write sets a's fields from in, checks them and, if a is to be emailed and
 // its mailing has not begun, the daily limit, and saves a with save. It
 // sends nothing: SendDue does.
@@ -271,7 +289,18 @@ func (s *AnnouncementService) write(
 	a.Audience, a.Role, a.ClassID, a.CourseTypeID, a.LessonID = in.Audience, in.Role, in.ClassID, in.CourseTypeID,
 		in.LessonID
 	a.EventID = in.EventID
-	a.PublishAt, a.ExpiresAt = cmp.Or(in.PublishAt, now), in.ExpiresAt
+
+	// A new announcement starts as a draft (no publish time) until here.
+	switch {
+	case in.Draft && !a.Draft():
+		return AnnouncementEntry{}, errPublishedDraft
+	case in.Draft && !in.PublishAt.IsZero():
+		return AnnouncementEntry{}, errDraftPublishAt
+	case in.Draft:
+		a.ExpiresAt = in.ExpiresAt
+	default:
+		a.PublishAt, a.ExpiresAt = cmp.Or(in.PublishAt, now), in.ExpiresAt
+	}
 
 	if err := a.Validate(); err != nil {
 		return AnnouncementEntry{}, err
@@ -290,7 +319,7 @@ func (s *AnnouncementService) write(
 		return AnnouncementEntry{}, err
 	}
 
-	if a.Email && !a.MailStarted() {
+	if a.MailPending() && !a.MailStarted() {
 		if err := announcementMailLimit(ctx, tx, loc, now, a); err != nil {
 			return AnnouncementEntry{}, err
 		}

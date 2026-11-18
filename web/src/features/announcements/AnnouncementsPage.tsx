@@ -23,12 +23,21 @@ import { statusAt } from './announcementForms';
 
 const columns = columnHelper<Announcement>();
 
-const statusVariant = { scheduled: 'outline', shown: 'secondary', expired: 'outline' } as const;
+const statusVariant = {
+  draft: 'outline',
+  scheduled: 'outline',
+  shown: 'secondary',
+  expired: 'outline',
+} as const;
+
+/** A draft has no publication time: it sorts as the newest. */
+const publishedAt = (a: Announcement) => (a.publishAt ? Date.parse(a.publishAt) : Infinity);
 
 /**
  * The school's announcements (/admin/announcements), for the office (ADR
  * 0014): every one with its audience, publication window, status and email,
- * to write, edit until it expires, and delete.
+ * to write, save as a draft and publish later, edit until it expires, and
+ * delete.
  */
 export function AnnouncementsPage() {
   const { t, i18n } = useTranslation('announcements');
@@ -78,7 +87,8 @@ export function AnnouncementsPage() {
       if (!a.email) return t('admin.noEmail');
       // The announcements job sends it from its publication on, in batches.
       if (!a.emailedAt) {
-        return statusAt(a, now) === 'scheduled'
+        const status = statusAt(a, now);
+        return status === 'scheduled' || status === 'draft'
           ? t('admin.emailScheduled')
           : t('admin.emailSending');
       }
@@ -101,13 +111,20 @@ export function AnnouncementsPage() {
         ),
       }),
       columns.accessor(audienceText, { id: 'audience', header: t('admin.audience') }),
-      columns.accessor((a) => formatTimestamp(a.publishAt ?? '', timeZone, lang), {
-        id: 'published',
-        header: t('admin.published'),
-        sortFn: (a, b) =>
-          Date.parse(a.original.publishAt ?? '') - Date.parse(b.original.publishAt ?? ''),
-        cell: (info) => <span className="whitespace-nowrap">{info.getValue()}</span>,
-      }),
+      columns.accessor(
+        (a) =>
+          a.publishAt ? formatTimestamp(a.publishAt, timeZone, lang) : t('admin.notPublished'),
+        {
+          id: 'published',
+          header: t('admin.published'),
+          // Two drafts (Infinity) are equal.
+          sortFn: (a, b) => {
+            const [x, y] = [publishedAt(a.original), publishedAt(b.original)];
+            return x === y ? 0 : x - y;
+          },
+          cell: (info) => <span className="whitespace-nowrap">{info.getValue()}</span>,
+        },
+      ),
       columns.accessor(
         (a) => (a.expiresAt ? formatTimestamp(a.expiresAt, timeZone, lang) : t('admin.never')),
         {
