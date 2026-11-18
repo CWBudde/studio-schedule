@@ -1338,16 +1338,16 @@ backends.
       and `Secure` (`__Host-` needs `Path=/`). Unit tests, an e2e run under a prefix
       (`web/e2e-server`), docs/operations.md (ADR 0023). The same production build passes the server
       suite at the domain root and under `/dance/schedule`, including the offline app shell.
-- [ ] Conformance suite (Go, black-box, against a `BASE_URL`): it ports the scenarios of
-      `internal/app/*_test.go` and `servicetest` to HTTP and checks every response against
-      `api/openapi.json`. It needs a test control API under `/api/test/…`, registered only with
-      `TEST_CONTROL=true` and refused at start with an `https://` `BASE_URL`, not part of
-      `api/openapi.json`, in both backends: set the clock, reset the database, load the demo
-      seed, read the outbox. It runs first against `serve` (at the root and under a base path),
-      then in CI against Go and against PHP on PostgreSQL, MySQL 8.0 and MariaDB 10.6
-      (`just conformance`). Go now passes 20 scenarios at both mount points. Its authenticated
-      fixture controls use an isolated PostgreSQL schema. The PHP fixtures and three-database CI
-      runs remain part of this item.
+- [ ] Conformance suite (Go, black-box, against a `BASE_URL`): port the scenarios of
+      `internal/app/*_test.go` and `servicetest` to HTTP and check every response against
+      `api/openapi.json` (`just conformance`). Both backends need a test control API under
+      `/api/test/…` to set the clock, reset the database, load the demo seed and read the outbox.
+      Register it only with `TEST_CONTROL=true`, refuse it at startup with an `https://`
+      `BASE_URL`, and keep it out of `api/openapi.json`.
+  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 20
+        scenarios at the domain root and under `/dance/schedule`.
+  - [ ] PHP test controls and the complete CI runs against both backends, with PHP tested on
+        PostgreSQL, MySQL 8.0 and MariaDB 10.6.
 - [ ] PHP skeleton (Slim 4, 64-bit PHP 8.3+): config from the environment with the names of
       docs/operations.md, else from `app/config/.env` (the environment wins), PSR-3 logging with
       request IDs, problem+json in the shape of `httpapi.ErrorModel`, the middleware chain of
@@ -1363,15 +1363,13 @@ backends.
       MariaDB 10.6. PHP accepts existing session cookies, checks impersonation and expires and renews
       sessions on all three engines. Shared caches, the readiness deadline, metrics and the job
       runner are open.
-- [ ] MySQL/MariaDB schema: `php/migrations/mysql`, one twin per Go migration with the same
-      version (`DATETIME(6)` in UTC for `timestamptz`, generated columns plus unique indexes for
-      partial unique indexes, `SIGNAL` triggers for the immutable receipts), the tables for rate
-      limits and the readiness cache in both sets, and a CI test that migrates PostgreSQL and
-      MySQL to the latest version and compares tables, columns, nullability, keys, unique
-      constraints and checks. The 38 existing PostgreSQL versions have MySQL/MariaDB twins
-      and CI runs the catalog and write-constraint comparisons on both engines. The shared
-      rate-limit and readiness-cache tables are still open.
-- [ ] Shared building blocks: PSR-20 clock and school time zone (never the server zone), UUIDv7
+- [ ] MySQL/MariaDB schema: `php/migrations/mysql` has one twin per Go migration at the same
+      version. Use `DATETIME(6)` in UTC for `timestamptz`, generated columns with unique indexes
+      for partial unique indexes, and `SIGNAL` triggers for immutable receipts.
+  - [x] Port PostgreSQL versions 1–38 and compare tables, columns, nullability, keys, unique
+        constraints and checks in CI on PostgreSQL, MySQL 8.0 and MariaDB 10.6.
+  - [ ] Add the shared rate-limit and readiness-cache tables to both migration sets.
+- [x] Shared building blocks: PSR-20 clock and school time zone (never the server zone), UUIDv7
       IDs, `Money`/`Date`/`TimeOfDay` value objects, argon2id through `password_verify` (or
       `sodium_crypto_pwhash_str_verify` where PHP lacks Argon2) on the existing PHC hashes, new
       hashes with Go's parameters (a test with hashes made by Go, and Go verifying hashes made by
@@ -1379,26 +1377,25 @@ backends.
       golden files in `internal/mail/testdata`, the iCal writer against the golden feeds in
       `internal/service/testdata/feeds`, the receipt template ported to Twig/HTML for mPDF
       against the text-extraction goldens of `tools/receipt-pdf`, web push through
-      `minishlink/web-push` against the RFC 8291 vectors of `internal/webpush`
+      `minishlink/web-push` against the RFC 8291 vectors of `internal/webpush`.
       PHP now shares the common-password list and its Argon2id hashes verify in both backends.
       The PSR-20 system clock and the money, date and wall-time values have parity tests,
       including DST gaps and repeated times. The Twig renderer and iCalendar writer match the Go
       golden files. Web Push transport uses the upstream encryption and VAPID code and passes the RFC
       8291 test vector. The Twig/mPDF receipt renderer uses the matching Libertinus 7.051
-      TrueType fonts and matches 12 Go text-extraction cases. The receipt API and ledger, push
-      subscriptions and delivery jobs are open.
-- [ ] Web installer at `<base>/setup`, only while `SETUP_TOKEN` is set and with the token on every
-      request: checks PHP version, extensions, the database and a writable log directory, migrates
-      an empty database, creates the settings and the first admin as `init` does, then refuses a
-      second admin. Upgrades: lists pending migrations and applies them after an admin signs in
-      there (token plus an admin's email and password against the existing tables); migrations
-      never run on their own. MySQL/MariaDB upgrades require a verified full backup. If an
-      upgrade stops after the recovery marker is written, the database stays in maintenance
-      until the operator restores that backup. Full dump and restore drills on MySQL 8.0 and MariaDB
-      10.6 recovered the data and migration history and allowed a corrected upgrade. Offers
-      `db:copy`. The mounted installer performs first setup and administrator-authorized upgrades. Its
-      one-time first-admin link uses the PHP password reset confirmation endpoint. Requesting a
-      replacement reset link by email and copying the database remain open.
+      TrueType fonts and matches 12 Go text-extraction cases.
+- [ ] Web installer at `<base>/setup`.
+  - [x] Register the installer only while `SETUP_TOKEN` is set and require it on each request.
+        Migrate an empty database, create the settings and first admin as `init` does, refuse a
+        second admin, and issue a one-time setup link through the PHP password reset confirmation
+        endpoint.
+  - [x] List pending migrations. Apply them only on an explicit upgrade request authenticated
+        with the setup token and an active administrator's email and password. Require a verified
+        full pre-upgrade backup on MySQL and MariaDB. An interrupted upgrade stays in maintenance
+        until the operator restores that backup. Full dump and restore drills recovered data and
+        migration history on both engines.
+  - [ ] Finish release-specific checks for PHP version, extensions, the database and a writable
+        log directory, and offer `db:copy`.
 - [ ] API areas, each done when its conformance cases pass on PHP with PostgreSQL, MySQL and
       MariaDB:
   - [ ] Public settings, schedule and visibility, release window (ADR 0003). PHP serves the
@@ -1407,7 +1404,8 @@ backends.
         and under a prefix.
   - [ ] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006). PHP serves
         `/api/v1/auth/me` and reads sessions issued by Go. Sign-in, rate limits and the remaining
-        account operations are open.
+        account operations are open, including requesting a replacement password reset link by
+        email.
   - [ ] Family, persons, invitations, catalogue and timetable administration (ADR 0007, 0008)
   - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
         order (`SELECT … FOR UPDATE` on all three databases, term → class → lesson → passes)
@@ -1419,13 +1417,13 @@ backends.
   - [ ] Privacy, export, anonymisation, retention jobs (ADR 0016)
   - [ ] Web push with VAPID (ADR 0017)
   - [ ] Events and workshops (Phase 10)
-- [ ] CLI parity: the operator commands (`migrate`, `seed`, `init`, `import`, `jobs:run`,
-      `vapid-keys`, `healthcheck`, `doctor`, `db check`) as PHP console commands in
-      `bin/studio-schedule`. The admin commands of Phase 11 and the MCP server of Phase 12 stay
-      Go-only (ADR 0023: no remote mode; a school on PostgreSQL runs the Go binary against its
-      database, a school on MySQL uses the web UI). The PHP executable provides `init` against a
-      current schema and `healthcheck` at the configured base path. The other operator commands
-      are open.
+- [ ] CLI parity: port the operator commands to the PHP `bin/studio-schedule` executable.
+      The Phase 11 admin commands and Phase 12 MCP server stay Go-only (ADR 0023). On PostgreSQL
+      a school can run the Go binary against its database. On MySQL and MariaDB it uses the web
+      UI for administration.
+  - [x] `init` sets up a school on a current schema and prints the one-time first-admin link.
+  - [x] `healthcheck` probes the liveness endpoint at the configured base path.
+  - [ ] `migrate`, `seed`, `import`, `jobs:run`, `vapid-keys`, `doctor`, and `db check`.
 - [ ] `db:copy` (command and installer action): copies a complete database into an empty one of
       another kind, MySQL/MariaDB → PostgreSQL and back, at the same schema version, in one
       transaction on the target, then runs the `db check` checks there and rolls back on a
