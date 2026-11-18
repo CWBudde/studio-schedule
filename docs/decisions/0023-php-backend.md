@@ -71,7 +71,7 @@ target. A failed check rolls the copy back.
 
 ### PHP 8.3 and small PSR libraries
 
-PHP 8.3 or later. No full-stack framework: Slim 4 for PSR-7/15 routing and middleware, Doctrine
+64-bit PHP 8.3 or later preserves Go’s integer amounts and timestamp range. No full-stack framework: Slim 4 for PSR-7/15 routing and middleware, Doctrine
 DBAL for the three databases (no ORM), symfony/mailer (SMTP only, like Go), symfony/uid (UUIDv7),
 Twig for the mail templates and the receipt, a PSR-3 logger, a PSR-20 clock. The code keeps the Go
 layering: `Http` → `Service` → `Store` interfaces, SQL only in the store implementations, one store

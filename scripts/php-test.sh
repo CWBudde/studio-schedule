@@ -38,6 +38,8 @@ run_php() {
 	docker run --rm --user "$(id -u):$(id -g)" \
 		-v "$PWD/php:/app" -v "$cache:/composer-cache" \
 		-v "$PWD/internal/store/postgres/migrations:/postgres-migrations:ro" \
+		-v "$PWD/internal/auth/password/common-passwords.txt:/common-passwords.txt:ro" \
+		-e STUDIO_PHP_TEST_COMMON_PASSWORDS=/common-passwords.txt \
 		-e STUDIO_PHP_TEST_POSTGRES_MIGRATIONS=/postgres-migrations \
 		-e COMPOSER_HOME=/tmp/composer -e COMPOSER_CACHE_DIR=/composer-cache \
 		-w /app "$@"
@@ -112,6 +114,10 @@ done
 # Each engine executes only its own SQL paths. Gate the union of the
 # supported engines and keep single-engine runs for focused verification.
 if [[ ${#engines[@]} == 3 ]]; then
-	reports=(--gate "${reports[@]}")
+	sodium_report=/coverage/password-sodium.php
+	run_php -v "$coverage_dir:/coverage" "$image" \
+		php -d disable_functions=password_hash,password_verify vendor/bin/phpunit \
+		--filter PasswordHashTest --coverage-php "$sodium_report"
+	reports=(--gate "${reports[@]}" "$sodium_report")
 fi
 run_php -v "$coverage_dir:/coverage:ro" "$image" php tools/check-coverage.php "${reports[@]}"

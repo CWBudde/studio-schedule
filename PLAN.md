@@ -1348,7 +1348,7 @@ backends.
       (`just conformance`). Go now passes 20 scenarios at both mount points. Its authenticated
       fixture controls use an isolated PostgreSQL schema. The PHP fixtures and three-database CI
       runs remain part of this item.
-- [ ] PHP skeleton (Slim 4, PHP 8.3+): config from the environment with the names of
+- [ ] PHP skeleton (Slim 4, 64-bit PHP 8.3+): config from the environment with the names of
       docs/operations.md, else from `app/config/.env` (the environment wins), PSR-3 logging with
       request IDs, problem+json in the shape of `httpapi.ErrorModel`, the middleware chain of
       `internal/app/observe.go` (security headers, request ID, access log with redacted `token`
@@ -1379,6 +1379,9 @@ backends.
       `internal/service/testdata/feeds`, the receipt template ported to Twig/HTML for mPDF
       against the text-extraction goldens of `tools/receipt-pdf`, web push through
       `minishlink/web-push` against the RFC 8291 vectors of `internal/webpush`
+      PHP now shares the common-password list and its Argon2id hashes verify in both backends.
+      The PSR-20 system clock and the money, date and wall-time values have parity tests,
+      including DST gaps and repeated times.
 - [ ] Web installer at `<base>/setup`, only while `SETUP_TOKEN` is set and with the token on every
       request: checks PHP version, extensions, the database and a writable log directory, migrates
       an empty database, creates the settings and the first admin as `init` does, then refuses a

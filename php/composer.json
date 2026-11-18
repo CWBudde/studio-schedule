@@ -5,6 +5,7 @@
   "type": "project",
   "require": {
     "php": "^8.3",
+    "php-64bit": "*",
     "ext-pdo": "*",
     "doctrine/dbal": "^4.4",
     "monolog/monolog": "^3.9",
