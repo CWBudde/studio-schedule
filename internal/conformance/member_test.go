@@ -1,0 +1,153 @@
+package conformance
+
+import (
+	"bytes"
+	"net/http"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+type booking struct {
+	ID       string
+	PersonID string
+	LessonID string
+	Status   string
+	Late     bool
+}
+
+func memberBooking(t *testing.T, b *backend) {
+	t.Helper()
+
+	member := browser(t)
+	login(t, b, member, "lina.mistlewood@example.com", "demo-password")
+	family := read[struct{ Me struct{ ID string } }](t, get(t, b, member, "/api/v1/family"))
+	type lessonState struct {
+		scheduledLesson
+		Status     string
+		FreePlaces int
+		BookedFor  []struct{ BookingID string }
+	}
+	office := browser(t)
+	login(t, b, office, "olga.ledgerby@example.net", demoPassword)
+	lessonID := createLesson(t, b, office, "regular", 2)
+
+	params := map[string]string{"lessonId": lessonID}
+	detail := request{method: http.MethodGet, path: "/api/v1/lessons/{lessonId}", params: params}
+	target := read[lessonState](t, b.call(t, member, detail, http.StatusOK))
+	book := request{
+		method: http.MethodPost, path: "/api/v1/lessons/{lessonId}/bookings",
+		params: params, body: `{"personId":"` + family.Me.ID + `"}`,
+	}
+	original := read[booking](t, b.call(t, member, book, http.StatusCreated))
+	b.call(t, member, book, http.StatusConflict)
+
+	before := read[lessonState](t, b.call(t, member, detail, http.StatusOK))
+	if before.FreePlaces != target.FreePlaces-1 || len(before.BookedFor) != 1 {
+		t.Errorf("booking did not reserve the member's place: before %+v, after %+v", target, before)
+	}
+	cancel := request{
+		method: http.MethodPost, path: "/api/v1/bookings/{bookingId}/cancel",
+		params: map[string]string{"bookingId": original.ID},
+	}
+	other := browser(t)
+	login(t, b, other, "clara.amberly@example.org", "demo-password")
+	b.call(t, other, cancel, http.StatusNotFound)
+	canceled := read[booking](t, b.call(t, member, cancel, http.StatusOK))
+	if canceled.ID != original.ID || canceled.Status != "canceled" || canceled.Late {
+		t.Fatalf("unexpected canceled booking: %+v", canceled)
+	}
+	after := read[lessonState](t, b.call(t, member, detail, http.StatusOK))
+	if after.FreePlaces != before.FreePlaces+1 || len(after.BookedFor) != 0 {
+		t.Errorf("canceling did not release the member's place: before %+v, after %+v", before, after)
+	}
+
+	rebooked := read[booking](t, b.call(t, member, book, http.StatusCreated))
+	if rebooked.Status != "booked" || rebooked.LessonID != original.LessonID || rebooked.PersonID != original.PersonID {
+		t.Fatalf("unexpected rebooking: %+v", rebooked)
+	}
+	restored := read[lessonState](t, b.call(t, member, detail, http.StatusOK))
+	if restored.FreePlaces != before.FreePlaces || len(restored.BookedFor) != 1 ||
+		restored.BookedFor[0].BookingID != rebooked.ID {
+		t.Errorf("rebooking did not restore availability and ownership: %+v", restored)
+	}
+}
+
+func calendarSubscription(t *testing.T, b *backend) {
+	t.Helper()
+
+	member := browser(t)
+	guest := browser(t)
+	login(t, b, member, "lina.mistlewood@example.com", "demo-password")
+	const endpoint = "/api/v1/my/calendar-feeds"
+	result := read[struct {
+		Feed      struct{ ID string }
+		Token     string
+		Path, URL string
+	}](t, b.call(t, member, request{method: http.MethodPost, path: endpoint, body: `{"scope":"bookings"}`}, http.StatusCreated))
+	base, _ := url.Parse(b.base)
+	wantPath := "/ical/" + result.Token + ".ics"
+	if result.Token == "" || result.Path != base.Path+wantPath || result.URL != b.base+wantPath {
+		t.Fatal("calendar feed URL or path did not use the mount point")
+	}
+
+	list := get(t, b, member, endpoint)
+	if !bytes.Contains(list.body, []byte(result.Feed.ID)) || bytes.Contains(list.body, []byte(result.Token)) {
+		t.Fatal("the list must show the active feed and omit its secret")
+	}
+
+	in := request{method: http.MethodGet, path: "/ical/{token}.ics", params: map[string]string{"token": result.Token}}
+	document := b.call(t, guest, in, http.StatusOK)
+	etag := document.header.Get("ETag")
+	if etag == "" || !bytes.HasPrefix(document.body, []byte("BEGIN:VCALENDAR\r\n")) ||
+		!bytes.Contains(document.body, []byte("BEGIN:VEVENT")) ||
+		!bytes.Contains(document.body, []byte(b.base+"/schedule")) {
+		t.Fatal("calendar document lacks its revision, events or mounted lesson links")
+	}
+	in.header = http.Header{"If-None-Match": {etag}}
+	b.call(t, guest, in, http.StatusNotModified)
+
+	b.call(t, member, request{
+		method: http.MethodDelete, path: endpoint + "/{feedId}",
+		params: map[string]string{"feedId": result.Feed.ID},
+	}, http.StatusNoContent)
+	b.call(t, guest, in, http.StatusNotFound)
+}
+
+func familyPrivacy(t *testing.T, b *backend) {
+	t.Helper()
+
+	parent := browser(t)
+	login(t, b, parent, "clara.amberly@example.org", "demo-password")
+	family := read[struct {
+		Me         struct{ ID, GivenName string }
+		Dependents []struct{ ID, GivenName string }
+	}](t, get(t, b, parent, "/api/v1/family"))
+	if family.Me.GivenName != "Clara" || len(family.Dependents) != 2 {
+		t.Fatalf("unexpected family: %+v", family)
+	}
+	export := request{
+		method: http.MethodGet, path: "/api/v1/my/export",
+		query: url.Values{"person": {family.Me.ID}},
+	}
+	signed := b.call(t, parent, export, http.StatusOK)
+	body := read[struct {
+		Format, ExportedAt string
+		Version            int
+		Account            struct{ Email string }
+	}](t, signed)
+	if body.Format != "studio-schedule.person-export" || body.Version != 1 ||
+		body.Account.Email != "clara.amberly@example.org" || body.ExportedAt != demoNow ||
+		strings.Contains(string(signed.body), "passwordHash") {
+		t.Fatal("person export contains an unexpected account, export version, or secret")
+	}
+	export.query.Set("person", family.Dependents[0].ID)
+	child := b.call(t, parent, export, http.StatusOK)
+	if containsJSON(child.body, `"account":`) {
+		t.Error("dependent export disclosed an account")
+	}
+
+	outsider := browser(t)
+	login(t, b, outsider, "lina.mistlewood@example.com", "demo-password")
+	b.call(t, outsider, export, http.StatusNotFound)
+}

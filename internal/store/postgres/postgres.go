@@ -70,6 +70,10 @@ func Open(ctx context.Context, databaseURL string) (*Store, error) {
 		return nil, err
 	}
 
+	return openPool(ctx, cfg)
+}
+
+func openPool(ctx context.Context, cfg *pgxpool.Config) (*Store, error) {
 	// The job locks hold a connection of their own while the job's
 	// transactions need another (TryLockJob): a pool of one would starve
 	// them.

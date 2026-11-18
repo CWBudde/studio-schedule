@@ -10,6 +10,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/lock"
@@ -71,9 +72,15 @@ func NewMigrator(databaseURL string) (*Migrator, error) {
 		return nil, err
 	}
 
+	return newMigrator(cfg, goose.WithSessionLocker(locker))
+}
+
+// Each fixture owns its schema and serializes migrations locally. Ordinary
+// installations pass the shared database lock from NewMigrator.
+func newMigrator(cfg *pgxpool.Config, opts ...goose.ProviderOption) (*Migrator, error) {
 	db := stdlib.OpenDB(*cfg.ConnConfig)
 
-	provider, err := newProvider(db, goose.WithSessionLocker(locker))
+	provider, err := newProvider(db, opts...)
 	if err != nil {
 		_ = db.Close()
 

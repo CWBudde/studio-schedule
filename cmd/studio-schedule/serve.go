@@ -109,6 +109,10 @@ func (f *serveFlags) explicit(cmd *cobra.Command) config.Flags {
 }
 
 func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
+	if err := checkTestControl(cfg); err != nil {
+		return err
+	}
+
 	// Fail closed: without a database the server would run the public demo
 	// with its published logins, so that needs the explicit DEMO_MODE opt-in.
 	if cfg.DatabaseURL == "" && !cfg.Demo {
@@ -117,7 +121,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 			config.EnvDatabaseURL, config.EnvDemoMode)
 	}
 
-	st, closeStore, err := openStore(ctx, cfg, logger)
+	st, closeStore, resetFixture, err := openServeStore(ctx, cfg, logger)
 	if err != nil {
 		return err
 	}
@@ -170,11 +174,17 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		deps.Ready = r.Ready
 	}
 
-	metricsSrv := setUpMetrics(ctx, cfg, &deps, logger)
-	handler, _ := app.New(deps)
-
-	stopJobs := startJobs(ctx, deps, logger)
-	defer stopJobs() // runs before closeStore: no job outlives the store
+	var metricsSrv *http.Server
+	var handler http.Handler
+	if resetFixture != nil {
+		deps.Wake = nil
+		handler = newTestControl(deps, cfg.TestControlToken, resetFixture)
+	} else {
+		metricsSrv = setUpMetrics(ctx, cfg, &deps, logger)
+		handler, _ = app.New(deps)
+		stopJobs := startJobs(ctx, deps, logger)
+		defer stopJobs() // runs before closeStore: no job outlives the store
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

@@ -1,0 +1,38 @@
+name: test-conformance
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: studio
+          POSTGRES_PASSWORD: conformance
+          POSTGRES_DB: studio
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U studio -d studio"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CONFORMANCE_DATABASE_URL: postgres://studio:conformance@127.0.0.1:5432/studio?sslmode=disable
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Pull Git LFS files
+        uses: ./.github/actions/lfs-pull
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Run conformance tests at the root and under a prefix
+        run: ./scripts/conformance-go.sh

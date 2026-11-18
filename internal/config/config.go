@@ -56,6 +56,10 @@ const (
 	// Without it, a missing DATABASE_URL is a startup error, so a typo in
 	// production cannot silently turn the server into the public demo.
 	EnvDemoMode = "DEMO_MODE"
+	// EnvTestControl enables the isolated HTTP conformance fixture in serve.
+	EnvTestControl = "TEST_CONTROL"
+	// EnvTestControlToken authenticates requests to the fixture controls.
+	EnvTestControlToken = "TEST_CONTROL_TOKEN"
 
 	// EnvMetricsAddr is the host:port of the Prometheus metrics server;
 	// empty means no metrics.
@@ -119,6 +123,9 @@ type Config struct {
 	// BaseURL is the app's public URL, with an optional path and no trailing
 	// slash. It is used to build absolute links. Empty means unset.
 	BaseURL string
+	// TestControl runs the HTTP app in a disposable database schema.
+	TestControl      bool
+	TestControlToken string
 	// Demo explicitly allows running without a database on the in-memory
 	// store with the demo data (DEMO_MODE). The default is false: without a
 	// database the server refuses to start. With a database it has no
@@ -305,6 +312,16 @@ func load(lookup LookupFunc, flags Flags, withLog bool) (Config, error) {
 		}
 
 		cfg.Demo = b
+	}
+
+	if v := env(EnvTestControl); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: must be a boolean (true or false)", EnvTestControl))
+		}
+
+		cfg.TestControl = b
+		cfg.TestControlToken = env(EnvTestControlToken)
 	}
 
 	cfg.HSTSIncludeSubdomains = true
@@ -567,6 +584,10 @@ func (c Config) BasePath() string {
 // Redacted returns a copy of c with passwords in DatabaseURL and SMTP
 // masked.
 func (c Config) Redacted() Config {
+	if c.TestControlToken != "" {
+		c.TestControlToken = redactedMask
+	}
+
 	c.DatabaseURL = redactDatabaseURL(c.DatabaseURL)
 	if c.SMTP.Password != "" {
 		c.SMTP.Password = redactedMask

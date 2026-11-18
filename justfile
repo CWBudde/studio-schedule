@@ -137,6 +137,10 @@ e2e *args: demo-build
 e2e-server *args: build
     {{ if os() == "macos" { "caffeinate -i " } else { "" } }}./scripts/e2e-server.sh {{args}}
 
+# Check API responses against the OpenAPI contract on Go, or on a running test fixture at BASE_URL
+conformance:
+    if [[ -n "${BASE_URL:-}" ]]; then ./scripts/conformance-test.sh; else ./scripts/conformance-go.sh; fi
+
 # Back up a seeded database with pg_dump, restore it into a new one and check that the copy serves
 # (PostgreSQL in Docker; see docs/operations.md, "Backups and restore")
 restore-drill:
@@ -144,6 +148,7 @@ restore-drill:
 
 # Everything CI runs but `just vuln`, then the coverage report and gate (needs Docker; e2e needs `just e2e-install`)
 ci: check-tidy check-formatted check-sqlc lint test-cover check-wasm-deps typst-wasm-check web-check wasm-smoke e2e e2e-server restore-drill
+    ./scripts/conformance-go.sh
     @just coverage
 
 # ---------------------------------------------------------------- build & run

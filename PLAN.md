@@ -1345,7 +1345,9 @@ backends.
       `api/openapi.json`, in both backends: set the clock, reset the database, load the demo
       seed, read the outbox. It runs first against `serve` (at the root and under a base path),
       then in CI against Go and against PHP on PostgreSQL, MySQL 8.0 and MariaDB 10.6
-      (`just conformance`)
+      (`just conformance`). Go now passes 20 scenarios at both mount points. Its authenticated
+      fixture controls use an isolated PostgreSQL schema. The PHP fixtures and three-database CI
+      runs remain part of this item.
 - [ ] PHP skeleton (Slim 4, PHP 8.3+): config from the environment with the names of
       docs/operations.md, else from `app/config/.env` (the environment wins), PSR-3 logging with
       request IDs, problem+json in the shape of `httpapi.ErrorModel`, the middleware chain of

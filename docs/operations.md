@@ -31,6 +31,8 @@ Prefer the environment for secrets: flags are visible in the process list.
 | ------------------------- | ---------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`            | `--database-url` | empty                         | PostgreSQL connection (below); the flag is the global `--database-url` ([Global flags](#global-flags)). Empty: `serve` refuses to start unless `DEMO_MODE=true`. `migrate`, `seed`, `init`, `import`, `doctor` and the commands that act as an account need it.                                                                     |
 | `DEMO_MODE`               | –                | `false`                       | `true` or `false`. Explicit opt-in to run `serve` without a database, on an in-memory store with the fictional demo data and its published demo logins; changes are lost on exit. Never set it in production: a missing `DATABASE_URL` must fail loudly instead of silently becoming the public demo.                               |
+| `TEST_CONTROL`            | –                | `false`                       | Enables the HTTP conformance fixture. Requires an explicit HTTP `BASE_URL` and a PostgreSQL role that can create a private schema.                                                                                                                                                                                                  |
+| `TEST_CONTROL_TOKEN`      | –                | empty                         | Bearer credential for the fixture controls. Set a random value of at least 32 characters for each test run.                                                                                                                                                                                                                         |
 | `HTTP_ADDR`               | `--addr`         | `:8080`                       | Listen address `host:port` of the app (API, web UI, `/healthz`, `/readyz`). `healthcheck` requests this port on the local host.                                                                                                                                                                                                     |
 | `BASE_URL`                | `--base-url`     | `http://localhost:<port>`     | The public URL, with an optional path such as `https://example.test/schedule`. Links in mails, calendar feed URLs and the link `init` prints point to it. With `https://` the session cookie is `Secure` and every answer carries `Strict-Transport-Security`; with `http://` or unset, `serve` warns at startup.                   |
 | `TRUSTED_PROXIES`         | –                | empty                         | Reverse proxies in front of the app, as addresses or CIDR prefixes, comma-separated (`10.0.0.0/8,192.0.2.10`). Only their `X-Forwarded-For` and `X-Request-Id` headers are believed. Empty: the connection's address is the client.                                                                                                 |
@@ -310,7 +312,27 @@ prices, receipts, branding) is set in the app under Administration. `init` refus
 database that has a school already. Never run `seed` on an installation that real people use: its
 demo accounts, the admin included, share the published password `demo-password`.
 
-### Reverse proxy and TLS
+### HTTP conformance tests
+
+`just conformance` starts Go with a test PostgreSQL service and checks its responses against
+`api/openapi.json`, at the root and under `/dance/schedule`. It starts a temporary PostgreSQL
+container unless `CONFORMANCE_DATABASE_URL` names a test service. Set `BASE_URL` and
+`TEST_CONTROL_TOKEN` to run against an existing test server with disposable VAPID keys. Run one
+suite at a time against each fixture. The fixture disables automatic delivery jobs.
+
+In test mode Go migrates a private schema with its own fixture data and drops that schema on
+shutdown. It uses the PostgreSQL connection from `DATABASE_URL` and needs permission to create
+a schema. Set `HTTP_ADDR` to a loopback address for the fixture listener. The control routes require
+`Authorization: Bearer <TEST_CONTROL_TOKEN>` and use the app's mount path.
+
+| Method | Path               | Input and result                                                                         |
+| ------ | ------------------ | ---------------------------------------------------------------------------------------- |
+| PUT    | `/api/test/clock`  | `{"now":"2026-10-23T16:00:00Z"}` sets the test clock and returns 204.                    |
+| POST   | `/api/test/reset`  | Recreates the fixture schema, clears sessions and rate limits, and returns 204.          |
+| POST   | `/api/test/seed`   | `{"school":"programme","anchor":"2026-10-23"}` loads a fictional school and returns 204. |
+| GET    | `/api/test/outbox` | Returns the latest queued mails in a JSON `mails` array.                                 |
+
+## Reverse proxy and TLS
 
 The app speaks plain HTTP. Put a reverse proxy in front of it that terminates TLS, and set
 `BASE_URL` to the public `https://` origin: the session cookie is then `Secure` and browsers get
