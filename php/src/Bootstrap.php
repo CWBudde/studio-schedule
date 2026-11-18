@@ -8,22 +8,33 @@ use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\StreamHandler;
 use Monolog\Level;
 use Monolog\Logger;
+use Psr\Clock\ClockInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use StudioSchedule\Http\Application;
 use StudioSchedule\Http\Installer;
+use StudioSchedule\Http\MeEndpoint;
 use StudioSchedule\Http\PasswordResetEndpoint;
+use StudioSchedule\Http\PublicSettingsEndpoint;
 use StudioSchedule\Http\Responses;
+use StudioSchedule\Http\ScheduleRoutes;
+use StudioSchedule\Http\SessionMiddleware;
 use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Service\CommonPasswords;
 use StudioSchedule\Service\DatabaseReadiness;
 use StudioSchedule\Service\PasswordHash;
 use StudioSchedule\Service\PasswordReset;
+use StudioSchedule\Service\PublicSettings;
+use StudioSchedule\Service\SessionAuthentication;
 use StudioSchedule\Service\SystemClock;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\PasswordResetStore;
+use StudioSchedule\Store\PublicSettingsStore;
+use StudioSchedule\Store\ScheduleStore;
 use StudioSchedule\Store\Schema;
+use StudioSchedule\Store\SessionStore;
 use Symfony\Component\Uid\Uuid;
 use Throwable;
 
@@ -40,10 +51,12 @@ final class Bootstrap
         string $postgresMigrations,
         ?callable $environment = null,
         ?string $commonPasswordFile = null,
+        ?ClockInterface $clock = null,
     ): ResponseInterface {
         $request = null;
         try {
             $request = $makeRequest();
+            $clock ??= new SystemClock();
             $config = Config::load($appDirectory . '/config/.env', $environment);
             $logger = new Logger('studio-schedule');
             $level = match ($config->logLevel) {
@@ -74,18 +87,39 @@ final class Bootstrap
             $resetPassword = $connection === null ? null : static function (
                 ServerRequestInterface $request,
                 ResponseInterface $response,
-            ) use ($connection, $commonPasswordFile): ResponseInterface {
+            ) use ($connection, $commonPasswordFile, $clock): ResponseInterface {
                 $reset = new PasswordReset(
                     new PasswordResetStore($connection),
                     new PasswordHash(),
                     new CommonPasswords($commonPasswordFile),
-                    new SystemClock(),
+                    $clock,
                     new Renderer(),
                 );
                 return (new PasswordResetEndpoint($reset))($request, $response);
             };
 
-            return Application::create($config, $publicDirectory, $readiness, $logger, $installer, $resetPassword)->handle($request);
+            $sessions = null;
+            $registerRoutes = null;
+            if ($connection !== null) {
+                $sessionStore = new SessionStore($connection);
+                $sessions = new SessionMiddleware($config, new SessionAuthentication($sessionStore, $clock));
+                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock): void {
+                    $app->get('/api/v1/auth/me', new MeEndpoint($sessionStore));
+                    (new PublicSettingsEndpoint(new PublicSettings(new PublicSettingsStore($connection))))->register($app);
+                    ScheduleRoutes::register($app, new ScheduleStore($connection), $clock);
+                };
+            }
+
+            return Application::create(
+                $config,
+                $publicDirectory,
+                $readiness,
+                $logger,
+                $installer,
+                $resetPassword,
+                $sessions,
+                $registerRoutes,
+            )->handle($request);
         } catch (Throwable $error) {
             $id = Uuid::v7()->toRfc4122();
             error_log('studio-schedule startup error ' . $id . ': ' . $error::class);

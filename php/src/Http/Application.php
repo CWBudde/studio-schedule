@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Http;
 
+use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Psr\Log\LoggerInterface;
+use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ResponseFactory;
 use StudioSchedule\Config;
@@ -15,7 +17,10 @@ use StudioSchedule\Service\Readiness;
 
 final class Application
 {
-    /** @param (callable(ServerRequestInterface, ResponseInterface):ResponseInterface)|null $resetPassword */
+    /**
+     * @param (callable(ServerRequestInterface, ResponseInterface):ResponseInterface)|null $resetPassword
+     * @param (callable(App<ContainerInterface|null>):void)|null $registerRoutes
+     */
     public static function create(
         Config $config,
         string $publicDirectory,
@@ -23,6 +28,8 @@ final class Application
         LoggerInterface $logger,
         ?Installer $installer = null,
         ?callable $resetPassword = null,
+        ?SessionMiddleware $sessions = null,
+        ?callable $registerRoutes = null,
     ): RequestHandlerInterface {
         $app = AppFactory::create(new ResponseFactory());
         $app->setBasePath($config->basePath);
@@ -46,6 +53,12 @@ final class Application
             $app->map(['GET', 'POST'], '/setup', $installer);
         }
 
+        if ($registerRoutes !== null) {
+            $registerRoutes($app);
+        }
+        if ($sessions !== null) {
+            $app->add($sessions);
+        }
         $app->addRoutingMiddleware();
         $app->add(new RequestMiddleware($config, new StaticFiles($publicDirectory, $config->basePath), $readiness, $logger));
 

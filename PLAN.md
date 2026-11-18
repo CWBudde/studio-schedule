@@ -1360,7 +1360,8 @@ backends.
       (`pg_advisory_lock` / `GET_LOCK`) and `jobs:run` with the wake after
       `fastcgi_finish_request()`. PHP 8.3 now serves the mounted HTTP shell, validates the Goose
       migration history, and tests the DBAL connection and job lock on PostgreSQL, MySQL 8.0 and
-      MariaDB 10.6. Session access, shared caches, the readiness deadline, metrics and the job
+      MariaDB 10.6. PHP accepts existing session cookies, checks impersonation and expires and renews
+      sessions on all three engines. Shared caches, the readiness deadline, metrics and the job
       runner are open.
 - [ ] MySQL/MariaDB schema: `php/migrations/mysql`, one twin per Go migration with the same
       version (`DATETIME(6)` in UTC for `timestamptz`, generated columns plus unique indexes for
@@ -1382,7 +1383,8 @@ backends.
       PHP now shares the common-password list and its Argon2id hashes verify in both backends.
       The PSR-20 system clock and the money, date and wall-time values have parity tests,
       including DST gaps and repeated times. The Twig renderer and iCalendar writer match the Go
-      golden files. Receipt rendering and web push are open.
+      golden files. Web Push transport uses the upstream encryption and VAPID code and passes the RFC
+      8291 test vector. Receipt rendering and push subscription and delivery jobs are open.
 - [ ] Web installer at `<base>/setup`, only while `SETUP_TOKEN` is set and with the token on every
       request: checks PHP version, extensions, the database and a writable log directory, migrates
       an empty database, creates the settings and the first admin as `init` does, then refuses a
@@ -1390,14 +1392,20 @@ backends.
       there (token plus an admin's email and password against the existing tables); migrations
       never run on their own. MySQL/MariaDB upgrades require a verified full backup. If an
       upgrade stops after the recovery marker is written, the database stays in maintenance
-      until the operator restores that backup. Offers `db:copy`.
-      The mounted installer performs first setup and administrator-authorized upgrades. Its
+      until the operator restores that backup. Full dump and restore drills on MySQL 8.0 and MariaDB
+      10.6 recovered the data and migration history and allowed a corrected upgrade. Offers
+      `db:copy`. The mounted installer performs first setup and administrator-authorized upgrades. Its
       one-time first-admin link uses the PHP password reset confirmation endpoint. Requesting a
       replacement reset link by email and copying the database remain open.
 - [ ] API areas, each done when its conformance cases pass on PHP with PostgreSQL, MySQL and
       MariaDB:
-  - [ ] Public settings, schedule and visibility, release window (ADR 0003)
-  - [ ] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006)
+  - [ ] Public settings, schedule and visibility, release window (ADR 0003). PHP serves the
+        settings, branding images, schedule and lesson reads on all three database engines. The
+        settings, schedule and lesson JSON matched Go on a shared PostgreSQL fixture at the root
+        and under a prefix.
+  - [ ] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006). PHP serves
+        `/api/v1/auth/me` and reads sessions issued by Go. Sign-in, rate limits and the remaining
+        account operations are open.
   - [ ] Family, persons, invitations, catalogue and timetable administration (ADR 0007, 0008)
   - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
         order (`SELECT … FOR UPDATE` on all three databases, term → class → lesson → passes)

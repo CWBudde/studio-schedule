@@ -6,13 +6,18 @@
   "require": {
     "php": "^8.3",
     "php-64bit": "*",
+    "ext-curl": "*",
+    "ext-openssl": "*",
     "ext-pdo": "*",
     "doctrine/dbal": "^4.4",
+    "minishlink/web-push": "^11.0",
     "monolog/monolog": "^3.9",
     "psr/clock": "^1.0",
+    "psr/http-client": "^1.0",
     "psr/log": "^3.0",
     "slim/psr7": "^1.8",
     "slim/slim": "^4.15",
+    "spomky-labs/base64url": "^2.0",
     "symfony/dotenv": "^7.4",
     "symfony/uid": "^7.4",
     "twig/twig": "^3.19"
@@ -36,7 +41,10 @@
     "platform": {
       "php": "8.3.0"
     },
-    "sort-packages": true
+    "sort-packages": true,
+    "allow-plugins": {
+      "php-http/discovery": false
+    }
   },
   "scripts": {
     "test": "phpunit",

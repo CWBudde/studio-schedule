@@ -1,0 +1,340 @@
+<?php
+
+declare(strict_types=1);
+
+namespace StudioSchedule\Tests;
+
+use Doctrine\DBAL\Configuration;
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Logging\Middleware;
+use Doctrine\DBAL\ParameterType;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Log\AbstractLogger;
+use Slim\Factory\AppFactory;
+use Slim\Psr7\Factory\ResponseFactory;
+use Slim\Psr7\Factory\ServerRequestFactory;
+use Stringable;
+use StudioSchedule\Bootstrap;
+use StudioSchedule\Domain\AccentColor;
+use StudioSchedule\Domain\BrandingImage;
+use StudioSchedule\Http\PublicSettingsEndpoint;
+use StudioSchedule\Service\PublicSettings;
+use StudioSchedule\Service\SchoolSetup;
+use StudioSchedule\Service\SetupInput;
+use StudioSchedule\Service\SystemClock;
+use StudioSchedule\Store\Database;
+use StudioSchedule\Store\Migrator;
+use StudioSchedule\Store\PublicSettingsStore;
+use StudioSchedule\Store\Schema;
+use StudioSchedule\Store\SetupStore;
+
+final class PublicSettingsTest extends TestCase
+{
+    private const string PNG = "\x89PNG\r\n\x1a\n\x00\xfflogo";
+    private const string JPEG = "\xff\xd8\xff\x00replacement";
+    private const string WEBP = "RIFF\x00\x00\x00\x00WEBPVP8 background";
+
+    private static ?string $dsn = null;
+    private Connection $db;
+
+    protected function setUp(): void
+    {
+        $this->db = Database::connect(self::fixtureDsn());
+        if (self::$dsn !== null) {
+            return;
+        }
+
+        self::assertSame([], (new Schema($this->db))->relations(), 'Settings tests require an empty disposable database');
+        self::$dsn = self::fixtureDsn();
+        $migrations = $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform
+            ? self::postgresMigrations()
+            : __DIR__ . '/../migrations/mysql';
+        (new Migrator(self::$dsn))->up($migrations);
+    }
+
+    protected function tearDown(): void
+    {
+        if (!isset($this->db)) {
+            return;
+        }
+        try {
+            if (self::$dsn !== null) {
+                foreach (['account_tokens', 'accounts', 'persons', 'settings'] as $table) {
+                    $this->db->executeStatement('DELETE FROM ' . $table);
+                }
+            }
+        } finally {
+            $this->db->close();
+        }
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        if (self::$dsn === null) {
+            return;
+        }
+
+        $db = Database::connect(self::$dsn);
+        $postgres = $db->getDatabasePlatform() instanceof PostgreSQLPlatform;
+        try {
+            if (!$postgres) {
+                $db->executeStatement('SET FOREIGN_KEY_CHECKS = 0');
+            }
+            foreach ($db->createSchemaManager()->listTableNames() as $table) {
+                $suffix = $postgres ? ' CASCADE' : '';
+                $db->executeStatement('DROP TABLE IF EXISTS ' . $db->quoteSingleIdentifier($table) . $suffix);
+            }
+            if ($postgres) {
+                $db->executeStatement('DROP FUNCTION IF EXISTS receipts_immutable()');
+            }
+        } finally {
+            $db->close();
+            self::$dsn = null;
+        }
+    }
+
+    public function testMissingSettingsAreReportedAsResourceNotFound(): void
+    {
+        foreach (['public', 'logo', 'background'] as $path) {
+            $response = $this->get($path);
+            self::assertSame(404, $response->getStatusCode());
+            self::assertSame('application/problem+json', $response->getHeaderLine('Content-Type'));
+            self::assertSame('resource not found', self::decoded($response)['detail'] ?? null);
+        }
+    }
+
+    public function testPublicSettingsUseDefaultsForLegacyValues(): void
+    {
+        $this->initialize();
+        $this->db->executeStatement('UPDATE settings SET default_locale = ?', ['fr-CA']);
+        $response = $this->get('public');
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('application/json', $response->getHeaderLine('Content-Type'));
+        self::assertEquals([
+            'schoolName' => 'Example Studio',
+            'theme' => 'programme',
+            'hasLogo' => false,
+            'hasBackground' => false,
+            'timezone' => 'Europe/Vienna',
+            'defaultLocale' => 'en',
+            'currency' => 'EUR',
+        ], self::decoded($response));
+    }
+
+    public function testPublicSettingsIncludeOnlyPublicBrandingFields(): void
+    {
+        $this->initialize();
+        $notice = "Example Studio\nOffice";
+        $this->db->executeStatement(
+            "UPDATE settings SET default_locale = ?, legal_notice = ?, accent_color = '#7a1f3d', theme = 'werkstatt', issuer_tax_id = 'internal'",
+            ["\u{2003}DE_at\u{00a0}", $notice],
+        );
+        $this->writeImage('logo', 'image/png', self::PNG);
+        $this->writeImage('background', 'image/webp', self::WEBP);
+
+        $response = $this->get('public');
+        self::assertSame(200, $response->getStatusCode());
+        self::assertEquals([
+            'schoolName' => 'Example Studio',
+            'legalNotice' => $notice,
+            'accentColor' => '#7a1f3d',
+            'accentColorDark' => '#ee9cae',
+            'theme' => 'werkstatt',
+            'hasLogo' => true,
+            'hasBackground' => true,
+            'timezone' => 'Europe/Vienna',
+            'defaultLocale' => 'de',
+            'currency' => 'EUR',
+        ], self::decoded($response));
+    }
+
+    /** @return iterable<string, array{string, string, string}> */
+    public static function imageExamples(): iterable
+    {
+        yield 'logo' => ['logo', 'image/png', self::PNG];
+        yield 'background' => ['background', 'image/webp', self::WEBP];
+    }
+
+    #[DataProvider('imageExamples')]
+    public function testBrandingImagesRevalidateWithoutFetchingTheBytes(string $kind, string $type, string $bytes): void
+    {
+        $this->initialize();
+        $missing = $this->get($kind, '*');
+        self::assertSame(404, $missing->getStatusCode());
+        self::assertSame('no ' . $kind, self::decoded($missing)['detail'] ?? null);
+
+        $this->writeImage($kind, $type, $bytes);
+        $etag = self::etag($type, $bytes);
+        $response = $this->get($kind, '"stale"');
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame($bytes, (string) $response->getBody());
+        self::assertSame($type, $response->getHeaderLine('Content-Type'));
+        self::assertSame($etag, $response->getHeaderLine('ETag'));
+        self::assertSame('public, no-cache', $response->getHeaderLine('Cache-Control'));
+        self::assertSame('inline', $response->getHeaderLine('Content-Disposition'));
+
+        $logger = new class extends AbstractLogger {
+            /** @var list<string> */
+            private array $queries = [];
+
+            /** @param array<string, mixed> $context */
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                if (is_string($context['sql'] ?? null)) {
+                    $this->queries[] = $context['sql'];
+                }
+            }
+
+            /** @return list<string> */
+            public function takeQueries(): array
+            {
+                $queries = $this->queries;
+                $this->queries = [];
+
+                return $queries;
+            }
+        };
+        $config = new Configuration();
+        $config->setMiddlewares([new Middleware($logger)]);
+        $reader = DriverManager::getConnection($this->db->getParams(), $config);
+        try {
+            foreach ([$etag, '"unrelated", W/' . $etag, '*'] as $validator) {
+                $cached = $this->get($kind, $validator, $reader);
+                self::assertSame(304, $cached->getStatusCode());
+                self::assertSame('', (string) $cached->getBody());
+                self::assertSame('', $cached->getHeaderLine('Content-Type'));
+                self::assertSame($etag, $cached->getHeaderLine('ETag'));
+                self::assertSame('public, no-cache', $cached->getHeaderLine('Cache-Control'));
+                self::assertSame('inline', $cached->getHeaderLine('Content-Disposition'));
+                $queries = $logger->takeQueries();
+                self::assertCount(1, $queries);
+                self::assertDoesNotMatchRegularExpression('/(?:\b' . $kind . '\b|\*)/i', $queries[0]);
+            }
+        } finally {
+            $reader->close();
+        }
+    }
+
+    #[DataProvider('imageExamples')]
+    public function testConcurrentReplacementUsesTheDigestOfTheBytesBeingSent(string $kind, string $type, string $bytes): void
+    {
+        $this->initialize();
+        $this->writeImage($kind, $type, $bytes);
+
+        $writer = Database::connect(self::fixtureDsn());
+        try {
+            $service = new PublicSettings(new PublicSettingsStore($this->db));
+            $result = $service->image(BrandingImage::from($kind), function (string $digest) use ($kind, $type, $bytes, $writer): bool {
+                self::assertSame(trim(self::etag($type, $bytes), '"'), $digest);
+                $this->writeImage($kind, 'image/jpeg', self::JPEG, $writer);
+
+                return false;
+            });
+        } finally {
+            $writer->close();
+        }
+
+        self::assertEquals([
+            'contentType' => 'image/jpeg',
+            'data' => self::JPEG,
+            'digest' => trim(self::etag('image/jpeg', self::JPEG), '"'),
+        ], $result);
+    }
+
+    /** @return iterable<string, array{string, ?string}> */
+    public static function accentExamples(): iterable
+    {
+        // The Go domain vectors cover the conversion and the sRGB gamut limit.
+        yield 'red-purple' => ['#7a1f3d', '#ee9cae'];
+        yield 'blue' => ['#1d4ed8', '#97b7f8'];
+        yield 'teal' => ['#0f766e', '#72cac0'];
+        yield 'orange' => ['#b45309', '#eca47e'];
+        yield 'red' => ['#ff0000', '#f19f92'];
+        yield 'grey' => ['#808080', '#b7b7b7'];
+        yield 'black' => ['#000000', '#b7b7b7'];
+        yield 'invalid' => ['#xyz', null];
+    }
+
+    #[DataProvider('accentExamples')]
+    public function testDarkAccentMatchesGo(string $light, ?string $dark): void
+    {
+        self::assertSame($dark, AccentColor::dark($light));
+    }
+
+    private static function fixtureDsn(): string
+    {
+        $dsn = getenv('STUDIO_PHP_TEST_DATABASE_URL');
+        if ($dsn === false) {
+            self::markTestSkipped('Requires the disposable database provisioned by just php-test');
+        }
+
+        return $dsn;
+    }
+
+    private function initialize(): void
+    {
+        $setup = new SchoolSetup(new SetupStore($this->db), new SystemClock());
+        $setup->init(new SetupInput('Example Studio', 'Europe/Vienna', 'en', 'EUR', 'admin@example.org', 'Ada', 'Example'));
+    }
+
+    private function get(string $path, string $ifNoneMatch = '', ?Connection $connection = null): ResponseInterface
+    {
+        $request = (new ServerRequestFactory())->createServerRequest('GET', '/studio/api/v1/settings/' . $path)
+            ->withHeader('If-None-Match', $ifNoneMatch);
+        if ($connection === null) {
+            return Bootstrap::handle(
+                static fn() => $request,
+                dirname(__DIR__),
+                __DIR__ . '/../public',
+                self::postgresMigrations(),
+                static fn(string $key): string => match ($key) {
+                    'BASE_URL' => 'http://localhost/studio',
+                    'DATABASE_URL' => self::fixtureDsn(),
+                    'LOG_LEVEL' => 'error',
+                    default => '',
+                },
+            );
+        }
+
+        $service = new PublicSettings(new PublicSettingsStore($connection));
+        $app = AppFactory::create(new ResponseFactory());
+        $app->setBasePath('/studio');
+        (new PublicSettingsEndpoint($service))->register($app);
+        $app->addRoutingMiddleware();
+
+        return $app->handle($request);
+    }
+
+    private static function postgresMigrations(): string
+    {
+        return getenv('STUDIO_PHP_TEST_POSTGRES_MIGRATIONS') ?: __DIR__ . '/../../internal/store/postgres/migrations';
+    }
+
+    private function writeImage(string $kind, string $type, string $bytes, ?Connection $connection = null): void
+    {
+        ($connection ?? $this->db)->executeStatement(
+            "UPDATE settings SET {$kind} = ?, {$kind}_type = ?, {$kind}_digest = ?",
+            [$bytes, $type, trim(self::etag($type, $bytes), '"')],
+            [ParameterType::LARGE_OBJECT, ParameterType::STRING, ParameterType::STRING],
+        );
+    }
+
+    private static function etag(string $type, string $bytes): string
+    {
+        return '"' . hash('sha256', $type . "\n" . $bytes) . '"';
+    }
+
+    /** @return array<array-key, mixed> */
+    private static function decoded(ResponseInterface $response): array
+    {
+        $body = json_decode((string) $response->getBody(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($body);
+
+        return $body;
+    }
+}
