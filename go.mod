@@ -2,7 +2,7 @@ module github.com/cwbudde/studio-schedule
 
 go 1.27.1
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/danielgtaylor/huma/v2 v2.39.1
