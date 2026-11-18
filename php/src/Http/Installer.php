@@ -6,12 +6,12 @@ namespace StudioSchedule\Http;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
-use PDO;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Log\LoggerInterface;
 use StudioSchedule\Config;
 use StudioSchedule\Service\AlreadyInitialized;
+use StudioSchedule\Service\InstallationEnvironment;
 use StudioSchedule\Service\InvalidSetupInput;
 use StudioSchedule\Service\PasswordHash;
 use StudioSchedule\Service\SchoolSetup;
@@ -50,20 +50,30 @@ final readonly class Installer
         if ($this->config->databaseURL === '') {
             return self::message($response, 'Set DATABASE_URL to connect the installer to the database.', 503);
         }
-        if (!self::environmentReady()) {
-            return self::message($response, 'Setup needs 64-bit PHP 8.3 or later, a PDO driver, Argon2id, and writable PHP logging.', 503);
+        $driver = Database::driverForURL($this->config->databaseURL);
+        if ($driver === null) {
+            return self::message($response, 'DATABASE_URL must name PostgreSQL, MySQL or MariaDB.', 503);
+        }
+        $problem = InstallationEnvironment::phpProblem($driver);
+        if ($problem !== null) {
+            return self::message($response, $problem, 503);
         }
 
+        $connection = null;
         try {
             $connection = Database::connect($this->config->databaseURL);
-            $connection->fetchOne('SELECT 1');
+            $problem = InstallationEnvironment::databaseProblem($driver, Database::serverVersion($connection, $driver));
         } catch (Throwable $error) {
+            $connection?->close();
             $this->logError($error);
 
-            return self::message($response, 'The database connection failed. Check DATABASE_URL and the PDO driver for this database.', 503);
+            return self::message($response, 'The database connection failed. Check DATABASE_URL and the database permissions.', 503);
         }
 
         try {
+            if ($problem !== null) {
+                return self::message($response, $problem, 503);
+            }
             $store = new SetupStore($connection);
             $backupRequired = !($connection->getDatabasePlatform() instanceof PostgreSQLPlatform);
             if ($post) {
@@ -203,16 +213,6 @@ final readonly class Installer
             'initialized' => $state['applied'] !== [] && $store->isInitialized(),
             'pending' => array_map(basename(...), array_values($state['pending'])),
         ];
-    }
-
-    private static function environmentReady(): bool
-    {
-        $log = ini_get('error_log');
-        $logging = $log === false || $log === '' || in_array($log, ['syslog', 'php://stderr', '/dev/stderr'], true)
-            || (is_writable(dirname($log)) && (!file_exists($log) || is_writable($log)));
-        $argon = in_array('argon2id', password_algos(), true) || function_exists('sodium_crypto_pwhash');
-
-        return extension_loaded('pdo') && PDO::getAvailableDrivers() !== [] && $logging && $argon;
     }
 
     private static function message(ResponseInterface $response, string $message, int $status = 200): ResponseInterface

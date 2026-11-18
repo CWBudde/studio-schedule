@@ -13,9 +13,18 @@ final class PasswordHash
     private const int SALT_BYTES = 16;
     private const int KEY_BYTES = 32;
 
+    public static function isAvailable(): bool
+    {
+        $native = self::nativeArgon();
+        $hash = ($native && function_exists('password_hash')) || self::sodiumCanHash();
+        $verify = ($native && function_exists('password_verify')) || function_exists('sodium_crypto_pwhash_str_verify');
+
+        return $hash && $verify;
+    }
+
     public function hash(#[\SensitiveParameter] string $password): string
     {
-        if (function_exists('password_hash') && in_array('argon2id', password_algos(), true)) {
+        if (function_exists('password_hash') && self::nativeArgon()) {
             return password_hash($password, 'argon2id', [
                 'memory_cost' => self::MEMORY_KIB,
                 'time_cost' => self::PASSES,
@@ -23,7 +32,7 @@ final class PasswordHash
             ]);
         }
 
-        if (!function_exists('sodium_crypto_pwhash') || !defined('SODIUM_CRYPTO_PWHASH_ALG_ARGON2ID13')) {
+        if (!self::sodiumCanHash()) {
             throw new \RuntimeException('Argon2id password hashing is unavailable');
         }
 
@@ -54,12 +63,22 @@ final class PasswordHash
             return false;
         }
 
-        if (function_exists('password_verify') && in_array('argon2id', password_algos(), true)) {
+        if (function_exists('password_verify') && self::nativeArgon()) {
             return password_verify($password, $encoded);
         }
 
         // The wrapper emits the same warning during verification and still returns the comparison.
         return function_exists('sodium_crypto_pwhash_str_verify') && @sodium_crypto_pwhash_str_verify($encoded, $password);
+    }
+
+    private static function nativeArgon(): bool
+    {
+        return function_exists('password_algos') && in_array('argon2id', password_algos(), true);
+    }
+
+    private static function sodiumCanHash(): bool
+    {
+        return function_exists('sodium_crypto_pwhash') && defined('SODIUM_CRYPTO_PWHASH_ALG_ARGON2ID13');
     }
 
     private static function isBoundedHash(string $encoded): bool

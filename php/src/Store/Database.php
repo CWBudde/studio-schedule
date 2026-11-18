@@ -25,12 +25,11 @@ final class Database
 
     public static function connect(#[\SensitiveParameter] string $url, bool $dedicated = false): Connection
     {
-        $scheme = parse_url($url, PHP_URL_SCHEME);
-        if (!is_string($scheme) || !isset(self::DRIVERS[strtolower($scheme)])) {
+        $driver = self::driverForURL($url);
+        if ($driver === null) {
             throw new InvalidArgumentException('DATABASE_URL must name PostgreSQL, MySQL or MariaDB');
         }
 
-        $driver = self::DRIVERS[strtolower($scheme)];
         $params = (new DsnParser(self::DRIVERS))->parse($url);
         unset($params['driverClass']);
         $params['driver'] = $driver;
@@ -42,6 +41,22 @@ final class Database
         }
 
         return DriverManager::getConnection($params);
+    }
+
+    /** @return 'pdo_pgsql'|'pdo_mysql'|null */
+    public static function driverForURL(#[\SensitiveParameter] string $url): ?string
+    {
+        $scheme = parse_url($url, PHP_URL_SCHEME);
+
+        return is_string($scheme) ? (self::DRIVERS[strtolower($scheme)] ?? null) : null;
+    }
+
+    /** @param 'pdo_pgsql'|'pdo_mysql' $driver */
+    public static function serverVersion(Connection $connection, string $driver): string
+    {
+        $version = $connection->fetchOne($driver === 'pdo_pgsql' ? 'SHOW server_version_num' : 'SELECT VERSION()');
+
+        return is_string($version) ? $version : '';
     }
 
     /** The lock shared by PHP migrations and copies and by Go Goose on PostgreSQL. */

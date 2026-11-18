@@ -1384,7 +1384,7 @@ backends.
       golden files. Web Push transport uses the upstream encryption and VAPID code and passes the RFC
       8291 test vector. The Twig/mPDF receipt renderer uses the matching Libertinus 7.051
       TrueType fonts and matches 12 Go text-extraction cases.
-- [ ] Web installer at `<base>/setup`.
+- [x] Web installer at `<base>/setup`.
   - [x] Register the installer only while `SETUP_TOKEN` is set and require it on each request.
         Migrate an empty database, create the settings and first admin as `init` does, refuse a
         second admin, and issue a one-time setup link through the PHP password reset confirmation
@@ -1394,8 +1394,9 @@ backends.
         full pre-upgrade backup on MySQL and MariaDB. An interrupted upgrade stays in maintenance
         until the operator restores that backup. Full dump and restore drills recovered data and
         migration history on both engines.
-  - [ ] Finish release-specific checks for PHP version, extensions, the database and a writable
-        log directory, and offer `db:copy`.
+  - [x] Check the PHP runtime, production extensions and the configured PDO driver, database
+        connectivity and version, and writable PHP logging. Offer `db:copy` once setup and
+        migrations are complete.
 - [ ] API areas, each done when its conformance cases pass on PHP with PostgreSQL, MySQL and
       MariaDB:
   - [ ] Public settings, schedule and visibility, release window (ADR 0003). PHP serves the

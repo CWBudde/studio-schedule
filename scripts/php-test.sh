@@ -145,7 +145,7 @@ done
 if [[ ${#engines[@]} == 3 ]]; then
 	sodium_report=/coverage/password-sodium.php
 	run_php -v "$coverage_dir:/coverage" "$image" \
-		php -d disable_functions=password_hash,password_verify vendor/bin/phpunit \
+		php -d disable_functions=password_algos vendor/bin/phpunit \
 		--filter PasswordHashTest --coverage-php "$sodium_report"
 	reports=(--gate "${reports[@]}" "$sodium_report")
 fi
