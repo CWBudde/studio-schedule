@@ -68,6 +68,7 @@ type AnnouncementAudience struct {
 	ClassID      domain.ClassID
 	CourseTypeID domain.CourseTypeID
 	LessonID     domain.LessonID
+	EventID      domain.EventID
 }
 
 // AnnouncementInput is an announcement as the office writes it.
@@ -100,6 +101,7 @@ type AnnouncementEntry struct {
 	CourseType domain.CourseType
 	// Lesson is the lesson of the lesson audience.
 	Lesson domain.Lesson
+	Event  domain.Event
 }
 
 // AnnouncementView is an announcement shown to an account.
@@ -268,6 +270,7 @@ func (s *AnnouncementService) write(
 	a.Title, a.Body, a.Email = title, body, in.Email
 	a.Audience, a.Role, a.ClassID, a.CourseTypeID, a.LessonID = in.Audience, in.Role, in.ClassID, in.CourseTypeID,
 		in.LessonID
+	a.EventID = in.EventID
 	a.PublishAt, a.ExpiresAt = cmp.Or(in.PublishAt, now), in.ExpiresAt
 
 	if err := a.Validate(); err != nil {
@@ -305,7 +308,7 @@ func (s *AnnouncementService) write(
 	return entries[0], nil
 }
 
-// checkAudienceRefs reports an unknown class, course type or lesson of the
+// checkAudienceRefs reports an unknown event, class, course type or lesson of the
 // audience as a *domain.FieldError on its field, and so a room rental,
 // which has nobody to reach (ADR 0007, amendment).
 func checkAudienceRefs(ctx context.Context, tx store.Tx, aud AnnouncementAudience) error {
@@ -318,6 +321,9 @@ func checkAudienceRefs(ctx context.Context, tx store.Tx, aud AnnouncementAudienc
 	}
 
 	switch aud.Audience {
+	case domain.AudienceEvent:
+		_, err := tx.Events().Get(ctx, aud.EventID)
+		return check(err, &domain.FieldError{Field: "eventId", Msg: "event does not exist"})
 	case domain.AudienceClass:
 		_, err := tx.Classes().Get(ctx, aud.ClassID)
 
@@ -410,7 +416,7 @@ func (s *AnnouncementService) Delete(ctx context.Context, id domain.Announcement
 func (s *AnnouncementService) CountRecipients(ctx context.Context, aud AnnouncementAudience) (int, error) {
 	a := domain.Announcement{
 		Audience: aud.Audience, Role: aud.Role, ClassID: aud.ClassID, CourseTypeID: aud.CourseTypeID,
-		LessonID: aud.LessonID,
+		LessonID: aud.LessonID, EventID: aud.EventID,
 	}
 
 	var n int
@@ -549,6 +555,7 @@ type reach struct {
 	classes     map[domain.ClassID]bool
 	courseTypes map[domain.CourseTypeID]bool
 	lessons     map[domain.LessonID]bool
+	events      map[domain.EventID]bool
 }
 
 func (r reach) reaches(p Principal, a domain.Announcement) bool {
@@ -561,6 +568,8 @@ func (r reach) reaches(p Principal, a domain.Announcement) bool {
 		return r.classes[a.ClassID]
 	case domain.AudienceCourseType:
 		return r.courseTypes[a.CourseTypeID]
+	case domain.AudienceEvent:
+		return r.events[a.EventID]
 	case domain.AudienceLesson:
 		return r.lessons[a.LessonID]
 	default:
@@ -576,15 +585,17 @@ func (s *AnnouncementService) reachOf(
 ) (reach, error) {
 	r := reach{
 		classes: map[domain.ClassID]bool{}, courseTypes: map[domain.CourseTypeID]bool{},
-		lessons: map[domain.LessonID]bool{},
+		lessons: map[domain.LessonID]bool{}, events: map[domain.EventID]bool{},
 	}
 
 	var askLessons []domain.LessonID
 
-	byPersons := false
+	byPersons, askEvents := false, false
 
 	for _, a := range as {
 		switch a.Audience {
+		case domain.AudienceEvent:
+			askEvents = true
 		case domain.AudienceLesson:
 			askLessons = append(askLessons, a.LessonID)
 		case domain.AudienceClass, domain.AudienceCourseType:
@@ -592,7 +603,7 @@ func (s *AnnouncementService) reachOf(
 		}
 	}
 
-	if (!byPersons && len(askLessons) == 0) || p.PersonID.IsZero() {
+	if (!byPersons && !askEvents && len(askLessons) == 0) || p.PersonID.IsZero() {
 		return r, nil
 	}
 
@@ -606,6 +617,28 @@ func (s *AnnouncementService) reachOf(
 		persons = append(persons, d.ID)
 	}
 
+	var sessions []domain.Lesson
+	if len(askLessons) > 0 {
+		list, err := tx.Lessons().ListByIDs(ctx, askLessons)
+		if err != nil {
+			return r, err
+		}
+		sessions = slices.DeleteFunc(list, func(l domain.Lesson) bool { return l.EventID.IsZero() })
+	}
+	if askEvents || len(sessions) > 0 {
+		regs, err := tx.EventRegistrations().ListByPersons(ctx, persons)
+		if err != nil {
+			return r, err
+		}
+		for _, reg := range regs {
+			if reg.Status == domain.EventRegistered {
+				r.events[reg.EventID] = true
+			}
+		}
+		for _, l := range sessions {
+			r.lessons[l.ID] = r.events[l.EventID]
+		}
+	}
 	if len(askLessons) > 0 {
 		booked, err := tx.Bookings().ListActiveByLessonsAndPersons(ctx, askLessons, persons)
 		if err != nil {
@@ -848,7 +881,7 @@ func mailKey(email string) string { return strings.ToLower(email) }
 // confirmed accounts (of the role) that are not disabled, in their
 // language; for persons, the recipients of the mail chain of each
 // (recipientsOf), with the persons they get it for. Guests without an
-// account are not reached.
+// account are not reached, except registered guests of events and sessions.
 func announcementRecipients(
 	ctx context.Context, tx store.Tx, loc *time.Location, now time.Time, a domain.Announcement,
 ) ([]recipient, error) {
@@ -865,7 +898,7 @@ func announcementRecipients(
 			set.add(r)
 		}
 	default:
-		persons, err := audiencePersons(ctx, tx, loc, now, a)
+		persons, err := audiencePersons(ctx, tx, loc, now, a, &set)
 		if err != nil {
 			return nil, err
 		}
@@ -923,9 +956,9 @@ func accountRecipients(ctx context.Context, tx store.Tx, role domain.Role) ([]re
 // audiencePersons returns the persons of a class, course type or lesson
 // audience at now, each once, in a stable order (see ForAccount): the
 // members first, then the persons booked, a few queries for any number of
-// lessons.
+// lessons. An event or session audience also adds its registered guests to guests.
 func audiencePersons(
-	ctx context.Context, tx store.Tx, loc *time.Location, now time.Time, a domain.Announcement,
+	ctx context.Context, tx store.Tx, loc *time.Location, now time.Time, a domain.Announcement, guests *recipientSet,
 ) ([]domain.PersonID, error) {
 	var (
 		persons []domain.PersonID
@@ -961,6 +994,31 @@ func audiencePersons(
 		return err
 	}
 
+	eventID := a.EventID
+	if a.Audience == domain.AudienceLesson {
+		l, err := tx.Lessons().Get(ctx, a.LessonID)
+		if err != nil {
+			return nil, err
+		}
+		eventID = l.EventID
+	}
+	if !eventID.IsZero() {
+		regs, err := tx.EventRegistrations().ListByEvent(ctx, eventID)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range regs {
+			if r.Status != domain.EventRegistered {
+				continue
+			}
+			if guest, ok := guestRecipient(r.GuestName, r.GuestEmail); ok {
+				guests.add(guest, guest.participants...)
+			} else {
+				add(r.PersonID)
+			}
+		}
+		return persons, nil
+	}
 	switch a.Audience {
 	case domain.AudienceLesson:
 		lessons = []domain.LessonID{a.LessonID}
@@ -1039,12 +1097,16 @@ func announcementEntries(ctx context.Context, tx store.Tx, as []domain.Announcem
 	authorIDs := make([]domain.AccountID, len(as))
 
 	var (
+		eventIDs  []domain.EventID
 		classIDs  []domain.ClassID
 		lessonIDs []domain.LessonID
 	)
 
 	for i, a := range as {
 		authorIDs[i] = a.AuthorID
+		if !a.EventID.IsZero() {
+			eventIDs = append(eventIDs, a.EventID)
+		}
 		if !a.ClassID.IsZero() {
 			classIDs = append(classIDs, a.ClassID)
 		}
@@ -1054,6 +1116,16 @@ func announcementEntries(ctx context.Context, tx store.Tx, as []domain.Announcem
 		}
 	}
 
+	events := map[domain.EventID]domain.Event{}
+	if len(eventIDs) > 0 {
+		found, err := tx.Events().ListByIDs(ctx, eventIDs)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range found {
+			events[e.ID] = e
+		}
+	}
 	authors, err := auditAccounts(ctx, tx, authorIDs)
 	if err != nil {
 		return nil, err
@@ -1107,6 +1179,10 @@ func announcementEntries(ctx context.Context, tx store.Tx, as []domain.Announcem
 		var ok bool
 
 		switch a.Audience {
+		case domain.AudienceEvent:
+			if e.Event, ok = events[a.EventID]; !ok {
+				return nil, fmt.Errorf("event %v: %w", a.EventID, errBrokenReference)
+			}
 		case domain.AudienceClass:
 			if e.Class, ok = classes[a.ClassID]; !ok {
 				return nil, fmt.Errorf("class %v: %w", a.ClassID, errBrokenReference)

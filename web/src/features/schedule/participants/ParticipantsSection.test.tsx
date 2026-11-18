@@ -215,6 +215,24 @@ async function openParticipants() {
 }
 
 describe('ParticipantsSection', () => {
+  it('shows registered event participants without booking or attendance actions', async () => {
+    mockStaff({
+      me: meOffice,
+      list: {
+        body: {
+          ...participants,
+          bookings: [],
+          waitlist: [],
+          registrants: [{ id: id(851), name: 'Example Guest', guest: true }],
+        },
+      },
+    });
+    const section = await openParticipants();
+    expect(section.getByText('Example Guest')).toBeInTheDocument();
+    expect(section.getByText('Registered for the event')).toBeInTheDocument();
+    expect(section.queryByRole('button')).not.toBeInTheDocument();
+  });
+
   it('shows the office the participants with markers, contacts and the waiting list', async () => {
     mockStaff({ me: meOffice });
 

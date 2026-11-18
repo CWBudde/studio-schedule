@@ -27,6 +27,8 @@ const templateSet = {
   'event-canceled': true,
   'event-registered': true,
   'event-registration-canceled': true,
+  'event-invite': true,
+  'event-invite-expired': true,
 } as const satisfies Record<MailTemplate, true>;
 /** The templates, in the order of the filter. */
 export const mailTemplates = Object.keys(templateSet) as MailTemplate[];

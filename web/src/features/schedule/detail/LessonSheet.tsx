@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { CircleAlert, RotateCcw, XIcon } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
@@ -177,6 +178,7 @@ function LessonDetails({
 }) {
   const { t, i18n } = useTranslation('schedule');
   const { t: tAdmin } = useTranslation('admin');
+  const { t: tEvents } = useTranslation('events');
   const lang = i18n.resolvedLanguage ?? 'en';
   const me = useQuery(meQuery);
   const label = useLessonLabel()(lesson, timeZone);
@@ -264,7 +266,20 @@ function LessonDetails({
           <p className="text-muted-foreground">{t('detail.rental')}</p>
         ) : (
           <>
-            <BookingSection lesson={lesson} timeZone={timeZone} label={label} />
+            {lesson.eventId ? (
+              <div className="space-y-2">
+                <p>{tEvents('sessionInfo')}</p>
+                {lesson.eventSlug && (
+                  <Button asChild variant="outline">
+                    <Link to="/events/$slug" params={{ slug: lesson.eventSlug }}>
+                      {tEvents('sessionLink')}
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <BookingSection lesson={lesson} timeZone={timeZone} label={label} />
+            )}
             <ParticipantsSection lesson={lesson} timeZone={timeZone} label={label} />
           </>
         )}

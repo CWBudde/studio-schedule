@@ -44,7 +44,7 @@ func NewRetentionService(st store.Store, clk clock.Clock) *RetentionService {
 
 // Purged counts what a purge changed.
 type Purged struct {
-	Guests, AuditEvents, ImportRuns int
+	Guests, EventGuests, AuditEvents, ImportRuns int
 	// PushSubscriptions and PushMessages count the web push subscriptions
 	// and messages deleted (ADR 0017).
 	PushSubscriptions, PushMessages int
@@ -65,7 +65,11 @@ func (s *RetentionService) Purge(ctx context.Context) (Purged, error) {
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		var err error
-		if out.Guests, err = tx.Bookings().AnonymizeGuests(ctx, now.AddDate(0, -GuestRetentionMonths, 0)); err != nil {
+		guestCutoff := now.AddDate(0, -GuestRetentionMonths, 0)
+		if out.Guests, err = tx.Bookings().AnonymizeGuests(ctx, guestCutoff); err != nil {
+			return err
+		}
+		if out.EventGuests, err = tx.EventRegistrations().AnonymizeGuests(ctx, guestCutoff); err != nil {
 			return err
 		}
 

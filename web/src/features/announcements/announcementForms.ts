@@ -14,7 +14,7 @@ export const maxTitleLength = 120;
 /** The longest text, in characters. */
 export const maxBodyLength = 4000;
 
-export const audiences = ['everyone', 'role', 'class', 'course-type', 'lesson'] as const;
+export const audiences = ['everyone', 'role', 'class', 'course-type', 'lesson', 'event'] as const;
 export const roles = ['member', 'instructor', 'office', 'admin'] as const;
 
 export type Audience = (typeof audiences)[number];
@@ -39,6 +39,7 @@ export const announcementSchema = (timeZone: string) =>
       courseTypeId: z.string(),
       lessonDate: z.string(),
       lessonId: z.string(),
+      eventId: z.string(),
       publishDate: z.string(),
       publishTime: z.string(),
       expiresDate: z.string(),
@@ -68,6 +69,10 @@ export const announcementSchema = (timeZone: string) =>
       if (v.audience === 'course-type') {
         if (v.courseTypeId) audience.courseTypeId = v.courseTypeId;
         else issue('courseTypeId', 'choose');
+      }
+      if (v.audience === 'event') {
+        if (v.eventId) audience.eventId = v.eventId;
+        else issue('eventId', 'choose');
       }
       if (v.audience === 'lesson') {
         // The date only picks the lesson; one that does not exist is refused.
@@ -128,6 +133,7 @@ export const announcementFields = [
   'classId',
   'courseTypeId',
   'lessonId',
+  'eventId',
 ] as const satisfies (keyof AnnouncementValues)[];
 
 /** The API's names of the date fields, which the form splits into date and time. */
@@ -150,6 +156,7 @@ export function announcementValues(
     courseTypeId: announcement?.courseTypeId ?? '',
     lessonDate: date(announcement?.lesson?.startsAt),
     lessonId: announcement?.lessonId ?? '',
+    eventId: announcement?.eventId ?? '',
     publishDate: date(announcement?.publishAt),
     publishTime: time(announcement?.publishAt),
     expiresDate: date(announcement?.expiresAt),
@@ -165,12 +172,14 @@ export const audienceOf = ({
   classId,
   courseTypeId,
   lessonId,
+  eventId,
 }: AnnouncementData): AnnouncementAudience => ({
   audience,
   ...(role ? { role } : {}),
   ...(classId ? { classId } : {}),
   ...(courseTypeId ? { courseTypeId } : {}),
   ...(lessonId ? { lessonId } : {}),
+  ...(eventId ? { eventId } : {}),
 });
 
 /** Whether an announcement is scheduled, shown or expired at `now`. */

@@ -23,6 +23,7 @@ export function AdminLayout() {
 
 function Administration({ role }: { role: Role }) {
   const { t } = useTranslation('admin');
+  const { t: tEvents } = useTranslation('adminEvents');
   const { t: tAnnouncements } = useTranslation('announcements');
   const { t: tMailLog } = useTranslation('mailLog');
   const { t: tImports } = useTranslation('imports');
@@ -50,6 +51,9 @@ function Administration({ role }: { role: Role }) {
         </Link>
         <Link to="/admin/terms" className={sectionLink}>
           {t('nav.timetable')}
+        </Link>
+        <Link to="/admin/events" className={sectionLink}>
+          {tEvents('title')}
         </Link>
         <Link to="/admin/persons" className={sectionLink}>
           {t('nav.persons')}

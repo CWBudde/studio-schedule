@@ -293,6 +293,16 @@ type AdminEventList struct {
 	Items []AdminEvent `json:"items" nullable:"false"`
 }
 
+// NewAdminEventList is the body of listAdminEvents.
+func NewAdminEventList(events []service.EventAdmin) AdminEventList {
+	out := AdminEventList{Items: make([]AdminEvent, len(events))}
+	for i, e := range events {
+		out.Items[i] = NewAdminEvent(e)
+	}
+
+	return out
+}
+
 // AdminEventListOutput is the response of listAdminEvents.
 type AdminEventListOutput struct {
 	Body AdminEventList
@@ -401,6 +411,16 @@ type EventRegistrationList struct {
 	Items []EventRegistration `json:"items" nullable:"false"`
 }
 
+// NewEventRegistrationList is the body of listEventRegistrations.
+func NewEventRegistrationList(regs []service.RegistrationView) EventRegistrationList {
+	out := EventRegistrationList{Items: make([]EventRegistration, len(regs))}
+	for i, r := range regs {
+		out.Items[i] = NewEventRegistration(r)
+	}
+
+	return out
+}
+
 // EventRegistrationListOutput is the response of listEventRegistrations.
 type EventRegistrationListOutput struct {
 	Body EventRegistrationList
@@ -446,6 +466,13 @@ type EventPayment struct {
 	Receipt      ReceiptRef        `doc:"The receipt issued." json:"receipt"`
 }
 
+// NewEventPayment is the body of markEventRegistrationPaid.
+func NewEventPayment(paid service.PaidRegistration) EventPayment {
+	return EventPayment{
+		Registration: NewEventRegistration(paid.RegistrationView), Receipt: *receiptRef(&paid.Receipt),
+	}
+}
+
 // EventPaymentOutput is the response of markEventRegistrationPaid.
 type EventPaymentOutput struct {
 	Body EventPayment
@@ -466,12 +493,7 @@ func (h *handlers) listAdminEvents(ctx context.Context, _ *struct{}) (*AdminEven
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	out := &AdminEventListOutput{Body: AdminEventList{Items: make([]AdminEvent, len(events))}}
-	for i, e := range events {
-		out.Body.Items[i] = NewAdminEvent(e)
-	}
-
-	return out, nil
+	return &AdminEventListOutput{Body: NewAdminEventList(events)}, nil
 }
 
 func (h *handlers) getAdminEvent(ctx context.Context, in *EventRefInput) (*AdminEventOutput, error) {
@@ -578,12 +600,7 @@ func (h *handlers) listEventRegistrations(ctx context.Context, in *EventRefInput
 		return nil, h.toHTTPError(ctx, err)
 	}
 
-	out := &EventRegistrationListOutput{Body: EventRegistrationList{Items: make([]EventRegistration, len(regs))}}
-	for i, r := range regs {
-		out.Body.Items[i] = NewEventRegistration(r)
-	}
-
-	return out, nil
+	return &EventRegistrationListOutput{Body: NewEventRegistrationList(regs)}, nil
 }
 
 func (h *handlers) addEventRegistration(
@@ -618,9 +635,7 @@ func (h *handlers) markEventRegistrationPaid(ctx context.Context, in *EventPayme
 		return nil, h.eventError(ctx, err)
 	}
 
-	return &EventPaymentOutput{Body: EventPayment{
-		Registration: NewEventRegistration(paid.RegistrationView), Receipt: *receiptRef(&paid.Receipt),
-	}}, nil
+	return &EventPaymentOutput{Body: NewEventPayment(paid)}, nil
 }
 
 func (h *handlers) officeCancelEventRegistration(

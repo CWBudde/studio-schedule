@@ -161,17 +161,26 @@ type LessonWaitlistEntry struct {
 	ExpiresAt  time.Time              `doc:"Until when the invite reserves the place; only while invited." json:"expiresAt,omitzero"`
 }
 
+// SessionRegistrant is a read-only participant registered for the whole event.
+type SessionRegistrant struct {
+	ID         domain.EventRegistrationID `json:"id"`
+	Name       string                     `json:"name"`
+	Guest      bool                       `json:"guest"`
+	Anonymized bool                       `json:"anonymized,omitempty"`
+}
+
 // LessonParticipants is the response body of listLessonParticipants.
 type LessonParticipants struct {
-	LessonID   domain.LessonID       `doc:"The lesson."                                   json:"lessonId"`
-	Capacity   int                   `doc:"Places of the lesson."                         json:"capacity"`
-	Active     int                   `doc:"Active (not canceled) bookings; more than the capacity after an override." json:"active"`
-	Held       int                   `doc:"Places held by open waiting-list invites."    json:"held"`
-	FreePlaces int                   `doc:"Capacity minus active bookings and held places, at least 0." json:"freePlaces"`
-	Waiting    int                   `doc:"Entries waiting for an invite."                json:"waiting"`
-	DayOverAt  time.Time             `doc:"When the attendance window of instructors and accompanists ends: the end of the lesson's school day, or its end if later. Attendance opens at the start." json:"dayOverAt"`
-	Bookings   []LessonParticipant   `doc:"All bookings, canceled ones included, ordered by when they were made." json:"bookings" nullable:"false"`
-	Waitlist   []LessonWaitlistEntry `doc:"The waiting list, ended entries included, in its order." json:"waitlist" nullable:"false"`
+	Registrants *[]SessionRegistrant  `doc:"Event session participants, including guests. Present even for an empty session." json:"registrants,omitempty" nullable:"false"`
+	LessonID    domain.LessonID       `doc:"The lesson."                                   json:"lessonId"`
+	Capacity    int                   `doc:"Places of the lesson."                         json:"capacity"`
+	Active      int                   `doc:"Active (not canceled) bookings; more than the capacity after an override." json:"active"`
+	Held        int                   `doc:"Places held by open waiting-list invites."    json:"held"`
+	FreePlaces  int                   `doc:"Capacity minus active bookings and held places, at least 0." json:"freePlaces"`
+	Waiting     int                   `doc:"Entries waiting for an invite."                json:"waiting"`
+	DayOverAt   time.Time             `doc:"When the attendance window of instructors and accompanists ends: the end of the lesson's school day, or its end if later. Attendance opens at the start." json:"dayOverAt"`
+	Bookings    []LessonParticipant   `doc:"All bookings, canceled ones included, ordered by when they were made." json:"bookings" nullable:"false"`
+	Waitlist    []LessonWaitlistEntry `doc:"The waiting list, ended entries included, in its order." json:"waitlist" nullable:"false"`
 }
 
 // LessonParticipantsOutput is the response of listLessonParticipants.
@@ -323,6 +332,13 @@ func NewLessonParticipants(lp service.LessonParticipants) LessonParticipants {
 		Bookings: make([]LessonParticipant, 0, len(lp.Bookings)), Waitlist: make([]LessonWaitlistEntry, 0, len(lp.Waitlist)),
 	}
 
+	if !lp.Lesson.EventID.IsZero() {
+		rows := make([]SessionRegistrant, 0, len(lp.Registrants))
+		for _, r := range lp.Registrants {
+			rows = append(rows, SessionRegistrant{ID: r.Registration.ID, Name: r.Name, Guest: r.Registration.PersonID.IsZero(), Anonymized: r.Anonymized})
+		}
+		body.Registrants = &rows
+	}
 	for _, pt := range lp.Bookings {
 		b := pt.Booking
 		body.Bookings = append(body.Bookings, LessonParticipant{

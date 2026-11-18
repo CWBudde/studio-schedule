@@ -49,6 +49,8 @@ type PersonExport struct {
 	// included, by the time it joined.
 	Bookings []ExportBooking
 	Waitlist []ExportWaitlistEntry
+	// EventRegistrations covers every event registration, including canceled ones.
+	EventRegistrations []ExportEventRegistration
 	// Passes are the passes the person owns with their redemptions.
 	Passes []ExportPass
 	// Receipts are the receipts the person (or a person merged into it)
@@ -68,6 +70,17 @@ type ExportWaitlistEntry struct {
 	Entry      domain.WaitlistEntry
 	Lesson     domain.Lesson
 	CourseType domain.CourseType
+}
+
+// ExportEventRegistration is a person's registration with its event and receipt numbers.
+type ExportEventRegistration struct {
+	ID                                       domain.EventRegistrationID
+	Title                                    string
+	Status                                   domain.EventRegistrationStatus
+	Payment                                  domain.EventPayment
+	Price                                    domain.Money
+	ReceiptNumber, CancellationReceiptNumber string
+	CreatedAt, CanceledAt                    time.Time
 }
 
 // ExportPass is a pass with its type and redemptions.
@@ -169,6 +182,10 @@ func exportPerson(
 	types := indexBy(courseTypes, func(c domain.CourseType) domain.CourseTypeID { return c.ID })
 
 	if err := exportLessons(ctx, tx, &out, types); err != nil {
+		return out, err
+	}
+
+	if err := exportEventRegistrations(ctx, tx, &out); err != nil {
 		return out, err
 	}
 
@@ -327,4 +344,46 @@ func indexBy[K comparable, V any](values []V, key func(V) K) map[K]V {
 	}
 
 	return out
+}
+
+func exportEventRegistrations(ctx context.Context, tx store.Tx, out *PersonExport) error {
+	regs, err := tx.EventRegistrations().ListByPersons(ctx, []domain.PersonID{out.Person.ID})
+	if err != nil || len(regs) == 0 {
+		return err
+	}
+
+	var eventIDs []domain.EventID
+	var receiptIDs []domain.ReceiptID
+	for _, r := range regs {
+		eventIDs = append(eventIDs, r.EventID)
+		if !r.ReceiptID.IsZero() {
+			receiptIDs = append(receiptIDs, r.ReceiptID)
+		}
+		if !r.CancellationReceiptID.IsZero() {
+			receiptIDs = append(receiptIDs, r.CancellationReceiptID)
+		}
+	}
+
+	events, err := tx.Events().ListByIDs(ctx, eventIDs)
+	if err != nil {
+		return err
+	}
+
+	receipts, err := tx.Receipts().ListByIDs(ctx, receiptIDs)
+	if err != nil {
+		return err
+	}
+
+	byEvent := indexBy(events, func(e domain.Event) domain.EventID { return e.ID })
+	byReceipt := indexBy(receipts, func(r domain.Receipt) domain.ReceiptID { return r.ID })
+	out.EventRegistrations = make([]ExportEventRegistration, 0, len(regs))
+	for _, r := range regs {
+		out.EventRegistrations = append(out.EventRegistrations, ExportEventRegistration{
+			ID: r.ID, Title: byEvent[r.EventID].Title, Status: r.Status, Payment: r.Payment, Price: r.Price,
+			ReceiptNumber: byReceipt[r.ReceiptID].Number, CancellationReceiptNumber: byReceipt[r.CancellationReceiptID].Number,
+			CreatedAt: r.CreatedAt, CanceledAt: r.CanceledAt,
+		})
+	}
+
+	return nil
 }

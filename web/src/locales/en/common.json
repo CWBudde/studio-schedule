@@ -5,6 +5,7 @@
     "home": "Studio Schedule – home"
   },
   "nav": {
+    "events": "Events",
     "label": "Main",
     "schedule": "Schedule",
     "classes": "Classes",

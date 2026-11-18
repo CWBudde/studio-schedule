@@ -60,7 +60,8 @@ Both export one JSON file (`studio-schedule.person-export`, version 1) with ever
 about a person: the person with every field (the office's notes included), guardians, dependents
 and merged persons (names only), the account, its calendar feeds, push devices (by label, without
 endpoint and keys) and dismissed announcements,
-class memberships, every booking and waiting-list entry, the passes with their visits, and the
+class memberships, every booking and waiting-list entry, event registrations with payment status
+and receipt numbers, the passes with their visits, and the
 receipts the person paid (as data, not the PDFs). It never contains password hashes, session or
 link tokens, or calendar feed tokens.
 
@@ -76,7 +77,9 @@ person becomes "Deleted person": name replaced, email, phone, birth date, notes 
 cleared. Its guardian links, class memberships, open waiting-list entries, staff links and its
 account (with sessions, links, calendar feeds and dismissals) are removed; future bookings are
 canceled on time (visits paid with a pass come back). Past bookings, passes and receipts stay, as
-anonymous history. It cannot be undone and is recorded in the audit log. The app refuses to
+anonymous history. Open event registrations are canceled if their first scheduled session has
+yet to start. The payments and receipts stay, and the freed places go to the event waiting list.
+The erasure is recorded in the audit log. The app refuses to
 anonymize the only guardian of a child (link another guardian first), the person of the last admin,
 the caller's own person, and the person of an office or admin account that issued receipts or
 acted in the audit log (disable that account instead, until those records expire).
@@ -85,7 +88,8 @@ acted in the audit log (disable that account instead, until those records expire
 password); an admin deletes any account. The person record stays with its bookings and passes; to
 erase it too, the office anonymizes it. A confirmation mail goes to the old address.
 
-**Guests** need no request: their name and email are cleared 12 months after the lesson.
+The app clears guest names and email addresses 12 months after the lesson or, for an event,
+12 months after its last session.
 
 ## What stays, and why
 

@@ -28,57 +28,64 @@ export const isRental = (kind: string) => kind === 'rental';
  * output has neither, no accompanist, a capacity of 0, and it is hidden; the
  * output of any other kind has a course type and no renter.
  */
-export const lessonSchema = z
-  .object({
-    courseTypeId: z.string(),
-    date: z.string().refine(isSchoolDate, 'date'),
-    startTime,
-    durationMinutes,
-    roomId: chosen,
-    instructorId: z.string(),
-    accompanistId: z.string(),
-    capacity: z.string(),
-    visibility: chosen.pipe(z.enum(visibilities)),
-    kind: chosen.pipe(z.enum(kinds)),
-    renter: z.string().trim(),
-  })
-  .superRefine((v, ctx) => {
-    if (minutesOf(v.startTime) + v.durationMinutes > 1440) {
-      ctx.addIssue({ code: 'custom', path: ['durationMinutes'], message: 'lessonMidnight' });
-    }
-    if (isRental(v.kind)) {
-      if (!v.renter) {
-        ctx.addIssue({ code: 'custom', path: ['renter'], message: 'required' });
-      } else if ([...v.renter].length > maxRenterLength) {
-        ctx.addIssue({ code: 'custom', path: ['renter'], message: 'tooLong' });
+const lessonFormSchema = (eventSession: boolean) =>
+  z
+    .object({
+      courseTypeId: z.string(),
+      date: z.string().refine(isSchoolDate, 'date'),
+      startTime,
+      durationMinutes,
+      roomId: chosen,
+      instructorId: z.string(),
+      accompanistId: z.string(),
+      capacity: z.string(),
+      visibility: chosen.pipe(z.enum(visibilities)),
+      kind: chosen.pipe(z.enum(kinds)),
+      renter: z.string().trim(),
+    })
+    .superRefine((v, ctx) => {
+      if (minutesOf(v.startTime) + v.durationMinutes > 1440) {
+        ctx.addIssue({ code: 'custom', path: ['durationMinutes'], message: 'lessonMidnight' });
       }
-      return;
-    }
-    if (!v.courseTypeId) {
-      ctx.addIssue({ code: 'custom', path: ['courseTypeId'], message: 'choose' });
-    }
-    if (!v.instructorId) {
-      ctx.addIssue({ code: 'custom', path: ['instructorId'], message: 'choose' });
-    }
-    if (!capacity.safeParse(v.capacity).success) {
-      ctx.addIssue({ code: 'custom', path: ['capacity'], message: 'capacity' });
-    }
-    if (v.accompanistId && v.accompanistId === v.instructorId) {
-      ctx.addIssue({ code: 'custom', path: ['accompanistId'], message: 'accompanist' });
-    }
-  })
-  .transform((v) =>
-    isRental(v.kind)
-      ? { ...v, instructorId: '', accompanistId: '', capacity: 0, visibility: 'hidden' as const }
-      : { ...v, capacity: Number(v.capacity.trim()), renter: '' },
-  ) satisfies z.ZodType<
-  Omit<LessonCreateData, 'instructorId' | 'accompanistId' | 'renter' | 'confirmRoomOverlap'> & {
-    instructorId: string;
-    accompanistId: string;
-    renter: string;
-  },
-  LessonInput
->;
+      if (isRental(v.kind)) {
+        if (!v.renter) {
+          ctx.addIssue({ code: 'custom', path: ['renter'], message: 'required' });
+        } else if ([...v.renter].length > maxRenterLength) {
+          ctx.addIssue({ code: 'custom', path: ['renter'], message: 'tooLong' });
+        }
+        return;
+      }
+      if (!v.courseTypeId) {
+        ctx.addIssue({ code: 'custom', path: ['courseTypeId'], message: 'choose' });
+      }
+      if (!v.instructorId) {
+        ctx.addIssue({ code: 'custom', path: ['instructorId'], message: 'choose' });
+      }
+      const validCapacity = eventSession
+        ? /^\d+$/.test(v.capacity.trim()) && Number(v.capacity) >= 1 && Number(v.capacity) <= 10_000
+        : capacity.safeParse(v.capacity).success;
+      if (!validCapacity) {
+        ctx.addIssue({ code: 'custom', path: ['capacity'], message: 'capacity' });
+      }
+      if (v.accompanistId && v.accompanistId === v.instructorId) {
+        ctx.addIssue({ code: 'custom', path: ['accompanistId'], message: 'accompanist' });
+      }
+    })
+    .transform((v) =>
+      isRental(v.kind)
+        ? { ...v, instructorId: '', accompanistId: '', capacity: 0, visibility: 'hidden' as const }
+        : { ...v, capacity: Number(v.capacity.trim()), renter: '' },
+    ) satisfies z.ZodType<
+    Omit<LessonCreateData, 'instructorId' | 'accompanistId' | 'renter' | 'confirmRoomOverlap'> & {
+      instructorId: string;
+      accompanistId: string;
+      renter: string;
+    },
+    LessonInput
+  >;
+
+export const lessonSchema = lessonFormSchema(false);
+export const sessionFormSchema = lessonFormSchema(true);
 
 /** The form values: what the inputs hold. */
 export type LessonInput = {

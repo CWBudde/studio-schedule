@@ -161,7 +161,10 @@ func withSessionEvents(ctx context.Context, tx store.Tx, v viewer, lessons []Sch
 
 	lessons = slices.DeleteFunc(lessons, func(sl ScheduledLesson) bool { return v.hidesSession(sl.Lesson, events) })
 	for i := range lessons {
-		lessons[i].EventSlug = events[lessons[i].Lesson.EventID].Slug
+		if e, ok := events[lessons[i].Lesson.EventID]; ok {
+			lessons[i].EventSlug = e.Slug
+			lessons[i].Lesson.Capacity = e.Capacity
+		}
 	}
 
 	return lessons, nil

@@ -7,14 +7,14 @@ SELECT * FROM announcements WHERE id = $1 FOR UPDATE;
 -- name: CreateAnnouncement :exec
 INSERT INTO announcements (
     id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at,
-    email, emailed_at, email_recipients, mail_cursor, created_at, updated_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17);
+    email, emailed_at, email_recipients, mail_cursor, created_at, updated_at, event_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18);
 
 -- name: UpdateAnnouncement :execrows
 -- Everything but the mail state, which only SetAnnouncementMailState writes.
 UPDATE announcements
 SET author_id = $2, title = $3, body = $4, audience = $5, role = $6, class_id = $7, course_type_id = $8,
-    lesson_id = $9, publish_at = $10, expires_at = $11, email = $12, created_at = $13, updated_at = $14
+    lesson_id = $9, publish_at = $10, expires_at = $11, email = $12, created_at = $13, updated_at = $14, event_id = $15
 WHERE id = $1;
 
 -- name: SetAnnouncementMailState :execrows

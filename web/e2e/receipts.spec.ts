@@ -1,6 +1,4 @@
-import { readFile } from 'node:fs/promises';
-import type { Download } from '@playwright/test';
-import { expect, type Page, signIn, test } from './fixtures';
+import { expect, expectPdfDownload, type Page, signIn, test } from './fixtures';
 
 // The demo's receipt settings are complete (standard VAT, prefix SD), and
 // the office sold Clara Amberly (the member login) her own 10-visit pass
@@ -15,17 +13,6 @@ async function openAdmin(page: Page, name: string, section: string) {
     .getByRole('link', { name: section })
     .click();
   await expect(page.getByRole('heading', { level: 1, name: section })).toBeVisible();
-}
-
-/** Clicks `button` and checks that it downloads a PDF. */
-async function expectPdfDownload(page: Page, click: () => Promise<void>) {
-  const [download] = await Promise.all([
-    page.waitForEvent('download', { timeout: 60_000 }) as Promise<Download>,
-    click(),
-  ]);
-  expect(download.suggestedFilename()).toMatch(/\.pdf$/);
-  const bytes = await readFile((await download.path())!);
-  expect(bytes.subarray(0, 4).toString('latin1')).toBe('%PDF');
 }
 
 test('the office sells a pass with a receipt, downloads it and cancels it', async ({ page }) => {

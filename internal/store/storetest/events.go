@@ -1072,6 +1072,64 @@ func testEventRegistrations(t *testing.T, newStore func(*testing.T) store.Store)
 			wantSlice(e.t, list(storno.ID, domain.ReceiptID{}), nil)
 			wantSlice(e.t, list(), nil)
 		},
+		"MoveUsingUpdate": func(e *env) {
+			ev := e.event(e.courseType("Ballet Basics"), "summer-intensive")
+			survivor, duplicate := e.person("Ada", "Survivor"), e.person("Ada", "Duplicate")
+			first := e.newRegistration(ev, survivor, t0)
+			second := e.newRegistration(ev, duplicate, t0)
+			e.createRegistrations(first, second)
+
+			moved := second
+			moved.PersonID = survivor.ID
+			wantErr(e.t, e.write(func(ctx context.Context, tx store.Tx) error {
+				return tx.EventRegistrations().Update(ctx, moved)
+			}), domain.ErrDuplicate)
+			wantEqual(e.t, e.getRegistration(second.ID), second)
+
+			moved = canceledReg(moved)
+			e.updateRegistration(moved)
+			wantEqual(e.t, e.getRegistration(second.ID), moved)
+			wantEqual(e.t, e.getRegistration(first.ID), first)
+		},
+		"ListDueEvents": func(e *env) {
+			ct := e.courseType("Ballet Basics")
+			first, second := e.event(ct, "first"), e.event(ct, "second")
+			later := e.event(ct, "later")
+			at := t0.Add(time.Hour)
+			reg := func(ev domain.Event, name string) domain.EventRegistration {
+				return e.newRegistration(ev, e.person(name, "Dancer"), t0)
+			}
+			e.createRegistrations(
+				invited(reg(second, "Ben"), 1, at),
+				invited(reg(first, "Ada"), 2, at.Add(-time.Minute)),
+				invited(reg(first, "Cal"), 3, at),
+				invited(reg(later, "Eve"), 4, at.Add(time.Microsecond)),
+				waiting(reg(later, "Dan")),
+				canceledReg(reg(later, "Gia")),
+			)
+
+			due := func(at time.Time) []domain.EventID {
+				return mustQuery(e, func(ctx context.Context, tx store.Tx) ([]domain.EventID, error) {
+					return tx.EventRegistrations().ListDueEvents(ctx, at)
+				})
+			}
+			wantSlice(e.t, due(t0), nil)
+			wantSlice(e.t, due(at.Add(-time.Microsecond)), []domain.EventID{first.ID})
+			wantSlice(e.t, due(at), []domain.EventID{first.ID, second.ID})
+			wantSlice(e.t, due(at.Add(time.Microsecond)), []domain.EventID{first.ID, second.ID, later.ID})
+		},
+		"StatisticsByEvents": func(e *env) {
+			s := e.setting()
+			ev := e.event(s.courseType, "summer")
+			other := e.event(s.courseType, "autumn")
+			payer := e.person("Casey", "Example")
+			fee := e.receipt(e.newReceipt(2026, 1, payer))
+			e.createRegistrations(canceledReg(paidWith(e.newRegistration(ev, payer, t0), fee)), e.newGuestRegistration(ev, "Example Guest", "guest@example.org", t0))
+			got := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]store.EventStats, error) {
+				return tx.Events().StatisticsByIDs(ctx, []domain.EventID{ev.ID, other.ID, ev.ID})
+			})
+			wantSlice(e.t, got, []store.EventStats{{EventID: ev.ID, Title: ev.Title, Registered: 1, Revenue: fee.Gross}, {EventID: other.ID, Title: other.Title}})
+		},
 		"CountsByEvents": func(e *env) {
 			ct := e.courseType("Ballet Basics")
 			full := e.event(ct, "full")

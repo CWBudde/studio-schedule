@@ -108,7 +108,7 @@ func TestSecretLink(t *testing.T) {
 
 	secret := map[string]bool{
 		mail.TemplateConfirmEmail: true, mail.TemplateChangeEmail: true, mail.TemplateResetPassword: true,
-		mail.TemplateInvite: true, mail.TemplateWaitlistInvite: true,
+		mail.TemplateInvite: true, mail.TemplateWaitlistInvite: true, mail.TemplateEventInvite: true,
 	}
 
 	for _, name := range mail.TemplateNames() {

@@ -177,7 +177,7 @@ type Spec struct {
 	// it in any case.
 	Store bool
 	// Destructive marks a command that deletes, anonymizes, mails, cancels
-	// or merges: it calls Env.Confirm before it changes anything.
+	// or merges: it calls Env.Confirm or Env.RequireYes before it changes anything.
 	Destructive bool
 	// JSON says what the command prints with --output json, for the
 	// reference: "the response body of <operationId>" or the schema of a
@@ -461,6 +461,15 @@ func (e *Env) Confirm(question string) error {
 	default:
 		return ErrNotConfirmed
 	}
+}
+
+// RequireYes requires the explicit --yes flag before changing data.
+func (e *Env) RequireYes() error {
+	if e.app.yes {
+		return nil
+	}
+
+	return Usagef("%s changes data: confirm with --yes", e.cmd.CommandPath())
 }
 
 // ReadLine reads one line from stdin, after prompt on stderr when stdin is

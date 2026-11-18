@@ -9,6 +9,7 @@ import { SubscribeButton } from '@/features/calendar-feeds/SubscribeDialog';
 import { LessonDetailSheet } from '@/features/schedule/detail/LessonSheet';
 import { HistorySection } from './HistorySection';
 import { Loading } from './Loading';
+import { MyEventsSection } from './MyEventsSection';
 import { MyPassesSection } from './MyPassesSection';
 import { MyReceiptsSection } from './MyReceiptsSection';
 import { UpcomingSections } from './UpcomingSections';
@@ -47,6 +48,7 @@ export function MyLessonsPage() {
       ) : (
         <>
           <UpcomingSections me={me.data} onOpen={open} />
+          <MyEventsSection />
           <MyPassesSection />
           <MyReceiptsSection />
           <HistorySection onOpen={open} />

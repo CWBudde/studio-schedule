@@ -69,7 +69,7 @@ export function useLessonQuickAction(
 
   const action = ((): QuickAction => {
     // A room rental (staff only) takes no bookings.
-    if (!me.data || lesson.kind === 'rental') return none;
+    if (!me.data || lesson.kind === 'rental' || lesson.eventId) return none;
     const closed = closedState(lesson, now);
     if (closed === 'canceled' || closed === 'started') return none;
     if (!family.data) return open;

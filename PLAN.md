@@ -867,37 +867,36 @@ last.
       open registration per person and event, `CountsByEvents(at)`, `GetByInviteTokenHash`,
       `GetByReceipt` and `AnonymizeGuests`; `Lessons().ListByEvent`; the store's choices are in
       ADR 0019's amendment
-- [ ] Office administration (`/api/v1/admin/events`, `office`): create/edit/delete events, add,
+- [x] Office administration (`/api/v1/admin/events`, `office`): create/edit/delete events, add,
       move and remove sessions (lessons) under the class/lesson rules of ADR 0007, list
       registrations, add a registration for a person or guest, mark paid, cancel; `withConflict`
-      409s and 422 field errors as elsewhere; audited (2026-11-01) — partial: the API and service
-      are done, `service.EventService` and `httpapi/event_admin.go`: events as drafts with a slug from the title, publish and take
+      409s and 422 field errors as elsewhere; audited (2026-11-18) — `service.EventService` and
+      `httpapi/event_admin.go` create events as drafts with a slug from the title, publish and take
       back, cancel with sessions, registrations and refunds (one `event-canceled` mail each), the
       image like the background, sessions added there and then edited as lessons (capacity kept
       the event's); registrations at the desk, mark paid and cancel with or without refund under
       `/api/v1/admin/event-registrations`; sessions refuse bookings (409 `event-session`), a
       draft's sessions are staff's only; four audit actions (migration 00032); ADR 0019,
-      amendment "office administration"; the office pages (Web item) remain
-- [ ] Public API: `listEvents` (upcoming, published; free places, price, sessions) and `getEvent`
+      amendment "office administration", with its web pages under Administration → Events
+- [x] Public API: `listEvents` (upcoming, published; free places, price, sessions) and `getEvent`
       by slug (`public`); `registerForEvent` and `cancelEventRegistration` (`signedIn`, and for
       guests if the ADR allows it); confirmation and cancellation mails (EN/DE, golden files).
       The event waiting list (offering freed places to those waiting) lands here too
-- [ ] Payment and receipts: marking a registration paid issues a receipt in the same transaction
+- [x] Payment and receipts: marking a registration paid issues a receipt in the same transaction
       (`ReceiptService`, the PDF template gets an event line), Storno on refund; "My events" with
-      the registrations of the family and their receipts (2026-11-01) — partial: the server side is
-      done (mark paid issues the receipt with an event line, refunds by Storno, event-attended);
-      "My events" and the web remain
-- [ ] Web: `/events` list and `/events/$slug` detail page (dates, sessions, instructor, location,
+      the registrations of the family and their receipts (2026-11-18). My events shows the fee
+      and payment status and offers both the receipt and cancellation PDFs.
+- [x] Web: `/events` list and `/events/$slug` detail page (dates, sessions, instructor, location,
       price, places left, register/cancel, waitlist), a nav entry, event sessions in the schedule
       linking to their event; office pages for events, sessions and registrations; every string in
       `locales/{en,de}`; school dates through `schoolTime.ts`
-- [ ] Themes: `EventList` and `EventDetail` slots (ADR 0018) in Programme, a Werkstatt variant
-- [ ] Integration: announcements can target an event's participants (ADR 0014); event sessions in
+- [x] Themes: `EventList` and `EventDetail` slots (ADR 0018) in Programme, a Werkstatt variant
+- [x] Integration: announcements can target an event's participants (ADR 0014); event sessions in
       calendar feeds; event revenue and sign-ups in the statistics; events in the person data
       export and anonymisation (ADR 0016)
-- [ ] Demo seed: two or three fictional events around today (one free, one nearly full, one with
+- [x] Demo seed: two or three fictional events around today (one free, one nearly full, one with
       a guest sign-up), relative to the visit day like the existing workshops
-- [ ] Tests: concurrent registration for the last place (both stores), price snapshot and receipt
+- [x] Tests: concurrent registration for the last place (both stores), price snapshot and receipt
       golden files, cancellation edges, visibility of unpublished events; e2e `events.spec.ts`
       (browse, register, cancel, the office marks paid and the receipt appears) on desktop and
       phone; docs: architecture.md, glossary (event, registration), CLAUDE.md code map
@@ -1120,12 +1119,13 @@ command groups by need: recovery and diagnosis first, then data, then reports.
       it opens with the process's opener (`newDBCmd(app, sys.Open)`). Since resolved: the service
       is `app.Services.Integrity`, the command opens the database through the layer, and
       `Spec.Validate` refuses an unknown check before that (2026-11-01)
-- [ ] Reports: `stats --from --to` (the statistics service as a table or JSON);
+- [x] Reports: `stats --from --to` (the statistics service as a table or JSON);
       `events list|registrations <slug>|mark-paid` (Phase 10). `stats` is done (2026-11-01):
       `office`, `--range` (last4Weeks by default, last12Weeks, term, custom) or `--from --to`,
       the totals and the tables by period, class, room, course type and instructor; the top
-      participants only with `--participants`, the JSON is getStatistics's full body. The
-      `events` commands wait for Phase 10
+      participants only with `--participants`, the JSON is getStatistics's full body.
+      The `events` commands list events and registrations and record payment with `--yes`
+      (2026-11-18). The JSON matches the corresponding office API responses.
 - [x] Tests: every command runs in-process (cobra `Execute` with buffers) on the memory store
       and PostgreSQL. They cover golden text and JSON output, exit codes, and the refusal without
       `--yes`. The commands count towards the coverage gate (Phase 9) (2026-11-01): checked command

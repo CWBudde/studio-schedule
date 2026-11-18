@@ -52,6 +52,7 @@ type Announcement struct {
 	MailCursor      pgtype.Text
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
+	EventID         pgtype.UUID
 }
 
 type AnnouncementDismissal struct {

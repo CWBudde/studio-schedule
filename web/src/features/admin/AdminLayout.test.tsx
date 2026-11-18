@@ -58,6 +58,7 @@ function renderAdmin(at: string, { accounts }: { accounts?: () => ReactElement }
         section('/pass-types', 'Passes section'),
         section('/staff', 'Staff section'),
         section('/terms', 'Terms section'),
+        section('/events', 'Events section'),
         section('/persons', 'Persons section'),
         section('/duplicates', 'Duplicates section'),
         section('/import', 'Import section'),
@@ -119,6 +120,7 @@ describe('AdminLayout', () => {
     expect(nav.getByRole('link', { name: 'Levels' })).toHaveAttribute('href', '/admin/levels');
     expect(nav.getByRole('link', { name: 'Staff' })).toHaveAttribute('href', '/admin/staff');
     expect(nav.getByRole('link', { name: 'Timetable' })).toHaveAttribute('href', '/admin/terms');
+    expect(nav.getByRole('link', { name: 'Events' })).toHaveAttribute('href', '/admin/events');
     expect(nav.getByRole('link', { name: 'Persons' })).toHaveAttribute('href', '/admin/persons');
     expect(nav.getByRole('link', { name: 'Passes' })).toHaveAttribute('href', '/admin/pass-types');
     expect(nav.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/admin/settings');
@@ -172,6 +174,7 @@ describe('AdminLayout', () => {
       'Passes',
       'Staff',
       'Timetable',
+      'Events',
       'Persons',
       'Duplicates',
       'Import',

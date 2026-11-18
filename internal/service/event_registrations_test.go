@@ -253,6 +253,12 @@ func TestMarkPaid(t *testing.T) {
 	e, _ := f.published(t, f.eventData())
 	svc := f.events(t)
 	r := f.register(t, e, NewRegistration{PersonID: f.mia.ID})
+	newPrice := f.eventData()
+	newPrice.Price, newPrice.VATRate = 5000, 700
+	if _, err := svc.Update(ctx, e.ID, newPrice); err != nil {
+		t.Fatal(err)
+	}
+
 	before := len(f.mails(t))
 
 	got, err := svc.MarkPaid(ctx, f.office, r.ID, EventPayment{Method: domain.PaymentCard, PayerID: f.anna.ID})
@@ -273,6 +279,7 @@ func TestMarkPaid(t *testing.T) {
 
 	if receipt.PayerID != f.anna.ID || receipt.PaymentMethod != domain.PaymentCard || receipt.Gross != 4500 ||
 		receipt.RecipientName != "Anna Example" || len(receipt.Lines) != 1 || len(pdf) == 0 ||
+		receipt.Lines[0].VATRate != r.VATRate ||
 		receipt.Lines[0].Description != "Imaginary Intensive for Mia Example, 23 Oct 2026 – 24 Oct 2026" {
 		t.Errorf("receipt %+v", receipt)
 	}

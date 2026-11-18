@@ -139,7 +139,7 @@ export interface paths {
         put?: never;
         /**
          * Publish an announcement
-         * @description Publishes an announcement at `publishAt` (default: now) until `expiresAt` (optional). The title is one line of 1 to 120 characters, the text plain text of 1 to 4000 (line breaks normalized to `\n`, trimmed, no control characters but line breaks and tabs, no invisible format characters but the zero-width joiners; a 422 on the field otherwise). With `email`, it is mailed once to its audience, each address once, in its account's language: at once if it publishes now, else at `publishAt`. Guests without an account are not reached. A school day has at most 3 emailed announcements, sent and scheduled together; beyond that a 409 `mail-limit`. An unknown class, course type or lesson is a 422 on its field.
+         * @description Publishes an announcement at `publishAt` (default: now) until `expiresAt` (optional). The title is one line of 1 to 120 characters, the text plain text of 1 to 4000 (line breaks normalized to `\n`, trimmed, no control characters but line breaks and tabs, no invisible format characters but the zero-width joiners; a 422 on the field otherwise). With `email`, it is mailed once to its audience, each address once, in its account's language: at once if it publishes now, else at `publishAt`. Registered event guests are emailed for event and session audiences. A school day has at most 3 emailed announcements, sent and scheduled together; beyond that a 409 `mail-limit`. An unknown class, course type or lesson is a 422 on its field.
          */
         post: operations["createAnnouncement"];
         delete?: never;
@@ -1912,6 +1912,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/event-invites/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read an event invitation by its token
+         * @description Reading this link does not take the place. A used, expired or unknown token is a 404.
+         */
+        get: operations["getEventInvite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/event-invites/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take a reserved event place by its token */
+        post: operations["acceptEventInviteByToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/event-invites/{token}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline a reserved event place by its token */
+        post: operations["declineEventInviteByToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/event-registrations/{registrationId}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take a reserved event place */
+        post: operations["acceptEventInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/event-registrations/{registrationId}/cancel": {
         parameters: {
             query?: never;
@@ -1926,6 +1997,40 @@ export interface paths {
          * @description Cancels a registration of the signed-in person or one of their dependents before the event's `cancelUntil` (default: the sign-up close); a paid fee is refunded by a Storno of its receipt. Anyone else's registration, a guest's included, is a 404. After the deadline it is a 409 `too-late` (the office still cancels); a canceled registration a 409 `already-canceled`, one on the waiting list a 409 `not-registered`; incomplete receipt settings for a refund a 409 `receipt-settings-incomplete`. The signed-in account gets a mail.
          */
         post: operations["cancelEventRegistration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/event-registrations/{registrationId}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline a reserved event place */
+        post: operations["declineEventInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/event-registrations/{registrationId}/leave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Leave an event waiting list */
+        post: operations["leaveEventWaitlist"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2006,6 +2111,23 @@ export interface paths {
          * @description Registers the signed-in person or one of their dependents for the whole event. A person outside the family, a draft and an unknown slug are a 404. An event that is canceled, or whose sign-up window is not open (from `signupOpensAt`, or publishing, until `signupClosesAt`, or the first session's start), is a 409 `closed`; one whose registrations and open invites fill its capacity a 409 `full`; a person registered (or waiting) already a 409 `duplicate`. A free registration is paid at once; a priced one is unpaid until the fee is paid at the desk. The signed-in account gets a confirmation mail.
          */
         post: operations["registerForEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{slug}/waitlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Join the waiting list of a full event */
+        post: operations["joinEventWaitlist"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3366,10 +3488,10 @@ export interface components {
         };
         Announcement: {
             /**
-             * @description everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: those booked for the lesson. Persons are reached through their guardians too.
+             * @description everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: its participants; event: its registered participants. Persons are reached through their guardians too.
              * @enum {string}
              */
-            audience: "everyone" | "role" | "class" | "course-type" | "lesson";
+            audience: "everyone" | "role" | "class" | "course-type" | "lesson" | "event";
             /** @description Name of the author; absent if it can no longer be found. */
             author?: string;
             /** @description Plain text with line breaks. */
@@ -3405,6 +3527,13 @@ export interface components {
              * @description When it was mailed; absent if not (yet).
              */
             emailedAt?: string;
+            /**
+             * Format: uuid
+             * @description The event; only with audience event.
+             */
+            eventId?: string;
+            /** @description Title of the event for an event audience. */
+            eventTitle?: string;
             /**
              * Format: date-time
              * @description When it stops showing; absent: never.
@@ -3442,10 +3571,10 @@ export interface components {
         };
         AnnouncementAudienceData: {
             /**
-             * @description everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: those booked for the lesson. Persons are reached through their guardians too.
+             * @description everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: its participants; event: its registered participants. Persons are reached through their guardians too.
              * @enum {string}
              */
-            audience: "everyone" | "role" | "class" | "course-type" | "lesson";
+            audience: "everyone" | "role" | "class" | "course-type" | "lesson" | "event";
             /**
              * Format: uuid
              * @description The class; only with audience class.
@@ -3456,6 +3585,11 @@ export interface components {
              * @description The course type; only with audience course-type.
              */
             courseTypeId?: string;
+            /**
+             * Format: uuid
+             * @description The event; only with audience event.
+             */
+            eventId?: string;
             /**
              * Format: uuid
              * @description The lesson; only with audience lesson.
@@ -3491,10 +3625,10 @@ export interface components {
         };
         AnnouncementData: {
             /**
-             * @description everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: those booked for the lesson. Persons are reached through their guardians too.
+             * @description everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: its participants; event: its registered participants. Persons are reached through their guardians too.
              * @enum {string}
              */
-            audience: "everyone" | "role" | "class" | "course-type" | "lesson";
+            audience: "everyone" | "role" | "class" | "course-type" | "lesson" | "event";
             /** @description Plain text with line breaks. */
             body: string;
             /**
@@ -3509,6 +3643,11 @@ export interface components {
             courseTypeId?: string;
             /** @description Whether it is mailed to its audience once, at publishAt. */
             email?: boolean;
+            /**
+             * Format: uuid
+             * @description The event; only with audience event.
+             */
+            eventId?: string;
             /**
              * Format: date-time
              * @description When it stops showing; absent: never.
@@ -4872,6 +5011,12 @@ export interface components {
             /** @description The image, base64 encoded; at most 1 MiB. */
             data: string;
         };
+        EventInvite: {
+            event: components["schemas"]["Event"];
+            /** Format: date-time */
+            expiresAt: string;
+            givenName: string;
+        };
         EventList: {
             items: components["schemas"]["Event"][];
         };
@@ -5008,6 +5153,18 @@ export interface components {
              */
             startTime: string;
         };
+        EventStats: {
+            /** Format: uuid */
+            eventId: string;
+            /** Format: int64 */
+            registered: number;
+            /**
+             * Format: int64
+             * @description Gross revenue in minor units for the whole event after refunds.
+             */
+            revenue: number;
+            title: string;
+        };
         ExportAccount: {
             /**
              * Format: date-time
@@ -5113,6 +5270,27 @@ export interface components {
              * @enum {string}
              */
             scope: "bookings" | "teaching" | "schedule";
+        };
+        ExportEventRegistration: {
+            /** Format: date-time */
+            canceledAt?: string;
+            cancellationReceiptNumber?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            payment: "unpaid" | "paid" | "refunded";
+            /**
+             * Format: int64
+             * @description The gross price when the registration was made, in minor units.
+             */
+            price: number;
+            receiptNumber?: string;
+            /** @enum {string} */
+            status: "waiting" | "invited" | "registered" | "canceled";
+            /** @description Event title. */
+            title: string;
         };
         ExportLesson: {
             /** @description Course type name. */
@@ -5876,7 +6054,7 @@ export interface components {
             accompanistId?: string;
             /**
              * Format: int64
-             * @description Maximum number of participants; at least 1, and 0 for a room rental.
+             * @description Capacity: 0 for rentals, 1–1000 for other lessons, or the inherited event capacity for a session.
              */
             capacity: number;
             /** @description Save even if the lesson starts in the past (skips the 409 past). */
@@ -5934,7 +6112,7 @@ export interface components {
             accompanistId?: string;
             /**
              * Format: int64
-             * @description Maximum number of participants; at least 1, and 0 for a room rental.
+             * @description Capacity: 0 for rentals, 1–1000 for other lessons, or the inherited event capacity for a session.
              */
             capacity: number;
             /** @description Save even if the lesson starts in the past (skips the 409 past). */
@@ -6167,6 +6345,8 @@ export interface components {
              * @description The lesson.
              */
             lessonId: string;
+            /** @description Event session participants, including guests. Present even for an empty session. */
+            registrants?: components["schemas"]["SessionRegistrant"][];
             /**
              * Format: int64
              * @description Entries waiting for an invite.
@@ -6416,7 +6596,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled" | "event-registered" | "event-registration-canceled";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled" | "event-registered" | "event-registration-canceled" | "event-invite" | "event-invite-expired";
             /** @description Plain text body; only with body shown. */
             text?: string;
             /** @description Recipient address. */
@@ -6436,7 +6616,7 @@ export interface components {
              * @description Only mails of this template; absent: all.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled" | "event-registered" | "event-registration-canceled";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled" | "event-registered" | "event-registration-canceled" | "event-invite" | "event-invite-expired";
         };
         MailLogItem: {
             /** @description File name of the attached PDF; absent if none. */
@@ -6486,7 +6666,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled" | "event-registered" | "event-registration-canceled";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled" | "event-registered" | "event-registration-canceled" | "event-invite" | "event-invite-expired";
             /** @description Recipient address. */
             to: string;
         };
@@ -6533,7 +6713,7 @@ export interface components {
              * @description Template the mail was rendered from.
              * @enum {string}
              */
-            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled" | "event-registered" | "event-registration-canceled";
+            template?: "confirm-email" | "reset-password" | "change-email" | "email-changed" | "invite" | "lesson-canceled" | "lesson-restored" | "lesson-changed" | "booking-confirmed" | "booking-canceled" | "waitlist-invite" | "waitlist-expired" | "lesson-notice" | "receipt" | "announcement" | "account-deleted" | "password-changed" | "event-canceled" | "event-registered" | "event-registration-canceled" | "event-invite" | "event-invite-expired";
             /** @description Plain text body. */
             text: string;
             /** @description Recipient address. */
@@ -6735,6 +6915,11 @@ export interface components {
              * @description When it was made.
              */
             createdAt: string;
+            /**
+             * Format: date-time
+             * @description Until an invitation reserves a place; absent otherwise.
+             */
+            expiresAt?: string;
             /**
              * Format: uuid
              * @description Registration ID.
@@ -7247,6 +7432,8 @@ export interface components {
             dependents: components["schemas"]["ExportPersonRef"][];
             /** @description Announcements the account dismissed. */
             dismissedAnnouncements: components["schemas"]["ExportAnnouncement"][];
+            /** @description Every event registration, ended ones included. */
+            eventRegistrations: components["schemas"]["ExportEventRegistration"][];
             /**
              * Format: date-time
              * @description When the document was made.
@@ -8028,6 +8215,13 @@ export interface components {
              */
             validFrom?: string;
         };
+        SessionRegistrant: {
+            anonymized?: boolean;
+            guest: boolean;
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
         StaffBooking: {
             /**
              * Format: date-time
@@ -8169,6 +8363,8 @@ export interface components {
             courseTypes: components["schemas"]["CourseTypeStatistics"][];
             /** @description ISO 4217 currency of the sales. */
             currency: string;
+            /** @description Events with a session in the range, their current registrations and retained fees. */
+            events: components["schemas"]["EventStats"][];
             /**
              * Format: date
              * @description First school date of the range.
@@ -8321,6 +8517,11 @@ export interface components {
              * @description Their places.
              */
             capacity: number;
+            /**
+             * Format: int64
+             * @description Gross event fees in minor units, net of refunds, by receipt issue date.
+             */
+            eventFees: number;
             /**
              * Format: int64
              * @description Active guest bookings (without a person).
@@ -12899,7 +13100,241 @@ export interface operations {
             };
         };
     };
+    getEventInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The token from the invite link. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventInvite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    acceptEventInviteByToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The token from the invite link. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    declineEventInviteByToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The token from the invite link. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    acceptEventInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The registration. */
+                registrationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyEvent"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     cancelEventRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The registration. */
+                registrationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyEvent"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    declineEventInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The registration. */
+                registrationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyEvent"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    leaveEventWaitlist: {
         parameters: {
             query?: never;
             header?: never;
@@ -13050,6 +13485,51 @@ export interface operations {
         };
     };
     registerForEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The event's slug. */
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterForEventInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyEvent"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    joinEventWaitlist: {
         parameters: {
             query?: never;
             header?: never;

@@ -4,9 +4,11 @@ import { initReactI18next } from 'react-i18next';
 import deAbout from './locales/de/about.json';
 import deAccount from './locales/de/account.json';
 import deAdmin from './locales/de/admin.json';
+import deAdminEvents from './locales/de/adminEvents.json';
 import deAnnouncements from './locales/de/announcements.json';
 import deAuth from './locales/de/auth.json';
 import deDuplicates from './locales/de/duplicates.json';
+import deEvents from './locales/de/events.json';
 import deFeeds from './locales/de/feeds.json';
 import deImports from './locales/de/imports.json';
 import deMailLog from './locales/de/mailLog.json';
@@ -22,9 +24,11 @@ import deTimetable from './locales/de/timetable.json';
 import enAbout from './locales/en/about.json';
 import enAccount from './locales/en/account.json';
 import enAdmin from './locales/en/admin.json';
+import enAdminEvents from './locales/en/adminEvents.json';
 import enAnnouncements from './locales/en/announcements.json';
 import enAuth from './locales/en/auth.json';
 import enDuplicates from './locales/en/duplicates.json';
+import enEvents from './locales/en/events.json';
 import enFeeds from './locales/en/feeds.json';
 import enImports from './locales/en/imports.json';
 import enMailLog from './locales/en/mailLog.json';
@@ -50,9 +54,11 @@ export const resources = {
     account: enAccount,
     timetable: enTimetable,
     admin: enAdmin,
+    adminEvents: enAdminEvents,
     teach: enTeach,
     myLessons: enMyLessons,
     feeds: enFeeds,
+    events: enEvents,
     passes: enPasses,
     receipts: enReceipts,
     settings: enSettings,
@@ -70,9 +76,11 @@ export const resources = {
     account: deAccount,
     timetable: deTimetable,
     admin: deAdmin,
+    adminEvents: deAdminEvents,
     teach: deTeach,
     myLessons: deMyLessons,
     feeds: deFeeds,
+    events: deEvents,
     passes: dePasses,
     receipts: deReceipts,
     settings: deSettings,
@@ -136,6 +144,7 @@ void i18n
       'account',
       'timetable',
       'admin',
+      'adminEvents',
       'teach',
       'myLessons',
       'feeds',

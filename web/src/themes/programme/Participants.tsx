@@ -51,6 +51,7 @@ export function Participants(props: ParticipantsProps) {
 function ParticipantsList({
   headingId,
   counts: data,
+  registrants,
   stale,
   onRetry,
   timeZone,
@@ -72,7 +73,10 @@ function ParticipantsList({
   const lang = i18n.resolvedLanguage ?? 'en';
 
   const counts = [
-    t('participants.counts.booked', { active: data.active, capacity: data.capacity }),
+    t(registrants ? 'participants.counts.registered' : 'participants.counts.booked', {
+      active: data.active,
+      capacity: data.capacity,
+    }),
     t('participants.counts.free', { count: data.freePlaces }),
     ...(data.held > 0 ? [t('participants.counts.held', { count: data.held })] : []),
     ...(data.waiting > 0 ? [t('participants.counts.waiting', { count: data.waiting })] : []),
@@ -94,7 +98,9 @@ function ParticipantsList({
           </Button>
         </p>
       )}
-      {!canEdit && <p className="text-sm font-medium">{t('participants.dayOver')}</p>}
+      {!canEdit && !registrants && (
+        <p className="text-sm font-medium">{t('participants.dayOver')}</p>
+      )}
 
       {(canAdd || allAttended.show) && (
         <div className="flex flex-wrap gap-2">
@@ -118,7 +124,23 @@ function ParticipantsList({
         </div>
       )}
 
-      {active.length === 0 ? (
+      {registrants ? (
+        <div className="space-y-2">
+          <h4 className="font-medium">{t('participants.registeredForEvent')}</h4>
+          {registrants.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('participants.noRegistrants')}</p>
+          ) : (
+            <ul className="divide-y" aria-label={t('participants.registeredForEvent')}>
+              {registrants.map((r) => (
+                <li key={r.id} className="flex items-center gap-2 py-2">
+                  {shownName(r)}{' '}
+                  {r.guest && <Badge variant="secondary">{t('participants.guest')}</Badge>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : active.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('participants.empty')}</p>
       ) : (
         <ul className="divide-y" aria-label={t('participants.listLabel')}>

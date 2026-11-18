@@ -21,6 +21,8 @@
     "invalid": "Dieser Zeitraum kann nicht angezeigt werden. Wähle höchstens {{count}} Tage, das Ende nicht vor dem Anfang."
   },
   "tiles": {
+    "eventFees": "Veranstaltungsgebühren",
+    "eventFeesDetail": "nach Erstattungen",
     "label": "Summen des Zeitraums",
     "bookings": "Buchungen",
     "bookingsDetail_one": "in {{count}} Stunde",
@@ -55,6 +57,10 @@
     "noData": "Nichts in diesem Zeitraum."
   },
   "tables": {
+    "events": "Veranstaltungen",
+    "event": "Veranstaltung",
+    "registered": "Angemeldet",
+    "revenue": "Gebühren nach Erstattungen",
     "periodsByWeek": "Nach Wochen",
     "periodsByMonth": "Nach Monaten",
     "classes": "Nach Kurs",

@@ -48,6 +48,8 @@
     "password-changed": "Passwort geändert",
     "event-canceled": "Veranstaltung abgesagt",
     "event-registered": "Veranstaltungsanmeldung bestätigt",
+    "event-invite": "Platz für Veranstaltung angeboten",
+    "event-invite-expired": "Platzangebot für Veranstaltung abgelaufen",
     "event-registration-canceled": "Veranstaltungsanmeldung storniert"
   },
   "attempts_one": "{{count}} Versuch",

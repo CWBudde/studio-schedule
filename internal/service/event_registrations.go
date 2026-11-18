@@ -60,6 +60,7 @@ func (s *EventService) AddRegistration(
 	ctx context.Context, p Principal, event domain.EventID, in NewRegistration,
 ) (RegistrationView, error) {
 	var out RegistrationView
+	var full bool
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		e, err := tx.Events().Lock(ctx, event)
@@ -105,13 +106,23 @@ func (s *EventService) AddRegistration(
 			return ErrEventClosed
 		}
 
-		counts, err := tx.EventRegistrations().CountsByEvents(ctx, []domain.EventID{e.ID}, now)
-		if err != nil {
-			return err
-		}
+		full = false
+		if !in.ConfirmOverCapacity {
+			if _, err := s.settleEventInvites(ctx, tx, e, now); err != nil {
+				return err
+			}
 
-		if c := counts[e.ID]; c.Registered+c.Invited >= e.Capacity && !in.ConfirmOverCapacity {
-			return ErrEventFull
+			counts, err := tx.EventRegistrations().CountsByEvents(ctx, []domain.EventID{e.ID}, now)
+			if err != nil {
+				return err
+			}
+
+			if c := counts[e.ID]; c.Registered+c.Invited >= e.Capacity {
+				// Keep the newly offered places even when the desk must
+				// confirm going over the capacity.
+				full = true
+				return nil
+			}
 		}
 
 		if err := tx.EventRegistrations().Create(ctx, r); err != nil {
@@ -128,6 +139,10 @@ func (s *EventService) AddRegistration(
 	})
 	if err != nil {
 		return RegistrationView{}, fmt.Errorf("register for event %v: %w", event, err)
+	}
+
+	if full {
+		return RegistrationView{}, fmt.Errorf("register for event %v: %w", event, ErrEventFull)
 	}
 
 	return out, nil
@@ -225,6 +240,7 @@ func (s *EventService) CancelRegistration(
 		}
 
 		now := s.clock.Now()
+		held := r.Status == domain.EventRegistered || r.Status == domain.EventInvited
 
 		var refunded bool
 		if r, refunded, err = s.cancelRegistration(ctx, tx, settings, loc, p, now, r, refund); err != nil {
@@ -233,6 +249,16 @@ func (s *EventService) CancelRegistration(
 
 		if err := s.audit(ctx, tx, p, now, domain.AuditEventRegistrationCanceled, r.EventID, &r, refunded); err != nil {
 			return err
+		}
+
+		if held {
+			e, err := tx.Events().Get(ctx, r.EventID)
+			if err != nil {
+				return err
+			}
+			if err := s.offerEventPlaces(ctx, tx, e, now); err != nil {
+				return err
+			}
 		}
 
 		views, err := registrationViews(ctx, tx, []domain.EventRegistration{r})
@@ -265,7 +291,7 @@ func lockRegistration(ctx context.Context, tx store.Tx, id domain.EventRegistrat
 	return tx.EventRegistrations().Get(ctx, id)
 }
 
-// cancelRegistration cancels the open registration r at now as p and, with
+// cancelRegistration ends r if it is still open and, with
 // refund, refunds a fee paid with a receipt by a Storno of the receipt
 // (ReceiptService.storno, the event's start notwithstanding). It returns
 // the registration as stored and whether this call refunded it. The caller
@@ -274,14 +300,13 @@ func (s *EventService) cancelRegistration(
 	ctx context.Context, tx store.Tx, settings domain.Settings, loc *time.Location, p Principal, now time.Time,
 	r domain.EventRegistration, refund bool,
 ) (domain.EventRegistration, bool, error) {
-	r.Status, r.CanceledAt, r.UpdatedAt = domain.EventRegistrationCanceled, now, now
-	r.InviteTokenHash, r.InvitedAt, r.ExpiresAt = [32]byte{}, time.Time{}, time.Time{}
-
-	if err := tx.EventRegistrations().Update(ctx, r); err != nil {
-		return domain.EventRegistration{}, false, err
+	if r.Open() {
+		if err := cancelEventRegistration(ctx, tx, &r, now); err != nil {
+			return domain.EventRegistration{}, false, err
+		}
 	}
 
-	if !refund || r.Payment != domain.EventPaid || r.ReceiptID.IsZero() {
+	if !refund || !paidWithReceipt(r) {
 		return r, false, nil
 	}
 

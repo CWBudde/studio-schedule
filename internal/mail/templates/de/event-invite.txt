@@ -1,0 +1,8 @@
+Hallo{{with .GivenName}} {{.}}{{end}},
+
+für {{.Participant}} ist ein Platz bei {{.Title}} bis {{date .ExpiresAt}}, {{clock .ExpiresAt}} Uhr reserviert.
+
+Anmeldung bestätigen: {{.Link}}
+
+Viele Grüße
+{{.SchoolName}}

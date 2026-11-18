@@ -48,6 +48,7 @@
     "emailSending": "Wird verschickt",
     "noEmail": "Nur in der App",
     "audiences": {
+      "event": "Veranstaltung",
       "everyone": "Alle",
       "role": "Rolle",
       "class": "Mitglieder eines Kurses",
@@ -61,6 +62,7 @@
       "admin": "Administration"
     },
     "audienceText": {
+      "event": "Veranstaltung · {{name}}",
       "everyone": "Alle",
       "role": "Rolle: {{role}}",
       "class": "Kurs: {{class}} ({{term}})",

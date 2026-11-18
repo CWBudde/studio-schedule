@@ -409,6 +409,7 @@ function StatisticsView({ stats }: { stats: Statistics }) {
         rows={stats.instructors.map((i) => ({ key: i.staffId, name: i.name, figures: i }))}
         f={f}
       />
+      <EventsTable events={stats.events} f={f} />
       <TopParticipantsTable participants={stats.topParticipants} f={f} />
     </div>
   );
@@ -456,6 +457,12 @@ function StatTiles({ totals, f }: { totals: Figures; f: Formats }) {
       label: t('tiles.sales'),
       value: f.money(totals.salesGross),
       detail: t('tiles.salesDetail', { count: totals.passesSold }),
+    },
+    {
+      key: 'eventFees',
+      label: t('tiles.eventFees'),
+      value: f.money(totals.eventFees),
+      detail: t('tiles.eventFeesDetail'),
     },
     {
       key: 'lateCancellations',
@@ -599,7 +606,10 @@ type FigureRow = {
   name: ReactNode;
   /** Whom the class is for, in the column of `audienceHeader`. */
   audience?: string;
-  figures: Omit<Figures, 'passesSold' | 'salesGross' | 'canceledLessons' | 'activeMembers'>;
+  figures: Omit<
+    Figures,
+    'passesSold' | 'salesGross' | 'eventFees' | 'canceledLessons' | 'activeMembers'
+  >;
 };
 
 /**
@@ -680,6 +690,44 @@ function FiguresTable({
 }
 
 /** The persons with the most bookings, each linked to their page. */
+function EventsTable({ events, f }: { events: Statistics['events']; f: Formats }) {
+  const { t } = useTranslation('statistics');
+  const caption = t('tables.events');
+  return (
+    <section className="space-y-2">
+      <h2 className="text-lg font-semibold">{caption}</h2>
+      {events.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t('tables.empty')}</p>
+      ) : (
+        <Table aria-label={caption}>
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col">{t('tables.event')}</TableHead>
+              <TableHead scope="col" className={numeric}>
+                {t('tables.registered')}
+              </TableHead>
+              <TableHead scope="col" className={numeric}>
+                {t('tables.revenue')}
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {events.map((e) => (
+              <TableRow key={e.eventId}>
+                <TableHead scope="row" className="font-normal">
+                  {e.title}
+                </TableHead>
+                <TableCell className={numeric}>{f.count(e.registered)}</TableCell>
+                <TableCell className={numeric}>{f.money(e.revenue)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </section>
+  );
+}
+
 function TopParticipantsTable({ participants, f }: { participants: Participant[]; f: Formats }) {
   const { t } = useTranslation('statistics');
   const caption = t('tables.topParticipants');

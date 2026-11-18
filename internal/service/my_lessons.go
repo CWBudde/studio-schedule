@@ -216,6 +216,10 @@ func lessonsOf(
 		ids = append(ids, e.LessonID)
 	}
 
+	return lessonSummariesByIDs(ctx, tx, settings, ids)
+}
+
+func lessonSummariesByIDs(ctx context.Context, tx store.Tx, settings domain.Settings, ids []domain.LessonID) (map[domain.LessonID]ScheduledLesson, error) {
 	out := map[domain.LessonID]ScheduledLesson{}
 	if len(ids) == 0 {
 		return out, nil

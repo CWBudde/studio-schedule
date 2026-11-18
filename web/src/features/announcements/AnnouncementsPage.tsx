@@ -59,6 +59,8 @@ export function AnnouncementsPage() {
                 term: a.class.termName,
               })
             : '';
+        case 'event':
+          return t('admin.audienceText.event', { name: a.eventTitle ?? '' });
         case 'course-type':
           return t('admin.audienceText.course-type', { name: a.courseType?.name ?? '' });
         case 'lesson':

@@ -13,7 +13,7 @@ import (
 // whose first line is the notification's title and the rest its body. A
 // notification shows on a lock screen, so it names the lesson and its
 // time, never a person.
-func PushTemplateNames() []string { return []string{TemplateWaitlistInvite} }
+func PushTemplateNames() []string { return []string{TemplateWaitlistInvite, TemplateEventInvite} }
 
 // PushText is a rendered notification.
 type PushText struct {

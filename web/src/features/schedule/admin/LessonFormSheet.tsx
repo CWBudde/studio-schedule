@@ -8,7 +8,9 @@ import { toast } from 'sonner';
 import type { LessonDetail } from '@/api/client';
 import { conflictReason, roomTakenBy } from '@/api/conflict';
 import {
+  addEventSessionMutation,
   allStaffQuery,
+  type AdminEvent,
   type CourseType,
   courseTypesQuery,
   createLessonMutation,
@@ -40,6 +42,7 @@ import {
   type LessonInput,
   type LessonOutput,
   lessonSchema,
+  sessionFormSchema,
   lessonValues,
   maxRenterLength,
   newLessonData,
@@ -47,7 +50,10 @@ import {
 } from './lessonForms';
 
 /** What the sheet edits: a new one-off lesson or an existing lesson. */
-export type LessonFormTarget = { mode: 'add' } | { mode: 'edit'; lesson: LessonDetail };
+export type LessonFormTarget =
+  | { mode: 'add' }
+  | { mode: 'addSession'; event: Pick<AdminEvent, 'id' | 'courseTypeId' | 'capacity'> }
+  | { mode: 'edit'; lesson: LessonDetail };
 
 /** What the office has confirmed of a write the API refused before. */
 type Confirmations = Pick<LessonCreateData, 'confirmPast' | 'confirmRoomOverlap'>;
@@ -101,6 +107,7 @@ function LessonFormLoader({
   onCreated?: (lessonId: string) => void;
 }) {
   const { t } = useTranslation('admin');
+  const { t: tEvents } = useTranslation('adminEvents');
   const queries = [
     useQuery(publicSettingsQuery),
     useQuery(courseTypesQuery),
@@ -109,9 +116,15 @@ function LessonFormLoader({
     useQuery(allStaffQuery),
   ] as const;
   const [settings, courseTypes, rooms, locations, staff] = queries;
+  const eventSession =
+    target.mode === 'addSession' || (target.mode === 'edit' && !!target.lesson.eventId);
   const header = (
     <FormSheetHeader
-      title={target.mode === 'edit' ? t('lessons.editTitle') : t('lessons.addTitle')}
+      title={
+        eventSession
+          ? tEvents(target.mode === 'edit' ? 'sessions.edit' : 'sessions.add')
+          : t(target.mode === 'edit' ? 'lessons.editTitle' : 'lessons.addTitle')
+      }
       description={target.mode === 'add' ? t('lessons.addDescription') : undefined}
     />
   );
@@ -181,17 +194,29 @@ function LessonForm({
   onCreated?: (lessonId: string) => void;
 }) {
   const { t } = useTranslation('admin');
+  const { t: tEvents } = useTranslation('adminEvents');
   const { t: tAuth } = useTranslation('auth');
   const { t: tSchedule } = useTranslation('schedule');
   const errorText = useAdminErrorText();
   const queryClient = useQueryClient();
   const create = useMutation(createLessonMutation(queryClient));
+  const addSession = useMutation(addEventSessionMutation(queryClient));
   const update = useMutation(updateLessonMutation(queryClient));
   const editing = target.mode === 'edit' ? target.lesson : undefined;
-  const save = editing ? update : create;
+  const event = target.mode === 'addSession' ? target.event : undefined;
+  const eventSession = !!(event || editing?.eventId);
+  const save = editing ? update : event ? addSession : create;
+  const defaults = lessonValues(editing, timeZone);
   const form = useForm<LessonInput, unknown, LessonOutput>({
-    resolver: zodResolver(lessonSchema),
-    defaultValues: lessonValues(editing, timeZone),
+    resolver: zodResolver(eventSession ? sessionFormSchema : lessonSchema),
+    defaultValues: event
+      ? {
+          ...defaults,
+          courseTypeId: event.courseTypeId,
+          kind: 'workshop',
+          capacity: String(event.capacity),
+        }
+      : defaults,
   });
   const { errors } = form.formState;
   const rental = isRental(useWatch({ control: form.control, name: 'kind' }));
@@ -232,7 +257,7 @@ function LessonForm({
   const pickRoom = (roomId: string) => {
     form.setValue('roomId', roomId, { shouldValidate: form.formState.isSubmitted });
     const room = choices.rooms.find((r) => r.id === roomId);
-    if (!editing && room && !form.getFieldState('capacity').isDirty) {
+    if (!editing && !eventSession && room && !form.getFieldState('capacity').isDirty) {
       form.setValue('capacity', String(room.capacity), {
         shouldValidate: form.formState.isSubmitted,
       });
@@ -250,7 +275,7 @@ function LessonForm({
     const onError = (error: Error) => {
       showServerErrors(error, form, lessonFields);
       for (const field of invalidFields(error, lessonFields)) {
-        const message = serverMessages[field];
+        const message = eventSession && field === 'capacity' ? undefined : serverMessages[field];
         if (message) form.setError(field, { type: 'server', message });
       }
     };
@@ -259,8 +284,32 @@ function LessonForm({
         { lessonId: editing.id, body: { ...lessonData(values), ...confirmations } },
         {
           onSuccess: () => {
-            toast.success(t('lessons.saved'));
+            toast.success(eventSession ? tEvents('sessions.saved') : t('lessons.saved'));
             onDone();
+          },
+          onError,
+        },
+      );
+    } else if (event) {
+      const { date, startTime, durationMinutes, roomId, instructorId, accompanistId } = values;
+      addSession.mutate(
+        {
+          eventId: event.id,
+          body: {
+            date,
+            startTime,
+            durationMinutes,
+            roomId,
+            instructorId,
+            ...(accompanistId ? { accompanistId } : {}),
+            ...confirmations,
+          },
+        },
+        {
+          onSuccess: (lesson) => {
+            toast.success(tEvents('sessions.added'));
+            onDone();
+            onCreated?.(lesson.id);
           },
           onError,
         },
@@ -290,9 +339,11 @@ function LessonForm({
     ? [
         t('lessons.editDescription'),
         editing.classId && !editing.admin?.detached ? t('lessons.editDetaches') : '',
-        editing.status === 'scheduled' && (editing.admin?.activeBookings ?? 0) > 0
-          ? t('lessons.editMails')
-          : '',
+        editing.status === 'scheduled' && eventSession
+          ? tEvents('sessions.moveMail')
+          : editing.status === 'scheduled' && (editing.admin?.activeBookings ?? 0) > 0
+            ? t('lessons.editMails')
+            : '',
       ]
         .filter(Boolean)
         .join(' ')
@@ -301,8 +352,18 @@ function LessonForm({
   return (
     <>
       <FormSheetHeader
-        title={editing ? t('lessons.editTitle') : t('lessons.addTitle')}
-        description={editing ? description : t('lessons.addDescription')}
+        title={
+          eventSession
+            ? tEvents(editing ? 'sessions.edit' : 'sessions.add')
+            : t(editing ? 'lessons.editTitle' : 'lessons.addTitle')
+        }
+        description={
+          editing
+            ? description
+            : eventSession
+              ? tEvents('sessions.addDescription')
+              : t('lessons.addDescription')
+        }
       />
       <form
         noValidate
@@ -330,17 +391,20 @@ function LessonForm({
         ) : (
           <ProblemAlert
             error={save.error}
+            conflicts={eventSession ? { closed: tEvents('conflicts.closed') } : {}}
             messages={{
               404: t('lessons.notFound'),
               ...problem422(save.error),
             }}
           />
         )}
-        {editing ? (
+        {editing || event ? (
           <p className="text-sm">
             <span className="text-muted-foreground">{t('lessons.courseType')}: </span>
             <span className="font-medium">
-              {editing.courseType?.name ?? t('lessons.noCourseType')}
+              {editing?.courseType?.name ??
+                choices.courseTypes.find((type) => type.id === event?.courseTypeId)?.name ??
+                t('lessons.noCourseType')}
             </span>
           </p>
         ) : (
@@ -367,22 +431,24 @@ function LessonForm({
             )}
           />
         )}
-        <Controller
-          control={form.control}
-          name="kind"
-          render={({ field }) => (
-            <SelectField
-              label={t('lessons.kind')}
-              placeholder={t('lessons.choose')}
-              hint={rentalOnly ? t('lessons.rentalOnly') : undefined}
-              options={options.kinds}
-              value={field.value}
-              onChange={field.onChange}
-              onBlur={field.onBlur}
-              error={errorText(errors.kind)}
-            />
-          )}
-        />
+        {!eventSession && (
+          <Controller
+            control={form.control}
+            name="kind"
+            render={({ field }) => (
+              <SelectField
+                label={t('lessons.kind')}
+                placeholder={t('lessons.choose')}
+                hint={rentalOnly ? t('lessons.rentalOnly') : undefined}
+                options={options.kinds}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                error={errorText(errors.kind)}
+              />
+            )}
+          />
+        )}
         {rental && (
           <>
             <p className="text-sm text-muted-foreground">{t('lessons.rentalHint')}</p>
@@ -473,32 +539,49 @@ function LessonForm({
               type="number"
               inputMode="numeric"
               min={1}
-              max={1000}
+              max={eventSession ? 10_000 : 1000}
               step={1}
-              hint={editing ? t('lessons.capacityHintEdit') : t('lessons.capacityHint')}
+              readOnly={eventSession}
+              hint={
+                eventSession
+                  ? tEvents('sessions.capacityHint')
+                  : t(editing ? 'lessons.capacityHintEdit' : 'lessons.capacityHint')
+              }
               error={errorText(errors.capacity)}
               {...form.register('capacity')}
             />
-            <Controller
-              control={form.control}
-              name="visibility"
-              render={({ field }) => (
-                <SelectField
-                  label={t('lessons.visibility')}
-                  placeholder={t('lessons.choose')}
-                  options={options.visibilities}
-                  value={field.value}
-                  onChange={field.onChange}
-                  onBlur={field.onBlur}
-                  error={errorText(errors.visibility)}
-                />
-              )}
-            />
+            {eventSession ? (
+              <TextField
+                label={t('lessons.visibility')}
+                value={tSchedule('visibility.public')}
+                readOnly
+                hint={tEvents('sessions.visibilityHint')}
+                error={errorText(errors.visibility)}
+              />
+            ) : (
+              <Controller
+                control={form.control}
+                name="visibility"
+                render={({ field }) => (
+                  <SelectField
+                    label={t('lessons.visibility')}
+                    placeholder={t('lessons.choose')}
+                    options={options.visibilities}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    error={errorText(errors.visibility)}
+                  />
+                )}
+              />
+            )}
           </>
         )}
         <FormSheetActions
           pending={save.isPending}
-          submitLabel={editing ? t('form.save') : t('lessons.add')}
+          submitLabel={
+            editing ? t('form.save') : eventSession ? tEvents('sessions.add') : t('lessons.add')
+          }
           icon={editing ? <Save aria-hidden="true" /> : <CalendarPlus aria-hidden="true" />}
         />
       </form>

@@ -35,6 +35,16 @@ ORDER BY (SELECT min(l.starts_at) FROM lessons l WHERE l.event_id = e.id) ASC NU
 -- name: ListEventsByIDs :many
 SELECT * FROM events WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY id;
 
+-- name: EventStatisticsByIDs :many
+SELECT e.id, e.title, count(*) FILTER (WHERE r.status = 'registered') AS registered,
+    (coalesce(sum(fee.gross),0) + coalesce(sum(refund.gross),0))::bigint AS revenue
+FROM events e
+LEFT JOIN event_registrations r ON r.event_id = e.id
+LEFT JOIN receipts fee ON fee.id = r.receipt_id
+LEFT JOIN receipts refund ON refund.id = r.cancellation_receipt_id
+WHERE e.id = ANY(sqlc.arg(ids)::uuid[])
+GROUP BY e.id ORDER BY e.id;
+
 -- name: GetEventImage :one
 -- A row for every existing event, NULLs if it has no image.
 SELECT i.image, i.image_type
@@ -115,6 +125,11 @@ GROUP BY event_id
 HAVING count(*) FILTER (
     WHERE status IN ('registered', 'waiting') OR expires_at > sqlc.arg(at)::timestamptz
 ) > 0;
+
+-- name: ListDueEventInvites :many
+SELECT DISTINCT event_id FROM event_registrations
+WHERE status = 'invited' AND expires_at <= $1
+ORDER BY event_id;
 
 -- name: AnonymizeGuestEventRegistrations :execrows
 -- The guest registrations of the events whose last session (canceled ones

@@ -213,6 +213,7 @@ export interface ParticipantsReadyProps {
   state: 'ready';
   /** The id of the section's heading. */
   headingId: string;
+  registrants?: LessonParticipants['registrants'];
   counts: Pick<LessonParticipants, 'active' | 'capacity' | 'freePlaces' | 'held' | 'waiting'>;
   /** Whether the last refetch failed, so the lists may be out of date. */
   stale: boolean;
@@ -248,6 +249,38 @@ export interface ParticipantsReadyProps {
 /** The view model of a lesson's participants (features/schedule/participants/ParticipantsSection.tsx). */
 export type ParticipantsProps = ParticipantsErrorProps | ParticipantsReadyProps;
 
+// --- Events ----------------------------------------------------------------
+
+export interface EventSessionView {
+  id: string;
+  date: string;
+  time: string;
+  place: string;
+  teachers: string;
+  canceled: boolean;
+}
+
+export interface EventView {
+  slug: string;
+  title: string;
+  courseType: string;
+  description?: string;
+  price: string;
+  availability: string;
+  sessions: EventSessionView[];
+  nextSession?: EventSessionView;
+}
+
+export interface EventListProps {
+  events: EventView[];
+}
+
+export interface EventDetailProps {
+  event: EventView;
+  image?: string;
+  registration: ReactNode;
+}
+
 // --- Theme -----------------------------------------------------------------
 
 export interface Slots {
@@ -258,6 +291,8 @@ export interface Slots {
   Home: ComponentType<HomeProps>;
   Profile: ComponentType<ProfileProps>;
   Participants: ComponentType<ParticipantsProps>;
+  EventList: ComponentType<EventListProps>;
+  EventDetail: ComponentType<EventDetailProps>;
 }
 
 /** A theme: its id and the slots it provides; the others are Programme's. */

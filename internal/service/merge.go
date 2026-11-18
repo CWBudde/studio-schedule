@@ -133,7 +133,7 @@ func (s *PersonService) Merge(ctx context.Context, p Principal, req MergeRequest
 
 	var sum MergeSummary
 
-	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+	err := personEventsTx(ctx, s.store, func(ctx context.Context, tx store.Tx) error {
 		var err error
 		if sum, err = s.merge(ctx, tx, p, req); err != nil {
 			return err
@@ -152,12 +152,17 @@ func (s *PersonService) Merge(ctx context.Context, p Principal, req MergeRequest
 	return sum, nil
 }
 
-// merge does the work of Merge in its transaction. The lock order is the
+// merge does the work of Merge in its transaction. The events are locked before the
 // persons (both, then the dependents the cycle check walks), the terms and
 // classes of the merged person's memberships, the lessons of its bookings
 // and waiting-list entries, and the passes.
 func (s *PersonService) merge(ctx context.Context, tx store.Tx, p Principal, req MergeRequest) (MergeSummary, error) {
 	var sum MergeSummary
+
+	events, err := lockPersonEvents(ctx, tx, true, req.SurvivorID, req.MergedID)
+	if err != nil {
+		return sum, err
+	}
 
 	persons, err := lockLivePersons(ctx, tx, req.SurvivorID, req.MergedID)
 	if err != nil {
@@ -165,6 +170,10 @@ func (s *PersonService) merge(ctx context.Context, tx store.Tx, p Principal, req
 	}
 
 	survivor, merged := persons[0], persons[1]
+	regs, err := lockedPersonRegistrations(ctx, tx, events, true, survivor.ID, merged.ID)
+	if err != nil {
+		return sum, err
+	}
 
 	notes := mergeNotes(survivor.Notes, merged.Notes)
 	if req.Notes != nil {
@@ -255,8 +264,13 @@ func (s *PersonService) merge(ctx context.Context, tx store.Tx, p Principal, req
 		return sum, err
 	}
 
+	now := s.clock.Now()
+	if err := s.mergeEventRegistrations(ctx, tx, events, regs, survivor.ID, merged.ID, now); err != nil {
+		return sum, err
+	}
+
 	e := domain.AuditEvent{
-		ID: ids.New[domain.AuditEventID](s.ids), At: s.clock.Now(), ActorID: actorOf(p), Action: domain.AuditPersonMerged,
+		ID: ids.New[domain.AuditEventID](s.ids), At: now, ActorID: actorOf(p), Action: domain.AuditPersonMerged,
 		TargetKind: domain.AuditTargetPerson, TargetPersonID: survivor.ID,
 		Details: domain.AuditDetails{
 			MergedPersonID: merged.ID, MergedName: merged.GivenName + " " + merged.FamilyName, Via: p.Via,

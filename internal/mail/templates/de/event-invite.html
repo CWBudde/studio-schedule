@@ -1,0 +1,6 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>Für {{.Participant}} ist ein Platz bei <strong>{{.Title}}</strong> bis {{date .ExpiresAt}}, {{clock .ExpiresAt}} Uhr reserviert.</p>
+<p><a href="{{.Link}}">Anmeldung bestätigen</a></p>
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

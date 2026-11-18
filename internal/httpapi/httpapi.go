@@ -135,6 +135,7 @@ func Register(api huma.API, deps Deps) {
 	registerReceipts(api, h)
 	registerEventAdmin(api, h)
 	registerEvents(api, h)
+	registerEventWaitlist(api, h)
 	registerAuth(api, h)
 	registerCredentials(api, h)
 	registerFamily(api, h)

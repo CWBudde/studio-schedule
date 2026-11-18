@@ -311,6 +311,12 @@ func (s *EventService) Update(ctx context.Context, id domain.EventID, d EventDat
 			return err
 		}
 
+		if e.Capacity > old.Capacity {
+			if err := s.offerEventPlaces(ctx, tx, e, now); err != nil {
+				return err
+			}
+		}
+
 		out, err = s.admin(ctx, tx, e, true)
 
 		return err
@@ -856,10 +862,10 @@ func (s *EventService) awaitRefunds(ctx context.Context, id domain.EventID) erro
 	return s.receipts.awaitRenderer(ctx)
 }
 
-// paidWithReceipt reports whether r is open and its fee was paid with a receipt
+// paidWithReceipt reports whether r has a paid and unrefunded fee receipt
 // that a Storno refunds.
 func paidWithReceipt(r domain.EventRegistration) bool {
-	return r.Open() && r.Payment == domain.EventPaid && !r.ReceiptID.IsZero()
+	return r.Payment == domain.EventPaid && !r.ReceiptID.IsZero()
 }
 
 // cancelSessions cancels the event's sessions that have not started at
@@ -915,7 +921,7 @@ func (s *EventService) cancelRegistrations(
 	var out []canceledRegistration
 
 	for _, r := range regs {
-		if !r.Open() {
+		if !r.Open() && !paidWithReceipt(r) {
 			continue
 		}
 

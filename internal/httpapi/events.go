@@ -193,6 +193,7 @@ type MyEventRegistration struct {
 	CancellationReceiptID domain.ReceiptID           `doc:"The Storno of a refund, for getMyReceiptPdf." json:"cancellationReceiptId,omitzero"`
 	Cancelable            bool                       `doc:"Whether cancelEventRegistration cancels it now: registered, and before the event's cancelUntil." json:"cancelable"`
 	CreatedAt             time.Time                  `doc:"When it was made." json:"createdAt"`
+	ExpiresAt             time.Time                  `doc:"Until an invitation reserves a place; absent otherwise." json:"expiresAt,omitzero"`
 	CanceledAt            time.Time                  `doc:"When it was canceled; only if canceled." json:"canceledAt,omitzero"`
 }
 
@@ -211,7 +212,7 @@ func NewMyEvent(v service.MyEvent) MyEvent {
 			ID: r.ID, Person: PassPerson{ID: r.PersonID, Name: v.Registration.Name, Anonymized: v.Registration.Anonymized},
 			Status: string(r.Status), Payment: string(r.Payment), Price: int64(r.Price), ReceiptID: r.ReceiptID,
 			CancellationReceiptID: r.CancellationReceiptID, Cancelable: v.Cancelable, CreatedAt: r.CreatedAt.UTC(),
-			CanceledAt: r.CanceledAt.UTC(),
+			CanceledAt: r.CanceledAt.UTC(), ExpiresAt: r.ExpiresAt.UTC(),
 		},
 		Event: NewEvent(v.Event),
 	}
@@ -311,8 +312,14 @@ func (h *handlers) myEventOutput(ctx context.Context) func(service.MyEvent, erro
 // memberEventError maps the members' too-late, then the conflicts of the
 // event administration (eventError).
 func (h *handlers) memberEventError(ctx context.Context, err error) error {
-	if errors.Is(err, service.ErrTooLate) {
+	switch {
+	case errors.Is(err, service.ErrTooLate):
 		return conflict(reasonTooLate, "the cancellation deadline has passed")
+	case errors.Is(err, service.ErrEventNotFull):
+		return conflict(reasonNotFull, "the event has a free place; register instead")
+	case errors.Is(err, service.ErrNotInvited), errors.Is(err, service.ErrInviteExpired),
+		errors.Is(err, service.ErrInviteUsed), errors.Is(err, service.ErrNotWaiting):
+		return h.waitlistError(ctx, err)
 	}
 
 	return h.eventError(ctx, err)

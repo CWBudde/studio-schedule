@@ -255,7 +255,7 @@ func (r receiptRepo) TotalsByDay(ctx context.Context, from, to domain.Date) ([]s
 	return convertRows(rows, err, func(row sqlc.ReceiptTotalsByDayRow) store.ReceiptDayTotals {
 		return store.ReceiptDayTotals{
 			Date: fromPgDate(row.IssueDate), Currency: row.Currency,
-			Sales: int(row.Sales), Cancellations: int(row.Cancellations), Gross: domain.Money(row.Gross),
+			Sales: int(row.Sales), Cancellations: int(row.Cancellations), Gross: domain.Money(row.Gross), EventFees: domain.Money(row.EventFees),
 		}
 	})
 }

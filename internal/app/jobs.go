@@ -22,7 +22,9 @@ func Jobs(deps Deps) *jobs.Runner {
 	lessons := newLessonGenerator(deps)
 	renderer := newRenderer()
 	auth := newAuthService(deps, renderer)
-	waitlist := service.NewWaitlistService(deps.Store, deps.Clock, deps.IDs, mailsOf(deps, renderer))
+	mails := mailsOf(deps, renderer)
+	waitlist := service.NewWaitlistService(deps.Store, deps.Clock, deps.IDs, mails)
+	events := service.NewEventService(deps.Store, deps.Clock, deps.IDs, mails, nil)
 
 	all := []jobs.Job{{
 		Name:  "generate-lessons",
@@ -68,20 +70,20 @@ func Jobs(deps Deps) *jobs.Runner {
 		Name:  "waitlist-expiry",
 		Every: time.Minute,
 		Run: func(ctx context.Context) error {
-			n, err := waitlist.ExpireDue(ctx)
-
-			switch {
-			case errors.Is(err, service.ErrNoSchool):
-				return nil // entries but no settings: broken data, nothing to settle
-			case err != nil:
-				return err
+			lessons, lessonErr := waitlist.ExpireDue(ctx)
+			eventInvites, eventErr := events.ExpireDueInvites(ctx)
+			if errors.Is(lessonErr, service.ErrNoSchool) {
+				lessonErr = nil
+			}
+			if errors.Is(eventErr, service.ErrNoSchool) {
+				eventErr = nil
 			}
 
-			if n > 0 {
+			if n := lessons + eventInvites; n > 0 {
 				deps.Logger.InfoContext(ctx, "waiting lists settled", slog.Int("entries", n))
 			}
 
-			return nil
+			return errors.Join(lessonErr, eventErr)
 		},
 	}}
 

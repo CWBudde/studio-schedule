@@ -23,6 +23,8 @@ func Events(t *testing.T, newStore func(t *testing.T) store.Store) {
 		"Lifecycle":            eventLifecycle,
 		"MembersLastPlaceOnce": eventMembersLastPlace,
 		"Privacy":              eventPrivacy,
+		"DeskRespectsQueue":    eventDeskRespectsQueue,
+		"WaitlistExpiry":       eventWaitlistExpiry,
 	}
 
 	for name, run := range scenarios {

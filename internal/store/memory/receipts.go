@@ -154,6 +154,12 @@ func (r receiptRepo) TotalsByDay(_ context.Context, from, to domain.Date) ([]sto
 	}
 
 	sums := map[key]store.ReceiptDayTotals{}
+	eventReceipts := map[domain.ReceiptID]bool{}
+	for _, reg := range r.tx.state.eventRegistrations.rows {
+		if !reg.ReceiptID.IsZero() {
+			eventReceipts[reg.ReceiptID] = true
+		}
+	}
 
 	for _, rc := range r.tx.state.receipts.filter(func(rc domain.Receipt) bool {
 		return rc.IssueDate.Compare(from) >= 0 && rc.IssueDate.Compare(to) <= 0
@@ -161,6 +167,11 @@ func (r receiptRepo) TotalsByDay(_ context.Context, from, to domain.Date) ([]sto
 		k := key{rc.IssueDate, rc.Currency}
 		t := sums[k]
 		t.Date, t.Currency = rc.IssueDate, rc.Currency
+		if eventReceipts[rc.ID] || eventReceipts[rc.CancelsReceiptID] {
+			t.EventFees += rc.Gross
+			sums[k] = t
+			continue
+		}
 		t.Gross += rc.Gross
 
 		if rc.Kind == domain.ReceiptCancellation {

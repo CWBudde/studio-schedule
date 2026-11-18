@@ -371,6 +371,12 @@ func testReceipts(t *testing.T, newStore func(*testing.T) store.Store) {
 			chf.Currency = "CHF"
 			on(chf, march2)
 			on(e.cancellationOf(sale, 4), march3)
+			fee := on(e.newReceipt(2026, 6, payer), march2)
+			storno := on(e.cancellationOf(fee, 7), march3)
+			ev := e.event(e.setting().courseType, "event-fees")
+			r := canceledReg(paidWith(e.newRegistration(ev, payer, t0), fee))
+			r.Payment, r.CancellationReceiptID = domain.EventRefunded, storno.ID
+			e.createRegistrations(r)
 			on(e.newReceipt(2026, 5, payer), domain.Date{Year: 2026, Month: time.March, Day: 4}) // after the range
 
 			got := mustQuery(e, func(ctx context.Context, tx store.Tx) ([]store.ReceiptDayTotals, error) {
@@ -379,8 +385,8 @@ func testReceipts(t *testing.T, newStore func(*testing.T) store.Store) {
 			wantSlice(e.t, got, []store.ReceiptDayTotals{
 				{Date: newYearsEve, Currency: "EUR", Sales: 1, Gross: sale.Gross},
 				{Date: march2, Currency: "CHF", Sales: 1, Gross: sale.Gross},
-				{Date: march2, Currency: "EUR", Sales: 2, Gross: 2 * sale.Gross},
-				{Date: march3, Currency: "EUR", Cancellations: 1, Gross: -sale.Gross},
+				{Date: march2, Currency: "EUR", Sales: 2, Gross: 2 * sale.Gross, EventFees: fee.Gross},
+				{Date: march3, Currency: "EUR", Cancellations: 1, Gross: -sale.Gross, EventFees: storno.Gross},
 			})
 
 			got = mustQuery(e, func(ctx context.Context, tx store.Tx) ([]store.ReceiptDayTotals, error) {

@@ -163,6 +163,32 @@ async function toastTitled(title: string) {
 const savedAt = '2026-11-02T08:00:00Z';
 
 describe('AnnouncementsPage', () => {
+  it('publishes an announcement to the selected event', async () => {
+    mockApiGet({
+      ...asOffice,
+      '/api/v1/admin/events': { body: { items: [{ id: id(940), title: 'Example Intensive' }] } },
+    });
+    const post = mockApiPost({
+      '/api/v1/admin/announcements': ({ body }) => ({
+        status: 201,
+        body: { ...(body as object), id: id(941), emailRecipients: 0, ...written },
+      }),
+    });
+    const user = userEvent.setup();
+    renderPage();
+    const sheet = await openAdd(user);
+    await user.type(sheet.getByLabelText('Title'), 'Rehearsal time');
+    await user.type(sheet.getByLabelText('Text'), 'Meet at nine.');
+    await user.click(sheet.getByRole('combobox', { name: 'Audience' }));
+    await user.click(await screen.findByRole('option', { name: 'Event' }));
+    await user.click(sheet.getByRole('combobox', { name: 'Event' }));
+    await user.click(await screen.findByRole('option', { name: 'Example Intensive' }));
+    await user.click(sheet.getByRole('button', { name: 'Publish' }));
+    expect(post).toHaveBeenCalledWith('/api/v1/admin/announcements', {
+      body: { audience: 'event', eventId: id(940), title: 'Rehearsal time', body: 'Meet at nine.' },
+    });
+  });
+
   it('lists the announcements with audience, window, status and email', async () => {
     mockApiGet(asOffice);
 

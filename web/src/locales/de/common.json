@@ -5,6 +5,7 @@
     "home": "Studio Schedule – Startseite"
   },
   "nav": {
+    "events": "Veranstaltungen",
     "label": "Hauptnavigation",
     "schedule": "Stundenplan",
     "classes": "Kurse",

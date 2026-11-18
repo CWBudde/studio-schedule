@@ -90,6 +90,13 @@ const (
 	TemplateTest = "test"
 )
 
+const (
+	// TemplateEventInvite offers a reserved event place until the invite expires.
+	TemplateEventInvite = "event-invite"
+	// TemplateEventInviteExpired tells a member that their event offer expired.
+	TemplateEventInviteExpired = "event-invite-expired"
+)
+
 // TemplateNames returns the names of the templates of the outbox's mails:
 // every template but TemplateTest.
 func TemplateNames() []string {
@@ -98,7 +105,7 @@ func TemplateNames() []string {
 		TemplateLessonCanceled, TemplateLessonRestored, TemplateLessonChanged, TemplateBookingConfirmed,
 		TemplateBookingCanceled, TemplateWaitlistInvite, TemplateWaitlistExpired, TemplateLessonNotice,
 		TemplateReceipt, TemplateAnnouncement, TemplateAccountDeleted, TemplatePasswordChanged, TemplateEventCanceled,
-		TemplateEventRegistered, TemplateEventRegistrationCanceled,
+		TemplateEventRegistered, TemplateEventRegistrationCanceled, TemplateEventInvite, TemplateEventInviteExpired,
 	}
 }
 
@@ -108,7 +115,8 @@ func TemplateNames() []string {
 // shows their bodies and never queues them again (ADR 0014).
 func SecretLink(template string) bool {
 	switch template {
-	case TemplateConfirmEmail, TemplateChangeEmail, TemplateResetPassword, TemplateInvite, TemplateWaitlistInvite:
+	case TemplateConfirmEmail, TemplateChangeEmail, TemplateResetPassword, TemplateInvite, TemplateWaitlistInvite,
+		TemplateEventInvite:
 		return true
 	default:
 		return false
@@ -601,6 +609,23 @@ func (d EventRegistrationData) Validate() error {
 		if !l.EndsAt.After(l.StartsAt) {
 			return fmt.Errorf("%w: a session must end after it starts", domain.ErrValidation)
 		}
+	}
+
+	return nil
+}
+
+// EventInviteData is used by event invitation and expiry messages.
+type EventInviteData struct {
+	SchoolName, GivenName, Title, Participant string
+	ExpiresAt                                 time.Time
+	Link                                      string
+}
+
+// Validate checks the required invitation details. Link is empty for expiry.
+func (d EventInviteData) Validate() error {
+	if strings.TrimSpace(d.SchoolName) == "" || strings.TrimSpace(d.Title) == "" ||
+		strings.TrimSpace(d.Participant) == "" || d.ExpiresAt.IsZero() {
+		return fmt.Errorf("%w: incomplete event invitation details", domain.ErrValidation)
 	}
 
 	return nil

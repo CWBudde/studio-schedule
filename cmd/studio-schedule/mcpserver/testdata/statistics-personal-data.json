@@ -1,4 +1,5 @@
 {
+  "events": [],
   "timezone": "Europe/Berlin",
   "currency": "EUR",
   "today": "2026-09-22",
@@ -7,6 +8,7 @@
   "to": "2026-09-22",
   "granularity": "week",
   "totals": {
+    "eventFees": 12000,
     "lessons": 82,
     "capacity": 1262,
     "bookings": 205,
@@ -18,8 +20,8 @@
     "trials": 11,
     "guests": 14,
     "waitlistEntries": 0,
-    "passesSold": 4,
-    "salesGross": 50900,
+    "passesSold": 3,
+    "salesGross": 38900,
     "canceledLessons": 0,
     "activeMembers": 32
   },
@@ -72,8 +74,8 @@
       "trials": 3,
       "guests": 4,
       "waitlistEntries": 0,
-      "passesSold": 2,
-      "salesGross": 20900
+      "passesSold": 1,
+      "salesGross": 8900
     },
     {
       "start": "2026-09-21",

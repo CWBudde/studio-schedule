@@ -480,13 +480,14 @@
         "additionalProperties": false,
         "properties": {
           "audience": {
-            "description": "everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: those booked for the lesson. Persons are reached through their guardians too.",
+            "description": "everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: its participants; event: its registered participants. Persons are reached through their guardians too.",
             "enum": [
               "everyone",
               "role",
               "class",
               "course-type",
-              "lesson"
+              "lesson",
+              "event"
             ],
             "type": "string"
           },
@@ -535,6 +536,15 @@
           "emailedAt": {
             "description": "When it was mailed; absent if not (yet).",
             "format": "date-time",
+            "type": "string"
+          },
+          "eventId": {
+            "description": "The event; only with audience event.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "eventTitle": {
+            "description": "Title of the event for an event audience.",
             "type": "string"
           },
           "expiresAt": {
@@ -598,13 +608,14 @@
         "additionalProperties": false,
         "properties": {
           "audience": {
-            "description": "everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: those booked for the lesson. Persons are reached through their guardians too.",
+            "description": "everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: its participants; event: its registered participants. Persons are reached through their guardians too.",
             "enum": [
               "everyone",
               "role",
               "class",
               "course-type",
-              "lesson"
+              "lesson",
+              "event"
             ],
             "type": "string"
           },
@@ -615,6 +626,11 @@
           },
           "courseTypeId": {
             "description": "The course type; only with audience course-type.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "eventId": {
+            "description": "The event; only with audience event.",
             "format": "uuid",
             "type": "string"
           },
@@ -685,13 +701,14 @@
         "additionalProperties": false,
         "properties": {
           "audience": {
-            "description": "everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: those booked for the lesson. Persons are reached through their guardians too.",
+            "description": "everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: its participants; event: its registered participants. Persons are reached through their guardians too.",
             "enum": [
               "everyone",
               "role",
               "class",
               "course-type",
-              "lesson"
+              "lesson",
+              "event"
             ],
             "type": "string"
           },
@@ -714,6 +731,11 @@
           "email": {
             "description": "Whether it is mailed to its audience once, at publishAt.",
             "type": "boolean"
+          },
+          "eventId": {
+            "description": "The event; only with audience event.",
+            "format": "uuid",
+            "type": "string"
           },
           "expiresAt": {
             "description": "When it stops showing; absent: never.",
@@ -3258,6 +3280,27 @@
         ],
         "type": "object"
       },
+      "EventInvite": {
+        "additionalProperties": false,
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/Event"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "givenName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "givenName",
+          "expiresAt",
+          "event"
+        ],
+        "type": "object"
+      },
       "EventList": {
         "additionalProperties": false,
         "properties": {
@@ -3500,6 +3543,34 @@
         ],
         "type": "object"
       },
+      "EventStats": {
+        "additionalProperties": false,
+        "properties": {
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "registered": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "revenue": {
+            "description": "Gross revenue in minor units for the whole event after refunds.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventId",
+          "title",
+          "registered",
+          "revenue"
+        ],
+        "type": "object"
+      },
       "ExportAccount": {
         "additionalProperties": false,
         "properties": {
@@ -3674,6 +3745,64 @@
         "required": [
           "id",
           "scope",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "ExportEventRegistration": {
+        "additionalProperties": false,
+        "properties": {
+          "canceledAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "cancellationReceiptNumber": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "payment": {
+            "enum": [
+              "unpaid",
+              "paid",
+              "refunded"
+            ],
+            "type": "string"
+          },
+          "price": {
+            "description": "The gross price when the registration was made, in minor units.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "receiptNumber": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "waiting",
+              "invited",
+              "registered",
+              "canceled"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "description": "Event title.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "payment",
+          "price",
           "createdAt"
         ],
         "type": "object"
@@ -5176,9 +5305,9 @@
             "type": "string"
           },
           "capacity": {
-            "description": "Maximum number of participants; at least 1, and 0 for a room rental.",
+            "description": "Capacity: 0 for rentals, 1–1000 for other lessons, or the inherited event capacity for a session.",
             "format": "int64",
-            "maximum": 1000,
+            "maximum": 10000,
             "minimum": 0,
             "type": "integer"
           },
@@ -5270,9 +5399,9 @@
             "type": "string"
           },
           "capacity": {
-            "description": "Maximum number of participants; at least 1, and 0 for a room rental.",
+            "description": "Capacity: 0 for rentals, 1–1000 for other lessons, or the inherited event capacity for a session.",
             "format": "int64",
-            "maximum": 1000,
+            "maximum": 10000,
             "minimum": 0,
             "type": "integer"
           },
@@ -5659,6 +5788,13 @@
             "description": "The lesson.",
             "format": "uuid",
             "type": "string"
+          },
+          "registrants": {
+            "description": "Event session participants, including guests. Present even for an empty session.",
+            "items": {
+              "$ref": "#/components/schemas/SessionRegistrant"
+            },
+            "type": "array"
           },
           "waiting": {
             "description": "Entries waiting for an invite.",
@@ -6184,7 +6320,9 @@
               "password-changed",
               "event-canceled",
               "event-registered",
-              "event-registration-canceled"
+              "event-registration-canceled",
+              "event-invite",
+              "event-invite-expired"
             ],
             "type": "string"
           },
@@ -6252,7 +6390,9 @@
               "password-changed",
               "event-canceled",
               "event-registered",
-              "event-registration-canceled"
+              "event-registration-canceled",
+              "event-invite",
+              "event-invite-expired"
             ],
             "type": "string"
           }
@@ -6343,7 +6483,9 @@
               "password-changed",
               "event-canceled",
               "event-registered",
-              "event-registration-canceled"
+              "event-registration-canceled",
+              "event-invite",
+              "event-invite-expired"
             ],
             "type": "string"
           },
@@ -6464,7 +6606,9 @@
               "password-changed",
               "event-canceled",
               "event-registered",
-              "event-registration-canceled"
+              "event-registration-canceled",
+              "event-invite",
+              "event-invite-expired"
             ],
             "type": "string"
           },
@@ -6844,6 +6988,11 @@
           },
           "createdAt": {
             "description": "When it was made.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "expiresAt": {
+            "description": "Until an invitation reserves a place; absent otherwise.",
             "format": "date-time",
             "type": "string"
           },
@@ -7896,6 +8045,13 @@
             },
             "type": "array"
           },
+          "eventRegistrations": {
+            "description": "Every event registration, ended ones included.",
+            "items": {
+              "$ref": "#/components/schemas/ExportEventRegistration"
+            },
+            "type": "array"
+          },
           "exportedAt": {
             "description": "When the document was made.",
             "format": "date-time",
@@ -7973,6 +8129,7 @@
           "classMemberships",
           "bookings",
           "waitlistEntries",
+          "eventRegistrations",
           "passes",
           "receipts"
         ],
@@ -9477,6 +9634,30 @@
         ],
         "type": "object"
       },
+      "SessionRegistrant": {
+        "additionalProperties": false,
+        "properties": {
+          "anonymized": {
+            "type": "boolean"
+          },
+          "guest": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "guest"
+        ],
+        "type": "object"
+      },
       "StaffBooking": {
         "additionalProperties": false,
         "properties": {
@@ -9796,6 +9977,13 @@
             "description": "ISO 4217 currency of the sales.",
             "type": "string"
           },
+          "events": {
+            "description": "Events with a session in the range, their current registrations and retained fees.",
+            "items": {
+              "$ref": "#/components/schemas/EventStats"
+            },
+            "type": "array"
+          },
           "from": {
             "description": "First school date of the range.",
             "format": "date",
@@ -9871,6 +10059,7 @@
           }
         },
         "required": [
+          "events",
           "timezone",
           "currency",
           "today",
@@ -10032,6 +10221,11 @@
             "format": "int64",
             "type": "integer"
           },
+          "eventFees": {
+            "description": "Gross event fees in minor units, net of refunds, by receipt issue date.",
+            "format": "int64",
+            "type": "integer"
+          },
           "guests": {
             "description": "Active guest bookings (without a person).",
             "format": "int64",
@@ -10084,6 +10278,7 @@
           }
         },
         "required": [
+          "eventFees",
           "canceledLessons",
           "activeMembers",
           "lessons",
@@ -10959,7 +11154,7 @@
         "x-access": "office"
       },
       "post": {
-        "description": "Publishes an announcement at `publishAt` (default: now) until `expiresAt` (optional). The title is one line of 1 to 120 characters, the text plain text of 1 to 4000 (line breaks normalized to `\\n`, trimmed, no control characters but line breaks and tabs, no invisible format characters but the zero-width joiners; a 422 on the field otherwise). With `email`, it is mailed once to its audience, each address once, in its account's language: at once if it publishes now, else at `publishAt`. Guests without an account are not reached. A school day has at most 3 emailed announcements, sent and scheduled together; beyond that a 409 `mail-limit`. An unknown class, course type or lesson is a 422 on its field.",
+        "description": "Publishes an announcement at `publishAt` (default: now) until `expiresAt` (optional). The title is one line of 1 to 120 characters, the text plain text of 1 to 4000 (line breaks normalized to `\\n`, trimmed, no control characters but line breaks and tabs, no invisible format characters but the zero-width joiners; a 422 on the field otherwise). With `email`, it is mailed once to its audience, each address once, in its account's language: at once if it publishes now, else at `publishAt`. Registered event guests are emailed for event and session audiences. A school day has at most 3 emailed announcements, sent and scheduled together; beyond that a 409 `mail-limit`. An unknown class, course type or lesson is a 422 on its field.",
         "operationId": "createAnnouncement",
         "requestBody": {
           "content": {
@@ -16331,6 +16526,213 @@
         "x-access": "public"
       }
     },
+    "/api/v1/event-invites/{token}": {
+      "get": {
+        "description": "Reading this link does not take the place. A used, expired or unknown token is a 404.",
+        "operationId": "getEventInvite",
+        "parameters": [
+          {
+            "description": "The token from the invite link.",
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "description": "The token from the invite link.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventInvite"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Read an event invitation by its token",
+        "tags": [
+          "events"
+        ],
+        "x-access": "public"
+      }
+    },
+    "/api/v1/event-invites/{token}/accept": {
+      "post": {
+        "operationId": "acceptEventInviteByToken",
+        "parameters": [
+          {
+            "description": "The token from the invite link.",
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "description": "The token from the invite link.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Take a reserved event place by its token",
+        "tags": [
+          "events"
+        ],
+        "x-access": "public"
+      }
+    },
+    "/api/v1/event-invites/{token}/decline": {
+      "post": {
+        "operationId": "declineEventInviteByToken",
+        "parameters": [
+          {
+            "description": "The token from the invite link.",
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "description": "The token from the invite link.",
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Decline a reserved event place by its token",
+        "tags": [
+          "events"
+        ],
+        "x-access": "public"
+      }
+    },
+    "/api/v1/event-registrations/{registrationId}/accept": {
+      "post": {
+        "operationId": "acceptEventInvite",
+        "parameters": [
+          {
+            "description": "The registration.",
+            "in": "path",
+            "name": "registrationId",
+            "required": true,
+            "schema": {
+              "description": "The registration.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyEvent"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Take a reserved event place",
+        "tags": [
+          "events"
+        ],
+        "x-access": "signedIn"
+      }
+    },
     "/api/v1/event-registrations/{registrationId}/cancel": {
       "post": {
         "description": "Cancels a registration of the signed-in person or one of their dependents before the event's `cancelUntil` (default: the sign-up close); a paid fee is refunded by a Storno of its receipt. Anyone else's registration, a guest's included, is a 404. After the deadline it is a 409 `too-late` (the office still cancels); a canceled registration a 409 `already-canceled`, one on the waiting list a 409 `not-registered`; incomplete receipt settings for a refund a 409 `receipt-settings-incomplete`. The signed-in account gets a mail.",
@@ -16381,6 +16783,116 @@
           }
         },
         "summary": "Cancel a registration",
+        "tags": [
+          "events"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/event-registrations/{registrationId}/decline": {
+      "post": {
+        "operationId": "declineEventInvite",
+        "parameters": [
+          {
+            "description": "The registration.",
+            "in": "path",
+            "name": "registrationId",
+            "required": true,
+            "schema": {
+              "description": "The registration.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyEvent"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Decline a reserved event place",
+        "tags": [
+          "events"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/event-registrations/{registrationId}/leave": {
+      "post": {
+        "operationId": "leaveEventWaitlist",
+        "parameters": [
+          {
+            "description": "The registration.",
+            "in": "path",
+            "name": "registrationId",
+            "required": true,
+            "schema": {
+              "description": "The registration.",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyEvent"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Leave an event waiting list",
         "tags": [
           "events"
         ],
@@ -16622,6 +17134,71 @@
           }
         },
         "summary": "Register for an event",
+        "tags": [
+          "events"
+        ],
+        "x-access": "signedIn"
+      }
+    },
+    "/api/v1/events/{slug}/waitlist": {
+      "post": {
+        "operationId": "joinEventWaitlist",
+        "parameters": [
+          {
+            "description": "The event's slug.",
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "description": "The event's slug.",
+              "maxLength": 80,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterForEventInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyEvent"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Join the waiting list of a full event",
         "tags": [
           "events"
         ],

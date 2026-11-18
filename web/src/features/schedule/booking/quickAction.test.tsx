@@ -116,6 +116,13 @@ describe('useLessonQuickAction', () => {
     }
   });
 
+  it('offers no booking action for an event session with places left', async () => {
+    mockMember();
+    await renderProbe({ ...lessonBallet, kind: 'workshop', eventId: 'example-event' });
+
+    expect(kind()).toBe('none');
+  });
+
   it('books a lesson with free places for the one person', async () => {
     mockMember();
     const post = mockApiPost({

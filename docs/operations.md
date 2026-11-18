@@ -216,6 +216,20 @@ receipts). Every command explains itself with `--help`, and [cli.md](cli.md) is 
 all of them. A test (`cmd/studio-schedule/docs_test.go`) fails when a variable or flag of the code,
 global or a command's, is missing from these tables, or a table names one the code doesn't have.
 
+### Commands and flags: events
+
+| Command            | Flag                  | Meaning                                                  |
+| ------------------ | --------------------- | -------------------------------------------------------- |
+| `events mark-paid` | `--method`            | payment method (required): cash, transfer, or card       |
+| `events mark-paid` | `--payer`             | person ID of the payer, if different from the registrant |
+| `events mark-paid` | `--recipient-name`    | name printed on the receipt                              |
+| `events mark-paid` | `--recipient-email`   | email address for the receipt                            |
+| `events mark-paid` | `--recipient-address` | address printed on the receipt                           |
+
+Use `events list` for the event slug and `events registrations <slug> --output json` for the
+registration ID. The office runs `events mark-paid <registration-id> --method cash --yes`
+with `--as` to record a desk payment and issue the receipt.
+
 ### Commands and flags: db
 
 | Command    | Flag     | Meaning                                                                                                       |

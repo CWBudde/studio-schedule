@@ -1,0 +1,2 @@
+A place is available for {{.Title}}
+Reserved until {{date .ExpiresAt}}, {{clock .ExpiresAt}}. Open to confirm your registration.

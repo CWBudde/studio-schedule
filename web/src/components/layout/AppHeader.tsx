@@ -1,4 +1,4 @@
-import { BookmarkCheck, CalendarDays, Presentation, Shapes } from 'lucide-react';
+import { CalendarRange, BookmarkCheck, CalendarDays, Presentation, Shapes } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMe } from '@/api/useMe';
 import { DemoMailbox } from '@/features/demo/DemoMailbox';
@@ -32,6 +32,7 @@ export function useShellHeader(): ShellProps['header'] {
   const nav: NavItem[] = [
     { to: '/schedule', label: t('nav.schedule'), icon: CalendarDays },
     { to: '/classes', label: t('nav.classes'), icon: Shapes },
+    { to: '/events', label: t('nav.events'), icon: CalendarRange },
   ];
   if (me.data) nav.push({ to: '/my-lessons', label: t('nav.myLessons'), icon: BookmarkCheck });
   if (canTeach(me.data?.role))

@@ -685,7 +685,8 @@ type LessonParticipants struct {
 	Lesson domain.Lesson
 	// Bookings are all the lesson's bookings, canceled ones included,
 	// ordered by BookedAt and ID.
-	Bookings []Participant
+	Bookings    []Participant
+	Registrants []RegistrationView
 	// Waitlist is the lesson's list, ended entries included, ordered by
 	// JoinedAt and ID.
 	Waitlist []WaitingParticipant
@@ -724,6 +725,11 @@ func (s *ParticipantService) Participants(
 			return err
 		}
 
+		if !l.EventID.IsZero() {
+			out, err = sessionParticipants(ctx, tx, l, s.clock.Now())
+			out.DayOverAt = dayOverAt(loc, l)
+			return err
+		}
 		bookings, err := tx.Bookings().ListByLesson(ctx, l.ID)
 		if err != nil {
 			return err
@@ -756,6 +762,34 @@ func (s *ParticipantService) Participants(
 	}
 
 	return out, nil
+}
+
+// sessionParticipants reads only registered rows. Open invites reserve a place.
+func sessionParticipants(ctx context.Context, tx store.Tx, l domain.Lesson, now time.Time) (LessonParticipants, error) {
+	event, err := tx.Events().Get(ctx, l.EventID)
+	if err != nil {
+		return LessonParticipants{}, err
+	}
+	l.Capacity = event.Capacity
+	out := LessonParticipants{Lesson: l}
+	regs, err := tx.EventRegistrations().ListByEvent(ctx, l.EventID)
+	if err != nil {
+		return out, err
+	}
+	for _, r := range regs {
+		switch r.Status {
+		case domain.EventInvited:
+			if r.ExpiresAt.After(now) {
+				out.Held++
+			}
+		case domain.EventWaiting:
+			out.Waiting++
+		}
+	}
+	regs = slices.DeleteFunc(regs, func(r domain.EventRegistration) bool { return r.Status != domain.EventRegistered })
+	out.Active = len(regs)
+	out.Registrants, err = registrationViews(ctx, tx, regs)
+	return out, err
 }
 
 // participantsOf builds the LessonParticipants of lesson l at now from its

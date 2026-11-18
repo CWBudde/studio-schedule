@@ -223,6 +223,49 @@ func (q *Queries) DeleteEventImage(ctx context.Context, eventID pgtype.UUID) (bo
 	return found, err
 }
 
+const eventStatisticsByIDs = `-- name: EventStatisticsByIDs :many
+SELECT e.id, e.title, count(*) FILTER (WHERE r.status = 'registered') AS registered,
+    (coalesce(sum(fee.gross),0) + coalesce(sum(refund.gross),0))::bigint AS revenue
+FROM events e
+LEFT JOIN event_registrations r ON r.event_id = e.id
+LEFT JOIN receipts fee ON fee.id = r.receipt_id
+LEFT JOIN receipts refund ON refund.id = r.cancellation_receipt_id
+WHERE e.id = ANY($1::uuid[])
+GROUP BY e.id ORDER BY e.id
+`
+
+type EventStatisticsByIDsRow struct {
+	ID         pgtype.UUID
+	Title      string
+	Registered int64
+	Revenue    int64
+}
+
+func (q *Queries) EventStatisticsByIDs(ctx context.Context, ids []pgtype.UUID) ([]EventStatisticsByIDsRow, error) {
+	rows, err := q.db.Query(ctx, eventStatisticsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EventStatisticsByIDsRow
+	for rows.Next() {
+		var i EventStatisticsByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Registered,
+			&i.Revenue,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEvent = `-- name: GetEvent :one
 SELECT id, slug, title, description, course_type_id, capacity, price, vat_rate_bp, status, signup_opens_at, signup_closes_at, cancel_until, created_at, updated_at, created_by FROM events WHERE id = $1
 `
@@ -403,6 +446,32 @@ func (q *Queries) GetEventRegistrationByToken(ctx context.Context, inviteTokenHa
 		&i.CanceledAt,
 	)
 	return i, err
+}
+
+const listDueEventInvites = `-- name: ListDueEventInvites :many
+SELECT DISTINCT event_id FROM event_registrations
+WHERE status = 'invited' AND expires_at <= $1
+ORDER BY event_id
+`
+
+func (q *Queries) ListDueEventInvites(ctx context.Context, expiresAt pgtype.Timestamptz) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listDueEventInvites, expiresAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var event_id pgtype.UUID
+		if err := rows.Scan(&event_id); err != nil {
+			return nil, err
+		}
+		items = append(items, event_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listEventRegistrationsByEvent = `-- name: ListEventRegistrationsByEvent :many

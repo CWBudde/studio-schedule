@@ -67,10 +67,12 @@ SELECT * FROM receipts WHERE cancels_receipt_id = ANY(sqlc.arg(receipts)::uuid[]
 -- range-scan receipts_order_idx over the range's years instead of reading
 -- every receipt.
 SELECT issue_date, currency,
-    count(*) FILTER (WHERE kind = 'sale') AS sales,
-    count(*) FILTER (WHERE kind = 'cancellation') AS cancellations,
-    sum(gross)::bigint AS gross
-FROM receipts
+    count(*) FILTER (WHERE kind = 'sale' AND reg.id IS NULL) AS sales,
+    count(*) FILTER (WHERE kind = 'cancellation' AND reg.id IS NULL) AS cancellations,
+    coalesce(sum(gross) FILTER (WHERE reg.id IS NULL), 0)::bigint AS gross,
+    coalesce(sum(gross) FILTER (WHERE reg.id IS NOT NULL), 0)::bigint AS event_fees
+FROM receipts r
+LEFT JOIN event_registrations reg ON reg.receipt_id = coalesce(r.cancels_receipt_id, r.id)
 WHERE issue_date BETWEEN sqlc.arg(from_date)::date AND sqlc.arg(to_date)::date
     AND year BETWEEN extract(year FROM sqlc.arg(from_date)::date)::integer
         AND extract(year FROM sqlc.arg(to_date)::date)::integer

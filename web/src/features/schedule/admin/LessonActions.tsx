@@ -14,6 +14,7 @@ import {
   restoreLessonMutation,
   updateLessonMutation,
 } from '@/api/queries';
+import { PendingIcon } from '@/components/PendingIcon';
 import { ProblemAlert } from '@/components/ProblemAlert';
 import {
   AlertDialog,
@@ -49,13 +50,16 @@ export function LessonActions({
   lesson,
   timeZone,
   onDeleted,
+  eventCanceled = false,
 }: {
   lesson: LessonDetail;
   timeZone: string;
   /** Called once the lesson is deleted, e.g. to close the sheet. */
   onDeleted: () => void;
+  eventCanceled?: boolean;
 }) {
   const { t, i18n } = useTranslation('admin');
+  const { t: tEvents } = useTranslation('adminEvents');
   const lang = i18n.resolvedLanguage ?? 'en';
   const queryClient = useQueryClient();
   const [open, setOpen] = useState<Open>(null);
@@ -67,6 +71,7 @@ export function LessonActions({
   const canceled = lesson.status === 'canceled';
   const hidden = lesson.visibility === 'hidden';
   const rental = lesson.kind === 'rental';
+  const eventSession = !!lesson.eventId;
   const bookings = lesson.admin?.activeBookings ?? 0;
   const label = t('lessons.label', {
     courseType: title(lesson),
@@ -95,10 +100,10 @@ export function LessonActions({
   return (
     <section aria-labelledby={headingId} className="space-y-3 rounded-lg border p-3">
       <h3 id={headingId} className="font-medium">
-        {t('lessons.manage')}
+        {eventSession ? tEvents('sessions.manage') : t('lessons.manage')}
       </h3>
       <ul className="space-y-1 text-sm text-muted-foreground">
-        {lesson.admin && !rental && (
+        {lesson.admin && !rental && !eventSession && (
           <li>
             {bookings > 0 ? t('lessons.bookings', { count: bookings }) : t('lessons.noBookings')}
           </li>
@@ -123,7 +128,7 @@ export function LessonActions({
           {t('lessons.edit')}
         </Button>
         {/* A room rental is always hidden (ADR 0007, amendment). */}
-        {!rental && (
+        {!rental && !eventSession && (
           <Button
             variant="outline"
             size="sm"
@@ -135,7 +140,12 @@ export function LessonActions({
           </Button>
         )}
         {canceled ? (
-          <Button variant="outline" size="sm" disabled={started} onClick={() => setOpen('restore')}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={started || eventCanceled}
+            onClick={() => setOpen('restore')}
+          >
             <RotateCcw aria-hidden="true" />
             {t('lessons.restore')}
           </Button>
@@ -188,7 +198,7 @@ export function LessonActions({
         texts={() => ({
           title: t('lessons.deleteTitle'),
           description: t('lessons.deleteDescription', { lesson: label }),
-          inUse: t('lessons.inUse'),
+          inUse: eventSession ? tEvents('sessions.deleteInUse') : t('lessons.inUse'),
           notFound: t('lessons.notFound'),
           deleted: t('lessons.deleted'),
           conflicts: { generated: t('lessons.generated') },
@@ -214,6 +224,7 @@ function ConfirmAction({
   pending,
   error,
   fields = [],
+  conflicts,
   destructive = false,
   form,
   children,
@@ -228,6 +239,7 @@ function ConfirmAction({
   pending: boolean;
   error: unknown;
   fields?: readonly string[];
+  conflicts?: React.ComponentProps<typeof ProblemAlert>['conflicts'];
   destructive?: boolean;
   /** The id of the form the confirm button submits; without one, it calls onConfirm. */
   form?: string;
@@ -251,6 +263,7 @@ function ConfirmAction({
         </AlertDialogHeader>
         <ProblemAlert
           error={error}
+          conflicts={conflicts}
           messages={{
             404: t('lessons.notFound'),
             // A 422 at the lesson means it has started; one at a field, that it needs a look.
@@ -272,6 +285,7 @@ function ConfirmAction({
             form={form}
             onClick={form ? undefined : onConfirm}
           >
+            <PendingIcon pending={pending} />
             {confirm}
           </Button>
         </AlertDialogFooter>
@@ -291,6 +305,7 @@ function CancelDialog({
   onClose: () => void;
 }) {
   const { t } = useTranslation('admin');
+  const { t: tEvents } = useTranslation('adminEvents');
   const errorText = useAdminErrorText();
   const queryClient = useQueryClient();
   const cancel = useMutation(cancelLessonMutation(queryClient));
@@ -318,9 +333,11 @@ function CancelDialog({
       open={open}
       title={t('lessons.cancelTitle')}
       description={
-        bookings > 0
-          ? t('lessons.cancelDescription', { count: bookings })
-          : t('lessons.cancelUnbooked')
+        lesson.eventId
+          ? tEvents('sessions.cancelMail')
+          : bookings > 0
+            ? t('lessons.cancelDescription', { count: bookings })
+            : t('lessons.cancelUnbooked')
       }
       confirm={cancel.isPending ? t('lessons.canceling') : t('lessons.cancel')}
       dismiss={t('lessons.keep')}
@@ -361,6 +378,7 @@ function RestoreDialog({
   onClose: () => void;
 }) {
   const { t } = useTranslation('admin');
+  const { t: tEvents } = useTranslation('adminEvents');
   const queryClient = useQueryClient();
   const restore = useMutation(restoreLessonMutation(queryClient));
   const bookings = lesson.admin?.activeBookings ?? 0;
@@ -380,14 +398,17 @@ function RestoreDialog({
       open={open}
       title={t('lessons.restoreTitle')}
       description={
-        bookings > 0
-          ? t('lessons.restoreDescription', { count: bookings })
-          : t('lessons.restoreUnbooked')
+        lesson.eventId
+          ? tEvents('sessions.cancelMail')
+          : bookings > 0
+            ? t('lessons.restoreDescription', { count: bookings })
+            : t('lessons.restoreUnbooked')
       }
       confirm={restore.isPending ? t('lessons.restoring') : t('lessons.restoreConfirm')}
       dismiss={t('lessons.back')}
       pending={restore.isPending}
       error={taken ? null : restore.error}
+      conflicts={lesson.eventId ? { closed: tEvents('sessions.closedRestore') } : undefined}
       onConfirm={() => send(false)}
       onClose={onClose}
     >

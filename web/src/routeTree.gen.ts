@@ -38,7 +38,12 @@ import { Route as AdminReceiptsRouteImport } from './routes/admin.receipts'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
 import { Route as AdminStatisticsRouteImport } from './routes/admin.statistics'
+import { Route as EventsIndexRouteImport } from './routes/events.index'
+import { Route as EventsSlugRouteImport } from './routes/events.$slug'
+import { Route as EventsInviteRouteImport } from './routes/events.invite'
 import { Route as WaitlistAcceptRouteImport } from './routes/waitlist.accept'
+import { Route as AdminEventsIndexRouteImport } from './routes/admin.events.index'
+import { Route as AdminEventsEventIdRouteImport } from './routes/admin.events.$eventId'
 import { Route as AdminPersonsIndexRouteImport } from './routes/admin.persons.index'
 import { Route as AdminPersonsPersonIdRouteImport } from './routes/admin.persons.$personId'
 import { Route as AdminTermsIndexRouteImport } from './routes/admin.terms.index'
@@ -189,10 +194,35 @@ const AdminStatisticsRoute = AdminStatisticsRouteImport.update({
   path: '/statistics',
   getParentRoute: () => AdminRoute,
 } as any)
+const EventsIndexRoute = EventsIndexRouteImport.update({
+  id: '/events/',
+  path: '/events/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventsSlugRoute = EventsSlugRouteImport.update({
+  id: '/events/$slug',
+  path: '/events/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventsInviteRoute = EventsInviteRouteImport.update({
+  id: '/events/invite',
+  path: '/events/invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WaitlistAcceptRoute = WaitlistAcceptRouteImport.update({
   id: '/waitlist/accept',
   path: '/waitlist/accept',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminEventsIndexRoute = AdminEventsIndexRouteImport.update({
+  id: '/events/',
+  path: '/events/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminEventsEventIdRoute = AdminEventsEventIdRouteImport.update({
+  id: '/events/$eventId',
+  path: '/events/$eventId',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminPersonsIndexRoute = AdminPersonsIndexRouteImport.update({
   id: '/persons/',
@@ -244,9 +274,14 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/statistics': typeof AdminStatisticsRoute
+  '/events/$slug': typeof EventsSlugRoute
+  '/events/invite': typeof EventsInviteRoute
   '/waitlist/accept': typeof WaitlistAcceptRoute
   '/admin/': typeof AdminIndexRoute
+  '/events/': typeof EventsIndexRoute
+  '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/persons/$personId': typeof AdminPersonsPersonIdRoute
+  '/admin/events/': typeof AdminEventsIndexRoute
   '/admin/persons/': typeof AdminPersonsIndexRoute
   '/admin/terms/': typeof AdminTermsIndexRoute
   '/admin/terms/$termId/classes': typeof AdminTermsTermIdClassesRoute
@@ -279,9 +314,14 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/statistics': typeof AdminStatisticsRoute
+  '/events/$slug': typeof EventsSlugRoute
+  '/events/invite': typeof EventsInviteRoute
   '/waitlist/accept': typeof WaitlistAcceptRoute
   '/admin': typeof AdminIndexRoute
+  '/events': typeof EventsIndexRoute
+  '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/persons/$personId': typeof AdminPersonsPersonIdRoute
+  '/admin/events': typeof AdminEventsIndexRoute
   '/admin/persons': typeof AdminPersonsIndexRoute
   '/admin/terms': typeof AdminTermsIndexRoute
   '/admin/terms/$termId/classes': typeof AdminTermsTermIdClassesRoute
@@ -316,9 +356,14 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/statistics': typeof AdminStatisticsRoute
+  '/events/$slug': typeof EventsSlugRoute
+  '/events/invite': typeof EventsInviteRoute
   '/waitlist/accept': typeof WaitlistAcceptRoute
   '/admin/': typeof AdminIndexRoute
+  '/events/': typeof EventsIndexRoute
+  '/admin/events/$eventId': typeof AdminEventsEventIdRoute
   '/admin/persons/$personId': typeof AdminPersonsPersonIdRoute
+  '/admin/events/': typeof AdminEventsIndexRoute
   '/admin/persons/': typeof AdminPersonsIndexRoute
   '/admin/terms/': typeof AdminTermsIndexRoute
   '/admin/terms/$termId/classes': typeof AdminTermsTermIdClassesRoute
@@ -354,9 +399,14 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/staff'
     | '/admin/statistics'
+    | '/events/$slug'
+    | '/events/invite'
     | '/waitlist/accept'
     | '/admin/'
+    | '/events/'
+    | '/admin/events/$eventId'
     | '/admin/persons/$personId'
+    | '/admin/events/'
     | '/admin/persons/'
     | '/admin/terms/'
     | '/admin/terms/$termId/classes'
@@ -389,9 +439,14 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/staff'
     | '/admin/statistics'
+    | '/events/$slug'
+    | '/events/invite'
     | '/waitlist/accept'
     | '/admin'
+    | '/events'
+    | '/admin/events/$eventId'
     | '/admin/persons/$personId'
+    | '/admin/events'
     | '/admin/persons'
     | '/admin/terms'
     | '/admin/terms/$termId/classes'
@@ -425,9 +480,14 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/staff'
     | '/admin/statistics'
+    | '/events/$slug'
+    | '/events/invite'
     | '/waitlist/accept'
     | '/admin/'
+    | '/events/'
+    | '/admin/events/$eventId'
     | '/admin/persons/$personId'
+    | '/admin/events/'
     | '/admin/persons/'
     | '/admin/terms/'
     | '/admin/terms/$termId/classes'
@@ -448,7 +508,10 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   ScheduleRoute: typeof ScheduleRoute
   TeachRoute: typeof TeachRoute
+  EventsSlugRoute: typeof EventsSlugRoute
+  EventsInviteRoute: typeof EventsInviteRoute
   WaitlistAcceptRoute: typeof WaitlistAcceptRoute
+  EventsIndexRoute: typeof EventsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -656,12 +719,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminStatisticsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/events/': {
+      id: '/events/'
+      path: '/events'
+      fullPath: '/events/'
+      preLoaderRoute: typeof EventsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/events/$slug': {
+      id: '/events/$slug'
+      path: '/events/$slug'
+      fullPath: '/events/$slug'
+      preLoaderRoute: typeof EventsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/events/invite': {
+      id: '/events/invite'
+      path: '/events/invite'
+      fullPath: '/events/invite'
+      preLoaderRoute: typeof EventsInviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/waitlist/accept': {
       id: '/waitlist/accept'
       path: '/waitlist/accept'
       fullPath: '/waitlist/accept'
       preLoaderRoute: typeof WaitlistAcceptRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/events/': {
+      id: '/admin/events/'
+      path: '/events'
+      fullPath: '/admin/events/'
+      preLoaderRoute: typeof AdminEventsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/events/$eventId': {
+      id: '/admin/events/$eventId'
+      path: '/events/$eventId'
+      fullPath: '/admin/events/$eventId'
+      preLoaderRoute: typeof AdminEventsEventIdRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/persons/': {
       id: '/admin/persons/'
@@ -710,7 +808,9 @@ interface AdminRouteChildren {
   AdminStaffRoute: typeof AdminStaffRoute
   AdminStatisticsRoute: typeof AdminStatisticsRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  AdminEventsEventIdRoute: typeof AdminEventsEventIdRoute
   AdminPersonsPersonIdRoute: typeof AdminPersonsPersonIdRoute
+  AdminEventsIndexRoute: typeof AdminEventsIndexRoute
   AdminPersonsIndexRoute: typeof AdminPersonsIndexRoute
   AdminTermsIndexRoute: typeof AdminTermsIndexRoute
   AdminTermsTermIdClassesRoute: typeof AdminTermsTermIdClassesRoute
@@ -732,7 +832,9 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminStaffRoute: AdminStaffRoute,
   AdminStatisticsRoute: AdminStatisticsRoute,
   AdminIndexRoute: AdminIndexRoute,
+  AdminEventsEventIdRoute: AdminEventsEventIdRoute,
   AdminPersonsPersonIdRoute: AdminPersonsPersonIdRoute,
+  AdminEventsIndexRoute: AdminEventsIndexRoute,
   AdminPersonsIndexRoute: AdminPersonsIndexRoute,
   AdminTermsIndexRoute: AdminTermsIndexRoute,
   AdminTermsTermIdClassesRoute: AdminTermsTermIdClassesRoute,
@@ -755,7 +857,10 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   ScheduleRoute: ScheduleRoute,
   TeachRoute: TeachRoute,
+  EventsSlugRoute: EventsSlugRoute,
+  EventsInviteRoute: EventsInviteRoute,
   WaitlistAcceptRoute: WaitlistAcceptRoute,
+  EventsIndexRoute: EventsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -358,10 +359,7 @@ type feedEvent struct {
 	ScheduledLesson
 
 	names []string
-	// persons are the persons of names: a merge may leave a person two
-	// bookings of a lesson that started (ADR 0015), named once.
-	persons []domain.PersonID
-	role    TeachRole
+	role  TeachRole
 }
 
 // render builds the document of feed for owner at now, in the school of
@@ -450,43 +448,55 @@ func bookingEvents(
 		return nil, fmt.Errorf("bookings: %w", err)
 	}
 
-	lessons, err := lessonsOf(ctx, tx, settings, bookings, nil)
+	byLesson := map[domain.LessonID][]domain.PersonID{}
+	for _, b := range bookings {
+		byLesson[b.LessonID] = append(byLesson[b.LessonID], b.PersonID)
+	}
+	regs, err := tx.EventRegistrations().ListByPersons(ctx, fam.ids())
 	if err != nil {
 		return nil, err
 	}
-
-	slices.SortStableFunc(bookings, func(a, b domain.Booking) int {
-		return cmp.Compare(fam.rank[a.PersonID], fam.rank[b.PersonID])
-	})
-
-	byLesson := map[domain.LessonID]*feedEvent{}
-
-	var events []*feedEvent
-
-	for _, b := range bookings {
-		e, ok := byLesson[b.LessonID]
-		if !ok {
-			sl, found := lessons[b.LessonID]
-			if !found {
-				continue // the store lists only bookings with their lesson
+	byEvent := map[domain.EventID][]domain.PersonID{}
+	for _, r := range regs {
+		if r.Status == domain.EventRegistered {
+			byEvent[r.EventID] = append(byEvent[r.EventID], r.PersonID)
+		}
+	}
+	if len(byEvent) > 0 {
+		events, err := tx.Events().ListByIDs(ctx, slices.Collect(maps.Keys(byEvent)))
+		if err != nil {
+			return nil, err
+		}
+		var visible []domain.EventID
+		for _, e := range events {
+			if e.Status != domain.EventDraft {
+				visible = append(visible, e.ID)
 			}
-
-			e = &feedEvent{ScheduledLesson: sl}
-			byLesson[b.LessonID] = e
-			events = append(events, e)
 		}
-
-		if !slices.Contains(e.persons, b.PersonID) {
-			e.persons = append(e.persons, b.PersonID)
-			e.names = append(e.names, fullName(fam.person(b.PersonID)))
+		sessions, err := tx.Lessons().ListByEvents(ctx, visible)
+		if err != nil {
+			return nil, err
+		}
+		for _, l := range sessions {
+			if !l.StartsAt.Before(from) {
+				byLesson[l.ID] = append(byLesson[l.ID], byEvent[l.EventID]...)
+			}
 		}
 	}
-
-	out := make([]feedEvent, len(events))
-	for i, e := range events {
-		out[i] = *e
+	lessons, err := lessonSummariesByIDs(ctx, tx, settings, slices.Collect(maps.Keys(byLesson)))
+	if err != nil {
+		return nil, err
 	}
-
+	out := make([]feedEvent, 0, len(lessons))
+	for id, sl := range lessons {
+		persons := byLesson[id]
+		slices.SortFunc(persons, func(a, b domain.PersonID) int { return cmp.Compare(fam.rank[a], fam.rank[b]) })
+		e := feedEvent{ScheduledLesson: sl}
+		for _, id := range slices.Compact(persons) {
+			e.names = append(e.names, fullName(fam.person(id)))
+		}
+		out = append(out, e)
+	}
 	slices.SortFunc(out, func(a, b feedEvent) int { return byStart(a.Lesson, b.Lesson) })
 
 	return out, nil

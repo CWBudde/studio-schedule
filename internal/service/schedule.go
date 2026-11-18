@@ -283,7 +283,15 @@ func (s *ScheduleService) Lesson(ctx context.Context, p Principal, id domain.Les
 			return err
 		}
 
-		out.EventSlug = events[l.EventID].Slug
+		if e, ok := events[l.EventID]; ok {
+			out.EventSlug = e.Slug
+			out.Lesson.Capacity = e.Capacity
+			counts, err := tx.EventRegistrations().CountsByEvents(ctx, []domain.EventID{e.ID}, now)
+			if err != nil {
+				return err
+			}
+			out.setAvailability(settings, counts[e.ID].Registered, counts[e.ID].Invited)
+		}
 
 		lessons := []ScheduledLesson{out}
 		if err := addFamily(ctx, tx, p, now, lessons, open); err != nil {
@@ -351,8 +359,25 @@ func addAvailability(
 		return fmt.Errorf("waiting lists: %w", err)
 	}
 
+	var eventIDs []domain.EventID
+	for _, sl := range lessons {
+		if !sl.Lesson.EventID.IsZero() {
+			eventIDs = append(eventIDs, sl.Lesson.EventID)
+		}
+	}
+	var events map[domain.EventID]store.EventRegistrationCounts
+	if len(eventIDs) > 0 {
+		events, err = tx.EventRegistrations().CountsByEvents(ctx, eventIDs, now)
+		if err != nil {
+			return err
+		}
+	}
 	held := heldPlaces(open, now)
 	for i := range lessons {
+		if eid := lessons[i].Lesson.EventID; !eid.IsZero() {
+			lessons[i].setAvailability(settings, events[eid].Registered, events[eid].Invited)
+			continue
+		}
 		id := lessons[i].Lesson.ID
 		lessons[i].setAvailability(settings, active[id], held[id])
 	}

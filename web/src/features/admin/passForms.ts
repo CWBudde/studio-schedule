@@ -9,6 +9,34 @@ import { moneyValue } from './passTypeForms';
 /** The longest note of a pass. */
 export const maxPassNote = 500;
 
+/** Receipt payer, payment method and optional recipient overrides shared with events. */
+export const receiptPaymentFields = {
+  payerId: z.string(),
+  paymentMethod: z.enum(['cash', 'transfer', 'card']),
+  recipientName: z.string().trim().max(200, 'tooLong'),
+  recipientEmail: z
+    .string()
+    .trim()
+    .max(254, 'tooLong')
+    .refine((v) => v === '' || z.email().safeParse(v).success, 'email'),
+  recipientAddress: z.string().trim().max(500, 'tooLong'),
+};
+
+type ReceiptPaymentValues = z.infer<z.ZodObject<typeof receiptPaymentFields>>;
+
+export function receiptPaymentData(
+  { payerId, paymentMethod, recipientName, recipientEmail, recipientAddress }: ReceiptPaymentValues,
+  defaultPayerId = '',
+) {
+  return {
+    ...(payerId && payerId !== defaultPayerId ? { payerId } : {}),
+    paymentMethod,
+    ...(recipientName ? { recipientName } : {}),
+    ...(recipientEmail ? { recipientEmail } : {}),
+    ...(recipientAddress ? { recipientAddress } : {}),
+  };
+}
+
 /**
  * The fields of both forms: the type, the first day ('' for today), a note,
  * and for a sale who paid, the price paid ('' for the type's), how, and
@@ -22,16 +50,8 @@ const fields = {
     .trim()
     .refine((v) => v === '' || isSchoolDate(v), 'date'),
   note: z.string().trim().max(maxPassNote, 'tooLong'),
-  payerId: z.string(),
   price: z.string().trim(),
-  paymentMethod: z.enum(['cash', 'transfer', 'card']),
-  recipientName: z.string().trim().max(200, 'tooLong'),
-  recipientEmail: z
-    .string()
-    .trim()
-    .max(254, 'tooLong')
-    .refine((v) => v === '' || z.email().safeParse(v).success, 'email'),
-  recipientAddress: z.string().trim().max(500, 'tooLong'),
+  ...receiptPaymentFields,
 };
 
 /** What the office gives away: a type, a first day and a note. */
@@ -60,22 +80,17 @@ export const assignPassFields = [
  */
 export const sellPassSchema = (digits: number, ownerId: string) =>
   z.object(fields).transform((values, ctx): SellPassData => {
-    const { passTypeId, validFrom, note, payerId, price, paymentMethod } = values;
-    const { recipientName, recipientEmail, recipientAddress } = values;
+    const { passTypeId, validFrom, note, price } = values;
     const minor = price ? moneyValue(price, digits) : undefined;
     if (price && minor === undefined) {
       ctx.addIssue({ code: 'custom', path: ['price'], message: 'money' });
     }
     return {
       passTypeId,
-      ...(payerId && payerId !== ownerId ? { payerId } : {}),
       ...(validFrom ? { validFrom } : {}),
       ...(minor !== undefined ? { price: minor } : {}),
       ...(note ? { note } : {}),
-      paymentMethod,
-      ...(recipientName ? { recipientName } : {}),
-      ...(recipientEmail ? { recipientEmail } : {}),
-      ...(recipientAddress ? { recipientAddress } : {}),
+      ...receiptPaymentData(values, ownerId),
     };
   });
 

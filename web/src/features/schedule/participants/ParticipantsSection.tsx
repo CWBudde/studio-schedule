@@ -209,8 +209,8 @@ function LoadedParticipants({
   // Instructors and accompanists change participants until the end of the
   // lesson's school day; the office always.
   const canEdit = office || !dayOver;
-  const canAdd = canEdit && !canceledLesson;
-  const canAttend = started && canEdit && !canceledLesson;
+  const canAdd = canEdit && !canceledLesson && !data.registrants;
+  const canAttend = started && canEdit && !canceledLesson && !data.registrants;
 
   const active = data.bookings.filter((b) => b.status !== 'canceled');
   const canceled = data.bookings.filter((b) => b.status === 'canceled');
@@ -236,6 +236,7 @@ function LoadedParticipants({
       state="ready"
       headingId={headingId}
       counts={data}
+      registrants={data.registrants}
       stale={stale}
       onRetry={onRetry}
       timeZone={timeZone}

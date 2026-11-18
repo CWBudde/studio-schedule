@@ -96,6 +96,35 @@ describe('PersonsPage', () => {
     });
   });
 
+  it('does not replace a pending person navigation with the debounced search', async () => {
+    const { post } = mockOffice();
+    const { router } = renderPage();
+    const link = await screen.findByRole('link', { name: 'Mia Sample' });
+    const detail = router.routesById['/admin/persons/$personId'];
+    if (!detail) throw new Error('The test person route is missing');
+    let finishLoading: (() => void) | undefined;
+    const loading = new Promise<void>((resolve) => {
+      finishLoading = resolve;
+    });
+    detail.updateLoader({ loader: () => loading });
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search persons' }), {
+      target: { value: 'mia' },
+    });
+    fireEvent.click(link);
+    await act(async () => {
+      // The lazy page remains pending longer than the search debounce.
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
+    expect(post).not.toHaveBeenCalledWith(
+      '/api/v1/admin/persons/search',
+      expect.objectContaining({ body: { query: 'mia' } }),
+    );
+
+    await act(async () => finishLoading?.());
+    await waitFor(() => expect(router.state.location.pathname).toBe(link.getAttribute('href')));
+  });
+
   it('keeps the search in the history state, never in the URL', async () => {
     mockOffice();
     const user = userEvent.setup();

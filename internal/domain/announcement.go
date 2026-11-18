@@ -41,11 +41,13 @@ const (
 	// AudienceLesson is the persons booked for one lesson
 	// (Announcement.LessonID).
 	AudienceLesson Audience = "lesson"
+	// AudienceEvent selects the registered participants of an event.
+	AudienceEvent Audience = "event"
 )
 
 // Audiences returns all audiences.
 func Audiences() []Audience {
-	return []Audience{AudienceEveryone, AudienceRole, AudienceClass, AudienceCourseType, AudienceLesson}
+	return []Audience{AudienceEveryone, AudienceRole, AudienceClass, AudienceCourseType, AudienceLesson, AudienceEvent}
 }
 
 // Valid reports whether a is a known audience.
@@ -63,12 +65,13 @@ type Announcement struct {
 	// Body is plain text with line breaks.
 	Body     string
 	Audience Audience
-	// Role, ClassID, CourseTypeID and LessonID name the audience; only the
+	// Role, ClassID, CourseTypeID, LessonID and EventID name the audience; only the
 	// one its kind needs is set.
 	Role         Role
 	ClassID      ClassID
 	CourseTypeID CourseTypeID
 	LessonID     LessonID
+	EventID      EventID `json:",omitzero"`
 	// PublishAt is when it shows; it may lie in the future.
 	PublishAt time.Time
 	// ExpiresAt is when it stops showing (optional).
@@ -114,6 +117,7 @@ func (a Announcement) Validate() error {
 			"a course type is needed exactly for the course type audience"),
 		on("lessonId", (a.Audience == AudienceLesson) == !a.LessonID.IsZero(),
 			"a lesson is needed exactly for the lesson audience"),
+		on("eventId", (a.Audience == AudienceEvent) == !a.EventID.IsZero(), "an event is needed exactly for the event audience"),
 		on("publishAt", !a.PublishAt.IsZero(), "publish time must be set"),
 		on("expiresAt", a.ExpiresAt.IsZero() || a.ExpiresAt.After(a.PublishAt), "must expire after it is published"),
 		rule{a.EmailedAt.IsZero() || a.Email, "only an emailed announcement has a mail time"},

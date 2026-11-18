@@ -145,6 +145,7 @@ type StatisticsPeriod struct {
 
 // StatisticsTotals are the aggregates of the whole range.
 type StatisticsTotals struct {
+	EventFees domain.Money
 	LessonCounts
 	SalesCounts
 	// CanceledLessons counts the lessons the school canceled; they are
@@ -209,6 +210,7 @@ type ParticipantStatistics struct {
 // sales in a range of school dates. They count the persons and name only
 // the top participants.
 type Statistics struct {
+	Events   []store.EventStats
 	Timezone string
 	Currency string
 	// Today is the school date the presets end on.
@@ -418,9 +420,14 @@ func (st *Statistics) compute(ctx context.Context, tx store.Tx, loc *time.Locati
 		return fmt.Errorf("lessons: %w", err)
 	}
 
+	var eventIDs []domain.EventID
 	lessons := make([]domain.Lesson, 0, len(all))
 
 	for _, l := range all {
+		if !l.EventID.IsZero() {
+			eventIDs = append(eventIDs, l.EventID)
+			continue
+		}
 		// A room rental has no places or bookings (ADR 0007, amendment).
 		if !l.Kind.Bookable() {
 			continue
@@ -435,6 +442,11 @@ func (st *Statistics) compute(ctx context.Context, tx store.Tx, loc *time.Locati
 		lessons = append(lessons, l)
 	}
 
+	if len(eventIDs) > 0 {
+		if st.Events, err = tx.Events().StatisticsByIDs(ctx, eventIDs); err != nil {
+			return fmt.Errorf("event statistics: %w", err)
+		}
+	}
 	ids := lessonIDs(lessons)
 
 	counts, err := tx.Bookings().CountsByLessons(ctx, ids)
@@ -562,6 +574,7 @@ func (st *Statistics) addSales(ctx context.Context, tx store.Tx) error {
 		}
 
 		sales := SalesCounts{PassesSold: d.Sales - d.Cancellations, Gross: d.Gross}
+		st.Totals.EventFees += d.EventFees
 		st.Totals.SalesCounts.add(sales)
 
 		if i := periodOf(st.Periods, d.Date); i >= 0 {

@@ -11,6 +11,7 @@ import {
   type AnnouncementData,
   announcementRecipientsQuery,
   courseTypesQuery,
+  adminEventsQuery,
   createAnnouncementMutation,
   scheduleQuery,
   termsQuery,
@@ -243,6 +244,7 @@ function AnnouncementForm({
             onTermChange={() => form.setValue('classId', '')}
           />
         )}
+        {audience === 'event' && <EventField form={form} errorText={errorText} />}
         {audience === 'course-type' && <CourseTypeField form={form} errorText={errorText} />}
         {audience === 'lesson' && (
           <LessonFields
@@ -385,6 +387,28 @@ function CourseTypeField({ form, errorText }: FormProps) {
           onChange={field.onChange}
           onBlur={field.onBlur}
           error={errorText(form.formState.errors.courseTypeId)}
+        />
+      )}
+    />
+  );
+}
+
+function EventField({ form, errorText }: FormProps) {
+  const { t } = useTranslation('announcements');
+  const events = useQuery(adminEventsQuery);
+  return (
+    <Controller
+      control={form.control}
+      name="eventId"
+      render={({ field }) => (
+        <SelectField
+          label={t('admin.audiences.event')}
+          placeholder={t('admin.choose')}
+          options={(events.data ?? []).map((c) => ({ value: c.id, label: c.title }))}
+          value={field.value}
+          onChange={field.onChange}
+          onBlur={field.onBlur}
+          error={errorText(form.formState.errors.eventId)}
         />
       )}
     />

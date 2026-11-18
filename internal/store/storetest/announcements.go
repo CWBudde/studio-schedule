@@ -107,9 +107,15 @@ func testAnnouncements(t *testing.T, newStore func(*testing.T) store.Store) {
 			forType.Audience, forType.CourseTypeID = domain.AudienceCourseType, s.courseType.ID
 			forLesson := e.newAnnouncement(olga, "Lesson", t0)
 			forLesson.Audience, forLesson.LessonID = domain.AudienceLesson, lesson.ID
-			e.createAnnouncements(forClass, forType, forLesson)
+			event := e.event(s.courseType, "autumn")
+			forEvent := e.newAnnouncement(olga, "Event", t0)
+			forEvent.Audience, forEvent.EventID = domain.AudienceEvent, event.ID
+			e.createAnnouncements(forClass, forType, forLesson, forEvent)
+			wantErr(e.t, e.write(func(ctx context.Context, tx store.Tx) error {
+				return tx.Events().Delete(ctx, event.ID)
+			}), domain.ErrConflict)
 
-			for _, want := range []domain.Announcement{forClass, forType, forLesson} {
+			for _, want := range []domain.Announcement{forClass, forType, forLesson, forEvent} {
 				got := mustQuery(e, func(ctx context.Context, tx store.Tx) (domain.Announcement, error) {
 					return tx.Announcements().Get(ctx, want.ID)
 				})
@@ -147,6 +153,9 @@ func testAnnouncements(t *testing.T, newStore func(*testing.T) store.Store) {
 				"class":  func(a *domain.Announcement) { a.Audience, a.ClassID = domain.AudienceClass, newID[domain.ClassID](e) },
 				"course type": func(a *domain.Announcement) {
 					a.Audience, a.CourseTypeID = domain.AudienceCourseType, newID[domain.CourseTypeID](e)
+				},
+				"event": func(a *domain.Announcement) {
+					a.Audience, a.EventID = domain.AudienceEvent, newID[domain.EventID](e)
 				},
 				"lesson": func(a *domain.Announcement) {
 					a.Audience, a.LessonID = domain.AudienceLesson, newID[domain.LessonID](e)

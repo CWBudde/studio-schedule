@@ -230,6 +230,7 @@ function mockMember({
     '/api/v1/auth/me': { body: meMember },
     '/api/v1/family': { body: fam },
     '/api/v1/my/lessons': () => ({ body: lessons() }),
+    '/api/v1/my/events': { body: { items: [] } },
     '/api/v1/my/lessons/history': (init: MockRequest) => ({
       body: history((init.params?.query as { before?: string } | undefined)?.before ?? ''),
     }),

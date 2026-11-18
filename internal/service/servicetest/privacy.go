@@ -34,6 +34,9 @@ func Privacy(t *testing.T, newStore func(t *testing.T) store.Store) {
 		"ImpersonationsEnd":       impersonationsEnd,
 		"DeleteOwnAccount":        deleteOwnAccount,
 		"Retention":               retention,
+		"EventAnonymize":          eventPrivacyAnonymize,
+		"EventMerge":              eventPrivacyMerge,
+		"EventRetention":          eventPrivacyRetention,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

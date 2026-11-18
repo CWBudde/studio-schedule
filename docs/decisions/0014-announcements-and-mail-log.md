@@ -142,3 +142,12 @@ to its person (so events are no longer only ever added). New actions: `person-an
 `account-disabled`, `account-enabled`, `account-role-changed` (details: both roles) and
 `account-deleted` (target: the person; without an actor when the holder deleted it, the one case
 of a NULL `actor_id`). The new `account-deleted` mail has no link and is no secret-link mail.
+
+## Amendment (2026-11-18): event audience
+
+An announcement for an event reaches the accounts of its currently registered persons and their
+guardians. A lesson announcement for one of the event's sessions reaches the same participants.
+The mail job uses the existing person and guardian recipient chain and also emails registered guests
+at their supplied addresses in the school's default language. The same address receives one copy.
+Waiting, invited and canceled registrations do not qualify. An event referenced by an announcement
+cannot be deleted until the office removes the announcement or changes its audience.

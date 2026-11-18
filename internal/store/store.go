@@ -954,11 +954,13 @@ type ReceiptFilter struct {
 
 // ReceiptDayTotals sums the receipts of one issue date and currency.
 type ReceiptDayTotals struct {
-	Date     domain.Date
-	Currency string
-	// Sales and Cancellations count the receipts of each kind.
+	// EventFees is gross revenue on event receipts, net of event refunds.
+	EventFees domain.Money
+	Date      domain.Date
+	Currency  string
+	// Sales and Cancellations count pass receipts of each kind.
 	Sales, Cancellations int
-	// Gross is the sum of their totals; cancellations count negative.
+	// Gross is the sum of the pass receipts; cancellations count negative.
 	Gross domain.Money
 }
 
@@ -1251,10 +1253,20 @@ type JobRunRepo interface {
 	DeleteStartedBefore(ctx context.Context, before time.Time) (int, error)
 }
 
+// EventStats summarizes the registrations and retained receipt revenue for an event.
+type EventStats struct {
+	EventID    domain.EventID
+	Title      string
+	Registered int
+	Revenue    domain.Money
+}
+
 // EventRepo stores events (ADR 0019) and their images. Slugs are unique,
 // exactly (they are lowercase already). An event's sessions are lessons
 // (LessonRepo.ListByEvent), its registrations EventRegistrationRepo's.
 type EventRepo interface {
+	// StatisticsByIDs returns the given events once, ordered by ID, with their current registrations and lifetime fee revenue.
+	StatisticsByIDs(ctx context.Context, ids []domain.EventID) ([]EventStats, error)
 	Get(ctx context.Context, id domain.EventID) (domain.Event, error)
 	// BySlug finds the event with the slug, or domain.ErrNotFound.
 	BySlug(ctx context.Context, slug string) (domain.Event, error)
@@ -1332,6 +1344,9 @@ type EventRegistrationRepo interface {
 	CountsByEvents(
 		ctx context.Context, events []domain.EventID, at time.Time,
 	) (map[domain.EventID]EventRegistrationCounts, error)
+	// ListDueEvents returns the event IDs with an invite expiring at or
+	// before now, each once and ordered by ID.
+	ListDueEvents(ctx context.Context, now time.Time) ([]domain.EventID, error)
 	// AnonymizeGuests replaces the name of every guest registration of an
 	// event whose last session ended before the instant with
 	// domain.AnonymousGuestName and clears its email (ADR 0016, ADR 0019),

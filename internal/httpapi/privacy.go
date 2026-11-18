@@ -333,22 +333,23 @@ const exportFormat = "studio-schedule.person-export"
 // PersonExport is the response body of exportPerson and exportMyData. Times
 // are instants (UTC); dates and times of day are the school's.
 type PersonExport struct {
-	Format        string                `doc:"The format of this document." enum:"studio-schedule.person-export" json:"format"`
-	Version       int                   `doc:"The version of the format; it changes when a field changes its meaning or goes." json:"version"`
-	ExportedAt    time.Time             `doc:"When the document was made." json:"exportedAt"`
-	Person        ExportPersonData      `json:"person"`
-	Guardians     []ExportPersonRef     `doc:"The person's guardians, names only." json:"guardians" nullable:"false"`
-	Dependents    []ExportPersonRef     `doc:"The person's dependents, names only." json:"dependents" nullable:"false"`
-	MergedPersons []ExportPersonRef     `doc:"Persons merged into this one (duplicates); their receipts are listed here." json:"mergedPersons" nullable:"false"`
-	Account       *ExportAccount        `doc:"The person's account; absent without one, or for a dependent's own account exported by a guardian." json:"account,omitempty"`
-	CalendarFeeds []ExportCalendarFeed  `doc:"The account's active calendar feeds, without their secret links." json:"calendarFeeds" nullable:"false"`
-	PushDevices   []ExportPushDevice    `doc:"The devices the account turned notifications on for (web push), without their endpoints and keys." json:"pushDevices" nullable:"false"`
-	Dismissed     []ExportAnnouncement  `doc:"Announcements the account dismissed." json:"dismissedAnnouncements" nullable:"false"`
-	Classes       []PersonClass         `doc:"Class memberships." json:"classMemberships" nullable:"false"`
-	Bookings      []ExportBooking       `doc:"Every booking, canceled ones included, by lesson start." json:"bookings" nullable:"false"`
-	Waitlist      []ExportWaitlistEntry `doc:"Every waiting-list entry, ended ones included." json:"waitlistEntries" nullable:"false"`
-	Passes        []ExportPass          `doc:"The passes the person owns." json:"passes" nullable:"false"`
-	Receipts      []ExportReceipt       `doc:"The receipts the person paid, newest first (no PDFs)." json:"receipts" nullable:"false"`
+	Format             string                    `doc:"The format of this document." enum:"studio-schedule.person-export" json:"format"`
+	Version            int                       `doc:"The version of the format; it changes when a field changes its meaning or goes." json:"version"`
+	ExportedAt         time.Time                 `doc:"When the document was made." json:"exportedAt"`
+	Person             ExportPersonData          `json:"person"`
+	Guardians          []ExportPersonRef         `doc:"The person's guardians, names only." json:"guardians" nullable:"false"`
+	Dependents         []ExportPersonRef         `doc:"The person's dependents, names only." json:"dependents" nullable:"false"`
+	MergedPersons      []ExportPersonRef         `doc:"Persons merged into this one (duplicates); their receipts are listed here." json:"mergedPersons" nullable:"false"`
+	Account            *ExportAccount            `doc:"The person's account; absent without one, or for a dependent's own account exported by a guardian." json:"account,omitempty"`
+	CalendarFeeds      []ExportCalendarFeed      `doc:"The account's active calendar feeds, without their secret links." json:"calendarFeeds" nullable:"false"`
+	PushDevices        []ExportPushDevice        `doc:"The devices the account turned notifications on for (web push), without their endpoints and keys." json:"pushDevices" nullable:"false"`
+	Dismissed          []ExportAnnouncement      `doc:"Announcements the account dismissed." json:"dismissedAnnouncements" nullable:"false"`
+	Classes            []PersonClass             `doc:"Class memberships." json:"classMemberships" nullable:"false"`
+	Bookings           []ExportBooking           `doc:"Every booking, canceled ones included, by lesson start." json:"bookings" nullable:"false"`
+	Waitlist           []ExportWaitlistEntry     `doc:"Every waiting-list entry, ended ones included." json:"waitlistEntries" nullable:"false"`
+	EventRegistrations []ExportEventRegistration `doc:"Every event registration, ended ones included." json:"eventRegistrations" nullable:"false"`
+	Passes             []ExportPass              `doc:"The passes the person owns." json:"passes" nullable:"false"`
+	Receipts           []ExportReceipt           `doc:"The receipts the person paid, newest first (no PDFs)." json:"receipts" nullable:"false"`
 }
 
 // PersonExportOutput is the response of exportPerson and exportMyData.
@@ -444,7 +445,20 @@ type ExportWaitlistEntry struct {
 	InvitedAt time.Time              `doc:"When the person was invited, if they were." json:"invitedAt,omitzero"`
 }
 
-// ExportPass is a pass with its redemptions.
+// ExportEventRegistration is a registration with its receipts in the person data export.
+type ExportEventRegistration struct {
+	ID                        domain.EventRegistrationID `json:"id"`
+	Title                     string                     `doc:"Event title." json:"title"`
+	Status                    string                     `enum:"waiting,invited,registered,canceled" json:"status"`
+	Payment                   string                     `enum:"unpaid,paid,refunded" json:"payment"`
+	Price                     int64                      `doc:"The gross price when the registration was made, in minor units." json:"price"`
+	ReceiptNumber             string                     `json:"receiptNumber,omitempty"`
+	CancellationReceiptNumber string                     `json:"cancellationReceiptNumber,omitempty"`
+	CreatedAt                 time.Time                  `json:"createdAt"`
+	CanceledAt                time.Time                  `json:"canceledAt,omitzero"`
+}
+
+// ExportPass is an owned pass with its redemptions.
 type ExportPass struct {
 	ID              domain.PassID      `doc:"Pass ID."             json:"id"`
 	Type            string             `doc:"Name of the pass type." json:"type"`
@@ -491,14 +505,15 @@ func NewPersonExport(x service.PersonExport) PersonExport {
 			AnonymizedAt: p.AnonymizedAt.UTC(),
 		},
 		Guardians: personRefs(x.Guardians), Dependents: personRefs(x.Dependents), MergedPersons: personRefs(x.Merged),
-		CalendarFeeds: make([]ExportCalendarFeed, 0, len(x.CalendarFeeds)),
-		PushDevices:   make([]ExportPushDevice, 0, len(x.PushSubscriptions)),
-		Dismissed:     make([]ExportAnnouncement, 0, len(x.Dismissed)),
-		Classes:       make([]PersonClass, 0, len(x.Classes)),
-		Bookings:      make([]ExportBooking, 0, len(x.Bookings)),
-		Waitlist:      make([]ExportWaitlistEntry, 0, len(x.Waitlist)),
-		Passes:        make([]ExportPass, 0, len(x.Passes)),
-		Receipts:      make([]ExportReceipt, 0, len(x.Receipts)),
+		CalendarFeeds:      make([]ExportCalendarFeed, 0, len(x.CalendarFeeds)),
+		PushDevices:        make([]ExportPushDevice, 0, len(x.PushSubscriptions)),
+		Dismissed:          make([]ExportAnnouncement, 0, len(x.Dismissed)),
+		Classes:            make([]PersonClass, 0, len(x.Classes)),
+		Bookings:           make([]ExportBooking, 0, len(x.Bookings)),
+		Waitlist:           make([]ExportWaitlistEntry, 0, len(x.Waitlist)),
+		EventRegistrations: make([]ExportEventRegistration, 0, len(x.EventRegistrations)),
+		Passes:             make([]ExportPass, 0, len(x.Passes)),
+		Receipts:           make([]ExportReceipt, 0, len(x.Receipts)),
 	}
 
 	if a := x.Account; a != nil {
@@ -544,6 +559,14 @@ func NewPersonExport(x service.PersonExport) PersonExport {
 		out.Waitlist = append(out.Waitlist, ExportWaitlistEntry{
 			ID: e.Entry.ID, Lesson: exportLesson(e.Lesson, e.CourseType), Status: string(e.Entry.Status),
 			JoinedAt: e.Entry.JoinedAt.UTC(), InvitedAt: e.Entry.InvitedAt.UTC(),
+		})
+	}
+
+	for _, r := range x.EventRegistrations {
+		out.EventRegistrations = append(out.EventRegistrations, ExportEventRegistration{
+			ID: r.ID, Title: r.Title, Status: string(r.Status), Payment: string(r.Payment), Price: int64(r.Price),
+			ReceiptNumber: r.ReceiptNumber, CancellationReceiptNumber: r.CancellationReceiptNumber,
+			CreatedAt: r.CreatedAt.UTC(), CanceledAt: r.CanceledAt.UTC(),
 		})
 	}
 

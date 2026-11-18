@@ -171,10 +171,12 @@ export function DownloadButton({
   receipt,
   mine = false,
   label,
+  visibleLabel,
 }: {
-  receipt: Pick<Receipt, 'id' | 'number'>;
+  receipt: Pick<Receipt, 'id'> & Partial<Pick<Receipt, 'number'>>;
   mine?: boolean;
   label?: string;
+  visibleLabel?: string;
 }) {
   const { t } = useTranslation('receipts');
   const [pending, setPending] = useState(false);
@@ -193,11 +195,13 @@ export function DownloadButton({
       variant="outline"
       size="sm"
       disabled={pending}
-      aria-label={label ?? t('download.label', { number: receipt.number })}
+      aria-label={
+        label ?? (receipt.number ? t('download.label', { number: receipt.number }) : undefined)
+      }
       onClick={() => void download()}
     >
       <Download aria-hidden="true" />
-      {pending ? t('download.pending') : t('download.button')}
+      {pending ? t('download.pending') : (visibleLabel ?? t('download.button'))}
     </Button>
   );
 }

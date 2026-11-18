@@ -365,3 +365,16 @@ func (a *eventsApp) callWith(method, path, header, value string, cookie *http.Co
 
 	return rec.Code
 }
+
+// Event sessions inherit capacities up to the event limit, including in lesson edits.
+func TestLargeEventSessionEdit(t *testing.T) {
+	t.Parallel()
+	a := newEventsApp(t)
+	const events = "/api/v1/admin/events"
+	e := decode(t, a.expect(http.StatusCreated, http.MethodPost, events, a.event("Imaginary Festival", 10000, ""), a.office))
+	path := events + "/" + e["id"].(string) + "/sessions"
+	l := decode(t, a.expect(http.StatusCreated, http.MethodPost, path, a.session("2026-10-24", "07:00", ""), a.office))
+	data := a.session("2026-10-24", "07:30", `,"visibility":"public","kind":"workshop","capacity":10000`)
+	a.expect(http.StatusOK, http.MethodPut, "/api/v1/lessons/"+l["id"].(string), data, a.office)
+	wantField(t, a.expect(http.StatusUnprocessableEntity, http.MethodPost, "/api/v1/lessons", strings.Replace(data, "}", fmt.Sprintf(`,"courseTypeId":%q}`, a.courseType), 1), a.office), "body.capacity")
+}

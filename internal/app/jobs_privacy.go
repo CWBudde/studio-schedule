@@ -24,6 +24,7 @@ func privacyJobs(deps Deps) []jobs.Job {
 			n, err := retention.Purge(ctx)
 			if n != (service.Purged{}) {
 				deps.Logger.InfoContext(ctx, "personal data purged", slog.Int("guests", n.Guests),
+					slog.Int("eventGuests", n.EventGuests),
 					slog.Int("auditEvents", n.AuditEvents), slog.Int("importRuns", n.ImportRuns),
 					slog.Int("pushSubscriptions", n.PushSubscriptions), slog.Int("pushMessages", n.PushMessages),
 					slog.Int("jobRuns", n.JobRuns))

@@ -30,6 +30,8 @@ const slotNames: (keyof Slots)[] = [
   'Home',
   'Profile',
   'Participants',
+  'EventList',
+  'EventDetail',
 ];
 
 describe('registry', () => {
@@ -46,6 +48,8 @@ describe('registry', () => {
     expect(theme.id).toBe('werkstatt');
     const own = [
       'DayHeading',
+      'EventDetail',
+      'EventList',
       'Home',
       'LessonCard',
       'Participants',

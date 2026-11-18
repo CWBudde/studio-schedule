@@ -101,6 +101,22 @@ const rowOf = (name: string) => {
 };
 
 describe('Werkstatt Participants', () => {
+  it('shows the registered participants of a session without attendance controls', () => {
+    render(
+      <Participants
+        {...readyProps({
+          registrants: [{ id: id(851), name: 'Example Guest', guest: true }],
+          active: [],
+          canAdd: false,
+          allAttended: { show: false, pending: false, run: vi.fn() },
+        })}
+      />,
+    );
+    expect(screen.getByText('Example Guest')).toBeInTheDocument();
+    expect(screen.getByText('Registered for the event')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
   it('shows the heading, the counts and the column headers', () => {
     render(<Participants {...readyProps()} />);
 

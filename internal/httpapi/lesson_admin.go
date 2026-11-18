@@ -123,7 +123,7 @@ type LessonData struct {
 	RoomID             domain.RoomID    `doc:"Room."                                       json:"roomId"`
 	InstructorID       domain.StaffID   `doc:"Instructor; required, except for a room rental, which has none."   json:"instructorId,omitzero" required:"false"`
 	AccompanistID      domain.StaffID   `doc:"Accompanist, if any; a room rental has none." json:"accompanistId,omitzero" required:"false"`
-	Capacity           int              `doc:"Maximum number of participants; at least 1, and 0 for a room rental." json:"capacity" maximum:"1000" minimum:"0"`
+	Capacity           int              `doc:"Capacity: 0 for rentals, 1–1000 for other lessons, or the inherited event capacity for a session." json:"capacity" maximum:"10000" minimum:"0"`
 	Visibility         string           `doc:"Who may see the lesson; a room rental is hidden (staff only)." enum:"public,members,hidden" json:"visibility"`
 	Kind               string           `doc:"Regular lesson or special format; workshops and private lessons are published early. A room rental blocks the room for an outside renter: one-off, hidden, without instructor, accompanist or capacity, and it takes no bookings." enum:"regular,workshop,private,rental" json:"kind"`
 	Renter             string           `doc:"Who rents the room; required for a room rental, absent otherwise." json:"renter,omitempty" maxLength:"100" required:"false"`

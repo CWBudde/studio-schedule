@@ -56,6 +56,7 @@ A command that deletes, anonymizes, mails, cancels or merges asks for confirmati
 - [`studio-schedule config`](#studio-schedule-config): Inspect the configuration
 - [`studio-schedule db`](#studio-schedule-db): Check the database
 - [`studio-schedule doctor`](#studio-schedule-doctor): Check the configuration, the database, the mail server and the receipt module
+- [`studio-schedule events`](#studio-schedule-events): List events and registrations and record payments
 - [`studio-schedule healthcheck`](#studio-schedule-healthcheck): Check that the local server answers (for container health checks)
 - [`studio-schedule import`](#studio-schedule-import): Import members from a CSV file (a dry run unless `--apply`)
 - [`studio-schedule init`](#studio-schedule-init): Set up a new school: its settings and the first admin
@@ -643,6 +644,90 @@ Flags:
 Access: an operator command. It acts as no account and refuses `--as`.
 
 Output with `--output json`: one object: ok (bool, false when a check failed) and checks, an array of {name, result, detail} in the order config, database, schema, settings, smtp, vapid, base-url, receipts, where result is ok, fail, warn or skip.
+
+### `studio-schedule events`
+
+List events and registrations and record payments.
+
+```text
+studio-schedule events <command> [flags]
+```
+
+Commands:
+
+- [`studio-schedule events list`](#studio-schedule-events-list): List all events, including drafts
+- [`studio-schedule events mark-paid`](#studio-schedule-events-mark-paid): Record payment for a registration and issue its receipt
+- [`studio-schedule events registrations`](#studio-schedule-events-registrations): List an event's registrations
+
+#### `studio-schedule events list`
+
+List all events, including drafts.
+
+```text
+studio-schedule events list [flags]
+```
+
+List all events, including drafts. Each row shows the slug, title, status, the start of the first session in the school's time zone, registered places and capacity, and the price in the school's currency.
+
+Examples:
+
+```sh
+studio-schedule events list --as office@example.org
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation listAdminEvents.
+
+#### `studio-schedule events mark-paid`
+
+Record payment for a registration and issue its receipt.
+
+```text
+studio-schedule events mark-paid <registration-id> [flags]
+```
+
+Record an event fee paid at the desk. The command issues a receipt, prints its number, and queues receipt mail when a recipient is available. Find the registration ID in events registrations with `--output json`. Confirm the payment with `--yes`.
+
+Examples:
+
+```sh
+studio-schedule events mark-paid <registration-id> --as office@example.org --method cash --yes
+```
+
+Flags:
+
+- `--method` (string): payment method (cash, transfer, or card)
+- `--payer` (string): ID of the person who paid, as persons search prints it
+- `--recipient-address` (string): address printed on the receipt
+- `--recipient-email` (string): receipt email for a guest or payer without an account
+- `--recipient-name` (string): name printed on the receipt
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Destructive: asks for confirmation, or needs `--yes` (see [Confirmation](#confirmation)).
+
+Output with `--output json`: the response body of the operation markEventRegistrationPaid.
+
+#### `studio-schedule events registrations`
+
+List an event's registrations.
+
+```text
+studio-schedule events registrations <slug> [flags]
+```
+
+List the event's registrations, including canceled registrations and the waiting list. Each row shows the person or guest name, registration status, payment status, and receipt number if issued. Use the event slug from events list and find registration IDs in the JSON output.
+
+Examples:
+
+```sh
+studio-schedule events registrations contemporary-weekend-intensive --as office@example.org
+```
+
+Access: `office`. Acts as the account of `--as` (or `STUDIO_AS`), which needs the role `office` or above.
+
+Output with `--output json`: the response body of the operation listEventRegistrations.
 
 ### `studio-schedule healthcheck`
 

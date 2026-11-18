@@ -36,6 +36,9 @@ export function renderWithQuery(ui: ReactElement) {
 /** The routes of the test router; each renders ui when it is the page `at`. */
 export type TestPath =
   | '/'
+  | '/events'
+  | '/events/$slug'
+  | '/events/invite'
   | '/schedule'
   | '/teach'
   | '/my-lessons'
@@ -48,6 +51,8 @@ export type TestPath =
   | '/waitlist/accept'
   | '/account'
   | '/admin/accounts'
+  | '/admin/events'
+  | '/admin/events/$eventId'
   | '/admin/receipts'
   | '/admin/statistics'
   | '/admin/settings'
@@ -111,6 +116,9 @@ export function renderInRouter(
   const router = createRouter({
     routeTree: rootRoute.addChildren([
       route('/'),
+      route('/events'),
+      route('/events/$slug'),
+      route('/events/invite'),
       scheduleRoute,
       teachRoute,
       myLessonsRoute,
@@ -123,6 +131,8 @@ export function renderInRouter(
       route('/waitlist/accept'),
       route('/account'),
       route('/admin/accounts'),
+      route('/admin/events'),
+      route('/admin/events/$eventId'),
       receiptsRoute,
       statisticsRoute,
       route('/admin/settings'),

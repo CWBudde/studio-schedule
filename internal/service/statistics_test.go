@@ -470,7 +470,7 @@ func demoTotals(d seed.Dataset, loc *time.Location, from, to domain.Date) Statis
 
 	for _, l := range d.Lessons {
 		day := domain.DateOf(l.StartsAt, loc)
-		if day.Compare(from) < 0 || day.Compare(to) > 0 {
+		if day.Compare(from) < 0 || day.Compare(to) > 0 || !l.EventID.IsZero() || !l.Kind.Bookable() {
 			continue
 		}
 
@@ -532,6 +532,12 @@ func demoTotals(d seed.Dataset, loc *time.Location, from, to domain.Date) Statis
 			continue
 		}
 
+		if slices.ContainsFunc(d.EventRegistrations, func(reg domain.EventRegistration) bool {
+			return reg.ReceiptID == r.ID || reg.CancellationReceiptID == r.ID
+		}) {
+			out.EventFees += r.Gross
+			continue
+		}
 		out.Gross += r.Gross
 		if r.Kind == domain.ReceiptCancellation {
 			out.PassesSold--

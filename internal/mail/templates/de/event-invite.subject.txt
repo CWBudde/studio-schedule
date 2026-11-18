@@ -1,0 +1,1 @@
+{{.SchoolName}}: Ein Platz ist frei für {{.Title}}

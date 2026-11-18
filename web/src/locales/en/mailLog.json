@@ -48,6 +48,8 @@
     "password-changed": "Password changed",
     "event-canceled": "Event canceled",
     "event-registered": "Event registration confirmed",
+    "event-invite": "Event place offered",
+    "event-invite-expired": "Event offer expired",
     "event-registration-canceled": "Event registration canceled"
   },
   "attempts_one": "{{count}} attempt",

@@ -132,6 +132,13 @@ func (r eventRepo) ListByIDs(ctx context.Context, ids []domain.EventID) ([]domai
 	return convertRows(rows, err, toEvent)
 }
 
+func (r eventRepo) StatisticsByIDs(ctx context.Context, ids []domain.EventID) ([]store.EventStats, error) {
+	rows, err := r.q.EventStatisticsByIDs(ctx, pgIDs(ids))
+	return convertRows(rows, err, func(row sqlc.EventStatisticsByIDsRow) store.EventStats {
+		return store.EventStats{EventID: fromPgID[domain.EventID](row.ID), Title: row.Title, Registered: int(row.Registered), Revenue: domain.Money(row.Revenue)}
+	})
+}
+
 // Lock reads the event with SELECT … FOR UPDATE. In a read-only transaction
 // PostgreSQL rejects the statement (SQLSTATE 25006, store.ErrReadOnly).
 func (r eventRepo) Lock(ctx context.Context, id domain.EventID) (domain.Event, error) {
@@ -342,6 +349,12 @@ func (r eventRegistrationRepo) CountsByEvents(
 	}
 
 	return out, nil
+}
+
+func (r eventRegistrationRepo) ListDueEvents(ctx context.Context, now time.Time) ([]domain.EventID, error) {
+	rows, err := r.q.ListDueEventInvites(ctx, pgInstant(now))
+
+	return convertRows(rows, err, func(id pgtype.UUID) domain.EventID { return fromPgID[domain.EventID](id) })
 }
 
 func (r eventRegistrationRepo) AnonymizeGuests(ctx context.Context, endedBefore time.Time) (int, error) {

@@ -1,0 +1,159 @@
+{
+  "items": [
+    {
+      "id": "00000000-0000-7000-8000-000000000333",
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "person": {
+        "id": "00000000-0000-7000-8000-000000000029",
+        "name": "Kai Lanternby"
+      },
+      "status": "registered",
+      "payment": "unpaid",
+      "price": 12000,
+      "vatRate": 1900,
+      "createdAt": "2026-09-16T16:00:00Z",
+      "updatedAt": "2026-09-16T16:00:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000334",
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "person": {
+        "id": "00000000-0000-7000-8000-00000000002b",
+        "name": "Lina Mistlewood"
+      },
+      "status": "registered",
+      "payment": "paid",
+      "price": 12000,
+      "vatRate": 1900,
+      "receiptId": "00000000-0000-7000-8000-000000000335",
+      "createdAt": "2026-09-16T16:07:00Z",
+      "updatedAt": "2026-09-20T08:30:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000336",
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "person": {
+        "id": "00000000-0000-7000-8000-000000000017",
+        "name": "Marta Fernwhistle"
+      },
+      "status": "registered",
+      "payment": "unpaid",
+      "price": 12000,
+      "vatRate": 1900,
+      "createdAt": "2026-09-16T16:14:00Z",
+      "updatedAt": "2026-09-16T16:14:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000337",
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "person": {
+        "id": "00000000-0000-7000-8000-00000000001b",
+        "name": "Jona Fernwhistle"
+      },
+      "status": "registered",
+      "payment": "unpaid",
+      "price": 12000,
+      "vatRate": 1900,
+      "createdAt": "2026-09-16T16:21:00Z",
+      "updatedAt": "2026-09-16T16:21:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000338",
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "person": {
+        "id": "00000000-0000-7000-8000-000000000022",
+        "name": "Sophie Hollowmere"
+      },
+      "status": "registered",
+      "payment": "unpaid",
+      "price": 12000,
+      "vatRate": 1900,
+      "createdAt": "2026-09-16T16:28:00Z",
+      "updatedAt": "2026-09-16T16:28:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000339",
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "person": {
+        "id": "00000000-0000-7000-8000-000000000014",
+        "name": "Ida Elderwick"
+      },
+      "status": "registered",
+      "payment": "unpaid",
+      "price": 12000,
+      "vatRate": 1900,
+      "createdAt": "2026-09-16T16:35:00Z",
+      "updatedAt": "2026-09-16T16:35:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000033a",
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "person": {
+        "id": "00000000-0000-7000-8000-000000000009",
+        "name": "Lotta Birchmoor"
+      },
+      "status": "registered",
+      "payment": "unpaid",
+      "price": 12000,
+      "vatRate": 1900,
+      "createdAt": "2026-09-16T16:42:00Z",
+      "updatedAt": "2026-09-16T16:42:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000033b",
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "person": {
+        "id": "00000000-0000-7000-8000-00000000001c",
+        "name": "Yara Gildenmoor"
+      },
+      "status": "registered",
+      "payment": "unpaid",
+      "price": 12000,
+      "vatRate": 1900,
+      "createdAt": "2026-09-16T16:49:00Z",
+      "updatedAt": "2026-09-16T16:49:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000033c",
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "person": {
+        "id": "00000000-0000-7000-8000-00000000002f",
+        "name": "Rhea Pinecrest"
+      },
+      "status": "registered",
+      "payment": "unpaid",
+      "price": 12000,
+      "vatRate": 1900,
+      "createdAt": "2026-09-16T16:56:00Z",
+      "updatedAt": "2026-09-16T16:56:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000033d",
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "person": {
+        "id": "00000000-0000-7000-8000-000000000035",
+        "name": "Wanda Sparrowhill"
+      },
+      "status": "registered",
+      "payment": "unpaid",
+      "price": 12000,
+      "vatRate": 1900,
+      "createdAt": "2026-09-16T17:03:00Z",
+      "updatedAt": "2026-09-16T17:03:00Z"
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000033e",
+      "eventId": "00000000-0000-7000-8000-00000000032f",
+      "person": {
+        "id": "00000000-0000-7000-8000-000000000027",
+        "name": "Irene Inkwell"
+      },
+      "status": "registered",
+      "payment": "unpaid",
+      "price": 12000,
+      "vatRate": 1900,
+      "createdAt": "2026-09-16T17:10:00Z",
+      "updatedAt": "2026-09-16T17:10:00Z"
+    }
+  ]
+}

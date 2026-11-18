@@ -79,6 +79,7 @@ func salesFigures(c service.SalesCounts) SalesFigures {
 
 // StatisticsTotals are the figures of the whole range.
 type StatisticsTotals struct {
+	EventFees int64 `doc:"Gross event fees in minor units, net of refunds, by receipt issue date." json:"eventFees"`
 	LessonFigures
 	SalesFigures
 
@@ -145,8 +146,17 @@ type StatisticsTerm struct {
 	Name string        `doc:"Name of the term." json:"name"`
 }
 
+// EventStats summarizes an event with a session in the requested date range.
+type EventStats struct {
+	EventID    domain.EventID `json:"eventId"`
+	Title      string         `json:"title"`
+	Registered int            `json:"registered"`
+	Revenue    int64          `doc:"Gross revenue in minor units for the whole event after refunds." json:"revenue"`
+}
+
 // Statistics is the response body of getStatistics.
 type Statistics struct {
+	Events      []EventStats           `doc:"Events with a session in the range, their current registrations and retained fees." json:"events" nullable:"false"`
 	Timezone    string                 `doc:"IANA time zone of the school; school dates are local to it." json:"timezone"`
 	Currency    string                 `doc:"ISO 4217 currency of the sales."                              json:"currency"`
 	Today       domain.Date            `doc:"Today's school date, where the presets end."                  format:"date" json:"today"`
@@ -192,7 +202,9 @@ func NewStatistics(st service.Statistics) Statistics {
 	body := Statistics{
 		Timezone: st.Timezone, Currency: st.Currency, Today: st.Today, Range: string(st.Range), From: st.From, To: st.To,
 		Granularity: string(st.Granularity),
+		Events:      make([]EventStats, 0, len(st.Events)),
 		Totals: StatisticsTotals{
+			EventFees:     int64(st.Totals.EventFees),
 			LessonFigures: lessonFigures(st.Totals.LessonCounts), SalesFigures: salesFigures(st.Totals.SalesCounts),
 			CanceledLessons: st.Totals.CanceledLessons, ActiveMembers: st.Totals.ActiveMembers,
 		},
@@ -203,6 +215,9 @@ func NewStatistics(st service.Statistics) Statistics {
 		Instructors: make([]InstructorStatistics, 0, len(st.Instructors)),
 	}
 
+	for _, e := range st.Events {
+		body.Events = append(body.Events, EventStats{EventID: e.EventID, Title: e.Title, Registered: e.Registered, Revenue: int64(e.Revenue)})
+	}
 	if !st.Term.ID.IsZero() {
 		body.Term = &StatisticsTerm{ID: st.Term.ID, Name: st.Term.Name}
 	}

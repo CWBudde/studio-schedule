@@ -7,6 +7,7 @@ import {
   lessonBalletDetail,
   lessonContemporary,
   lessonWorkshop,
+  meMember,
   type MockRequest,
   mockApiGet,
   publicSettings,
@@ -131,6 +132,24 @@ describe('LessonSheet', () => {
     expect(within(dialog).getByText('Saturday, November 7')).toBeInTheDocument();
     expect(within(dialog).getByText('14:00–17:00')).toBeInTheDocument();
     expect(within(dialog).queryByText('All levels')).not.toBeInTheDocument();
+  });
+
+  it('links an event session to the whole event instead of offering a booking', async () => {
+    mockApiGet({
+      '/api/v1/settings/public': { body: publicSettings },
+      '/api/v1/auth/me': { body: meMember },
+      '/api/v1/lessons/{lessonId}': {
+        body: { ...lessonWorkshop, eventId: 'example-event', eventSlug: 'example-intensive' },
+      },
+    });
+    renderAtSchedule(<LessonSheet />, { lesson: ids.lessonWorkshop });
+
+    const sheet = within(await screen.findByRole('dialog', { name: 'Jazz' }));
+    expect(sheet.getByRole('link', { name: 'View the event' })).toHaveAttribute(
+      'href',
+      '/events/example-intensive',
+    );
+    expect(sheet.queryByRole('region', { name: 'Booking' })).not.toBeInTheDocument();
   });
 
   it('titles a room rental without a course type "Room rental", without a kind badge', async () => {

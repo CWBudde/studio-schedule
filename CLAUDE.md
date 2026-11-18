@@ -211,7 +211,12 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   office's administration is `service.EventService` (`service/events.go`, `event_registrations.go`,
   `event_payment.go`; fees through `ReceiptService.issueEventFee`, refunds through its `storno`) and
   `httpapi/event_admin.go` (`/api/v1/admin/events`, `/api/v1/admin/event-registrations`); a session
-  refuses bookings with `ErrEventSession`. The public API and web follow.
+  refuses bookings with `ErrEventSession`. Public events and family registrations are in
+  `service/event_public.go` and `httpapi/events.go`. `service/event_waitlist.go` and
+  `httpapi/event_waitlist.go` handle invitations, token acceptance and the `waitlist-expiry` job.
+  The web pages are in `features/events`, `features/my-lessons/MyEventsSection.tsx` and
+  `features/admin/events`. Programme and Werkstatt provide the `EventList` and `EventDetail`
+  slots. The office CLI is `cmd/studio-schedule/events.go`.
 - **PWA & web push:** ADR 0017. The service worker is `web/src/sw.ts` (vite-plugin-pwa
   `injectManifest`; precaches the shell, never `*.wasm`, never the API), registered with the update
   toast in `web/src/pwa.ts`; offline the allow-listed query cache comes from IndexedDB

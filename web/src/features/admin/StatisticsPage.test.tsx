@@ -37,8 +37,17 @@ const stats: Statistics = {
   from: '2026-10-19',
   to: '2026-10-26',
   granularity: 'week',
+  events: [
+    {
+      eventId: '00000000-0000-7000-8000-000000000025',
+      title: 'Example Intensive',
+      registered: 7,
+      revenue: 6500,
+    },
+  ],
   totals: {
     ...figures,
+    eventFees: 2100,
     passesSold: 1,
     salesGross: 4500,
     canceledLessons: 1,
@@ -159,6 +168,11 @@ describe('StatisticsPage', () => {
     expect(
       within(tile('No-show rate')).getByText('2 of 4 with attendance taken'),
     ).toBeInTheDocument();
+    expect(within(tile('Event fees')).getByText('€21.00')).toBeInTheDocument();
+    const eventTable = within(screen.getByRole('table', { name: 'Events' }));
+    expect(eventTable.getByRole('rowheader', { name: 'Example Intensive' })).toBeInTheDocument();
+    expect(eventTable.getByText('€65.00')).toBeInTheDocument();
+    expect(eventTable.getByText('7')).toBeInTheDocument();
     expect(within(tile('Pass sales')).getByText('€45.00')).toBeInTheDocument();
     expect(within(tile('Pass sales')).getByText('1 pass sold')).toBeInTheDocument();
     expect(within(tile('Active members')).getByText('3')).toBeInTheDocument();

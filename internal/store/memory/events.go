@@ -91,9 +91,10 @@ func (r eventRepo) Delete(_ context.Context, id domain.EventID) error {
 	switch {
 	case !s.events.has(id):
 		return notFound("event")
-	case s.lessons.exists(func(l domain.Lesson) bool { return l.EventID == id }),
+	case s.announcements.exists(func(a domain.Announcement) bool { return a.EventID == id }),
+		s.lessons.exists(func(l domain.Lesson) bool { return l.EventID == id }),
 		s.eventRegistrations.exists(func(reg domain.EventRegistration) bool { return reg.EventID == id }):
-		return fmt.Errorf("event %s has sessions or registrations: %w", id, domain.ErrInUse)
+		return fmt.Errorf("event %s is referenced: %w", id, domain.ErrInUse)
 	}
 
 	s.eventImages.delete(r.tx.gen, id)
@@ -146,6 +147,32 @@ func (r eventRepo) ListByIDs(_ context.Context, ids []domain.EventID) ([]domain.
 
 		return ok
 	}), func(a, b domain.Event) int { return compareID(a.ID, b.ID) }), nil
+}
+
+func (r eventRepo) StatisticsByIDs(ctx context.Context, ids []domain.EventID) ([]store.EventStats, error) {
+	events, _ := r.ListByIDs(ctx, ids)
+	out := make([]store.EventStats, len(events))
+	index := map[domain.EventID]int{}
+	for i, e := range events {
+		out[i] = store.EventStats{EventID: e.ID, Title: e.Title}
+		index[e.ID] = i
+	}
+	for _, reg := range r.tx.state.eventRegistrations.rows {
+		i, ok := index[reg.EventID]
+		if !ok {
+			continue
+		}
+		if reg.Status == domain.EventRegistered {
+			out[i].Registered++
+		}
+		if rc, ok := r.tx.state.receipts.get(reg.ReceiptID); ok {
+			out[i].Revenue += rc.Gross
+		}
+		if rc, ok := r.tx.state.receipts.get(reg.CancellationReceiptID); ok {
+			out[i].Revenue += rc.Gross
+		}
+	}
+	return out, nil
 }
 
 // Lock needs no lock of its own: the store mutex already serialises every
@@ -375,6 +402,23 @@ func (r eventRegistrationRepo) CountsByEvents(
 	}
 
 	return out, nil
+}
+
+func (r eventRegistrationRepo) ListDueEvents(_ context.Context, now time.Time) ([]domain.EventID, error) {
+	now = instant(now)
+	due := map[domain.EventID]struct{}{}
+	for _, reg := range r.tx.state.eventRegistrations.rows {
+		if reg.Status == domain.EventInvited && !reg.ExpiresAt.After(now) {
+			due[reg.EventID] = struct{}{}
+		}
+	}
+
+	out := make([]domain.EventID, 0, len(due))
+	for id := range due {
+		out = append(out, id)
+	}
+
+	return sorted(out, compareID[domain.EventID]), nil
 }
 
 func (r eventRegistrationRepo) AnonymizeGuests(_ context.Context, endedBefore time.Time) (int, error) {

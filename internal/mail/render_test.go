@@ -685,6 +685,8 @@ func TestRenderAllTemplates(t *testing.T) {
 		mail.TemplateEventCanceled:             eventCanceledData(t),
 		mail.TemplateEventRegistered:           eventRegistrationData(t),
 		mail.TemplateEventRegistrationCanceled: eventRegistrationCanceledData(t),
+		mail.TemplateEventInvite:               eventInviteData(t),
+		mail.TemplateEventInviteExpired:        eventInviteData(t),
 		mail.TemplateTest:                      testData(),
 	}
 

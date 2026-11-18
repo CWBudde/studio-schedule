@@ -1185,6 +1185,55 @@ export const personExport = (
     },
   ],
   waitlistEntries: [],
+  eventRegistrations: [],
   passes: [],
   receipts: [],
 });
+
+/** Draft and published event views for the office, with a fictional desk registration. */
+const eventTimestamp = '2026-10-01T08:00:00Z';
+
+export const eventDraft: components['schemas']['AdminEvent'] = {
+  id: id(701),
+  slug: 'improvisation-lab',
+  title: 'Improvisation Lab',
+  courseTypeId: ids.ballet,
+  capacity: 12,
+  price: 4500,
+  vatRate: 1900,
+  status: 'draft',
+  createdAt: eventTimestamp,
+  updatedAt: eventTimestamp,
+  registered: 0,
+  invited: 0,
+  waiting: 0,
+  sessions: [],
+};
+
+export const eventSession: LessonDetail = {
+  ...lessonWorkshopOffice,
+  courseType: { id: ids.ballet, name: 'Ballet' },
+  capacity: eventDraft.capacity,
+  freePlaces: eventDraft.capacity,
+  eventId: eventDraft.id,
+  eventSlug: eventDraft.slug,
+};
+
+export const eventPublished: components['schemas']['AdminEvent'] = {
+  ...eventDraft,
+  status: 'published',
+  registered: 1,
+  sessions: [eventSession],
+};
+
+export const guestRegistration: components['schemas']['EventRegistration'] = {
+  id: id(702),
+  eventId: eventDraft.id,
+  guest: { name: 'Taylor Example', email: 'taylor@example.org' },
+  payment: 'unpaid',
+  status: 'registered',
+  price: 4500,
+  vatRate: 1900,
+  createdAt: eventTimestamp,
+  updatedAt: eventTimestamp,
+};

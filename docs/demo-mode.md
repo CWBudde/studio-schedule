@@ -91,6 +91,17 @@ which builds the same data for the fixed `seed.FixedDemoAnchor`: the term is the
 (`--anchor today` or a date moves it, `--school` picks the school). For one school only the dates
 differ between them; names, IDs and the timetable are the same.
 
+## Events in the demo
+
+Both schools have three events dated around the visit. The published contemporary intensive has
+three sessions on the next weekend and one place left. Its fee is 120.00 in the school currency
+and one registration already has a receipt. The published ballet taster is free and includes a
+guest the office registered. A showcase rehearsal remains a draft.
+
+Open Events to browse the published events. The member demo account can register a dependent for
+the last place in the intensive. The confirmation appears in the demo mailbox. Use the office
+account to view the draft, manage registrations, mark a fee paid and download the receipt.
+
 ## Receipt PDFs
 
 Receipts (ADR 0012) are rendered by the typst module built from `tools/receipt-pdf`

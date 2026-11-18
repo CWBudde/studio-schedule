@@ -71,15 +71,20 @@ type MyEvent struct {
 // opening) and not closed. Without its own close and without a scheduled
 // session both instants are zero and the window is shut.
 func signupWindow(e domain.Event, sessions []ScheduledLesson, now time.Time) (closes, cancelUntil time.Time, open bool) {
-	closes = e.SignupClosesAt
-	if closes.IsZero() {
+	var first time.Time
+	if e.SignupClosesAt.IsZero() {
 		if i := slices.IndexFunc(sessions, func(sl ScheduledLesson) bool {
 			return sl.Lesson.Status == domain.LessonScheduled
 		}); i >= 0 {
-			closes = sessions[i].Lesson.StartsAt
+			first = sessions[i].Lesson.StartsAt
 		}
 	}
 
+	return eventSignupWindow(e, first, now)
+}
+
+func eventSignupWindow(e domain.Event, first, now time.Time) (closes, cancelUntil time.Time, open bool) {
+	closes = cmp.Or(e.SignupClosesAt, first)
 	cancelUntil = cmp.Or(e.CancelUntil, closes)
 	open = e.Status == domain.EventPublished && !now.Before(e.SignupOpensAt) && !closes.IsZero() && now.Before(closes)
 
@@ -264,6 +269,7 @@ func (s *EventService) Register(
 	ctx context.Context, p Principal, event domain.EventID, person domain.PersonID,
 ) (MyEvent, error) {
 	var out MyEvent
+	var refusal error
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
 		settings, loc, err := loadSchool(ctx, tx)
@@ -287,6 +293,10 @@ func (s *EventService) Register(
 		}
 
 		now := s.clock.Now()
+		refusal = nil
+		if _, err := s.settleEventInvites(ctx, tx, e, now); err != nil {
+			return err
+		}
 
 		pe, err := publicEvent(ctx, tx, e, now)
 		if err != nil {
@@ -295,9 +305,12 @@ func (s *EventService) Register(
 
 		switch {
 		case !pe.SignupOpen:
-			return ErrEventClosed
+			refusal = ErrEventClosed
 		case pe.FreePlaces == 0:
-			return ErrEventFull
+			refusal = ErrEventFull
+		}
+		if refusal != nil {
+			return nil
 		}
 
 		r := s.newRegistration(p, e, now)
@@ -322,6 +335,10 @@ func (s *EventService) Register(
 	})
 	if err != nil {
 		return MyEvent{}, fmt.Errorf("register for event %v: %w", event, err)
+	}
+
+	if refusal != nil {
+		return MyEvent{}, fmt.Errorf("register for event %v: %w", event, refusal)
 	}
 
 	return out, nil
@@ -364,6 +381,13 @@ func (s *EventService) mailRegistration(
 		return err
 	}
 
+	return s.mailEventRegistration(ctx, tx, settings, loc, now, []recipient{rc}, template, m, refunded)
+}
+
+func (s *EventService) mailEventRegistration(
+	ctx context.Context, tx store.Tx, settings domain.Settings, loc *time.Location, now time.Time,
+	rs []recipient, template string, m MyEvent, refunded bool,
+) error {
 	r := m.Registration.Registration
 	data := mail.EventRegistrationData{
 		SchoolName: settings.SchoolName, Participant: m.Registration.Name, Title: m.Event.Event.Title,
@@ -383,7 +407,7 @@ func (s *EventService) mailRegistration(
 		data.CancelUntil = m.Event.CancelUntil.In(loc)
 	}
 
-	return sendMails(ctx, tx, s.ids, s.mails.Renderer, settings, now, []recipient{rc}, template, mailOpts{},
+	return sendMails(ctx, tx, s.ids, s.mails.Renderer, settings, now, rs, template, mailOpts{},
 		func(rc recipient) any {
 			d := data
 			d.GivenName = rc.givenName
@@ -462,6 +486,10 @@ func (s *EventService) CancelOwn(ctx context.Context, p Principal, id domain.Eve
 			return err
 		}
 
+		if err := s.offerEventPlaces(ctx, tx, e, now); err != nil {
+			return err
+		}
+
 		after, err := publicEvent(ctx, tx, e, now)
 		if err != nil {
 			return err
@@ -499,7 +527,7 @@ func (s *EventService) awaitRefund(ctx context.Context, p Principal, id domain.E
 			return err
 		}
 
-		paid = paidWithReceipt(r)
+		paid = r.Open() && paidWithReceipt(r)
 
 		return nil
 	})

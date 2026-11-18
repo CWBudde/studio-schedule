@@ -532,6 +532,9 @@ func (s *LessonService) apply(l *domain.Lesson, d LessonData, loc *time.Location
 		return err
 	}
 
+	if l.EventID.IsZero() && d.Capacity > 1000 {
+		return &domain.FieldError{Field: "capacity", Msg: "lesson capacity must not exceed 1000"}
+	}
 	start := d.Date.At(d.StartTime, loc)
 	l.StartsAt, l.EndsAt = start, start.Add(d.Duration)
 	l.RoomID, l.InstructorID, l.AccompanistID = d.RoomID, d.InstructorID, d.AccompanistID

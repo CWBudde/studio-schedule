@@ -1,0 +1,5 @@
+{{define "content" -}}
+<p>Hallo{{with .GivenName}} {{.}}{{end}},</p>
+<p>Die Platzreservierung für {{.Participant}} bei <strong>{{.Title}}</strong> ist abgelaufen. Solange die Anmeldung offen ist, kannst du dich erneut auf die Warteliste setzen.</p>
+<p>Viele Grüße<br>{{.SchoolName}}</p>
+{{- end}}

@@ -265,10 +265,13 @@
     "expiredPlain": "The place reserved for {{name}} can no longer be taken."
   },
   "participants": {
+    "registeredForEvent": "Registered for the event",
+    "noRegistrants": "Nobody is registered.",
     "title": "Participants",
     "loadError": "The participants could not be loaded.",
     "retry": "Try again",
     "counts": {
+      "registered": "{{active}} of {{capacity}} registered",
       "booked": "{{active}} of {{capacity}} booked",
       "free_one": "{{count}} place free",
       "free_other": "{{count}} places free",

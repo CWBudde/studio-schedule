@@ -371,3 +371,59 @@ The sessions lie at times and in rooms that no class, workshop or rental uses on
 fall. Nobody of a demo login's family is registered, so the member login can register a child for
 the intensive's last place. The events are built after every other record, so the records of
 the demo keep their IDs, and the fee's receipt takes the next number after the passes' receipts.
+
+## Amendment (2026-11-18): event waiting lists
+
+A member can join the waiting list for someone in their family while sign-up is open and the event
+is full. Joining creates a waiting registration with the price and VAT in effect at the time. A
+person can hold only one open registration. Members can leave the list and accept or decline an
+invitation through their account. My events includes the expiry time of an active invitation.
+
+Canceling a registration, declining an offer, increasing capacity, and expiring an invitation offer
+the available places to waiting members in creation-time and ID order. The event lock serializes
+these actions with registration and acceptance. Offer and confirmation mails go through the
+existing recipient chain. A waiting person without a reachable recipient keeps their place on
+the list. Canceling the whole event ends its waiting list with the registrations.
+
+An invitation expires at the earlier of the school's invitation duration and the event's sign-up
+close. The `waitlist-expiry` job checks due events under their individual locks, cancels expired
+offers, sends the expiry mail and offers the places to the next people. A late accept also settles
+the list under that lock. The canceled member can join again at the end of the list.
+
+The email and optional push lead to `/events/invite?token=…`. Reading the link returns the event,
+the invited person's given name and the expiry. Accept and decline are separate writes. Both clear
+the hashed token in the same transaction as the registration change, and a used or expired link
+returns 404. The link operations use the existing invite rate limit. The mail log hides the
+invitation body and prevents requeue. Signed-in changes record their actor in the audit log.
+
+## Amendment (2026-11-18): privacy and merge
+
+The office and family exports include event registration history, the price snapshot, payment
+state and receipt numbers. The export omits invitation tokens. The retention job anonymizes
+event guests 12 months after the last session ended and reports them separately from lesson guests.
+
+Person erasure cancels open registrations whose first scheduled session has yet to start.
+It leaves payments and receipts in place and offers released places to the waiting list.
+Registrations for events that already started remain associated with the anonymized person.
+
+A merge transfers registration history to the surviving person. When both persons have an open
+registration for the same event, the survivor's registration stays open. The duplicate ends
+without a refund, and any place it held goes to the waiting list. The preview rolls back these
+changes with the rest of the merge.
+
+Anonymization and merge take the affected event locks in ID order before locking persons. If an
+additional registration has appeared by the time the person is locked, the transaction retries
+from the event locks.
+
+## Amendment (2026-11-18): integration
+
+The session participant list shows the whole event's currently registered persons and guests.
+Staff see anonymized names in their own language. These rows are read-only and carry no booking or
+attendance actions. Open event invites reserve places across all sessions. A family's personal
+calendar lists a session once, names all registered family members and preserves the cancellation
+status of a canceled session.
+
+Statistics report event fees separately from pass sales. Gross fees and their refunds count on
+the issue dates of the receipts. Each event with a session in the requested range appears once,
+with its current registration count and its lifetime fee revenue after refunds. Session capacity
+and attendance are excluded from lesson booking utilization.

@@ -1,0 +1,206 @@
+{
+  "items": [
+    {
+      "id": "00000000-0000-7000-8000-00000000032f",
+      "slug": "contemporary-weekend-intensive",
+      "title": "Contemporary Weekend Intensive",
+      "description": "Three sessions over one weekend: floor work, release technique and a short piece to take home. For dancers with some contemporary experience.",
+      "courseTypeId": "00000000-0000-7000-8000-000000000055",
+      "capacity": 12,
+      "price": 12000,
+      "vatRate": 1900,
+      "status": "published",
+      "createdAt": "2026-09-08T07:00:00Z",
+      "updatedAt": "2026-09-08T07:00:00Z",
+      "registered": 11,
+      "invited": 0,
+      "waiting": 0,
+      "sessions": [
+        {
+          "id": "00000000-0000-7000-8000-000000000330",
+          "startsAt": "2026-09-26T14:00:00Z",
+          "endsAt": "2026-09-26T16:30:00Z",
+          "status": "scheduled",
+          "kind": "workshop",
+          "visibility": "public",
+          "capacity": 12,
+          "courseType": {
+            "id": "00000000-0000-7000-8000-000000000055",
+            "name": "Contemporary"
+          },
+          "room": {
+            "id": "00000000-0000-7000-8000-000000000046",
+            "name": "Hall 1",
+            "position": 1
+          },
+          "location": {
+            "id": "00000000-0000-7000-8000-000000000045",
+            "name": "Studio South"
+          },
+          "instructor": {
+            "id": "00000000-0000-7000-8000-00000000004a",
+            "displayName": "Marco Wrenfield"
+          },
+          "eventId": "00000000-0000-7000-8000-00000000032f",
+          "eventSlug": "contemporary-weekend-intensive"
+        },
+        {
+          "id": "00000000-0000-7000-8000-000000000331",
+          "startsAt": "2026-09-27T08:00:00Z",
+          "endsAt": "2026-09-27T10:30:00Z",
+          "status": "scheduled",
+          "kind": "workshop",
+          "visibility": "public",
+          "capacity": 12,
+          "courseType": {
+            "id": "00000000-0000-7000-8000-000000000055",
+            "name": "Contemporary"
+          },
+          "room": {
+            "id": "00000000-0000-7000-8000-000000000046",
+            "name": "Hall 1",
+            "position": 1
+          },
+          "location": {
+            "id": "00000000-0000-7000-8000-000000000045",
+            "name": "Studio South"
+          },
+          "instructor": {
+            "id": "00000000-0000-7000-8000-00000000004a",
+            "displayName": "Marco Wrenfield"
+          },
+          "eventId": "00000000-0000-7000-8000-00000000032f",
+          "eventSlug": "contemporary-weekend-intensive"
+        },
+        {
+          "id": "00000000-0000-7000-8000-000000000332",
+          "startsAt": "2026-09-27T14:00:00Z",
+          "endsAt": "2026-09-27T16:00:00Z",
+          "status": "scheduled",
+          "kind": "workshop",
+          "visibility": "public",
+          "capacity": 12,
+          "courseType": {
+            "id": "00000000-0000-7000-8000-000000000055",
+            "name": "Contemporary"
+          },
+          "room": {
+            "id": "00000000-0000-7000-8000-000000000046",
+            "name": "Hall 1",
+            "position": 1
+          },
+          "location": {
+            "id": "00000000-0000-7000-8000-000000000045",
+            "name": "Studio South"
+          },
+          "instructor": {
+            "id": "00000000-0000-7000-8000-00000000004a",
+            "displayName": "Marco Wrenfield"
+          },
+          "eventId": "00000000-0000-7000-8000-00000000032f",
+          "eventSlug": "contemporary-weekend-intensive"
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-7000-8000-00000000033f",
+      "slug": "open-ballet-taster",
+      "title": "Open Ballet Taster",
+      "description": "A free ballet class with live piano for anyone who wants to try ballet. No experience needed; comfortable clothes are fine.",
+      "courseTypeId": "00000000-0000-7000-8000-000000000053",
+      "capacity": 20,
+      "price": 0,
+      "vatRate": 1900,
+      "status": "published",
+      "createdAt": "2026-09-08T07:00:00Z",
+      "updatedAt": "2026-09-08T07:00:00Z",
+      "registered": 3,
+      "invited": 0,
+      "waiting": 0,
+      "sessions": [
+        {
+          "id": "00000000-0000-7000-8000-000000000340",
+          "startsAt": "2026-10-04T08:30:00Z",
+          "endsAt": "2026-10-04T10:00:00Z",
+          "status": "scheduled",
+          "kind": "workshop",
+          "visibility": "public",
+          "capacity": 20,
+          "courseType": {
+            "id": "00000000-0000-7000-8000-000000000053",
+            "name": "Classical Ballet"
+          },
+          "room": {
+            "id": "00000000-0000-7000-8000-000000000046",
+            "name": "Hall 1",
+            "position": 1
+          },
+          "location": {
+            "id": "00000000-0000-7000-8000-000000000045",
+            "name": "Studio South"
+          },
+          "instructor": {
+            "id": "00000000-0000-7000-8000-00000000004c",
+            "displayName": "Lea Moonfield"
+          },
+          "accompanist": {
+            "id": "00000000-0000-7000-8000-000000000050",
+            "displayName": "Greta Ivorylane"
+          },
+          "eventId": "00000000-0000-7000-8000-00000000033f",
+          "eventSlug": "open-ballet-taster"
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-7000-8000-000000000344",
+      "slug": "summer-showcase-rehearsal",
+      "title": "Summer Showcase Rehearsal",
+      "description": "The first rehearsal for the summer showcase.",
+      "courseTypeId": "00000000-0000-7000-8000-000000000053",
+      "capacity": 16,
+      "price": 0,
+      "vatRate": 1900,
+      "status": "draft",
+      "createdAt": "2026-09-20T07:00:00Z",
+      "updatedAt": "2026-09-20T07:00:00Z",
+      "registered": 0,
+      "invited": 0,
+      "waiting": 0,
+      "sessions": [
+        {
+          "id": "00000000-0000-7000-8000-000000000345",
+          "startsAt": "2026-10-18T08:00:00Z",
+          "endsAt": "2026-10-18T10:00:00Z",
+          "status": "scheduled",
+          "kind": "workshop",
+          "visibility": "public",
+          "capacity": 16,
+          "courseType": {
+            "id": "00000000-0000-7000-8000-000000000053",
+            "name": "Classical Ballet"
+          },
+          "room": {
+            "id": "00000000-0000-7000-8000-000000000042",
+            "name": "Studio A",
+            "position": 1
+          },
+          "location": {
+            "id": "00000000-0000-7000-8000-000000000041",
+            "name": "Studio North"
+          },
+          "instructor": {
+            "id": "00000000-0000-7000-8000-000000000048",
+            "displayName": "Alina Starling"
+          },
+          "accompanist": {
+            "id": "00000000-0000-7000-8000-00000000004f",
+            "displayName": "Felix Keysworth"
+          },
+          "eventId": "00000000-0000-7000-8000-000000000344",
+          "eventSlug": "summer-showcase-rehearsal"
+        }
+      ]
+    }
+  ]
+}

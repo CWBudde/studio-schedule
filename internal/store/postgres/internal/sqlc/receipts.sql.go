@@ -597,10 +597,12 @@ func (q *Queries) NextReceiptSequence(ctx context.Context, year int32) (int32, e
 
 const receiptTotalsByDay = `-- name: ReceiptTotalsByDay :many
 SELECT issue_date, currency,
-    count(*) FILTER (WHERE kind = 'sale') AS sales,
-    count(*) FILTER (WHERE kind = 'cancellation') AS cancellations,
-    sum(gross)::bigint AS gross
-FROM receipts
+    count(*) FILTER (WHERE kind = 'sale' AND reg.id IS NULL) AS sales,
+    count(*) FILTER (WHERE kind = 'cancellation' AND reg.id IS NULL) AS cancellations,
+    coalesce(sum(gross) FILTER (WHERE reg.id IS NULL), 0)::bigint AS gross,
+    coalesce(sum(gross) FILTER (WHERE reg.id IS NOT NULL), 0)::bigint AS event_fees
+FROM receipts r
+LEFT JOIN event_registrations reg ON reg.receipt_id = coalesce(r.cancels_receipt_id, r.id)
 WHERE issue_date BETWEEN $1::date AND $2::date
     AND year BETWEEN extract(year FROM $1::date)::integer
         AND extract(year FROM $2::date)::integer
@@ -619,6 +621,7 @@ type ReceiptTotalsByDayRow struct {
 	Sales         int64
 	Cancellations int64
 	Gross         int64
+	EventFees     int64
 }
 
 // There is no index on issue_date. The year bounds, implied by the dates
@@ -640,6 +643,7 @@ func (q *Queries) ReceiptTotalsByDay(ctx context.Context, arg ReceiptTotalsByDay
 			&i.Sales,
 			&i.Cancellations,
 			&i.Gross,
+			&i.EventFees,
 		); err != nil {
 			return nil, err
 		}

@@ -75,6 +75,18 @@ export function PersonsPage() {
             <Link
               to="/admin/persons/$personId"
               params={{ personId: info.row.original.id }}
+              onClick={(event) => {
+                // The list can stay mounted while the person page loads.
+                if (
+                  event.button === 0 &&
+                  !event.altKey &&
+                  !event.ctrlKey &&
+                  !event.metaKey &&
+                  !event.shiftKey
+                ) {
+                  clearTimeout(timer.current);
+                }
+              }}
               className="font-medium underline-offset-4 hover:underline focus-visible:underline"
             >
               {info.getValue()}

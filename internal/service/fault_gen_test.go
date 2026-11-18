@@ -2188,6 +2188,14 @@ type faultEventRepo struct {
 	f *FaultStore
 }
 
+func (r *faultEventRepo) StatisticsByIDs(a0 context.Context, a1 []domain.EventID) (r0 []store.EventStats, err error) {
+	if err = r.f.hit("Events.StatisticsByIDs"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRepo.StatisticsByIDs(a0, a1)
+}
+
 func (r *faultEventRepo) Get(a0 context.Context, a1 domain.EventID) (r0 domain.Event, err error) {
 	if err = r.f.hit("Events.Get"); err != nil {
 		return r0, err
@@ -2351,6 +2359,14 @@ func (r *faultEventRegistrationRepo) CountsByEvents(a0 context.Context, a1 []dom
 	}
 
 	return r.EventRegistrationRepo.CountsByEvents(a0, a1, a2)
+}
+
+func (r *faultEventRegistrationRepo) ListDueEvents(a0 context.Context, a1 time.Time) (r0 []domain.EventID, err error) {
+	if err = r.f.hit("EventRegistrations.ListDueEvents"); err != nil {
+		return r0, err
+	}
+
+	return r.EventRegistrationRepo.ListDueEvents(a0, a1)
 }
 
 func (r *faultEventRegistrationRepo) AnonymizeGuests(a0 context.Context, a1 time.Time) (r0 int, err error) {

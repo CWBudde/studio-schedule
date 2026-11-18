@@ -66,7 +66,7 @@ func registerAnnouncements(api huma.API, h *handlers) {
 			"breaks normalized to `\\n`, trimmed, no control characters but line breaks and tabs, no invisible "+
 			"format characters but the zero-width joiners; a 422 on the field otherwise). With `email`, it is "+
 			"mailed once to its audience, each address once, in its account's language: at once if it publishes "+
-			"now, else at `publishAt`. Guests without an account are not reached. A school day has at most %d "+
+			"now, else at `publishAt`. Registered event guests are emailed for event and session audiences. A school day has at most %d "+
 			"emailed announcements, sent and scheduled together; beyond that a 409 `mail-limit`. An unknown "+
 			"class, course type or lesson is a 422 on its field.",
 			domain.MaxAnnouncementTitleLen, domain.MaxAnnouncementBodyLen, domain.AnnouncementMailsPerDay),
@@ -105,7 +105,8 @@ func registerAnnouncements(api huma.API, h *handlers) {
 
 // AnnouncementAudienceData names whom an announcement is for.
 type AnnouncementAudienceData struct {
-	Audience     string              `doc:"everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: those booked for the lesson. Persons are reached through their guardians too." enum:"everyone,role,class,course-type,lesson" json:"audience"`
+	EventID      domain.EventID      `doc:"The event; only with audience event." json:"eventId,omitzero" required:"false"`
+	Audience     string              `doc:"everyone: every account; role: the accounts of role; class: the members of the class and those booked for one of its lessons that is not over; course-type: the same for every class (of a term not ended) and lesson of the course type; lesson: its participants; event: its registered participants. Persons are reached through their guardians too." enum:"everyone,role,class,course-type,lesson,event" json:"audience"`
 	Role         string              `doc:"The role; only with audience role." enum:"member,instructor,office,admin" json:"role,omitempty" required:"false"`
 	ClassID      domain.ClassID      `doc:"The class; only with audience class." json:"classId,omitzero" required:"false"`
 	CourseTypeID domain.CourseTypeID `doc:"The course type; only with audience course-type." json:"courseTypeId,omitzero" required:"false"`
@@ -115,7 +116,7 @@ type AnnouncementAudienceData struct {
 func (d AnnouncementAudienceData) service() service.AnnouncementAudience {
 	return service.AnnouncementAudience{
 		Audience: domain.Audience(d.Audience), Role: domain.Role(d.Role), ClassID: d.ClassID,
-		CourseTypeID: d.CourseTypeID, LessonID: d.LessonID,
+		CourseTypeID: d.CourseTypeID, LessonID: d.LessonID, EventID: d.EventID,
 	}
 }
 
@@ -180,6 +181,7 @@ type Announcement struct {
 	ID domain.AnnouncementID `doc:"Announcement ID." json:"id"`
 	AnnouncementData
 
+	EventTitle      string              `doc:"Title of the event for an event audience." json:"eventTitle,omitempty"`
 	Author          string              `doc:"Name of the author; absent if it can no longer be found." json:"author,omitempty"`
 	Class           *AnnouncementClass  `doc:"The class; only with audience class." json:"class,omitempty"`
 	CourseType      *CourseTypeRef      `doc:"The course type; only with audience course-type." json:"courseType,omitempty"`
@@ -335,11 +337,11 @@ func (h *handlers) announcementOutput(
 func announcementBody(e service.AnnouncementEntry) Announcement {
 	a := e.Announcement
 	out := Announcement{
-		ID: a.ID,
+		ID: a.ID, EventTitle: e.Event.Title,
 		AnnouncementData: AnnouncementData{
 			AnnouncementAudienceData: AnnouncementAudienceData{
 				Audience: string(a.Audience), Role: string(a.Role), ClassID: a.ClassID, CourseTypeID: a.CourseTypeID,
-				LessonID: a.LessonID,
+				LessonID: a.LessonID, EventID: a.EventID,
 			},
 			Title: a.Title, Body: a.Body, PublishAt: a.PublishAt, ExpiresAt: a.ExpiresAt, Email: a.Email,
 		},

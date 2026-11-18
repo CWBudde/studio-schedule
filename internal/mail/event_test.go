@@ -287,3 +287,47 @@ func TestEventRegistrationDataValidate(t *testing.T) {
 		t.Errorf("valid data: %v", err)
 	}
 }
+
+func eventInviteData(t *testing.T) mail.EventInviteData {
+	t.Helper()
+
+	return mail.EventInviteData{
+		SchoolName: "Studio Example", GivenName: "Anna", Title: "Imaginary Workshop", Participant: "Mia Example",
+		ExpiresAt: time.Date(2026, time.July, 4, 9, 0, 0, 0, berlin(t)),
+		Link:      "https://example.org/events/invite?token=test",
+	}
+}
+
+func TestRenderEventInviteGolden(t *testing.T) {
+	t.Parallel()
+
+	r := newRenderer(t)
+	for _, template := range []string{mail.TemplateEventInvite, mail.TemplateEventInviteExpired} {
+		for _, locale := range []string{"en", "de"} {
+			t.Run(template+"/"+locale, func(t *testing.T) {
+				t.Parallel()
+
+				data := eventInviteData(t)
+				if template == mail.TemplateEventInviteExpired {
+					data.Link = ""
+				}
+
+				got, err := r.Render(locale, template, data)
+				if err != nil {
+					t.Fatal(err)
+				}
+				golden(t, locale+"/"+template+".subject.golden", got.Subject+"\n")
+				golden(t, locale+"/"+template+".txt.golden", got.Text)
+				golden(t, locale+"/"+template+".html.golden", got.HTML)
+
+				if template == mail.TemplateEventInvite {
+					text, err := r.RenderPush(locale, template, data)
+					if err != nil {
+						t.Fatal(err)
+					}
+					golden(t, locale+"/"+template+".push.golden", text.Title+"\n"+text.Body+"\n")
+				}
+			})
+		}
+	}
+}

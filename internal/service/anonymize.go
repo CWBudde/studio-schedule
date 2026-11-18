@@ -70,7 +70,7 @@ type AnonymizeSummary struct {
 func (s *PersonService) Anonymize(ctx context.Context, p Principal, id domain.PersonID) (AnonymizeSummary, error) {
 	var sum AnonymizeSummary
 
-	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+	err := personEventsTx(ctx, s.store, func(ctx context.Context, tx store.Tx) error {
 		var err error
 
 		sum, err = s.anonymize(ctx, tx, p, id)
@@ -84,15 +84,20 @@ func (s *PersonService) Anonymize(ctx context.Context, p Principal, id domain.Pe
 	return sum, nil
 }
 
-// anonymize does the work of Anonymize. The lock order is the persons
+// anonymize does the work of Anonymize. Event locks are taken before the persons
 // (lockAnonymizeTarget), the terms and classes of its memberships, the
 // lessons of its bookings that have not started and of its open
-// waiting-list entries, and the passes (persons → term → class → lesson →
+// waiting-list entries, and the passes (event → persons → term → class → lesson →
 // passes).
 func (s *PersonService) anonymize(
 	ctx context.Context, tx store.Tx, p Principal, id domain.PersonID,
 ) (AnonymizeSummary, error) {
 	var sum AnonymizeSummary
+
+	events, err := lockPersonEvents(ctx, tx, false, id)
+	if err != nil {
+		return sum, err
+	}
 
 	t, err := lockAnonymizeTarget(ctx, tx, id)
 	if err != nil {
@@ -113,6 +118,11 @@ func (s *PersonService) anonymize(
 	}
 
 	if err := soleGuardianCheck(ctx, tx, id, t.dependents); err != nil {
+		return sum, err
+	}
+
+	regs, err := lockedPersonRegistrations(ctx, tx, events, false, id)
+	if err != nil {
 		return sum, err
 	}
 
@@ -159,6 +169,13 @@ func (s *PersonService) anonymize(
 		}
 
 		sum.AccountDeleted = true
+		// Account deletion already cleared these references in the store.
+		// Keep the locked registration copies in sync before writing them.
+		for i := range regs {
+			if regs[i].RegisteredBy == t.account.ID {
+				regs[i].RegisteredBy = domain.AccountID{}
+			}
+		}
 	}
 
 	dismissals, err := tx.DuplicateDismissals().ListByPerson(ctx, id)
@@ -178,6 +195,10 @@ func (s *PersonService) anonymize(
 	}
 
 	if err := tx.Persons().Update(ctx, sum.Person); err != nil {
+		return sum, err
+	}
+
+	if err := s.cancelFutureEventRegistrations(ctx, tx, events, regs, now); err != nil {
 		return sum, err
 	}
 

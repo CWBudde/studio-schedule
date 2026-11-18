@@ -78,7 +78,8 @@ func (r announcementRepo) put(a domain.Announcement) error {
 	case !s.accounts.has(a.AuthorID),
 		!a.ClassID.IsZero() && !s.classes.has(a.ClassID),
 		!a.CourseTypeID.IsZero() && !s.courseTypes.has(a.CourseTypeID),
-		!a.LessonID.IsZero() && !s.lessons.has(a.LessonID):
+		!a.LessonID.IsZero() && !s.lessons.has(a.LessonID),
+		!a.EventID.IsZero() && !s.events.has(a.EventID):
 		return conflict("announcement references a missing record")
 	}
 

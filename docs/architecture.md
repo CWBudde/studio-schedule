@@ -179,6 +179,29 @@ data would grow by thousands of rows a day. For the command line, the Runner lis
 now under the same lock (`RunNow`; an unknown name is `domain.ErrNotFound`, a held lock
 `domain.ErrConflict`).
 
+## Events
+
+[ADR 0019](decisions/0019-events-and-workshops.md) defines an event with its own capacity, price,
+sign-up window and cancellation deadline. Its sessions are workshop lessons linked by
+`Lesson.EventID`. The school publishes the event and its sessions together. Members register
+themselves or their dependents for the whole event. The office can also register guests.
+
+`EventService` checks capacity under the event lock. Registered people and open invitations
+occupy places. When a place opens, the service offers it to the next reachable person on the
+waiting list. Mail and push are queued in the same transaction. The existing `waitlist-expiry`
+job expires event invitations and offers freed places. The emailed link can accept or decline an
+offer once.
+
+The office marks a fee paid at the desk. The payment and receipt commit together, using the
+same gapless series as passes. Refunds issue a cancellation receipt. A family can download both
+PDFs from My events, based on whose registration the receipt belongs to.
+
+The schedule links sessions to their event. Event participants appear in session participant
+lists and receive relevant announcements. The family's bookings calendar includes its event
+sessions. Statistics report event fees and registrations separately from pass sales and lesson
+utilization. Event registrations are included in the person data export and follow the rules
+for anonymization, retention and merging in [Privacy](privacy.md).
+
 ## Statistics
 
 The office's statistics (`GET /api/v1/admin/statistics`, `service.StatisticsService`) are computed

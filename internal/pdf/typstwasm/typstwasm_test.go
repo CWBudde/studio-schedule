@@ -297,3 +297,45 @@ func TestEmbeddedModuleMatchesPin(t *testing.T) {
 		t.Fatalf("receipt.wasm has sha256 %s, receipt.wasm.sha256 pins %s (just typst-wasm; git lfs pull)", got, want)
 	}
 }
+
+func TestEventReceiptGolden(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile("testdata/receipt.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const description = "Contemporary-Intensivkurs für Lea Öztürk, 24.10.2026–25.10.2026"
+	line := []byte("10er-Karte für Lea Öztürk (gültig 24.10.2026–21.04.2027)")
+	if !bytes.Contains(data, line) {
+		t.Fatal("receipt fixture no longer contains the sample line")
+	}
+	in, err := pdf.Input(bytes.Replace(data, line, []byte(description), 1), logo(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out := render(t, in)
+	visible, err := pdftext.Text(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.ReplaceAll(strings.Join(strings.Fields(visible), " "), "– ", "–"), description) {
+		t.Errorf("rendered receipt is missing the event line: %s", visible)
+	}
+
+	const golden = "testdata/event-receipt.pdf.sha256"
+	if *update {
+		if err := os.WriteFile(golden, []byte(sum(out)+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sum(out); got != strings.TrimSpace(string(want)) {
+		t.Errorf("sha256 %s, golden %s", got, strings.TrimSpace(string(want)))
+	}
+}

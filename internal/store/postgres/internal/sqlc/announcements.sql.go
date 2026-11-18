@@ -33,8 +33,8 @@ func (q *Queries) CountAnnouncementsScheduledForMail(ctx context.Context, arg Co
 const createAnnouncement = `-- name: CreateAnnouncement :exec
 INSERT INTO announcements (
     id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at,
-    email, emailed_at, email_recipients, mail_cursor, created_at, updated_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+    email, emailed_at, email_recipients, mail_cursor, created_at, updated_at, event_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 `
 
 type CreateAnnouncementParams struct {
@@ -55,6 +55,7 @@ type CreateAnnouncementParams struct {
 	MailCursor      pgtype.Text
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
+	EventID         pgtype.UUID
 }
 
 func (q *Queries) CreateAnnouncement(ctx context.Context, arg CreateAnnouncementParams) error {
@@ -76,6 +77,7 @@ func (q *Queries) CreateAnnouncement(ctx context.Context, arg CreateAnnouncement
 		arg.MailCursor,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.EventID,
 	)
 	return err
 }
@@ -132,7 +134,7 @@ func (q *Queries) DismissAnnouncement(ctx context.Context, arg DismissAnnounceme
 }
 
 const getAnnouncement = `-- name: GetAnnouncement :one
-SELECT id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at, email, emailed_at, email_recipients, mail_cursor, created_at, updated_at FROM announcements WHERE id = $1
+SELECT id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at, email, emailed_at, email_recipients, mail_cursor, created_at, updated_at, event_id FROM announcements WHERE id = $1
 `
 
 func (q *Queries) GetAnnouncement(ctx context.Context, id pgtype.UUID) (Announcement, error) {
@@ -156,6 +158,7 @@ func (q *Queries) GetAnnouncement(ctx context.Context, id pgtype.UUID) (Announce
 		&i.MailCursor,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EventID,
 	)
 	return i, err
 }
@@ -198,7 +201,7 @@ func (q *Queries) ListAnnouncementMailings(ctx context.Context, arg ListAnnounce
 }
 
 const listAnnouncements = `-- name: ListAnnouncements :many
-SELECT id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at, email, emailed_at, email_recipients, mail_cursor, created_at, updated_at FROM announcements ORDER BY publish_at DESC, id DESC
+SELECT id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at, email, emailed_at, email_recipients, mail_cursor, created_at, updated_at, event_id FROM announcements ORDER BY publish_at DESC, id DESC
 `
 
 func (q *Queries) ListAnnouncements(ctx context.Context) ([]Announcement, error) {
@@ -228,6 +231,7 @@ func (q *Queries) ListAnnouncements(ctx context.Context) ([]Announcement, error)
 			&i.MailCursor,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EventID,
 		); err != nil {
 			return nil, err
 		}
@@ -240,7 +244,7 @@ func (q *Queries) ListAnnouncements(ctx context.Context) ([]Announcement, error)
 }
 
 const listAnnouncementsDueForMail = `-- name: ListAnnouncementsDueForMail :many
-SELECT id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at, email, emailed_at, email_recipients, mail_cursor, created_at, updated_at FROM announcements
+SELECT id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at, email, emailed_at, email_recipients, mail_cursor, created_at, updated_at, event_id FROM announcements
 WHERE email AND emailed_at IS NULL AND publish_at <= $1
 ORDER BY publish_at, id
 LIMIT $2
@@ -280,6 +284,7 @@ func (q *Queries) ListAnnouncementsDueForMail(ctx context.Context, arg ListAnnou
 			&i.MailCursor,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EventID,
 		); err != nil {
 			return nil, err
 		}
@@ -323,7 +328,7 @@ func (q *Queries) ListDismissedAnnouncements(ctx context.Context, arg ListDismis
 }
 
 const listShownAnnouncements = `-- name: ListShownAnnouncements :many
-SELECT id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at, email, emailed_at, email_recipients, mail_cursor, created_at, updated_at FROM announcements
+SELECT id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at, email, emailed_at, email_recipients, mail_cursor, created_at, updated_at, event_id FROM announcements
 WHERE publish_at <= $1 AND (expires_at IS NULL OR expires_at > $1)
 ORDER BY publish_at DESC, id DESC
 `
@@ -355,6 +360,7 @@ func (q *Queries) ListShownAnnouncements(ctx context.Context, now pgtype.Timesta
 			&i.MailCursor,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EventID,
 		); err != nil {
 			return nil, err
 		}
@@ -367,7 +373,7 @@ func (q *Queries) ListShownAnnouncements(ctx context.Context, now pgtype.Timesta
 }
 
 const lockAnnouncement = `-- name: LockAnnouncement :one
-SELECT id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at, email, emailed_at, email_recipients, mail_cursor, created_at, updated_at FROM announcements WHERE id = $1 FOR UPDATE
+SELECT id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at, email, emailed_at, email_recipients, mail_cursor, created_at, updated_at, event_id FROM announcements WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockAnnouncement(ctx context.Context, id pgtype.UUID) (Announcement, error) {
@@ -391,6 +397,7 @@ func (q *Queries) LockAnnouncement(ctx context.Context, id pgtype.UUID) (Announc
 		&i.MailCursor,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EventID,
 	)
 	return i, err
 }
@@ -439,7 +446,7 @@ func (q *Queries) SetAnnouncementMailState(ctx context.Context, arg SetAnnouncem
 const updateAnnouncement = `-- name: UpdateAnnouncement :execrows
 UPDATE announcements
 SET author_id = $2, title = $3, body = $4, audience = $5, role = $6, class_id = $7, course_type_id = $8,
-    lesson_id = $9, publish_at = $10, expires_at = $11, email = $12, created_at = $13, updated_at = $14
+    lesson_id = $9, publish_at = $10, expires_at = $11, email = $12, created_at = $13, updated_at = $14, event_id = $15
 WHERE id = $1
 `
 
@@ -458,6 +465,7 @@ type UpdateAnnouncementParams struct {
 	Email        bool
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
+	EventID      pgtype.UUID
 }
 
 // Everything but the mail state, which only SetAnnouncementMailState writes.
@@ -477,6 +485,7 @@ func (q *Queries) UpdateAnnouncement(ctx context.Context, arg UpdateAnnouncement
 		arg.Email,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.EventID,
 	)
 	if err != nil {
 		return 0, err

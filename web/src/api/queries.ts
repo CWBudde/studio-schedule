@@ -1723,6 +1723,220 @@ export const removeClassMemberMutation = (queryClient: QueryClient) =>
     onSettled: onMembersSettled(queryClient),
   });
 
+export type AdminEvent = components['schemas']['AdminEvent'];
+export type EventData = components['schemas']['EventData'];
+export type EventSessionData = components['schemas']['EventSessionData'];
+export type EventRegistration = components['schemas']['EventRegistration'];
+export type AddEventRegistrationData = components['schemas']['AddEventRegistrationData'];
+export type EventPaymentData = components['schemas']['EventPaymentData'];
+export type EventImageData = components['schemas']['EventImagePutInputBody'];
+
+const adminEventsKey = [...adminQueryKey, 'events'] as const;
+
+export const adminEventsQuery = queryOptions({
+  queryKey: [...adminEventsKey, 'list'],
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/admin/events', { signal }))).items,
+});
+
+const adminEventKey = (eventId: string) => [...adminEventsKey, 'one', eventId] as const;
+
+export const adminEventQuery = (eventId: string) =>
+  queryOptions({
+    queryKey: adminEventKey(eventId),
+    queryFn: ({ signal }) =>
+      unwrap(api.GET('/api/v1/admin/events/{eventId}', { params: { path: { eventId } }, signal })),
+  });
+
+export const eventRegistrationsQuery = (eventId: string) =>
+  queryOptions({
+    queryKey: [...adminEventKey(eventId), 'registrations'],
+    queryFn: async ({ signal }) =>
+      (
+        await unwrap(
+          api.GET('/api/v1/admin/events/{eventId}/registrations', {
+            params: { path: { eventId } },
+            signal,
+          }),
+        )
+      ).items,
+  });
+
+export const adminEventImageQuery = (eventId: string, digest: string | undefined) =>
+  queryOptions({
+    queryKey: [...adminEventKey(eventId), 'image', digest],
+    enabled: digest !== undefined,
+    queryFn: ({ signal }) =>
+      unwrapOrNull(
+        404,
+        api.GET('/api/v1/admin/events/{eventId}/image', {
+          params: { path: { eventId } },
+          parseAs: 'blob',
+          signal,
+        }),
+      ) as Promise<Blob | null>,
+  });
+
+function refreshEvent(queryClient: QueryClient, eventId: string, { deleted = false } = {}) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: adminEventsQuery.queryKey }),
+    queryClient.invalidateQueries({
+      queryKey: adminEventKey(eventId),
+      refetchType: deleted ? 'none' : 'active',
+    }),
+    queryClient.invalidateQueries({ queryKey: eventsKey }),
+    queryClient.invalidateQueries({ queryKey: myEventsQuery.queryKey }),
+  ]);
+}
+
+function refreshEventLessons(queryClient: QueryClient, eventId: string, deleted = false) {
+  return Promise.all([
+    refreshEvent(queryClient, eventId, { deleted }),
+    refreshLessons(queryClient),
+  ]);
+}
+
+export const createEventMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (body: EventData) => unwrap(api.POST('/api/v1/admin/events', { body })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminEventsQuery.queryKey }),
+  });
+
+export const updateEventMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ eventId, body }: { eventId: string; body: EventData }) =>
+      unwrap(api.PUT('/api/v1/admin/events/{eventId}', { params: { path: { eventId } }, body })),
+    onSuccess: (event) => refreshEventLessons(queryClient, event.id),
+  });
+
+export const deleteEventMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: (eventId: string) =>
+      expectOk(api.DELETE('/api/v1/admin/events/{eventId}', { params: { path: { eventId } } })),
+    onSuccess: (_, eventId) => refreshEventLessons(queryClient, eventId, true),
+  });
+
+export const publishEventMutation = (queryClient: QueryClient, publish: boolean) =>
+  mutationOptions({
+    mutationFn: (eventId: string) =>
+      unwrap(
+        api.POST(
+          publish
+            ? '/api/v1/admin/events/{eventId}/publish'
+            : '/api/v1/admin/events/{eventId}/unpublish',
+          { params: { path: { eventId } } },
+        ),
+      ),
+    onSuccess: (event) => refreshEventLessons(queryClient, event.id),
+  });
+
+export const cancelEventMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ eventId, body }: { eventId: string; body: LessonCancelData }) =>
+      unwrap(
+        api.POST('/api/v1/admin/events/{eventId}/cancel', { params: { path: { eventId } }, body }),
+      ),
+    onSuccess: (event) =>
+      Promise.all([refreshEventLessons(queryClient, event.id), refreshEventReceipts(queryClient)]),
+  });
+
+export const addEventSessionMutation = (queryClient: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ eventId, body }: { eventId: string; body: EventSessionData }) =>
+      unwrap(
+        api.POST('/api/v1/admin/events/{eventId}/sessions', {
+          params: { path: { eventId } },
+          body,
+        }),
+      ),
+    onSuccess: (_, { eventId }) => refreshEventLessons(queryClient, eventId),
+  });
+
+export const putEventImageMutation = (queryClient: QueryClient, eventId: string) =>
+  mutationOptions({
+    mutationFn: (body: EventImageData) =>
+      expectOk(
+        api.PUT('/api/v1/admin/events/{eventId}/image', { params: { path: { eventId } }, body }),
+      ),
+    onSuccess: () => refreshEvent(queryClient, eventId),
+  });
+
+export const deleteEventImageMutation = (queryClient: QueryClient, eventId: string) =>
+  mutationOptions({
+    mutationFn: () =>
+      expectOk(
+        api.DELETE('/api/v1/admin/events/{eventId}/image', { params: { path: { eventId } } }),
+      ),
+    onSuccess: () => refreshEvent(queryClient, eventId),
+  });
+
+function refreshEventRegistrations(queryClient: QueryClient, eventId: string) {
+  return Promise.all([
+    refreshEvent(queryClient, eventId),
+    queryClient.invalidateQueries({ queryKey: scheduleQueryKey }),
+    queryClient.invalidateQueries({ queryKey: ['lesson'] }),
+    queryClient.invalidateQueries({ queryKey: demoMailboxQuery.queryKey }),
+    queryClient.invalidateQueries({ queryKey: [...adminQueryKey, 'mails'] }),
+  ]);
+}
+
+function refreshEventReceipts(queryClient: QueryClient) {
+  return Promise.all(
+    [receiptsKey, myReceiptsQuery.queryKey, [...adminQueryKey, 'statistics']].map((queryKey) =>
+      queryClient.invalidateQueries({ queryKey }),
+    ),
+  );
+}
+
+export const addEventRegistrationMutation = (queryClient: QueryClient, eventId: string) =>
+  mutationOptions({
+    mutationFn: (body: AddEventRegistrationData) =>
+      unwrap(
+        api.POST('/api/v1/admin/events/{eventId}/registrations', {
+          params: { path: { eventId } },
+          body,
+        }),
+      ),
+    onSuccess: () => refreshEventRegistrations(queryClient, eventId),
+  });
+
+export const markEventRegistrationPaidMutation = (
+  queryClient: QueryClient,
+  registrationId: string,
+) =>
+  mutationOptions({
+    mutationFn: (body: EventPaymentData) =>
+      unwrap(
+        api.POST('/api/v1/admin/event-registrations/{registrationId}/pay', {
+          params: { path: { registrationId } },
+          body,
+        }),
+      ),
+    onSuccess: ({ registration }) =>
+      Promise.all([
+        refreshEventRegistrations(queryClient, registration.eventId),
+        refreshEventReceipts(queryClient),
+      ]),
+  });
+
+export const cancelEventRegistrationAsOfficeMutation = (
+  queryClient: QueryClient,
+  registrationId: string,
+) =>
+  mutationOptions({
+    mutationFn: (refund: boolean) =>
+      unwrap(
+        api.POST('/api/v1/admin/event-registrations/{registrationId}/cancel', {
+          params: { path: { registrationId } },
+          body: { refund },
+        }),
+      ),
+    onSuccess: (registration) =>
+      Promise.all([
+        refreshEventRegistrations(queryClient, registration.eventId),
+        refreshEventReceipts(queryClient),
+      ]),
+  });
+
 /** The editable fields of a lesson (updateLesson); no `accompanistId` means none. */
 export type LessonData = PutBody<'/api/v1/lessons/{lessonId}'>;
 /** A new one-off lesson: the fields of a lesson and its course type. */
@@ -1787,6 +2001,12 @@ export function refusedAt(
   return (body?.errors ?? []).some((e) => e.location === location);
 }
 
+function refreshChangedLesson(queryClient: QueryClient, lesson: { eventId?: string }) {
+  return lesson.eventId
+    ? refreshEventLessons(queryClient, lesson.eventId)
+    : refreshLessons(queryClient);
+}
+
 /**
  * The errors of a lesson write. A 404 means the lesson is gone, and a 422
  * at `path.lessonId` that it has started meanwhile: either way, the lessons
@@ -1822,7 +2042,7 @@ export const updateLessonMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: ({ lessonId, body }: { lessonId: string; body: LessonData }) =>
       unwrap(api.PUT('/api/v1/lessons/{lessonId}', { params: { path: { lessonId } }, body })),
-    onSuccess: () => refreshLessons(queryClient),
+    onSuccess: (lesson) => refreshChangedLesson(queryClient, lesson),
     onError: onLessonError(queryClient),
   });
 
@@ -1833,7 +2053,7 @@ export const cancelLessonMutation = (queryClient: QueryClient) =>
       unwrap(
         api.POST('/api/v1/lessons/{lessonId}/cancel', { params: { path: { lessonId } }, body }),
       ),
-    onSuccess: () => refreshLessons(queryClient),
+    onSuccess: (lesson) => refreshChangedLesson(queryClient, lesson),
     onError: onLessonError(queryClient),
   });
 
@@ -1848,7 +2068,7 @@ export const restoreLessonMutation = (queryClient: QueryClient) =>
       unwrap(
         api.POST('/api/v1/lessons/{lessonId}/restore', { params: { path: { lessonId } }, body }),
       ),
-    onSuccess: () => refreshLessons(queryClient),
+    onSuccess: (lesson) => refreshChangedLesson(queryClient, lesson),
     onError: onLessonError(queryClient),
   });
 
@@ -1860,7 +2080,13 @@ export const deleteLessonMutation = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (lessonId: string) =>
       expectOk(api.DELETE('/api/v1/lessons/{lessonId}', { params: { path: { lessonId } } })),
-    onSuccess: (_: void, lessonId: string) => refreshLessons(queryClient, { except: lessonId }),
+    onSuccess: (_: void, lessonId: string) => {
+      const eventId = queryClient.getQueryData(lessonQuery(lessonId).queryKey)?.eventId;
+      return Promise.all([
+        refreshLessons(queryClient, { except: lessonId }),
+        eventId ? refreshEvent(queryClient, eventId) : undefined,
+      ]);
+    },
     onError: onLessonError(queryClient),
   });
 
@@ -3194,4 +3420,117 @@ export const cancelReceiptMutation = (queryClient: QueryClient) =>
         queryClient.invalidateQueries({ queryKey: myReceiptsQuery.queryKey }),
         refreshPasses(queryClient),
       ]),
+  });
+
+export type PublicEvent = components['schemas']['Event'];
+export type MyEvent = components['schemas']['MyEvent'];
+
+const eventsKey = ['events'] as const;
+
+export const eventsQuery = queryOptions({
+  queryKey: eventsKey,
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/events', { signal }))).items,
+});
+
+export const eventQuery = (slug: string) =>
+  queryOptions({
+    queryKey: [...eventsKey, slug],
+    queryFn: ({ signal }) =>
+      unwrap(api.GET('/api/v1/events/{slug}', { params: { path: { slug } }, signal })),
+  });
+
+export const eventImageQuery = (slug: string, hasImage: boolean) =>
+  queryOptions({
+    queryKey: [...eventsKey, slug, 'image'],
+    enabled: hasImage,
+    queryFn: ({ signal }) =>
+      unwrapOrNull(
+        404,
+        api.GET('/api/v1/events/{slug}/image', {
+          params: { path: { slug } },
+          parseAs: 'blob',
+          signal,
+        }),
+      ) as Promise<Blob | null>,
+  });
+
+export const myEventsQuery = queryOptions({
+  queryKey: ['my-events'],
+  queryFn: async ({ signal }) => (await unwrap(api.GET('/api/v1/my/events', { signal }))).items,
+});
+
+function refreshMemberEvents(client: QueryClient) {
+  return Promise.all([
+    client.invalidateQueries({ queryKey: eventsKey }),
+    client.invalidateQueries({ queryKey: myEventsQuery.queryKey }),
+    client.invalidateQueries({ queryKey: adminEventsKey }),
+    client.invalidateQueries({ queryKey: myReceiptsQuery.queryKey }),
+    refreshLessons(client, { history: false }),
+  ]);
+}
+
+export const registerForEventMutation = (client: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({
+      slug,
+      personId,
+      waiting,
+    }: {
+      slug: string;
+      personId: string;
+      waiting: boolean;
+    }) =>
+      unwrap(
+        api.POST(
+          waiting ? '/api/v1/events/{slug}/waitlist' : '/api/v1/events/{slug}/registrations',
+          { params: { path: { slug } }, body: { personId } },
+        ),
+      ),
+    onSettled: () => refreshMemberEvents(client),
+  });
+
+const eventRegistrationPaths = {
+  cancel: '/api/v1/event-registrations/{registrationId}/cancel',
+  leave: '/api/v1/event-registrations/{registrationId}/leave',
+  accept: '/api/v1/event-registrations/{registrationId}/accept',
+  decline: '/api/v1/event-registrations/{registrationId}/decline',
+} as const;
+
+export type EventRegistrationAction = keyof typeof eventRegistrationPaths;
+
+export const eventRegistrationMutation = (client: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({
+      registrationId,
+      action,
+    }: {
+      registrationId: string;
+      action: EventRegistrationAction;
+    }) =>
+      unwrap(api.POST(eventRegistrationPaths[action], { params: { path: { registrationId } } })),
+    onSettled: () => refreshMemberEvents(client),
+  });
+
+export const eventInviteQuery = (token: string) =>
+  queryOptions({
+    queryKey: ['event-invite', token],
+    queryFn: ({ signal }) =>
+      unwrap(api.GET('/api/v1/event-invites/{token}', { params: { path: { token } }, signal })),
+    retry: false,
+    gcTime: 0,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+export const respondToEventInviteMutation = (client: QueryClient) =>
+  mutationOptions({
+    mutationFn: ({ token, accept }: { token: string; accept: boolean }) =>
+      expectOk(
+        api.POST(
+          accept ? '/api/v1/event-invites/{token}/accept' : '/api/v1/event-invites/{token}/decline',
+          { params: { path: { token } } },
+        ),
+      ),
+    onSuccess: () => refreshMemberEvents(client),
   });

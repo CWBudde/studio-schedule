@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, type Locator, type Page, test as base } from '@playwright/test';
 
 /** A demo school (web/src/features/demo/school.ts). */
@@ -63,7 +64,7 @@ export async function gotoDemo(page: Page, path = '/'): Promise<void> {
   // A linked lesson opens as a modal sheet, which hides the page heading.
   await expect(
     page.getByRole('heading', { level: 1 }).or(page.getByRole('dialog')).first(),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('heading', { name: 'Demo crashed — reload' })).toHaveCount(0);
 }
 
@@ -176,4 +177,15 @@ export function savedStore(page: Page): Promise<string> {
 /** Waits until the saved data contains `text`, i.e. a change has been saved. */
 export async function waitForSaved(page: Page, text: string): Promise<void> {
   await expect.poll(() => savedStore(page), { timeout: 10_000 }).toContain(text);
+}
+
+/** Clicks `button` and checks that it downloads a PDF. */
+export async function expectPdfDownload(page: Page, click: () => Promise<void>) {
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 60_000 }),
+    click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/\.pdf$/);
+  const bytes = await readFile((await download.path())!);
+  expect(bytes.subarray(0, 4).toString('latin1')).toBe('%PDF');
 }

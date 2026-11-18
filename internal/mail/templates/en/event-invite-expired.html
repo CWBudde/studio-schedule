@@ -1,0 +1,5 @@
+{{define "content" -}}
+<p>Hello{{with .GivenName}} {{.}}{{end}},</p>
+<p>The reserved place for {{.Participant}} in <strong>{{.Title}}</strong> has expired. You can join the waiting list again while sign-up is open.</p>
+<p>Kind regards,<br>{{.SchoolName}}</p>
+{{- end}}

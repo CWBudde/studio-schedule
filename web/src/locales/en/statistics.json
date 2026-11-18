@@ -21,6 +21,8 @@
     "invalid": "This range cannot be shown. Choose at most {{count}} days, the end not before the start."
   },
   "tiles": {
+    "eventFees": "Event fees",
+    "eventFeesDetail": "after refunds",
     "label": "Totals of the range",
     "bookings": "Bookings",
     "bookingsDetail_one": "in {{count}} lesson",
@@ -55,6 +57,10 @@
     "noData": "Nothing in this range."
   },
   "tables": {
+    "events": "Events",
+    "event": "Event",
+    "registered": "Registered",
+    "revenue": "Fees after refunds",
     "periodsByWeek": "By week",
     "periodsByMonth": "By month",
     "classes": "By class",
