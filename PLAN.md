@@ -1402,11 +1402,14 @@ backends.
 - [ ] API areas, each done when its conformance cases pass on PHP with PostgreSQL, MySQL and
       MariaDB:
   - [ ] Public settings, schedule and visibility, release window (ADR 0003). PHP serves the
-        settings, branding images, schedule and lesson reads on all three database engines. The
-        settings, schedule and lesson JSON matched Go on a shared PostgreSQL fixture at the root
-        and under a prefix.
+        settings, branding images, schedule and lesson reads on all three database engines.
     - [x] Public catalogue lists, upcoming events, and the web manifest.
           The shared OpenAPI scenario passes on PostgreSQL, MySQL and MariaDB at both mount paths.
+    - [x] Cover schedule and lesson reads, the release window, and role-based visibility in the
+          PHP test suite on PostgreSQL, MySQL and MariaDB. The settings, schedule and lesson JSON
+          also matched Go on a shared PostgreSQL fixture at the root and under a prefix.
+    - [ ] Pass the shared `schedule_release_and_visibility` scenario on PHP at both mount paths
+          on all three engines. The scenario signs in a member to verify the visibility rules.
   - [ ] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006). PHP serves
         `/api/v1/auth/me` and reads sessions issued by Go. Sign-in, rate limits and the remaining
         account operations are open, including requesting a replacement password reset link by
@@ -1442,12 +1445,12 @@ backends.
 - [ ] Release zip, built by CI: `public/` and `app/` (production `vendor/`, the built web UI, both
       migration sets), a GPL-2.0 notice and mPDF's licence (the zip bundles mPDF; `php/` stays
       MIT), and the container image (PHP-FPM + nginx)
-- [ ] Tests: PHPUnit for services and stores on PostgreSQL, MySQL 8.0 and MariaDB 10.6 via Docker
-      (like `just test-pg`), concurrency cases for capacity, redemption and receipt numbers
-      against each real database, the Playwright suite `web/e2e-server` against the PHP backend,
-      PHPStan at max level, PHP-CS-Fixer, `just ci` and CI running all of it; PHP coverage
-      (PHPUnit with PCOV) reported after every run and gated like Go: 95 % of all statements, 80 %
-      per namespace
+- [ ] Tests.
+  - [x] Run PHPUnit service and store tests on PostgreSQL, MySQL 8.0 and MariaDB 10.6 via Docker,
+        with PHPStan at max level, PHP-CS-Fixer, and PCOV coverage gates of 95 % of all statements
+        and 80 % per namespace. `just php-test` and the PHP CI job run these checks.
+  - [ ] Add concurrency cases for capacity, redemption and receipt numbers on each real database,
+        run `web/e2e-server` against PHP, and include all checks in `just ci` and CI.
 - [ ] Docs: deployment on shared hosting (upload, document root or subdirectory, cron,
       `SETUP_TOKEN` and the installer, upgrades) and in a container (docs/operations.md), choosing
       a backend and a database, switching with `db:copy`, ADR 0001 amended (the WASM demo stays
