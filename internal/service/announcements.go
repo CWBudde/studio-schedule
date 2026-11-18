@@ -204,7 +204,8 @@ func (s *AnnouncementService) Create(ctx context.Context, p Principal, in Announ
 }
 
 // Update changes an announcement that has not expired
-// (ErrAnnouncementExpired otherwise). A draft stays one while in.Draft is
+// (ErrAnnouncementExpired otherwise; a draft is edited whatever its
+// expiry, which must lie in the future again). A draft stays one while in.Draft is
 // set, and is published like a new one without it; a published one never
 // becomes a draft again (a field error on draft). One whose mailing has begun (emailed,
 // or being sent) stays emailed and is not emailed again, whatever in.Email
@@ -230,8 +231,10 @@ func (s *AnnouncementService) Update(
 			return err
 		}
 
+		// A draft was never shown: its expiry is corrected before it is
+		// published (write refuses one still in the past).
 		now = s.clock.Now()
-		if a.ExpiredAt(now) {
+		if !a.Draft() && a.ExpiredAt(now) {
 			return ErrAnnouncementExpired
 		}
 

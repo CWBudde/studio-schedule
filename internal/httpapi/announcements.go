@@ -52,17 +52,20 @@ func registerAnnouncements(api huma.API, h *handlers) {
 		Method:      http.MethodGet,
 		Path:        BasePath + "/admin/announcements",
 		Summary:     "List all announcements",
-		Description: "Returns every announcement, scheduled and expired ones included, newest publication first.",
-		Tags:        []string{"announcements"},
+		Description: "Returns every announcement, drafts, scheduled and expired ones included: the drafts first, then " +
+			"newest publication first.",
+		Tags: []string{"announcements"},
 	}, h.listAllAnnouncements)
 
 	register(api, AccessOffice, write(huma.Operation{
 		OperationID: "createAnnouncement",
 		Method:      http.MethodPost,
 		Path:        BasePath + "/admin/announcements",
-		Summary:     "Publish an announcement",
+		Summary:     "Publish an announcement or save a draft",
 		Description: fmt.Sprintf("Publishes an announcement at `publishAt` (default: now) until `expiresAt` "+
-			"(optional). The title is one line of 1 to %d characters, the text plain text of 1 to %d (line "+
+			"(optional), or with `draft` saves it as a draft without `publishAt` (a 422 with one): neither "+
+			"shown nor mailed, and not counted in the daily limit, until an update without `draft` publishes "+
+			"it. The title is one line of 1 to %d characters, the text plain text of 1 to %d (line "+
 			"breaks normalized to `\\n`, trimmed, no control characters but line breaks and tabs, no invisible "+
 			"format characters but the zero-width joiners; a 422 on the field otherwise). With `email`, it is "+
 			"mailed once to its audience, each address once, in its account's language: at once if it publishes "+
@@ -79,8 +82,10 @@ func registerAnnouncements(api huma.API, h *handlers) {
 		Path:        BasePath + "/admin/announcements/{announcementId}",
 		Summary:     "Update an announcement",
 		Description: "Replaces an announcement's fields, like `createAnnouncement`, until it expires; an expired " +
-			"one is a 409 `expired`. An edit never mails again: one emailed already stays emailed, whatever " +
-			"`email` says; one not emailed yet is emailed like a new one.",
+			"one is a 409 `expired`. A draft stays one with `draft` and is published like a new one without it; " +
+			"its expiry may have passed, but the new one must lie in the future. A published announcement " +
+			"never becomes a draft again (a 422 on `draft`). An edit never mails again: one emailed already " +
+			"stays emailed, whatever `email` says; one not emailed yet is emailed like a new one.",
 	}), h.updateAnnouncement)
 
 	register(api, AccessOffice, write(huma.Operation{

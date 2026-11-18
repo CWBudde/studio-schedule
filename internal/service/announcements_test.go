@@ -925,4 +925,19 @@ func TestAnnouncementDraft(t *testing.T) {
 	if err != nil || !slices.Contains(titles(got), "Other draft") {
 		t.Errorf("Anna sees %q, %v; want the published draft", titles(got), err)
 	}
+
+	// A draft whose expiry has passed is still edited: kept, it is
+	// refused like a new one; extended, it is saved.
+	lapsing := emailed("Lapsing draft", true)
+	lapsing.ExpiresAt = now.Add(time.Minute)
+	stale := f.create(t, svc, lapsing)
+	later := f.serviceAt(t, now.Add(time.Hour))
+
+	_, err = later.Update(ctx, stale.ID, lapsing)
+	wantFieldError(t, err, "expiresAt")
+
+	lapsing.ExpiresAt = now.Add(2 * time.Hour)
+	if e, err := later.Update(ctx, stale.ID, lapsing); err != nil || !e.Announcement.Draft() {
+		t.Errorf("extend lapsed draft = %+v, %v; want a draft", e.Announcement, err)
+	}
 }

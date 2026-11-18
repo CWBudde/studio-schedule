@@ -161,8 +161,10 @@ no place in the daily limit of emailed announcements. It has no mail state (a ch
 The office's list puts the drafts first.
 
 The office saves one with "Save as draft" in the announcement form (`draft: true` on
-`createAnnouncement` or `updateAnnouncement`; a `publishAt` beside it is a 422 on `body.publishAt`).
-It edits the draft like any announcement and publishes it with the form's "Publish" (a write
+`createAnnouncement` or `updateAnnouncement`; a `publishAt` beside it is a 422 on `body.publishAt`;
+the form then ignores its publication fields). It edits the draft like any announcement, even once
+its expiry has passed (it was never shown, so the 409 `expired` does not apply; the new expiry must
+lie in the future), and publishes it with the form's "Publish" (a write
 without `draft`). Publishing takes `publishAt`, or now when there is none, checks the expiry and
 the daily limit like a new announcement, and wakes the mail job if it is due now. A published
 announcement never becomes a draft again (422 on `body.draft`). The assistant saves drafts too, and
