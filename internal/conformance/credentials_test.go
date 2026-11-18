@@ -3,6 +3,7 @@ package conformance
 import (
 	"bytes"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -18,14 +19,36 @@ func recoverPassword(t *testing.T, b *backend) {
 	original := browser(t)
 	visitor := browser(t)
 	login(t, b, original, demoMember, demoPassword)
-	reset := request{
-		method: http.MethodPost, path: "/api/v1/auth/password-reset",
-		body: `{"email":"` + demoMember + `","locale":"de"}`,
+	const resetPath = "/api/v1/auth/password-reset"
+	const unknownEmail = "unknown-reset@example.test"
+	reset := request{method: http.MethodPost, path: resetPath, body: `{"email":""}`}
+	b.call(t, visitor, reset, http.StatusUnprocessableEntity)
+	reset.body = `{"Email":"` + unknownEmail + `","Locale":null}`
+	unknown := b.call(t, visitor, reset, http.StatusAccepted)
+	outbox := read[struct{ Mails []struct{ To string } }](t, b.fixture(t, http.MethodGet, "outbox", "", http.StatusOK))
+	for _, mail := range outbox.Mails {
+		if mail.To == unknownEmail {
+			t.Fatal("password recovery queued a mail for an unknown address")
+		}
 	}
+
+	reset.body = `{"email":" ` + strings.ToUpper(demoMember) + ` ","locale":"de"}`
+	known := b.call(t, visitor, reset, http.StatusAccepted)
+	if !bytes.Equal(unknown.body, known.body) {
+		t.Fatal("the password-reset response depends on whether the account exists")
+	}
+	staleToken := mailToken(t, b, demoMember, "reset-password", "/reset-password")
+
+	b.fixture(t, http.MethodPut, "clock", `{"now":"2026-10-23T16:00:01Z"}`, http.StatusNoContent)
 	b.call(t, visitor, reset, http.StatusAccepted)
 	token := mailToken(t, b, demoMember, "reset-password", "/reset-password")
+	if token == staleToken {
+		t.Fatal("a new reset request must issue a different token")
+	}
 
 	reset.path += "/confirm"
+	reset.body = `{"token":"` + staleToken + `","password":"a discarded fixture password"}`
+	b.call(t, visitor, reset, http.StatusGone)
 	reset.body = `{"token":"` + token + `","password":"Sunshine"}`
 	weak := b.call(t, visitor, reset, http.StatusUnprocessableEntity)
 	if !bytes.Contains(weak.body, []byte("body.password")) {
@@ -42,6 +65,16 @@ func recoverPassword(t *testing.T, b *backend) {
 		body: `{"email":"` + demoMember + `","password":"` + demoPassword + `"}`,
 	}, http.StatusUnauthorized)
 	login(t, b, visitor, demoMember, newPassword)
+
+	reset.path = resetPath
+	reset.body = `{"email":"` + unknownEmail + `"}`
+	for range 2 {
+		b.call(t, visitor, reset, http.StatusAccepted)
+	}
+	limited := b.call(t, visitor, reset, http.StatusTooManyRequests)
+	if limited.header.Get("Retry-After") == "" {
+		t.Error("rate-limited password recovery lacked Retry-After")
+	}
 }
 
 func loginRateLimit(t *testing.T, b *backend) {
