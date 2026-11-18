@@ -1382,7 +1382,9 @@ backends.
       an empty database, creates the settings and the first admin as `init` does, then refuses a
       second admin. Upgrades: lists pending migrations and applies them after an admin signs in
       there (token plus an admin's email and password against the existing tables); migrations
-      never run on their own. Offers `db:copy`
+      never run on their own. MySQL/MariaDB upgrades require a verified full backup. If an
+      upgrade stops after the recovery marker is written, the database stays in maintenance
+      until the operator restores that backup. Offers `db:copy`
 - [ ] API areas, each done when its conformance cases pass on PHP with PostgreSQL, MySQL and
       MariaDB:
   - [ ] Public settings, schedule and visibility, release window (ADR 0003)

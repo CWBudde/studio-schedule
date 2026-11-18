@@ -133,6 +133,16 @@ then lists the pending migrations and applies them after an admin signs in on th
 token plus an admin's email and password, checked against the existing tables). Migrations never
 run by themselves, so a school can back up first. `db:copy` is offered on the same page.
 
+MySQL and MariaDB can commit schema changes before the full upgrade finishes. Before upgrading
+either engine, stop writes from the site and scheduled jobs, then take and verify a full
+pre-upgrade backup. Keep those writers stopped until the upgrade or restore finishes.
+The migration runner records a recovery marker in the database before executing schema changes
+and clears it after the entire batch succeeds. If an upgrade stops with that marker in place,
+the API stays in maintenance mode, readiness fails, and subsequent migration attempts are
+refused. Replace the affected database with the full pre-upgrade backup, including
+`goose_db_version`, before retrying. For an interrupted first install, start over with a fresh
+empty database. PostgreSQL applies its upgrade in a transaction and rolls back on failure.
+
 ### A subdirectory install, in both backends
 
 A school may install the app at the root of a domain or subdomain, or in a subdirectory
@@ -165,7 +175,7 @@ production. It is not part of `api/openapi.json`.
 ### Coverage
 
 PHP coverage (PHPUnit with PCOV) is reported after every run and gated like Go's: 95 % of all
-statements, 80 % per namespace.
+statements, 80 % per namespace across all three supported database engines.
 
 ## Consequences
 

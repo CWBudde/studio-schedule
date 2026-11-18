@@ -6,6 +6,7 @@ namespace StudioSchedule\Service;
 
 use Doctrine\DBAL\Exception;
 use Psr\Log\LoggerInterface;
+use StudioSchedule\Store\MigrationRecoveryRequired;
 use StudioSchedule\Store\Schema;
 
 final readonly class DatabaseReadiness implements Readiness
@@ -25,7 +26,7 @@ final readonly class DatabaseReadiness implements Readiness
 
         try {
             return $this->schema->appliedVersions() === $this->expectedVersions;
-        } catch (Exception $error) {
+        } catch (Exception|MigrationRecoveryRequired $error) {
             $this->logger->debug('database is not ready', ['exception' => $error::class]);
 
             return false;

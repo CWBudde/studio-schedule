@@ -16,11 +16,13 @@ esac
 image=studio-schedule-php-tests
 network="studio-schedule-php-$$"
 container=
+coverage_dir=$(mktemp -d "${TMPDIR:-/tmp}/studio-schedule-php-coverage.XXXXXXXX")
 cleanup() {
 	if [[ -n $container ]]; then
 		docker rm -f "$container" >/dev/null 2>&1 || true
 	fi
 	docker network rm "$network" >/dev/null 2>&1 || true
+	rm -rf -- "$coverage_dir"
 }
 trap cleanup EXIT
 
@@ -40,6 +42,7 @@ run_php "$image" composer analyse -- --no-progress
 run_php "$image" composer check-format
 
 docker network create "$network" >/dev/null
+reports=()
 for engine in "${engines[@]}"; do
 	container="$network-$engine"
 	case "$engine" in
@@ -80,9 +83,17 @@ for engine in "${engines[@]}"; do
 	fi
 
 	echo "PHP 8.3 on $engine"
-	run_php --network "$network" -e "STUDIO_PHP_TEST_DATABASE_URL=$dsn" "$image" sh -ec '
-		php vendor/bin/phpunit --coverage-clover /tmp/php-coverage.xml
-		php tools/check-coverage.php /tmp/php-coverage.xml'
+	report="/coverage/$engine.php"
+	run_php --network "$network" -e "STUDIO_PHP_TEST_DATABASE_URL=$dsn" \
+		-v "$coverage_dir:/coverage" "$image" php vendor/bin/phpunit --coverage-php "$report"
+	reports+=("$report")
 	docker rm -f "$container" >/dev/null
 	container=
 done
+
+# Each engine executes only its own SQL paths. Gate the union of the
+# supported engines and keep single-engine runs for focused verification.
+if [[ ${#engines[@]} == 3 ]]; then
+	reports=(--gate "${reports[@]}")
+fi
+run_php -v "$coverage_dir:/coverage:ro" "$image" php tools/check-coverage.php "${reports[@]}"
