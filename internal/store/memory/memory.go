@@ -13,6 +13,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"slices"
 	"sync"
@@ -357,6 +358,20 @@ func (r settingsRepo) Get(context.Context) (domain.Settings, error) {
 	}
 
 	return *r.tx.state.settings, nil
+}
+
+func (r settingsRepo) Create(_ context.Context, s domain.Settings) error {
+	if err := r.tx.checkWritable(); err != nil {
+		return err
+	}
+
+	if r.tx.state.settings != nil {
+		return fmt.Errorf("settings already exist: %w", domain.ErrDuplicate)
+	}
+
+	r.tx.state.settings = &s
+
+	return nil
 }
 
 func (r settingsRepo) Put(_ context.Context, s domain.Settings) error {

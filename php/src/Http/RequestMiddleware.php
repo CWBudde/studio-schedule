@@ -51,6 +51,9 @@ final readonly class RequestMiddleware implements MiddlewareInterface
         ]);
 
         $response = Responses::secure($response, $id);
+        if ($localPath === '/setup') {
+            $response = $response->withHeader('Referrer-Policy', 'no-referrer');
+        }
         if ($this->config->secure) {
             $hsts = 'max-age=31536000' . ($this->config->hstsSubdomains ? '; includeSubDomains' : '');
             $response = $response->withHeader('Strict-Transport-Security', $hsts);

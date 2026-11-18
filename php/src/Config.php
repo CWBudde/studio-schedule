@@ -20,6 +20,8 @@ final readonly class Config
         public string $databaseURL,
         #[\SensitiveParameter]
         public string $metricsToken,
+        #[\SensitiveParameter]
+        public string $setupToken,
         public string $logFormat,
         public string $logLevel,
         public TrustedProxies $trustedProxies,
@@ -54,6 +56,7 @@ final readonly class Config
             self::boolean('HSTS_INCLUDE_SUBDOMAINS', $get('HSTS_INCLUDE_SUBDOMAINS'), true),
             $get('DATABASE_URL'),
             $get('METRICS_TOKEN'),
+            $get('SETUP_TOKEN'),
             $logFormat,
             $logLevel,
             TrustedProxies::parse($get('TRUSTED_PROXIES')),

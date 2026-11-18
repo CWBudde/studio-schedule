@@ -1,0 +1,22 @@
+Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+deine Buchung bei {{ SchoolName }} ist bestätigt:
+
+Gebucht für: {{ Participant }}
+{%- for lesson in Lessons ~%}
+
+{{ lesson.CourseType }}
+{{ lesson.StartsAt|mail_date(locale) }}, {{ lesson.StartsAt|mail_clock }}–{{ lesson.EndsAt|mail_clock }} Uhr
+{{ lesson.Room }}, {{ lesson.Location }}
+{%- endfor ~%}
+
+{% if Guest -%}
+Falls der Termin doch nicht passt, sag bitte rechtzeitig bei {{ SchoolName }} ab, damit jemand
+anderes den Platz bekommt.
+{%- else -%}
+Falls der Termin doch nicht passt, storniere die Buchung bitte rechtzeitig, damit jemand
+anderes den Platz bekommt.
+{%- endif ~%}
+
+Viele Grüße
+{{ SchoolName }}

@@ -1,0 +1,10 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>{{ SchoolName }} hat ein Konto für dich angelegt. Um dein Passwort zu wählen und das Konto zu aktivieren, öffne diesen Link.</p>
+<p><a href="{{ Link|mail_url }}" style="display:inline-block;padding:10px 20px;border-radius:6px;background-color:#18181b;color:#ffffff;text-decoration:none;">Passwort wählen</a></p>
+<p>Falls die Schaltfläche nicht funktioniert, öffne diesen Link in deinem Browser:<br><a href="{{ Link|mail_url }}" style="color:#18181b;word-break:break-all;">{{ Link }}</a></p>
+<p>Der Link ist {% if ExpiresHours == 1 %}1 Stunde{% else %}{{ ExpiresHours }} Stunden{% endif %} gültig. Ist er abgelaufen, fordere auf der Anmeldeseite über „Passwort vergessen?“ einen neuen an.</p>
+<p>Falls du diese E-Mail nicht erwartet hast, kannst du sie ignorieren.</p>
+<p>Viele Grüße<br>{{ SchoolName }}</p>
+{%- endblock %}

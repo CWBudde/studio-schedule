@@ -1,0 +1,12 @@
+Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+{{ SchoolName }} has an announcement{% if Participants is not empty %} for {{ Participants|join(', ') }}{% endif %}:
+
+{{ Title }}
+
+{{ Message }}
+
+You also find it in the app under Announcements on the home page.
+
+Kind regards,
+{{ SchoolName }}

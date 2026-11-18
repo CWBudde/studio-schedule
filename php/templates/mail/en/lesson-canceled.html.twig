@@ -1,0 +1,10 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>Unfortunately, this lesson at {{ SchoolName }} is canceled:</p>
+<p><strong>{{ CourseType }}</strong><br>{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }}<br>{{ Room }}, {{ Location }}<br>Booked for: {{ Participants|join(', ') }}</p>
+{%- if Note is not empty ~%}
+<p>Note from {{ SchoolName }}: {{ Note }}</p>
+{%- endif ~%}
+<p>Kind regards,<br>{{ SchoolName }}</p>
+{%- endblock %}

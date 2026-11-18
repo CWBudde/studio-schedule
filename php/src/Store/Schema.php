@@ -6,6 +6,7 @@ namespace StudioSchedule\Store;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use RuntimeException;
 use UnexpectedValueException;
 
 final readonly class Schema
@@ -49,6 +50,34 @@ final readonly class Schema
             : 'SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()';
 
         return array_values(array_filter($this->connection->fetchFirstColumn($sql), is_string(...)));
+    }
+
+    /**
+     * @param array<int,string> $files Ordered by migration version.
+     * @return array{applied:list<int>,pending:array<int,string>,hasHistory:bool}
+     */
+    public function migrationState(array $files): array
+    {
+        if ($files === []) {
+            throw new RuntimeException('The release has no migration files');
+        }
+
+        $relations = $this->relations();
+        $hasHistory = in_array('goose_db_version', $relations, true);
+        $applied = $hasHistory ? $this->appliedVersions() : [];
+        $versions = array_keys($files);
+        if ($applied !== array_slice($versions, 0, count($applied))) {
+            throw new RuntimeException('Database migration history does not match this release');
+        }
+        if ($applied === [] && array_diff($relations, ['goose_db_version']) !== []) {
+            throw new RuntimeException('An existing database is missing its migration history');
+        }
+
+        return [
+            'applied' => $applied,
+            'pending' => array_slice($files, count($applied), preserve_keys: true),
+            'hasHistory' => $hasHistory,
+        ];
     }
 
     /** @return list<int> */

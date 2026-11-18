@@ -30,6 +30,7 @@ final readonly class StaticFiles
     public function serve(string $path, ServerRequestInterface $request): ?ResponseInterface
     {
         if ($path === '/api' || str_starts_with($path, '/api/') || str_starts_with($path, '/ical/')
+            || $path === '/setup' || str_starts_with($path, '/setup/')
             || str_contains($path, "\0") || preg_match('#/(?:\.|\.\.)(?:/|$)#', $path) === 1) {
             return null;
         }

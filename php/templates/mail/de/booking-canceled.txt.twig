@@ -1,0 +1,17 @@
+Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+{% if Lessons|length == 1 %}diese Buchung bei {{ SchoolName }} ist storniert:{% else %}diese Buchungen bei {{ SchoolName }} sind storniert:{% endif ~%}
+
+Gebucht für: {{ Participant }}
+{%- for lesson in Lessons ~%}
+
+{{ lesson.CourseType }}
+{{ lesson.StartsAt|mail_date(locale) }}, {{ lesson.StartsAt|mail_clock }}–{{ lesson.EndsAt|mail_clock }} Uhr
+{{ lesson.Room }}, {{ lesson.Location }}
+{%- if lesson.Late ~%}
+Späte Absage: nach der Abmeldefrist
+{%- endif ~%}
+{%- endfor ~%}
+
+Viele Grüße
+{{ SchoolName }}

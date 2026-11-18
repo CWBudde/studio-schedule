@@ -115,14 +115,10 @@ func (s *SetupService) Init(ctx context.Context, d SetupData) (SetupResult, erro
 	}
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		switch _, err := tx.Settings().Get(ctx); {
-		case err == nil:
+		switch err := tx.Settings().Create(ctx, settings); {
+		case errors.Is(err, domain.ErrDuplicate):
 			return ErrAlreadySetUp
-		case !errors.Is(err, domain.ErrNotFound):
-			return err
-		}
-
-		if err := tx.Settings().Put(ctx, settings); err != nil {
+		case err != nil:
 			return err
 		}
 

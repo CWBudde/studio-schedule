@@ -1,0 +1,22 @@
+Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+leider hat {{ SchoolName }} diese Veranstaltung abgesagt:
+
+{{ Title }}
+{%- if SeveralDays ~%}
+{{ FirstDay|mail_date(locale) }} – {{ LastDay|mail_date(locale) }}
+{%- elseif HasDates ~%}
+{{ FirstDay|mail_date(locale) }}
+{%- endif ~%}
+Angemeldet: {{ Participants|join(', ') }}
+{%- if Note is not empty ~%}
+
+Hinweis von {{ SchoolName }}: {{ Note }}
+{%- endif ~%}
+{%- if Refunded ~%}
+
+Die gezahlte Gebühr wird erstattet. Den Stornobeleg bekommst du mit einer eigenen E-Mail.
+{%- endif ~%}
+
+Viele Grüße
+{{ SchoolName }}

@@ -1,0 +1,8 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>gute Nachricht: Diese Stunde bei {{ SchoolName }} findet doch statt. Bitte beachte Zeit und Ort, sie können sich seit der Absage geändert haben:</p>
+<p><strong>{{ CourseType }}</strong><br>{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }} Uhr<br>{{ Room }}, {{ Location }}<br>Gebucht für: {{ Participants|join(', ') }}</p>
+<p>Deine Buchung bleibt bestehen.</p>
+<p>Viele Grüße<br>{{ SchoolName }}</p>
+{%- endblock %}

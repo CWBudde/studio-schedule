@@ -1381,7 +1381,8 @@ backends.
       `minishlink/web-push` against the RFC 8291 vectors of `internal/webpush`
       PHP now shares the common-password list and its Argon2id hashes verify in both backends.
       The PSR-20 system clock and the money, date and wall-time values have parity tests,
-      including DST gaps and repeated times.
+      including DST gaps and repeated times. The Twig renderer and iCalendar writer match the Go
+      golden files. Receipt rendering and web push are open.
 - [ ] Web installer at `<base>/setup`, only while `SETUP_TOKEN` is set and with the token on every
       request: checks PHP version, extensions, the database and a writable log directory, migrates
       an empty database, creates the settings and the first admin as `init` does, then refuses a
@@ -1389,7 +1390,10 @@ backends.
       there (token plus an admin's email and password against the existing tables); migrations
       never run on their own. MySQL/MariaDB upgrades require a verified full backup. If an
       upgrade stops after the recovery marker is written, the database stays in maintenance
-      until the operator restores that backup. Offers `db:copy`
+      until the operator restores that backup. Offers `db:copy`.
+      The mounted installer performs first setup and administrator-authorized upgrades. Its
+      one-time first-admin link uses the PHP password reset confirmation endpoint. Requesting a
+      replacement reset link by email and copying the database remain open.
 - [ ] API areas, each done when its conformance cases pass on PHP with PostgreSQL, MySQL and
       MariaDB:
   - [ ] Public settings, schedule and visibility, release window (ADR 0003)

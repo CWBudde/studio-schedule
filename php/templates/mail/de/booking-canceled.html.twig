@@ -1,0 +1,10 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>{% if Lessons|length == 1 %}diese Buchung bei {{ SchoolName }} ist storniert:{% else %}diese Buchungen bei {{ SchoolName }} sind storniert:{% endif %}</p>
+<p>Gebucht für: {{ Participant }}</p>
+{%- for lesson in Lessons ~%}
+<p><strong>{{ lesson.CourseType }}</strong><br>{{ lesson.StartsAt|mail_date(locale) }}, {{ lesson.StartsAt|mail_clock }}–{{ lesson.EndsAt|mail_clock }} Uhr<br>{{ lesson.Room }}, {{ lesson.Location }}{% if lesson.Late %}<br><strong>Späte Absage:</strong> nach der Abmeldefrist{% endif %}</p>
+{%- endfor ~%}
+<p>Viele Grüße<br>{{ SchoolName }}</p>
+{%- endblock %}

@@ -161,6 +161,14 @@ func (r *faultSettingsRepo) Get(a0 context.Context) (r0 domain.Settings, err err
 	return r.SettingsRepo.Get(a0)
 }
 
+func (r *faultSettingsRepo) Create(a0 context.Context, a1 domain.Settings) (err error) {
+	if err = r.f.hit("Settings.Create"); err != nil {
+		return err
+	}
+
+	return r.SettingsRepo.Create(a0, a1)
+}
+
 func (r *faultSettingsRepo) Put(a0 context.Context, a1 domain.Settings) (err error) {
 	if err = r.f.hit("Settings.Put"); err != nil {
 		return err

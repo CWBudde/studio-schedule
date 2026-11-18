@@ -11,6 +11,81 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createSettings = `-- name: CreateSettings :execrows
+INSERT INTO settings (
+    school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time,
+    release_weeks_ahead, booking_cutoff, cancellation_cutoff, default_visible_days, legal_notice,
+    waitlist_invite_expiry, redemption_mode, issuer_name, issuer_address, issuer_tax_id, issuer_email,
+    issuer_phone, tax_mode, tax_note, receipt_footer, accent_color, theme, released_through
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
+    $25
+)
+ON CONFLICT (id) DO NOTHING
+`
+
+type CreateSettingsParams struct {
+	SchoolName           string
+	Timezone             string
+	DefaultLocale        string
+	Currency             string
+	ReceiptPrefix        string
+	ReleaseWeekday       int16
+	ReleaseTime          pgtype.Time
+	ReleaseWeeksAhead    int32
+	BookingCutoff        pgtype.Interval
+	CancellationCutoff   pgtype.Interval
+	DefaultVisibleDays   int32
+	LegalNotice          pgtype.Text
+	WaitlistInviteExpiry pgtype.Interval
+	RedemptionMode       string
+	IssuerName           pgtype.Text
+	IssuerAddress        pgtype.Text
+	IssuerTaxID          pgtype.Text
+	IssuerEmail          pgtype.Text
+	IssuerPhone          pgtype.Text
+	TaxMode              pgtype.Text
+	TaxNote              pgtype.Text
+	ReceiptFooter        pgtype.Text
+	AccentColor          pgtype.Text
+	Theme                pgtype.Text
+	ReleasedThrough      pgtype.Date
+}
+
+func (q *Queries) CreateSettings(ctx context.Context, arg CreateSettingsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, createSettings,
+		arg.SchoolName,
+		arg.Timezone,
+		arg.DefaultLocale,
+		arg.Currency,
+		arg.ReceiptPrefix,
+		arg.ReleaseWeekday,
+		arg.ReleaseTime,
+		arg.ReleaseWeeksAhead,
+		arg.BookingCutoff,
+		arg.CancellationCutoff,
+		arg.DefaultVisibleDays,
+		arg.LegalNotice,
+		arg.WaitlistInviteExpiry,
+		arg.RedemptionMode,
+		arg.IssuerName,
+		arg.IssuerAddress,
+		arg.IssuerTaxID,
+		arg.IssuerEmail,
+		arg.IssuerPhone,
+		arg.TaxMode,
+		arg.TaxNote,
+		arg.ReceiptFooter,
+		arg.AccentColor,
+		arg.Theme,
+		arg.ReleasedThrough,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getSettings = `-- name: GetSettings :one
 SELECT
     school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time,

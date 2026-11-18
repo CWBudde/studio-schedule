@@ -1,0 +1,18 @@
+Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+{{ Sender }} schickt eine Nachricht zu dieser Stunde bei {{ SchoolName }}:
+
+{{ CourseType }}
+{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }} Uhr
+{{ Room }}, {{ Location }}
+Gebucht für: {{ Participants|join(', ') }}
+{%- if Canceled ~%}
+Die Stunde fällt aus.
+{%- endif ~%}
+
+{{ Message }}
+
+Um {{ Sender }} zu antworten, antworte einfach auf diese Mail.
+
+Viele Grüße
+{{ SchoolName }}

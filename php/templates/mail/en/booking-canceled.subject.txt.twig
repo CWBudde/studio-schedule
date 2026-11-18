@@ -1,0 +1,1 @@
+{{ SchoolName }}: {% if Lessons|length == 1 %}{% if Lessons is not empty %}booking of {{ Lessons[0].CourseType }} on {{ Lessons[0].StartsAt|mail_date(locale) }}{% endif %} canceled{% else %}{{ Lessons|length }} bookings of {{ Lessons[0].CourseType }} canceled{% endif ~%}

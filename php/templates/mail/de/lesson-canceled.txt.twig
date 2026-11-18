@@ -1,0 +1,15 @@
+Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+leider fällt diese Stunde bei {{ SchoolName }} aus:
+
+{{ CourseType }}
+{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }} Uhr
+{{ Room }}, {{ Location }}
+Gebucht für: {{ Participants|join(', ') }}
+{%- if Note is not empty ~%}
+
+Hinweis von {{ SchoolName }}: {{ Note }}
+{%- endif ~%}
+
+Viele Grüße
+{{ SchoolName }}

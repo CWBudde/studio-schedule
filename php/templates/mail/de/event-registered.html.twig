@@ -1,0 +1,16 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>deine Anmeldung für diese Veranstaltung bei {{ SchoolName }} ist bestätigt:</p>
+<p><strong>{{ Title }}</strong><br>Angemeldet: {{ Participant }}</p>
+{%- for session in Sessions ~%}
+<p>{{ session.StartsAt|mail_date(locale) }}, {{ session.StartsAt|mail_clock }}–{{ session.EndsAt|mail_clock }} Uhr<br>{{ session.Room }}, {{ session.Location }}</p>
+{%- endfor ~%}
+{%- if Fee is not empty ~%}
+<p>Bitte bezahle die Gebühr von {{ Fee }} am Empfang; dort bekommst du auch den Beleg.</p>
+{%- endif ~%}
+{%- if CancelUntil is not null ~%}
+<p>Falls es doch nicht passt, kannst du die Anmeldung bis {{ CancelUntil|mail_date(locale) }}, {{ CancelUntil|mail_clock }} Uhr selbst stornieren. Danach wende dich bitte an {{ SchoolName }}.</p>
+{%- endif ~%}
+<p>Viele Grüße<br>{{ SchoolName }}</p>
+{%- endblock %}

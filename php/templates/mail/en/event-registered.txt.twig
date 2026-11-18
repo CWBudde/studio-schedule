@@ -1,0 +1,23 @@
+Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+your registration for this event at {{ SchoolName }} is confirmed:
+
+{{ Title }}
+Registered: {{ Participant }}
+{%- for session in Sessions ~%}
+
+{{ session.StartsAt|mail_date(locale) }}, {{ session.StartsAt|mail_clock }}–{{ session.EndsAt|mail_clock }}
+{{ session.Room }}, {{ session.Location }}
+{%- endfor ~%}
+{%- if Fee is not empty ~%}
+
+Please pay the fee of {{ Fee }} at the desk; you get the receipt there.
+{%- endif ~%}
+{%- if CancelUntil is not null ~%}
+
+If it does not suit after all, you can cancel the registration yourself until
+{{ CancelUntil|mail_date(locale) }}, {{ CancelUntil|mail_clock }}. After that, please contact {{ SchoolName }}.
+{%- endif ~%}
+
+Kind regards,
+{{ SchoolName }}

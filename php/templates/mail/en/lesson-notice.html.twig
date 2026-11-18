@@ -1,0 +1,9 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>{{ Sender }} sends a message about this lesson at {{ SchoolName }}:</p>
+<p><strong>{{ CourseType }}</strong><br>{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }}<br>{{ Room }}, {{ Location }}<br>Booked for: {{ Participants|join(', ') }}{% if Canceled %}<br>The lesson is canceled.{% endif %}</p>
+<p style="margin:16px 0;padding:8px 16px;border-left:4px solid #d4d4d8;">{% for line in Message|split("\n") %}{% if not loop.first %}<br>{% endif %}{{ line }}{% endfor %}</p>
+<p>To answer {{ Sender }}, reply to this mail.</p>
+<p>Kind regards,<br>{{ SchoolName }}</p>
+{%- endblock %}

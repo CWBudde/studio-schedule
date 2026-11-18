@@ -37,18 +37,8 @@ final readonly class Migrator
                 throw new RuntimeException('A database migration is already running');
             }
 
-            $schema = new Schema($connection);
-            $relations = $schema->relations();
-            $hasHistory = in_array('goose_db_version', $relations, true);
-            $applied = $hasHistory ? $schema->appliedVersions() : [];
-            $versions = array_keys($files);
-            if ($applied !== array_slice($versions, 0, count($applied))) {
-                throw new RuntimeException('Database migration history does not match this release');
-            }
-            if ($applied === [] && array_diff($relations, ['goose_db_version']) !== []) {
-                throw new RuntimeException('An existing database is missing its migration history');
-            }
-            $pending = array_slice($files, count($applied), preserve_keys: true);
+            $state = (new Schema($connection))->migrationState($files);
+            ['applied' => $applied, 'pending' => $pending, 'hasHistory' => $hasHistory] = $state;
             if ($pending === []) {
                 return [];
             }

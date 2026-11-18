@@ -1,0 +1,12 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>der für {{ Participant }} reservierte Platz in dieser Stunde bei {{ SchoolName }} wurde nicht rechtzeitig genommen:</p>
+<p><strong>{{ CourseType }}</strong><br>{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }} Uhr<br>{{ Room }}, {{ Location }}</p>
+{%- if StillWaiting ~%}
+<p>{{ Participant }} bleibt auf der Warteliste, an ihrem Ende, und wird wieder eingeladen, sobald ein weiterer Platz frei wird.</p>
+{%- else ~%}
+<p>{{ Participant }} steht nicht mehr auf der Warteliste für diese Stunde.</p>
+{%- endif ~%}
+<p>Viele Grüße<br>{{ SchoolName }}</p>
+{%- endblock %}

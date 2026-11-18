@@ -1,0 +1,11 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>in einer Stunde bei {{ SchoolName }}, für die {{ Participant }} auf der Warteliste steht, ist ein Platz frei geworden:</p>
+<p><strong>{{ CourseType }}</strong><br>{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }} Uhr<br>{{ Room }}, {{ Location }}</p>
+<p>Der Platz ist für {{ Participant }} reserviert bis {{ ExpiresAt|mail_date(locale) }}, {{ ExpiresAt|mail_clock }} Uhr.</p>
+<p><a href="{{ Link|mail_url }}" style="display:inline-block;padding:10px 20px;border-radius:6px;background-color:#18181b;color:#ffffff;text-decoration:none;">Platz nehmen</a></p>
+<p>Falls die Schaltfläche nicht funktioniert, öffne diesen Link in deinem Browser:<br><a href="{{ Link|mail_url }}" style="color:#18181b;word-break:break-all;">{{ Link }}</a></p>
+<p>Wird der Platz bis dahin nicht genommen, geht er an die nächste Person auf der Warteliste.</p>
+<p>Viele Grüße<br>{{ SchoolName }}</p>
+{%- endblock %}

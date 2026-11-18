@@ -1,0 +1,10 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>the registration for this event at {{ SchoolName }} is canceled:</p>
+<p><strong>{{ Title }}</strong><br>Registered: {{ Participant }}</p>
+{%- if Refunded ~%}
+<p>The fee you paid is refunded. You get the cancellation receipt in a separate email.</p>
+{%- endif ~%}
+<p>Kind regards,<br>{{ SchoolName }}</p>
+{%- endblock %}

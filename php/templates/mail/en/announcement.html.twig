@@ -1,0 +1,9 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>{{ SchoolName }} has an announcement{% if Participants is not empty %} for {{ Participants|join(', ') }}{% endif %}:</p>
+<p><strong>{{ Title }}</strong></p>
+<p style="margin:16px 0;padding:8px 16px;border-left:4px solid #d4d4d8;">{% for line in Message|split("\n") %}{% if not loop.first %}<br>{% endif %}{{ line }}{% endfor %}</p>
+<p>You also find it in the app under Announcements on the home page.</p>
+<p>Kind regards,<br>{{ SchoolName }}</p>
+{%- endblock %}

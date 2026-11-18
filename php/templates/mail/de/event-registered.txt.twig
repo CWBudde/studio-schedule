@@ -1,0 +1,23 @@
+Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+deine Anmeldung für diese Veranstaltung bei {{ SchoolName }} ist bestätigt:
+
+{{ Title }}
+Angemeldet: {{ Participant }}
+{%- for session in Sessions ~%}
+
+{{ session.StartsAt|mail_date(locale) }}, {{ session.StartsAt|mail_clock }}–{{ session.EndsAt|mail_clock }} Uhr
+{{ session.Room }}, {{ session.Location }}
+{%- endfor ~%}
+{%- if Fee is not empty ~%}
+
+Bitte bezahle die Gebühr von {{ Fee }} am Empfang; dort bekommst du auch den Beleg.
+{%- endif ~%}
+{%- if CancelUntil is not null ~%}
+
+Falls es doch nicht passt, kannst du die Anmeldung bis {{ CancelUntil|mail_date(locale) }},
+{{ CancelUntil|mail_clock }} Uhr selbst stornieren. Danach wende dich bitte an {{ SchoolName }}.
+{%- endif ~%}
+
+Viele Grüße
+{{ SchoolName }}

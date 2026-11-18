@@ -1,0 +1,18 @@
+Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+der für {{ Participant }} reservierte Platz in dieser Stunde bei
+{{ SchoolName }} wurde nicht rechtzeitig genommen:
+
+{{ CourseType }}
+{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }} Uhr
+{{ Room }}, {{ Location }}
+
+{% if StillWaiting -%}
+{{ Participant }} bleibt auf der Warteliste, an ihrem Ende, und wird wieder
+eingeladen, sobald ein weiterer Platz frei wird.
+{%- else -%}
+{{ Participant }} steht nicht mehr auf der Warteliste für diese Stunde.
+{%- endif ~%}
+
+Viele Grüße
+{{ SchoolName }}

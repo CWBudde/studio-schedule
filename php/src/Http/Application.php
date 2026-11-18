@@ -15,11 +15,14 @@ use StudioSchedule\Service\Readiness;
 
 final class Application
 {
+    /** @param (callable(ServerRequestInterface, ResponseInterface):ResponseInterface)|null $resetPassword */
     public static function create(
         Config $config,
         string $publicDirectory,
         Readiness $readiness,
         LoggerInterface $logger,
+        ?Installer $installer = null,
+        ?callable $resetPassword = null,
     ): RequestHandlerInterface {
         $app = AppFactory::create(new ResponseFactory());
         $app->setBasePath($config->basePath);
@@ -36,6 +39,12 @@ final class Application
             return $readiness->ready() ? $healthy($r, $res) : Responses::problem($r, 503, 'not ready');
         });
         $app->get('/api/v1/health', $healthy);
+        if ($resetPassword !== null) {
+            $app->post('/api/v1/auth/password-reset/confirm', $resetPassword);
+        }
+        if ($installer !== null) {
+            $app->map(['GET', 'POST'], '/setup', $installer);
+        }
 
         $app->addRoutingMiddleware();
         $app->add(new RequestMiddleware($config, new StaticFiles($publicDirectory, $config->basePath), $readiness, $logger));

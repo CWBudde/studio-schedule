@@ -1,0 +1,13 @@
+Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+diese Stunde bei {{ SchoolName }} wurde geändert:
+
+{{ CourseType }}
+Neu:     {{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }} Uhr, {{ Room }}, {{ Location }}
+Bisher:  {{ PreviousStartsAt|mail_date(locale) }}, {{ PreviousStartsAt|mail_clock }}–{{ PreviousEndsAt|mail_clock }} Uhr, {{ PreviousRoom }}, {{ PreviousLocation }}
+Gebucht für: {{ Participants|join(', ') }}
+
+Deine Buchung gilt für den neuen Termin. Passt dir die Änderung nicht, melde dich bitte bei {{ SchoolName }}.
+
+Viele Grüße
+{{ SchoolName }}

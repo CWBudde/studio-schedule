@@ -43,6 +43,27 @@ func testSettings(t *testing.T, newStore func(*testing.T) store.Store) {
 			_, err := get(e)
 			wantErr(e.t, err, domain.ErrNotFound)
 		},
+		"CreateNeverReplaces": func(e *env) {
+			create := func(s domain.Settings) error {
+				return e.write(func(ctx context.Context, tx store.Tx) error { return tx.Settings().Create(ctx, s) })
+			}
+
+			valid(e.t, want)
+			if err := create(want); err != nil {
+				e.t.Fatalf("Create: %v", err)
+			}
+
+			replacement := want
+			replacement.SchoolName = "Second School"
+			wantErr(e.t, create(replacement), domain.ErrDuplicate)
+
+			got, err := get(e)
+			if err != nil {
+				e.t.Fatalf("Get: %v", err)
+			}
+
+			wantEqual(e.t, got, want)
+		},
 		"PutThenGet": func(e *env) {
 			valid(e.t, want)
 			put(e, want)

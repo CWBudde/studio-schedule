@@ -138,6 +138,12 @@ writable directory for logs), applies the migrations to an empty database, creat
 settings and the first admin as `init` does, and from then on refuses to create another. Seed data
 stays a CLI command.
 
+Open `<base>/setup?token=…` on the configured public URL. The form carries the token in each
+submission. After first setup, open the one-time link it shows to set the administrator password.
+Keep the setup token private and remove `SETUP_TOKEN` from the environment when setup or upgrade
+is finished. The installer uses PHP's configured logging and checks access to the log directory
+when PHP writes to a file.
+
 Uploading a newer release over an older one leaves the schema behind. Until it is migrated the API
 answers 503 with a `maintenance` problem and `/readyz` fails, as Go refuses to start. The installer
 then lists the pending migrations and applies them after an admin signs in on the setup page (the

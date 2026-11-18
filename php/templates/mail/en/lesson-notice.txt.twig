@@ -1,0 +1,18 @@
+Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+{{ Sender }} sends a message about this lesson at {{ SchoolName }}:
+
+{{ CourseType }}
+{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }}
+{{ Room }}, {{ Location }}
+Booked for: {{ Participants|join(', ') }}
+{%- if Canceled ~%}
+The lesson is canceled.
+{%- endif ~%}
+
+{{ Message }}
+
+To answer {{ Sender }}, reply to this mail.
+
+Kind regards,
+{{ SchoolName }}

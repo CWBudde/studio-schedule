@@ -1,0 +1,19 @@
+Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+in einer Stunde bei {{ SchoolName }}, für die {{ Participant }} auf der
+Warteliste steht, ist ein Platz frei geworden:
+
+{{ CourseType }}
+{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }} Uhr
+{{ Room }}, {{ Location }}
+
+Der Platz ist für {{ Participant }} reserviert bis {{ ExpiresAt|mail_date(locale) }}, {{ ExpiresAt|mail_clock }} Uhr.
+Um ihn zu nehmen, öffne diesen Link und bestätige:
+
+{{ Link }}
+
+Wird der Platz bis dahin nicht genommen, geht er an die nächste Person auf
+der Warteliste.
+
+Viele Grüße
+{{ SchoolName }}

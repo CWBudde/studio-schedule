@@ -1,0 +1,7 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>Für {{ Participant }} ist ein Platz bei <strong>{{ Title }}</strong> bis {{ ExpiresAt|mail_date(locale) }}, {{ ExpiresAt|mail_clock }} Uhr reserviert.</p>
+<p><a href="{{ Link|mail_url }}">Anmeldung bestätigen</a></p>
+<p>Viele Grüße<br>{{ SchoolName }}</p>
+{%- endblock %}

@@ -1,0 +1,14 @@
+Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+bitte bestätige diese Adresse als neue E-Mail-Adresse deines Kontos bei
+{{ SchoolName }}, indem du diesen Link öffnest:
+
+{{ Link }}
+
+Der Link ist {% if ExpiresHours == 1 %}1 Stunde{% else %}{{ ExpiresHours }} Stunden{% endif %} gültig.
+
+Falls du das nicht angefragt hast, ignoriere diese E-Mail;
+es ändert sich nichts.
+
+Viele Grüße
+{{ SchoolName }}

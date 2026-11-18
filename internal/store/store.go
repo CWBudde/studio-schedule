@@ -147,6 +147,8 @@ type Tx interface {
 type SettingsRepo interface {
 	// Get returns the settings or domain.ErrNotFound if none were stored.
 	Get(ctx context.Context) (domain.Settings, error)
+	// Create inserts the settings, returning domain.ErrDuplicate if they already exist.
+	Create(ctx context.Context, s domain.Settings) error
 	// Put creates or replaces the settings.
 	Put(ctx context.Context, s domain.Settings) error
 	// Logo returns the school's logo, the zero Logo if it has none, or

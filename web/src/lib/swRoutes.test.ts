@@ -3,7 +3,7 @@ import { bypassesServiceWorker } from './swRoutes';
 
 describe('the service worker leaves to the server', () => {
   for (const base of ['/', '/studio-schedule/']) {
-    it(`the API, feeds, manifest, probes and metrics under ${base}`, () => {
+    it(`the API, feeds, manifest, installer, probes and metrics under ${base}`, () => {
       for (const path of [
         'api',
         'api/v1/health',
@@ -14,6 +14,8 @@ describe('the service worker leaves to the server', () => {
         'readyz',
         'readyz?verbose=1',
         'metrics',
+        'setup',
+        'setup?token=example',
       ]) {
         expect(bypassesServiceWorker(base, base + path), path).toBe(true);
       }
@@ -27,6 +29,7 @@ describe('the service worker leaves to the server', () => {
         'account',
         'apiary',
         'healthzone',
+        'setup-guide',
       ]) {
         expect(bypassesServiceWorker(base, base + path), path).toBe(false);
       }

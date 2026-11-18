@@ -1,0 +1,11 @@
+Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+{% if Cancellation ~%}
+im Anhang findest du den Stornobeleg {{ Number }} zur Quittung {{ Cancels }}:
+{{ Amount }} werden erstattet.
+{%- else ~%}
+vielen Dank für deine Zahlung von {{ Amount }}. Im Anhang findest du deine
+Quittung {{ Number }}{% if Item is not empty %} über {{ Item }}{% endif %}.
+{%- endif ~%}
+
+Viele Grüße
+{{ SchoolName }}

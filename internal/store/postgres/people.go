@@ -130,23 +130,50 @@ func (r settingsRepo) PutBackground(ctx context.Context, b domain.Background) er
 	return affected("settings", n, err)
 }
 
-func (r settingsRepo) Put(ctx context.Context, s domain.Settings) error {
-	day, err := weekday(s.ReleaseWeekday)
+func (r settingsRepo) Create(ctx context.Context, s domain.Settings) error {
+	params, err := settingsParams(s)
 	if err != nil {
 		return err
+	}
+
+	n, err := r.q.CreateSettings(ctx, sqlc.CreateSettingsParams(params))
+	if err != nil {
+		return mapErr(err)
+	}
+
+	if n == 0 {
+		return fmt.Errorf("settings already exist: %w", domain.ErrDuplicate)
+	}
+
+	return nil
+}
+
+func (r settingsRepo) Put(ctx context.Context, s domain.Settings) error {
+	params, err := settingsParams(s)
+	if err != nil {
+		return err
+	}
+
+	return mapErr(r.q.PutSettings(ctx, params))
+}
+
+func settingsParams(s domain.Settings) (sqlc.PutSettingsParams, error) {
+	day, err := weekday(s.ReleaseWeekday)
+	if err != nil {
+		return sqlc.PutSettingsParams{}, err
 	}
 
 	weeksAhead, err := int4(s.ReleaseWeeksAhead)
 	if err != nil {
-		return err
+		return sqlc.PutSettingsParams{}, err
 	}
 
 	visibleDays, err := int4(s.DefaultVisibleDays)
 	if err != nil {
-		return err
+		return sqlc.PutSettingsParams{}, err
 	}
 
-	return mapErr(r.q.PutSettings(ctx, sqlc.PutSettingsParams{
+	return sqlc.PutSettingsParams{
 		SchoolName:         s.SchoolName,
 		Timezone:           s.Timezone,
 		DefaultLocale:      s.DefaultLocale,
@@ -173,7 +200,7 @@ func (r settingsRepo) Put(ctx context.Context, s domain.Settings) error {
 		TaxMode:              pgText(string(s.Receipts.TaxMode)),
 		TaxNote:              pgText(s.Receipts.TaxNote),
 		ReceiptFooter:        pgText(s.Receipts.Footer),
-	}))
+	}, nil
 }
 
 // ---------------------------------------------------------------- persons

@@ -1,0 +1,8 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>diese Stunde bei {{ SchoolName }} wurde geändert:</p>
+<p><strong>{{ CourseType }}</strong><br>Neu: <strong>{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }} Uhr, {{ Room }}, {{ Location }}</strong><br>Bisher: <s>{{ PreviousStartsAt|mail_date(locale) }}, {{ PreviousStartsAt|mail_clock }}–{{ PreviousEndsAt|mail_clock }} Uhr, {{ PreviousRoom }}, {{ PreviousLocation }}</s><br>Gebucht für: {{ Participants|join(', ') }}</p>
+<p>Deine Buchung gilt für den neuen Termin. Passt dir die Änderung nicht, melde dich bitte bei {{ SchoolName }}.</p>
+<p>Viele Grüße<br>{{ SchoolName }}</p>
+{%- endblock %}

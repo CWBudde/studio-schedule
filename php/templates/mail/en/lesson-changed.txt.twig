@@ -1,0 +1,13 @@
+Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+This lesson at {{ SchoolName }} has changed:
+
+{{ CourseType }}
+Now:    {{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }}, {{ Room }}, {{ Location }}
+Before: {{ PreviousStartsAt|mail_date(locale) }}, {{ PreviousStartsAt|mail_clock }}–{{ PreviousEndsAt|mail_clock }}, {{ PreviousRoom }}, {{ PreviousLocation }}
+Booked for: {{ Participants|join(', ') }}
+
+Your booking moves with the lesson. If the change does not suit you, contact {{ SchoolName }}.
+
+Kind regards,
+{{ SchoolName }}

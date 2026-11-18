@@ -1,0 +1,11 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>Your booking at {{ SchoolName }} is confirmed:</p>
+<p>Booked for: {{ Participant }}</p>
+{%- for lesson in Lessons ~%}
+<p><strong>{{ lesson.CourseType }}</strong><br>{{ lesson.StartsAt|mail_date(locale) }}, {{ lesson.StartsAt|mail_clock }}–{{ lesson.EndsAt|mail_clock }}<br>{{ lesson.Room }}, {{ lesson.Location }}</p>
+{%- endfor ~%}
+<p>{% if Guest %}If the date does not suit after all, please contact {{ SchoolName }} in good time to cancel, so that someone else can take the place.{% else %}If the date does not suit after all, please cancel the booking in good time, so that someone else can take the place.{% endif %}</p>
+<p>Kind regards,<br>{{ SchoolName }}</p>
+{%- endblock %}

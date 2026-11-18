@@ -1,0 +1,16 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>your registration for this event at {{ SchoolName }} is confirmed:</p>
+<p><strong>{{ Title }}</strong><br>Registered: {{ Participant }}</p>
+{%- for session in Sessions ~%}
+<p>{{ session.StartsAt|mail_date(locale) }}, {{ session.StartsAt|mail_clock }}–{{ session.EndsAt|mail_clock }}<br>{{ session.Room }}, {{ session.Location }}</p>
+{%- endfor ~%}
+{%- if Fee is not empty ~%}
+<p>Please pay the fee of {{ Fee }} at the desk; you get the receipt there.</p>
+{%- endif ~%}
+{%- if CancelUntil is not null ~%}
+<p>If it does not suit after all, you can cancel the registration yourself until {{ CancelUntil|mail_date(locale) }}, {{ CancelUntil|mail_clock }}. After that, please contact {{ SchoolName }}.</p>
+{%- endif ~%}
+<p>Kind regards,<br>{{ SchoolName }}</p>
+{%- endblock %}

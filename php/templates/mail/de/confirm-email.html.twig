@@ -1,0 +1,10 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>bitte bestätige die E-Mail-Adresse für dein Konto bei {{ SchoolName }}.</p>
+<p><a href="{{ Link|mail_url }}" style="display:inline-block;padding:10px 20px;border-radius:6px;background-color:#18181b;color:#ffffff;text-decoration:none;">E-Mail-Adresse bestätigen</a></p>
+<p>Falls die Schaltfläche nicht funktioniert, öffne diesen Link in deinem Browser:<br><a href="{{ Link|mail_url }}" style="color:#18181b;word-break:break-all;">{{ Link }}</a></p>
+<p>Der Link ist {% if ExpiresHours == 1 %}1 Stunde{% else %}{{ ExpiresHours }} Stunden{% endif %} gültig.</p>
+<p>Falls du dich nicht registriert hast, kannst du diese E-Mail ignorieren.</p>
+<p>Viele Grüße<br>{{ SchoolName }}</p>
+{%- endblock %}

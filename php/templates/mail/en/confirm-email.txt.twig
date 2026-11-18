@@ -1,0 +1,13 @@
+Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+Please confirm the email address for your account at {{ SchoolName }} by
+opening this link:
+
+{{ Link }}
+
+The link is valid for {% if ExpiresHours == 1 %}1 hour{% else %}{{ ExpiresHours }} hours{% endif %}.
+
+If you did not sign up, you can ignore this email.
+
+Kind regards,
+{{ SchoolName }}

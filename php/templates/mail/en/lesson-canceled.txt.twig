@@ -1,0 +1,15 @@
+Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+Unfortunately, this lesson at {{ SchoolName }} is canceled:
+
+{{ CourseType }}
+{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }}
+{{ Room }}, {{ Location }}
+Booked for: {{ Participants|join(', ') }}
+{%- if Note is not empty ~%}
+
+Note from {{ SchoolName }}: {{ Note }}
+{%- endif ~%}
+
+Kind regards,
+{{ SchoolName }}

@@ -1,0 +1,12 @@
+Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+{{ SchoolName }} hat eine Mitteilung{% if Participants is not empty %} für {{ Participants|join(', ') }}{% endif %}:
+
+{{ Title }}
+
+{{ Message }}
+
+Du findest sie auch in der App unter Mitteilungen auf der Startseite.
+
+Viele Grüße
+{{ SchoolName }}

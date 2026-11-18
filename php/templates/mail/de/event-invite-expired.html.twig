@@ -1,0 +1,6 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>Die Platzreservierung für {{ Participant }} bei <strong>{{ Title }}</strong> ist abgelaufen. Solange die Anmeldung offen ist, kannst du dich erneut auf die Warteliste setzen.</p>
+<p>Viele Grüße<br>{{ SchoolName }}</p>
+{%- endblock %}

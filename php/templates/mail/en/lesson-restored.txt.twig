@@ -1,0 +1,14 @@
+Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+Good news: this lesson at {{ SchoolName }} takes place after all. Please note its time and
+place, which may have changed since the cancellation:
+
+{{ CourseType }}
+{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }}
+{{ Room }}, {{ Location }}
+Booked for: {{ Participants|join(', ') }}
+
+Your booking still stands.
+
+Kind regards,
+{{ SchoolName }}

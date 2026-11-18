@@ -1,0 +1,13 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+<p>leider hat {{ SchoolName }} diese Veranstaltung abgesagt:</p>
+<p><strong>{{ Title }}</strong>{% if SeveralDays %}<br>{{ FirstDay|mail_date(locale) }} – {{ LastDay|mail_date(locale) }}{% elseif HasDates %}<br>{{ FirstDay|mail_date(locale) }}{% endif %}<br>Angemeldet: {{ Participants|join(', ') }}</p>
+{%- if Note is not empty ~%}
+<p>Hinweis von {{ SchoolName }}: {{ Note }}</p>
+{%- endif ~%}
+{%- if Refunded ~%}
+<p>Die gezahlte Gebühr wird erstattet. Den Stornobeleg bekommst du mit einer eigenen E-Mail.</p>
+{%- endif ~%}
+<p>Viele Grüße<br>{{ SchoolName }}</p>
+{%- endblock %}

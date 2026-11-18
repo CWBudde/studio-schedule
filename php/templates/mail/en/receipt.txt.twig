@@ -1,0 +1,11 @@
+Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+{% if Cancellation ~%}
+attached is the cancellation {{ Number }} of receipt {{ Cancels }}: {{ Amount }}
+are refunded.
+{%- else ~%}
+thank you for your payment of {{ Amount }}. Attached is your receipt
+{{ Number }}{% if Item is not empty %} for {{ Item }}{% endif %}.
+{%- endif ~%}
+
+Kind regards,
+{{ SchoolName }}

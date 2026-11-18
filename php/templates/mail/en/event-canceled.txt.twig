@@ -1,0 +1,22 @@
+Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+unfortunately, {{ SchoolName }} has canceled this event:
+
+{{ Title }}
+{%- if SeveralDays ~%}
+{{ FirstDay|mail_date(locale) }} – {{ LastDay|mail_date(locale) }}
+{%- elseif HasDates ~%}
+{{ FirstDay|mail_date(locale) }}
+{%- endif ~%}
+Registered: {{ Participants|join(', ') }}
+{%- if Note is not empty ~%}
+
+Note from {{ SchoolName }}: {{ Note }}
+{%- endif ~%}
+{%- if Refunded ~%}
+
+The fee you paid is refunded. You get the cancellation receipt in a separate email.
+{%- endif ~%}
+
+Kind regards,
+{{ SchoolName }}

@@ -1,0 +1,1 @@
+{{ SchoolName }}: {% if Lessons is not empty %}{{ Lessons[0].CourseType }} am {{ Lessons[0].StartsAt|mail_date(locale) }}{% endif %} ist gebucht

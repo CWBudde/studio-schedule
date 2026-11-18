@@ -1,0 +1,14 @@
+Hallo{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+gute Nachricht: Diese Stunde bei {{ SchoolName }} findet doch statt. Bitte beachte Zeit und
+Ort, sie können sich seit der Absage geändert haben:
+
+{{ CourseType }}
+{{ StartsAt|mail_date(locale) }}, {{ StartsAt|mail_clock }}–{{ EndsAt|mail_clock }} Uhr
+{{ Room }}, {{ Location }}
+Gebucht für: {{ Participants|join(', ') }}
+
+Deine Buchung bleibt bestehen.
+
+Viele Grüße
+{{ SchoolName }}

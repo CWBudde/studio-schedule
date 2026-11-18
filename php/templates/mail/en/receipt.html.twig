@@ -1,0 +1,10 @@
+{% extends 'layout.html.twig' %}
+{% block content %}
+<p>Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},</p>
+{% if Cancellation -%}
+<p>attached is the cancellation <strong>{{ Number }}</strong> of receipt {{ Cancels }}: {{ Amount }} are refunded.</p>
+{%- else -%}
+<p>thank you for your payment of {{ Amount }}. Attached is your receipt <strong>{{ Number }}</strong>{% if Item is not empty %} for {{ Item }}{% endif %}.</p>
+{%- endif ~%}
+<p>Kind regards,<br>{{ SchoolName }}</p>
+{%- endblock %}

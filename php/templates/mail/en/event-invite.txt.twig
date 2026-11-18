@@ -1,0 +1,8 @@
+Hello{% if GivenName is not empty %} {{ GivenName }}{% endif %},
+
+a place for {{ Participant }} is reserved for {{ Title }} until {{ ExpiresAt|mail_date(locale) }}, {{ ExpiresAt|mail_clock }}.
+
+Confirm your registration: {{ Link }}
+
+Kind regards,
+{{ SchoolName }}
