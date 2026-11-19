@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace StudioSchedule\Tests;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\TestCase;
 use Psr\Clock\ClockInterface;
@@ -15,6 +16,7 @@ use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
 use StudioSchedule\Bootstrap;
 use StudioSchedule\Console\JobsCommand;
+use StudioSchedule\Http\AfterResponse;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\JobResult;
 use StudioSchedule\Service\JobRunner;
@@ -24,6 +26,7 @@ use StudioSchedule\Store\JobLocks;
 use StudioSchedule\Store\JobRunStore;
 use StudioSchedule\Store\MetricsStore;
 use StudioSchedule\Store\Schema;
+use Symfony\Component\Uid\Uuid;
 
 final class InstallerLifecycleTest extends TestCase
 {
@@ -185,6 +188,7 @@ final class InstallerLifecycleTest extends TestCase
             self::assertSame(200, $this->request($app, $dsn, 'GET', '/dance/readyz', clock: $this->clockAt($start->modify('+4 seconds')))->getStatusCode());
 
             $this->assertMetrics($app, $dsn, $migrations);
+            $this->assertAnnouncements($app, $dsn, $database);
 
             $futureMigration = $migrations . '/99003_future_probe.sql';
             touch($futureMigration);
@@ -222,6 +226,128 @@ final class InstallerLifecycleTest extends TestCase
             }
             rmdir($app);
         }
+    }
+
+    private function assertAnnouncements(string $app, #[\SensitiveParameter] string $dsn, Connection $database): void
+    {
+        $now = new DateTimeImmutable('2041-01-01T09:00:00Z');
+        $clock = $this->clockAt($now);
+        $login = $this->request($app, $dsn, 'POST', '/dance/api/v1/auth/login', json: [
+            'email' => 'first-admin@example.invalid', 'password' => self::PASSWORD,
+        ], clock: $clock);
+        self::assertSame(200, $login->getStatusCode(), (string) $login->getBody());
+        self::assertSame(1, preg_match('/\bstudio_session=([^;]+)/', $login->getHeaderLine('Set-Cookie'), $cookie));
+        self::assertArrayHasKey(1, $cookie);
+        $cookies = ['studio_session' => $cookie[1] ?? throw new \LogicException('Expected the login cookie')];
+        $path = '/dance/api/v1/admin/announcements';
+
+        $posted = ['audience' => 'role', 'role' => 'admin', 'title' => 'Fixture notice', 'body' => 'Studio closed', 'email' => true];
+        $after = new AfterResponse();
+        $notice = $this->request($app, $dsn, 'POST', $path, json: $posted, clock: $clock, cookies: $cookies, afterResponse: $after);
+        self::assertSame(201, $notice->getStatusCode(), (string) $notice->getBody());
+        $mailCount = static fn(): mixed => $database->fetchOne("SELECT COUNT(*) FROM outbox_mails WHERE template = 'announcement'");
+        self::assertContains($mailCount(), [0, '0']);
+        $after->run(static fn(): bool => true);
+        self::assertContains($mailCount(), [1, '1']);
+        self::assertSame('first-admin@example.invalid', $database->fetchOne("SELECT recipient FROM outbox_mails WHERE template = 'announcement'"));
+        $subject = $database->fetchOne("SELECT subject FROM outbox_mails WHERE template = 'announcement'");
+        self::assertIsString($subject);
+        self::assertStringContainsString('Fixture notice', $subject);
+        $memberPath = '/dance/api/v1/announcements';
+        $officeItems = $this->request($app, $dsn, 'GET', $path, clock: $clock, cookies: $cookies);
+        self::assertSame(200, $officeItems->getStatusCode());
+        self::assertStringContainsString('"emailRecipients":1', (string) $officeItems->getBody());
+        $myItems = $this->request($app, $dsn, 'GET', $memberPath, clock: $clock, cookies: $cookies);
+        self::assertSame(200, $myItems->getStatusCode());
+        self::assertStringContainsString('"dismissed":false', (string) $myItems->getBody());
+
+        $noticeBody = json_decode((string) $notice->getBody(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($noticeBody);
+        $id = $noticeBody['id'] ?? null;
+        self::assertIsString($id);
+        $dismiss = "$memberPath/$id/dismiss";
+        self::assertSame([204, 204], [
+            $this->request($app, $dsn, 'POST', $dismiss, clock: $clock, cookies: $cookies)->getStatusCode(),
+            $this->request($app, $dsn, 'POST', $dismiss, clock: $clock, cookies: $cookies)->getStatusCode(),
+        ]);
+        self::assertSame(422, $this->request($app, $dsn, 'POST', "$memberPath/invalid-id/dismiss", clock: $clock, cookies: $cookies)->getStatusCode());
+        $dismissed = $this->request($app, $dsn, 'GET', $memberPath, clock: $clock, cookies: $cookies);
+        self::assertStringContainsString('"dismissed":true', (string) $dismissed->getBody());
+
+        $preview = $this->request($app, $dsn, 'POST', "$path/recipients", json: ['Audience' => 'role', 'Role' => 'admin'], clock: $clock, cookies: $cookies);
+        self::assertSame(200, $preview->getStatusCode());
+        self::assertSame('{"recipients":1}', (string) $preview->getBody());
+        $unknown = $this->request($app, $dsn, 'POST', "$path/recipients", json: ['audience' => 'everyone', 'typo' => true], clock: $clock, cookies: $cookies);
+        self::assertSame(422, $unknown->getStatusCode());
+
+        $edit = $posted;
+        $edit['email'] = false;
+        $edit['expiresAt'] = $now->modify('+1 hour')->format(DATE_RFC3339);
+        $updated = $this->request($app, $dsn, 'PUT', "$path/$id", json: $edit, clock: $clock, cookies: $cookies);
+        self::assertSame(200, $updated->getStatusCode());
+        self::assertStringContainsString('"email":true', (string) $updated->getBody());
+        self::assertSame(422, $this->request($app, $dsn, 'PUT', "$path/$id", json: $edit + ['Draft' => true], clock: $clock, cookies: $cookies)->getStatusCode());
+        self::assertSame(409, $this->request($app, $dsn, 'PUT', "$path/$id", json: $edit, clock: $this->clockAt($now->modify('+2 hours')), cookies: $cookies)->getStatusCode());
+
+        $postgres = $database->getDatabasePlatform() instanceof PostgreSQLPlatform;
+        $confirmed = Database::sqlInstant($database, $now);
+        for ($number = 1; $number <= 102; ++$number) {
+            $person = Uuid::v7();
+            $account = Uuid::v7();
+            $personId = $postgres ? $person->toRfc4122() : $person->toBinary();
+            $accountId = $postgres ? $account->toRfc4122() : $account->toBinary();
+            $database->executeStatement("INSERT INTO persons (id, given_name, family_name) VALUES (?, 'Mail', 'Fixture')", [$personId]);
+            // Go uses simple Unicode lowercase when persisting the mail cursor.
+            $address = match ($number) {
+                101 => 'zİ@example.invalid',
+                102 => 'zi@example.invalid',
+                default => sprintf('member%03d@example.invalid', $number),
+            };
+            $database->executeStatement(
+                "INSERT INTO accounts (id, person_id, email, role, locale, confirmed_at) VALUES (?, ?, ?, 'member', 'en', ?)",
+                [$accountId, $personId, $address, $confirmed],
+            );
+        }
+
+        $posted['role'] = 'member';
+        $first = $now->modify('+1 day');
+        $posted['publishAt'] = $first->format(DATE_RFC3339);
+        $future = $this->request($app, $dsn, 'POST', $path, json: $posted, clock: $clock, cookies: $cookies);
+        self::assertSame(201, $future->getStatusCode(), (string) $future->getBody());
+        $futureBody = json_decode((string) $future->getBody(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($futureBody);
+        self::assertArrayHasKey('id', $futureBody);
+        $futureId = $futureBody['id'];
+        self::assertIsString($futureId);
+        $posted['publishAt'] = $first->modify('+2 hours')->format(DATE_RFC3339);
+        foreach (['Second notice', 'Third notice'] as $title) {
+            $posted['title'] = $title;
+            self::assertSame(201, $this->request($app, $dsn, 'POST', $path, json: $posted, clock: $clock, cookies: $cookies)->getStatusCode());
+        }
+        self::assertContains($mailCount(), [1, '1']);
+        $limited = $this->request($app, $dsn, 'POST', $path, json: $posted, clock: $clock, cookies: $cookies);
+        self::assertSame(409, $limited->getStatusCode());
+        self::assertStringContainsString('"reason":"mail-limit"', (string) $limited->getBody());
+
+        $jobs = new BackgroundJobs($database, $dsn, $this->clockAt($first), new NullLogger());
+        self::assertSame(JobResult::Ok, $jobs->queueAnnouncements());
+        self::assertContains($mailCount(), [101, '101']);
+        $key = $postgres ? $futureId : Uuid::fromString($futureId)->toBinary();
+        self::assertSame('member100@example.invalid', $database->fetchOne('SELECT mail_cursor FROM announcements WHERE id = ?', [$key]));
+        self::assertNull($database->fetchOne('SELECT emailed_at FROM announcements WHERE id = ?', [$key]));
+
+        $jobs = new BackgroundJobs($database, $dsn, $this->clockAt($first->modify('+1 minute')), new NullLogger());
+        self::assertSame(JobResult::Ok, $jobs->queueAnnouncements());
+        self::assertSame(JobResult::Ok, $jobs->queueAnnouncements(immediate: true));
+        self::assertContains($mailCount(), [102, '102']);
+        self::assertContains($database->fetchOne("SELECT COUNT(DISTINCT recipient) FROM outbox_mails WHERE template = 'announcement'"), [102, '102']);
+        self::assertContains($database->fetchOne('SELECT recipients FROM announcement_mailings WHERE announcement_id = ?', [$key]), [101, '101']);
+        self::assertNull($database->fetchOne('SELECT mail_cursor FROM announcements WHERE id = ?', [$key]));
+
+        $later = $this->clockAt($first);
+        self::assertSame(204, $this->request($app, $dsn, 'DELETE', "$path/$futureId", clock: $later, cookies: $cookies)->getStatusCode());
+        self::assertContains($database->fetchOne('SELECT recipients FROM announcement_mailings WHERE announcement_id IS NULL'), [101, '101']);
+        self::assertSame(409, $this->request($app, $dsn, 'POST', $path, json: $posted, clock: $later, cookies: $cookies)->getStatusCode());
     }
 
     private function assertMetrics(string $app, #[\SensitiveParameter] string $dsn, string $migrations): void
@@ -316,7 +442,8 @@ final class InstallerLifecycleTest extends TestCase
     /**
      * @param array<string,string> $body
      * @param array<string,string> $query
-     * @param array<string,string> $json
+     * @param array<string,string|bool> $json
+     * @param array<string,string> $cookies
      */
     private function request(
         string $app,
@@ -330,10 +457,13 @@ final class InstallerLifecycleTest extends TestCase
         ?ClockInterface $clock = null,
         string $metricsToken = '',
         string $authorization = '',
+        array $cookies = [],
+        ?AfterResponse $afterResponse = null,
     ): ResponseInterface {
         $request = (new ServerRequestFactory())->createServerRequest($method, 'https://school.example.test' . $path)
             ->withParsedBody($body)
-            ->withQueryParams($query);
+            ->withQueryParams($query)
+            ->withCookieParams($cookies);
         if ($authorization !== '') {
             $request = $request->withHeader('Authorization', $authorization);
         }
@@ -358,6 +488,7 @@ final class InstallerLifecycleTest extends TestCase
             static fn(string $key): ?string => $environment[$key] ?? null,
             getenv('STUDIO_PHP_TEST_COMMON_PASSWORDS') ?: __DIR__ . '/../../internal/auth/password/common-passwords.txt',
             $clock,
+            $afterResponse,
         );
     }
 }

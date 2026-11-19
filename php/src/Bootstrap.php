@@ -19,6 +19,7 @@ use StudioSchedule\Http\AdminAccountsEndpoint;
 use StudioSchedule\Http\AdminAuditEndpoint;
 use StudioSchedule\Http\AdminSettingsRoutes;
 use StudioSchedule\Http\AfterResponse;
+use StudioSchedule\Http\AnnouncementRoutes;
 use StudioSchedule\Http\Application;
 use StudioSchedule\Http\AuthMailLimit;
 use StudioSchedule\Http\AuthSessionRoutes;
@@ -56,6 +57,7 @@ use StudioSchedule\Service\AccountAdministration;
 use StudioSchedule\Service\AccountConfirmation;
 use StudioSchedule\Service\AccountRegistration;
 use StudioSchedule\Service\AdminSettings;
+use StudioSchedule\Service\Announcements;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\BookingRuleSettings;
 use StudioSchedule\Service\ClassAdmin;
@@ -67,6 +69,7 @@ use StudioSchedule\Service\DatabaseReadiness;
 use StudioSchedule\Service\EmailChange;
 use StudioSchedule\Service\Family;
 use StudioSchedule\Service\Impersonation;
+use StudioSchedule\Service\JobResult;
 use StudioSchedule\Service\LessonGenerator;
 use StudioSchedule\Service\MailLog;
 use StudioSchedule\Service\ParticipantRead;
@@ -84,6 +87,8 @@ use StudioSchedule\Service\SystemClock;
 use StudioSchedule\Service\TermAdmin;
 use StudioSchedule\Store\AdminAccountsStore;
 use StudioSchedule\Store\AdminAuditStore;
+use StudioSchedule\Store\AnnouncementRecipients;
+use StudioSchedule\Store\AnnouncementStore;
 use StudioSchedule\Store\CalendarFeedStore;
 use StudioSchedule\Store\CatalogStore;
 use StudioSchedule\Store\Database;
@@ -174,23 +179,41 @@ final class Bootstrap
             }
 
 
-            $wakeMail = $afterResponse === null ? null : static function () use ($afterResponse, $appDirectory, $environment, $config, $expectedVersions, $clock, $logger): void {
-                $afterResponse->wake(BackgroundJobs::DELIVER_MAIL, static function () use ($appDirectory, $environment, $config, $expectedVersions, $clock, $logger): void {
-                    $mailer = SmtpMailer::fromEnvironment(Config::lookup($appDirectory . '/config/.env', $environment));
-                    if ($mailer === null) {
-                        return;
-                    }
-
-                    $database = Database::connect($config->databaseURL, dedicated: true);
-                    try {
-                        if ((new DatabaseReadiness(new Schema($database), $expectedVersions, $logger))->ready()) {
-                            (new BackgroundJobs($database, $config->databaseURL, $clock, $logger, collectMetrics: $config->metricsToken !== ''))->deliverMail($mailer, immediate: true);
+            $wakeMail = null;
+            $wakeAnnouncements = null;
+            if ($afterResponse !== null) {
+                $wake = static function (bool $announcements) use ($afterResponse, $appDirectory, $environment, $config, $expectedVersions, $clock, $logger): void {
+                    $name = $announcements ? BackgroundJobs::ANNOUNCEMENTS : BackgroundJobs::DELIVER_MAIL;
+                    $afterResponse->wake($name, static function () use ($announcements, $appDirectory, $environment, $config, $expectedVersions, $clock, $logger): void {
+                        $lookup = Config::lookup($appDirectory . '/config/.env', $environment);
+                        $mailer = $announcements ? null : SmtpMailer::fromEnvironment($lookup);
+                        if (!$announcements && $mailer === null) {
+                            return;
                         }
-                    } finally {
-                        $database->close();
-                    }
-                });
-            };
+
+                        $database = Database::connect($config->databaseURL, dedicated: true);
+                        try {
+                            if (!(new DatabaseReadiness(new Schema($database), $expectedVersions, $logger))->ready()) {
+                                return;
+                            }
+                            $jobs = new BackgroundJobs($database, $config->databaseURL, $clock, $logger, collectMetrics: $config->metricsToken !== '');
+                            if ($announcements) {
+                                if ($jobs->queueAnnouncements(immediate: true) !== JobResult::Ok) {
+                                    return;
+                                }
+                                $mailer = SmtpMailer::fromEnvironment($lookup);
+                            }
+                            if ($mailer !== null) {
+                                $jobs->deliverMail($mailer, immediate: true);
+                            }
+                        } finally {
+                            $database->close();
+                        }
+                    });
+                };
+                $wakeMail = static fn() => $wake(false);
+                $wakeAnnouncements = static fn() => $wake(true);
+            }
 
             $installer = $config->setupToken === ''
                 ? null
@@ -220,7 +243,7 @@ final class Bootstrap
                 $sessionStore = new SessionStore($connection);
                 $sessions = new SessionMiddleware($config, new SessionAuthentication($sessionStore, $clock));
                 $pushSender = static fn(): ?Sender => Sender::fromEnvironment(Config::lookup($appDirectory . '/config/.env', $environment), $clock);
-                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $config, $logger, $commonPasswordFile, $wakeMail, $pushSender): void {
+                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $config, $logger, $commonPasswordFile, $wakeMail, $wakeAnnouncements, $pushSender): void {
                     $profile = new MeEndpoint($sessionStore);
                     $limits = new RateLimitStore($connection, $clock, $logger);
                     $mailLimit = new AuthMailLimit($config->trustedProxies, $limits);
@@ -281,6 +304,14 @@ final class Bootstrap
                     $familyStore = new FamilyStore($connection);
                     (new FamilyRoutes(new Family($familyStore, $clock)))->register($app);
                     (new PersonExportRoutes(new PersonExport(new PersonExportStore($connection), $familyStore, $clock)))->register($app);
+                    (new AnnouncementRoutes(new Announcements(
+                        new AnnouncementStore($connection),
+                        new AnnouncementRecipients($connection),
+                        new OutboxStore($connection),
+                        $mail,
+                        $clock,
+                        $wakeAnnouncements,
+                    )))->register($app);
                     (new MailLogRoutes(new MailLog(new MailLogStore($connection), $clock)))->register($app);
                     (new ParticipantReadRoutes(new ParticipantRead(new ParticipantReadStore($connection), $clock)))->register($app);
                     (new PassReadRoutes(new PassRead(new PassReadStore($connection, $schedule), $clock)))->register($app);

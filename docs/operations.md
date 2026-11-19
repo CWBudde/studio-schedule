@@ -523,8 +523,8 @@ SMTP_FROM=Studio Example <schedule@example.test>
 
 For PHP, run `php /path/to/app/bin/studio-schedule jobs:run` from cron once a minute. The
 command checks that the schema matches the release and records job outcomes in `job_runs`.
-It purges expired sessions and account links hourly, and processes the mail outbox when
-`SMTP_HOST` is set. Receipt mail attaches the original PDF from the database. If a receipt
+It purges expired sessions and account links hourly, queues due announcements, and processes the
+mail outbox when `SMTP_HOST` is set. Receipt mail attaches the original PDF from the database. If a receipt
 has no PDF yet, PHP renders it from the saved receipt and caches it before sending. If
 rendering fails, the delivery attempt follows the outbox retry schedule.
 
@@ -539,8 +539,10 @@ at expiry or after its fifth attempt, and removes subscriptions that the push se
 as gone.
 
 On PHP-FPM, a completed password reset that queues a notification wakes mail delivery after the
-HTTP response has been sent. Cron handles queued mail on other PHP hosts and when the mail job
-is already running.
+HTTP response has been sent. Publishing an emailed announcement due now also wakes the
+announcement job after the response. It queues up to 100 recipients per run and wakes mail
+delivery when SMTP is configured. Cron processes later batches and handles queued mail on
+other PHP hosts or when a job is already running.
 
 ### One instance
 

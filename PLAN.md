@@ -1531,6 +1531,15 @@ backends.
           a failed generation attempt. The shared `settings_and_branding` case passes on all three
           PHP databases at both mount paths.
   - [ ] Announcements, mail log, statistics (ADR 0014)
+    - [x] Serve and edit announcements, with drafts, all six audiences, recipient previews and
+          account dismissals. The shared scenario passes at both mount paths on all three PHP
+          databases, including guardians, event guests and recorded attendance.
+    - [x] Queue due announcement mail from cron and after the HTTP response on PHP-FPM. Tests
+          verify resumable batches of 100, case-insensitive deduplication, and the scheduled
+          quota on PostgreSQL, MySQL and MariaDB.
+    - [ ] Resolve how backdated announcements consume the daily mail quota. Both backends check
+          a new backdated announcement against today and omit earlier publication dates from
+          today's waiting total.
     - [x] Serve the administrator mail log with filtered search, detail and audited requeue.
           Secret-link bodies stay private. Tests pass on PostgreSQL, MySQL and MariaDB,
           including the shared `mail_log` scenario at both mount paths.

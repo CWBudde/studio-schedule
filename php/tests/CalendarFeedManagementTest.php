@@ -50,6 +50,8 @@ final class CalendarFeedManagementTest extends TestCase
 Town"]);
             self::seedSchedule($db, $postgres, $member, $admin, $location);
 
+            self::assertAttendanceAnnouncement($db, $postgres, $request);
+
             self::assertSame(401, $request('GET', cookie: '')->getStatusCode());
             self::assertSame(['items' => []], self::json($request('GET'), 200));
             self::assertSame(403, $request('POST', body: '{"scope":"teaching"}')->getStatusCode());
@@ -217,6 +219,35 @@ Town"]);
     {
         self::assertIsString($value);
         return $value;
+    }
+
+    /** @param \Closure(string,string,string,string):ResponseInterface $request */
+    private static function assertAttendanceAnnouncement(Connection $db, bool $postgres, \Closure $request): void
+    {
+        $member = self::id(self::MEMBER, $postgres);
+        $admin = self::id(self::ADMIN, $postgres);
+        $db->executeStatement('INSERT INTO person_guardians (guardian_id, dependent_id) VALUES (?, ?)', [$admin, $member]);
+        $db->executeStatement("UPDATE bookings SET status = 'attended' WHERE person_id = ?", [$member]);
+        try {
+            $path = '/api/v1/admin/announcements';
+            $visible = '/api/v1/announcements';
+            $audience = '{"audience":"lesson","lessonId":"018f0000-0000-7000-8000-000000000012"';
+            $preview = $request('POST', "$path/recipients", 'admin-session', $audience . '}');
+            self::assertSame(200, $preview->getStatusCode());
+            self::assertSame('{"recipients":1}', (string) $preview->getBody());
+            $notice = $request('POST', $path, 'admin-session', $audience . ',"title":"Lesson notice","body":"Fixture note"}');
+            self::assertSame(201, $notice->getStatusCode(), (string) $notice->getBody());
+            $read = $request('GET', $visible, 'admin-session', '');
+            self::assertSame(200, $read->getStatusCode());
+            self::assertStringContainsString('Lesson notice', (string) $read->getBody());
+            $memberRead = $request('GET', $visible, 'member-session', '');
+            self::assertSame(200, $memberRead->getStatusCode());
+            self::assertStringContainsString('Lesson notice', (string) $memberRead->getBody());
+        } finally {
+            $db->executeStatement("DELETE FROM announcements WHERE title = 'Lesson notice'");
+            $db->executeStatement("UPDATE bookings SET status = 'booked' WHERE person_id = ?", [$member]);
+            $db->executeStatement('DELETE FROM person_guardians WHERE guardian_id = ? AND dependent_id = ?', [$admin, $member]);
+        }
     }
 
     private static function seedSchedule(Connection $db, bool $postgres, string $member, string $admin, string $location): void

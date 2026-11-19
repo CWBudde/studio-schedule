@@ -6,6 +6,9 @@ import (
 	"net/url"
 	"slices"
 	"testing"
+
+	"github.com/cwbudde/studio-schedule/internal/domain"
+	"github.com/cwbudde/studio-schedule/internal/seed"
 )
 
 func announcements(t *testing.T, b *backend) {
@@ -55,6 +58,139 @@ func announcements(t *testing.T, b *backend) {
 	}
 	if slices.ContainsFunc(items(office), func(v item) bool { return v.ID == n.ID && v.Dismissed }) {
 		t.Error("dismissing changed another account's announcement")
+	}
+
+	draft := request{
+		method: http.MethodPost, path: path,
+		body: `{"audience":"role","role":"member","title":"Draft","body":"Draft body","Draft":true,"email":true}`,
+	}
+	typo := draft
+	typo.body = `{"audience":"everyone","title":"Typo","body":"Must stay private","drfat":true,"email":true}`
+	b.call(t, office, typo, http.StatusUnprocessableEntity)
+
+	d := read[struct {
+		ID, PublishAt string
+		Draft         bool
+	}](t, b.call(t, office, draft, http.StatusCreated))
+	if !d.Draft || d.PublishAt != "" || slices.ContainsFunc(items(member), func(v item) bool { return v.ID == d.ID }) {
+		t.Fatal("draft became visible or acquired a publication time")
+	}
+	ref := map[string]string{"announcementId": d.ID}
+	b.call(t, member, request{method: http.MethodPost, path: public + "/{announcementId}/dismiss", params: ref}, http.StatusNotFound)
+	preview := request{method: http.MethodPost, path: path + "/recipients", body: `{"audience":"role","role":"member"}`}
+	if got := read[struct{ Recipients int }](t, b.call(t, office, preview, http.StatusOK)).Recipients; got < 1 {
+		t.Error("member audience had no email recipients")
+	}
+	edit := request{
+		method: http.MethodPut, path: path + "/{announcementId}", params: ref,
+		body: `{"audience":"role","role":"member","title":"Member notice","body":"For members."}`,
+	}
+	published := read[note](t, b.call(t, office, edit, http.StatusOK))
+	if published.PublishAt != demoNow || !slices.ContainsFunc(items(member), func(v item) bool { return v.ID == d.ID }) ||
+		slices.ContainsFunc(items(office), func(v item) bool { return v.ID == d.ID }) {
+		t.Fatal("publishing the draft did not target members")
+	}
+	edit.body = draft.body
+	b.call(t, office, edit, http.StatusUnprocessableEntity)
+
+	timetable := readSeededTimetable(t, b, browser(t))
+	ballet := timetable.classes[slices.IndexFunc(timetable.classes, func(c listedClass) bool { return c.ID == timetable.balletID })]
+	guardian := browser(t)
+	login(t, b, guardian, "clara.amberly@example.org", demoPassword)
+	classBody := `{"audience":"class","classId":"` + ballet.ID + `","title":"Class notice","body":"Class updates."}`
+	classNotice := read[struct {
+		ID    string
+		Class struct {
+			ID, TermID, StartTime string
+		}
+	}](t, b.call(t, office, request{method: http.MethodPost, path: path, body: classBody}, http.StatusCreated))
+	if classNotice.Class.ID != ballet.ID || classNotice.Class.TermID != timetable.termID || classNotice.Class.StartTime != ballet.StartTime ||
+		!slices.ContainsFunc(items(guardian), func(v item) bool { return v.ID == classNotice.ID }) ||
+		slices.ContainsFunc(items(member), func(v item) bool { return v.ID == classNotice.ID }) {
+		t.Fatal("class announcement did not reach the enrolled child's guardian")
+	}
+	b.call(t, member, request{
+		method: http.MethodPost, path: public + "/{announcementId}/dismiss",
+		params: map[string]string{"announcementId": classNotice.ID},
+	}, http.StatusNotFound)
+	course := read[struct {
+		CourseType struct{ ID string }
+	}](t, b.call(t, office, request{
+		method: http.MethodPost, path: path,
+		body: `{"audience":"course-type","courseTypeId":"` + ballet.CourseTypeID + `","title":"Course notice","body":"Course updates."}`,
+	}, http.StatusCreated))
+	if course.CourseType.ID != ballet.CourseTypeID {
+		t.Fatalf("course type description = %+v", course.CourseType)
+	}
+	event := read[struct {
+		Title    string
+		Sessions []scheduledLesson
+	}](t, b.call(t, browser(t), request{
+		method: http.MethodGet, path: "/api/v1/events/{slug}",
+		params: map[string]string{"slug": "open-ballet-taster"},
+	}, http.StatusOK))
+	anchor, err := domain.ParseDate(demoDate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture := seed.DemoAt(anchor)
+	eventIndex := slices.IndexFunc(fixture.Events, func(e domain.Event) bool { return e.Slug == "open-ballet-taster" })
+	if eventIndex < 0 {
+		t.Fatal("fixture event ID missing")
+	}
+	eventID := fixture.Events[eventIndex].ID.String()
+
+	eventGuardian := browser(t)
+	login(t, b, eventGuardian, "yara.gildenmoor@example.org", demoPassword)
+	if len(event.Sessions) != 1 {
+		t.Fatal("fixture event needs one session")
+	}
+	for _, audience := range []string{
+		`"audience":"event","eventId":"` + eventID + `"`,
+		`"audience":"lesson","lessonId":"` + event.Sessions[0].ID + `"`,
+	} {
+		recipientCount := read[struct{ Recipients int }](t, b.call(t, office, request{
+			method: http.MethodPost, path: path + "/recipients", body: "{" + audience + "}",
+		}, http.StatusOK))
+		if recipientCount.Recipients != 3 {
+			t.Fatalf("expected the two registered contacts and the guest, got %d", recipientCount.Recipients)
+		}
+		eventNotice := read[struct {
+			ID, Audience, EventTitle string
+			Lesson                   *struct{ ID string }
+		}](t, b.call(t, office, request{method: http.MethodPost, path: path, body: "{" + audience +
+			`,"title":"Event notice","body":"Event updates."}`}, http.StatusCreated))
+		if (eventNotice.Audience == "event" && eventNotice.EventTitle != event.Title) ||
+			(eventNotice.Audience == "lesson" && (eventNotice.Lesson == nil || eventNotice.Lesson.ID != event.Sessions[0].ID)) ||
+			!slices.ContainsFunc(items(eventGuardian), func(v item) bool { return v.ID == eventNotice.ID }) ||
+			slices.ContainsFunc(items(member), func(v item) bool { return v.ID == eventNotice.ID }) {
+			t.Fatal("event or session announcement did not reach the registered child's guardian")
+		}
+	}
+
+	memberIndex := slices.IndexFunc(fixture.Accounts, func(a domain.Account) bool { return a.Email == demoMember })
+	if memberIndex < 0 {
+		t.Fatal("fixture member is missing")
+	}
+	person := fixture.Accounts[memberIndex].PersonID
+	attendance := slices.IndexFunc(fixture.Bookings, func(b domain.Booking) bool {
+		return b.PersonID == person && (b.Status == domain.BookingAttended || b.Status == domain.BookingNoShow)
+	})
+	if attendance < 0 {
+		t.Fatal("fixture needs a recorded attendance result")
+	}
+	audience := `"audience":"lesson","lessonId":"` + fixture.Bookings[attendance].LessonID.String() + `"`
+	attendedNote := read[note](t, b.call(t, office, request{
+		method: http.MethodPost, path: path,
+		body: "{" + audience + `,"title":"Lesson follow-up","body":"Follow-up after attendance."}`,
+	}, http.StatusCreated))
+	if !slices.ContainsFunc(items(member), func(v item) bool { return v.ID == attendedNote.ID }) {
+		t.Fatal("recorded attendance hid the lesson announcement")
+	}
+	if got := read[struct{ Recipients int }](t, b.call(t, office, request{
+		method: http.MethodPost, path: path + "/recipients", body: "{" + audience + "}",
+	}, http.StatusOK)).Recipients; got < 1 {
+		t.Fatal("recorded attendance removed every lesson recipient")
 	}
 
 	b.fixture(t, http.MethodPut, "clock", `{"now":"2026-10-23T18:01:00Z"}`, http.StatusNoContent)
