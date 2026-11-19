@@ -114,6 +114,63 @@ func calendarSubscription(t *testing.T, b *backend) {
 	b.call(t, guest, in, http.StatusNotFound)
 }
 
+func familyProfiles(t *testing.T, b *backend) {
+	t.Helper()
+
+	const path = "/api/v1/family"
+	parent, outsider := browser(t), browser(t)
+	b.call(t, parent, request{method: http.MethodGet, path: path}, http.StatusUnauthorized)
+	login(t, b, parent, "clara.amberly@example.org", demoPassword)
+	login(t, b, outsider, "lina.mistlewood@example.com", demoPassword)
+
+	type profile struct{ ID, GivenName, FamilyName, Phone, BirthDate string }
+	type family struct {
+		Me         profile
+		Dependents []struct {
+			profile
+			Guardians []struct{ GivenName, FamilyName string }
+			Managed   bool
+		}
+	}
+	initial := read[family](t, get(t, b, parent, path))
+	if initial.Me.GivenName != "Clara" || len(initial.Dependents) != 2 || len(initial.Dependents[0].Guardians) == 0 {
+		t.Fatalf("unexpected fixture family: %+v", initial)
+	}
+	me := request{method: http.MethodPut, path: path + "/me",
+		body: `{"givenName":"Clara","familyName":"Amberly","phone":" 0123 "}`}
+	bad := me
+	bad.body = `{"givenName":"Clara","familyName":"Amberly","birthDate":""}`
+	if res := b.call(t, parent, bad, http.StatusUnprocessableEntity); !containsJSON(res.body, `"location":"body.birthDate"`) {
+		t.Fatal("the empty birth date was not reported at body.birthDate")
+	}
+	if updated := read[profile](t, b.call(t, parent, me, http.StatusOK)); updated.ID != initial.Me.ID || updated.Phone != "0123" {
+		t.Fatalf("unexpected saved profile: %+v", updated)
+	}
+
+	child := request{method: http.MethodPost, path: path + "/dependents",
+		body: `{"givenName":"New","familyName":"Fixture","birthDate":"2010-02-03"}`}
+	created := read[profile](t, b.call(t, parent, child, http.StatusCreated))
+	if created.ID == "" || created.GivenName != "New" || created.BirthDate != "2010-02-03" {
+		t.Fatalf("unexpected saved dependent: %+v", created)
+	}
+	edit := request{method: http.MethodPut, path: path + "/dependents/{personId}",
+		params: map[string]string{"personId": created.ID}, body: `{"givenName":"Edited","familyName":"Fixture"}`}
+	b.call(t, outsider, edit, http.StatusNotFound)
+	if updated := read[profile](t, b.call(t, parent, edit, http.StatusOK)); updated.ID != created.ID || updated.GivenName != "Edited" || updated.BirthDate != "" {
+		t.Fatalf("unexpected edited dependent: %+v", updated)
+	}
+	after := read[family](t, get(t, b, parent, path))
+	if len(after.Dependents) != 3 || after.Me.Phone != "0123" {
+		t.Fatalf("profile changes were not stored: %+v", after)
+	}
+	for _, dependent := range after.Dependents {
+		if dependent.ID == created.ID && dependent.GivenName == "Edited" && !dependent.Managed && len(dependent.Guardians) == 0 {
+			return
+		}
+	}
+	t.Fatal("updated dependent is missing from the guardian's family")
+}
+
 func familyPrivacy(t *testing.T, b *backend) {
 	t.Helper()
 

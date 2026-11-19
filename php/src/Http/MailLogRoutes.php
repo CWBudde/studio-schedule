@@ -12,6 +12,7 @@ use Psr\Http\Server\RequestHandlerInterface;
 use SensitiveParameter;
 use Slim\App;
 use Slim\Routing\RouteCollectorProxy;
+use StudioSchedule\Domain\Id;
 use StudioSchedule\Mail\TemplateData;
 use StudioSchedule\Service\MailLog;
 use StudioSchedule\Service\SessionPrincipal;
@@ -85,7 +86,7 @@ final readonly class MailLogRoutes
     /** @param array{mailId:string} $args */
     private function detail(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        if (!MailLog::validId($args['mailId'])) {
+        if (!Id::valid($args['mailId'])) {
             return self::invalid($request, 'path.mailId', 'invalid ID');
         }
         $mail = $this->service->detail(strtolower($args['mailId']));
@@ -98,7 +99,7 @@ final readonly class MailLogRoutes
     /** @param array{mailId:string} $args */
     private function requeue(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        if (!MailLog::validId($args['mailId'])) {
+        if (!Id::valid($args['mailId'])) {
             return self::invalid($request, 'path.mailId', 'invalid ID');
         }
         $principal = $request->getAttribute('sessionPrincipal');

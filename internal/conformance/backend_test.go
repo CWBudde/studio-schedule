@@ -250,6 +250,7 @@ func TestBackendConformance(t *testing.T) {
 		{"lesson waitlist", lessonWaitlist},
 		{"participant roles", participantRoles},
 		{"calendar subscription", calendarSubscription},
+		{"family profiles", familyProfiles},
 		{"family and privacy", familyPrivacy},
 		{"announcements", announcements},
 		{"mail log", mailLog},

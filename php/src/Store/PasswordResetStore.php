@@ -9,7 +9,6 @@ use DateInterval;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use RuntimeException;
 use StudioSchedule\Mail\Rendered;
@@ -17,12 +16,9 @@ use StudioSchedule\Service\PasswordResetAccount;
 use StudioSchedule\Service\PasswordResetPersistence;
 use StudioSchedule\Service\PasswordResetResult;
 use Symfony\Component\Uid\Uuid;
-use Throwable;
 
 final readonly class PasswordResetStore implements PasswordResetPersistence
 {
-    private const int MAX_WRITE_ATTEMPTS = 3;
-
     public function __construct(private Connection $connection) {}
 
     public function findAccount(#[\SensitiveParameter] string $tokenHash, ?string $lockedAccountId = null): ?PasswordResetAccount
@@ -61,22 +57,7 @@ final readonly class PasswordResetStore implements PasswordResetPersistence
 
     public function transactional(Closure $reset): PasswordResetResult
     {
-        for ($attempt = 1; ; ++$attempt) {
-            try {
-                $this->connection->beginTransaction();
-                $result = $reset();
-                $this->connection->commit();
-
-                return $result;
-            } catch (Throwable $error) {
-                $this->abandonTransaction();
-                // An account and its impersonator may reset concurrently and
-                // contend for the same session and its audit foreign keys.
-                if (!$error instanceof RetryableException || $attempt >= self::MAX_WRITE_ATTEMPTS) {
-                    throw $error;
-                }
-            }
-        }
+        return Database::retryWrite($this->connection, $reset);
     }
 
     public function lockAccount(string $accountId): void
@@ -123,21 +104,6 @@ final readonly class PasswordResetStore implements PasswordResetPersistence
             . "VALUES (?, ?, ?, ?, ?, 'password-changed', 0, ?, ?)",
             [$this->newId(), $email, $rendered->subject, $rendered->text, $rendered->html, $instant, $instant],
         );
-    }
-
-    private function abandonTransaction(): void
-    {
-        if ($this->connection->isTransactionActive()) {
-            try {
-                $this->connection->rollBack();
-
-                return;
-            } catch (Throwable) {
-                // InnoDB may already have rolled back its deadlock victim.
-                // Keep the original retryable error and reset the connection.
-            }
-        }
-        $this->connection->close();
     }
 
     private function endSessions(string $accountId, DateTimeImmutable $now): void

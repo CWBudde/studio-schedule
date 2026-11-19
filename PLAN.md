@@ -1344,7 +1344,7 @@ backends.
       `/api/test/…` to set the clock, reset the database, load the demo seed and read the outbox.
       Register it only with `TEST_CONTROL=true`, refuse it at startup with an `https://`
       `BASE_URL`, and keep it out of `api/openapi.json`.
-  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 22
+  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 23
         scenarios at the domain root and under `/dance/schedule`.
   - [x] PHP test controls for clock, reset, demo seed and outbox. The CI fixture job exercises
         them on PostgreSQL, MySQL 8.0 and MariaDB 10.6 at the root and under `/dance/schedule`.
@@ -1434,6 +1434,10 @@ backends.
           suite verifies that a successful reset revokes existing sessions and queues the
           password-change notice in the same transaction on PostgreSQL, MySQL and MariaDB.
   - [ ] Family, persons, invitations, catalogue and timetable administration (ADR 0007, 0008)
+    - [x] Read a signed-in person's family, edit their own profile, and create or edit their
+          dependents. Managed dependents are read-only. The shared `family_profiles` case passes
+          at both mount paths on all three engines with the PHP authentication draft.
+    - [ ] Remove dependents and pass any freed waitlist places on to the next eligible people.
   - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
         order (`SELECT … FOR UPDATE` on all three databases, term → class → lesson → passes)
   - [ ] Calendar feeds (ADR 0011)

@@ -9,6 +9,7 @@ use DateTimeZone;
 use InvalidArgumentException;
 use Psr\Clock\ClockInterface;
 use SensitiveParameter;
+use StudioSchedule\Domain\Id;
 use StudioSchedule\Mail\TemplateData;
 use StudioSchedule\Store\MailLogStore;
 
@@ -18,12 +19,6 @@ final readonly class MailLog
     private const int PAGE_SIZE = 50;
 
     public function __construct(private MailLogStore $store, private ClockInterface $clock) {}
-
-    public static function validId(string $id): bool
-    {
-        return $id !== '00000000-0000-0000-0000-000000000000'
-            && preg_match('/\A[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\z/i', $id) === 1;
-    }
 
     /** @return array{items:list<array<string,mixed>>, nextCursor?:string} */
     public function search(string $status, string $template, #[SensitiveParameter] string $recipient, string $cursor): array
@@ -70,7 +65,7 @@ final readonly class MailLog
         $id = $parts[1] ?? '';
         $micros = (int) $parts[0];
         // Bound the timestamp to the range shared by PostgreSQL and DATETIME(6).
-        if (preg_match('/\A\+?[0-9]+\z/', $parts[0]) !== 1 || $micros <= 0 || $micros > 253402300799999999 || !self::validId($id)) {
+        if (preg_match('/\A\+?[0-9]+\z/', $parts[0]) !== 1 || $micros <= 0 || $micros > 253402300799999999 || !Id::valid($id)) {
             throw new InvalidArgumentException('invalid cursor');
         }
         $createdAt = DateTimeImmutable::createFromFormat('U.u', sprintf('%d.%06d', intdiv($micros, 1_000_000), $micros % 1_000_000));

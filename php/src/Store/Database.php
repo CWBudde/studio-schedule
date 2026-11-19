@@ -9,14 +9,17 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Tools\DsnParser;
 use InvalidArgumentException;
 use PDO;
+use Throwable;
 
 final class Database
 {
     private const string READ_SNAPSHOT = 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY';
+    private const int MAX_WRITE_ATTEMPTS = 3;
 
     private const DRIVERS = [
         'postgres' => 'pdo_pgsql',
@@ -124,5 +127,43 @@ final class Database
 
             return $read();
         });
+    }
+
+    /**
+     * @template T
+     * @param Closure():T $write
+     * @return T
+     */
+    public static function retryWrite(Connection $connection, Closure $write): mixed
+    {
+        for ($attempt = 1; ; ++$attempt) {
+            try {
+                $connection->beginTransaction();
+                $result = $write();
+                $connection->commit();
+
+                return $result;
+            } catch (Throwable $error) {
+                self::abandonTransaction($connection);
+                if (!$error instanceof RetryableException || $attempt >= self::MAX_WRITE_ATTEMPTS) {
+                    throw $error;
+                }
+            }
+        }
+    }
+
+    private static function abandonTransaction(Connection $connection): void
+    {
+        if ($connection->isTransactionActive()) {
+            try {
+                $connection->rollBack();
+
+                return;
+            } catch (Throwable) {
+                // InnoDB may already have rolled back its deadlock victim.
+                // Keep the original retryable error and reset the connection.
+            }
+        }
+        $connection->close();
     }
 }
