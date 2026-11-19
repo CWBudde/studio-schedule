@@ -23,6 +23,18 @@ final class Responses
             ->withHeader('Referrer-Policy', 'same-origin');
     }
 
+    public static function etagMatches(string $header, string $etag): bool
+    {
+        foreach (explode(',', $header) as $candidate) {
+            $candidate = trim($candidate);
+            if ($candidate === '*' || $candidate === $etag || $candidate === 'W/' . $etag) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** @param array<string,mixed> $body */
     public static function json(ResponseInterface $response, array $body, bool $head = false): ResponseInterface
     {
@@ -33,11 +45,13 @@ final class Responses
         return $response->withHeader('Content-Type', 'application/json');
     }
 
+    /** @param list<array{location:string,message:string}> $errors */
     public static function problem(
         ServerRequestInterface $request,
         int $status,
         string $detail,
         string $type = '',
+        array $errors = [],
     ): ResponseInterface {
         $response = new Response($status);
         $body = ['title' => $response->getReasonPhrase(), 'status' => $status, 'detail' => $detail];
@@ -48,9 +62,29 @@ final class Responses
         if ($type !== '') {
             $body['type'] = $type;
         }
+        if ($errors !== []) {
+            $body['errors'] = $errors;
+        }
 
         return self::json($response, $body, $request->getMethod() === 'HEAD')
             ->withHeader('Content-Type', 'application/problem+json')
             ->withHeader('Cache-Control', 'no-store');
+    }
+
+    /** @param array{digest:string,contentType:string,data:string}|array{digest:string} $asset */
+    public static function image(ResponseInterface $response, array $asset, bool $head = false): ResponseInterface
+    {
+        $response = $response
+            ->withHeader('ETag', '"' . $asset['digest'] . '"')
+            ->withHeader('Cache-Control', 'public, no-cache')
+            ->withHeader('Content-Disposition', 'inline');
+        if (!isset($asset['data'])) {
+            return $response->withStatus(304);
+        }
+        if (!$head) {
+            $response->getBody()->write($asset['data']);
+        }
+
+        return $response->withHeader('Content-Type', $asset['contentType']);
     }
 }

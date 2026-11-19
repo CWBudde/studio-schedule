@@ -7,7 +7,7 @@ namespace StudioSchedule\Service;
 use DateTimeImmutable;
 use DateTimeZone;
 use Psr\Clock\ClockInterface;
-use StudioSchedule\Domain\PublishedEvent;
+use StudioSchedule\Domain\PublicEvent;
 use StudioSchedule\Domain\PublishedLesson;
 
 final readonly class EventService
@@ -24,7 +24,7 @@ final readonly class EventService
                 return [];
             }
 
-            $ids = array_map(static fn(PublishedEvent $event): string => $event->id, $events);
+            $ids = array_map(static fn(PublicEvent $event): string => $event->id, $events);
             $sessions = [];
             foreach ($this->store->sessions($ids) as $lesson) {
                 assert($lesson->eventId !== null);
@@ -33,18 +33,50 @@ final readonly class EventService
             $occupied = $this->store->occupiedPlaces($ids, $now);
 
             return array_map(
-                static fn(PublishedEvent $event): array
+                static fn(PublicEvent $event): array
                     => self::document($event, $sessions[$event->id] ?? [], $occupied[$event->id] ?? 0, $now),
                 $events,
             );
         });
     }
 
+    /** @return array<string,mixed>|null */
+    public function bySlug(string $slug): ?array
+    {
+        return $this->store->inReadSnapshot(function () use ($slug): ?array {
+            $event = $this->store->bySlug($slug);
+            if ($event === null) {
+                return null;
+            }
+
+            $now = $this->clock->now();
+            $sessions = $this->store->sessions([$event->id]);
+            $occupied = $this->store->occupiedPlaces([$event->id], $now);
+
+            return self::document($event, $sessions, $occupied[$event->id] ?? 0, $now);
+        });
+    }
+
+    /** @return array{digest:string,contentType:string,data:string}|array{data:null}|null */
+    public function image(string $slug): ?array
+    {
+        $asset = $this->store->image($slug);
+        if ($asset === null) {
+            return null;
+        }
+        ['contentType' => $contentType, 'data' => $data] = $asset;
+        if ($contentType === null || $data === null) {
+            return ['data' => null];
+        }
+
+        return ['digest' => hash('sha256', $contentType . "\n" . $data), 'contentType' => $contentType, 'data' => $data];
+    }
+
     /**
      * @param list<PublishedLesson> $sessions
      * @return array<string,mixed>
      */
-    private static function document(PublishedEvent $event, array $sessions, int $occupied, DateTimeImmutable $now): array
+    private static function document(PublicEvent $event, array $sessions, int $occupied, DateTimeImmutable $now): array
     {
         $closesAt = $event->signupClosesAt;
         if ($closesAt === null) {
@@ -55,7 +87,7 @@ final readonly class EventService
                 }
             }
         }
-        $open = $closesAt !== null && $now < $closesAt
+        $open = $event->status === 'published' && $closesAt !== null && $now < $closesAt
             && ($event->signupOpensAt === null || $now >= $event->signupOpensAt);
 
         return [
@@ -66,7 +98,7 @@ final readonly class EventService
             'freePlaces' => max(0, $event->capacity - $occupied),
             'price' => $event->price,
             'vatRate' => $event->vatRate,
-            'status' => 'published',
+            'status' => $event->status,
             'signupOpen' => $open,
             'hasImage' => $event->hasImage,
             'sessions' => array_map(ScheduleService::lessonSummary(...), $sessions),

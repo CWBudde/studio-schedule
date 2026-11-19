@@ -6,7 +6,7 @@ namespace StudioSchedule\Service;
 
 use Closure;
 use DateTimeImmutable;
-use StudioSchedule\Domain\PublishedEvent;
+use StudioSchedule\Domain\PublicEvent;
 use StudioSchedule\Domain\PublishedLesson;
 
 interface EventPersistence
@@ -18,8 +18,13 @@ interface EventPersistence
      */
     public function inReadSnapshot(Closure $read): mixed;
 
-    /** @return list<PublishedEvent> */
+    /** @return list<PublicEvent> */
     public function upcoming(DateTimeImmutable $now): array;
+
+    public function bySlug(string $slug): ?PublicEvent;
+
+    /** @return array{contentType:?string,data:?string}|null */
+    public function image(string $slug): ?array;
 
     /**
      * @param list<string> $eventIds

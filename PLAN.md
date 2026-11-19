@@ -1344,7 +1344,7 @@ backends.
       `/api/test/…` to set the clock, reset the database, load the demo seed and read the outbox.
       Register it only with `TEST_CONTROL=true`, refuse it at startup with an `https://`
       `BASE_URL`, and keep it out of `api/openapi.json`.
-  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 21
+  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 22
         scenarios at the domain root and under `/dance/schedule`.
   - [x] PHP test controls for clock, reset, demo seed and outbox. The CI fixture job exercises
         them on PostgreSQL, MySQL 8.0 and MariaDB 10.6 at the root and under `/dance/schedule`.
@@ -1442,6 +1442,9 @@ backends.
           its queued messages. Moving it to another account clears them in the same transaction.
           Waiting-list invite queueing and after-response delivery are open.
   - [ ] Events and workshops (Phase 10)
+    - [x] Serve public event details and images, including past and canceled events. Drafts
+          stay private and image requests support conditional responses. The shared
+          `public_event_details` case passes on all three PHP databases at both mount paths.
 - [ ] CLI parity: port the operator commands to the PHP `bin/studio-schedule` executable.
       The Phase 11 admin commands and Phase 12 MCP server stay Go-only (ADR 0023). On PostgreSQL
       a school can run the Go binary against its database. On MySQL and MariaDB it uses the web

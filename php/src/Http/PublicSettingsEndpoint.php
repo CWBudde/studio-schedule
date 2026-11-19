@@ -81,7 +81,7 @@ final readonly class PublicSettingsEndpoint
     {
         $ifNoneMatch = $request->getHeaderLine('If-None-Match');
         try {
-            $asset = $this->settings->image($image, static fn(string $digest): bool => self::matches($ifNoneMatch, self::etag($digest)));
+            $asset = $this->settings->image($image, static fn(string $digest): bool => Responses::etagMatches($ifNoneMatch, '"' . $digest . '"'));
         } catch (SettingsNotFound) {
             return Responses::problem($request, 404, 'resource not found');
         }
@@ -89,33 +89,6 @@ final readonly class PublicSettingsEndpoint
             return Responses::problem($request, 404, 'no ' . $image->value);
         }
 
-        $response = $response
-            ->withHeader('ETag', self::etag($asset['digest']))
-            ->withHeader('Cache-Control', 'public, no-cache')
-            ->withHeader('Content-Disposition', 'inline');
-        if (!isset($asset['data'])) {
-            return $response->withStatus(304);
-        }
-
-        $response->getBody()->write($asset['data']);
-
-        return $response->withHeader('Content-Type', $asset['contentType']);
-    }
-
-    private static function etag(string $digest): string
-    {
-        return '"' . $digest . '"';
-    }
-
-    private static function matches(string $header, string $etag): bool
-    {
-        foreach (explode(',', $header) as $candidate) {
-            $candidate = trim($candidate);
-            if ($candidate === '*' || $candidate === $etag || $candidate === 'W/' . $etag) {
-                return true;
-            }
-        }
-
-        return false;
+        return Responses::image($response, $asset);
     }
 }

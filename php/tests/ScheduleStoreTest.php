@@ -11,6 +11,7 @@ use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\TestCase;
 use Psr\Clock\ClockInterface;
 use Psr\Container\ContainerInterface;
+use Psr\Http\Message\ResponseInterface;
 use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
@@ -141,6 +142,73 @@ final class ScheduleStoreTest extends TestCase
         self::assertIsArray($whenOpen['items']);
         self::assertSame([true, true], array_column($whenOpen['items'], 'signupOpen'));
         self::assertSame(['items' => []], self::get($this->app('2026-11-03T11:00:00.5Z'), '/events'));
+    }
+
+    public function testPublicEventDetailsAndImagesIncludeCanceledEventsAndHideDrafts(): void
+    {
+        $this->insert('events', [
+            'id' => 122, 'slug' => 'canceled-workshop', 'title' => 'Canceled workshop', 'status' => 'canceled',
+            'course_type_id' => 22, 'capacity' => 6, 'price' => 2500, 'vat_rate_bp' => 1900,
+            'created_at' => '2026-10-24 10:00:00', 'updated_at' => '2026-10-25 12:00:00',
+            'signup_closes_at' => '2026-11-02 08:00:00',
+        ]);
+        $this->insertLesson(110, '2026-11-02', 'workshop', 'public', [
+            'event_id' => 122, 'status' => 'canceled', 'canceled_at' => '2026-10-25 12:00:00',
+        ]);
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWZkAAAAASUVORK5CYII=');
+        $digest = hash('sha256', "image/png\n" . $png);
+        foreach ([121, 122] as $eventId) {
+            $this->insert('event_images', [
+                'event_id' => $eventId, 'image' => $png, 'image_type' => 'image/png', 'image_digest' => $digest,
+            ]);
+        }
+
+        $app = $this->app(self::BEFORE_RELEASE);
+        $published = self::get($app, '/events/winter-workshop');
+        self::assertSame('published', $published['status']);
+        self::assertSame(5, $published['freePlaces']);
+        self::assertTrue($published['signupOpen']);
+        $past = self::get($this->app('2026-11-04T12:00:00Z'), '/events/winter-workshop');
+        self::assertFalse($past['signupOpen']);
+        self::assertSame(6, $past['freePlaces']);
+        $canceled = self::get($app, '/events/canceled-workshop');
+        self::assertSame('canceled', $canceled['status']);
+        self::assertFalse($canceled['signupOpen']);
+        self::assertTrue($canceled['hasImage']);
+        self::assertIsArray($canceled['sessions']);
+        self::assertSame(['canceled'], array_column($canceled['sessions'], 'status'));
+        foreach (['draft-workshop', 'Winter-workshop', 'missing-workshop'] as $slug) {
+            self::assertSame('resource not found', self::get($app, '/events/' . $slug, status: 404)['detail']);
+            self::assertSame('resource not found', self::get($app, '/events/' . $slug . '/image', status: 404)['detail']);
+        }
+        self::assertSame('no image', self::get($app, '/events/winter-workshop/image', status: 404)['detail']);
+        self::assertSame('resource not found', self::get($app, '/events/canceled-workshop%2Fimage', status: 404)['detail']);
+        foreach (['', '/image'] as $suffix) {
+            $invalid = self::get($app, '/events/' . str_repeat('a', 81) . $suffix, status: 422);
+            self::assertIsArray($invalid['errors']);
+            self::assertSame(['path.slug'], array_column($invalid['errors'], 'location'));
+        }
+
+        $image = static function (string $ifNoneMatch) use ($app): ResponseInterface {
+            $request = (new ServerRequestFactory())->createServerRequest('GET', '/api/v1/events/canceled-workshop/image')
+                ->withHeader('If-None-Match', $ifNoneMatch);
+
+            return $app->handle($request);
+        };
+        $etag = '"' . $digest . '"';
+        $response = $image('"other"');
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame($png, (string) $response->getBody());
+        self::assertSame('image/png', $response->getHeaderLine('Content-Type'));
+        self::assertSame('inline', $response->getHeaderLine('Content-Disposition'));
+        self::assertSame('public, no-cache', $response->getHeaderLine('Cache-Control'));
+        self::assertSame($etag, $response->getHeaderLine('ETag'));
+        foreach ([$etag, '"other", W/' . $etag, '*'] as $validator) {
+            $unchanged = $image($validator);
+            self::assertSame(304, $unchanged->getStatusCode());
+            self::assertSame('', (string) $unchanged->getBody());
+            self::assertSame($etag, $unchanged->getHeaderLine('ETag'));
+        }
     }
 
     public function testReleaseVisibilityFiltersAndAvailabilityThroughPublishedRoutes(): void
@@ -386,7 +454,7 @@ final class ScheduleStoreTest extends TestCase
                 $text = self::id($value);
                 $value = $this->postgres ? $text : pack('H*', str_replace('-', '', $text));
                 $type = $this->postgres ? ParameterType::STRING : ParameterType::BINARY;
-            } elseif ($value !== null && $name === 'invite_token_hash') {
+            } elseif ($value !== null && in_array($name, ['invite_token_hash', 'image'], true)) {
                 if ($this->postgres) {
                     assert(is_string($value));
                     $value = '\x' . bin2hex($value);

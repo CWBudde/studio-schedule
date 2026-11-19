@@ -16,6 +16,36 @@ type eventSummary struct {
 	Sessions   []scheduledLesson
 }
 
+func publicEventDetails(t *testing.T, b *backend) {
+	t.Helper()
+
+	const path = "/api/v1/events/{slug}"
+	client := browser(t)
+	event := request{
+		method: http.MethodGet, path: path, params: map[string]string{"slug": "open-ballet-taster"},
+	}
+	upcoming := read[eventSummary](t, b.call(t, client, event, http.StatusOK))
+	if upcoming.Slug != event.params["slug"] || upcoming.Status != "published" || !upcoming.SignupOpen ||
+		upcoming.FreePlaces != 17 || len(upcoming.Sessions) != 1 {
+		t.Fatalf("published event details: %+v", upcoming)
+	}
+	for _, slug := range []string{"summer-showcase-rehearsal", "missing-workshop"} {
+		hidden := request{method: http.MethodGet, path: path, params: map[string]string{"slug": slug}}
+		b.call(t, client, hidden, http.StatusNotFound)
+		hidden.path += "/image"
+		b.call(t, client, hidden, http.StatusNotFound)
+	}
+	image := event
+	image.path += "/image"
+	b.call(t, client, image, http.StatusNotFound)
+
+	b.fixture(t, http.MethodPut, "clock", `{"now":"2027-02-05T12:00:00Z"}`, http.StatusNoContent)
+	past := read[eventSummary](t, b.call(t, client, event, http.StatusOK))
+	if past.Slug != upcoming.Slug || past.Status != "published" || past.SignupOpen || len(past.Sessions) != 1 {
+		t.Fatalf("past event details: %+v", past)
+	}
+}
+
 func eventRegistration(t *testing.T, b *backend) {
 	t.Helper()
 

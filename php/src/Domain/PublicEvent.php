@@ -7,7 +7,7 @@ namespace StudioSchedule\Domain;
 use DateTimeImmutable;
 
 /** @phpstan-import-type NameRef from PublishedLesson */
-final readonly class PublishedEvent
+final readonly class PublicEvent
 {
     /** @param NameRef $courseType */
     public function __construct(
@@ -19,6 +19,7 @@ final readonly class PublishedEvent
         public int $capacity,
         public int $price,
         public int $vatRate,
+        public string $status,
         public ?DateTimeImmutable $signupOpensAt,
         public ?DateTimeImmutable $signupClosesAt,
         public ?DateTimeImmutable $cancelUntil,

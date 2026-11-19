@@ -52,3 +52,5 @@ jobs:
         run: ./scripts/conformance-php.sh all --controls-only
       - name: Check PHP public catalogue against OpenAPI on all three databases
         run: ./scripts/conformance-php.sh all --scenario public_settings_and_catalog
+      - name: Check PHP public event details against OpenAPI on all three databases
+        run: ./scripts/conformance-php.sh all --scenario public_event_details
