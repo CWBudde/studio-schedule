@@ -401,6 +401,145 @@ final class AuthSessionRoutesTest extends TestCase
         self::assertSame('900', $emailBlocked->getHeaderLine('Retry-After'));
     }
 
+    public function testAccountLifecycleRevokesSessionsAndRollsBackAProtectedSelfDeletion(): void
+    {
+        $this->account(self::ADMIN, 'admin@example.test', self::NOW, 'admin');
+        $this->account(self::MEMBER, 'member@example.test', self::NOW, 'member');
+        $duration = $this->postgres ? "'0 seconds'" : '0';
+        $this->db->executeStatement(
+            'INSERT INTO settings (school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time, '
+            . 'release_weeks_ahead, default_visible_days, booking_cutoff, cancellation_cutoff) '
+            . "VALUES ('Fixture Studio', 'UTC', 'en', 'EUR', 'R', 0, '18:00:00', 1, 2, $duration, $duration)",
+        );
+
+        $memberId = $this->id(self::MEMBER);
+        $decode = $this->postgres ? "decode(?, 'hex')" : 'UNHEX(?)';
+        $this->db->executeStatement(
+            'INSERT INTO push_subscriptions (id, account_id, endpoint, p256dh, auth, created_at, last_used_at) '
+            . "VALUES (?, ?, 'https://push.example.test/fixture', $decode, $decode, ?, ?)",
+            [$memberId, $memberId, str_repeat('01', 65), str_repeat('02', 16), self::NOW, self::NOW],
+        );
+        $token = static function (ResponseInterface $reply): string {
+            self::assertSame(200, $reply->getStatusCode(), (string) $reply->getBody());
+
+            return substr(explode(';', self::lastCookie($reply))[0], strlen('studio_session='));
+        };
+        $admin = $token($this->login('admin@example.test'));
+        $member = $token($this->login('member@example.test'));
+        $path = '/admin/accounts/' . self::MEMBER;
+        $password = json_encode(['password' => self::PASSWORD, 'locale' => 'en'], JSON_THROW_ON_ERROR);
+
+        $own = $this->call('POST', '/admin/accounts/' . self::ADMIN . '/enable', token: $admin);
+        self::assertSame(409, $own->getStatusCode());
+        self::assertStringContainsString('own-account', (string) $own->getBody());
+        $last = $this->call('DELETE', '/my/account', $password, token: $admin);
+        self::assertSame(409, $last->getStatusCode());
+        self::assertStringContainsString('last-admin', (string) $last->getBody());
+        self::assertSame(401, $this->call('POST', $path . '/disable')->getStatusCode());
+        self::assertSame(403, $this->call('POST', $path . '/disable', token: $member)->getStatusCode());
+        self::assertSame(422, $this->call('DELETE', '/admin/accounts/bad-id', token: $admin)->getStatusCode());
+        self::assertSame(404, $this->call('DELETE', '/admin/accounts/018f0000-0000-7000-8000-000000000099', token: $admin)->getStatusCode());
+        self::assertSame(400, $this->call('PUT', $path . '/role', '{', token: $admin)->getStatusCode());
+        self::assertSame(422, $this->call('PUT', $path . '/role', '{"role":"guest"}', token: $admin)->getStatusCode());
+
+        for ($attempt = 0; $attempt < 2; ++$attempt) {
+            self::assertSame(200, $this->call('PUT', $path . '/role', '{"role":"office"}', token: $admin)->getStatusCode());
+            self::assertSame(200, $this->call('POST', $path . '/disable', token: $admin)->getStatusCode());
+        }
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM push_subscriptions'), [0, '0']);
+        self::assertSame(401, $this->call('GET', '/auth/me', token: $member)->getStatusCode());
+        self::assertSame(200, $this->call('POST', $path . '/enable', token: $admin)->getStatusCode());
+        $member = $token($this->login('member@example.test'));
+        self::assertSame('office', $this->db->fetchOne('SELECT role FROM accounts WHERE id = ?', [$memberId]));
+        self::assertSame(['account-disabled', 'account-enabled', 'account-role-changed'], $this->db->fetchFirstColumn('SELECT action FROM audit_events ORDER BY action'));
+
+        $wrong = $this->call('DELETE', '/my/account', '{"password":"wrong fixture password"}', token: $member);
+        self::assertSame(422, $wrong->getStatusCode());
+        self::assertStringContainsString('body.password', (string) $wrong->getBody());
+
+        $this->db->executeStatement(
+            "INSERT INTO audit_events (id, occurred_at, actor_id, action) VALUES (?, ?, ?, 'mcp-tool-called')",
+            [$memberId, self::NOW, $memberId],
+        );
+        $blocked = $this->call('DELETE', '/my/account', $password, token: $member);
+        self::assertSame(409, $blocked->getStatusCode());
+        self::assertStringContainsString('in-use', (string) $blocked->getBody());
+        self::assertSame(200, $this->call('GET', '/auth/me', token: $member)->getStatusCode());
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM audit_events WHERE target_id = ?', [$memberId]), [3, '3']);
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM outbox_mails'), [0, '0']);
+
+        $this->db->executeStatement('DELETE FROM audit_events WHERE id = ?', [$memberId]);
+        $deleted = $this->call('DELETE', '/my/account', $password, token: $member);
+        self::assertSame(204, $deleted->getStatusCode(), (string) $deleted->getBody());
+        self::assertStringContainsString('Path=/dance;', self::lastCookie($deleted));
+        self::assertStringContainsString('Max-Age=0', self::lastCookie($deleted));
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM accounts WHERE id = ?', [$memberId]), [0, '0']);
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM persons WHERE id = ?', [$memberId]), [1, '1']);
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM audit_events WHERE target_person_id = ?', [$memberId]), [4, '4']);
+        self::assertSame('Dein Konto bei Fixture Studio wurde gelöscht', $this->db->fetchOne("SELECT subject FROM outbox_mails WHERE template = 'account-deleted'"));
+    }
+
+    public function testOverlappingAdminChangesPreserveTheLastConfirmedAdmin(): void
+    {
+        $this->account(self::ADMIN, 'admin@example.test', self::NOW, 'admin');
+        $this->account(self::MEMBER, 'second@example.test', self::NOW, 'admin');
+        $this->account('018f0000-0000-7000-8000-000000000003', 'invited@example.test', null, 'admin');
+
+        $worker = <<<'PHP'
+            require 'vendor/autoload.php';
+            $db = StudioSchedule\Store\Database::connect(getenv('STUDIO_PHP_TEST_DATABASE_URL'));
+            $accounts = new StudioSchedule\Store\AdminAccountsStore($db);
+            echo $accounts->write(function () use ($db, $accounts, $argv) {
+                // Establish a snapshot before either transaction changes an admin.
+                $db->fetchOne("SELECT COUNT(*) FROM accounts WHERE role = 'admin'");
+                echo "ready\n";
+                if (fgets(STDIN) !== "go\n") {
+                    throw new RuntimeException('Unexpected synchronization signal');
+                }
+                $target = $accounts->lock($argv[1]);
+                if ($target['lastAdmin']) {
+                    return 'last-admin';
+                }
+                $accounts->setDisabled($target['id'], new DateTimeImmutable('2026-12-04T12:00:00Z'));
+                return 'disabled';
+            });
+            PHP;
+        $workers = [];
+        try {
+            foreach ([self::ADMIN, self::MEMBER] as $target) {
+                $process = proc_open(
+                    [PHP_BINARY, '-r', $worker, '--', $target],
+                    [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+                    $pipes,
+                    dirname(__DIR__),
+                );
+                self::assertIsResource($process);
+                $workers[] = [$process, $pipes];
+            }
+            foreach ($workers as [, $pipes]) {
+                self::assertSame("ready\n", fgets($pipes[1]));
+            }
+            foreach ($workers as [, $pipes]) {
+                self::assertSame(3, fwrite($pipes[0], "go\n"));
+            }
+            $results = [];
+            foreach ($workers as [, $pipes]) {
+                $results[] = stream_get_contents($pipes[1]);
+                self::assertSame('', stream_get_contents($pipes[2]));
+            }
+            sort($results);
+            self::assertSame(['disabled', 'last-admin'], $results);
+            self::assertContains($this->db->fetchOne("SELECT COUNT(*) FROM accounts WHERE role = 'admin' AND confirmed_at IS NOT NULL AND disabled_at IS NULL"), [1, '1']);
+        } finally {
+            foreach ($workers as [$process, $pipes]) {
+                foreach ($pipes as $pipe) {
+                    fclose($pipe);
+                }
+                proc_close($process);
+            }
+        }
+    }
+
     private function confirmationToken(string $excluding = ''): string
     {
         foreach ($this->db->fetchFirstColumn("SELECT body_text FROM outbox_mails WHERE template = 'confirm-email'") as $body) {

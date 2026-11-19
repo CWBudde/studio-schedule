@@ -13,10 +13,15 @@ use Psr\Clock\ClockInterface;
 use Psr\Http\Message\ResponseInterface;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
+use Slim\Psr7\Response;
 use StudioSchedule\Bootstrap;
+use StudioSchedule\Http\PushRoutes;
+use StudioSchedule\Push\Sender;
 use StudioSchedule\Push\VapidKeys;
+use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\Migrator;
+use StudioSchedule\Store\PushSubscriptionStore;
 use StudioSchedule\Store\Schema;
 
 final class PushRoutesTest extends TestCase
@@ -149,6 +154,7 @@ final class PushRoutesTest extends TestCase
                 self::assertSame(204, $this->request('DELETE', $owner, input: ['endpoint' => self::DEVICE])->getStatusCode());
             }
             self::assertFalse($this->database->fetchOne('SELECT id FROM push_subscriptions'));
+            $this->assertStaleSessionCannotSubscribe($device, $keys);
         } finally {
             if (!$this->postgres) {
                 $this->database->executeStatement('SET FOREIGN_KEY_CHECKS = 0');
@@ -161,6 +167,30 @@ final class PushRoutesTest extends TestCase
             }
             $this->database->close();
         }
+    }
+
+    /** @param array<string,mixed> $device */
+    private function assertStaleSessionCannotSubscribe(array $device, VapidKeys $keys): void
+    {
+        $owner = '018f0000-0000-7000-8000-000000000001';
+        $request = (new ServerRequestFactory())->createServerRequest('POST', self::BASE . '/api/v1/my/push/subscriptions')
+            ->withHeader('Content-Type', 'application/json')
+            ->withBody((new StreamFactory())->createStream(json_encode($device, JSON_THROW_ON_ERROR)))
+            ->withAttribute('sessionPrincipal', new SessionPrincipal($owner, $owner, 'member'))
+            ->withAttribute('sessionToken', 'first');
+        $clock = new class implements ClockInterface {
+            public function now(): DateTimeImmutable
+            {
+                return new DateTimeImmutable('2026-11-19T12:00:00Z');
+            }
+        };
+        $routes = new PushRoutes(new PushSubscriptionStore($this->database), $clock, static fn(): Sender => new Sender($keys, 'mailto:fixture@example.test'));
+
+        // The session cookie was accepted before the account mutation removed the session.
+        $this->database->executeStatement('DELETE FROM sessions WHERE id = ?', [$this->id(11)]);
+        $response = $routes($request, new Response());
+        self::assertSame(401, $response->getStatusCode(), (string) $response->getBody());
+        self::assertFalse($this->database->fetchOne('SELECT id FROM push_subscriptions'));
     }
 
     /**

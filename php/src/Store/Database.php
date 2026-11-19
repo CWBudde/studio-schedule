@@ -172,11 +172,18 @@ final class Database
      * @param Closure():T $write
      * @return T
      */
-    public static function retryWrite(Connection $connection, Closure $write): mixed
+    public static function retryWrite(Connection $connection, Closure $write, bool $readCommitted = false): mixed
     {
+        $postgres = $readCommitted && $connection->getDatabasePlatform() instanceof PostgreSQLPlatform;
         for ($attempt = 1; ; ++$attempt) {
             try {
+                if ($readCommitted && !$postgres) {
+                    $connection->executeStatement('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+                }
                 $connection->beginTransaction();
+                if ($postgres) {
+                    $connection->executeStatement('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+                }
                 $result = $write();
                 $connection->commit();
 

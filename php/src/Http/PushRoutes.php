@@ -118,7 +118,18 @@ final readonly class PushRoutes
             return self::invalid($request, $response, 'body.keys.auth', 'auth must be set');
         }
         $label = preg_replace('/^\s+|\s+$/u', '', $label);
-        $this->store->save($principal->accountId, $endpoint, $publicKey, $secret, $label === '' ? null : $label, $this->clock->now());
+        $token = $request->getAttribute('sessionToken');
+        if (!is_string($token) || !$this->store->save(
+            $principal->accountId,
+            $endpoint,
+            $publicKey,
+            $secret,
+            $label === '' ? null : $label,
+            $this->clock,
+            hash('sha256', $token),
+        )) {
+            return Responses::problem($request, 401, 'not signed in');
+        }
 
         return $response->withStatus(204);
     }

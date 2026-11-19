@@ -109,9 +109,9 @@ final readonly class PasswordResetStore implements PasswordResetPersistence
         $this->connection->fetchOne('SELECT id FROM accounts WHERE id = ? FOR UPDATE', [$accountId]);
     }
 
-    public function passwordHashForAccount(string $accountId): ?string
+    public function passwordHashForAccount(string $accountId, bool $locked = false): ?string
     {
-        return $this->fetchPasswordHash($this->encodeId($accountId), false);
+        return $this->fetchPasswordHash($this->encodeId($accountId), $locked);
     }
 
     /** @return array{accountId:string,email:string,sessionId:string,hash:?string,now:DateTimeImmutable}|null */
@@ -172,7 +172,7 @@ final readonly class PasswordResetStore implements PasswordResetPersistence
         $update = $this->isPostgres() ? 'ON CONFLICT (account_id) DO UPDATE SET' : 'ON DUPLICATE KEY UPDATE';
         $this->connection->executeStatement('INSERT INTO account_credentials (account_id, password_hash, changed_at) '
             . "VALUES (?, ?, ?) $update password_hash = ?, changed_at = ?", [$accountId, $passwordHash, $changedAt, $passwordHash, $changedAt]);
-        $this->endSessions($accountId, $now, $keepSessionId);
+        (new SessionStore($this->connection))->endForAccount($accountId, $now, $keepSessionId);
         $this->connection->executeStatement('DELETE FROM account_tokens WHERE account_id = ?', [$accountId]);
     }
 
@@ -224,34 +224,6 @@ final readonly class PasswordResetStore implements PasswordResetPersistence
         return $hash === false ? null : $hash;
     }
 
-    private function endSessions(string $accountId, DateTimeImmutable $now, ?string $keepSessionId): void
-    {
-        $clause = 'WHERE (account_id = ? OR impersonator_id = ?)';
-        $params = [$accountId, $accountId];
-        if ($keepSessionId !== null) {
-            $clause .= ' AND id <> ?';
-            $params[] = $keepSessionId;
-        }
-        // Match Go's earlier of the idle expiry and 30 days after creation.
-        $absoluteCutoff = $now->setTimezone(new DateTimeZone('UTC'))->sub(new DateInterval('P30D'));
-        $instant = $this->timestamp($now);
-        $sessions = $this->connection->fetchAllNumeric(
-            "SELECT account_id, impersonator_id FROM sessions $clause "
-            . 'AND impersonator_id IS NOT NULL AND expires_at > ? AND created_at > ? ORDER BY id FOR UPDATE',
-            [...$params, $instant, $this->timestamp($absoluteCutoff)],
-        );
-        $this->connection->executeStatement("DELETE FROM sessions $clause", $params);
-        $this->connection->executeStatement('DELETE FROM push_subscriptions WHERE account_id = ?', [$accountId]);
-
-        foreach ($sessions as [$targetId, $actorId]) {
-            $this->connection->executeStatement(
-                'INSERT INTO audit_events (id, occurred_at, actor_id, action, target_kind, target_id) '
-                . "VALUES (?, ?, ?, 'impersonation-ended', 'account', ?)",
-                [$this->newId(), $instant, $actorId, $targetId],
-            );
-        }
-    }
-
     private function timestamp(DateTimeImmutable $instant): string
     {
         return $instant->setTimezone(new DateTimeZone('UTC'))->format($this->isPostgres() ? 'Y-m-d H:i:s.uP' : 'Y-m-d H:i:s.u');
@@ -260,13 +232,6 @@ final readonly class PasswordResetStore implements PasswordResetPersistence
     private function encodeId(string $id): string
     {
         return $this->isPostgres() ? $id : Uuid::fromString($id)->toBinary();
-    }
-
-    private function newId(): string
-    {
-        $id = Uuid::v7();
-
-        return $this->isPostgres() ? $id->toRfc4122() : $id->toBinary();
     }
 
     private function isPostgres(): bool

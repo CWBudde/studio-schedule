@@ -250,6 +250,7 @@ func TestBackendConformance(t *testing.T) {
 		{"credential changes", changeCredentials},
 		{"login rate limit", loginRateLimit},
 		{"admin impersonation", adminImpersonation},
+		{"account lifecycle", accountLifecycle},
 		{"member booking and cancellation", memberBooking},
 		{"lesson waitlist", lessonWaitlist},
 		{"participant roster and history", participantRosterAndHistory},

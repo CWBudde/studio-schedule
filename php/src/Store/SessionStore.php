@@ -287,6 +287,29 @@ final readonly class SessionStore
         });
     }
 
+    /** Revoke sessions and push registrations for a locked account in its write transaction. IDs use the database's representation. */
+    public function endForAccount(string $accountId, DateTimeImmutable $now, ?string $keepSessionId = null): void
+    {
+        $clause = 'WHERE (account_id = ? OR impersonator_id = ?)';
+        $params = [$accountId, $accountId];
+        if ($keepSessionId !== null) {
+            $clause .= ' AND id <> ?';
+            $params[] = $keepSessionId;
+        }
+        $absoluteCutoff = $now->setTimezone(new DateTimeZone('UTC'))->sub(new DateInterval(SessionRecord::MAX_AGE));
+        $sessions = $this->connection->fetchAllNumeric(
+            "SELECT account_id, impersonator_id FROM sessions $clause "
+            . 'AND impersonator_id IS NOT NULL AND expires_at > ? AND created_at > ? ORDER BY id FOR UPDATE',
+            [...$params, $this->timestamp($now), $this->timestamp($absoluteCutoff)],
+        );
+        $this->connection->executeStatement("DELETE FROM sessions $clause", $params);
+        $this->connection->executeStatement('DELETE FROM push_subscriptions WHERE account_id = ?', [$accountId]);
+
+        foreach ($sessions as [$target, $actor]) {
+            $this->auditImpersonation($this->connection, $now, 'impersonation-ended', self::text($actor), self::text($target));
+        }
+    }
+
     public function findActiveAccount(#[\SensitiveParameter] string $hash): ?SessionRecord
     {
         $row = $this->connection->fetchAssociative(

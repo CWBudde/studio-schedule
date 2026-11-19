@@ -13,6 +13,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
+use StudioSchedule\Http\AccountAdministrationRoutes;
 use StudioSchedule\Http\AccountRegistrationEndpoint;
 use StudioSchedule\Http\AdminAccountsEndpoint;
 use StudioSchedule\Http\AdminAuditEndpoint;
@@ -50,6 +51,7 @@ use StudioSchedule\Mail\SmtpMailer;
 use StudioSchedule\Push\Sender;
 use StudioSchedule\Receipt\AttachmentStore;
 use StudioSchedule\Receipt\Attachments;
+use StudioSchedule\Service\AccountAdministration;
 use StudioSchedule\Service\AccountConfirmation;
 use StudioSchedule\Service\AccountRegistration;
 use StudioSchedule\Service\AdminSettings;
@@ -90,6 +92,7 @@ use StudioSchedule\Store\FamilyStore;
 use StudioSchedule\Store\MailLogStore;
 use StudioSchedule\Store\ParticipantReadStore;
 use StudioSchedule\Store\PassReadStore;
+use StudioSchedule\Store\OutboxStore;
 use StudioSchedule\Store\PasswordResetStore;
 use StudioSchedule\Store\PersonExportStore;
 use StudioSchedule\Store\PublicSettingsStore;
@@ -207,7 +210,14 @@ final class Bootstrap
                     $mail = new Renderer();
                     $app->get('/api/v1/auth/me', $profile);
                     $app->put('/api/v1/auth/locale', $profile->updateLocale(...));
-                    $app->get('/api/v1/admin/accounts', new AdminAccountsEndpoint(new AdminAccountsStore($connection)));
+                    $adminAccounts = new AdminAccountsStore($connection);
+                    $app->get('/api/v1/admin/accounts', new AdminAccountsEndpoint($adminAccounts));
+                    (new AccountAdministrationRoutes(
+                        new AccountAdministration($adminAccounts, $sessionStore, $resetStore, $passwords, $mail, new OutboxStore($connection), $clock, $wakeMail),
+                        $sessionStore,
+                        $failures,
+                        $config,
+                    ))->register($app);
                     $app->get('/api/v1/admin/audit', new AdminAuditEndpoint(new AdminAuditStore($connection)));
                     $app->post('/api/v1/auth/register', new AccountRegistrationEndpoint(
                         new AccountRegistration(new RegistrationStore($connection), $passwords, $commonPasswords, $clock, $mail, $config->baseURL, $wakeMail),

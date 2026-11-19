@@ -1344,7 +1344,7 @@ backends.
       `/api/test/…` to set the clock, reset the database, load the demo seed and read the outbox.
       Register it only with `TEST_CONTROL=true`, refuse it at startup with an `https://`
       `BASE_URL`, and keep it out of `api/openapi.json`.
-  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 33
+  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 34
         scenarios at the domain root and under `/dance/schedule`.
   - [x] PHP test controls for clock, reset, demo seed and outbox. The CI fixture job exercises
         them on PostgreSQL, MySQL 8.0 and MariaDB 10.6 at the root and under `/dance/schedule`.
@@ -1442,8 +1442,14 @@ backends.
     - [x] Confirm one-time password reset links, including the first-admin setup link. The PHP
           suite verifies that a successful reset revokes existing sessions and queues the
           password-change notice in the same transaction on PostgreSQL, MySQL and MariaDB.
-    - [ ] Let administrators disable, re-enable, or delete accounts and change their roles.
-          Let users delete their own account (ADR 0016).
+    - [x] Let administrators disable, re-enable, or delete accounts and change their roles.
+          Let users delete their own account (ADR 0016). The shared `account_lifecycle` case passes
+          at both mount paths on all three databases and runs in PHP CI. The database tests verify
+          last-admin protection under concurrent writes, rollback for a protected account, and
+          rejection of a push write after session revocation.
+    - [ ] In the Go reference backend, serialize login, impersonation and push registration with
+          revocation. A login already checking a password can currently finish after an account
+          is disabled. Recheck permission and session state under the write locks.
   - [ ] Family, persons, invitations, catalogue and timetable administration (ADR 0007, 0008)
     - [x] Read a signed-in person's family, edit their own profile, and create or edit their
           dependents. Managed dependents are read-only. The shared `family_profiles` case passes
