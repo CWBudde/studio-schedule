@@ -131,7 +131,38 @@ final readonly class EventRegistrationStore implements EventRegistrationPersiste
         return $this->find($id) ?? throw new RuntimeException('The paid registration was not found');
     }
 
-    public function audit(EventRegistration $registration, string $actorId, string $action, DateTimeImmutable $now): void
+    public function cancel(string $id, DateTimeImmutable $now): EventRegistration
+    {
+        $at = Database::sqlInstant($this->connection, $now);
+        $affected = $this->connection->executeStatement(
+            "UPDATE event_registrations SET status = 'canceled', canceled_at = ?, updated_at = ?, "
+            . "invited_at = NULL, expires_at = NULL, invite_token_hash = NULL WHERE id = ? AND status <> 'canceled'",
+            [$at, $at, $this->encodeId($id)],
+            [ParameterType::STRING, ParameterType::STRING, $this->idType()],
+        );
+        if ($affected !== 1) {
+            throw new RuntimeException('The registration changed while being canceled');
+        }
+
+        return $this->find($id) ?? throw new RuntimeException('The canceled registration was not found');
+    }
+
+    public function markRefunded(string $id, string $receiptId, DateTimeImmutable $now): EventRegistration
+    {
+        $affected = $this->connection->executeStatement(
+            "UPDATE event_registrations SET payment = 'refunded', cancellation_receipt_id = ?, updated_at = ? "
+            . "WHERE id = ? AND payment = 'paid' AND status = 'canceled' AND receipt_id IS NOT NULL",
+            [$this->encodeId($receiptId), Database::sqlInstant($this->connection, $now), $this->encodeId($id)],
+            [$this->idType(), ParameterType::STRING, $this->idType()],
+        );
+        if ($affected !== 1) {
+            throw new RuntimeException('The registration changed while being refunded');
+        }
+
+        return $this->find($id) ?? throw new RuntimeException('The refunded registration was not found');
+    }
+
+    public function audit(EventRegistration $registration, string $actorId, string $action, DateTimeImmutable $now, bool $refund = false): void
     {
         $person = $registration->person['id'] ?? null;
         $target = $person === null ? null : $this->encodeId($person);
@@ -141,7 +172,7 @@ final readonly class EventRegistrationStore implements EventRegistrationPersiste
             $target === null ? null : 'person',
             $target,
             $now,
-            ['eventId' => $registration->eventId, 'registrationId' => $registration->id],
+            ['eventId' => $registration->eventId, 'registrationId' => $registration->id] + ($refund ? ['refund' => true] : []),
         );
     }
 

@@ -14,6 +14,7 @@ use Slim\App;
 use stdClass;
 use StudioSchedule\Domain\Id;
 use StudioSchedule\Service\CatalogFailure;
+use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
 use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\EventRegistrationWrites;
@@ -28,6 +29,7 @@ final readonly class EventRegistrationRoutes
         private EventRegistrationReads $registrations,
         private Closure $writes,
         private EventPayments $payments,
+        private EventCancellations $cancellations,
     ) {}
 
     /**
@@ -40,6 +42,8 @@ final readonly class EventRegistrationRoutes
         $app->get('/api/v1/my/events', $this->mine(...));
         $app->post('/api/v1/admin/events/{eventId}/registrations', $this->desk(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->post('/api/v1/admin/event-registrations/{registrationId}/pay', $this->pay(...))->add(CatalogAdminRoutes::requireOffice(...));
+        $app->post('/api/v1/admin/event-registrations/{registrationId}/cancel', $this->cancelAtDesk(...))->add(CatalogAdminRoutes::requireOffice(...));
+        $app->post('/api/v1/event-registrations/{registrationId}/cancel', $this->cancelOwn(...))->add(self::requireSignedIn(...));
         $app->post('/api/v1/events/{slug}/{action:registrations|waitlist}', $this->signup(...))->add(self::requireSignedIn(...));
         $app->post('/api/v1/event-registrations/{registrationId}/{action:accept|decline|leave}', $this->respond(...))
             ->add(self::requireSignedIn(...));
@@ -98,6 +102,30 @@ final readonly class EventRegistrationRoutes
             'address' => SetupInput::trim(CatalogAdminRoutes::text($body, 'recipientAddress', 500) ?? ''),
             'email' => SetupInput::trim(CatalogAdminRoutes::text($body, 'recipientEmail', 254) ?? ''),
         ]))->withHeader('Cache-Control', 'no-store');
+    }
+
+    /** @param array{registrationId:string} $args */
+    private function cancelAtDesk(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = self::pathId($request, $args['registrationId'], 'registrationId');
+        $body = CatalogAdminRoutes::fields($request, ['refund']);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        $principal = $request->getAttribute('sessionPrincipal');
+        assert($principal instanceof SessionPrincipal);
+
+        return Responses::json($response, $this->cancellations->office($principal, $id, CatalogAdminRoutes::flag($body, 'refund')));
+    }
+
+    /** @param array{registrationId:string} $args */
+    private function cancelOwn(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = self::pathId($request, $args['registrationId'], 'registrationId');
+        $principal = $request->getAttribute('sessionPrincipal');
+        assert($principal instanceof SessionPrincipal);
+
+        return Responses::json($response, $this->cancellations->member($principal, $id));
     }
 
     /** @return array{name:string,email:string} */

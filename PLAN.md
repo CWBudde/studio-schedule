@@ -1617,7 +1617,10 @@ backends.
           checks capacity, active invitations and duplicate slugs on all three PHP databases at
           both mount paths.
     - [ ] Let the office cancel an event with its future sessions and registrations, including refunds.
-    - [ ] Let members and the office cancel individual registrations, including eligible refunds.
+    - [x] Let members and the office cancel individual registrations. Enforce the member deadline
+          and let the office retain the payment or refund it after the deadline. Issue an immutable
+          cancellation receipt for a refund and offer freed places to the waitlist. The shared
+          `events_and_registrations` case runs in PHP CI at both mount paths on all three databases.
     - [x] Let the office record event payments and issue receipts. Use the signup fee and VAT
           snapshot with the issuer's tax mode. Allocate the next school-year receipt number,
           store the original PDF and queue it for the payer or guest. The shared `event_signup`

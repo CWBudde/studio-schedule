@@ -40,7 +40,11 @@ interface EventRegistrationPersistence
 
     public function markPaid(string $id, string $receiptId, DateTimeImmutable $now): EventRegistration;
 
-    public function audit(EventRegistration $registration, string $actorId, string $action, DateTimeImmutable $now): void;
+    public function cancel(string $id, DateTimeImmutable $now): EventRegistration;
+
+    public function markRefunded(string $id, string $receiptId, DateTimeImmutable $now): EventRegistration;
+
+    public function audit(EventRegistration $registration, string $actorId, string $action, DateTimeImmutable $now, bool $refund = false): void;
 
     /** @return list<EventRegistration> */
     public function forEvent(string $eventId): array;

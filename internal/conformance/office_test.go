@@ -136,8 +136,8 @@ func eventRegistration(t *testing.T, b *backend) {
 	member := browser(t)
 	login(t, b, member, "clara.amberly@example.org", "demo-password")
 	family := read[struct{ Dependents []struct{ ID string } }](t, get(t, b, member, "/api/v1/family"))
-	if len(family.Dependents) == 0 {
-		t.Fatal("fixture has no dependent to register")
+	if len(family.Dependents) < 2 {
+		t.Fatal("fixture needs two dependents to register")
 	}
 
 	person := family.Dependents[0].ID
@@ -168,6 +168,84 @@ func eventRegistration(t *testing.T, b *backend) {
 	after := read[eventSummary](t, b.call(t, guest, event, http.StatusOK))
 	if after.FreePlaces != before.FreePlaces {
 		t.Errorf("canceling registration did not release the place: before %d, after %d", before.FreePlaces, after.FreePlaces)
+	}
+
+	const slug = "contemporary-weekend-intensive"
+	register.params = map[string]string{"slug": slug}
+	priced := read[myEvent](t, b.call(t, member, register, http.StatusCreated))
+	wait := register
+	wait.path = event.path + "/waitlist"
+	wait.body = `{"personId":"` + family.Dependents[1].ID + `"}`
+	waiting := read[myEvent](t, b.call(t, member, wait, http.StatusCreated))
+	const own = "/api/v1/event-registrations/{registrationId}"
+	const admin = "/api/v1/admin/event-registrations/{registrationId}"
+	pay := request{
+		method: http.MethodPost, path: admin + "/pay", params: map[string]string{"registrationId": priced.Registration.ID},
+		body: `{"recipientEmail":"event-refund@example.test"}`,
+	}
+	type registration struct {
+		Status, Payment, ReceiptID, CancellationReceiptID, CanceledAt string
+	}
+	original := read[struct{ Registration registration }](t, b.call(t, office, pay, http.StatusOK)).Registration
+	leave := request{method: http.MethodPost, path: own + "/cancel", params: pay.params}
+	b.call(t, guest, leave, http.StatusUnauthorized)
+	b.call(t, office, leave, http.StatusNotFound)
+	waitCancel := leave
+	waitCancel.params = map[string]string{"registrationId": waiting.Registration.ID}
+	expectConflict(t, b, member, waitCancel, "not-registered")
+	outcome := read[struct {
+		Registration registration
+		Event        eventSummary
+	}](t, b.call(t, member, leave, http.StatusOK))
+	refunded := outcome.Registration
+	if refunded.Status != "canceled" || refunded.Payment != "refunded" || refunded.CanceledAt != demoNow ||
+		refunded.ReceiptID != original.ReceiptID || refunded.CancellationReceiptID == "" ||
+		refunded.CancellationReceiptID == original.ReceiptID || outcome.Event.FreePlaces != 0 {
+		t.Fatalf("member cancellation and replacement offer: %+v", outcome)
+	}
+	expectConflict(t, b, member, leave, "already-canceled")
+	offer := mailToken(t, b, "clara.amberly@example.org", "event-invite", "/events/invite")
+	b.call(t, guest, request{method: http.MethodGet, path: "/api/v1/event-invites/{token}", params: map[string]string{"token": offer}}, http.StatusOK)
+
+	receipt := request{
+		method: http.MethodGet, path: "/api/v1/admin/receipts/{receiptId}",
+		params: map[string]string{"receiptId": refunded.CancellationReceiptID},
+	}
+	storno := read[struct {
+		Kind, Number string
+		Gross        int
+	}](t, b.call(t, office, receipt, http.StatusOK))
+	if storno.Kind != "cancellation" || storno.Gross != -12000 {
+		t.Fatalf("cancellation receipt: %+v", storno)
+	}
+	receipt.path = "/api/v1/my/receipts/{receiptId}/pdf"
+	b.call(t, member, receipt, http.StatusOK)
+	outbox := read[struct {
+		Mails []struct{ To, Text, Template string }
+	}](t, b.fixture(t, http.MethodGet, "outbox", "", http.StatusOK))
+	var memberNotice, refundNotice bool
+	for _, mail := range outbox.Mails {
+		memberNotice = memberNotice || mail.To == "clara.amberly@example.org" &&
+			mail.Template == "event-registration-canceled" && strings.Contains(mail.Text, "Contemporary Weekend Intensive")
+		refundNotice = refundNotice || mail.To == "event-refund@example.test" &&
+			mail.Template == "receipt" && strings.Contains(mail.Text, storno.Number)
+	}
+	if !memberNotice || !refundNotice {
+		t.Errorf("missing cancellation or refund notice: member notice=%t, refund notice=%t", memberNotice, refundNotice)
+	}
+
+	waitCancel.path = own + "/accept"
+	b.call(t, member, waitCancel, http.StatusOK)
+	pay.params = waitCancel.params
+	b.call(t, office, pay, http.StatusOK)
+	b.fixture(t, http.MethodPut, "clock", `{"now":"2026-10-25T15:00:00Z"}`, http.StatusNoContent)
+	waitCancel.path = own + "/cancel"
+	expectConflict(t, b, member, waitCancel, "too-late")
+	waitCancel.path, waitCancel.body = admin+"/cancel", `{}`
+	b.call(t, member, waitCancel, http.StatusForbidden)
+	if kept := read[registration](t, b.call(t, office, waitCancel, http.StatusOK)); kept.Status != "canceled" ||
+		kept.Payment != "paid" || kept.ReceiptID == "" || kept.CancellationReceiptID != "" {
+		t.Fatalf("office cancellation without a refund: %+v", kept)
 	}
 }
 

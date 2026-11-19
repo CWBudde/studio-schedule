@@ -18,6 +18,8 @@ use Symfony\Component\Uid\Uuid;
 /**
  * @phpstan-import-type Settings from ReceiptWritePersistence
  * @phpstan-import-type Payer from ReceiptWritePersistence
+ * @phpstan-import-type Original from ReceiptWritePersistence
+ * @phpstan-import-type ReceiptLine from AttachmentStore
  */
 final readonly class ReceiptWriteStore implements ReceiptWritePersistence
 {
@@ -38,12 +40,46 @@ final readonly class ReceiptWriteStore implements ReceiptWritePersistence
     {
         /** @var Payer|false $row */
         $row = $this->connection->fetchAssociative(
-            'SELECT p.given_name, p.family_name, a.email, a.locale FROM persons p '
-            . 'LEFT JOIN accounts a ON a.person_id = p.id WHERE p.id = ?',
+            'SELECT recipient.given_name, recipient.family_name, a.email, a.locale FROM persons p '
+            . 'JOIN persons recipient ON recipient.id = COALESCE(p.merged_into, p.id) '
+            . 'LEFT JOIN accounts a ON a.person_id = recipient.id WHERE p.id = ?',
             [$this->key($id)],
         );
 
         return $row === false ? throw new RuntimeException('The locked receipt payer disappeared') : $row;
+    }
+
+    public function original(string $id): ?array
+    {
+        $key = $this->key($id);
+        /** @var array{kind:'sale'|'cancellation',number:string,issue_date:string,locale:string,tax_mode:string,tax_note:?string,
+         *     currency:string,gross:int|numeric-string,recipient_name:string,recipient_address:?string,recipient_email:?string,
+         *     payment_method:'cash'|'transfer'|'card',payer_person_id:?string,has_cancellation:bool|int|string}|false $row
+         */
+        $row = $this->connection->fetchAssociative(
+            'SELECT r.kind, r.number, r.issue_date, r.locale, r.tax_mode, r.tax_note, r.currency, r.gross, '
+            . 'r.recipient_name, r.recipient_address, r.recipient_email, r.payment_method, r.payer_person_id, '
+            . 'EXISTS (SELECT 1 FROM receipts c WHERE c.cancels_receipt_id = r.id) AS has_cancellation '
+            . 'FROM receipts r WHERE r.id = ?',
+            [$key],
+        );
+        if ($row === false) {
+            return null;
+        }
+        /** @var list<ReceiptLine> $lines */
+        $lines = $this->connection->fetchAllAssociative(
+            'SELECT position, description, quantity, unit_price, vat_rate_bp, net, vat, gross '
+            . 'FROM receipt_lines WHERE receipt_id = ? ORDER BY position',
+            [$key],
+        );
+        $payer = $row['payer_person_id'];
+        $hasCancellation = in_array($row['has_cancellation'], [true, 1, '1', 't'], true);
+        unset($row['payer_person_id'], $row['has_cancellation']);
+
+        return $row + [
+            'payerId' => $payer === null ? null : ($this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform ? $payer : Uuid::fromBinary($payer)->toRfc4122()),
+            'hasCancellation' => $hasCancellation, 'lines' => $lines,
+        ];
     }
 
     public function nextSequence(int $year): int
@@ -81,12 +117,14 @@ final readonly class ReceiptWriteStore implements ReceiptWritePersistence
         array $receipt,
         #[SensitiveParameter]
         array $lines,
+        ?string $cancelsReceiptId = null,
     ): void {
         $key = $this->key($id);
         $this->connection->insert('receipts', array_diff_key($receipt, ['original_number' => true, 'original_date' => true]) + [
             'id' => $key,
             'year' => (int) substr($receipt['issue_date'], 0, 4),
             'sequence' => $sequence,
+            'cancels_receipt_id' => $cancelsReceiptId === null ? null : $this->key($cancelsReceiptId),
             'issued_at' => Database::sqlInstant($this->connection, $issuedAt),
             'created_by' => $this->key($actorId),
             'payer_person_id' => $payerId === null ? null : $this->key($payerId),

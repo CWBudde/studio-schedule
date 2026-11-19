@@ -10,39 +10,31 @@ use Psr\Clock\ClockInterface;
 use RuntimeException;
 use SensitiveParameter;
 use StudioSchedule\Domain\EventRegistration;
-use StudioSchedule\Domain\Money;
 use StudioSchedule\Domain\PublishedLesson;
-use StudioSchedule\Mail\Renderer as MailRenderer;
 use StudioSchedule\Receipt\Document;
-use StudioSchedule\Receipt\Renderer;
-use Symfony\Component\Uid\Uuid;
 
 /**
- * @phpstan-import-type Settings from ReceiptWritePersistence
- * @phpstan-import-type ReceiptDocument from Renderer
+ * @phpstan-import-type ReceiptRef from ReceiptIssuance
  * @phpstan-type Payment array{method:'cash'|'transfer'|'card',payerId:?string,name:string,address:string,email:string}
  */
 final readonly class EventPayments
 {
-    /** @param (Closure(ReceiptDocument,string):string)|null $render */
     public function __construct(
         private EventPersistence $events,
         private EventRegistrationPersistence $registrations,
-        private ReceiptWritePersistence $receipts,
+        private ReceiptIssuance $receipts,
         private ClockInterface $clock,
-        private MailRenderer $mail,
         private ?Closure $wakeMail = null,
-        private ?Closure $render = null,
     ) {}
 
     /**
      * @param Payment $payment
-     * @return array{registration:array<string,mixed>,receipt:array{id:string,number:string,issueDate:string}}
+     * @return array{registration:array<string,mixed>,receipt:ReceiptRef}
      */
     public function pay(SessionPrincipal $principal, string $id, #[SensitiveParameter] array $payment): array
     {
         $result = $this->events->write(function () use ($principal, $id, $payment): array {
-            $settings = $this->receipts->settings() ?? throw self::notFound();
+            $settings = $this->receipts->settings();
             $observed = $this->registrations->find($id) ?? throw self::notFound();
             $event = $this->events->lockEvent($observed->eventId) ?? throw self::notFound();
             $registration = $this->registrations->find($id) ?? throw self::notFound();
@@ -64,7 +56,7 @@ final readonly class EventPayments
                 }
                 $payer = $this->receipts->payer($payerId);
             }
-            self::requireIssuer($settings);
+            ReceiptIssuance::requireIssuer($settings);
 
             $name = $payment['name'] !== '' ? $payment['name'] : ($payer === null ? $participant : $payer['given_name'] . ' ' . $payer['family_name']);
             if (SetupInput::trim($name) === '' || mb_strlen($name, 'UTF-8') > 200) {
@@ -80,12 +72,6 @@ final readonly class EventPayments
 
             $now = $this->clock->now();
             $timezone = new DateTimeZone($settings['timezone']);
-            $day = $now->setTimezone($timezone);
-            $year = (int) $day->format('Y');
-            $issueDate = $day->format('Y-m-d');
-            $sequence = $this->receipts->nextSequence($year);
-            $number = sprintf('%s-%04d-%04d', $settings['receipt_prefix'], $year, $sequence);
-            $receiptId = Uuid::v7()->toRfc4122();
             $actor = $principal->impersonatorId ?? $principal->accountId;
             $locale = $settings['default_locale'];
             [$first, $last] = self::eventDays($this->events->sessions([$event->id]), $timezone);
@@ -99,41 +85,19 @@ final readonly class EventPayments
                 'position' => 1, 'description' => $item(Document::language($locale)), 'quantity' => 1, 'unit_price' => $gross,
                 'vat_rate_bp' => $rate, 'net' => $net, 'vat' => $gross - $net, 'gross' => $gross,
             ]];
-            $header = [
-                'number' => $number, 'kind' => 'sale', 'issue_date' => $issueDate, 'locale' => $locale,
-                'issuer_name' => $settings['issuer_name'] ?? '', 'issuer_address' => $settings['issuer_address'] ?? '',
-                'issuer_tax_id' => $settings['issuer_tax_id'] ?? '', 'issuer_email' => $settings['issuer_email'],
-                'issuer_phone' => $settings['issuer_phone'], 'tax_mode' => $settings['tax_mode'] ?? '', 'tax_note' => $settings['tax_note'],
-                'footer' => $settings['receipt_footer'], 'recipient_name' => $name,
+            $receipt = $this->receipts->issue($settings, $actor, $now, [
+                'kind' => 'sale', 'tax_mode' => $settings['tax_mode'] ?? '', 'tax_note' => $settings['tax_note'],
+                'currency' => $settings['currency'], 'gross' => $gross, 'recipient_name' => $name,
                 'recipient_address' => $payment['address'] === '' ? null : $payment['address'],
-                'payment_method' => $payment['method'], 'currency' => $settings['currency'], 'gross' => $gross,
-                'reason' => null, 'original_number' => null, 'original_date' => null,
-            ];
-            $this->receipts->record($receiptId, $sequence, $now, $actor, $payerId, $email, $header, $lines);
-            $render = $this->render ?? (new Renderer())->render(...);
-            $this->receipts->putPdf($receiptId, $render(Document::fromSnapshot($header, $lines), $this->receipts->logo()));
-            $to = $payer['email'] ?? $email;
-            if ($to !== null) {
-                if (!SetupInput::validEmail($to)) {
-                    throw new RuntimeException('The receipt payer has an invalid account email');
-                }
-                $payerLocale = $payer['locale'] ?? '';
-                $mailLocale = $payerLocale === '' ? $locale : $payerLocale;
-                $lang = Document::language($mailLocale);
-                $message = $this->mail->render($mailLocale, 'receipt', [
-                    'SchoolName' => $settings['school_name'], 'GivenName' => $payer !== null && $payer['email'] !== null ? $payer['given_name'] : '',
-                    'Number' => $number, 'Cancellation' => false, 'Cancels' => '',
-                    'Amount' => (new Money($gross))->format($settings['currency'], $lang), 'Item' => $item($lang),
-                ]);
-                $this->receipts->enqueue($receiptId, $to, $message, $now);
-            }
+                'payment_method' => $payment['method'], 'payerId' => $payerId, 'recipientEmail' => $email,
+            ], $lines, $item);
 
-            $updated = $this->registrations->markPaid($id, $receiptId, $now);
+            $updated = $this->registrations->markPaid($id, $receipt['id'], $now);
             $this->registrations->audit($updated, $actor, 'event-registration-paid', $now);
 
             return [
                 'registration' => EventRegistrationReads::officeDocument($updated),
-                'receipt' => ['id' => $receiptId, 'number' => $number, 'issueDate' => $issueDate],
+                'receipt' => $receipt,
             ];
         });
         if ($this->wakeMail !== null) {
@@ -153,23 +117,6 @@ final readonly class EventPayments
         }
         if ($registration->payment !== 'unpaid') {
             throw new CatalogFailure(409, 'the registration is paid already', reason: 'already-paid');
-        }
-    }
-
-    /** @param Settings $settings */
-    private static function requireIssuer(array $settings): void
-    {
-        $missing = match (true) {
-            SetupInput::trim($settings['issuer_name'] ?? '') === '' => "the issuer's name is missing",
-            SetupInput::trim($settings['issuer_address'] ?? '') === '' => "the issuer's address is missing",
-            SetupInput::trim($settings['issuer_tax_id'] ?? '') === '' => 'the tax number or VAT ID is missing',
-            !in_array($settings['tax_mode'], ['standard', 'small_business', 'exempt'], true) => 'the tax mode is missing',
-            $settings['tax_mode'] === 'exempt' && SetupInput::trim($settings['tax_note'] ?? '') === ''
-                => 'the exempt tax mode needs a note with its legal basis',
-            default => null,
-        };
-        if ($missing !== null) {
-            throw new CatalogFailure(409, "the receipt settings are incomplete: $missing", reason: 'receipt-settings-incomplete');
         }
     }
 

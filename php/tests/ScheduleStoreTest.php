@@ -28,12 +28,14 @@ use StudioSchedule\Http\TrustedProxies;
 use StudioSchedule\Http\WaitlistInviteEndpoint;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Mail\Renderer;
+use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
 use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
 use StudioSchedule\Service\JobResult;
 use StudioSchedule\Service\OneOffLesson;
+use StudioSchedule\Service\ReceiptIssuance;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\StatisticsService;
 use StudioSchedule\Service\WaitlistInvites;
@@ -1065,6 +1067,60 @@ final class ScheduleStoreTest extends TestCase
         self::assertSame(['receipt-payer@example.test'], $this->database->fetchFirstColumn('SELECT recipient FROM outbox_mails'));
     }
 
+    public function testOfficeEventRefundKeepsOriginalAmountsAndRollsBackOnPdfFailure(): void
+    {
+        $this->database->executeStatement("UPDATE event_registrations SET price = 2250, vat_rate_bp = 1900 WHERE status = 'registered'");
+        $this->database->executeStatement(
+            "UPDATE settings SET issuer_name = 'Original Studio', issuer_address = 'Room 1', issuer_tax_id = '123', tax_mode = 'standard'",
+        );
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $path = '/admin/event-registrations/' . self::id(221);
+        $before = $this->app(self::BEFORE_RELEASE);
+        $original = self::post($before, $path . '/pay', $office, 200, [])['receipt'];
+        self::assertIsArray($original);
+        self::assertIsString($original['id']);
+
+        $after = '2026-11-06T12:00:00Z';
+        $app = $this->app($after);
+        $this->database->executeStatement("UPDATE settings SET issuer_name = NULL, tax_mode = 'small_business', default_locale = 'de'");
+        $incomplete = self::post($app, $path . '/cancel', $office, 409, ['refund' => true]);
+        self::assertSame('receipt-settings-incomplete', $incomplete['reason']);
+        $this->database->executeStatement("UPDATE settings SET issuer_name = 'Current Studio'");
+        $fails = $this->app($after, renderReceipt: static fn(): never => throw new RuntimeException('Fixture Storno rendering error'));
+        try {
+            self::post($fails, $path . '/cancel', $office, 200, ['refund' => true]);
+            self::fail('Expected a rendering error to abort the refund');
+        } catch (RuntimeException $error) {
+            self::assertSame('Fixture Storno rendering error', $error->getMessage());
+        }
+        self::assertSame(['paid'], $this->database->fetchFirstColumn("SELECT payment FROM event_registrations WHERE status = 'registered'"));
+        self::assertSame([$original['number']], $this->database->fetchFirstColumn('SELECT number FROM receipts'));
+        self::assertSame(['event-registration-paid'], $this->database->fetchFirstColumn('SELECT action FROM audit_events'));
+        self::assertSame(['receipt'], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
+
+        $refund = self::post($app, $path . '/cancel', $office, 200, ['refund' => true]);
+        self::assertSame('canceled', $refund['status']);
+        self::assertSame('refunded', $refund['payment']);
+        self::assertSame($original['id'], $refund['receiptId']);
+        self::assertSame($after, $refund['canceledAt']);
+        self::assertSame('already-canceled', self::post($app, $path . '/cancel', $office, 409, ['refund' => true])['reason']);
+
+        $refundAmounts = $this->database->fetchNumeric("SELECT net, vat, gross FROM receipts WHERE kind = 'cancellation'");
+        self::assertIsArray($refundAmounts);
+        self::assertSame([-1891, -359, -2250], array_map(static fn(mixed $value): int => is_numeric($value) ? (int) $value : 0, $refundAmounts));
+        self::assertSame(['R-2026-0002', 'Current Studio', 'standard', 'de'], $this->database->fetchNumeric(
+            "SELECT number, issuer_name, tax_mode, locale FROM receipts WHERE kind = 'cancellation'",
+        ));
+        self::assertSame(['member@example.test'], $this->database->fetchFirstColumn(
+            "SELECT m.recipient FROM outbox_mails m JOIN receipts r ON r.id = m.receipt_id WHERE r.kind = 'cancellation'",
+        ));
+        $details = $this->database->fetchOne("SELECT details FROM audit_events WHERE action = 'event-registration-canceled'");
+        self::assertIsString($details);
+        $decoded = json_decode($details, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($decoded);
+        self::assertTrue($decoded['refund']);
+    }
+
     private function eventExpiryJobs(DateTimeImmutable $now): BackgroundJobs
     {
         $dsn = getenv('STUDIO_PHP_TEST_DATABASE_URL');
@@ -1508,11 +1564,14 @@ final class ScheduleStoreTest extends TestCase
             'https://school.example.test/dance/schedule',
             false,
         );
-        EventRoutes::register($app, $eventStore, $clock, $lessons, static fn(): EventWaitlist => $waitlist);
+        $eventWaitlist = static fn(): EventWaitlist => $waitlist;
+        EventRoutes::register($app, $eventStore, $clock, $lessons, $eventWaitlist);
+        $eventReceipts = new ReceiptIssuance(new ReceiptWriteStore($this->database), new Renderer(), $renderReceipt);
         (new EventRegistrationRoutes(
             $registrations,
             static fn(): EventRegistrationWrites => new EventRegistrationWrites($eventStore, $registrationStore, $waitlist, $clock),
-            new EventPayments($eventStore, $registrationStore, new ReceiptWriteStore($this->database), $clock, new Renderer(), render: $renderReceipt),
+            new EventPayments($eventStore, $registrationStore, $eventReceipts, $clock),
+            new EventCancellations($eventStore, $registrationStore, $eventReceipts, $clock, $eventWaitlist),
         ))->register($app);
         $app->post('/api/v1/event-invites/{token}/accept', new WaitlistInviteEndpoint(
             static fn(string $token): ?true => $waitlist->respondByToken($token, accept: true),

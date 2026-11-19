@@ -209,6 +209,19 @@ final readonly class EventWaitlist
         }
     }
 
+    /** @param Recipient $recipient */
+    public function sendCancellation(Event $event, DateTimeImmutable $now, #[SensitiveParameter] array $recipient, bool $refunded): void
+    {
+        $settings = $this->store->settings();
+        $this->queueMail(
+            $recipient['email'],
+            $this->locale($recipient, $settings),
+            'event-registration-canceled',
+            $this->mailData($recipient, $settings, $event) + ['Refunded' => $refunded],
+            $now,
+        );
+    }
+
     /**
      * @param list<Entry> $entries
      * @return array<string,list<Recipient>>

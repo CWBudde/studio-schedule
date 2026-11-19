@@ -59,8 +59,10 @@ use StudioSchedule\Mail\SmtpMailer;
 use StudioSchedule\Push\Sender;
 use StudioSchedule\Receipt\AttachmentStore;
 use StudioSchedule\Receipt\Attachments;
+use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
 use StudioSchedule\Service\EventRegistrationReads;
+use StudioSchedule\Service\ReceiptIssuance;
 use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
 use StudioSchedule\Service\AccountAdministration;
@@ -342,10 +344,12 @@ final class Bootstrap
                         $pushSender() !== null,
                     );
                     EventRoutes::register($app, $eventStore, $clock, $lessons, $eventWaitlist);
+                    $eventReceipts = new ReceiptIssuance(new ReceiptWriteStore($connection), $mail);
                     (new EventRegistrationRoutes(
                         $eventRegistrations,
                         static fn(): EventRegistrationWrites => new EventRegistrationWrites($eventStore, $registrationStore, $eventWaitlist(), $clock),
-                        new EventPayments($eventStore, $registrationStore, new ReceiptWriteStore($connection), $clock, $mail, $wakeMail),
+                        new EventPayments($eventStore, $registrationStore, $eventReceipts, $clock, $wakeMail),
+                        new EventCancellations($eventStore, $registrationStore, $eventReceipts, $clock, $eventWaitlist, $wakeMail),
                     ))->register($app);
                     $familyStore = new FamilyStore($connection);
                     $duplicates = new DuplicateStore($connection, $memberDirectory, $familyStore, $clock);

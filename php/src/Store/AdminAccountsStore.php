@@ -143,7 +143,7 @@ final readonly class AdminAccountsStore
         $this->connection->executeStatement(self::DELETE_ACCOUNT, [$key]);
     }
 
-    /** @param array<string,string> $details */
+    /** @param array<string,string|bool> $details */
     public function audit(?string $actor, string $action, ?string $kind, ?string $target, DateTimeImmutable $now, array $details = []): void
     {
         $this->connection->executeStatement(
