@@ -8,11 +8,11 @@ import (
 )
 
 type listedClass struct {
-	ID, TermID, StartTime string
-	Weekday               int
-	Retired               *bool
-	Instructor            struct{ DisplayName string }
-	LevelFrom             struct{ Name string }
+	ID, TermID, CourseTypeID, RoomID, StartTime string
+	Weekday                                     int
+	Retired                                     *bool
+	Instructor                                  struct{ ID, DisplayName string }
+	LevelFrom                                   struct{ Name string }
 }
 
 type seededTimetable struct {

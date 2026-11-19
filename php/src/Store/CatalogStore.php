@@ -129,18 +129,10 @@ final readonly class CatalogStore implements CatalogPersistence, CatalogAdminPer
 
     public function classes(string $term, bool $withRetired): ?array
     {
-        $duration = $this->isPostgres() ? Database::intervalMicros('c.duration') : 'c.duration';
         $active = $withRetired ? '' : ' AND c.retired = FALSE';
         // Keep an empty term distinguishable from an unknown term using a single read.
         $rows = $this->connection->fetchAllAssociative(
-            "SELECT c.id, c.term_id, c.course_type_id, c.room_id, c.weekday, c.start_time, $duration AS duration_micros, "
-            . 'c.capacity, c.retired, c.all_levels, c.stage, c.age_from_months, c.age_to_months, '
-            . 'i.id AS instructor_id, i.display_name AS instructor_name, a.id AS accompanist_id, a.display_name AS accompanist_name, '
-            . 'f.id AS from_id, f.name AS from_name, f.code AS from_code, f.position AS from_position, '
-            . 'l.id AS to_id, l.name AS to_name, l.code AS to_code, l.position AS to_position '
-            . "FROM terms t LEFT JOIN classes c ON c.term_id = t.id$active "
-            . 'LEFT JOIN staff i ON i.id = c.instructor_id LEFT JOIN staff a ON a.id = c.accompanist_id '
-            . 'LEFT JOIN levels f ON f.id = c.level_from_id LEFT JOIN levels l ON l.id = c.level_to_id '
+            $this->classQuery("terms t LEFT JOIN classes c ON c.term_id = t.id$active")
             . 'WHERE t.id = ? ORDER BY c.weekday, c.start_time, c.id',
             [$this->encodeId($term)],
         );
@@ -156,6 +148,31 @@ final readonly class CatalogStore implements CatalogPersistence, CatalogAdminPer
         }
 
         return $items;
+    }
+
+    /** @return CatalogDocument */
+    public function classByStoredId(string $id): array
+    {
+        $row = $this->connection->fetchAssociative($this->classQuery('classes c') . 'WHERE c.id = ?', [$id]);
+        if ($row === false) {
+            throw new CatalogFailure(404, 'resource not found');
+        }
+
+        return $this->classDocument($row, true);
+    }
+
+    private function classQuery(string $source): string
+    {
+        $duration = $this->isPostgres() ? Database::intervalMicros('c.duration') : 'c.duration';
+
+        return "SELECT c.id, c.term_id, c.course_type_id, c.room_id, c.weekday, c.start_time, $duration AS duration_micros, "
+            . 'c.capacity, c.retired, c.all_levels, c.stage, c.age_from_months, c.age_to_months, '
+            . 'i.id AS instructor_id, i.display_name AS instructor_name, a.id AS accompanist_id, a.display_name AS accompanist_name, '
+            . 'f.id AS from_id, f.name AS from_name, f.code AS from_code, f.position AS from_position, '
+            . 'l.id AS to_id, l.name AS to_name, l.code AS to_code, l.position AS to_position '
+            . "FROM $source "
+            . 'LEFT JOIN staff i ON i.id = c.instructor_id LEFT JOIN staff a ON a.id = c.accompanist_id '
+            . 'LEFT JOIN levels f ON f.id = c.level_from_id LEFT JOIN levels l ON l.id = c.level_to_id ';
     }
 
     public function classMembers(string $class): ?array

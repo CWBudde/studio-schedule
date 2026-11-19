@@ -890,6 +890,162 @@ final class PublicSettingsTest extends TestCase
         self::assertSame('application/problem+json', $response->getHeaderLine('Content-Type'));
     }
 
+    public function testOfficeCreatesClassesAndGeneratesLessonsAtomically(): void
+    {
+        $clock = $this->generationFixture();
+        $this->db->executeStatement('UPDATE accounts SET visible_days = 21');
+        $term = $this->fixtureUuid($this->db->fetchOne('SELECT id FROM terms'));
+        $path = "/terms/$term/classes";
+        $data = $this->classInput();
+        $methods = $this->apiRequest('HEAD', $path, signedIn: false, clock: $clock);
+        self::assertSame(405, $methods->getStatusCode());
+        self::assertSame('GET, POST', $methods->getHeaderLine('Allow'));
+        self::assertSame(401, $this->apiRequest('POST', $path, $data, signedIn: false, clock: $clock)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'office'");
+        $missing = $this->fixtureUuid($this->fixtureId());
+        foreach ([
+            'roomId' => $missing,
+            'durationMinutes' => 1440,
+            'ageToMonths' => 12,
+            'levelToId' => $missing,
+            'accompanistId' => $data['instructorId'],
+            'weekday' => 7,
+            'startTime' => '24:00',
+            'retired' => 'false',
+        ] as $field => $value) {
+            $rejected = $this->apiRequest('POST', $path, [$field => $value] + $data, clock: $clock);
+            self::assertSame(422, $rejected->getStatusCode());
+            self::assertStringContainsString('body.' . $field, (string) $rejected->getBody());
+        }
+        self::assertSame(404, $this->apiRequest('POST', "/terms/$missing/classes", $data, clock: $clock)->getStatusCode());
+        $beginner = $this->insertRegionalFixture('levels', ['name' => 'Beginner', 'position' => 1]);
+        $advanced = $this->insertRegionalFixture('levels', ['name' => 'Advanced', 'position' => 2]);
+        $data += ['levelFromId' => $this->fixtureUuid($advanced), 'levelToId' => $this->fixtureUuid($beginner)];
+        foreach (['levelFromId', 'levelToId'] as $field) {
+            $unknown = $this->apiRequest('POST', $path, [$field => $missing] + $data, clock: $clock);
+            self::assertSame(422, $unknown->getStatusCode());
+            self::assertSame([['location' => 'body.' . $field, 'message' => 'level does not exist']], self::decoded($unknown)['errors']);
+        }
+        $refused = $this->apiRequest('POST', $path, ['allLevels' => true] + $data, clock: $clock);
+        self::assertSame(422, $refused->getStatusCode());
+        self::assertStringContainsString('body.allLevels', (string) $refused->getBody());
+
+        $response = $this->apiRequest('POST', $path, $data, clock: $clock);
+        self::assertSame(201, $response->getStatusCode());
+        $class = self::decoded($response);
+        self::assertIsString($class['id']);
+        self::assertSame($term, $class['termId']);
+        self::assertSame(false, $class['retired']);
+        self::assertSame(['id' => $this->fixtureUuid($beginner), 'name' => 'Beginner'], $class['levelFrom']);
+        self::assertSame(['id' => $this->fixtureUuid($advanced), 'name' => 'Advanced'], $class['levelTo']);
+        $this->assertClassSlots($class['id'], ['2026-10-26', '2026-11-02', '2026-11-09']);
+        $retired = $this->apiRequest('POST', $path, ['retired' => true] + $data, clock: $clock);
+        self::assertSame(201, $retired->getStatusCode());
+        $retiredClass = self::decoded($retired);
+        self::assertSame(true, $retiredClass['retired']);
+        self::assertIsString($retiredClass['id']);
+        $this->assertClassSlots($retiredClass['id'], []);
+    }
+
+    public function testDeletingAClassProtectsBookingsAndRemovesUnclaimedLessons(): void
+    {
+        $clock = $this->generationFixture();
+        $this->db->executeStatement('UPDATE accounts SET visible_days = 21');
+        $term = $this->fixtureUuid($this->db->fetchOne('SELECT id FROM terms'));
+        $occupied = $this->fixtureUuid($this->db->fetchOne('SELECT id FROM classes WHERE retired = FALSE'));
+        $inUse = $this->apiRequest('DELETE', "/classes/$occupied", clock: $clock);
+        self::assertSame(409, $inUse->getStatusCode());
+        self::assertSame('in-use', self::decoded($inUse)['reason']);
+
+        $new = $this->apiRequest('POST', "/terms/$term/classes", $this->classInput(), clock: $clock);
+        $class = self::decoded($new)['id'];
+        self::assertIsString($class);
+        $path = "/classes/$class";
+        $this->db->executeStatement(
+            'INSERT INTO bookings (id, lesson_id, person_id, status, trial, booked_at, canceled_at, source) '
+            . "SELECT ?, l.id, a.person_id, 'canceled', FALSE, '2026-10-24 10:00:00', '2026-10-24 12:00:00', 'self' "
+            . "FROM lessons l CROSS JOIN accounts a WHERE l.slot_date = '2026-11-09'",
+            [$this->fixtureId()],
+        );
+        $refused = $this->apiRequest('DELETE', $path, clock: $clock);
+        self::assertSame(409, $refused->getStatusCode());
+        self::assertSame('in-use', self::decoded($refused)['reason']);
+        $this->assertClassSlots($class, ['2026-10-26', '2026-11-02', '2026-11-09']);
+        $late = self::createStub(ClockInterface::class);
+        $late->method('now')->willReturn(new DateTimeImmutable('2026-10-25T03:00:00Z'));
+        $this->db->executeStatement("UPDATE lessons SET starts_at = '2026-10-25 03:00:00', ends_at = '2026-10-25 04:00:00' WHERE slot_date = '2026-10-26'");
+        $this->db->executeStatement("DELETE FROM bookings WHERE source = 'self'");
+        self::assertSame(409, $this->apiRequest('DELETE', $path, clock: $late)->getStatusCode());
+        $this->db->executeStatement(
+            'INSERT INTO bookings (id, lesson_id, person_id, status, trial, booked_at, canceled_at, source) '
+            . "SELECT ?, l.id, a.person_id, 'canceled', FALSE, '2026-10-24 10:00:00', '2026-10-24 12:00:00', 'member' "
+            . "FROM lessons l CROSS JOIN accounts a WHERE l.slot_date = '2026-11-09'",
+            [$this->fixtureId()],
+        );
+        $this->db->executeStatement(
+            'INSERT INTO booking_events (id, booking_id, at, status, override) '
+            . "SELECT ?, id, '2026-10-24 10:00:00', 'booked', FALSE FROM bookings WHERE source = 'member'",
+            [$this->fixtureId()],
+        );
+        self::assertSame(204, $this->apiRequest('DELETE', $path, clock: $clock)->getStatusCode());
+        self::assertSame(404, $this->apiRequest('DELETE', $path, clock: $clock)->getStatusCode());
+        $this->assertClassSlots($class, []);
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM bookings'), [0, '0']);
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM booking_events'), [0, '0']);
+    }
+
+    public function testFailedLessonGenerationRollsBackNewClassAndItsEarlierSlot(): void
+    {
+        $clock = $this->generationFixture();
+        $this->db->executeStatement('UPDATE accounts SET visible_days = 21');
+        $term = $this->fixtureUuid($this->db->fetchOne('SELECT id FROM terms'));
+        $oldClasses = $this->db->fetchFirstColumn('SELECT id FROM classes ORDER BY id');
+        $postgres = $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform;
+        if ($postgres) {
+            $this->db->executeStatement(<<<'SQL'
+                CREATE FUNCTION fixture_refuse_class_slot() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF NEW.slot_date = DATE '2026-11-02' THEN RAISE EXCEPTION 'fixture refused class slot'; END IF;
+                    RETURN NEW;
+                END;
+                $$
+                SQL);
+        }
+        $reject = $postgres
+            ? 'EXECUTE FUNCTION fixture_refuse_class_slot()'
+            : "BEGIN IF NEW.slot_date = '2026-11-02' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'fixture refused class slot'; END IF; END";
+        $this->db->executeStatement('CREATE TRIGGER fixture_refuse_class_slot BEFORE INSERT ON lessons FOR EACH ROW ' . $reject);
+        try {
+            $failed = $this->apiRequest('POST', "/terms/$term/classes", $this->classInput(), clock: $clock);
+            self::assertSame(500, $failed->getStatusCode());
+            self::assertSame($oldClasses, $this->db->fetchFirstColumn('SELECT id FROM classes ORDER BY id'));
+            self::assertSame(['2026-10-27'], $this->db->fetchFirstColumn('SELECT slot_date FROM lessons'));
+        } finally {
+            $this->db->executeStatement('DROP TRIGGER fixture_refuse_class_slot' . ($postgres ? ' ON lessons' : ''));
+            if ($postgres) {
+                $this->db->executeStatement('DROP FUNCTION fixture_refuse_class_slot()');
+            }
+        }
+    }
+
+    /** @return array{courseTypeId:string, roomId:string, instructorId:string, weekday:int, startTime:string, durationMinutes:int, capacity:int, ageFromMonths:int} */
+    private function classInput(): array
+    {
+        return [
+            'courseTypeId' => $this->fixtureUuid($this->db->fetchOne('SELECT id FROM course_types')),
+            'roomId' => $this->fixtureUuid($this->db->fetchOne('SELECT id FROM rooms')),
+            'instructorId' => $this->fixtureUuid($this->db->fetchOne('SELECT id FROM staff')),
+            'weekday' => 1, 'startTime' => '18:20', 'durationMinutes' => 75, 'capacity' => 6, 'ageFromMonths' => 48,
+        ];
+    }
+
+    /** @param list<string> $slots */
+    private function assertClassSlots(string $class, array $slots): void
+    {
+        $id = $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform ? $class : Uuid::fromString($class)->toBinary();
+        self::assertSame($slots, $this->db->fetchFirstColumn('SELECT slot_date FROM lessons WHERE class_id = ? ORDER BY slot_date', [$id]));
+    }
+
     private function fixtureUuid(mixed $storedId): string
     {
         self::assertIsString($storedId);

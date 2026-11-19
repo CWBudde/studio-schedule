@@ -13,7 +13,7 @@ use StudioSchedule\Domain\ScheduleRules;
 final readonly class TermAdmin
 {
     public function __construct(
-        private TermPersistence $store,
+        private TimetableAdminPersistence $store,
         private LessonGenerator $generator,
         private ClockInterface $clock,
     ) {}

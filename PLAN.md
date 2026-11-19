@@ -1453,6 +1453,11 @@ backends.
           The office can read retired classes and rosters with current membership pauses. The
           shared `class_lists_and_roster` case passes at both mount paths on all three PHP
           databases with the authentication draft.
+    - [ ] Run class creation and deletion in PHP CI after PHP sign-in lands. The office can
+          create a class with its future lessons and delete it while it has no members, started
+          lessons or bookings made outside automatic class enrollment. The shared
+          `class_creation_and_deletion` case passes at both mount paths on all three PHP
+          databases with the authentication draft.
   - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
         order (`SELECT … FOR UPDATE` on all three databases, term → class → lesson → passes)
   - [ ] Calendar feeds (ADR 0011)

@@ -242,6 +242,7 @@ func TestBackendConformance(t *testing.T) {
 		{"catalog administration", catalogAdministration},
 		{"term administration", termAdministration},
 		{"class lists and roster", classListsAndRoster},
+		{"class creation and deletion", classCreationAndDeletion},
 		{"public event details", publicEventDetails},
 		{"schedule release and visibility", publicSchedule},
 		{"registration and session", registrationSession},

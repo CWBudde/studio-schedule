@@ -13,16 +13,18 @@ use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use StudioSchedule\Domain\Date;
 use StudioSchedule\Domain\ScheduleRules;
 use StudioSchedule\Service\CatalogFailure;
+use StudioSchedule\Service\ClassData;
 use StudioSchedule\Service\LessonGenerationPersistence;
-use StudioSchedule\Service\TermPersistence;
+use StudioSchedule\Service\TimetableAdminPersistence;
 use Symfony\Component\Uid\Uuid;
 
 /**
  * @phpstan-import-type TermRow from LessonGenerationPersistence
  * @phpstan-import-type ClassRow from LessonGenerationPersistence
  * @phpstan-import-type MemberRow from LessonGenerationPersistence
+ * @phpstan-import-type ClassLesson from TimetableAdminPersistence
  */
-final readonly class TimetableStore implements TermPersistence
+final readonly class TimetableStore implements TimetableAdminPersistence
 {
     public function __construct(private Connection $db) {}
 
@@ -108,11 +110,114 @@ final readonly class TimetableStore implements TermPersistence
 
     public function lockExcludedLessons(string $class, Date $startsOn, Date $endsOn, DateTimeImmutable $now): array
     {
+        return $this->lockLessons($class, $now, [$startsOn, $endsOn]);
+    }
+
+    public function createClass(string $term, ClassData $data): array
+    {
+        $course = $this->requireReference('course_types', $data->courseTypeId, 'courseTypeId', 'course type');
+        $room = $this->requireReference('rooms', $data->roomId, 'roomId', 'room');
+        $instructor = $this->requireReference('staff', $data->instructorId, 'instructorId', 'instructor');
+        $accompanist = $data->accompanistId === null ? null : $this->requireReference('staff', $data->accompanistId, 'accompanistId', 'accompanist');
+        [$from, $to] = $this->lockClassLevels($data->levelFromId, $data->levelToId);
+        $duration = $data->durationMinutes * 60_000_000;
+        $class = [
+            'id' => $this->newId(), 'course_type_id' => $course, 'room_id' => $room,
+            'instructor_id' => $instructor, 'accompanist_id' => $accompanist,
+            'weekday' => $data->weekday, 'start_time' => (string) $data->startTime,
+            'capacity' => $data->capacity, 'retired' => $data->retired,
+        ];
+        $this->db->insert('classes', $class + [
+            'term_id' => $term, 'level_from_id' => $from, 'level_to_id' => $to, 'all_levels' => $data->allLevels,
+            'stage' => $data->stage, 'age_from_months' => $data->ageFromMonths, 'age_to_months' => $data->ageToMonths,
+            'duration' => $this->isPostgres() ? "{$data->durationMinutes} minutes" : $duration,
+        ], ['all_levels' => ParameterType::BOOLEAN, 'retired' => ParameterType::BOOLEAN]);
+
+        return $class + ['duration_micros' => $duration];
+    }
+
+    public function classDocument(string $id): array
+    {
+        return (new CatalogStore($this->db))->classByStoredId($id);
+    }
+
+    public function lockClassId(string $id): string
+    {
+        $stored = $this->encodeId($id);
+        if ($this->db->fetchOne('SELECT id FROM classes WHERE id = ? FOR UPDATE', [$stored]) === false) {
+            throw new CatalogFailure(404, 'resource not found');
+        }
+
+        return $stored;
+    }
+
+    public function deleteClass(string $id): void
+    {
+        try {
+            $this->db->delete('classes', ['id' => $id]);
+        } catch (ForeignKeyConstraintViolationException) {
+            throw new CatalogFailure(409, 'conflict');
+        }
+    }
+
+    public function lockClassLessons(string $class, DateTimeImmutable $now): array
+    {
+        return $this->lockLessons($class, $now, null);
+    }
+
+    private function requireReference(string $table, string $id, string $field, string $label): string
+    {
+        $stored = $this->encodeId($id);
+        if ($this->db->fetchOne("SELECT 1 FROM $table WHERE id = ? FOR UPDATE", [$stored]) === false) {
+            throw CatalogFailure::field($field, "$label does not exist");
+        }
+
+        return $stored;
+    }
+
+    /** @return array{?string, ?string} */
+    private function lockClassLevels(?string $from, ?string $to): array
+    {
+        if ($from === null || $to === null) {
+            return [null, null];
+        }
+        $fields = ['levelFromId' => $this->encodeId($from), 'levelToId' => $this->encodeId($to)];
+        $ids = array_unique(array_values($fields));
+        // Catalogue reorders also lock levels by ID.
+        sort($ids, SORT_STRING);
+        $found = [];
+        foreach ($ids as $id) {
+            if ($this->db->fetchOne('SELECT 1 FROM levels WHERE id = ? FOR UPDATE', [$id]) !== false) {
+                $found[] = $id;
+            }
+        }
+        foreach ($fields as $field => $id) {
+            if (!in_array($id, $found, true)) {
+                throw CatalogFailure::field($field, 'level does not exist');
+            }
+        }
+
+        return [$fields['levelFromId'], $fields['levelToId']];
+    }
+
+    /**
+     * @param array{Date, Date}|null $outside
+     * @return list<ClassLesson>
+     */
+    private function lockLessons(string $class, DateTimeImmutable $now, ?array $outside): array
+    {
+        $params = [Database::sqlInstant($this->db, $now), $class];
+        $filter = '';
+        if ($outside !== null) {
+            $filter = ' AND (slot_date < ? OR slot_date > ?)';
+            $params[] = (string) $outside[0];
+            $params[] = (string) $outside[1];
+        }
         /** @var list<array{id: string, slot_date: string, started: int|numeric-string}> $rows */
         $rows = $this->db->fetchAllAssociative(
             'SELECT id, slot_date, CASE WHEN starts_at <= ? THEN 1 ELSE 0 END AS started '
-            . 'FROM lessons WHERE class_id = ? AND (slot_date < ? OR slot_date > ?) ORDER BY starts_at, id FOR UPDATE',
-            [Database::sqlInstant($this->db, $now), $class, (string) $startsOn, (string) $endsOn],
+            . "FROM lessons WHERE class_id = ?$filter ORDER BY starts_at, id FOR UPDATE",
+            $params,
         );
 
         return array_map(static function (array $row): array {

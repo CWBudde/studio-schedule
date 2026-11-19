@@ -37,6 +37,7 @@ use StudioSchedule\Push\Sender;
 use StudioSchedule\Service\AdminSettings;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\BookingRuleSettings;
+use StudioSchedule\Service\ClassAdmin;
 use StudioSchedule\Service\LessonGenerator;
 use StudioSchedule\Service\CommonPasswords;
 use StudioSchedule\Service\DatabaseReadiness;
@@ -169,6 +170,7 @@ final class Bootstrap
                     (new AdminSettingsRoutes(new AdminSettings($settingsStore), new BookingRuleSettings($scheduleStore, $clock, $generator, $logger)))->register($app);
                     CatalogRoutes::register($app, new CatalogStore($connection), $clock);
                     CatalogAdminRoutes::registerTerms($app, new TermAdmin($timetableStore, $generator, $clock));
+                    CatalogAdminRoutes::registerClasses($app, new ClassAdmin($timetableStore, $generator, $clock));
                     EventRoutes::register($app, new EventStore($connection), $clock);
                     $familyStore = new FamilyStore($connection);
                     (new FamilyRoutes(new Family($familyStore, $clock)))->register($app);

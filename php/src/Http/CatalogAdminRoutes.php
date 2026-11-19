@@ -15,8 +15,11 @@ use Slim\Routing\RouteCollectorProxy;
 use StudioSchedule\Domain\CatalogResource;
 use StudioSchedule\Domain\Date;
 use StudioSchedule\Domain\Id;
+use StudioSchedule\Domain\TimeOfDay;
 use StudioSchedule\Service\CatalogAdmin;
 use StudioSchedule\Service\CatalogFailure;
+use StudioSchedule\Service\ClassAdmin;
+use StudioSchedule\Service\ClassData;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\TermAdmin;
 
@@ -58,6 +61,94 @@ final readonly class CatalogAdminRoutes
             $routes->map(['PUT', 'DELETE'], '/{id}', static fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
                 => self::writeTerm($request, $response, $service, self::id($args['id'] ?? null, 'path.termId')));
         })->add(self::requireOffice(...));
+    }
+
+    /**
+     * @template TContainer of ContainerInterface|null
+     * @param App<TContainer> $app
+     */
+    public static function registerClasses(App $app, ClassAdmin $service): void
+    {
+        $app->group('/api/v1', static function (RouteCollectorProxy $routes) use ($service): void {
+            $routes->post('/terms/{termId}/classes', static fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+                => self::createClass($request, $response, $service, self::id($args['termId'] ?? null, 'path.termId')));
+            $routes->delete('/classes/{classId}', static function (ServerRequestInterface $request, ResponseInterface $response, array $args) use ($service): ResponseInterface {
+                $service->delete(self::id($args['classId'] ?? null, 'path.classId'));
+
+                return $response->withStatus(204);
+            });
+        })->add(self::requireOffice(...));
+    }
+
+    private static function createClass(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, ClassAdmin $service, string $term): ResponseInterface
+    {
+        $body = self::fields($request, [
+            'coursetypeid', 'roomid', 'instructorid', 'accompanistid', 'levelfromid', 'leveltoid',
+            'alllevels', 'stage', 'agefrommonths', 'agetomonths', 'weekday', 'starttime', 'durationminutes', 'capacity', 'retired',
+        ]);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        try {
+            $time = TimeOfDay::parse(self::text($body, 'startTime', 5, true));
+        } catch (InvalidArgumentException) {
+            throw CatalogFailure::field('startTime', 'expected a wall-clock time in HH:MM form');
+        }
+        $data = new ClassData(
+            courseTypeId: self::id(self::value($body, 'courseTypeId', true), 'body.courseTypeId'),
+            roomId: self::id(self::value($body, 'roomId', true), 'body.roomId'),
+            instructorId: self::id(self::value($body, 'instructorId', true), 'body.instructorId'),
+            weekday: self::number($body, 'weekday', 0, 6, true),
+            startTime: $time,
+            durationMinutes: self::number($body, 'durationMinutes', 1, 1440, true),
+            capacity: self::number($body, 'capacity', 1, 1000, true),
+            accompanistId: self::optionalId($body, 'accompanistId'),
+            levelFromId: self::optionalId($body, 'levelFromId'),
+            levelToId: self::optionalId($body, 'levelToId'),
+            allLevels: self::flag($body, 'allLevels'),
+            stage: self::number($body, 'stage', 1, 9),
+            ageFromMonths: self::number($body, 'ageFromMonths', 1, 1200),
+            ageToMonths: self::number($body, 'ageToMonths', 1, 1200),
+            retired: self::flag($body, 'retired'),
+        );
+
+        return Responses::json($response->withStatus(201), $service->create($term, $data));
+    }
+
+    /** @param array<array-key,mixed> $body */
+    private static function optionalId(array $body, string $field): ?string
+    {
+        $value = self::value($body, $field, false);
+
+        return $value === null ? null : self::id($value, "body.$field");
+    }
+
+    /** @param array<array-key,mixed> $body */
+    private static function flag(array $body, string $field): bool
+    {
+        $value = self::value($body, $field, false) ?? false;
+        if (!is_bool($value)) {
+            throw CatalogFailure::field($field, 'expected boolean');
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param array<array-key,mixed> $body
+     * @return ($required is true ? int : ?int)
+     */
+    private static function number(array $body, string $field, int $min, int $max, bool $required = false): ?int
+    {
+        $value = self::value($body, $field, $required);
+        if ($value === null && !$required) {
+            return null;
+        }
+        if (!is_int($value) || $value < $min || $value > $max) {
+            throw CatalogFailure::field($field, "expected an integer between $min and $max");
+        }
+
+        return $value;
     }
 
     private static function writeTerm(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, TermAdmin $service, ?string $id): ResponseInterface

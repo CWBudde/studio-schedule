@@ -58,7 +58,7 @@ final readonly class CatalogRoutes
     private function classes(ServerRequestInterface $request, ResponseInterface $response, mixed $term, bool $withRetired): ResponseInterface
     {
         if ($request->getMethod() === 'HEAD') {
-            return Responses::problem($request, 405, 'method not allowed')->withHeader('Allow', 'GET');
+            return Responses::problem($request, 405, 'method not allowed')->withHeader('Allow', $withRetired ? 'GET' : 'GET, POST');
         }
         if (!is_string($term) || !Id::valid($term)) {
             return self::invalidId($request, 'path.termId', is_string($term) ? $term : '');
