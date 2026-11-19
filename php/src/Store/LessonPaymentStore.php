@@ -10,7 +10,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 
-/** All methods run under the lesson lock and receive the database representation of its ID. */
+/** All methods run under the lesson lock and receive database IDs. */
 final readonly class LessonPaymentStore
 {
     public function __construct(private Connection $db) {}
@@ -22,27 +22,40 @@ final readonly class LessonPaymentStore
             return;
         }
         $this->lockPasses($ids);
-        /** @var list<array{pass_id:string,booking_id:string}> $redemptions */
-        $redemptions = $this->db->fetchAllAssociative(
-            'SELECT pass_id, booking_id FROM pass_redemptions WHERE booking_id IN (?) ORDER BY booking_id',
-            [$ids],
-            [$this->idListType()],
-        );
-        foreach ($redemptions as $redemption) {
-            $this->refund($redemption['booking_id'], $redemption['pass_id']);
+        $paid = $this->redemptions($ids);
+        foreach ($ids as $booking) {
+            if (isset($paid[$booking])) {
+                $this->refund($booking, $paid[$booking]);
+            }
         }
     }
 
     public function restore(string $lesson, bool $onBooking, string $day, DateTimeImmutable $now): void
     {
-        $bookings = $this->dueBookings($lesson, $onBooking);
-        if ($bookings === []) {
+        $this->settle($this->dueBookings($lesson, $onBooking), [], $day, $now);
+    }
+
+    /**
+     * @param list<array{id:string,person_id:string}> $charges
+     * @param list<string> $refunds Booking IDs.
+     */
+    public function settle(array $charges, array $refunds, string $day, DateTimeImmutable $now): void
+    {
+        $ids = array_merge(array_column($charges, 'id'), $refunds);
+        if ($ids === []) {
             return;
         }
-        $this->lockPasses(array_column($bookings, 'id'));
-        foreach ($bookings as $booking) {
-            if ($this->db->fetchOne('SELECT 1 FROM pass_redemptions WHERE booking_id = ?', [$booking['id']], [$this->idType()]) === false) {
-                $this->redeem($booking['id'], $booking['person_id'], $day, $now);
+        // Lock all affected passes together, and return visits before spending them.
+        $passes = $this->lockPasses($ids);
+        $paid = $this->redemptions($ids);
+        foreach ($refunds as $booking) {
+            if (isset($paid[$booking])) {
+                $this->refund($booking, $paid[$booking]);
+            }
+        }
+        foreach ($charges as $booking) {
+            if (!isset($paid[$booking['id']])) {
+                $this->redeem($booking['id'], $booking['person_id'], $passes, $day, $now);
             }
         }
     }
@@ -58,7 +71,7 @@ final readonly class LessonPaymentStore
         if ($ids === []) {
             return;
         }
-        $this->lockPasses($ids);
+        $passes = $this->lockPasses($ids);
         /** @var list<array{pass_id:string,booking_id:string,person_id:string}> $invalid */
         $invalid = $this->db->fetchAllAssociative(
             'SELECT r.pass_id, r.booking_id, b.person_id FROM pass_redemptions r JOIN bookings b ON b.id = r.booking_id '
@@ -69,7 +82,7 @@ final readonly class LessonPaymentStore
         );
         foreach ($invalid as $redemption) {
             $this->refund($redemption['booking_id'], $redemption['pass_id']);
-            $this->redeem($redemption['booking_id'], $redemption['person_id'], $day, $now);
+            $this->redeem($redemption['booking_id'], $redemption['person_id'], $passes, $day, $now);
         }
     }
 
@@ -89,14 +102,36 @@ final readonly class LessonPaymentStore
         return $bookings;
     }
 
-    /** @param list<string> $bookingIds */
-    private function lockPasses(array $bookingIds): void
+    /**
+     * @param list<string> $bookingIds
+     * @return array<array-key,string> Pass ID by booking ID.
+     */
+    private function redemptions(array $bookingIds): array
     {
-        $this->db->fetchFirstColumn(
+        /** @var list<array{pass_id:string,booking_id:string}> $rows */
+        $rows = $this->db->fetchAllAssociative(
+            'SELECT pass_id, booking_id FROM pass_redemptions WHERE booking_id IN (?)',
+            [$bookingIds],
+            [$this->idListType()],
+        );
+
+        return array_column($rows, 'pass_id', 'booking_id');
+    }
+
+    /**
+     * @param list<string> $bookingIds
+     * @return list<string>
+     */
+    private function lockPasses(array $bookingIds): array
+    {
+        /** @var list<string> $locked */
+        $locked = $this->db->fetchFirstColumn(
             'SELECT id FROM passes WHERE person_id IN (SELECT person_id FROM bookings WHERE id IN (?)) ORDER BY id FOR UPDATE',
             [$bookingIds],
             [$this->idListType()],
         );
+
+        return $locked;
     }
 
     private function refund(string $booking, string $pass): void
@@ -116,16 +151,22 @@ final readonly class LessonPaymentStore
         }
     }
 
-    private function redeem(string $booking, string $person, string $day, DateTimeImmutable $now): void
+    /** @param list<string> $lockedPasses */
+    private function redeem(string $booking, string $person, array $lockedPasses, string $day, DateTimeImmutable $now): void
     {
+        if ($lockedPasses === []) {
+            return;
+        }
+
+        // A concurrent sale can add a pass after the locking read.
         $type = $this->idType();
         /** @var array{id:string,kind:string}|false $pass */
         $pass = $this->db->fetchAssociative(
-            "SELECT id, kind FROM passes WHERE person_id = ? AND status = 'active' AND valid_from <= ? "
+            "SELECT id, kind FROM passes WHERE id IN (?) AND person_id = ? AND status = 'active' AND valid_from <= ? "
             . "AND (valid_until IS NULL OR valid_until >= ?) AND (kind = 'time' OR visits_remaining > 0) "
             . "ORDER BY CASE WHEN kind = 'time' THEN 0 ELSE 1 END, CASE WHEN valid_until IS NULL THEN 1 ELSE 0 END, valid_until, sold_at, id LIMIT 1",
-            [$person, $day, $day],
-            [$type, ParameterType::STRING, ParameterType::STRING],
+            [$lockedPasses, $person, $day, $day],
+            [$this->idListType(), $type, ParameterType::STRING, ParameterType::STRING],
         );
         if ($pass === false) {
             return;

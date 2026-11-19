@@ -330,10 +330,16 @@ final readonly class CatalogAdminRoutes
         if ($failure->status === 422 && $failure->location !== '') {
             return Responses::problem($request, 422, 'validation failed', errors: [
                 ['location' => $failure->location, 'message' => $failure->getMessage()],
-            ]);
+            ], reason: $failure->reason);
         }
 
-        return Responses::problem($request, $failure->status, $failure->getMessage(), reason: $failure->reason);
+        return Responses::problem(
+            $request,
+            $failure->status,
+            $failure->getMessage(),
+            reason: $failure->reason,
+            extensions: $failure->why === '' ? [] : ['why' => $failure->why],
+        );
     }
 
     private function write(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, CatalogResource $resource, ?string $id): ResponseInterface

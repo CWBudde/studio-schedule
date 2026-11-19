@@ -6,20 +6,27 @@ namespace StudioSchedule\Tests;
 
 use Closure;
 use DateTimeImmutable;
+use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
+use Doctrine\DBAL\Logging\Middleware;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\TestCase;
 use Psr\Clock\ClockInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
+use Psr\Log\AbstractLogger;
 use Psr\Log\NullLogger;
 use RuntimeException;
 use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
+use Stringable;
 use StudioSchedule\Http\CatalogAdminRoutes;
+use StudioSchedule\Http\AttendanceRoutes;
 use StudioSchedule\Http\EventRegistrationRoutes;
 use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\LessonAdminRoutes;
@@ -31,6 +38,7 @@ use StudioSchedule\Http\StatisticsEndpoint;
 use StudioSchedule\Http\TrustedProxies;
 use StudioSchedule\Http\WaitlistInviteEndpoint;
 use StudioSchedule\Service\BackgroundJobs;
+use StudioSchedule\Service\Attendance;
 use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
@@ -51,6 +59,7 @@ use StudioSchedule\Service\StatisticsService;
 use StudioSchedule\Service\TeachingSchedule;
 use StudioSchedule\Service\WaitlistInvites;
 use StudioSchedule\Store\Database;
+use StudioSchedule\Store\AttendanceStore;
 use StudioSchedule\Store\EventRegistrationStore;
 use StudioSchedule\Store\ReceiptWriteStore;
 use StudioSchedule\Store\EventStore;
@@ -1740,6 +1749,166 @@ final class ScheduleStoreTest extends TestCase
         self::get($app, $query, $office, 404);
     }
 
+    public function testAttendanceSettlesVisitsAndRecordsChangesInOneTransaction(): void
+    {
+        $this->database->executeStatement("UPDATE staff SET person_id = (SELECT person_id FROM accounts WHERE role = 'office') WHERE kind = 'instructor'");
+        $this->insert('accounts', [
+            'id' => 12, 'person_id' => 6, 'email' => 'actual-admin@example.test', 'role' => 'admin',
+        ]);
+        $this->insert('pass_types', [
+            'id' => 301, 'name' => 'Fixture Visits', 'kind' => 'visits', 'visits' => 5, 'validity_days' => 0,
+            'price' => 0, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => '2026-10-20 10:00:00',
+        ]);
+        foreach ([303 => [1, 3], 304 => [7, 2], 305 => [6, 5], 306 => [2, 4]] as $pass => [$person, $visits]) {
+            $this->insert('passes', [
+                'id' => $pass, 'pass_type_id' => 301, 'person_id' => $person, 'kind' => 'visits',
+                'visits_total' => 5, 'visits_remaining' => $visits, 'valid_from' => '2026-10-20', 'valid_until' => '2026-10-25',
+                'status' => 'active', 'origin' => 'assignment', 'sold_at' => '2026-10-20 10:00:00', 'price_paid' => 0,
+            ]);
+        }
+        $booked = ['lesson_id' => 100, 'status' => 'booked', 'trial' => false, 'booked_at' => '2026-10-23 09:00:00'];
+        $this->insert('bookings', ['id' => 307, 'person_id' => 7] + $booked);
+        $this->insert('bookings', ['id' => 308, 'person_id' => 6, 'trial' => true, 'trial_note' => 'Fixture trial'] + $booked);
+        $this->insert('bookings', ['id' => 309, 'person_id' => 2, 'source' => 'member'] + $booked);
+        $this->insert('bookings', ['id' => 310, 'guest_name' => 'Walk-in'] + $booked);
+
+        $app = $this->app(self::BEFORE_RELEASE);
+        $set = static fn(int $id): string => '/bookings/' . self::id($id) . '/attendance';
+        $all = '/lessons/' . self::id(100) . '/attendance/all';
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office', impersonatorId: self::id(12));
+        $instructor = new SessionPrincipal(self::id(11), self::id(5), 'instructor');
+        $unassigned = new SessionPrincipal(self::id(10), self::id(1), 'instructor');
+        $invalidActor = new SessionPrincipal(self::id(11), self::id(5), 'office', impersonatorId: self::id(999));
+        $attended = ['status' => 'attended'];
+        $remaining = function (): array {
+            /** @var list<int|numeric-string> $visits */
+            $visits = $this->database->fetchFirstColumn('SELECT visits_remaining FROM passes ORDER BY id');
+
+            return array_map(intval(...), $visits);
+        };
+        self::post($app, $set(201), null, 401, $attended);
+        self::post($app, $all, new SessionPrincipal(self::id(10), self::id(1), 'member'), 403);
+        self::post($app, $set(201), $unassigned, 404, $attended);
+        self::post($app, $set(999), $office, 404, $attended);
+        self::post($app, '/bookings/invalid/attendance', $office, 422, $attended);
+        self::post($app, $set(201), $office, 400);
+        self::post($app, $set(201), $office, 422, ['status' => 'unknown']);
+        self::assertSame('already-canceled', self::post($app, $set(203), $office, 409, $attended)['reason']);
+        $closed = self::post($app, '/lessons/' . self::id(103) . '/attendance/all', $office, 409);
+        self::assertSame('closed', $closed['reason']);
+        self::assertSame('canceled', $closed['why']);
+        $early = $this->app('2026-10-25T09:00:00Z');
+        self::assertSame('not-started', self::post($early, $all, $office, 422)['reason']);
+
+        try {
+            self::post($app, $all, $invalidActor, 200);
+            self::fail('Expected the booking event insert to fail');
+        } catch (ForeignKeyConstraintViolationException) {
+            self::assertSame([3, 2, 5, 4], $remaining());
+            self::assertCount(5, $this->database->fetchFirstColumn("SELECT 1 FROM bookings WHERE status = 'booked'"));
+            self::assertSame([], $this->database->fetchFirstColumn('SELECT 1 FROM pass_redemptions'));
+            self::assertSame([], $this->database->fetchFirstColumn('SELECT 1 FROM booking_events'));
+        }
+
+        $this->database->executeStatement("UPDATE bookings SET guest_email = 'invalid' WHERE guest_name = 'Walk-in'");
+        $invalid = self::post($app, $all, $office, 422);
+        $errors = $invalid['errors'] ?? null;
+        self::assertIsArray($errors);
+        self::assertIsArray($errors[0] ?? null);
+        self::assertSame('body.guest.email', $errors[0]['location'] ?? null);
+        self::assertCount(5, $this->database->fetchFirstColumn("SELECT 1 FROM bookings WHERE status = 'booked'"));
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT 1 FROM booking_events'));
+        $this->database->executeStatement("UPDATE bookings SET guest_email = NULL WHERE guest_name = 'Walk-in'");
+
+        /** @var list<array<string,mixed>> $items */
+        $items = self::post($app, $all, $office, 200)['items'];
+        self::assertSame(self::ids(201, 307, 308, 309, 310), array_column($items, 'id'));
+        self::assertSame('Fixture trial', $items[2]['trialNote']);
+        self::assertSame('member', $items[3]['source']);
+        self::assertSame('Walk-in', $items[4]['guestName']);
+        self::assertArrayNotHasKey('personId', $items[4]);
+        self::assertArrayNotHasKey('guestEmail', $items[4]);
+        self::assertSame([2, 1, 5, 4], $remaining());
+        self::assertCount(2, $this->database->fetchFirstColumn('SELECT 1 FROM pass_redemptions'));
+        self::assertSame(array_fill(0, 5, 'actual-admin@example.test'), $this->database->fetchFirstColumn(
+            'SELECT a.email FROM booking_events e JOIN accounts a ON a.id = e.actor_account_id',
+        ));
+        self::assertSame(['items' => []], self::post($app, $all, $office, 200));
+
+        $missed = ['status' => 'no_show'];
+        self::assertSame('no_show', self::post($app, $set(201), $instructor, 200, $missed)['status']);
+        self::post($app, $set(201), $instructor, 200, $missed);
+        self::assertCount(6, $this->database->fetchFirstColumn('SELECT 1 FROM booking_events'));
+        self::assertSame([2, 1, 5, 4], $remaining());
+        $reset = ['status' => 'booked'];
+        self::post($app, $set(201), $instructor, 200, $reset);
+        self::assertSame([3, 1, 5, 4], $remaining());
+
+        $after = $this->app('2026-10-26T09:00:00Z');
+        self::assertSame('day-over', self::post($after, $set(201), $instructor, 422, $attended)['reason']);
+        self::post($after, $set(201), $office, 200, $attended);
+        self::assertSame([2, 1, 5, 4], $remaining());
+        $this->database->executeStatement("UPDATE settings SET redemption_mode = 'booking'");
+        self::post($after, $set(201), $office, 200, $reset);
+        self::assertSame([2, 1, 5, 4], $remaining());
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT 1 FROM outbox_mails'));
+    }
+
+    public function testAttendanceSelectsOnlyPassesLockedBeforeSettlement(): void
+    {
+        $this->insert('pass_types', [
+            'id' => 301, 'name' => 'Single Visit', 'kind' => 'visits', 'visits' => 1, 'validity_days' => 0,
+            'price' => 0, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => '2026-10-20 10:00:00',
+        ]);
+        // The statement logger runs between the pass lock and the redemption lookup.
+        $sale = function (): void {
+            $this->insert('passes', [
+                'id' => 302, 'pass_type_id' => 301, 'person_id' => 1, 'kind' => 'visits',
+                'visits_total' => 1, 'visits_remaining' => 1, 'valid_from' => '2026-10-25',
+                'status' => 'active', 'origin' => 'sale', 'sold_at' => '2026-10-25 12:00:00', 'price_paid' => 0,
+            ]);
+        };
+        $logger = new class ($sale) extends AbstractLogger {
+            public bool $inserted = false;
+
+            /** @param Closure():void $insertPass */
+            public function __construct(private readonly Closure $insertPass) {}
+
+            /** @param array<string,mixed> $context */
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                $sql = $context['sql'] ?? null;
+                if (!$this->inserted && is_string($sql) && str_contains($sql, 'SELECT pass_id, booking_id FROM pass_redemptions')) {
+                    ($this->insertPass)();
+                    $this->inserted = true;
+                }
+            }
+        };
+        $config = new Configuration();
+        $config->setMiddlewares([new Middleware($logger)]);
+        $writer = DriverManager::getConnection($this->database->getParams(), $config);
+        $clock = self::createStub(ClockInterface::class);
+        $clock->method('now')->willReturn(new DateTimeImmutable(self::BEFORE_RELEASE));
+        $attendance = new Attendance(new AttendanceStore(
+            $writer,
+            new EventStore($writer),
+            new LessonWriteStore($writer),
+            new ParticipantReadStore($writer),
+        ), $clock);
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        try {
+            self::assertSame('attended', $attendance->set($office, self::id(201), 'attended')['status']);
+            self::assertTrue($logger->inserted);
+            self::assertSame([], $this->database->fetchFirstColumn('SELECT 1 FROM pass_redemptions'));
+            self::assertSame('booked', $attendance->set($office, self::id(201), 'booked')['status']);
+            self::assertSame('attended', $attendance->set($office, self::id(201), 'attended')['status']);
+            self::assertCount(1, $this->database->fetchFirstColumn('SELECT 1 FROM pass_redemptions'));
+            self::assertContains($this->database->fetchOne('SELECT visits_remaining FROM passes'), [0, '0']);
+        } finally {
+            $writer->close();
+        }
+    }
+
     private function eventExpiryJobs(DateTimeImmutable $now): BackgroundJobs
     {
         $dsn = getenv('STUDIO_PHP_TEST_DATABASE_URL');
@@ -2186,6 +2355,10 @@ final class ScheduleStoreTest extends TestCase
         $app->get('/api/v1/event-invites/{token}', new WaitlistInviteEndpoint($registrations->invite(...), $proxies, $limits));
         $recipients = new EventWaitlistStore($this->database);
         $lessonWrites = new LessonWriteStore($this->database);
+        (new AttendanceRoutes(new Attendance(
+            new AttendanceStore($this->database, $eventStore, $lessonWrites, new ParticipantReadStore($this->database)),
+            $clock,
+        )))->register($app);
         $lessonParticipants = new LessonRecipients($lessonWrites, $registrationStore, new ScheduleRecipients($recipients));
         (new LessonNoticeRoutes(new LessonNotices(
             new LessonNoticeStore($this->database, $eventStore, $lessonWrites, $scheduleStore),

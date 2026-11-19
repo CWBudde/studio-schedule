@@ -42,6 +42,7 @@ use StudioSchedule\Http\MailLogRoutes;
 use StudioSchedule\Http\MeEndpoint;
 use StudioSchedule\Http\MemberImportRoutes;
 use StudioSchedule\Http\ParticipantReadRoutes;
+use StudioSchedule\Http\AttendanceRoutes;
 use StudioSchedule\Http\PassReadRoutes;
 use StudioSchedule\Http\PasswordFailureLimit;
 use StudioSchedule\Http\PasswordResetEndpoint;
@@ -98,6 +99,7 @@ use StudioSchedule\Service\ScheduleRecipients;
 use StudioSchedule\Service\TeachingSchedule;
 use StudioSchedule\Service\MemberImports;
 use StudioSchedule\Service\ParticipantRead;
+use StudioSchedule\Service\Attendance;
 use StudioSchedule\Service\PassRead;
 use StudioSchedule\Service\PasswordAuthentication;
 use StudioSchedule\Service\PasswordChange;
@@ -132,6 +134,7 @@ use StudioSchedule\Store\FamilyStore;
 use StudioSchedule\Store\MailLogStore;
 use StudioSchedule\Store\MemberImportStore;
 use StudioSchedule\Store\ParticipantReadStore;
+use StudioSchedule\Store\AttendanceStore;
 use StudioSchedule\Store\PassReadStore;
 use StudioSchedule\Store\OutboxStore;
 use StudioSchedule\Store\PasswordResetStore;
@@ -414,6 +417,10 @@ final class Bootstrap
                     )))->register($app);
                     (new MailLogRoutes(new MailLog(new MailLogStore($connection), $clock)))->register($app);
                     $participants = new ParticipantReadStore($connection);
+                    (new AttendanceRoutes(new Attendance(
+                        new AttendanceStore($connection, $eventStore, $lessonWrites, $participants),
+                        $clock,
+                    )))->register($app);
                     (new ParticipantReadRoutes(new ParticipantRead($participants, $clock)))->register($app);
                     (new TeachingScheduleRoutes(new TeachingSchedule($schedule, $clock)))->register($app);
                     (new LessonSignupRoutes(new LessonSignup($schedule, $participants, $familyStore, $clock)))->register($app);

@@ -248,6 +248,7 @@ func TestBackendConformance(t *testing.T) {
 		{"lesson editing and restoration", lessonEditingAndRestoration},
 		{"lesson notices", lessonNotices},
 		{"teaching schedule", teachingSchedule},
+		{"lesson attendance", lessonAttendance},
 		{"public event details", publicEventDetails},
 		{"office event reads", officeEventReads},
 		{"office event lifecycle", officeEventLifecycle},

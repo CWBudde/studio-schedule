@@ -13,6 +13,7 @@ final class CatalogFailure extends RuntimeException
         string $message,
         public readonly string $location = '',
         public readonly string $reason = '',
+        public readonly string $why = '',
     ) {
         parent::__construct($message);
     }
