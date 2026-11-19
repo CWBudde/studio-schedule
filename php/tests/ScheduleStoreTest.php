@@ -94,7 +94,10 @@ use StudioSchedule\Store\StatisticsStore;
 use StudioSchedule\Store\TimetableStore;
 use StudioSchedule\Store\WaitlistInviteStore;
 
-/** @phpstan-import-type ReceiptDocument from \StudioSchedule\Receipt\Renderer */
+/**
+ * @phpstan-import-type ReceiptDocument from \StudioSchedule\Receipt\Renderer
+ * @phpstan-type WriteWorker array{process:resource,pipes:array{resource,resource,resource}}
+ */
 final class ScheduleStoreTest extends TestCase
 {
     private const string RANGE = '/schedule?from=2026-10-25&to=2026-11-05';
@@ -147,6 +150,204 @@ final class ScheduleStoreTest extends TestCase
         } finally {
             $this->database->close();
         }
+    }
+
+    public function testConcurrentEventSignupsDoNotOverbookTheFinalPlace(): void
+    {
+        $this->database->executeStatement('DELETE FROM event_registrations');
+        $this->database->executeStatement("UPDATE events SET capacity = 1 WHERE slug = 'winter-workshop'");
+        foreach ([301 => 2, 302 => 6] as $account => $person) {
+            $this->insert('accounts', [
+                'id' => $account, 'person_id' => $person, 'role' => 'member', 'email' => "fixture-$account@example.test",
+                'confirmed_at' => '2026-10-24 12:00:00',
+            ]);
+        }
+
+        self::assertSame(['ok', 'refused full'], $this->overlapWrites(
+            'capacity',
+            firstActor: self::id(301),
+            firstTarget: self::id(2),
+            secondActor: self::id(302),
+            secondTarget: self::id(6),
+        ));
+        self::assertSame(['registered'], $this->database->fetchFirstColumn('SELECT status FROM event_registrations'));
+        self::assertSame(['event-registration-added'], $this->database->fetchFirstColumn('SELECT action FROM audit_events'));
+        self::assertSame(['fixture-301@example.test'], $this->database->fetchFirstColumn('SELECT recipient FROM outbox_mails'));
+    }
+
+    public function testConcurrentAttendanceConsumesTheFinalPassVisitOnlyOnce(): void
+    {
+        $this->insert('pass_types', [
+            'id' => 301, 'name' => 'Final visit', 'kind' => 'visits', 'visits' => 1, 'validity_days' => 0,
+            'price' => 0, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => '2026-10-21 13:00:00',
+        ]);
+        $this->insert('passes', [
+            'id' => 303, 'pass_type_id' => 301, 'person_id' => 2, 'kind' => 'visits', 'origin' => 'assignment',
+            'visits_total' => 1, 'visits_remaining' => 1, 'status' => 'active', 'valid_from' => '2026-10-20',
+            'price_paid' => 0, 'sold_at' => '2026-10-21 13:00:00',
+        ]);
+        foreach ([301 => 100, 302 => 101] as $booking => $lesson) {
+            $this->insert('bookings', [
+                'id' => $booking, 'person_id' => 2, 'lesson_id' => $lesson, 'source' => 'self', 'trial' => false,
+                'status' => 'booked', 'booked_at' => '2026-10-22 13:00:00',
+            ]);
+        }
+
+        self::assertSame(['ok', 'ok'], $this->overlapWrites('redemption', self::id(11), self::id(301), self::id(11), self::id(302)));
+        self::assertContains($this->database->fetchOne('SELECT visits_remaining FROM passes'), [0, '0']);
+        $winner = $this->postgres ? self::id(301) : pack('H*', str_replace('-', '', self::id(301)));
+        self::assertSame([$winner], $this->database->fetchFirstColumn('SELECT booking_id FROM pass_redemptions'));
+        $person = $this->postgres ? self::id(2) : pack('H*', str_replace('-', '', self::id(2)));
+        self::assertSame(['attended', 'attended'], $this->database->fetchFirstColumn(
+            'SELECT status FROM bookings WHERE person_id = ? ORDER BY id',
+            [$person],
+            [$this->postgres ? ParameterType::STRING : ParameterType::BINARY],
+        ));
+        self::assertSame(['attended', 'attended'], $this->database->fetchFirstColumn('SELECT status FROM booking_events'));
+    }
+
+    public function testConcurrentPassSalesKeepReceiptNumbersGaplessAfterRollback(): void
+    {
+        $this->database->executeStatement(
+            "UPDATE settings SET issuer_name = 'Fixture Studio', issuer_address = 'Room 1', issuer_tax_id = '123', tax_mode = 'standard'",
+        );
+        $this->insert('pass_types', [
+            'id' => 301, 'name' => 'Ten visits', 'kind' => 'visits', 'visits' => 10, 'validity_days' => 0,
+            'price' => 1500, 'vat_rate_bp' => 1900, 'active' => true, 'created_at' => '2026-10-21 13:00:00',
+        ]);
+        $actor = self::id(11);
+        $first = self::id(2);
+        $second = self::id(6);
+
+        self::assertSame(['rolled back', 'ok'], $this->overlapWrites('receipt', $actor, $first, $actor, $second, rollback: true));
+        self::assertSame(['R-2027-0001'], $this->database->fetchFirstColumn('SELECT number FROM receipts'));
+        self::assertCount(1, $this->database->fetchFirstColumn('SELECT id FROM passes'));
+
+        self::assertSame(['ok', 'ok'], $this->overlapWrites('receipt', $actor, $first, $actor, $second));
+        self::assertSame(['R-2027-0001', 'R-2027-0002', 'R-2027-0003'], $this->database->fetchFirstColumn('SELECT number FROM receipts ORDER BY sequence'));
+        self::assertContains($this->database->fetchOne('SELECT last FROM receipt_counters WHERE year = 2027'), [3, '3']);
+        foreach (['passes', 'receipt_lines', 'receipt_pdfs', 'outbox_mails'] as $table) {
+            self::assertContains($this->database->fetchOne("SELECT COUNT(*) FROM $table"), [3, '3'], $table);
+        }
+    }
+
+    /** @return list<string> */
+    private function overlapWrites(
+        string $scenario,
+        string $firstActor,
+        string $firstTarget,
+        string $secondActor,
+        string $secondTarget,
+        bool $rollback = false,
+    ): array {
+        $workers = [];
+        try {
+            $leader = $this->startWriteWorker($scenario, $firstActor, $firstTarget, $rollback ? 'rollback' : 'commit');
+            $workers[] = $leader;
+            $leaderId = self::readWorkerLine($leader);
+            self::assertIsNumeric($leaderId);
+            self::assertSame('holding', self::readWorkerLine($leader));
+
+            $contender = $this->startWriteWorker($scenario, $secondActor, $secondTarget, 'contender');
+            $workers[] = $contender;
+            $backend = self::readWorkerLine($contender);
+            self::assertIsNumeric($backend);
+            $this->waitForContendedWrite((int) $leaderId, (int) $backend, $scenario, $contender);
+            self::assertSame(8, fwrite($leader['pipes'][0], "release\n"));
+
+            $results = [];
+            foreach ($workers as $index => $worker) {
+                $results[] = self::readWorkerLine($worker);
+                $error = stream_get_contents($worker['pipes'][2]);
+                foreach ($worker['pipes'] as $pipe) {
+                    fclose($pipe);
+                }
+                $status = proc_close($worker['process']);
+                unset($workers[$index]);
+                self::assertSame(0, $status, (string) $error);
+                self::assertSame('', $error);
+            }
+
+            return $results;
+        } finally {
+            foreach (array_reverse($workers) as $worker) {
+                $status = proc_get_status($worker['process']);
+                if ($status['running']) {
+                    proc_terminate($worker['process']);
+                }
+                foreach ($worker['pipes'] as $pipe) {
+                    fclose($pipe);
+                }
+                proc_close($worker['process']);
+            }
+        }
+    }
+
+    /** @return WriteWorker */
+    private function startWriteWorker(string $scenario, string $actor, string $target, string $mode): array
+    {
+        $process = proc_open(
+            [PHP_BINARY, __DIR__ . '/Concurrency/write-worker.php', $scenario, $actor, $target, $mode],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($process);
+        self::assertArrayHasKey(0, $pipes);
+        self::assertArrayHasKey(1, $pipes);
+        self::assertArrayHasKey(2, $pipes);
+        stream_set_blocking($pipes[2], false);
+
+        return ['process' => $process, 'pipes' => [$pipes[0], $pipes[1], $pipes[2]]];
+    }
+
+    /** @param WriteWorker $worker */
+    private static function readWorkerLine(array $worker): string
+    {
+        $read = [$worker['pipes'][1]];
+        $write = $except = null;
+        if (stream_select($read, $write, $except, 15) !== 1 || ($line = fgets($worker['pipes'][1])) === false) {
+            self::fail('Write worker did not report its state: ' . stream_get_contents($worker['pipes'][2]));
+        }
+
+        return rtrim($line, "\r\n");
+    }
+
+    /** @param WriteWorker $worker */
+    private function waitForContendedWrite(int $leader, int $contender, string $scenario, array $worker): void
+    {
+        $needle = match ($scenario) {
+            'capacity' => 'SELECT id FROM events WHERE id = ',
+            'redemption' => 'SELECT id FROM passes WHERE person_id IN',
+            'receipt' => 'INSERT INTO receipt_counters',
+            default => throw new RuntimeException('Unrecognized concurrency scenario'),
+        };
+        $deadline = hrtime(true) + 10_000_000_000;
+        do {
+            $query = $this->postgres
+                ? $this->database->fetchOne(
+                    "SELECT query FROM pg_stat_activity WHERE pid = ? AND wait_event_type = 'Lock' AND ? = ANY(pg_blocking_pids(pid))",
+                    [$contender, $leader],
+                    [ParameterType::INTEGER, ParameterType::INTEGER],
+                )
+                // The fixture runs only these two writes. INNODB_TRX distinguishes a wait from an active statement.
+                : $this->database->fetchOne(
+                    "SELECT trx_query FROM information_schema.INNODB_TRX WHERE trx_mysql_thread_id = ? AND trx_state = 'LOCK WAIT'",
+                    [$contender],
+                    [ParameterType::INTEGER],
+                );
+            if (is_string($query) && str_contains($query, $needle)
+                && ($scenario === 'receipt' || str_contains($query, 'FOR UPDATE'))) {
+                return;
+            }
+            $status = proc_get_status($worker['process']);
+            if (!$status['running']) {
+                self::fail('The second write finished before waiting for the first: ' . stream_get_contents($worker['pipes'][2]));
+            }
+            // Give InnoDB time to refresh the cached transaction snapshot between reads.
+            usleep($this->postgres ? 10_000 : 250_000);
+        } while (hrtime(true) < $deadline);
+
+        self::fail('The database did not show the second write contending at ' . $needle);
     }
 
     public function testOfficeCreatesOneOffLessonsWithSchoolTimeAndValidatesReferencesAndConflicts(): void

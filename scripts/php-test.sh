@@ -110,8 +110,9 @@ for engine in "${engines[@]}"; do
 			-c 'CREATE DATABASE installer' >/dev/null
 		;;
 	mysql | mariadb)
+		# The isolated concurrency fixtures inspect InnoDB lock waits.
 		docker exec -e MYSQL_PWD=fixture "$container" mysql -u root -e \
-			"CREATE DATABASE installer; GRANT ALL PRIVILEGES ON installer.* TO 'studio'@'%';"
+			"CREATE DATABASE installer; GRANT ALL PRIVILEGES ON installer.* TO 'studio'@'%'; GRANT PROCESS ON *.* TO 'studio'@'%';"
 		;;
 	esac
 

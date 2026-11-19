@@ -1719,6 +1719,10 @@ backends.
         and 80 % per namespace. `just php-test` and the PHP CI job run these checks.
   - [ ] Add concurrency cases for capacity, redemption and receipt numbers on each real database,
         run `web/e2e-server` against PHP, and include all checks in `just ci` and CI.
+    - [x] Exercise overlapping event signups, attendance that shares a final pass visit, and
+          pass sales that share a receipt counter. Confirm database lock waits and verify that a
+          failed PDF render leaves its receipt number available. These cases run in PHP CI on
+          PostgreSQL, MySQL and MariaDB.
 - [x] Docs: deployment on shared hosting (upload, document root or subdirectory, cron,
       `SETUP_TOKEN` and the installer, upgrades) and in a container (docs/operations.md), choosing
       a backend and a database, switching with `db:copy`, ADR 0001 amended (the WASM demo stays
