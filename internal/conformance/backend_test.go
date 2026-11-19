@@ -265,6 +265,7 @@ func TestBackendConformance(t *testing.T) {
 		{"push subscriptions", pushSubscriptions},
 		{"import inspection", inspectImport},
 		{"member import", importMembers},
+		{"duplicate detection", detectDuplicates},
 		{"duplicate persons", mergeDuplicates},
 		{"events and registrations", eventRegistration},
 		{"pass type administration", passTypeAdministration},

@@ -135,6 +135,59 @@ func jsonBody(t *testing.T, value any) string {
 	return string(data)
 }
 
+func detectDuplicates(t *testing.T, b *backend) {
+	t.Helper()
+
+	office, member := browser(t), browser(t)
+	login(t, b, office, "olga.ledgerby@example.net", demoPassword)
+	login(t, b, member, demoMember, demoPassword)
+	const path = "/api/v1/admin/duplicates"
+	list := request{method: http.MethodGet, path: path}
+	b.call(t, browser(t), list, http.StatusUnauthorized)
+	b.call(t, member, list, http.StatusForbidden)
+
+	type candidate struct{ ID, GivenName string }
+	type pair struct {
+		A, B     candidate
+		Strength string
+		Reasons  []string
+	}
+	type response struct{ Items []pair }
+	items := read[response](t, b.call(t, office, list, http.StatusOK)).Items
+	if len(items) != 2 || items[0].A.GivenName != "Lena" || items[0].Strength != "strong" ||
+		!slices.Equal(items[0].Reasons, []string{"email", "name"}) || items[1].A.GivenName != "Jonas" ||
+		items[1].Strength != "weak" || !slices.Equal(items[1].Reasons, []string{"name"}) {
+		t.Fatalf("unexpected duplicate candidates: %+v", items)
+	}
+
+	dismiss := func(client *http.Client, a, bID string, status int) {
+		t.Helper()
+		b.call(t, client, request{
+			method: http.MethodPost, path: path + "/dismissals",
+			body: jsonBody(t, map[string]string{"personA": a, "personB": bID}),
+		}, status)
+	}
+	a, other := items[0].A.ID, items[0].B.ID
+	dismiss(browser(t), a, other, http.StatusUnauthorized)
+	dismiss(member, a, other, http.StatusForbidden)
+	dismiss(office, a, a, http.StatusUnprocessableEntity)
+	b.call(t, office, request{
+		method: http.MethodPost, path: path + "/dismissals",
+		body: jsonBody(t, struct {
+			Canonical bool   `json:"personA"`
+			Alias     string `json:"PERSONA"`
+			Other     string `json:"personB"`
+		}{false, a, other}),
+	}, http.StatusUnprocessableEntity)
+	dismiss(office, a, "f20daa9e-941c-44bc-8c4e-c7435c06a5b7", http.StatusNotFound)
+	dismiss(office, other, a, http.StatusNoContent)
+	dismiss(office, a, other, http.StatusNoContent)
+	remaining := read[response](t, b.call(t, office, list, http.StatusOK)).Items
+	if len(remaining) != 1 || remaining[0].A.ID != items[1].A.ID || remaining[0].B.ID != items[1].B.ID {
+		t.Fatalf("displayed pairs after dismissal: %+v", remaining)
+	}
+}
+
 func mergeDuplicates(t *testing.T, b *backend) {
 	t.Helper()
 

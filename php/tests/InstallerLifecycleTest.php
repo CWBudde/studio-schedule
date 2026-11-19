@@ -188,8 +188,9 @@ final class InstallerLifecycleTest extends TestCase
             self::assertSame(200, $this->request($app, $dsn, 'GET', '/dance/readyz', clock: $this->clockAt($start->modify('+4 seconds')))->getStatusCode());
 
             $this->assertMetrics($app, $dsn, $migrations);
-            $this->assertAnnouncements($app, $dsn, $database);
             $this->assertMemberImports($app, $dsn, $database);
+            $this->assertDuplicateDetection($app, $dsn, $database);
+            $this->assertAnnouncements($app, $dsn, $database);
 
             $futureMigration = $migrations . '/99003_future_probe.sql';
             touch($futureMigration);
@@ -363,6 +364,56 @@ final class InstallerLifecycleTest extends TestCase
             self::assertCount(2, $this->importHistory($app, $dsn, $path, $clock, $cookies));
         }
 
+    }
+
+    private function assertDuplicateDetection(string $app, #[\SensitiveParameter] string $dsn, Connection $database): void
+    {
+        $clock = $this->clockAt(new DateTimeImmutable('2041-02-02T10:00:00Z'));
+        $login = $this->request($app, $dsn, 'POST', '/dance/api/v1/auth/login', json: [
+            'email' => 'first-admin@example.invalid', 'password' => self::PASSWORD,
+        ], clock: $clock);
+        self::assertSame(200, $login->getStatusCode(), (string) $login->getBody());
+        self::assertSame(1, preg_match('/\bstudio_session=([^;]+)/', $login->getHeaderLine('Set-Cookie'), $cookie));
+        $cookies = ['studio_session' => $cookie[1] ?? throw new \LogicException('Expected the login cookie')];
+        $path = '/dance/api/v1/admin/duplicates';
+        $csv = "Number;Given;Family;Contact;Guardian Given;Guardian Family;Guardian Contact\n"
+            . "D1;Joy;Tester;first-admin@example.invalid;;;\n"
+            . "D2;Ada;Muster;;;;\n"
+            . "D3;Leo;Meier;family@example.invalid;Joerg;Gross;family@example.invalid\n";
+        self::assertSame(200, $this->request($app, $dsn, 'POST', '/dance/api/v1/admin/imports', json: [
+            'fileName' => 'duplicates.csv', 'content' => base64_encode($csv), 'apply' => true,
+            'mapping' => ['columns' => [
+                'memberNo' => 'Number', 'givenName' => 'Given', 'familyName' => 'Family', 'email' => 'Contact',
+                'guardian1GivenName' => 'Guardian Given', 'guardian1FamilyName' => 'Guardian Family', 'guardian1Email' => 'Guardian Contact',
+            ]],
+        ], clock: $clock, cookies: $cookies)->getStatusCode());
+
+        /** @var list<array{a:array<string,string>,b:array<string,string>,strength:string,reasons:list<string>}> $pairs */
+        $pairs = self::importDocument($this->request($app, $dsn, 'GET', $path, clock: $clock, cookies: $cookies))['items'];
+        self::assertCount(3, $pairs);
+        self::assertSame([['name-birth-date'], ['email'], ['name']], array_column($pairs, 'reasons'));
+        self::assertSame(['strong', 'strong', 'weak'], array_column($pairs, 'strength'));
+        self::assertSame('first-admin@example.invalid', $pairs[1]['a']['accountEmail']);
+        self::assertSame('D1', $pairs[1]['b']['memberNo']);
+
+        $ids = ['personA' => strtoupper($pairs[1]['b']['id']), 'personB' => $pairs[1]['a']['id']];
+        self::assertSame(422, $this->request($app, $dsn, 'POST', "$path/dismissals", json: [
+            'personA' => false, 'personB' => 'invalid', 'extra' => true,
+        ], clock: $clock, cookies: $cookies)->getStatusCode());
+        self::assertSame(204, $this->request($app, $dsn, 'POST', "$path/dismissals", json: $ids, clock: $clock, cookies: $cookies)->getStatusCode());
+        $saved = $database->fetchAssociative(
+            'SELECT d.dismissed_at, a.email FROM person_duplicate_dismissals d JOIN accounts a ON a.id = d.dismissed_by',
+        );
+        self::assertIsArray($saved);
+        self::assertSame('first-admin@example.invalid', $saved['email']);
+
+        self::assertSame(204, $this->request($app, $dsn, 'POST', "$path/dismissals", json: [
+            'personA' => $ids['personB'], 'personB' => $ids['personA'],
+        ], clock: $this->clockAt(new DateTimeImmutable('2041-02-02T11:00:00Z')), cookies: $cookies)->getStatusCode());
+        self::assertSame($saved['dismissed_at'], $database->fetchOne('SELECT dismissed_at FROM person_duplicate_dismissals'));
+
+        $remaining = self::importDocument($this->request($app, $dsn, 'GET', $path, clock: $clock, cookies: $cookies))['items'];
+        self::assertSame([$pairs[0], $pairs[2]], $remaining);
     }
 
     /** @param array<string,string> $cookies
