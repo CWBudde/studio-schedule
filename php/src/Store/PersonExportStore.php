@@ -40,39 +40,53 @@ final readonly class PersonExportStore
     }
 
     /** @return array{guardians:list<array<string,mixed>>,dependents:list<array<string,mixed>>,mergedPersons:list<array<string,mixed>>} */
-    public function familyLinks(string $id): array
+    public function familyLinks(string $id, bool $includeMatchFields = false): array
     {
         $order = $this->isPostgres() ? 'p.family_name, p.given_name, p.id' : 'CAST(p.family_name AS BINARY), CAST(p.given_name AS BINARY), p.id';
         $key = $this->key();
-        $select = 'SELECT p.id, p.given_name, p.family_name FROM persons p';
+        $select = 'SELECT p.id, p.given_name, p.family_name';
+        $optional = [];
+        if ($includeMatchFields) {
+            $select .= ', p.email, p.member_no, CASE WHEN p.anonymized_at IS NOT NULL THEN TRUE END AS anonymized';
+            $optional = ['email' => 'email', 'member_no' => 'memberNo', 'anonymized' => ['anonymized', 'boolean']];
+        }
+        $select .= ' FROM persons p';
         $params = [$this->value($id)];
 
         return [
-            'guardians' => $this->rows("$select JOIN person_guardians g ON p.id = g.guardian_id WHERE g.dependent_id = $key ORDER BY $order", $params, self::PERSON),
-            'dependents' => $this->rows("$select JOIN person_guardians g ON p.id = g.dependent_id WHERE g.guardian_id = $key ORDER BY $order", $params, self::PERSON),
-            'mergedPersons' => $this->rows("$select WHERE p.merged_into = $key ORDER BY $order", $params, self::PERSON),
+            'guardians' => $this->rows("$select JOIN person_guardians g ON p.id = g.guardian_id WHERE g.dependent_id = $key ORDER BY $order", $params, self::PERSON, $optional),
+            'dependents' => $this->rows("$select JOIN person_guardians g ON p.id = g.dependent_id WHERE g.guardian_id = $key ORDER BY $order", $params, self::PERSON, $optional),
+            'mergedPersons' => $this->rows("$select WHERE p.merged_into = $key ORDER BY $order", $params, self::PERSON, $optional),
         ];
+    }
+
+    /** @return array<string,mixed>|null */
+    public function account(string $personId): ?array
+    {
+        $row = $this->db->fetchAssociative(
+            'SELECT id, email, role, locale, NULLIF(visible_days, 0) AS visible_days, confirmed_at, disabled_at '
+            . 'FROM accounts WHERE person_id = ' . $this->key(),
+            [$this->value($personId)],
+        );
+
+        return $row === false ? null : $this->fields($row, ['id' => ['id', 'id'], 'email' => 'email', 'role' => 'role'], [
+            'locale' => 'locale', 'visible_days' => ['visibleDays', 'integer'],
+            'confirmed_at' => ['confirmedAt', 'instant'], 'disabled_at' => ['disabledAt', 'instant'],
+        ]);
     }
 
     /** @return array<string,mixed> */
     public function accountData(string $personId): array
     {
-        $key = $this->key();
-        $row = $this->db->fetchAssociative(
-            'SELECT id, email, role, locale, NULLIF(visible_days, 0) AS visible_days, confirmed_at, disabled_at '
-            . "FROM accounts WHERE person_id = $key",
-            [$this->value($personId)],
-        );
-        if ($row === false) {
+        $account = $this->account($personId);
+        if ($account === null) {
             return [];
         }
-        $params = [$this->value($this->id(self::text($row['id'])))];
+        $key = $this->key();
+        $params = [$this->value(self::text($account['id']))];
 
         return [
-            'account' => $this->fields($row, ['id' => ['id', 'id'], 'email' => 'email', 'role' => 'role'], [
-                'locale' => 'locale', 'visible_days' => ['visibleDays', 'integer'],
-                'confirmed_at' => ['confirmedAt', 'instant'], 'disabled_at' => ['disabledAt', 'instant'],
-            ]),
+            'account' => $account,
             'calendarFeeds' => $this->rows(
                 "SELECT id, scope, location_id, created_at, last_used_at FROM calendar_feeds WHERE account_id = $key AND revoked_at IS NULL ORDER BY created_at, id",
                 $params,

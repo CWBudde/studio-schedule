@@ -191,6 +191,7 @@ final class InstallerLifecycleTest extends TestCase
             $this->assertMemberImports($app, $dsn, $database);
             $this->assertDuplicateDetection($app, $dsn, $database);
             $this->assertAnnouncements($app, $dsn, $database);
+            $this->assertPersonDetails($app, $dsn, $database);
 
             $futureMigration = $migrations . '/99003_future_probe.sql';
             touch($futureMigration);
@@ -414,6 +415,73 @@ final class InstallerLifecycleTest extends TestCase
 
         $remaining = self::importDocument($this->request($app, $dsn, 'GET', $path, clock: $clock, cookies: $cookies))['items'];
         self::assertSame([$pairs[0], $pairs[2]], $remaining);
+    }
+
+    private function assertPersonDetails(string $app, #[\SensitiveParameter] string $dsn, Connection $database): void
+    {
+        $now = new DateTimeImmutable('2041-02-03T10:00:00Z');
+        $clock = $this->clockAt($now);
+        $login = $this->request($app, $dsn, 'POST', '/dance/api/v1/auth/login', json: [
+            'email' => 'first-admin@example.invalid', 'password' => self::PASSWORD,
+        ], clock: $clock);
+        self::assertSame(200, $login->getStatusCode(), (string) $login->getBody());
+        self::assertSame(1, preg_match('/\bstudio_session=([^;]+)/', $login->getHeaderLine('Set-Cookie'), $cookie));
+        $cookies = ['studio_session' => $cookie[1] ?? throw new \LogicException('Expected the login cookie')];
+        $path = '/dance/api/v1/admin/persons/';
+        $get = fn(string $id): ResponseInterface => $this->request($app, $dsn, 'GET', $path . $id, clock: $clock, cookies: $cookies);
+
+        $postgres = $database->getDatabasePlatform() instanceof PostgreSQLPlatform;
+        $storedId = static fn(Uuid $id): string => $postgres ? $id->toRfc4122() : $id->toBinary();
+        $publicId = static fn(string $id): string => $postgres ? $id : Uuid::fromBinary($id)->toRfc4122();
+        $keep = $database->fetchOne("SELECT id FROM persons WHERE member_no = 'D1'");
+        $drop = $database->fetchOne("SELECT id FROM persons WHERE member_no = 'D2'");
+        self::assertIsString($keep);
+        self::assertIsString($drop);
+        $database->update('persons', ['merged_into' => $keep, 'member_no' => null], ['id' => $drop]);
+        $database->insert('accounts', [
+            'id' => $storedId(Uuid::v7()), 'person_id' => $drop, 'email' => 'disabled@example.invalid',
+            'role' => 'member', 'disabled_at' => Database::sqlInstant($database, $now),
+        ]);
+        $database->insert('accounts', [
+            'id' => $storedId(Uuid::v7()), 'person_id' => $keep, 'email' => 'pending@example.invalid', 'role' => 'member',
+        ]);
+        foreach (['B instructor', 'A instructor'] as $name) {
+            $database->insert('staff', [
+                'id' => $storedId(Uuid::v7()), 'person_id' => $keep, 'display_name' => $name, 'kind' => 'instructor', 'active' => '1',
+            ]);
+        }
+
+        $dropResponse = $get(strtoupper($publicId($drop)));
+        $dropBody = self::importDocument($dropResponse);
+        self::assertSame('no-store', $dropResponse->getHeaderLine('Cache-Control'));
+        self::assertSame($publicId($drop), $dropBody['id']);
+        self::assertSame([
+            'id' => $publicId($keep), 'givenName' => 'Joy', 'familyName' => 'Tester',
+            'email' => 'first-admin@example.invalid', 'memberNo' => 'D1',
+        ], $dropBody['mergedInto']);
+        self::assertArrayNotHasKey('mergedIntoId', $dropBody);
+        self::assertArrayNotHasKey('memberNo', $dropBody);
+        self::assertStringContainsString('"status":"disabled"', json_encode($dropBody['account'], JSON_THROW_ON_ERROR));
+
+        $keepBody = self::importDocument($get($publicId($keep)));
+        self::assertSame([['id' => $publicId($drop), 'givenName' => 'Ada', 'familyName' => 'Muster']], $keepBody['merged']);
+        self::assertStringContainsString('"status":"pending"', json_encode($keepBody['account'], JSON_THROW_ON_ERROR));
+        self::assertIsArray($keepBody['staff']);
+        /** @var list<array{displayName:string}> $staff */
+        $staff = $keepBody['staff'];
+        self::assertSame(['A instructor', 'B instructor'], array_column($staff, 'displayName'));
+        self::assertSame([], $keepBody['classes']);
+
+        $deleted = Uuid::v7();
+        $database->insert('persons', [
+            'id' => $storedId($deleted), 'given_name' => 'Deleted', 'family_name' => 'person',
+            'anonymized_at' => Database::sqlInstant($database, $now),
+        ]);
+        $erased = self::importDocument($get($deleted->toRfc4122()));
+        self::assertSame('2041-02-03T10:00:00Z', $erased['anonymizedAt']);
+        self::assertArrayNotHasKey('account', $erased);
+        self::assertSame(422, $get('bad-id')->getStatusCode());
+        self::assertSame(404, $get(Uuid::v7()->toRfc4122())->getStatusCode());
     }
 
     /** @param array<string,string> $cookies

@@ -41,6 +41,7 @@ use StudioSchedule\Http\PassReadRoutes;
 use StudioSchedule\Http\PasswordFailureLimit;
 use StudioSchedule\Http\PasswordResetEndpoint;
 use StudioSchedule\Http\PasswordResetRequestEndpoint;
+use StudioSchedule\Http\PersonDetailEndpoint;
 use StudioSchedule\Http\PersonExportRoutes;
 use StudioSchedule\Http\PublicSettingsEndpoint;
 use StudioSchedule\Http\PushRoutes;
@@ -108,6 +109,7 @@ use StudioSchedule\Store\ParticipantReadStore;
 use StudioSchedule\Store\PassReadStore;
 use StudioSchedule\Store\OutboxStore;
 use StudioSchedule\Store\PasswordResetStore;
+use StudioSchedule\Store\PersonDetailStore;
 use StudioSchedule\Store\PersonExportStore;
 use StudioSchedule\Store\PublicSettingsStore;
 use StudioSchedule\Store\PushSubscriptionStore;
@@ -303,7 +305,8 @@ final class Bootstrap
                     $timetableStore = new TimetableStore($connection);
                     $generator = new LessonGenerator($timetableStore, $clock);
                     (new AdminSettingsRoutes(new AdminSettings($settingsStore), new BookingRuleSettings($schedule, $clock, $generator, $logger)))->register($app);
-                    CatalogRoutes::register($app, new CatalogStore($connection), $clock);
+                    $catalog = new CatalogStore($connection);
+                    CatalogRoutes::register($app, $catalog, $clock);
                     $memberDirectory = new MemberImportStore($connection);
                     (new MemberImportRoutes(new MemberImports($memberDirectory, $clock)))->register($app);
                     CatalogAdminRoutes::registerTerms($app, new TermAdmin($timetableStore, $generator, $clock));
@@ -313,7 +316,10 @@ final class Bootstrap
                     $duplicates = new DuplicateStore($connection, $memberDirectory, $familyStore, $clock);
                     (new DuplicateRoutes(new PersonDuplicates($duplicates)))->register($app);
                     (new FamilyRoutes(new Family($familyStore, $clock)))->register($app);
-                    (new PersonExportRoutes(new PersonExport(new PersonExportStore($connection), $familyStore, $clock)))->register($app);
+                    $personExport = new PersonExportStore($connection);
+                    (new PersonExportRoutes(new PersonExport($personExport, $familyStore, $clock)))->register($app);
+                    $app->get('/api/v1/admin/persons/{personId}', new PersonDetailEndpoint(new PersonDetailStore($connection, $personExport, $catalog)))
+                        ->add(CatalogAdminRoutes::requireOffice(...));
                     (new AnnouncementRoutes(new Announcements(
                         new AnnouncementStore($connection),
                         new AnnouncementRecipients($connection),

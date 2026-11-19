@@ -1344,7 +1344,7 @@ backends.
       `/api/test/…` to set the clock, reset the database, load the demo seed and read the outbox.
       Register it only with `TEST_CONTROL=true`, refuse it at startup with an `https://`
       `BASE_URL`, and keep it out of `api/openapi.json`.
-  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 36
+  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 37
         scenarios at the domain root and under `/dance/schedule`.
   - [x] PHP test controls for clock, reset, demo seed and outbox. The CI fixture job exercises
         them on PostgreSQL, MySQL 8.0 and MariaDB 10.6 at the root and under `/dance/schedule`.
@@ -1557,8 +1557,11 @@ backends.
     - [x] List and dismiss possible duplicate persons. Rank pairs with a shared email or a matching
           name and birth date first, with the family email exception. The shared
           `duplicate_detection` case passes in Go and on all three PHP databases at both mount paths.
-    - [ ] Port person merge, including preview, ledger and waiting-list changes, event
-          registrations, and read-only tombstone details.
+    - [x] Let the office read a person's family, account, staff links and classes. Show both
+          directions of a merge and the anonymization timestamp on historical profiles. The
+          shared `person_detail` case runs in PHP CI on all three databases at both mount paths.
+    - [ ] Port transactional person merge, including preview, ledger, waiting-list changes and
+          event registrations.
   - [ ] Privacy, export, anonymisation, retention jobs (ADR 0016)
     - [x] Export the version 1 person document for members, guardians and the office, including
           historical records. All exports omit secrets and receipt PDFs. Guardian exports also

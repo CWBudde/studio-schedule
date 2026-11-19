@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -175,6 +176,52 @@ func familyProfiles(t *testing.T, b *backend) {
 		}
 	}
 	t.Fatal("updated dependent is missing from the guardian's family")
+}
+
+func personDetail(t *testing.T, b *backend) {
+	t.Helper()
+
+	parent, office := browser(t), browser(t)
+	login(t, b, parent, "clara.amberly@example.org", demoPassword)
+	login(t, b, office, "olga.ledgerby@example.net", demoPassword)
+	type person struct {
+		ID, GivenName, FamilyName string
+	}
+	family := read[struct {
+		Me         person
+		Dependents []person
+	}](t, get(t, b, parent, "/api/v1/family"))
+	if len(family.Dependents) != 2 {
+		t.Fatalf("unexpected family fixture: %+v", family)
+	}
+	in := request{method: http.MethodGet, path: "/api/v1/admin/persons/{personId}", params: map[string]string{"personId": family.Me.ID}}
+	b.call(t, browser(t), in, http.StatusUnauthorized)
+	b.call(t, parent, in, http.StatusForbidden)
+
+	type detail struct {
+		person
+		Account               *struct{ ID, Email, Role, Status string }
+		Dependents, Guardians []person
+		Classes               []struct{ ClassID, TermName, CourseTypeName, StartTime string }
+		Staff                 []any
+		Merged                []person
+		MergedInto            *person
+	}
+	response := b.call(t, office, in, http.StatusOK)
+	got := read[detail](t, response)
+	if got.person != family.Me || got.Account == nil || got.Account.Email != "clara.amberly@example.org" ||
+		got.Account.Role != "member" || got.Account.Status != "active" || len(got.Dependents) != 2 ||
+		len(got.Classes) == 0 || got.Guardians == nil || got.Staff == nil || got.Merged == nil || got.MergedInto != nil ||
+		strings.Contains(string(response.body), "passwordHash") {
+		t.Fatalf("unexpected office person detail: %+v", got)
+	}
+	in.params["personId"] = family.Dependents[0].ID
+	child := read[detail](t, b.call(t, office, in, http.StatusOK))
+	if child.person != family.Dependents[0] || !slices.Contains(child.Guardians, family.Me) {
+		t.Fatalf("office detail omitted the guardian link: %+v", child)
+	}
+	in.params["personId"] = "f20daa9e-941c-44bc-8c4e-c7435c06a5b7"
+	b.call(t, office, in, http.StatusNotFound)
 }
 
 func familyPrivacy(t *testing.T, b *backend) {

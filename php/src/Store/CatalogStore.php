@@ -262,10 +262,24 @@ final readonly class CatalogStore implements CatalogPersistence, CatalogAdminPer
 
     public function allStaff(): array
     {
+        return $this->staffRecords();
+    }
+
+    /** @return list<CatalogDocument> */
+    public function staffForPerson(string $personId): array
+    {
+        return $this->staffRecords($personId);
+    }
+
+    /** @return list<CatalogDocument> */
+    private function staffRecords(?string $personId = null): array
+    {
         $items = [];
         foreach ($this->connection->fetchAllAssociative(
             'SELECT s.id, s.display_name, s.kind, s.active, s.person_id, p.given_name, p.family_name, p.email, '
-            . 'p.member_no, p.anonymized_at FROM staff s LEFT JOIN persons p ON p.id = s.person_id',
+            . 'p.member_no, p.anonymized_at FROM staff s LEFT JOIN persons p ON p.id = s.person_id'
+            . ($personId === null ? '' : ' WHERE s.person_id = ?'),
+            $personId === null ? [] : [$this->encodeId($personId)],
         ) as $row) {
             $entry = ['id' => $this->id($row['id']), 'displayName' => self::text($row['display_name']),
                 'kind' => self::text($row['kind']), 'active' => in_array($row['active'], [true, 1, '1', 't'], true)];
