@@ -1454,9 +1454,16 @@ backends.
           `statistics` scenario at both mount paths with the PHP authentication draft.
   - [ ] Import, duplicates and merge (ADR 0015)
   - [ ] Privacy, export, anonymisation, retention jobs (ADR 0016)
+    - [x] Export the version 1 person document for members, guardians and the office, including
+          historical records. All exports omit secrets and receipt PDFs. Guardian exports also
+          omit data belonging to the dependent's own account. The shared `family_and_privacy`
+          case passes on all three PHP databases at both mount paths with the authentication draft.
   - [ ] Web push with VAPID (ADR 0017)
     - [x] Serve signed-in push status, subscription saves and removal. Refreshing a device keeps
           its queued messages. Moving it to another account clears them in the same transaction.
+          The shared `push_subscriptions` case now verifies device labels and removal through
+          the privacy export on all three PHP databases at both mount paths with the authentication
+          draft.
           Waiting-list invite queueing and after-response delivery are open.
   - [ ] Events and workshops (Phase 10)
     - [x] Serve public event details and images, including past and canceled events. Drafts

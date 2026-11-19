@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
+use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\TestCase;
 use Psr\Clock\ClockInterface;
@@ -205,6 +206,196 @@ final class FamilyRoutesTest extends TestCase
         }
     }
 
+    public function testPrivacyExportProjectsHistoryAndRedactsADependentsAccount(): void
+    {
+        $this->request('GET', '/my/export?person=' . self::id(1), user: null, status: 401, mount: '');
+        $this->request('GET', '/my/export', status: 422, mount: '');
+        $this->request('GET', '/my/export?person=invalid', status: 422, mount: '');
+        $this->request('GET', '/my/export?person=' . self::id(1), user: 'outsider', status: 404, mount: '');
+        $this->request('GET', '/admin/persons/' . self::id(1) . '/export', status: 403, mount: '');
+        $this->account(6, 'office');
+        $this->session(6, 'office', 36);
+        $this->seedExportHistory();
+
+        $result = $this->request('GET', '/my/export?person=' . self::id(1), user: 'acting-parent', mount: '');
+        self::assertSame('studio-schedule.person-export', $result['format']);
+        self::assertSame(1, $result['version']);
+        self::assertSame(self::NOW, $result['exportedAt']);
+        self::assertIsArray($result['person']);
+        self::assertSame('office-only note', $result['person']['notes']);
+        self::assertSame('M-123', $result['person']['memberNo']);
+        self::assertSame('private-contact@example.test', $result['person']['email']);
+        self::assertSame([], $result['guardians']);
+        self::assertIsArray($result['dependents']);
+        self::assertSame(['id' => self::id(3), 'givenName' => 'Kid', 'familyName' => 'Alpha'], $result['dependents'][0]);
+        self::assertSame([['id' => self::id(11), 'givenName' => 'Old Profile', 'familyName' => 'Example']], $result['mergedPersons']);
+        self::assertIsArray($result['account']);
+        self::assertSame('person-1@example.test', $result['account']['email']);
+        self::assertEquals([['id' => self::id(63), 'scope' => 'schedule', 'locationId' => self::id(50), 'createdAt' => self::NOW]], $result['calendarFeeds']);
+        self::assertEquals([['id' => self::id(65), 'deviceLabel' => 'Fixture Browser', 'createdAt' => self::NOW, 'lastUsedAt' => self::NOW]], $result['pushDevices']);
+        self::assertSame([['id' => self::id(66), 'title' => 'Fixture announcement', 'publishAt' => self::NOW]], $result['dismissedAnnouncements']);
+
+        $membership = [
+            'classId' => self::id(54), 'termId' => self::id(53), 'termName' => 'Autumn', 'courseTypeName' => 'Ballet',
+            'weekday' => 4, 'startTime' => '15:00', 'retired' => false, 'since' => '2026-11-01',
+        ];
+        self::assertEquals([$membership, ['classId' => self::id(55)] + $membership], $result['classMemberships']);
+        $lesson = ['id' => self::id(56), 'startsAt' => '2026-11-18T15:00:00.123456Z', 'endsAt' => '2026-11-18T16:00:00.123456Z', 'courseType' => 'Ballet'];
+        self::assertEquals([[
+            'id' => self::id(57), 'lesson' => $lesson, 'status' => 'canceled', 'source' => 'self',
+            'trial' => true, 'trialNote' => 'Trial note', 'bookedAt' => '2026-11-17T12:00:00Z', 'canceledAt' => self::NOW, 'late' => true,
+        ]], $result['bookings']);
+        self::assertEquals([[
+            'id' => self::id(58), 'lesson' => $lesson, 'status' => 'withdrawn',
+            'joinedAt' => '2026-11-17T12:00:00Z', 'invitedAt' => '2026-11-18T12:00:00Z',
+        ]], $result['waitlistEntries']);
+        self::assertEquals([[
+            'id' => self::id(61), 'title' => 'Fixture workshop', 'status' => 'canceled', 'payment' => 'refunded',
+            'price' => 2500, 'receiptNumber' => 'R-2026-71', 'cancellationReceiptNumber' => 'R-2026-72',
+            'createdAt' => '2026-11-17T12:00:00Z', 'canceledAt' => self::NOW,
+        ]], $result['eventRegistrations']);
+        self::assertEquals([[
+            'id' => self::id(60), 'type' => 'Two visits', 'kind' => 'visits', 'visitsTotal' => 2, 'visitsRemaining' => 1,
+            'validFrom' => '2026-11-01', 'status' => 'active', 'soldAt' => '2026-11-01T12:00:00Z', 'pricePaid' => 0,
+            'redemptions' => [['bookingId' => self::id(57), 'at' => '2026-11-17T12:00:00Z']],
+        ]], $result['passes']);
+        self::assertIsArray($result['receipts']);
+        self::assertSame(['R-2026-72', 'R-2026-71'], array_column($result['receipts'], 'number'));
+        self::assertSame([-2500, 2500], array_column($result['receipts'], 'gross'));
+        self::assertSame([false, true], array_column($result['receipts'], 'canceled'));
+        $document = json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        foreach (['fixture-private-hash', 'https://push.example.test/secret', 'token_hash', '%PDF-fixture', 'passwordHash', 'inviteToken'] as $secret) {
+            self::assertStringNotContainsString($secret, $document);
+        }
+
+        $dependent = $this->request('GET', '/my/export?person=' . self::id(2), mount: '');
+        self::assertArrayNotHasKey('account', $dependent);
+        foreach (['calendarFeeds', 'pushDevices', 'dismissedAnnouncements'] as $key) {
+            self::assertSame([], $dependent[$key]);
+        }
+        self::assertSame($result, $this->request('GET', '/admin/persons/' . self::id(1) . '/export', user: 'office', mount: ''));
+        $childOfOffice = $this->request('GET', '/admin/persons/' . self::id(2) . '/export', user: 'office', mount: '');
+        self::assertIsArray($childOfOffice['account']);
+        self::assertSame('person-2@example.test', $childOfOffice['account']['email']);
+        foreach (['calendarFeeds', 'pushDevices', 'dismissedAnnouncements'] as $key) {
+            self::assertIsArray($childOfOffice[$key]);
+            self::assertCount(1, $childOfOffice[$key]);
+        }
+        $deleted = $this->request('GET', '/admin/persons/' . self::id(10) . '/export', user: 'office', mount: '');
+        self::assertIsArray($deleted['person']);
+        self::assertSame('2026-11-17T10:00:00Z', $deleted['person']['anonymizedAt']);
+        $merged = $this->request('GET', '/admin/persons/' . self::id(11) . '/export', user: 'office', mount: '');
+        self::assertIsArray($merged['person']);
+        self::assertSame(self::id(1), $merged['person']['mergedIntoId']);
+    }
+
+    private function seedExportHistory(): void
+    {
+        $stamp = '2026-11-18 23:30:00';
+        $earlier = '2026-11-17 12:00:00';
+        $this->db->executeStatement("UPDATE persons SET member_no = 'M-123' WHERE id = ?", [$this->uuid(1)]);
+        $this->insert('persons', ['id' => 11, 'given_name' => 'Old Profile', 'family_name' => 'Example', 'merged_into' => 1]);
+        $this->insert('locations', ['id' => 50, 'name' => 'Fixture Hall']);
+        $this->insert('rooms', ['id' => 51, 'location_id' => 50, 'name' => 'Room', 'capacity' => 20, 'position' => 1]);
+        $this->insert('course_types', ['id' => 52, 'name' => 'Ballet']);
+        $this->insert('terms', ['id' => 53, 'name' => 'Autumn', 'starts_on' => '2026-11-01', 'ends_on' => '2026-11-30']);
+        foreach ([54 => '15:00:59', 55 => '15:00:00'] as $id => $startTime) {
+            $this->insert('classes', [
+                'id' => $id, 'term_id' => 53, 'course_type_id' => 52, 'room_id' => 51, 'instructor_id' => 21,
+                'weekday' => 4, 'start_time' => $startTime, 'duration' => $this->postgres ? '1 hour' : 3600000000, 'capacity' => 8,
+            ]);
+            $this->insert('class_members', ['class_id' => $id, 'person_id' => 1, 'since' => '2026-11-01']);
+        }
+        $this->insert('lessons', [
+            'id' => 56, 'course_type_id' => 52, 'room_id' => 51, 'instructor_id' => 21,
+            'starts_at' => '2026-11-18 15:00:00.123456', 'ends_at' => '2026-11-18 16:00:00.123456',
+            'kind' => 'regular', 'visibility' => 'public', 'status' => 'scheduled', 'capacity' => 8,
+        ]);
+        $this->insert('bookings', [
+            'id' => 57, 'lesson_id' => 56, 'person_id' => 1, 'status' => 'canceled', 'booked_at' => $earlier,
+            'canceled_at' => $stamp, 'late' => true, 'trial' => true, 'trial_note' => 'Trial note',
+        ]);
+        $this->insert('waitlist_entries', [
+            'id' => 58, 'lesson_id' => 56, 'person_id' => 1, 'status' => 'withdrawn', 'stay_on_list' => false,
+            'joined_at' => $earlier, 'invite_token_hash' => str_repeat('w', 32),
+            'invited_at' => '2026-11-18 12:00:00', 'expires_at' => '2026-11-18 15:00:00',
+        ]);
+        $this->insert('pass_types', [
+            'id' => 59, 'name' => 'Two visits', 'kind' => 'visits', 'visits' => 2,
+            'validity_days' => 0, 'price' => 2000, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => $earlier,
+        ]);
+        $this->insert('passes', [
+            'id' => 60, 'pass_type_id' => 59, 'person_id' => 1, 'kind' => 'visits', 'visits_total' => 2,
+            'visits_remaining' => 1, 'valid_from' => '2026-11-01', 'status' => 'active', 'origin' => 'assignment',
+            'sold_at' => '2026-11-01 12:00:00', 'price_paid' => 0,
+        ]);
+        $this->insert('pass_redemptions', ['pass_id' => 60, 'booking_id' => 57, 'at' => $earlier]);
+        $this->insert('events', [
+            'id' => 62, 'slug' => 'fixture-workshop', 'title' => 'Fixture workshop', 'course_type_id' => 52,
+            'capacity' => 7, 'status' => 'published', 'price' => 2500, 'vat_rate_bp' => 0,
+            'created_at' => $earlier, 'updated_at' => $earlier,
+        ]);
+        foreach ([71 => [2500, null], 72 => [-2500, 71]] as $id => [$gross, $cancels]) {
+            $this->insert('receipts', [
+                'id' => $id, 'number' => "R-2026-$id", 'year' => 2026, 'sequence' => $id,
+                'kind' => $cancels === null ? 'sale' : 'cancellation', 'cancels_receipt_id' => $cancels,
+                'issued_at' => $stamp, 'issue_date' => '2026-11-19', 'locale' => 'en',
+                'issuer_name' => 'Studio', 'issuer_address' => 'Road', 'issuer_tax_id' => '123',
+                'tax_mode' => 'exempt', 'recipient_name' => 'Fixture recipient', 'payment_method' => 'cash',
+                'currency' => 'EUR', 'net' => $gross, 'vat' => 0, 'gross' => $gross, 'payer_person_id' => 11,
+            ]);
+        }
+        $this->insert('receipt_pdfs', ['receipt_id' => 71, 'pdf' => '%PDF-fixture']);
+        $this->insert('event_registrations', [
+            'id' => 61, 'event_id' => 62, 'person_id' => 1, 'status' => 'canceled', 'payment' => 'refunded',
+            'price' => 2500, 'vat_rate_bp' => 0, 'receipt_id' => 71, 'cancellation_receipt_id' => 72,
+            'created_at' => $earlier, 'updated_at' => $stamp, 'canceled_at' => $stamp,
+        ]);
+        $this->insert('calendar_feeds', [
+            'id' => 63, 'account_id' => 1, 'scope' => 'schedule', 'location_id' => 50,
+            'token_hash' => str_repeat('a', 32), 'created_at' => $stamp,
+        ]);
+        $this->insert('calendar_feeds', [
+            'id' => 64, 'account_id' => 1, 'scope' => 'bookings',
+            'token_hash' => str_repeat('b', 32), 'created_at' => $earlier, 'revoked_at' => $stamp,
+        ]);
+        $this->insert('calendar_feeds', ['id' => 68, 'account_id' => 2, 'scope' => 'bookings', 'token_hash' => str_repeat('c', 32), 'created_at' => $stamp]);
+        $this->insert('push_subscriptions', [
+            'id' => 65, 'account_id' => 1, 'endpoint' => 'https://push.example.test/secret', 'device_label' => 'Fixture Browser',
+            'p256dh' => str_repeat('p', 65), 'auth' => str_repeat('a', 16), 'created_at' => $stamp, 'last_used_at' => $stamp,
+        ]);
+        $this->insert('push_subscriptions', [
+            'id' => 69, 'account_id' => 2, 'endpoint' => 'https://push.example.test/teen',
+            'p256dh' => str_repeat('q', 65), 'auth' => str_repeat('b', 16), 'created_at' => $stamp, 'last_used_at' => $stamp,
+        ]);
+        $this->insert('announcements', [
+            'id' => 66, 'author_id' => 6, 'title' => 'Fixture announcement', 'body' => 'Other public text', 'audience' => 'everyone',
+            'publish_at' => $stamp, 'email' => false, 'email_recipients' => 0, 'created_at' => $stamp, 'updated_at' => $stamp,
+        ]);
+        $this->insert('announcement_dismissals', ['announcement_id' => 66, 'account_id' => 1, 'dismissed_at' => $stamp]);
+        $this->insert('announcement_dismissals', ['announcement_id' => 66, 'account_id' => 2, 'dismissed_at' => $stamp]);
+        $this->insert('account_credentials', ['account_id' => 1, 'password_hash' => 'fixture-private-hash', 'changed_at' => $stamp]);
+    }
+
+    /** @param array<string,int|bool|string|null> $data */
+    private function insert(string $table, array $data): void
+    {
+        $types = [];
+        foreach ($data as $key => $value) {
+            $types[$key] = match (true) {
+                $value === null => ParameterType::NULL,
+                is_bool($value) => ParameterType::BOOLEAN,
+                is_int($value) => ParameterType::INTEGER,
+                default => ParameterType::STRING,
+            };
+            if (is_int($value) && ($key === 'id' || str_ends_with($key, '_id') || $key === 'merged_into')) {
+                $data[$key] = $this->uuid($value);
+                $types[$key] = $this->postgres ? ParameterType::STRING : ParameterType::BINARY;
+            }
+        }
+        $this->db->insert($table, $data, $types);
+    }
+
     private function account(int $id, string $role, bool $disabled = false): void
     {
         $stamp = '2026-11-18 12:00:00';
@@ -232,9 +423,9 @@ final class FamilyRoutesTest extends TestCase
      * @param array<string,mixed>|string|null $input
      * @return array<array-key,mixed>
      */
-    private function request(string $method, string $path, array|string|null $input = null, ?string $user = 'parent', int $status = 200): array
+    private function request(string $method, string $path, array|string|null $input = null, ?string $user = 'parent', int $status = 200, string $mount = '/family'): array
     {
-        $request = (new ServerRequestFactory())->createServerRequest($method, self::BASE . '/api/v1/family' . $path);
+        $request = (new ServerRequestFactory())->createServerRequest($method, self::BASE . '/api/v1' . $mount . $path);
         if ($user !== null) {
             $request = $request->withCookieParams(['studio_session' => 'fixture-' . $user]);
         }

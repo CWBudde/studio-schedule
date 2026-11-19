@@ -192,11 +192,29 @@ func familyPrivacy(t *testing.T, b *backend) {
 		Format, ExportedAt string
 		Version            int
 		Account            struct{ Email string }
+		ClassMemberships   []any
+		Bookings           []any
+		Passes             []any
+		Receipts           []any
 	}](t, signed)
 	if body.Format != "studio-schedule.person-export" || body.Version != 1 ||
 		body.Account.Email != "clara.amberly@example.org" || body.ExportedAt != demoNow ||
 		strings.Contains(string(signed.body), "passwordHash") {
 		t.Fatal("person export contains an unexpected account, export version, or secret")
+	}
+
+	if len(body.ClassMemberships) == 0 || len(body.Bookings) == 0 || len(body.Passes) == 0 || len(body.Receipts) == 0 {
+		t.Fatal("export omitted the demo person's history")
+	}
+	office := browser(t)
+	adminExport := request{
+		method: http.MethodGet, path: "/api/v1/admin/persons/{personId}/export",
+		params: map[string]string{"personId": family.Me.ID},
+	}
+	b.call(t, parent, adminExport, http.StatusForbidden)
+	login(t, b, office, "olga.ledgerby@example.net", demoPassword)
+	if copy := b.call(t, office, adminExport, http.StatusOK); !bytes.Equal(copy.body, signed.body) {
+		t.Error("office and self exports of the same person differ")
 	}
 	export.query.Set("person", family.Dependents[0].ID)
 	child := b.call(t, parent, export, http.StatusOK)

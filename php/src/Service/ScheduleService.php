@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace StudioSchedule\Service;
 
 use DateTimeImmutable;
-use DateTimeZone;
 use Psr\Clock\ClockInterface;
 use StudioSchedule\Domain\Date;
+use StudioSchedule\Domain\Instant;
 use StudioSchedule\Domain\PublishedLesson;
 use StudioSchedule\Domain\ScheduleRules;
 
@@ -274,10 +274,7 @@ final readonly class ScheduleService
 
     public static function instant(DateTimeImmutable $instant): string
     {
-        $utc = $instant->setTimezone(new DateTimeZone('UTC'));
-        $fraction = rtrim($utc->format('u'), '0');
-
-        return $utc->format('Y-m-d\TH:i:s') . ($fraction === '' ? '' : '.' . $fraction) . 'Z';
+        return Instant::format($instant);
     }
 
     /**
