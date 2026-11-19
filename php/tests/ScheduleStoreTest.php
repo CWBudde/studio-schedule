@@ -26,6 +26,7 @@ use StudioSchedule\Http\LessonAdminRoutes;
 use StudioSchedule\Http\LessonNoticeRoutes;
 use StudioSchedule\Http\LessonSignupRoutes;
 use StudioSchedule\Http\ScheduleRoutes;
+use StudioSchedule\Http\TeachingScheduleRoutes;
 use StudioSchedule\Http\StatisticsEndpoint;
 use StudioSchedule\Http\TrustedProxies;
 use StudioSchedule\Http\WaitlistInviteEndpoint;
@@ -47,6 +48,7 @@ use StudioSchedule\Service\ScheduleRecipients;
 use StudioSchedule\Service\ReceiptIssuance;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\StatisticsService;
+use StudioSchedule\Service\TeachingSchedule;
 use StudioSchedule\Service\WaitlistInvites;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\EventRegistrationStore;
@@ -1656,6 +1658,88 @@ final class ScheduleStoreTest extends TestCase
         self::assertSame([], $this->database->fetchFirstColumn('SELECT 1 FROM outbox_mails'));
     }
 
+    public function testTeachingScheduleUsesActiveStaffAndSchoolDayAttendance(): void
+    {
+        $this->database->executeStatement("UPDATE staff SET person_id = (SELECT id FROM persons WHERE given_name = 'Iona') WHERE kind = 'instructor'");
+        $this->database->executeStatement("UPDATE staff SET person_id = (SELECT id FROM persons WHERE given_name = 'Third') WHERE kind = 'accompanist'");
+        $this->insertLesson(108, '2026-10-25', 'private', 'hidden', [
+            'status' => 'canceled', 'starts_at' => '2026-10-25 12:00:00', 'ends_at' => '2026-10-25 13:00:00',
+        ]);
+        $this->insertLesson(109, '2026-10-25', 'workshop', 'public', [
+            'starts_at' => '2026-10-25 22:30:00', 'ends_at' => '2026-10-26 01:00:00',
+        ]);
+        $guest = ['lesson_id' => 100, 'trial' => true, 'booked_at' => '2026-10-22 14:00:00'];
+        $this->insert('bookings', ['id' => 301, 'guest_name' => 'Trial Guest', 'status' => 'booked'] + $guest);
+        $this->insert('bookings', [
+            'id' => 302, 'guest_name' => 'Canceled Guest', 'status' => 'canceled', 'canceled_at' => '2026-10-23 14:00:00',
+        ] + $guest);
+        $instructor = new SessionPrincipal(self::id(11), self::id(5), 'instructor');
+        $accompanist = new SessionPrincipal(self::id(11), self::id(7), 'instructor');
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member');
+        $app = $this->app(self::BEFORE_RELEASE);
+        $query = '/teach?from=2026-10-25&to=2026-10-26';
+        self::get($app, '/teach', status: 401);
+        self::get($app, '/teach', $member, 403);
+        self::get($app, '/teach?from=invalid&staffId=invalid', $office, 422);
+        self::get($app, '/teach?from=9999-12-31', $office, 422);
+        self::get($app, '/teach?from=2026-10-25&to=2026-10-25', $office, 422);
+        self::assertSame(405, $app->handle((new ServerRequestFactory())->createServerRequest('HEAD', '/api/v1/teach'))->getStatusCode());
+        $default = self::get($app, '/teach', $office);
+        self::assertSame('2026-10-18', $default['from']);
+        self::assertSame('2026-11-02', $default['to']);
+
+        /** @var list<array<string,mixed>> $own */
+        $own = self::get($app, $query, $instructor)['lessons'];
+        self::assertSame(self::ids(100, 108, 109), array_column($own, 'id'));
+        self::assertSame('instructor', $own[0]['role']);
+        self::assertSame(4, $own[0]['active']);
+        self::assertSame(1, $own[0]['held']);
+        self::assertSame(0, $own[0]['freePlaces']);
+        self::assertSame(2, $own[0]['waiting']);
+        self::assertSame(1, $own[0]['trials']);
+        self::assertSame(1, $own[0]['guests']);
+        self::assertSame('2026-10-25T23:00:00Z', $own[0]['dayOverAt']);
+        self::assertTrue($own[0]['attendanceOpen']);
+        self::assertFalse($own[0]['attendanceTaken']);
+        self::assertSame('hidden', $own[1]['visibility']);
+        self::assertSame('canceled', $own[1]['status']);
+        self::assertFalse($own[1]['attendanceOpen']);
+
+        $filter = $query . '&staffId=' . self::id(24);
+        self::assertSame([], self::get($app, $filter, $instructor)['lessons']);
+        $unnamed = new SessionPrincipal(self::id(11), self::id(4), 'instructor');
+        self::assertSame([], self::get($app, $query, $unnamed)['lessons']);
+        /** @var list<array<string,mixed>> $filtered */
+        $filtered = self::get($app, $filter, $office)['lessons'];
+        self::assertSame(self::ids(100), array_column($filtered, 'id'));
+        self::assertSame('instructor', $filtered[0]['role']);
+        /** @var list<array<string,mixed>> $playing */
+        $playing = self::get($app, $query, $accompanist)['lessons'];
+        self::assertSame('accompanist', $playing[0]['role']);
+
+        /** @var list<array<string,mixed>> $draft */
+        $draft = self::get($app, '/teach?from=2026-11-04&to=2026-11-05', $instructor)['lessons'];
+        self::assertSame('draft-workshop', $draft[0]['eventSlug']);
+        self::assertSame(4, $draft[0]['capacity']);
+        self::assertSame(4, $draft[0]['freePlaces']);
+
+        $this->database->executeStatement("UPDATE bookings SET status = 'attended' WHERE status = 'booked'");
+        $late = $this->app('2026-10-25T23:00:00Z');
+        /** @var list<array<string,mixed>> $afterMidnight */
+        $afterMidnight = self::get($late, $query, $instructor)['lessons'];
+        self::assertFalse($afterMidnight[0]['attendanceOpen']);
+        self::assertTrue($afterMidnight[0]['attendanceTaken']);
+        self::assertSame('2026-10-26T01:00:00Z', $afterMidnight[2]['dayOverAt']);
+        self::assertTrue($afterMidnight[2]['attendanceOpen']);
+        /** @var list<array<string,mixed>> $officeAfter */
+        $officeAfter = self::get($late, $query, $office)['lessons'];
+        self::assertTrue($officeAfter[0]['attendanceOpen']);
+
+        $this->database->executeStatement('DELETE FROM settings');
+        self::get($app, $query, $office, 404);
+    }
+
     private function eventExpiryJobs(DateTimeImmutable $now): BackgroundJobs
     {
         $dsn = getenv('STUDIO_PHP_TEST_DATABASE_URL');
@@ -2078,6 +2162,7 @@ final class ScheduleStoreTest extends TestCase
         };
         $scheduleStore = new ScheduleStore($this->database);
         ScheduleRoutes::register($app, $scheduleStore, $clock);
+        (new TeachingScheduleRoutes(new TeachingSchedule($scheduleStore, $clock)))->register($app);
         (new LessonSignupRoutes(new LessonSignup(
             $scheduleStore,
             new ParticipantReadStore($this->database),

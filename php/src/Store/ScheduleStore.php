@@ -173,7 +173,7 @@ final readonly class ScheduleStore implements SchedulePersistence
             return null;
         }
 
-        return $this->publishedLesson($storedCapacity ? ['capacity' => $row['lesson_capacity']] + $row : $row);
+        return $this->publishedLesson($row, $storedCapacity);
     }
 
     /**
@@ -190,7 +190,7 @@ final readonly class ScheduleStore implements SchedulePersistence
                 [$this->idListType()],
             );
             foreach ($rows as $row) {
-                $lessons[] = $this->publishedLesson(['capacity' => $row['lesson_capacity']] + $row);
+                $lessons[] = $this->publishedLesson($row, storedCapacity: true);
             }
         }
         usort($lessons, static fn(PublishedLesson $first, PublishedLesson $second): int
@@ -212,7 +212,7 @@ final readonly class ScheduleStore implements SchedulePersistence
             $eventIds === null ? [] : [$this->idListType()],
         );
 
-        return array_map(fn(array $row): PublishedLesson => $this->publishedLesson(['capacity' => $row['lesson_capacity']] + $row), $rows);
+        return array_map(fn(array $row): PublishedLesson => $this->publishedLesson($row, storedCapacity: true), $rows);
     }
 
     /** @return array<string,true> Active staff IDs linked to the account's person. */
@@ -231,21 +231,42 @@ final readonly class ScheduleStore implements SchedulePersistence
         return $staff;
     }
 
-    /**
-     * @param non-empty-list<string> $staffIds
-     * @return list<PublishedLesson>
-     */
-    public function teachingLessons(DateTimeImmutable $from, DateTimeImmutable $until, array $staffIds): array
+    public function teachingLessons(DateTimeImmutable $from, DateTimeImmutable $until, ?array $staffIds, bool $storedCapacity = false): array
     {
-        $ids = $this->encodeIds($staffIds);
-        $rows = $this->connection->fetchAllAssociative(
-            self::LESSONS . ' WHERE l.starts_at >= ? AND l.starts_at < ? AND (l.instructor_id IN (?) OR l.accompanist_id IN (?)) '
-            . 'ORDER BY l.starts_at, l.id',
-            [$this->sqlInstant($from), $this->sqlInstant($until), $ids, $ids],
-            [ParameterType::STRING, ParameterType::STRING, $this->idListType(), $this->idListType()],
-        );
+        $where = ' WHERE l.starts_at >= ? AND l.starts_at <= ?';
+        $params = Database::sqlRange($this->connection, $from, $until);
+        $types = [ParameterType::STRING, ParameterType::STRING];
+        if ($staffIds !== null) {
+            $ids = $this->encodeIds($staffIds);
+            $where .= ' AND (l.instructor_id IN (?) OR l.accompanist_id IN (?))';
+            $params[] = $ids;
+            $params[] = $ids;
+            $types[] = $this->idListType();
+            $types[] = $this->idListType();
+        }
+        $rows = $this->connection->fetchAllAssociative(self::LESSONS . $where . ' ORDER BY l.starts_at, l.id', $params, $types);
 
-        return array_map($this->publishedLesson(...), $rows);
+        return array_map(fn(array $row): PublishedLesson => $this->publishedLesson($row, $storedCapacity), $rows);
+    }
+
+    public function bookingCounts(array $lessonIds): array
+    {
+        $rows = $this->connection->fetchAllAssociative(
+            "SELECT lesson_id, COUNT(*) AS active, SUM(CASE WHEN status = 'booked' THEN 1 ELSE 0 END) AS booked, "
+            . 'SUM(CASE WHEN trial THEN 1 ELSE 0 END) AS trials, SUM(CASE WHEN person_id IS NULL THEN 1 ELSE 0 END) AS guests '
+            . "FROM bookings WHERE lesson_id IN (?) AND status <> 'canceled' GROUP BY lesson_id",
+            [$this->encodeIds($lessonIds)],
+            [$this->idListType()],
+        );
+        $counts = [];
+        foreach ($rows as $row) {
+            $counts[$this->id($row['lesson_id'])] = [
+                'active' => self::integer($row['active']), 'booked' => self::integer($row['booked']),
+                'trials' => self::integer($row['trials']), 'guests' => self::integer($row['guests']),
+            ];
+        }
+
+        return $counts;
     }
 
     /**
@@ -381,7 +402,7 @@ final readonly class ScheduleStore implements SchedulePersistence
     }
 
     /** @param array<string, mixed> $row */
-    private function publishedLesson(array $row): PublishedLesson
+    private function publishedLesson(array $row, bool $storedCapacity = false): PublishedLesson
     {
         $low = $this->level($row, 'low');
         $high = $this->level($row, 'high');
@@ -396,7 +417,7 @@ final readonly class ScheduleStore implements SchedulePersistence
             status: self::string($row['status']),
             kind: self::string($row['kind']),
             visibility: self::string($row['visibility']),
-            capacity: self::integer($row['capacity']),
+            capacity: self::integer($row[$storedCapacity ? 'lesson_capacity' : 'capacity']),
             room: ['id' => $this->id($row['room_id']), 'name' => self::string($row['room_name']), 'position' => self::integer($row['room_position'])],
             location: ['id' => $this->id($row['location_id']), 'name' => self::string($row['location_name'])],
             classId: $this->optionalId($row['class_id']),

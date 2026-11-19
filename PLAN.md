@@ -1489,6 +1489,10 @@ backends.
           The shared `participant_roster_and_history` case passes at both mount paths on all
           three PHP databases.
     - [x] Run `participant_roster_and_history` in PHP CI.
+    - [x] List teaching lessons by school date and active staff assignment. Show booking, trial,
+          guest and waitlist counts, including for hidden or canceled lessons, and the attendance
+          window. The shared `teaching_schedule` case runs in PHP CI at both mount paths on
+          all three databases.
     - [x] Preview waiting-list invites using their stored token hashes. Show expiry, requeue
           position and booking closure without taking a place. Rate-limit lookups per client
           and redact tokens from request logs. The shared `waitlist_invite_lookup_limits` case

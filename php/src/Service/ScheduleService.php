@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace StudioSchedule\Service;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Psr\Clock\ClockInterface;
 use StudioSchedule\Domain\Date;
 use StudioSchedule\Domain\Instant;
@@ -195,6 +196,11 @@ final readonly class ScheduleService
         }
 
         return $out;
+    }
+
+    public static function dayOverAt(DateTimeImmutable $start, DateTimeImmutable $end, DateTimeZone $zone): DateTimeImmutable
+    {
+        return max($end, Date::fromInstant($start, $zone)->nextMidnight($zone));
     }
 
     /** @param list<WaitlistEntry> $entries */

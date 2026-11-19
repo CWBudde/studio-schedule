@@ -7,7 +7,6 @@ namespace StudioSchedule\Service;
 use DateTimeImmutable;
 use DateTimeZone;
 use Psr\Clock\ClockInterface;
-use StudioSchedule\Domain\Date;
 use StudioSchedule\Domain\Instant;
 
 /**
@@ -50,10 +49,7 @@ final readonly class ParticipantRead
     /** @param RosterLesson $lesson */
     private static function dayOverAt(array $lesson): string
     {
-        $zone = new DateTimeZone($lesson['timezone']);
-        $nextMidnight = Date::fromInstant($lesson['startsAt'], $zone)->nextMidnight($zone);
-
-        return Instant::format(max($nextMidnight, $lesson['endsAt']));
+        return Instant::format(ScheduleService::dayOverAt($lesson['startsAt'], $lesson['endsAt'], new DateTimeZone($lesson['timezone'])));
     }
 
     /**

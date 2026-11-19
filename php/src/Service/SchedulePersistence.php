@@ -30,6 +30,21 @@ interface SchedulePersistence
      */
     public function lessons(DateTimeImmutable $from, DateTimeImmutable $to, array $filters): array;
 
+    /** @return array<string,true> Active staff IDs linked to the person's account. */
+    public function activeStaff(string $personId): array;
+
+    /**
+     * @param non-empty-list<string>|null $staffIds Null selects every staff member's lessons.
+     * @return list<PublishedLesson>
+     */
+    public function teachingLessons(DateTimeImmutable $from, DateTimeImmutable $until, ?array $staffIds, bool $storedCapacity = false): array;
+
+    /**
+     * @param list<string> $lessonIds
+     * @return array<string,array{active:int,booked:int,trials:int,guests:int}>
+     */
+    public function bookingCounts(array $lessonIds): array;
+
     /** @phpstan-impure */
     public function lesson(string $id, bool $storedCapacity = false): ?PublishedLesson;
 
