@@ -15,6 +15,7 @@ use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use StudioSchedule\Http\AccountRegistrationEndpoint;
 use StudioSchedule\Http\AdminAccountsEndpoint;
+use StudioSchedule\Http\AdminAuditEndpoint;
 use StudioSchedule\Http\AdminSettingsRoutes;
 use StudioSchedule\Http\AfterResponse;
 use StudioSchedule\Http\Application;
@@ -78,6 +79,7 @@ use StudioSchedule\Service\StatisticsService;
 use StudioSchedule\Service\SystemClock;
 use StudioSchedule\Service\TermAdmin;
 use StudioSchedule\Store\AdminAccountsStore;
+use StudioSchedule\Store\AdminAuditStore;
 use StudioSchedule\Store\CalendarFeedStore;
 use StudioSchedule\Store\CatalogStore;
 use StudioSchedule\Store\Database;
@@ -206,6 +208,7 @@ final class Bootstrap
                     $app->get('/api/v1/auth/me', $profile);
                     $app->put('/api/v1/auth/locale', $profile->updateLocale(...));
                     $app->get('/api/v1/admin/accounts', new AdminAccountsEndpoint(new AdminAccountsStore($connection)));
+                    $app->get('/api/v1/admin/audit', new AdminAuditEndpoint(new AdminAuditStore($connection)));
                     $app->post('/api/v1/auth/register', new AccountRegistrationEndpoint(
                         new AccountRegistration(new RegistrationStore($connection), $passwords, $commonPasswords, $clock, $mail, $config->baseURL, $wakeMail),
                         $mailLimit,

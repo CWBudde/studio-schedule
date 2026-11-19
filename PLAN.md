@@ -1427,20 +1427,23 @@ backends.
     - [x] Pass the shared `schedule_release_and_visibility` scenario on PHP at both mount paths
           on all three engines. The scenario signs in a member to verify the visibility rules.
   - [ ] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006).
-        The administrator audit log and account management writes, including self-deletion
-        under ADR 0016, remain open.
     - [x] Register and confirm accounts, sign in and out, update locale, request a replacement
           reset link, and change passwords and email addresses. Login and credential requests use
           database-backed rate limits. Shared registration, recovery, credential and rate-limit
           scenarios pass on all three PHP databases at both mount paths.
     - [x] Let administrators list accounts and start and stop audited impersonation. The shared
           `admin_impersonation` scenario passes on all three PHP databases at both mount paths.
+    - [x] Let administrators read the latest 200 audit events with their actors, targets and typed
+          details. The shared `admin_impersonation` scenario verifies both audit records at both
+          mount paths on PostgreSQL, MySQL and MariaDB.
     - [x] Serve `/api/v1/auth/me` from existing Go-compatible sessions. The PHP suite covers
           cookie handling at both mount paths, expiry, renewal, and sessions already in
           impersonation on PostgreSQL, MySQL and MariaDB.
     - [x] Confirm one-time password reset links, including the first-admin setup link. The PHP
           suite verifies that a successful reset revokes existing sessions and queues the
           password-change notice in the same transaction on PostgreSQL, MySQL and MariaDB.
+    - [ ] Let administrators disable, re-enable, or delete accounts and change their roles.
+          Let users delete their own account (ADR 0016).
   - [ ] Family, persons, invitations, catalogue and timetable administration (ADR 0007, 0008)
     - [x] Read a signed-in person's family, edit their own profile, and create or edit their
           dependents. Managed dependents are read-only. The shared `family_profiles` case passes

@@ -42,6 +42,7 @@ final class MailLogTest extends TestCase
             (new Migrator($dsn))->up($this->postgres ? $this->postgresMigrations : dirname(__DIR__) . '/migrations/mysql');
             $this->account(1, 'admin');
             $this->account(2, 'office');
+            self::assertSame(['items' => []], $this->request('GET', '', mount: 'audit'));
             $this->db->executeStatement(
                 'INSERT INTO receipts (id, number, year, sequence, kind, issued_at, issue_date, locale, '
                 . 'issuer_name, issuer_address, issuer_tax_id, tax_mode, recipient_name, payment_method, currency, net, vat, gross) '
@@ -141,6 +142,7 @@ final class MailLogTest extends TestCase
             self::assertIsString($details);
             self::assertEquals(['mailId' => self::uuid(11), 'recipient' => 'ÄLEX%name@example.test', 'template' => 'receipt'], json_decode($details, true, flags: JSON_THROW_ON_ERROR));
             self::assertContains($this->db->fetchOne("SELECT COUNT(*) FROM audit_events WHERE action = 'mail-requeued'"), [1, '1']);
+            $this->assertAdminAuditLog();
         } finally {
             if (!$this->postgres) {
                 $this->db->executeStatement('SET FOREIGN_KEY_CHECKS = 0');
@@ -155,13 +157,69 @@ final class MailLogTest extends TestCase
         }
     }
 
+    private function assertAdminAuditLog(): void
+    {
+        $this->db->transactional(function (): void {
+            for ($id = 100; $id <= 301; ++$id) {
+                $this->db->insert('audit_events', [
+                    'id' => $this->id($id), 'occurred_at' => self::CREATE, 'action' => 'impersonation-ended',
+                    'actor_id' => $this->id(1), 'target_kind' => 'account', 'target_id' => $this->id(2),
+                ]);
+            }
+            $this->db->insert('persons', [
+                'id' => $this->id(3), 'given_name' => 'Deleted', 'family_name' => 'person', 'anonymized_at' => self::CREATE,
+            ]);
+            $this->db->insert('audit_events', [
+                'id' => $this->id(402), 'occurred_at' => self::CREATE, 'action' => 'account-deleted',
+                'target_kind' => 'person', 'target_person_id' => $this->id(3),
+            ]);
+            $this->db->insert('audit_events', [
+                'id' => $this->id(403), 'occurred_at' => self::CREATE, 'action' => 'mcp-tool-called', 'actor_id' => $this->id(1),
+                'details' => '{"tool":"draft_announcement","outcome":"ok","via":{"channel":"mcp","osUser":"fixture","token":"hidden"},"sessions":0,"refund":false,"arguments":"private"}',
+            ]);
+            $this->db->insert('audit_events', [
+                'id' => $this->id(404), 'occurred_at' => self::CREATE, 'action' => 'event-registration-canceled', 'actor_id' => $this->id(1),
+                'details' => '{"eventId":"018F0000-0000-7000-0000-000000000011","registrationId":"018f0000-0000-7000-8000-000000000012","refund":true}',
+            ]);
+        });
+        $page = $this->request('GET', '', mount: 'audit');
+        $items = $page['items'];
+        self::assertIsArray($items);
+        self::assertCount(200, $items);
+        self::assertIsArray($items[0]);
+        self::assertSame('mail-requeued', $items[0]['action']);
+        self::assertSame(self::NOW, $items[0]['at']);
+        $actor = ['id' => self::uuid(1), 'email' => 'admin@example.test', 'givenName' => 'Fixture', 'familyName' => 'Person'];
+        self::assertSame($actor, $items[0]['actor']);
+        self::assertArrayNotHasKey('target', $items[0]);
+        self::assertEquals(['mailId' => self::uuid(11), 'recipient' => 'ÄLEX%name@example.test', 'template' => 'receipt'], $items[0]['details']);
+        self::assertEquals([
+            'id' => self::uuid(404), 'at' => '2026-11-18T12:00:00.123456Z', 'action' => 'event-registration-canceled',
+            'actor' => $actor, 'details' => [
+                'eventId' => '018f0000-0000-7000-0000-000000000011', 'registrationId' => '018f0000-0000-7000-8000-000000000012', 'refund' => true,
+            ],
+        ], $items[1]);
+        self::assertEquals([
+            'id' => self::uuid(403), 'at' => '2026-11-18T12:00:00.123456Z', 'action' => 'mcp-tool-called',
+            'actor' => $actor, 'details' => ['tool' => 'draft_announcement', 'outcome' => 'ok', 'via' => ['channel' => 'mcp', 'osUser' => 'fixture']],
+        ], $items[2]);
+        self::assertEquals([
+            'id' => self::uuid(402), 'at' => '2026-11-18T12:00:00.123456Z', 'action' => 'account-deleted',
+            'targetPerson' => ['id' => self::uuid(3), 'givenName' => 'Deleted', 'familyName' => 'person', 'anonymized' => true],
+        ], $items[3]);
+        self::assertSame(array_map(self::uuid(...), range(301, 106)), array_slice(array_column($items, 'id'), 4));
+        self::assertIsArray($items[4]);
+        self::assertSame(['id' => self::uuid(2), 'email' => 'office@example.test', 'givenName' => 'Fixture', 'familyName' => 'Person'], $items[4]['target']);
+        self::assertArrayNotHasKey('details', $items[4]);
+    }
+
     /**
      * @param array<string,mixed>|string|null $input
      * @return array<array-key,mixed>
      */
-    private function request(string $method, string $path, ?string $user = 'admin', array|string|null $input = null, int $status = 200): array
+    private function request(string $method, string $path, ?string $user = 'admin', array|string|null $input = null, int $status = 200, string $mount = 'mails'): array
     {
-        $request = (new ServerRequestFactory())->createServerRequest($method, self::BASE . '/api/v1/admin/mails' . $path);
+        $request = (new ServerRequestFactory())->createServerRequest($method, self::BASE . '/api/v1/admin/' . $mount . $path);
         if ($user !== null) {
             $request = $request->withCookieParams(['studio_session' => 'fixture-' . $user]);
         }

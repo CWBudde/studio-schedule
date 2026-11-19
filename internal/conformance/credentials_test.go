@@ -200,6 +200,11 @@ func adminImpersonation(t *testing.T, b *backend) {
 	subject := read[account](t, login(t, b, member, demoMember, demoPassword))
 	login(t, b, office, "olga.ledgerby@example.net", demoPassword)
 
+	audit := request{method: http.MethodGet, path: "/api/v1/admin/audit"}
+	b.call(t, browser(t), audit, http.StatusUnauthorized)
+	b.call(t, member, audit, http.StatusForbidden)
+	b.call(t, office, audit, http.StatusForbidden)
+
 	impersonate := request{
 		method: http.MethodPost, path: "/api/v1/admin/accounts/{accountId}/impersonate",
 		params: map[string]string{"accountId": subject.AccountID},
@@ -213,9 +218,39 @@ func adminImpersonation(t *testing.T, b *backend) {
 		t.Fatal("admin session did not assume the member role and record the impersonator")
 	}
 	b.call(t, admin, request{method: http.MethodGet, path: "/api/v1/admin/accounts"}, http.StatusForbidden)
+
+	b.call(t, admin, audit, http.StatusForbidden)
+	b.fixture(t, http.MethodPut, "clock", `{"now":"2026-10-23T16:00:01Z"}`, http.StatusNoContent)
 	b.call(t, admin, request{method: http.MethodPost, path: "/api/v1/auth/impersonation/stop"}, http.StatusOK)
 	restored := read[account](t, get(t, b, admin, "/api/v1/auth/me"))
 	if restored.Email != demoAdmin || restored.Role != "admin" || restored.Impersonator != nil {
 		t.Fatal("ending impersonation did not restore the admin session")
+	}
+
+	assertImpersonationAudit(t, b, admin, restored.AccountID, subject.AccountID)
+}
+
+func assertImpersonationAudit(t *testing.T, b *backend, admin *http.Client, actorID, subjectID string) {
+	t.Helper()
+
+	type auditAccount struct{ ID, Email string }
+	type auditEvent struct {
+		Action, At    string
+		Actor, Target *auditAccount
+	}
+	page := read[struct{ Items []auditEvent }](t, get(t, b, admin, "/api/v1/admin/audit"))
+	if len(page.Items) < 2 {
+		t.Fatalf("expected two impersonation audit records, got %d", len(page.Items))
+	}
+	for index, want := range []auditEvent{
+		{Action: "impersonation-ended", At: "2026-10-23T16:00:01Z"},
+		{Action: "impersonation-started", At: demoNow},
+	} {
+		event := page.Items[index]
+		if event.Action != want.Action || event.At != want.At ||
+			event.Actor == nil || *event.Actor != (auditAccount{ID: actorID, Email: demoAdmin}) ||
+			event.Target == nil || *event.Target != (auditAccount{ID: subjectID, Email: demoMember}) {
+			t.Errorf("unexpected audit event at position %d: %+v", index, event)
+		}
 	}
 }
