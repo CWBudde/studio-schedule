@@ -189,6 +189,7 @@ final class InstallerLifecycleTest extends TestCase
 
             $this->assertMetrics($app, $dsn, $migrations);
             $this->assertAnnouncements($app, $dsn, $database);
+            $this->assertMemberImports($app, $dsn, $database);
 
             $futureMigration = $migrations . '/99003_future_probe.sql';
             touch($futureMigration);
@@ -226,6 +227,164 @@ final class InstallerLifecycleTest extends TestCase
             }
             rmdir($app);
         }
+    }
+
+    private function assertMemberImports(string $app, #[\SensitiveParameter] string $dsn, Connection $database): void
+    {
+        $clock = $this->clockAt(new DateTimeImmutable('2041-02-01T23:30:00Z'));
+        $login = $this->request($app, $dsn, 'POST', '/dance/api/v1/auth/login', json: [
+            'email' => 'first-admin@example.invalid', 'password' => self::PASSWORD,
+        ], clock: $clock);
+        self::assertSame(200, $login->getStatusCode(), (string) $login->getBody());
+        self::assertSame(1, preg_match('/\bstudio_session=([^;]+)/', $login->getHeaderLine('Set-Cookie'), $cookie));
+        $cookies = ['studio_session' => $cookie[1] ?? throw new \LogicException('Expected the login cookie')];
+        $path = '/dance/api/v1/admin/imports';
+        $send = function (array $body) use ($app, $dsn, $path, $clock, $cookies): ResponseInterface {
+            /** @var array<string,mixed> $body */
+            return $this->request($app, $dsn, 'POST', $path, json: $body, clock: $clock, cookies: $cookies);
+        };
+        $originalAccounts = $database->fetchOne('SELECT COUNT(*) FROM accounts');
+        $csv = "Nr;Vorname;Nachname;Kontakt;Geburt;Eltern Vorname;Eltern Nachname;Eltern Kontakt;Telefon;Tanz\n"
+            . "A1;Käthe;Meier;family@example.invalid;02.02.2041;Jörg;Groß;family@example.invalid;0123;Walzer\n"
+            . "A2;Kaethe;Meier;family@example.invalid;2041-2-2;Joerg;Gross;family@example.invalid;;Tango\n"
+            . "A3;Bea;Muster;;2041-02-03;Else;Muster;;;\n"
+            . "A4;Lee;Muster;bad-address;31.02.2020;;;;;\n"
+            . "A1;Cora;Muster;;;;;;;\n"
+            . "A9;Emma;Muster;person@[127.0.0.1\0];;;;;;\n";
+        $columns = [
+            'memberNo' => 'nr', 'givenName' => 'Vorname', 'familyName' => 'Nachname', 'email' => 'Kontakt',
+            'birthDate' => 'Geburt', 'guardian1GivenName' => 'Eltern Vorname', 'guardian1FamilyName' => 'Eltern Nachname',
+            'guardian1Email' => 'Eltern Kontakt', 'guardian1Phone' => 'Telefon',
+        ];
+        $payload = ['fileName' => '  fixture.csv  ', 'content' => base64_encode($csv), 'mapping' => ['columns' => $columns, 'notes' => ['tanz']]];
+        $badPayloads = [
+            ['apply' => 'yes'],
+            ['mapping' => false],
+            ['mapping' => ['columns' => $columns, 'typo' => true]],
+            ['mapping' => ['columns' => $columns, 'notes' => 'Tanz']],
+            ['mapping' => ['columns' => $columns + ['typo' => 'Tanz']]],
+            ['mapping' => ['columns' => array_replace($columns, ['email' => 42])]],
+            ['mapping' => ['columns' => array_replace($columns, ['email' => 'Unknown'])]],
+            ['mapping' => ['columns' => array_diff_key($columns, ['guardian1FamilyName' => true])]],
+            ['mapping' => ['columns' => $columns, 'notes' => ['Kontakt']]],
+            ['mapping' => ['columns' => $columns, 'notes' => [42]]],
+        ];
+        foreach ($badPayloads as $replacement) {
+            self::assertSame(422, $send(array_replace($payload, $replacement))->getStatusCode());
+        }
+        self::assertSame(401, $this->request($app, $dsn, 'GET', $path, clock: $clock)->getStatusCode());
+
+        $counts = [
+            'rows' => 6, 'created' => 2, 'updated' => 0, 'unchanged' => 0, 'failed' => 4,
+            'guardiansCreated' => 1, 'guardiansUpdated' => 1, 'linksAdded' => 2,
+        ];
+        $preview = self::importDocument($send($payload));
+        self::assertFalse($preview['applied']);
+        self::assertArrayNotHasKey('runId', $preview);
+        self::assertSame($counts, $preview['counts']);
+        self::assertStringNotContainsString('"personId"', json_encode($preview['rows'], JSON_THROW_ON_ERROR));
+        self::assertStringContainsString('"duplicates":[{"givenName":"Käthe"', json_encode($preview['rows'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+        self::assertSame([], $this->importHistory($app, $dsn, $path, $clock, $cookies));
+        self::assertContains($database->fetchOne('SELECT COUNT(*) FROM persons WHERE member_no IS NOT NULL'), [0, '0']);
+        self::assertContains($database->fetchOne('SELECT COUNT(*) FROM person_guardians'), [0, '0']);
+
+        $applied = self::importDocument($send($payload + ['apply' => true]));
+        self::assertTrue($applied['applied']);
+        self::assertSame($counts, $applied['counts']);
+        self::assertArrayHasKey('runId', $applied);
+        self::assertContains($database->fetchOne('SELECT COUNT(*) FROM person_guardians'), [2, '2']);
+        self::assertSame('Tanz: Walzer', $database->fetchOne("SELECT notes FROM persons WHERE member_no = 'A1'"));
+        self::assertSame('Tanz: Tango', $database->fetchOne("SELECT notes FROM persons WHERE member_no = 'A2'"));
+        self::assertContains($database->fetchOne("SELECT COUNT(*) FROM persons WHERE given_name = 'Else'"), [0, '0']);
+        self::assertSame($originalAccounts, $database->fetchOne('SELECT COUNT(*) FROM accounts'));
+
+        $history = $this->importHistory($app, $dsn, $path, $clock, $cookies);
+        self::assertCount(1, $history);
+        self::assertSame($applied['runId'], $history[0]['id']);
+        self::assertSame('fixture.csv', $history[0]['fileName']);
+        self::assertEquals([
+            ['line' => 4, 'code' => 'future', 'field' => 'birthDate'],
+            ['line' => 5, 'code' => 'invalid', 'field' => 'email'],
+            ['line' => 6, 'code' => 'member-no-repeated', 'field' => 'memberNo'],
+            ['line' => 7, 'code' => 'invalid', 'field' => 'email'],
+        ], $history[0]['errors']);
+        self::assertStringContainsString('first-admin@example.invalid', json_encode($history[0]['by'], JSON_THROW_ON_ERROR));
+
+        $search = $this->request($app, $dsn, 'POST', '/dance/api/v1/admin/persons/search', json: [
+            'query' => ' A2 MEIER ',
+        ], clock: $clock, cookies: $cookies);
+        $items = self::importDocument($search)['items'];
+        self::assertIsArray($items);
+        self::assertCount(1, $items);
+        self::assertStringContainsString('Kaethe', json_encode($items, JSON_THROW_ON_ERROR));
+
+        $repeatCsv = "Nr;Vorname;Nachname;Kontakt;Geburt;Eltern Vorname;Eltern Nachname;Eltern Kontakt;Telefon;Tanz\n"
+            . "A1;;;;;Joerg;Gross;family@example.invalid;;\n"
+            . "A2;;;;;Joerg;Gross;family@example.invalid;;\n"
+            . "A1;;;;;Käthe;Meier;family@example.invalid;;\n"
+            . "A5;Dana;Muster;;;Käthe;Meier;;;\n";
+        $repeat = self::importDocument($send(array_replace($payload, ['apply' => true, 'content' => base64_encode($repeatCsv)])));
+        self::assertSame([
+            'rows' => 4, 'created' => 0, 'updated' => 0, 'unchanged' => 2, 'failed' => 2,
+            'guardiansCreated' => 0, 'guardiansUpdated' => 0, 'linksAdded' => 0,
+        ], $repeat['counts']);
+        self::assertStringContainsString('member-no-repeated', json_encode($repeat['rows'], JSON_THROW_ON_ERROR));
+        self::assertStringContainsString('guardian-ambiguous', json_encode($repeat['rows'], JSON_THROW_ON_ERROR));
+        self::assertSame('Tanz: Walzer', $database->fetchOne("SELECT notes FROM persons WHERE member_no = 'A1'"));
+        self::assertContains($database->fetchOne('SELECT COUNT(*) FROM person_guardians'), [2, '2']);
+        $relationships = "Nr;Vorname;Nachname;Kontakt;Geburt;Eltern Vorname;Eltern Nachname;Eltern Kontakt;Telefon;Tanz\n"
+            . "A2;Berta;;;;;;;;\n"
+            . "A6;Cora;Muster;;;Käthe;Meier;family@example.invalid;;\n"
+            . "A1;;;;;Cora;Muster;;;\n"
+            . "A7;Elin;Muster;;;;;first-admin@example.invalid;;\n"
+            . "A6;;;;;Cora;Muster;;;\n";
+        $review = self::importDocument($send(array_replace($payload, ['content' => base64_encode($relationships)])));
+        self::assertSame([
+            'rows' => 5, 'created' => 2, 'updated' => 1, 'unchanged' => 0, 'failed' => 2,
+            'guardiansCreated' => 0, 'guardiansUpdated' => 0, 'linksAdded' => 2,
+        ], $review['counts']);
+        $results = json_encode($review['rows'], JSON_THROW_ON_ERROR);
+        self::assertStringContainsString('guardian-cycle', $results);
+        self::assertStringContainsString('guardian-is-member', $results);
+        self::assertStringContainsString('"matchedBy":"email"', $results);
+        self::assertContains($database->fetchOne('SELECT COUNT(*) FROM person_guardians'), [2, '2']);
+
+        // Fail the final history insert to prove apply rolls back earlier member writes.
+        $imports = new \StudioSchedule\Service\MemberImports(new \StudioSchedule\Store\MemberImportStore($database), $clock);
+        $csvWithOneMember = \StudioSchedule\Service\MemberCsv::parse("Number;Given;Family\nAF;Faye;Muster\n");
+        $map = \StudioSchedule\Service\MemberImportMapping::resolve($csvWithOneMember->headers, [
+            'memberNo' => 'Number', 'givenName' => 'Given', 'familyName' => 'Family',
+        ], []);
+        try {
+            $imports->run('failure.csv', $csvWithOneMember, $map, true, Uuid::v7()->toRfc4122());
+            self::fail('Expected the history insert to reject the missing actor');
+        } catch (\Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException) {
+            self::assertContains($database->fetchOne("SELECT COUNT(*) FROM persons WHERE member_no = 'AF'"), [0, '0']);
+            self::assertCount(2, $this->importHistory($app, $dsn, $path, $clock, $cookies));
+        }
+
+    }
+
+    /** @param array<string,string> $cookies
+     *  @return list<array<string,mixed>>
+     */
+    private function importHistory(string $app, #[\SensitiveParameter] string $dsn, string $path, ClockInterface $clock, array $cookies): array
+    {
+        $document = self::importDocument($this->request($app, $dsn, 'GET', $path, clock: $clock, cookies: $cookies));
+        /** @var list<array<string,mixed>> $items */
+        $items = $document['items'];
+
+        return $items;
+    }
+
+    /** @return array<string,mixed> */
+    private static function importDocument(ResponseInterface $response): array
+    {
+        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        /** @var array<string,mixed> $document */
+        $document = json_decode((string) $response->getBody(), true, flags: JSON_THROW_ON_ERROR);
+
+        return $document;
     }
 
     private function assertAnnouncements(string $app, #[\SensitiveParameter] string $dsn, Connection $database): void
@@ -442,7 +601,7 @@ final class InstallerLifecycleTest extends TestCase
     /**
      * @param array<string,string> $body
      * @param array<string,string> $query
-     * @param array<string,string|bool> $json
+     * @param array<string,mixed> $json
      * @param array<string,string> $cookies
      */
     private function request(

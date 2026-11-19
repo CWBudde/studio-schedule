@@ -1551,7 +1551,9 @@ backends.
     - [x] Inspect UTF-8 and Windows-1252 member CSV files, return sample rows, and suggest
           English and German column mappings. The shared `import_inspection` case passes
           against Go and on all three PHP databases at both mount paths.
-    - [ ] Port transactional import preview, apply and run history.
+    - [x] Preview member CSV imports with rollback, apply valid rows and guardian links in
+          one transaction, and record the result in run history. The shared `member_import`
+          case passes on all three PHP databases at both mount paths and runs in PHP CI.
     - [ ] Port duplicate detection, dismissals and person merge.
   - [ ] Privacy, export, anonymisation, retention jobs (ADR 0016)
     - [x] Export the version 1 person document for members, guardians and the office, including
@@ -1561,6 +1563,7 @@ backends.
     - [x] Run personal-data retention daily through `jobs:run`. Tests on all three databases
           verify the cutoff boundaries, rollback on failure, and guest anonymization that
           preserves booking and registration history.
+    - [ ] Let the office anonymize a person with the safeguards in ADR 0016.
   - [ ] Web push with VAPID (ADR 0017)
     - [x] Serve signed-in push status, subscription saves and removal. Refreshing a device keeps
           its queued messages. Moving it to another account clears them in the same transaction.
