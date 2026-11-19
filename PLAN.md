@@ -1443,6 +1443,8 @@ backends.
   - [ ] Calendar feeds (ADR 0011)
   - [ ] Passes, redemption ledger, receipts with the gapless counter and PDF (ADR 0012)
   - [ ] Settings, branding, themes, `init` (ADR 0013, 0018)
+    - [x] Initialize school settings and issue the first administrator's one-time setup link
+          through `init` or the web installer on PostgreSQL, MySQL and MariaDB.
   - [ ] Announcements, mail log, statistics (ADR 0014)
     - [x] Serve the administrator mail log with filtered search, detail and audited requeue.
           Secret-link bodies stay private. Tests pass on PostgreSQL, MySQL and MariaDB,
@@ -1458,6 +1460,9 @@ backends.
           historical records. All exports omit secrets and receipt PDFs. Guardian exports also
           omit data belonging to the dependent's own account. The shared `family_and_privacy`
           case passes on all three PHP databases at both mount paths with the authentication draft.
+    - [x] Run personal-data retention daily through `jobs:run`. Tests on all three databases
+          verify the cutoff boundaries, rollback on failure, and guest anonymization that
+          preserves booking and registration history.
   - [ ] Web push with VAPID (ADR 0017)
     - [x] Serve signed-in push status, subscription saves and removal. Refreshing a device keeps
           its queued messages. Moving it to another account clears them in the same transaction.
