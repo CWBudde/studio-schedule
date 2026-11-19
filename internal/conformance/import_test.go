@@ -7,8 +7,57 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 )
+
+func inspectImport(t *testing.T, b *backend) {
+	t.Helper()
+
+	office, member := browser(t), browser(t)
+	login(t, b, office, "olga.ledgerby@example.net", demoPassword)
+	login(t, b, member, demoMember, demoPassword)
+	const path = "/api/v1/admin/imports/inspect"
+	payload := map[string]string{
+		"fileName": "fixture-members.csv",
+		"content": base64.StdEncoding.EncodeToString([]byte("Mitgliedsnummer\tVorname\tNachname\tE-Mail Elternteil 1\r\n" +
+			"A1\tK\xe4the\tMuster\tguardian@example.invalid\r\n")),
+	}
+	in := request{method: http.MethodPost, path: path, body: jsonBody(t, payload)}
+	b.call(t, browser(t), in, http.StatusUnauthorized)
+	b.call(t, member, in, http.StatusForbidden)
+	type inspection struct {
+		Encoding, Delimiter string
+		Headers             []string
+		Rows                int
+		Sample              [][]string
+		Suggested           struct{ Columns map[string]string }
+	}
+	got := read[inspection](t, b.call(t, office, in, http.StatusOK))
+	if got.Encoding != "windows-1252" || got.Delimiter != "tab" || got.Rows != 1 ||
+		!slices.Equal(got.Headers, []string{"Mitgliedsnummer", "Vorname", "Nachname", "E-Mail Elternteil 1"}) ||
+		len(got.Sample) != 1 || !slices.Equal(got.Sample[0], []string{"A1", "Käthe", "Muster", "guardian@example.invalid"}) ||
+		got.Suggested.Columns["guardian1Email"] != "E-Mail Elternteil 1" {
+		t.Fatalf("unexpected import inspection: %+v", got)
+	}
+
+	const bodyLimit = 1_463_640
+	atLimit := in
+	atLimit.body += strings.Repeat(" ", bodyLimit-len(atLimit.body))
+	b.call(t, office, atLimit, http.StatusRequestEntityTooLarge)
+
+	payload["content"] += "\n"
+	wrapped := in
+	wrapped.body = jsonBody(t, payload)
+	b.call(t, office, wrapped, http.StatusUnprocessableEntity)
+
+	payload["content"] = base64.StdEncoding.EncodeToString([]byte("Name;name\nAda;Bea\n"))
+	in.body = jsonBody(t, payload)
+	invalid := b.call(t, office, in, http.StatusUnprocessableEntity)
+	if !containsJSON(invalid.body, `"location":"body.content"`) {
+		t.Fatalf("duplicate headers were not reported on body.content: %s", invalid.body)
+	}
+}
 
 func importMembers(t *testing.T, b *backend) {
 	t.Helper()

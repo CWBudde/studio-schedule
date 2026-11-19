@@ -57,5 +57,5 @@ jobs:
           registration_and_session password_recovery credential_changes login_rate_limit admin_impersonation account_lifecycle
           catalog_administration term_administration class_lists_and_roster class_creation_and_deletion
           family_profiles participant_roster_and_history calendar_subscription family_and_privacy
-          announcements mail_log statistics settings_and_branding push_subscriptions
+          announcements import_inspection mail_log statistics settings_and_branding push_subscriptions
           pass_type_administration pass_lists receipt_pdf_downloads receipt_lists_and_search receipt_settings_and_logo

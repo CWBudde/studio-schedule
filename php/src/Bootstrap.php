@@ -34,6 +34,7 @@ use StudioSchedule\Http\Installer;
 use StudioSchedule\Http\MetricsEndpoint;
 use StudioSchedule\Http\MailLogRoutes;
 use StudioSchedule\Http\MeEndpoint;
+use StudioSchedule\Http\MemberImportEndpoint;
 use StudioSchedule\Http\ParticipantReadRoutes;
 use StudioSchedule\Http\PassReadRoutes;
 use StudioSchedule\Http\PasswordFailureLimit;
@@ -298,6 +299,7 @@ final class Bootstrap
                     $generator = new LessonGenerator($timetableStore, $clock);
                     (new AdminSettingsRoutes(new AdminSettings($settingsStore), new BookingRuleSettings($schedule, $clock, $generator, $logger)))->register($app);
                     CatalogRoutes::register($app, new CatalogStore($connection), $clock);
+                    $app->post('/api/v1/admin/imports/inspect', new MemberImportEndpoint())->add(CatalogAdminRoutes::requireOffice(...));
                     CatalogAdminRoutes::registerTerms($app, new TermAdmin($timetableStore, $generator, $clock));
                     CatalogAdminRoutes::registerClasses($app, new ClassAdmin($timetableStore, $generator, $clock));
                     EventRoutes::register($app, new EventStore($connection), $clock);

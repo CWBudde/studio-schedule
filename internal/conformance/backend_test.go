@@ -263,6 +263,7 @@ func TestBackendConformance(t *testing.T) {
 		{"statistics", statistics},
 		{"settings and branding", settingsAndBranding},
 		{"push subscriptions", pushSubscriptions},
+		{"import inspection", inspectImport},
 		{"member import", importMembers},
 		{"duplicate persons", mergeDuplicates},
 		{"events and registrations", eventRegistration},
