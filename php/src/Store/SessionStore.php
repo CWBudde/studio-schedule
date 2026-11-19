@@ -271,7 +271,8 @@ final readonly class SessionStore
 
     public function end(#[\SensitiveParameter] string $hash, DateTimeImmutable $now): void
     {
-        $this->connection->transactional(function (Connection $connection) use ($hash, $now): void {
+        $connection = $this->connection;
+        Database::retryWrite($connection, function () use ($connection, $hash, $now): void {
             $target = 'WHERE token_hash = ' . $this->binaryParameter();
             $cutoff = $now->setTimezone(new DateTimeZone('UTC'))->sub(new DateInterval(SessionRecord::MAX_AGE));
             $instant = $this->timestamp($now);

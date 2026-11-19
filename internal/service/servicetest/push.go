@@ -98,7 +98,14 @@ func (w *world) principal(a domain.Account) service.Principal {
 func (w *world) subscribe(svc *service.PushService, p service.Principal, endpoint string) {
 	w.t.Helper()
 
-	err := svc.Subscribe(w.t.Context(), p, service.PushSubscriptionInput{
+	session := domain.Session{
+		ID: newID[domain.SessionID](w), AccountID: p.AccountID,
+		CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(service.SessionIdleTimeout),
+	}
+	session.TokenHash = domain.HashToken(session.ID.String())
+	w.write(func(ctx context.Context, tx store.Tx) error { return tx.Sessions().Create(ctx, session) })
+
+	err := svc.Subscribe(w.t.Context(), withSession(p, session), service.PushSubscriptionInput{
 		Endpoint: endpoint, P256DH: pushP256DH, Auth: pushAuth, DeviceLabel: "Firefox on Linux",
 	})
 	if err != nil {

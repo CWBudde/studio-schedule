@@ -248,6 +248,20 @@ func (s *PushService) Subscribe(ctx context.Context, p Principal, in PushSubscri
 	}
 
 	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		acc, err := tx.Accounts().Lock(ctx, p.AccountID)
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			return ErrNoSession
+		case err != nil:
+			return err
+		case !mayActAs(acc):
+			return ErrNoSession
+		}
+
+		if err := requireCurrentSession(ctx, tx, s.clock, p); err != nil {
+			return err
+		}
+
 		return tx.PushSubscriptions().Save(ctx, sub)
 	})
 	if err != nil {

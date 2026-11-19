@@ -44,6 +44,19 @@ func (r credentialRepo) Put(_ context.Context, c domain.Credential) error {
 
 type sessionRepo struct{ tx *tx }
 
+func (r sessionRepo) Lock(_ context.Context, id domain.SessionID) (domain.Session, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return domain.Session{}, err
+	}
+
+	sess, ok := r.tx.state.sessions.get(id)
+	if !ok {
+		return domain.Session{}, notFound("session")
+	}
+
+	return sess, nil
+}
+
 func (r sessionRepo) GetByToken(_ context.Context, hash [32]byte) (domain.Session, error) {
 	found := r.tx.state.sessions.filter(func(s domain.Session) bool { return s.TokenHash == hash })
 	if len(found) == 0 {

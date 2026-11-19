@@ -56,6 +56,15 @@ func toSession(row sqlc.Session) domain.Session {
 	}
 }
 
+func (r sessionRepo) Lock(ctx context.Context, id domain.SessionID) (domain.Session, error) {
+	row, err := r.q.LockSession(ctx, pgID(id))
+	if err != nil {
+		return domain.Session{}, notFound("session", err)
+	}
+
+	return toSession(row), nil
+}
+
 func (r sessionRepo) GetByToken(ctx context.Context, hash [32]byte) (domain.Session, error) {
 	row, err := r.q.GetSessionByToken(ctx, hash[:])
 	if err != nil {

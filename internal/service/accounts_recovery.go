@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -97,7 +98,7 @@ func (s *AuthService) IssuePasswordReset(
 	var out PasswordReset
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		acc, err := tx.Accounts().Get(ctx, id)
+		acc, err := tx.Accounts().Lock(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -185,8 +186,21 @@ func (s *AuthService) RevokeAllSessions(ctx context.Context, p Principal) (sessi
 
 		sessions, accounts = 0, len(all)
 
+		// Lock the entire set in impersonation's order before deleting any session.
+		slices.SortFunc(all, func(a, b domain.Account) int { return strings.Compare(a.ID.String(), b.ID.String()) })
+		locked := make([]domain.AccountID, 0, len(all))
 		for _, acc := range all {
-			n, err := endSessionsCounted(ctx, tx, s.ids, s.clock.Now(), acc.ID, domain.SessionID{})
+			if _, err := tx.Accounts().Lock(ctx, acc.ID); errors.Is(err, domain.ErrNotFound) {
+				continue
+			} else if err != nil {
+				return err
+			}
+
+			locked = append(locked, acc.ID)
+		}
+
+		for _, id := range locked {
+			n, err := endLockedSessions(ctx, tx, s.ids, s.clock.Now(), id, domain.SessionID{})
 			if err != nil {
 				return err
 			}

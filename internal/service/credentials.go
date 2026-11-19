@@ -46,7 +46,7 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email, locale st
 	token := newToken()
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		acc, err := tx.Accounts().GetByEmail(ctx, strings.TrimSpace(email))
+		acc, err := tx.Accounts().LockByEmail(ctx, strings.TrimSpace(email))
 
 		switch {
 		case errors.Is(err, domain.ErrNotFound):
@@ -81,8 +81,11 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, password string)
 	}
 
 	// Check the link before the slow hashing, so invalid links cost nothing.
+	var accountID domain.AccountID
+
 	err := s.store.InTx(ctx, store.ReadOnly, func(ctx context.Context, tx store.Tx) error {
-		_, err := s.resetAccount(ctx, tx, token)
+		account, err := s.resetAccount(ctx, tx, token)
+		accountID = account.ID
 
 		return err
 	})
@@ -96,6 +99,10 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, password string)
 	}
 
 	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		if _, err := tx.Accounts().Lock(ctx, accountID); err != nil {
+			return mapTokenErr(err)
+		}
+
 		acc, err := s.resetAccount(ctx, tx, token)
 		if err != nil {
 			return err
@@ -168,6 +175,20 @@ func (s *AuthService) ChangePassword(ctx context.Context, p Principal, current, 
 	}
 
 	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		acc, err := tx.Accounts().Lock(ctx, p.AccountID)
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			return ErrNoSession
+		case err != nil:
+			return err
+		case !mayActAs(acc):
+			return ErrNoSession
+		}
+
+		if err := requireCurrentSession(ctx, tx, s.clock, p); err != nil {
+			return err
+		}
+
 		cur, err := tx.Credentials().Get(ctx, p.AccountID)
 		if err != nil {
 			return err
@@ -297,16 +318,35 @@ func (s *AuthService) RequestEmailChange(ctx context.Context, p Principal, passw
 		return ErrSameEmail
 	}
 
-	if _, err := s.checkCurrentPassword(ctx, p, password); err != nil {
+	cred, err := s.checkCurrentPassword(ctx, p, password)
+	if err != nil {
 		return err
 	}
 
 	token := newToken()
 
-	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		acc, err := tx.Accounts().Get(ctx, p.AccountID)
+	err = s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		acc, err := tx.Accounts().Lock(ctx, p.AccountID)
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			return ErrNoSession
+		case err != nil:
+			return err
+		case !mayActAs(acc):
+			return ErrNoSession
+		}
+
+		if err := requireCurrentSession(ctx, tx, s.clock, p); err != nil {
+			return err
+		}
+
+		current, err := tx.Credentials().Get(ctx, acc.ID)
 		if err != nil {
 			return err
+		}
+
+		if current.PasswordHash != cred.PasswordHash {
+			return ErrWrongPassword
 		}
 
 		moved := acc
@@ -342,6 +382,15 @@ func (s *AuthService) RequestEmailChange(ctx context.Context, p Principal, passw
 // in locale, else in the school's default.
 func (s *AuthService) ConfirmEmailChange(ctx context.Context, token, locale string) error {
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		_, owner, err := s.linkToken(ctx, tx, token, domain.TokenChangeEmail)
+		if err != nil {
+			return err
+		}
+
+		if _, err := tx.Accounts().Lock(ctx, owner.ID); err != nil {
+			return mapTokenErr(err)
+		}
+
 		t, acc, err := s.linkToken(ctx, tx, token, domain.TokenChangeEmail)
 		if err != nil {
 			return err

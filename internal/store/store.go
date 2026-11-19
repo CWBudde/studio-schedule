@@ -323,6 +323,8 @@ type AccountRepo interface {
 	Get(ctx context.Context, id domain.AccountID) (domain.Account, error)
 	// Lock reads the current account and holds its write lock until commit.
 	Lock(ctx context.Context, id domain.AccountID) (domain.Account, error)
+	// LockForSessions returns the existing accounts once each, locking and listing them in ID order.
+	LockForSessions(ctx context.Context, ids ...domain.AccountID) ([]domain.Account, error)
 	// GetByEmail finds an account by email, ignoring ASCII case.
 	GetByEmail(ctx context.Context, email string) (domain.Account, error)
 	// LockByEmail finds and locks an existing account, ignoring ASCII case.
@@ -374,6 +376,8 @@ type CredentialRepo interface {
 
 // SessionRepo stores signed-in sessions, found by the hash of their token.
 type SessionRepo interface {
+	// Lock reads a session and holds its write lock until commit.
+	Lock(ctx context.Context, id domain.SessionID) (domain.Session, error)
 	// GetByToken finds a session by its token hash, whether it has expired
 	// or not.
 	GetByToken(ctx context.Context, hash [32]byte) (domain.Session, error)

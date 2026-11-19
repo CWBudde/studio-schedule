@@ -85,7 +85,9 @@ final readonly class AdminAccountsStore
             }
         }
 
-        $row = $this->connection->fetchAssociative('SELECT person_id, email, role, disabled_at FROM accounts WHERE id = ? FOR UPDATE', [$key]);
+        // PostgreSQL session and audit foreign keys can share the account key during a state change.
+        $lock = $this->isPostgres() ? 'FOR NO KEY UPDATE' : 'FOR UPDATE';
+        $row = $this->connection->fetchAssociative("SELECT person_id, email, role, disabled_at FROM accounts WHERE id = ? $lock", [$key]);
         if ($row === false) {
             return null;
         }

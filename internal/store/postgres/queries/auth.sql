@@ -7,6 +7,9 @@ VALUES ($1, $2, $3)
 ON CONFLICT (account_id) DO UPDATE
 SET password_hash = excluded.password_hash, changed_at = excluded.changed_at;
 
+-- name: LockSession :one
+SELECT * FROM sessions WHERE id = $1 FOR UPDATE;
+
 -- name: GetSessionByToken :one
 SELECT * FROM sessions WHERE token_hash = $1;
 

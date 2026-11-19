@@ -389,6 +389,12 @@ func (r accountRepo) Lock(ctx context.Context, id domain.AccountID) (domain.Acco
 	return toAccount(row), nil
 }
 
+func (r accountRepo) LockForSessions(ctx context.Context, ids ...domain.AccountID) ([]domain.Account, error) {
+	rows, err := r.q.LockAccountsForSessions(ctx, pgIDs(ids))
+
+	return convertRows(rows, err, toAccount)
+}
+
 func (r accountRepo) GetByEmail(ctx context.Context, email string) (domain.Account, error) {
 	row, err := r.q.GetAccountByEmail(ctx, email)
 	if err != nil {

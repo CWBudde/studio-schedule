@@ -80,7 +80,7 @@ func newPushFixture(t *testing.T) *pushFixture {
 		{f.anna, "https://push.example.org/anna/laptop"},
 		{f.stella, "https://push.example.org/stella/phone"},
 	} {
-		p := f.principal(t, d.person)
+		p := f.signedIn(t, d.person)
 
 		err := svc.Subscribe(t.Context(), p, PushSubscriptionInput{
 			Endpoint: d.endpoint, P256DH: testPushP256DH, Auth: testPushAuth,
@@ -102,6 +102,22 @@ func newPushFixture(t *testing.T) *pushFixture {
 	}
 
 	return f
+}
+
+func (f *pushFixture) signedIn(t *testing.T, person domain.Person) Principal {
+	t.Helper()
+
+	p := f.principal(t, person)
+	now := mustInstant(t, bookingNow)
+	session := domain.Session{
+		ID: ids.New[domain.SessionID](f.seq), AccountID: p.AccountID,
+		CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(SessionIdleTimeout),
+	}
+	session.TokenHash = domain.HashToken(session.ID.String())
+	f.write(t, func(ctx context.Context, tx store.Tx) error { return tx.Sessions().Create(ctx, session) })
+	p.SessionID = session.ID
+
+	return p
 }
 
 // queue stores a message for each subscription, due at bookingNow and
@@ -366,7 +382,7 @@ func TestPushSubscriptionStoreFaults(t *testing.T) {
 			f := newPushFixture(t)
 			fs := NewFaultStore(f.st)
 			svc := NewPushService(fs, clock.NewFixed(mustInstant(t, bookingNow)), f.seq, &pushRecorder{})
-			tom := f.principal(t, f.tom)
+			tom := f.signedIn(t, f.tom)
 
 			return fs, func() error {
 				return svc.Subscribe(t.Context(), tom, PushSubscriptionInput{

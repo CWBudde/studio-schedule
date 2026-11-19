@@ -11,6 +11,7 @@ import (
 
 	"github.com/cwbudde/studio-schedule/internal/auth/password"
 	"github.com/cwbudde/studio-schedule/internal/clock"
+	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/mail"
 	"github.com/cwbudde/studio-schedule/internal/seed"
@@ -191,4 +192,148 @@ func registrationTestService(t *testing.T, st *Store, now time.Time) *service.Au
 	}
 
 	return service.NewAuthService(st, clock.NewFixed(now), ids.V7{}, hasher, renderer, "https://school.example.test/dance/")
+}
+
+func TestLoginWaitsForConcurrentAccountDisable(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+	st := newTestStore(t)
+	now := time.Date(2026, time.October, 23, 16, 0, 0, 0, time.UTC)
+	svc := registrationTestService(t, st, now)
+	const email, secret = "disable-race@example.test", "a fictional login password"
+	if err := svc.Register(ctx, service.Registration{
+		GivenName: "Fixture", FamilyName: "Member", Email: email, Password: secret,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.pool.Exec(ctx, "UPDATE accounts SET confirmed_at = $1 WHERE email = $2", now, email); err != nil {
+		t.Fatal(err)
+	}
+
+	tx, pid := beginRegistrationBlocker(ctx, t, st)
+	var account string
+	if err := tx.QueryRow(ctx, "SELECT id::text FROM accounts WHERE email = $1 FOR UPDATE", email).Scan(&account); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, "UPDATE accounts SET disabled_at = $1 WHERE id = $2", now, account); err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan error, 1)
+	go func() {
+		_, err := svc.Login(ctx, email, secret)
+		result <- err
+	}()
+
+	waitForBlockedTransaction(ctx, t, st, pid)
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-result; !errors.Is(err, service.ErrInvalidCredentials) {
+		t.Errorf("concurrent login: got %v, want %v", err, service.ErrInvalidCredentials)
+	}
+	var count int
+	if err := st.pool.QueryRow(ctx, "SELECT COUNT(*) FROM sessions WHERE account_id = $1", account).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("disabled account has %d sessions, want zero", count)
+	}
+}
+
+func TestAuthenticatedWritesWaitForAccountRevocation(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"impersonation", "push subscription", "locale change"} {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+			defer cancel()
+			st := newTestStore(t)
+			now := time.Date(2026, time.October, 23, 16, 0, 0, 0, time.UTC)
+			svc := registrationTestService(t, st, now)
+			member := sessionRaceAccount(ctx, t, st, svc, "member@example.test", domain.RoleMember, now)
+			admin := sessionRaceAccount(ctx, t, st, svc, "admin@example.test", domain.RoleAdmin, now)
+
+			revocation, pid := beginRegistrationBlocker(ctx, t, st)
+			id := member.Principal.AccountID.String()
+			var locked bool
+			if err := revocation.QueryRow(ctx, "SELECT TRUE FROM accounts WHERE id = $1 FOR UPDATE", id).Scan(&locked); err != nil {
+				t.Fatal(err)
+			}
+
+			result := make(chan error, 1)
+			want := service.ErrAccountInactive
+			if name == "push subscription" {
+				want = service.ErrNoSession
+				if _, err := revocation.Exec(ctx, "DELETE FROM sessions WHERE account_id = $1", id); err != nil {
+					t.Fatal(err)
+				}
+				push := service.NewPushService(st, clock.NewFixed(now), ids.NewSequence(), sessionRacePushSender{})
+				go func() {
+					result <- push.Subscribe(ctx, member.Principal, service.PushSubscriptionInput{
+						Endpoint: "https://push.example.test/fixture",
+						P256DH:   "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
+						Auth:     "BTBZMqHH6r4Tts7J_aSIgg",
+					})
+				}()
+			} else {
+				if _, err := revocation.Exec(ctx, "UPDATE accounts SET disabled_at = $1 WHERE id = $2", now, id); err != nil {
+					t.Fatal(err)
+				}
+				if name == "locale change" {
+					want = service.ErrNoSession
+					go func() { result <- svc.SetLocale(ctx, member.Principal, "de") }()
+				} else {
+					go func() {
+						_, err := svc.Impersonate(ctx, admin.Principal, member.Principal.AccountID)
+						result <- err
+					}()
+				}
+			}
+
+			waitForBlockedTransaction(ctx, t, st, pid)
+			if err := revocation.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if got := <-result; !errors.Is(got, want) {
+				t.Errorf("write after revocation: got %v, want %v", got, want)
+			}
+			if name != "push subscription" {
+				var disabled bool
+				if err := st.pool.QueryRow(ctx, "SELECT disabled_at IS NOT NULL FROM accounts WHERE id = $1", id).Scan(&disabled); err != nil {
+					t.Fatal(err)
+				}
+				if !disabled {
+					t.Error("the concurrent write re-enabled the account")
+				}
+			}
+		})
+	}
+}
+
+func sessionRaceAccount(ctx context.Context, t *testing.T, st *Store, svc *service.AuthService, email string, role domain.Role, now time.Time) service.SignedIn {
+	t.Helper()
+
+	const password = "fictional session race phrase"
+	if err := svc.Register(ctx, service.Registration{
+		GivenName: "Fixture", FamilyName: "Account", Email: email, Password: password,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.pool.Exec(ctx, "UPDATE accounts SET confirmed_at = $1, role = $2 WHERE email = $3", now, string(role), email); err != nil {
+		t.Fatal(err)
+	}
+	signedIn, err := svc.Login(ctx, email, password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signedIn
+}
+
+type sessionRacePushSender struct{}
+
+func (sessionRacePushSender) PublicKey() string { return "" }
+func (sessionRacePushSender) Send(context.Context, domain.PushSubscription, []byte, time.Duration) error {
+	return nil
 }

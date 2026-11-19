@@ -115,6 +115,26 @@ func (f *fixture) principal(t *testing.T, email string) service.Principal {
 	return p
 }
 
+// browserPrincipal supplies a live session when mail fixtures use the browser's credential API.
+func (f *fixture) browserPrincipal(t *testing.T, email string) service.Principal {
+	t.Helper()
+
+	p := f.principal(t, email)
+	p.Via = domain.AuditVia{}
+	p.SessionID = ids.New[domain.SessionID](ids.V7{})
+	session := domain.Session{
+		ID: p.SessionID, AccountID: p.AccountID, TokenHash: domain.HashToken(p.SessionID.String()),
+		CreatedAt: testNow, LastSeenAt: testNow, ExpiresAt: testNow.Add(service.SessionIdleTimeout),
+	}
+	if err := f.st.InTx(t.Context(), store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
+		return tx.Sessions().Create(ctx, session)
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	return p
+}
+
 // actorOf resolves email again on every call, as cli.Env.Actor does.
 func (f *fixture) actorOf(email string) Actor {
 	return func(ctx context.Context) (service.Principal, error) { return f.svc.Auth.Actor(ctx, email, via) }

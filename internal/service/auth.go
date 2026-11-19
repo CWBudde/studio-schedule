@@ -367,37 +367,37 @@ func (s *AuthService) Confirm(ctx context.Context, token, password string) (Sign
 		return SignedIn{}, ErrInvalidCredentials
 	}
 
-	return s.signIn(ctx, acc, password, cred, func(ctx context.Context, tx store.Tx, now time.Time) error {
+	return s.signIn(ctx, password, cred, func(ctx context.Context, tx store.Tx) (domain.Account, error) {
 		// Take the same account lock as registration before reading the token
 		// and credentials again or consuming the link.
 		if _, err := tx.Accounts().Lock(ctx, acc.ID); err != nil {
-			return mapTokenErr(err)
+			return domain.Account{}, mapTokenErr(err)
 		}
 
 		// The password must still be the one just verified: a registration
 		// in between replaces it and sends a new link.
 		cur, curCred, err := s.tokenAccount(ctx, tx, token)
 		if err != nil {
-			return err
+			return domain.Account{}, err
 		}
 
 		if curCred.PasswordHash != cred.PasswordHash {
-			return ErrInvalidToken
+			return domain.Account{}, ErrInvalidToken
 		}
 		if !cur.DisabledAt.IsZero() {
-			return ErrInvalidCredentials
+			return domain.Account{}, ErrInvalidCredentials
 		}
 
 		// The token is used up here; a concurrent use finds it gone.
 		if err := tx.AccountTokens().Delete(ctx, domain.HashToken(token)); err != nil {
-			return mapTokenErr(err)
+			return domain.Account{}, mapTokenErr(err)
 		}
 
 		if cur.ConfirmedAt.IsZero() {
-			cur.ConfirmedAt = now
+			cur.ConfirmedAt = s.clock.Now()
 		}
 
-		return tx.Accounts().Update(ctx, cur)
+		return cur, tx.Accounts().Update(ctx, cur)
 	})
 }
 
@@ -485,7 +485,29 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (Signed
 		return SignedIn{}, ErrEmailNotConfirmed
 	}
 
-	return s.signIn(ctx, acc, password, cred, nil)
+	return s.signIn(ctx, password, cred, func(ctx context.Context, tx store.Tx) (domain.Account, error) {
+		current, err := tx.Accounts().Lock(ctx, acc.ID)
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			return domain.Account{}, ErrInvalidCredentials
+		case err != nil:
+			return domain.Account{}, err
+		case current.Email != acc.Email || !mayActAs(current):
+			return domain.Account{}, ErrInvalidCredentials
+		}
+
+		curCred, err := tx.Credentials().Get(ctx, acc.ID)
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			return domain.Account{}, ErrInvalidCredentials
+		case err != nil:
+			return domain.Account{}, err
+		case curCred.PasswordHash != cred.PasswordHash:
+			return domain.Account{}, ErrInvalidCredentials
+		}
+
+		return current, nil
+	})
 }
 
 // verify checks password against the stored credential.
@@ -520,11 +542,11 @@ func (s *AuthService) dummy() (string, error) {
 	return s.dummyHash, nil
 }
 
-// signIn creates a session for acc. If the password hash uses outdated
-// parameters it is replaced. extra runs first in the same transaction.
+// signIn rechecks the verified credentials under the account lock, then
+// creates the session and upgrades the hash if it uses outdated parameters.
 func (s *AuthService) signIn(
-	ctx context.Context, acc domain.Account, password string, cred domain.Credential,
-	extra func(ctx context.Context, tx store.Tx, now time.Time) error,
+	ctx context.Context, password string, cred domain.Credential,
+	prepare func(ctx context.Context, tx store.Tx) (domain.Account, error),
 ) (SignedIn, error) {
 	var rehash string
 
@@ -537,17 +559,18 @@ func (s *AuthService) signIn(
 
 	token := newToken()
 
-	var sess domain.Session
+	var (
+		acc  domain.Account
+		sess domain.Session
+	)
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		now := s.clock.Now()
-
-		if extra != nil {
-			if err := extra(ctx, tx, now); err != nil {
-				return err
-			}
+		current, err := prepare(ctx, tx)
+		if err != nil {
+			return err
 		}
 
+		acc = current
 		if rehash != "" {
 			c := domain.Credential{AccountID: acc.ID, PasswordHash: rehash, ChangedAt: cred.ChangedAt}
 			if err := tx.Credentials().Put(ctx, c); err != nil {
@@ -555,8 +578,7 @@ func (s *AuthService) signIn(
 			}
 		}
 
-		var err error
-		sess, err = s.createSession(ctx, tx, acc.ID, token, now, domain.AccountID{})
+		sess, err = s.createSession(ctx, tx, acc.ID, token, s.clock.Now(), domain.AccountID{})
 
 		return err
 	})
@@ -784,9 +806,16 @@ func (s *AuthService) SetLocale(ctx context.Context, p Principal, locale string)
 	}
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		acc, err := tx.Accounts().Get(ctx, p.AccountID)
-		if err != nil || acc.Locale == locale {
+		acc, err := tx.Accounts().Lock(ctx, p.AccountID)
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			return ErrNoSession
+		case err != nil:
 			return err
+		case !mayActAs(acc):
+			return ErrNoSession
+		case acc.Locale == locale:
+			return nil
 		}
 
 		acc.Locale = locale

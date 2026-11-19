@@ -27,7 +27,7 @@ func mailFixture(t *testing.T) *fixture {
 	f := newFixture(t)
 	mailResets(t, f, demoMember, demoInstructor, demoOffice)
 
-	err := f.svc.Auth.ChangePassword(t.Context(), f.principal(t, demoMember), seed.DemoPassword,
+	err := f.svc.Auth.ChangePassword(t.Context(), f.browserPrincipal(t, demoMember), seed.DemoPassword,
 		"a-fresh-zebra-password")
 	if err != nil {
 		t.Fatal(err)

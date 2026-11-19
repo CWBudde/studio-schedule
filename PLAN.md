@@ -1426,7 +1426,7 @@ backends.
           also matched Go on a shared PostgreSQL fixture at the root and under a prefix.
     - [x] Pass the shared `schedule_release_and_visibility` scenario on PHP at both mount paths
           on all three engines. The scenario signs in a member to verify the visibility rules.
-  - [ ] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006).
+  - [x] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006).
     - [x] Register and confirm accounts, sign in and out, update locale, request a replacement
           reset link, and change passwords and email addresses. Login and credential requests use
           database-backed rate limits. Shared registration, recovery, credential and rate-limit
@@ -1447,9 +1447,9 @@ backends.
           at both mount paths on all three databases and runs in PHP CI. The database tests verify
           last-admin protection under concurrent writes, rollback for a protected account, and
           rejection of a push write after session revocation.
-    - [ ] In the Go reference backend, serialize login, impersonation and push registration with
-          revocation. A login already checking a password can currently finish after an account
-          is disabled. Recheck permission and session state under the write locks.
+    - [x] Serialize login, impersonation and push registration with revocation in both backends.
+          PostgreSQL tests verify that Go rejects writes waiting behind revocation and prevents
+          a concurrent locale update from undoing an account disable.
   - [ ] Family, persons, invitations, catalogue and timetable administration (ADR 0007, 0008)
     - [x] Read a signed-in person's family, edit their own profile, and create or edit their
           dependents. Managed dependents are read-only. The shared `family_profiles` case passes

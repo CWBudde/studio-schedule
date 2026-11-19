@@ -90,6 +90,26 @@ func testSessions(t *testing.T, newStore func(*testing.T) store.Store) {
 	}
 
 	cases(t, newStore, map[string]func(e *env){
+		"Lock": func(e *env) {
+			a := e.account(e.person("Ada", "Account"), "ada@example.org")
+			session := e.session(a, "fixture token", t0.Add(time.Hour))
+			wantErr(e.t, e.read(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Sessions().Lock(ctx, session.ID)
+
+				return err
+			}), store.ErrReadOnly)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				got, err := tx.Sessions().Lock(ctx, session.ID)
+				wantEqual(e.t, got, session)
+
+				return err
+			})
+			wantErr(e.t, e.write(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Sessions().Lock(ctx, newID[domain.SessionID](e))
+
+				return err
+			}), domain.ErrNotFound)
+		},
 		"CreateGetUpdateDelete": func(e *env) {
 			a := e.account(e.person("Ada", "Account"), "ada@example.org")
 

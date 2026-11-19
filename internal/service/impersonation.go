@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cwbudde/studio-schedule/internal/clock"
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/ids"
 	"github.com/cwbudde/studio-schedule/internal/store"
@@ -41,11 +42,21 @@ func (s *AuthService) Impersonate(ctx context.Context, admin Principal, target d
 	var out SignedIn
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		acc, err := tx.Accounts().Get(ctx, target)
-
+		actor, acc, err := lockImpersonationAccounts(ctx, tx, admin.AccountID, target)
 		switch {
 		case err != nil:
 			return err
+		case actor.Role != domain.RoleAdmin || !mayActAs(actor):
+			return ErrNoSession
+		}
+
+		if err := requireCurrentSession(ctx, tx, s.clock, admin); err != nil {
+			return err
+		}
+
+		switch {
+		case acc.ID.IsZero():
+			return domain.ErrNotFound
 		case acc.Role == domain.RoleAdmin:
 			return ErrNotImpersonable
 		case !mayActAs(acc):
@@ -87,13 +98,18 @@ func (s *AuthService) StopImpersonation(ctx context.Context, p Principal) (Signe
 	var out SignedIn
 
 	err := s.store.InTx(ctx, store.ReadWrite, func(ctx context.Context, tx store.Tx) error {
-		admin, err := tx.Accounts().Get(ctx, p.ImpersonatorID)
+		admin, subject, err := lockImpersonationAccounts(ctx, tx, p.ImpersonatorID, p.AccountID)
 		if err != nil {
 			return err
 		}
 
-		if admin.Role != domain.RoleAdmin || !mayActAs(admin) {
+		if admin.Role != domain.RoleAdmin || !mayActAs(admin) ||
+			subject.ID.IsZero() || subject.Role == domain.RoleAdmin || !mayActAs(subject) {
 			return ErrNoSession
+		}
+
+		if err := requireCurrentSession(ctx, tx, s.clock, p); err != nil {
+			return err
 		}
 
 		if err := s.endSession(ctx, tx, p.SessionID); err != nil {
@@ -114,6 +130,40 @@ func (s *AuthService) StopImpersonation(ctx context.Context, p Principal) (Signe
 	}
 
 	return out, nil
+}
+
+// lockImpersonationAccounts locks both participants in ID order, before
+// taking the session lock. Shared locks allow concurrent audit foreign-key checks.
+func lockImpersonationAccounts(ctx context.Context, tx store.Tx, actorID, subjectID domain.AccountID) (actor, subject domain.Account, err error) {
+	accounts, err := tx.Accounts().LockForSessions(ctx, actorID, subjectID)
+	if err != nil {
+		return domain.Account{}, domain.Account{}, err
+	}
+
+	for _, account := range accounts {
+		if account.ID == actorID {
+			actor = account
+		} else {
+			subject = account
+		}
+	}
+
+	return actor, subject, nil
+}
+
+// requireCurrentSession rechecks a request's session under the row lock.
+func requireCurrentSession(ctx context.Context, tx store.Tx, clk clock.Clock, p Principal) error {
+	session, err := tx.Sessions().Lock(ctx, p.SessionID)
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		return ErrNoSession
+	case err != nil:
+		return err
+	case session.AccountID != p.AccountID || session.ImpersonatorID != p.ImpersonatorID || !clk.Now().Before(sessionEnd(session)):
+		return ErrNoSession
+	default:
+		return nil
+	}
 }
 
 // endSession deletes the session of the request; if it is gone already, the

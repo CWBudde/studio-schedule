@@ -40,7 +40,7 @@ func wmFixture(t *testing.T) (*fixture, wmMails) {
 	f := newFixture(t)
 
 	for _, email := range []string{demoMember, demoOffice, demoInstructor} {
-		err := f.svc.Auth.ChangePassword(t.Context(), f.principal(t, email), seed.DemoPassword, "a-fresh-zebra-password")
+		err := f.svc.Auth.ChangePassword(t.Context(), f.browserPrincipal(t, email), seed.DemoPassword, "a-fresh-zebra-password")
 		if err != nil {
 			t.Fatal(err)
 		}

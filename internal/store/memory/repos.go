@@ -344,6 +344,14 @@ func (r accountRepo) Lock(ctx context.Context, id domain.AccountID) (domain.Acco
 	return r.Get(ctx, id)
 }
 
+func (r accountRepo) LockForSessions(_ context.Context, ids ...domain.AccountID) ([]domain.Account, error) {
+	if err := r.tx.checkWritable(); err != nil {
+		return nil, err
+	}
+
+	return sorted(byIDs(r.tx.state.accounts.get, ids), func(a, b domain.Account) int { return compareID(a.ID, b.ID) }), nil
+}
+
 func (r accountRepo) GetByEmail(_ context.Context, email string) (domain.Account, error) {
 	found := r.tx.state.accounts.filter(func(a domain.Account) bool { return foldASCII(a.Email) == foldASCII(email) })
 	if len(found) == 0 {

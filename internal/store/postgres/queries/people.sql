@@ -62,7 +62,10 @@ ORDER BY p.family_name, p.given_name, p.id;
 SELECT * FROM accounts WHERE id = $1;
 
 -- name: LockAccount :one
-SELECT * FROM accounts WHERE id = $1 FOR UPDATE;
+SELECT * FROM accounts WHERE id = $1 FOR NO KEY UPDATE;
+
+-- name: LockAccountsForSessions :many
+SELECT * FROM accounts WHERE id = ANY(sqlc.arg(ids)::uuid[]) ORDER BY id FOR SHARE;
 
 -- name: GetAccountByEmail :one
 -- The parameter needs collation "C" as well, so that lower() folds ASCII
@@ -70,7 +73,7 @@ SELECT * FROM accounts WHERE id = $1 FOR UPDATE;
 SELECT * FROM accounts WHERE lower(email) = lower(sqlc.arg(email)::text COLLATE "C");
 
 -- name: LockAccountByEmail :one
-SELECT * FROM accounts WHERE lower(email) = lower(sqlc.arg(email)::text COLLATE "C") FOR UPDATE;
+SELECT * FROM accounts WHERE lower(email) = lower(sqlc.arg(email)::text COLLATE "C") FOR NO KEY UPDATE;
 
 -- name: GetAccountByPerson :one
 SELECT * FROM accounts WHERE person_id = $1;

@@ -276,7 +276,9 @@ func lockAccount(ctx context.Context, tx store.Tx, id domain.AccountID) (domain.
 		return domain.Account{}, nil, err
 	}
 
-	return acc, admins, nil
+	acc, err = tx.Accounts().Lock(ctx, id)
+
+	return acc, admins, err
 }
 
 // adminSet returns the persons of every admin account, enabled or not, to
@@ -321,6 +323,22 @@ func endSessions(
 // endSessionsCounted is endSessions, and returns how many of the sessions
 // it deleted had not ended yet.
 func endSessionsCounted(
+	ctx context.Context, tx store.Tx, src ids.Source, now time.Time, id domain.AccountID, keep domain.SessionID,
+) (int, error) {
+	// Session creation and push registration use this same account lock.
+	if _, err := tx.Accounts().Lock(ctx, id); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return 0, nil // a concurrent deletion already removed its sessions and subscriptions
+		}
+
+		return 0, err
+	}
+
+	return endLockedSessions(ctx, tx, src, now, id, keep)
+}
+
+// endLockedSessions requires the account's write lock.
+func endLockedSessions(
 	ctx context.Context, tx store.Tx, src ids.Source, now time.Time, id domain.AccountID, keep domain.SessionID,
 ) (int, error) {
 	ended, err := tx.Sessions().DeleteByAccount(ctx, id, keep)

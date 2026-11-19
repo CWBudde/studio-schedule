@@ -216,6 +216,25 @@ func (q *Queries) GetSessionByToken(ctx context.Context, tokenHash []byte) (Sess
 	return i, err
 }
 
+const lockSession = `-- name: LockSession :one
+SELECT id, account_id, token_hash, created_at, last_seen_at, expires_at, impersonator_id FROM sessions WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockSession(ctx context.Context, id pgtype.UUID) (Session, error) {
+	row := q.db.QueryRow(ctx, lockSession, id)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.TokenHash,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+		&i.ExpiresAt,
+		&i.ImpersonatorID,
+	)
+	return i, err
+}
+
 const putCredential = `-- name: PutCredential :exec
 INSERT INTO account_credentials (account_id, password_hash, changed_at)
 VALUES ($1, $2, $3)

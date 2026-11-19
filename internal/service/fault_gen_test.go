@@ -379,6 +379,14 @@ func (r *faultAccountRepo) Lock(a0 context.Context, a1 domain.AccountID) (r0 dom
 	return r.AccountRepo.Lock(a0, a1)
 }
 
+func (r *faultAccountRepo) LockForSessions(a0 context.Context, a1 ...domain.AccountID) (r0 []domain.Account, err error) {
+	if err = r.f.hit("Accounts.LockForSessions"); err != nil {
+		return r0, err
+	}
+
+	return r.AccountRepo.LockForSessions(a0, a1...)
+}
+
 func (r *faultAccountRepo) GetByEmail(a0 context.Context, a1 string) (r0 domain.Account, err error) {
 	if err = r.f.hit("Accounts.GetByEmail"); err != nil {
 		return r0, err
@@ -491,6 +499,14 @@ func (r *faultCredentialRepo) Put(a0 context.Context, a1 domain.Credential) (err
 type faultSessionRepo struct {
 	store.SessionRepo
 	f *FaultStore
+}
+
+func (r *faultSessionRepo) Lock(a0 context.Context, a1 domain.SessionID) (r0 domain.Session, err error) {
+	if err = r.f.hit("Sessions.Lock"); err != nil {
+		return r0, err
+	}
+
+	return r.SessionRepo.Lock(a0, a1)
 }
 
 func (r *faultSessionRepo) GetByToken(a0 context.Context, a1 [32]byte) (r0 domain.Session, err error) {

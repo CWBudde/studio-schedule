@@ -565,7 +565,7 @@ func (q *Queries) ListPersonsByIDs(ctx context.Context, ids []pgtype.UUID) ([]Pe
 }
 
 const lockAccount = `-- name: LockAccount :one
-SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at, locale FROM accounts WHERE id = $1 FOR UPDATE
+SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at, locale FROM accounts WHERE id = $1 FOR NO KEY UPDATE
 `
 
 func (q *Queries) LockAccount(ctx context.Context, id pgtype.UUID) (Account, error) {
@@ -585,7 +585,7 @@ func (q *Queries) LockAccount(ctx context.Context, id pgtype.UUID) (Account, err
 }
 
 const lockAccountByEmail = `-- name: LockAccountByEmail :one
-SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at, locale FROM accounts WHERE lower(email) = lower($1::text COLLATE "C") FOR UPDATE
+SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at, locale FROM accounts WHERE lower(email) = lower($1::text COLLATE "C") FOR NO KEY UPDATE
 `
 
 func (q *Queries) LockAccountByEmail(ctx context.Context, email string) (Account, error) {
@@ -602,6 +602,39 @@ func (q *Queries) LockAccountByEmail(ctx context.Context, email string) (Account
 		&i.Locale,
 	)
 	return i, err
+}
+
+const lockAccountsForSessions = `-- name: LockAccountsForSessions :many
+SELECT id, person_id, email, role, visible_days, disabled_at, confirmed_at, locale FROM accounts WHERE id = ANY($1::uuid[]) ORDER BY id FOR SHARE
+`
+
+func (q *Queries) LockAccountsForSessions(ctx context.Context, ids []pgtype.UUID) ([]Account, error) {
+	rows, err := q.db.Query(ctx, lockAccountsForSessions, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Account
+	for rows.Next() {
+		var i Account
+		if err := rows.Scan(
+			&i.ID,
+			&i.PersonID,
+			&i.Email,
+			&i.Role,
+			&i.VisibleDays,
+			&i.DisabledAt,
+			&i.ConfirmedAt,
+			&i.Locale,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const lockPersons = `-- name: LockPersons :many

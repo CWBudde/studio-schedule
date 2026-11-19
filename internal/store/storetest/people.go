@@ -419,6 +419,22 @@ func testAccounts(t *testing.T, newStore func(*testing.T) store.Store) {
 				return err
 			}), domain.ErrNotFound)
 		},
+		"LockForSessions": func(e *env) {
+			first := e.account(e.person("Ada", "Account"), "z@example.org")
+			second := e.account(e.person("Bea", "Account"), "a@example.org")
+			missing := newID[domain.AccountID](e)
+			wantErr(e.t, e.read(func(ctx context.Context, tx store.Tx) error {
+				_, err := tx.Accounts().LockForSessions(ctx, first.ID)
+
+				return err
+			}), store.ErrReadOnly)
+			e.mustWrite(func(ctx context.Context, tx store.Tx) error {
+				got, err := tx.Accounts().LockForSessions(ctx, second.ID, missing, first.ID, second.ID)
+				wantSlice(e.t, got, []domain.Account{first, second})
+
+				return err
+			})
+		},
 		"LockByEmail": func(e *env) {
 			a := e.account(e.person("Ada", "Account"), "Ada@Example.org")
 			wantErr(e.t, e.read(func(ctx context.Context, tx store.Tx) error {
