@@ -226,6 +226,24 @@ final readonly class TimetableStore implements TimetableAdminPersistence, OneOff
         return $stored;
     }
 
+    public function removeClassMember(string $class, string $person): void
+    {
+        if ($this->db->delete('class_members', ['class_id' => $class, 'person_id' => $this->encodeId($person)]) === 0) {
+            throw new CatalogFailure(404, 'resource not found');
+        }
+    }
+
+    public function futureClassLessons(string $class, DateTimeImmutable $now): array
+    {
+        /** @var list<string> $ids */
+        $ids = $this->db->fetchFirstColumn(
+            'SELECT id FROM lessons WHERE class_id = ? AND starts_at > ? ORDER BY id',
+            [$class, Database::sqlInstant($this->db, $now)],
+        );
+
+        return array_map($this->decodeId(...), $ids);
+    }
+
     public function deleteClass(string $id): void
     {
         try {

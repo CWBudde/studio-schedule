@@ -1492,6 +1492,10 @@ backends.
           pass charges when the school date changes and offer added places to the waitlist. The
           shared `class_editing_and_retirement` case runs in PHP CI on all three databases at both
           mount paths.
+    - [x] Let the office remove members of active or retired classes. Cancel their future bookings
+          as timely, settle pass visits, preserve the dates for later enrollment, and queue waitlist
+          offers in the same transaction. The shared `class_member_removal` case runs at both mount
+          paths on PostgreSQL, MySQL and MariaDB in PHP CI.
     - [x] Let the office create one-off lessons and room rentals in school-local time, with
           confirmation for past starts and room overlaps. The shared `one_off_lesson_creation`
           case runs in PHP CI on all three databases at both mount paths.

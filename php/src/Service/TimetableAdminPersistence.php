@@ -44,6 +44,11 @@ interface TimetableAdminPersistence extends LessonGenerationPersistence
 
     public function lockClassId(string $id): string;
 
+    public function removeClassMember(string $class, string $person): void;
+
+    /** @return list<string> Lesson IDs in lock order. */
+    public function futureClassLessons(string $class, DateTimeImmutable $now): array;
+
     public function deleteClass(string $id): void;
 
     /** @return list<ClassLesson> */

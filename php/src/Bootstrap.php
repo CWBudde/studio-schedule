@@ -92,6 +92,7 @@ use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\BookingRuleSettings;
 use StudioSchedule\Service\ClassAdmin;
 use StudioSchedule\Service\ClassLessonSync;
+use StudioSchedule\Service\ClassMemberships;
 use StudioSchedule\Service\CalendarFeedManagement;
 use StudioSchedule\Service\CalendarFeedRendering;
 use StudioSchedule\Service\CommonPasswords;
@@ -477,7 +478,7 @@ final class Bootstrap
                     $participants = new ParticipantReadStore($connection);
                     $bookings = new BookingStore($connection, $eventStore, $lessonWrites, $participants);
                     (new AttendanceRoutes(new Attendance($bookings, $clock)))->register($app);
-                    (new BookingRoutes(new BookingCancellation(
+                    $cancellations = new BookingCancellation(
                         $bookings,
                         $schedule,
                         $lessonRecipients,
@@ -485,7 +486,9 @@ final class Bootstrap
                         $mail,
                         $clock,
                         $wakeMail,
-                    )))->register($app);
+                    );
+                    (new BookingRoutes($cancellations))->register($app);
+                    CatalogAdminRoutes::registerClassMemberships($app, new ClassMemberships($timetableStore, $bookings, $cancellations, $clock, $wakeMail));
                     (new ParticipantReadRoutes(new ParticipantRead($participants, $clock)))->register($app);
                     (new MyLessonsRoutes(new MyLessons(new MyLessonsStore($connection), $schedule, $clock)))->register($app);
                     (new TeachingScheduleRoutes(new TeachingSchedule($schedule, $clock)))->register($app);

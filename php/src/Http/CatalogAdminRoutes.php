@@ -21,6 +21,7 @@ use StudioSchedule\Service\CatalogAdmin;
 use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\ClassAdmin;
 use StudioSchedule\Service\ClassData;
+use StudioSchedule\Service\ClassMemberships;
 use StudioSchedule\Service\LessonRoomTaken;
 use StudioSchedule\Service\OneOffLesson;
 use StudioSchedule\Service\OneOffLessonData;
@@ -93,6 +94,25 @@ final readonly class CatalogAdminRoutes
 
                 return $response->withStatus(204);
             });
+        })->add(self::requireOffice(...));
+    }
+
+    /**
+     * @template TContainer of ContainerInterface|null
+     * @param App<TContainer> $app
+     */
+    public static function registerClassMemberships(App $app, ClassMemberships $memberships): void
+    {
+        $app->delete('/api/v1/classes/{classId}/members/{personId}', static function (ServerRequestInterface $request, ResponseInterface $response, array $args) use ($memberships): ResponseInterface {
+            $principal = $request->getAttribute('sessionPrincipal');
+            assert($principal instanceof SessionPrincipal);
+            $memberships->remove(
+                $principal,
+                self::id($args['classId'] ?? null, 'path.classId'),
+                self::id($args['personId'] ?? null, 'path.personId'),
+            );
+
+            return $response->withStatus(204);
         })->add(self::requireOffice(...));
     }
 

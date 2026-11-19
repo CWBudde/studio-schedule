@@ -56,6 +56,7 @@ use StudioSchedule\Service\AccountInvitation;
 use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\ClassAdmin;
 use StudioSchedule\Service\ClassLessonSync;
+use StudioSchedule\Service\ClassMemberships;
 use StudioSchedule\Service\Attendance;
 use StudioSchedule\Service\BookingCancellation;
 use StudioSchedule\Mail\Renderer;
@@ -467,6 +468,108 @@ final class ScheduleStoreTest extends TestCase
             $this->database->close();
             $this->database = $fixture;
         }
+    }
+
+    public function testOfficeClassMemberRemovalRefundsFutureBookingsAndRollsBackWithTheWaitlistOffer(): void
+    {
+        $this->database->executeStatement("UPDATE settings SET redemption_mode = 'booking'");
+        $this->database->executeStatement('UPDATE classes SET retired = TRUE');
+        $this->insert('class_members', ['class_id' => 40, 'person_id' => 2]);
+        $this->insert('class_members', ['class_id' => 40, 'person_id' => 3]);
+        $this->insert('persons', ['id' => 8, 'given_name' => 'Admin', 'family_name' => 'Fixture']);
+        $this->insert('accounts', ['id' => 12, 'person_id' => 8, 'email' => 'admin@example.test', 'role' => 'admin']);
+        $this->insert('persons', ['id' => 9, 'given_name' => 'Waitlist', 'family_name' => 'Fixture', 'email' => 'invalid email']);
+        $this->insertLesson(108, '2026-11-01', 'regular', 'public', [
+            'class_id' => 40, 'slot_date' => '2026-10-20', 'detached' => true, 'capacity' => 1,
+        ]);
+        $this->insertLesson(109, '2026-11-08', 'regular', 'public', ['class_id' => 40, 'slot_date' => '2026-11-08']);
+        foreach ([301 => [100, 'member'], 302 => [108, 'self'], 303 => [109, 'member']] as $id => [$lesson, $source]) {
+            $this->insert('bookings', [
+                'id' => $id, 'person_id' => 2, 'lesson_id' => $lesson, 'status' => 'booked', 'trial' => false,
+                'booked_at' => '2026-10-23 10:00:00', 'source' => $source,
+            ]);
+        }
+        $this->insert('pass_types', [
+            'id' => 304, 'name' => 'Fixture Visits', 'kind' => 'visits', 'visits' => 2, 'validity_days' => 0,
+            'price' => 0, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => '2026-10-20 10:00:00',
+        ]);
+        $this->insert('passes', [
+            'id' => 305, 'pass_type_id' => 304, 'kind' => 'visits', 'visits_total' => 2, 'visits_remaining' => 1,
+            'valid_from' => '2026-10-20', 'person_id' => 2, 'status' => 'active', 'origin' => 'assignment',
+            'price_paid' => 0, 'sold_at' => '2026-10-20 10:00:00',
+        ]);
+        $this->insert('pass_redemptions', ['pass_id' => 305, 'booking_id' => 302, 'at' => '2026-10-23 10:00:00']);
+        $this->insert('waitlist_entries', [
+            'id' => 306, 'lesson_id' => 108, 'person_id' => 9, 'status' => 'waiting',
+            'stay_on_list' => false, 'joined_at' => '2026-10-24 10:00:00',
+        ]);
+        $wakes = 0;
+        // Inside the usual cancellation cutoff, but an office removal is always timely.
+        $now = '2026-11-01T09:00:00Z';
+        $wake = function () use (&$wakes): void {
+            self::assertFalse($this->database->isTransactionActive());
+            ++$wakes;
+        };
+        $app = $this->app($now, wakeLessonMail: $wake);
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office', impersonatorId: self::id(12));
+        $path = '/classes/' . self::id(40) . '/members/' . self::id(2);
+        $request = (new ServerRequestFactory())->createServerRequest('DELETE', '/api/v1' . $path)->withAttribute('sessionPrincipal', $office);
+        $key = fn(int $id): string => $this->postgres ? self::id($id) : pack('H*', str_replace('-', '', self::id($id)));
+        try {
+            $app->handle($request);
+            self::fail('Expected the invalid waitlist address to roll back class member removal');
+        } catch (RuntimeException $error) {
+            self::assertSame('A lesson waitlist recipient has an invalid email address', $error->getMessage());
+        }
+        self::assertCount(2, $this->database->fetchFirstColumn('SELECT person_id FROM class_members'));
+        self::assertSame('booked', $this->database->fetchOne('SELECT status FROM bookings WHERE id = ?', [$key(302)]));
+        self::assertSame('waiting', $this->database->fetchOne('SELECT status FROM waitlist_entries WHERE id = ?', [$key(306)]));
+        self::assertCount(1, $this->database->fetchFirstColumn('SELECT booking_id FROM pass_redemptions'));
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
+        self::assertSame(0, $wakes);
+
+        $this->database->executeStatement('UPDATE persons SET email = ? WHERE id = ?', ['waitlist@example.test', $key(9)]);
+        $fixture = $this->database;
+        $logger = new class ($fixture) extends AbstractLogger {
+            private bool $changed = false;
+
+            public function __construct(private readonly Connection $fixture) {}
+
+            /** @param array<string,mixed> $context */
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                if (!$this->changed && ($context['sql'] ?? null) === 'SELECT id FROM lessons WHERE id = ? FOR UPDATE') {
+                    $this->fixture->executeStatement("UPDATE settings SET redemption_mode = 'attendance'");
+                    $this->changed = true;
+                }
+            }
+        };
+        $configuration = new Configuration();
+        $configuration->setMiddlewares([new Middleware($logger)]);
+        $this->database = DriverManager::getConnection($fixture->getParams(), $configuration);
+        try {
+            $app = $this->app($now, wakeLessonMail: $wake);
+            self::assertSame(204, $app->handle($request)->getStatusCode());
+            self::send($app, 'DELETE', $path, $office, 404);
+        } finally {
+            $this->database->close();
+            $this->database = $fixture;
+        }
+        self::assertSame('attendance', $this->database->fetchOne('SELECT redemption_mode FROM settings'));
+        self::assertSame([$key(3)], $this->database->fetchFirstColumn('SELECT person_id FROM class_members'));
+        self::assertSame(['booked', 'canceled', 'canceled'], $this->database->fetchFirstColumn(
+            'SELECT status FROM bookings WHERE person_id = ? ORDER BY id',
+            [$key(2)],
+        ));
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT id FROM bookings WHERE person_id = ? AND (late = TRUE OR released = TRUE)', [$key(2)]));
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT booking_id FROM pass_redemptions'));
+        self::assertContains($this->database->fetchOne('SELECT visits_remaining FROM passes'), [2, '2']);
+        self::assertSame(['admin@example.test', 'admin@example.test'], $this->database->fetchFirstColumn(
+            "SELECT a.email FROM booking_events e JOIN accounts a ON a.id = e.actor_account_id WHERE e.status = 'canceled'",
+        ));
+        self::assertSame('invited', $this->database->fetchOne('SELECT status FROM waitlist_entries WHERE id = ?', [$key(306)]));
+        self::assertSame(['waitlist-invite'], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
+        self::assertSame(1, $wakes);
     }
 
     public function testConcurrentEventSignupsDoNotOverbookTheFinalPlace(): void
@@ -3766,7 +3869,7 @@ final class ScheduleStoreTest extends TestCase
             new ClassLessonSync($timetable, $scheduleStore, $lessonWrites, $recipients, $lessonOffers, $clock),
             $wakeLessonMail,
         ));
-        (new BookingRoutes(new BookingCancellation(
+        $cancellations = new BookingCancellation(
             $bookings,
             $scheduleStore,
             $recipients,
@@ -3774,7 +3877,9 @@ final class ScheduleStoreTest extends TestCase
             new Renderer(),
             $clock,
             $wakeLessonMail,
-        )))->register($app);
+        );
+        (new BookingRoutes($cancellations))->register($app);
+        CatalogAdminRoutes::registerClassMemberships($app, new ClassMemberships($timetable, $bookings, $cancellations, $clock, $wakeLessonMail));
         (new LessonAdminRoutes(new LessonAdministration(
             $eventStore,
             $lessonWrites,

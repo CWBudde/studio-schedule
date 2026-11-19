@@ -137,6 +137,35 @@ final readonly class BookingCancellation
     }
 
     /**
+     * Cancel future bookings in the caller’s membership transaction.
+     * @param list<string> $lessonIds Lesson IDs in lock order.
+     */
+    public function cancelRemovedMember(SessionPrincipal $principal, string $person, array $lessonIds): bool
+    {
+        $rules = $this->schedule->rules();
+        $onBooking = $this->store->redemptionOnBooking();
+        // Settlement uses the redemption mode observed before waiting for lesson locks.
+        foreach ($lessonIds as $lessonId) {
+            $this->lockLesson($lessonId);
+        }
+        $entries = $this->collect($person, $lessonIds, $rules, $this->clock->now());
+        $offered = false;
+        $settings = null;
+        foreach ($entries as $entry) {
+            $now = $this->clock->now();
+            if ($entry['lesson']->startsAt <= $now) {
+                continue;
+            }
+            // Office removal is timely and keeps the date available for future enrollment.
+            $entry['late'] = false;
+            $settings ??= $this->messages->settings();
+            $offered = $this->apply($principal, $person, $entry, $rules, $onBooking, false, $now, $settings) || $offered;
+        }
+
+        return $offered;
+    }
+
+    /**
      * @param Booking|null $observed
      * @return array{Booking,string,string}
      */
@@ -252,7 +281,7 @@ final readonly class BookingCancellation
         bool $released,
         DateTimeImmutable $now,
         array $settings,
-    ): void {
+    ): bool {
         ['booking' => $booking, 'lesson' => $lesson, 'late' => $late] = $entry;
         if ($now < new DateTimeImmutable($booking['bookedAt'])) {
             throw new CatalogFailure(422, 'validation failed: booking cannot be canceled before it was made');
@@ -266,7 +295,7 @@ final readonly class BookingCancellation
         $this->store->record($booking['id'], $principal->impersonatorId ?? $principal->accountId, 'canceled', $now, $late);
 
         // A new invitation uses the current booking cutoff under the lesson lock.
-        $this->offers->offerLocked($lesson, $this->schedule->rules(), $settings, $now);
+        return $this->offers->offerLocked($lesson, $this->schedule->rules(), $settings, $now);
     }
 
     /** @param Booking $booking */
