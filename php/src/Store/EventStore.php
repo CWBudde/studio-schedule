@@ -173,6 +173,92 @@ final readonly class EventStore implements EventPersistence
         }
     }
 
+    public function cancelSessions(string $eventId, array $sessions, string $actor, string $note, DateTimeImmutable $now): void
+    {
+        $instant = Database::sqlInstant($this->connection, $now);
+        $event = $this->encodeId($eventId);
+        $by = $this->encodeId($actor);
+        $type = $this->idType();
+        $onBooking = $this->connection->fetchOne('SELECT redemption_mode FROM settings WHERE id = TRUE') === 'booking';
+        foreach ($sessions as $session) {
+            if ($session->status !== 'scheduled' || $session->startsAt <= $now) {
+                continue;
+            }
+            $lesson = $this->encodeId($session->id);
+            $locked = $this->connection->fetchOne(
+                "SELECT id FROM lessons WHERE id = ? AND event_id = ? AND status = 'scheduled' AND starts_at > ? FOR UPDATE",
+                [$lesson, $event, $instant],
+                [$type, $type, ParameterType::STRING],
+            );
+            if ($locked === false) {
+                continue;
+            }
+            $this->connection->executeStatement(
+                "UPDATE lessons SET status = 'canceled', detached = (class_id IS NOT NULL), "
+                . 'cancel_note = ?, canceled_by = ?, canceled_at = ? WHERE id = ?',
+                [$note === '' ? null : $note, $by, $instant, $lesson],
+                [$note === '' ? ParameterType::NULL : ParameterType::STRING, $type, ParameterType::STRING, $type],
+            );
+            // Old links still identify the requeued entry, but release their reserved place.
+            $this->connection->executeStatement(
+                "UPDATE waitlist_entries SET status = 'waiting', invited_at = NULL, expires_at = NULL "
+                . "WHERE lesson_id = ? AND status = 'invited'",
+                [$lesson],
+                [$type],
+            );
+            $this->returnSessionVisits($lesson, $onBooking);
+        }
+    }
+
+    private function returnSessionVisits(string $lesson, bool $onBooking): void
+    {
+        $type = $this->idType();
+        $listType = $this->isPostgres() ? ArrayParameterType::STRING : ArrayParameterType::BINARY;
+        $bookings = $this->connection->fetchFirstColumn(
+            "SELECT b.id FROM bookings b WHERE b.lesson_id = ? AND b.person_id IS NOT NULL AND b.source <> 'member' "
+            . 'AND b.trial = FALSE AND ('
+            . " (b.status = 'canceled' AND b.late = TRUE)"
+            . " OR (b.status <> 'canceled' AND (? = TRUE OR b.status IN ('attended', 'no_show'))))",
+            [$lesson, $onBooking],
+            [$type, ParameterType::BOOLEAN],
+        );
+        if ($bookings === []) {
+            return;
+        }
+
+        // Follow the lesson-to-passes order used by Go. Read redemptions under the pass locks.
+        $this->connection->fetchFirstColumn(
+            'SELECT id FROM passes WHERE person_id IN (SELECT person_id FROM bookings WHERE id IN (?)) ORDER BY id FOR UPDATE',
+            [$bookings],
+            [$listType],
+        );
+        /** @var list<array{pass_id:string,booking_id:string}> $redemptions */
+        $redemptions = $this->connection->fetchAllAssociative(
+            'SELECT pass_id, booking_id FROM pass_redemptions WHERE booking_id IN (?) ORDER BY booking_id',
+            [$bookings],
+            [$listType],
+        );
+        foreach ($redemptions as $redemption) {
+            $removed = $this->connection->executeStatement(
+                'DELETE FROM pass_redemptions WHERE booking_id = ? AND pass_id = ?',
+                [$redemption['booking_id'], $redemption['pass_id']],
+                [$type, $type],
+            );
+            if ($removed === 1) {
+                $this->connection->executeStatement(
+                    "UPDATE passes SET visits_remaining = visits_remaining + 1 WHERE id = ? AND kind = 'visits' AND visits_remaining < visits_total",
+                    [$redemption['pass_id']],
+                    [$type],
+                );
+            }
+        }
+    }
+
+    public function auditCancellation(string $eventId, string $actor, DateTimeImmutable $now): void
+    {
+        (new AdminAccountsStore($this->connection))->audit($actor, 'event-canceled', null, null, $now, ['eventId' => $eventId]);
+    }
+
     public function setStatus(string $id, string $status, DateTimeImmutable $now): Event
     {
         $this->connection->executeStatement(

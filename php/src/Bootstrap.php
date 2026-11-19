@@ -343,13 +343,14 @@ final class Bootstrap
                         $eventURL(),
                         $pushSender() !== null,
                     );
-                    EventRoutes::register($app, $eventStore, $clock, $lessons, $eventWaitlist);
                     $eventReceipts = new ReceiptIssuance(new ReceiptWriteStore($connection), $mail);
+                    $eventCancellations = new EventCancellations($eventStore, $registrationStore, $eventReceipts, $clock, $eventWaitlist, $wakeMail);
+                    EventRoutes::register($app, $eventStore, $clock, $lessons, $eventWaitlist, $eventCancellations);
                     (new EventRegistrationRoutes(
                         $eventRegistrations,
                         static fn(): EventRegistrationWrites => new EventRegistrationWrites($eventStore, $registrationStore, $eventWaitlist(), $clock),
                         new EventPayments($eventStore, $registrationStore, $eventReceipts, $clock, $wakeMail),
-                        new EventCancellations($eventStore, $registrationStore, $eventReceipts, $clock, $eventWaitlist, $wakeMail),
+                        $eventCancellations,
                     ))->register($app);
                     $familyStore = new FamilyStore($connection);
                     $duplicates = new DuplicateStore($connection, $memberDirectory, $familyStore, $clock);

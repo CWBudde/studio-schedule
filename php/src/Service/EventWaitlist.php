@@ -10,7 +10,9 @@ use Psr\Clock\ClockInterface;
 use RuntimeException;
 use SensitiveParameter;
 use StudioSchedule\Domain\Event;
+use StudioSchedule\Domain\EventRegistration;
 use StudioSchedule\Domain\Money;
+use StudioSchedule\Domain\PersonName;
 use StudioSchedule\Domain\PublishedLesson;
 use StudioSchedule\Mail\Renderer;
 use Throwable;
@@ -223,6 +225,64 @@ final readonly class EventWaitlist
     }
 
     /**
+     * @param list<PublishedLesson> $sessions
+     * @param list<array{registration:EventRegistration,refunded:bool}> $canceled
+     * @param array{name:string,locale:string,timezone:DateTimeZone} $school
+     */
+    public function sendEventCancellation(
+        Event $event,
+        array $sessions,
+        array $canceled,
+        string $note,
+        DateTimeImmutable $now,
+        array $school,
+    ): void {
+        $personIds = [];
+        foreach ($canceled as $change) {
+            $person = $change['registration']->person;
+            if ($person !== null) {
+                $personIds[] = $person['id'];
+            }
+        }
+        $people = $this->store->recipients($personIds);
+        $messages = [];
+        foreach ($canceled as $change) {
+            $registration = $change['registration'];
+            $recipients = $people[$registration->person['id'] ?? ''] ?? [];
+            $guest = $registration->guest;
+            if ($guest !== null && isset($guest['email']) && $guest['email'] !== '') {
+                $recipients = [[
+                    'email' => $guest['email'], 'locale' => '', 'accountId' => null,
+                    'givenName' => $guest['name'], 'participant' => $guest['name'],
+                ]];
+            }
+            foreach ($recipients as $recipient) {
+                $address = PersonName::lower($recipient['email']);
+                $messages[$address] ??= ['recipient' => $recipient, 'participants' => [], 'refunded' => false];
+                if ($recipient['accountId'] !== null && $messages[$address]['recipient']['accountId'] === null) {
+                    $messages[$address]['recipient'] = $recipient;
+                }
+                if (!in_array($recipient['participant'], $messages[$address]['participants'], true)) {
+                    $messages[$address]['participants'][] = $recipient['participant'];
+                }
+                $messages[$address]['refunded'] = $messages[$address]['refunded'] || $change['refunded'];
+            }
+        }
+
+        $first = ($sessions[0] ?? null)?->startsAt->setTimezone($school['timezone']);
+        $last = $sessions === [] ? null : $sessions[array_key_last($sessions)]->startsAt->setTimezone($school['timezone']);
+        foreach ($messages as $message) {
+            $recipient = $message['recipient'];
+            $this->queueMail($recipient['email'], $this->locale($recipient, $school), 'event-canceled', [
+                'SchoolName' => $school['name'], 'GivenName' => $recipient['givenName'], 'Title' => $event->title,
+                'HasDates' => $first !== null, 'FirstDay' => $first, 'LastDay' => $last, 'Note' => $note,
+                'SeveralDays' => $first?->format('Y-m-d') !== $last?->format('Y-m-d'),
+                'Participants' => $message['participants'], 'Refunded' => $message['refunded'],
+            ], $now);
+        }
+    }
+
+    /**
      * @param list<Entry> $entries
      * @return array<string,list<Recipient>>
      */
@@ -275,7 +335,7 @@ final readonly class EventWaitlist
 
     /**
      * @param Recipient $recipient
-     * @param Settings $settings
+     * @param array{locale:string} $settings
      */
     private function locale(#[SensitiveParameter] array $recipient, array $settings): string
     {

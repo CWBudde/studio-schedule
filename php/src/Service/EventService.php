@@ -373,7 +373,7 @@ final readonly class EventService
      * @param RegistrationCounts|null $counts
      * @return array<string,mixed>
      */
-    private static function officeDocument(Event $event, array $sessions, ?array $counts): array
+    public static function officeDocument(Event $event, array $sessions, ?array $counts): array
     {
         return [
             'id' => $event->id,

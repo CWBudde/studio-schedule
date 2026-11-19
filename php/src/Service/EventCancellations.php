@@ -6,6 +6,7 @@ namespace StudioSchedule\Service;
 
 use Closure;
 use DateTimeImmutable;
+use DateTimeZone;
 use Psr\Clock\ClockInterface;
 use StudioSchedule\Domain\EventRegistration;
 
@@ -35,6 +36,50 @@ final readonly class EventCancellations
     public function office(SessionPrincipal $principal, string $id, bool $refund): array
     {
         return $this->cancel($principal, $id, member: false, refund: $refund);
+    }
+
+    /** @return array<string,mixed> */
+    public function wholeEvent(SessionPrincipal $principal, string $id, string $note): array
+    {
+        $result = $this->events->write(function () use ($principal, $id, $note): array {
+            $settings = $this->receipts->settings();
+            $event = $this->events->lockEvent($id) ?? throw self::notFound();
+            if ($event->status === 'canceled') {
+                throw new CatalogFailure(409, 'the event takes no registrations', reason: 'closed');
+            }
+
+            $now = $this->clock->now();
+            $actor = $principal->impersonatorId ?? $principal->accountId;
+            $this->events->cancelSessions($id, $this->events->sessions([$id]), $actor, $note, $now);
+
+            $canceled = [];
+            foreach ($this->registrations->forEvent($id) as $registration) {
+                if ($registration->status === 'canceled' && ($registration->payment !== 'paid' || $registration->receiptId === null)) {
+                    continue;
+                }
+                $updated = $this->cancelLocked($registration, $actor, $now, $settings, refund: true);
+                $canceled[] = ['registration' => $updated, 'refunded' => $registration->payment === 'paid' && $updated->payment === 'refunded'];
+            }
+            $event = $this->events->setStatus($id, 'canceled', $now);
+            $sessions = $this->events->sessions([$id]);
+            if ($canceled !== []) {
+                ($this->waitlist)()->sendEventCancellation($event, $sessions, $canceled, $note, $now, [
+                    'name' => $settings['school_name'], 'locale' => $settings['default_locale'],
+                    'timezone' => new DateTimeZone($settings['timezone']),
+                ]);
+            }
+            $this->events->auditCancellation($event->id, $actor, $now);
+
+            $counts = $this->events->registrationCounts([$id], $this->clock->now());
+            $image = $this->events->imageInfo($id);
+
+            return EventService::officeDocument($event, $sessions, $counts[$id] ?? null) + ($image === null ? [] : ['image' => $image]);
+        });
+        if ($this->wakeMail !== null) {
+            ($this->wakeMail)();
+        }
+
+        return $result;
     }
 
     /** @return array<string,mixed> */

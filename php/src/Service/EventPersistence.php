@@ -43,6 +43,11 @@ interface EventPersistence
     /** @param list<PublishedLesson> $sessions */
     public function deleteEvent(string $id, array $sessions): void;
 
+    /** @param list<PublishedLesson> $sessions */
+    public function cancelSessions(string $eventId, array $sessions, string $actor, string $note, DateTimeImmutable $now): void;
+
+    public function auditCancellation(string $eventId, string $actor, DateTimeImmutable $now): void;
+
     public function setStatus(string $id, string $status, DateTimeImmutable $now): Event;
 
     public function setImage(string $id, string $contentType, string $data, string $digest): void;

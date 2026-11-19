@@ -12,11 +12,13 @@ use Psr\Clock\ClockInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use SensitiveParameter;
 use Slim\App;
 use StudioSchedule\Domain\Id;
 use StudioSchedule\Domain\TimeOfDay;
 use StudioSchedule\Service\AdminSettings;
 use StudioSchedule\Service\CatalogFailure;
+use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventData;
 use StudioSchedule\Service\EventPersistence;
 use StudioSchedule\Service\EventService;
@@ -29,17 +31,17 @@ use StudioSchedule\Service\SetupInput;
 
 final readonly class EventRoutes
 {
-    public function __construct(private EventService $service) {}
+    public function __construct(private EventService $service, private EventCancellations $cancellations) {}
 
     /**
      * @template TContainer of ContainerInterface|null
      * @param App<TContainer> $app
      * @param Closure():EventWaitlist $waitlist
      */
-    public static function register(App $app, EventPersistence $store, ClockInterface $clock, OneOffLesson $lessons, Closure $waitlist): void
+    public static function register(App $app, EventPersistence $store, ClockInterface $clock, OneOffLesson $lessons, Closure $waitlist, EventCancellations $cancellations): void
     {
         $service = new EventService($store, $clock, $lessons, $waitlist);
-        $routes = new self($service);
+        $routes = new self($service, $cancellations);
         $app->get('/api/v1/events', static fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
             => Responses::json($response, ['items' => $service->upcoming()]));
         $app->get('/api/v1/events/{slug}', $routes->detail(...));
@@ -55,6 +57,7 @@ final readonly class EventRoutes
         $app->post('/api/v1/admin/events/{eventId}/sessions', $routes->addSession(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->post('/api/v1/admin/events/{eventId}/publish', $routes->publish(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->post('/api/v1/admin/events/{eventId}/unpublish', $routes->unpublish(...))->add(CatalogAdminRoutes::requireOffice(...));
+        $app->post('/api/v1/admin/events/{eventId}/cancel', $routes->cancel(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->put('/api/v1/admin/events/{eventId}/image', $routes->uploadImage(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->delete('/api/v1/admin/events/{eventId}/image', $routes->deleteImage(...))->add(CatalogAdminRoutes::requireOffice(...));
     }
@@ -160,6 +163,28 @@ final readonly class EventRoutes
     {
         return Responses::json($response, $this->service->publish(self::officeId($request, $args['eventId']), false))
             ->withHeader('Cache-Control', 'no-store');
+    }
+
+    /** @param array{eventId:string} $args */
+    private function cancel(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = self::officeId($request, $args['eventId']);
+        $body = CatalogAdminRoutes::fields($request, ['note']);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        $note = $body['note'] ?? '';
+        if (!is_string($note) || str_contains($note, "\0")) {
+            throw CatalogFailure::field('note', 'expected text');
+        }
+        $note = SetupInput::trim($note);
+        if (mb_strlen($note, 'UTF-8') > 500) {
+            throw CatalogFailure::field('note', 'the note is too long');
+        }
+        $principal = $request->getAttribute('sessionPrincipal');
+        assert($principal instanceof SessionPrincipal);
+
+        return Responses::json($response, $this->cancellations->wholeEvent($principal, $id, $note))->withHeader('Cache-Control', 'no-store');
     }
 
     /** @param array{eventId:string} $args */

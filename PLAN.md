@@ -1616,7 +1616,16 @@ backends.
           capacities, and offer added places to the waiting list. The shared `event_signup` case
           checks capacity, active invitations and duplicate slugs on all three PHP databases at
           both mount paths.
-    - [ ] Let the office cancel an event with its future sessions and registrations, including refunds.
+    - [x] Let the office cancel an event with its future sessions and registrations, including refunds.
+          Restore visits for charged lesson bookings, release lesson invite holds and queue one
+          event notice per recipient. The shared `events_and_registrations` case verifies refunds
+          and notices after an event has started. PHP tests check transaction rollback on all
+          three databases.
+    - [ ] Let the office edit, cancel, restore or remove an individual event session through
+          lesson administration. Keep the event's inherited capacity and the existing rules for
+          sessions of canceled events.
+    - [ ] Return `event-session` when someone tries to book or join the lesson waitlist for one
+          session of an event through the lesson routes.
     - [x] Let members and the office cancel individual registrations. Enforce the member deadline
           and let the office retain the payment or refund it after the deadline. Issue an immutable
           cancellation receipt for a refund and offer freed places to the waitlist. The shared

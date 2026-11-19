@@ -1121,6 +1121,113 @@ final class ScheduleStoreTest extends TestCase
         self::assertTrue($decoded['refund']);
     }
 
+    public function testCancelEventRollsBackSessionsAndVisitsUntilAllRefundsSucceed(): void
+    {
+        $this->database->executeStatement(
+            "UPDATE settings SET issuer_name = 'Fixture Studio', issuer_address = 'Room 1', issuer_tax_id = '123', "
+            . "tax_mode = 'standard', redemption_mode = 'booking'",
+        );
+        $this->database->executeStatement("UPDATE accounts SET confirmed_at = '2026-10-10 12:00:00' WHERE email = 'member@example.test'");
+        $this->database->executeStatement("UPDATE event_registrations SET price = 2250, vat_rate_bp = 1900 WHERE status = 'registered'");
+        $this->insert('event_registrations', [
+            'id' => 224, 'event_id' => 120, 'guest_name' => 'Fixture Guest', 'guest_email' => 'MEMBER@EXAMPLE.TEST',
+            'payment' => 'unpaid', 'status' => 'registered', 'price' => 2250, 'vat_rate_bp' => 1900,
+            'created_at' => '2026-10-20 14:00:00', 'updated_at' => '2026-10-20 14:00:00',
+        ]);
+        foreach ([225 => ['ΟΣ@example.test', 'First Guest'], 226 => ['οσ@example.test', 'Second Guest']] as $id => [$email, $name]) {
+            $this->insert('event_registrations', [
+                'id' => $id, 'event_id' => 120, 'guest_name' => $name, 'guest_email' => $email,
+                'payment' => 'unpaid', 'status' => 'registered', 'price' => 2250, 'vat_rate_bp' => 1900,
+                'created_at' => '2026-10-21 14:00:00', 'updated_at' => '2026-10-21 14:00:00',
+            ]);
+        }
+        $this->insert('pass_types', [
+            'id' => 301, 'name' => 'Fixture Visits', 'kind' => 'visits', 'visits' => 5, 'validity_days' => 0,
+            'price' => 0, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => '2026-10-20 10:00:00',
+        ]);
+        $this->insert('passes', [
+            'id' => 302, 'pass_type_id' => 301, 'person_id' => 1, 'kind' => 'visits',
+            'visits_total' => 5, 'visits_remaining' => 4, 'valid_from' => '2026-10-20',
+            'status' => 'active', 'origin' => 'assignment', 'price_paid' => 0, 'sold_at' => '2026-10-20 10:00:00',
+        ]);
+        $this->insert('bookings', [
+            'id' => 303, 'lesson_id' => 106, 'person_id' => 1, 'status' => 'booked', 'trial' => false,
+            'booked_at' => '2026-10-24 16:00:00',
+        ]);
+        $this->insert('pass_redemptions', ['pass_id' => 302, 'booking_id' => 303, 'at' => '2026-10-24 16:00:00']);
+        $this->insert('waitlist_entries', [
+            'id' => 304, 'lesson_id' => 106, 'person_id' => 6, 'status' => 'invited', 'stay_on_list' => true,
+            'joined_at' => '2026-10-22 10:00:00', 'invited_at' => '2026-10-24 10:00:00',
+            'expires_at' => '2026-10-26 10:00:00', 'invite_token_hash' => hash('sha256', 'cancel-legacy-lesson', true),
+        ]);
+
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office', impersonatorId: self::id(10));
+        $app = $this->app(self::BEFORE_RELEASE);
+        self::get($app, '/event-invites/222');
+        $paid = self::post($app, '/admin/event-registrations/' . self::id(221) . '/pay', $office, 200, []);
+        self::assertIsArray($paid['receipt']);
+        $path = '/admin/events/' . self::id(120);
+        $note = ['note' => '  Fixture venue closed  '];
+        self::post($app, $path . '/cancel', $office, 422, ['note' => true]);
+        self::post($app, '/admin/events/' . self::id(999) . '/cancel', $office, 404, []);
+
+        $fails = $this->app(self::BEFORE_RELEASE, renderReceipt: static fn(): never => throw new RuntimeException('Fixture event refund failed'));
+        try {
+            self::post($fails, $path . '/cancel', $office, 200, $note);
+            self::fail('Expected the refund to abort the whole event cancellation');
+        } catch (RuntimeException $error) {
+            self::assertSame('Fixture event refund failed', $error->getMessage());
+        }
+        $stillOpen = self::get($app, $path, $office);
+        self::assertSame('published', $stillOpen['status']);
+        self::assertSame(4, $stillOpen['registered']);
+        self::assertIsArray($stillOpen['sessions']);
+        self::assertSame(['scheduled'], array_column($stillOpen['sessions'], 'status'));
+        self::assertContains($this->database->fetchOne('SELECT visits_remaining FROM passes'), [4, '4']);
+        self::assertCount(1, $this->database->fetchFirstColumn('SELECT 1 FROM pass_redemptions'));
+        self::assertSame(['receipt'], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
+        self::assertSame(['event-registration-paid'], $this->database->fetchFirstColumn('SELECT action FROM audit_events'));
+
+        $canceled = self::post($app, $path . '/cancel', $office, 200, $note);
+        self::assertSame('canceled', $canceled['status']);
+        self::assertIsArray($canceled['sessions']);
+        self::assertSame(['canceled'], array_column($canceled['sessions'], 'status'));
+        self::assertSame(0, $canceled['invited']);
+        self::get($app, '/event-invites/222', status: 404);
+        self::assertCount(0, $this->database->fetchFirstColumn("SELECT 1 FROM event_registrations WHERE status = 'canceled' AND invite_token_hash IS NOT NULL"));
+        $lesson = $this->postgres ? self::id(106) : hex2bin(str_replace('-', '', self::id(106)));
+        $idType = $this->postgres ? ParameterType::STRING : ParameterType::BINARY;
+        $session = $this->database->fetchNumeric('SELECT cancel_note, canceled_by FROM lessons WHERE id = ?', [$lesson], [$idType]);
+        self::assertSame(['Fixture venue closed', $this->postgres ? self::id(10) : hex2bin(str_replace('-', '', self::id(10)))], $session);
+        self::assertContains($this->database->fetchOne('SELECT visits_remaining FROM passes'), [5, '5']);
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT 1 FROM pass_redemptions'));
+        self::assertSame(['booked'], $this->database->fetchFirstColumn('SELECT status FROM bookings WHERE lesson_id = ?', [$lesson], [$idType]));
+        $invite = $this->database->fetchNumeric(
+            'SELECT status, invited_at, expires_at FROM waitlist_entries WHERE invite_token_hash IS NOT NULL AND lesson_id = ?',
+            [$lesson],
+            [$idType],
+        );
+        self::assertSame(['waiting', null, null], $invite);
+        self::assertSame(['R-2026-0002'], $this->database->fetchFirstColumn("SELECT number FROM receipts WHERE kind = 'cancellation'"));
+        self::assertSame(['event-canceled', 'event-registration-paid'], $this->database->fetchFirstColumn('SELECT action FROM audit_events ORDER BY action'));
+        $notices = $this->database->fetchAllAssociative("SELECT recipient, body_text FROM outbox_mails WHERE template = 'event-canceled'");
+        self::assertCount(2, $notices);
+        $bodies = array_column($notices, 'body_text', 'recipient');
+        $family = $bodies['member@example.test'];
+        self::assertIsString($family);
+        self::assertStringContainsString('Fixture Guest', $family);
+        self::assertStringContainsString('Mara Steps', $family);
+        self::assertStringContainsString('refunded', $family);
+        $guests = $bodies['ΟΣ@example.test'];
+        self::assertIsString($guests);
+        self::assertStringContainsString('First Guest, Second Guest', $guests);
+        self::assertSame('closed', self::post($app, $path . '/cancel', $office, 409, [])['reason']);
+
+        $draft = self::post($app, '/admin/events/' . self::id(121) . '/cancel', $office, 200, []);
+        self::assertSame('canceled', $draft['status']);
+        self::assertCount(2, $this->database->fetchFirstColumn("SELECT 1 FROM outbox_mails WHERE template = 'event-canceled'"));
+    }
+
     private function eventExpiryJobs(DateTimeImmutable $now): BackgroundJobs
     {
         $dsn = getenv('STUDIO_PHP_TEST_DATABASE_URL');
@@ -1565,13 +1672,14 @@ final class ScheduleStoreTest extends TestCase
             false,
         );
         $eventWaitlist = static fn(): EventWaitlist => $waitlist;
-        EventRoutes::register($app, $eventStore, $clock, $lessons, $eventWaitlist);
         $eventReceipts = new ReceiptIssuance(new ReceiptWriteStore($this->database), new Renderer(), $renderReceipt);
+        $eventCancellations = new EventCancellations($eventStore, $registrationStore, $eventReceipts, $clock, $eventWaitlist);
+        EventRoutes::register($app, $eventStore, $clock, $lessons, $eventWaitlist, $eventCancellations);
         (new EventRegistrationRoutes(
             $registrations,
             static fn(): EventRegistrationWrites => new EventRegistrationWrites($eventStore, $registrationStore, $waitlist, $clock),
             new EventPayments($eventStore, $registrationStore, $eventReceipts, $clock),
-            new EventCancellations($eventStore, $registrationStore, $eventReceipts, $clock, $eventWaitlist),
+            $eventCancellations,
         ))->register($app);
         $app->post('/api/v1/event-invites/{token}/accept', new WaitlistInviteEndpoint(
             static fn(string $token): ?true => $waitlist->respondByToken($token, accept: true),
