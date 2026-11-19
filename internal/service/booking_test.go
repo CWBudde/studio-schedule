@@ -1078,6 +1078,36 @@ func TestCancelFollowingConcurrentEdits(t *testing.T) {
 		}
 	})
 
+	t.Run("booking made after waiting began", func(t *testing.T) {
+		t.Parallel()
+
+		f, lessons := setup(t)
+		clk := clock.NewFixed(mustInstant(t, bookingNow))
+		storeWithWait := editingStore{Store: f.st, onLock: func(ctx context.Context, tx store.Tx, l domain.Lesson) domain.Lesson {
+			if l.ID == lessons[0].ID {
+				clk.T = clk.T.Add(time.Second)
+				if err := tx.Bookings().Create(ctx, domain.Booking{
+					ID: ids.New[domain.BookingID](f.seq), LessonID: lessons[3].ID, PersonID: f.mia.ID,
+					Source: domain.BookingSourceSelf, Status: domain.BookingBooked, BookedAt: clk.Now(),
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			return l
+		}}
+		svc := NewBookingService(storeWithWait, &clk, f.seq, testMails(newTestRenderer(t)))
+		done, err := svc.CancelFollowing(t.Context(), f.principal(t, f.anna), f.bookingIn(t, lessons[0], f.mia).ID, domain.Date{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(done.Bookings) != len(lessons) ||
+			!done.Bookings[len(lessons)-1].Booking.CanceledAt.Equal(clk.Now()) ||
+			done.Bookings[len(lessons)-1].Lesson.ID != lessons[3].ID {
+			t.Fatalf("expected the concurrent booking to cancel at %v: %+v", clk.Now(), done)
+		}
+	})
+
 	t.Run("requested lesson started meanwhile", func(t *testing.T) {
 		t.Parallel()
 

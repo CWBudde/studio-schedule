@@ -264,6 +264,7 @@ func TestBackendConformance(t *testing.T) {
 		{"account lifecycle", accountLifecycle},
 		{"member booking and cancellation", memberBooking},
 		{"member cancellation of a seeded booking", memberCancellation},
+		{"member cancellation of following bookings", memberCancellationFollowing},
 		{"lesson waitlist", lessonWaitlist},
 		{"waitlist invite lookup limits", waitlistInviteLookupLimits},
 		{"participant roster and history", participantRosterAndHistory},

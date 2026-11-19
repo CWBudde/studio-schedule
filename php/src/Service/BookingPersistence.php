@@ -6,6 +6,7 @@ namespace StudioSchedule\Service;
 
 use Closure;
 use DateTimeImmutable;
+use StudioSchedule\Domain\Date;
 
 /**
  * @phpstan-import-type RosterLesson from ParticipantReadPersistence
@@ -25,6 +26,25 @@ interface BookingPersistence
 
     public function lock(string $lesson): bool;
 
+    public function lockClass(string $class): void;
+
+    /** @return array{slot:Date,termEnd:Date}|null */
+    public function classSlot(string $lesson): ?array;
+
+    /** @return list<string> */
+    public function followingLessons(string $class, Date $from, Date $until, DateTimeImmutable $now): array;
+
+    /**
+     * @param list<string> $lessons
+     * @return list<Booking>
+     */
+    public function activeFor(string $person, array $lessons): array;
+
+    /** @return array{pausedUntil:?Date}|null */
+    public function membershipPause(string $class, string $person): ?array;
+
+    public function pauseMembership(string $class, string $person, Date $until): void;
+
     public function redemptionOnBooking(): bool;
 
     /** @return array{email:string,givenName:string,locale:?string}|null */
@@ -41,7 +61,7 @@ interface BookingPersistence
 
     public function setStatus(string $booking, string $status): void;
 
-    public function cancelLocked(string $booking, DateTimeImmutable $now, bool $late): void;
+    public function cancelLocked(string $booking, DateTimeImmutable $now, bool $late, bool $released): void;
 
     /**
      * @param list<array{id:string,personId:string}> $charges

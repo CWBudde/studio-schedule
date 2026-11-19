@@ -354,6 +354,194 @@ final class ScheduleStoreTest extends TestCase
         self::assertSame([], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
     }
 
+    #[DataProvider('followingCancellationMemberships')]
+    public function testFollowingCancellationUsesSlotDateAndPreservesTheLongerPause(bool $member): void
+    {
+        $this->seedFollowingCancellations($member);
+        $principal = new SessionPrincipal(self::id(10), self::id(1), 'member');
+        $app = $this->app('2026-10-25T07:00:00Z');
+        $path = '/bookings/' . self::id(301) . '/cancel-following';
+        $end = '2026-11-09';
+        $preview = self::get($app, $path . '?until=' . $end, $principal);
+        $expected = [
+            'bookings' => [
+                ['bookingId' => self::id(301), 'lessonId' => self::id(100), 'startsAt' => '2026-10-25T10:00:00.5Z',
+                    'endsAt' => '2026-10-25T11:00:00.5Z', 'late' => false],
+                ['bookingId' => self::id(302), 'lessonId' => self::id(108), 'startsAt' => '2026-10-25T08:00:00Z',
+                    'endsAt' => '2026-10-25T09:00:00Z', 'late' => true],
+            ],
+            'until' => $end,
+        ] + ($member ? ['pausedUntil' => '2026-11-20'] : []);
+        self::assertSame($expected, $preview);
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT status FROM booking_events'));
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
+
+        self::assertSame($preview, self::post($app, $path, $principal, 200, ['until' => $end]));
+        self::assertSame(['canceled', 'canceled', 'booked'], $this->database->fetchFirstColumn(
+            "SELECT status FROM bookings WHERE booked_at = '2026-10-22 09:00:00' ORDER BY id",
+        ));
+        self::assertCount($member ? 0 : 2, $this->database->fetchFirstColumn('SELECT status FROM bookings WHERE released = TRUE'));
+        self::assertSame(['canceled', 'canceled'], $this->database->fetchFirstColumn('SELECT status FROM booking_events'));
+        self::assertSame(['booking-canceled'], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
+        $mail = $this->database->fetchOne('SELECT body_text FROM outbox_mails');
+        self::assertIsString($mail);
+        self::assertMatchesRegularExpression('/09:00–10:00.*11:00–12:00/s', $mail);
+    }
+
+    /** @return iterable<string,array{bool}> */
+    public static function followingCancellationMemberships(): iterable
+    {
+        yield 'a member keeps the longer pause' => [true];
+        yield 'other family bookings release the dates' => [false];
+    }
+
+    public function testFollowingCancellationRollsBackAllBookingsAndThePause(): void
+    {
+        $this->seedFollowingCancellations(true);
+        $this->database->executeStatement(
+            "ALTER TABLE outbox_mails ADD CONSTRAINT fixture_no_following_mail CHECK (template <> 'booking-canceled')",
+        );
+        $wakes = 0;
+        $app = $this->app('2026-10-25T07:00:00Z', wakeLessonMail: static function () use (&$wakes): void {
+            ++$wakes;
+        });
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member');
+        $path = '/bookings/' . self::id(301) . '/cancel-following';
+        try {
+            self::post($app, $path, $member, 200);
+            self::fail('Canceled the class bookings even though their mail could not be queued');
+        } catch (DriverException $error) {
+            self::assertStringContainsString('fixture_no_following_mail', $error->getMessage());
+        }
+        self::assertSame(['booked', 'booked', 'booked'], $this->database->fetchFirstColumn(
+            "SELECT status FROM bookings WHERE booked_at = '2026-10-22 09:00:00' ORDER BY id",
+        ));
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT status FROM booking_events'));
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
+        // PostgreSQL deliberately uses a different session DateStyle in this suite.
+        self::assertSame('2026-11-20', $this->database->fetchOne(
+            "SELECT CASE WHEN paused_until = '2026-11-20' THEN '2026-11-20' ELSE NULL END FROM class_members",
+        ));
+        self::assertSame(0, $wakes);
+    }
+
+    public function testFollowingCancellationRejectsOneOffAndInvalidDates(): void
+    {
+        $this->seedFollowingCancellations(false);
+        $this->insert('bookings', [
+            'id' => 304, 'lesson_id' => 101, 'person_id' => 2, 'status' => 'booked', 'trial' => false,
+            'source' => 'self', 'booked_at' => '2026-10-22 09:00:00',
+        ]);
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member');
+        $app = $this->app('2026-10-25T07:00:00Z');
+        $path = '/bookings/' . self::id(301) . '/cancel-following';
+        $invalid = self::get($app, $path . '?until=2026-02-30', $member, 422);
+        self::assertSame([['location' => 'query.until', 'message' => 'invalid date']], $invalid['errors']);
+        $invalid = self::post($app, $path, $member, 422, ['until' => 10]);
+        self::assertSame([['location' => 'body.until', 'message' => 'expected a date']], $invalid['errors']);
+        $oneOff = self::get($app, '/bookings/' . self::id(304) . '/cancel-following', $member, 422);
+        self::assertSame([['location' => 'path.bookingId', 'message' => 'the booking is not for a lesson of a class']], $oneOff['errors']);
+    }
+
+    public function testFollowingCancellationIncludesABookingMadeWhileWaitingForLocks(): void
+    {
+        $this->seedFollowingCancellations(false);
+        $this->insertLesson(110, '2026-10-26', 'regular', 'public', [
+            'class_id' => 40, 'slot_date' => '2026-11-15', 'detached' => true,
+        ]);
+        $clock = new class implements ClockInterface {
+            public function __construct(public DateTimeImmutable $instant = new DateTimeImmutable('2026-10-25T07:00:00Z')) {}
+
+            public function now(): DateTimeImmutable
+            {
+                return $this->instant;
+            }
+        };
+        // The logger runs on the worker connection while the fixture connection
+        // commits another booking just before the lesson lock is acquired.
+        $bookMeanwhile = function () use ($clock): void {
+            $clock->instant = new DateTimeImmutable('2026-10-25T07:00:01Z');
+            $this->insert('bookings', [
+                'id' => 304, 'lesson_id' => 110, 'person_id' => 2, 'status' => 'booked', 'trial' => false,
+                'source' => 'self', 'booked_at' => '2026-10-25 07:00:01',
+            ]);
+        };
+        $logger = new class ($bookMeanwhile) extends AbstractLogger {
+            public bool $booked = false;
+
+            /** @param Closure():void $insert */
+            public function __construct(private readonly Closure $insert) {}
+
+            /** @param array<string,mixed> $context */
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                if (!$this->booked && ($context['sql'] ?? null) === 'SELECT id FROM lessons WHERE id = ? FOR UPDATE') {
+                    ($this->insert)();
+                    $this->booked = true;
+                }
+            }
+        };
+        $config = new Configuration();
+        $config->setMiddlewares([new Middleware($logger)]);
+        $writer = DriverManager::getConnection($this->database->getParams(), $config);
+        $schedule = new ScheduleStore($writer);
+        $lessons = new LessonWriteStore($writer);
+        $messages = new EventWaitlistStore($writer);
+        $mail = new Renderer();
+        $offers = new LessonWaitlistOffers(
+            $schedule,
+            $lessons,
+            $messages,
+            $mail,
+            static fn(): string => 'https://school.example.test',
+            static fn(): bool => false,
+        );
+        $cancellations = new BookingCancellation(
+            new BookingStore($writer, new EventStore($writer), $lessons, new ParticipantReadStore($writer)),
+            $schedule,
+            $messages,
+            $offers,
+            $mail,
+            $clock,
+        );
+
+        try {
+            $principal = new SessionPrincipal(self::id(10), self::id(1), 'member');
+            $result = $cancellations->following($principal, self::id(301), null, true);
+            self::assertTrue($logger->booked);
+            self::assertIsArray($result['bookings']);
+            self::assertCount(3, $result['bookings']);
+            self::assertSame(['canceled'], $this->database->fetchFirstColumn(
+                "SELECT status FROM bookings WHERE booked_at = '2026-10-25 07:00:01' AND canceled_at = booked_at",
+            ));
+        } finally {
+            $writer->close();
+        }
+    }
+
+    private function seedFollowingCancellations(bool $member): void
+    {
+        $this->database->executeStatement('DELETE FROM waitlist_entries');
+        $this->insertLesson(108, '2026-10-25', 'regular', 'public', [
+            'class_id' => 40, 'slot_date' => '2026-11-01', 'detached' => true,
+            'starts_at' => '2026-10-25 08:00:00', 'ends_at' => '2026-10-25 09:00:00',
+        ]);
+        $this->insertLesson(109, '2026-10-24', 'regular', 'public', [
+            'class_id' => 40, 'slot_date' => '2026-11-08', 'detached' => true,
+        ]);
+        foreach ([301 => 100, 302 => 108, 303 => 109] as $booking => $lesson) {
+            $this->insert('bookings', [
+                'id' => $booking, 'lesson_id' => $lesson, 'person_id' => 2, 'status' => 'booked',
+                'source' => $member ? 'member' : 'self', 'trial' => false, 'booked_at' => '2026-10-22 09:00:00',
+            ]);
+        }
+        if ($member) {
+            $this->insert('class_members', [
+                'class_id' => 40, 'person_id' => 2, 'since' => '2026-10-01', 'paused_until' => '2026-11-20',
+            ]);
+        }
+    }
+
     public function testConcurrentAttendanceConsumesTheFinalPassVisitOnlyOnce(): void
     {
         $this->insert('pass_types', [

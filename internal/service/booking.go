@@ -392,8 +392,9 @@ func (s *BookingService) CancelFollowing(
 			}
 		}
 
-		// Read the bookings again under the locks: a concurrent
-		// cancellation or booking may have come first.
+		// Read the clock and bookings again under the locks. A new booking
+		// may have been made while we waited, or a lesson may have started.
+		now = s.clock.Now()
 		if b, err = tx.Bookings().Get(ctx, id); err != nil {
 			return err
 		}

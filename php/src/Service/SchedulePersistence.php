@@ -50,6 +50,12 @@ interface SchedulePersistence
 
     /**
      * @param list<string> $lessonIds
+     * @return list<PublishedLesson>
+     */
+    public function lessonsById(array $lessonIds): array;
+
+    /**
+     * @param list<string> $lessonIds
      * @return array<string, int>
      */
     public function activeBookings(array $lessonIds): array;

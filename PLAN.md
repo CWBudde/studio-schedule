@@ -1506,6 +1506,12 @@ backends.
           place to the waiting list in the same transaction as the mail. The shared
           `member_cancellation_of_a_seeded_booking` case runs in PHP CI at both mount paths on
           PostgreSQL, MySQL and MariaDB.
+    - [x] Preview and cancel the following bookings of a class through the requested slot date
+          or the end of the term. Keep an existing longer membership pause, settle pass visits and
+          waitlist offers, and send one cancellation mail. Both backends include bookings made
+          while cancellation waits for the lesson locks. The shared
+          `member_cancellation_of_following_bookings` case runs in PHP CI at both mount paths
+          on PostgreSQL, MySQL and MariaDB.
     - [ ] Add lesson invite acceptance and decline for signed-in families and invite links.
           Lesson edits and restores can offer places again, with mail and configured push
           delivery. Link acceptance still requires the lesson booking writes.
