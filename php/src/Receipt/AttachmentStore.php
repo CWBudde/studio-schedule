@@ -63,6 +63,26 @@ final readonly class AttachmentStore
         return ['filename' => $number . '.pdf', 'pdf' => $pdf];
     }
 
+    public function canDownload(string $receiptId, string $personId): bool
+    {
+        $receipt = $this->key($receiptId);
+        $person = $this->key($personId);
+        if ($receipt === null || $person === null) {
+            return false;
+        }
+
+        $id = $this->idParameter();
+
+        return $this->db->fetchOne(
+            "SELECT 1 FROM receipts r WHERE r.id = $id AND (r.payer_person_id = $id "
+            . "OR EXISTS (SELECT 1 FROM persons p WHERE p.id = r.payer_person_id AND p.merged_into = $id) "
+            . 'OR EXISTS (SELECT 1 FROM event_registrations e WHERE e.receipt_id = COALESCE(r.cancels_receipt_id, r.id) '
+            . "AND (e.person_id = $id OR EXISTS (SELECT 1 FROM person_guardians g "
+            . "WHERE g.dependent_id = e.person_id AND g.guardian_id = $id))))",
+            [$receipt, $person, $person, $person, $person],
+        ) !== false;
+    }
+
     /** @return array{receipt:ReceiptRow, lines:list<ReceiptLine>, logo:string}|null */
     public function snapshot(string $receiptId): ?array
     {

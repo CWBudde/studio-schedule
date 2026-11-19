@@ -12,9 +12,12 @@ use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\TestCase;
 use Psr\Clock\ClockInterface;
+use Psr\Http\Message\ResponseInterface;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
 use StudioSchedule\Bootstrap;
+use StudioSchedule\Receipt\AttachmentStore;
+use StudioSchedule\Receipt\Attachments;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\FamilyStore;
 use StudioSchedule\Store\Migrator;
@@ -289,6 +292,78 @@ final class FamilyRoutesTest extends TestCase
         self::assertSame(self::id(1), $merged['person']['mergedIntoId']);
     }
 
+    public function testReceiptPdfUsesTheCurrentPayerAndEventFamilyAccess(): void
+    {
+        $this->account(4, 'office');
+        $this->account(6, 'member');
+        $this->seedExportHistory();
+        $this->db->executeStatement('UPDATE event_registrations SET person_id = ? WHERE id = ?', [$this->uuid(3), $this->uuid(61)]);
+        $this->session(4, 'office', 34);
+        $this->session(6, 'guardian', 36);
+        $this->session(7, 'acting-outsider', 38, 9);
+        $this->insert('receipt_lines', [
+            'receipt_id' => 72, 'position' => 1, 'description' => 'Workshop fee refund',
+            'quantity' => 1, 'unit_price' => -2500, 'vat_rate_bp' => 0, 'net' => -2500, 'vat' => 0, 'gross' => -2500,
+        ]);
+
+        $sale = '/receipts/' . self::id(71) . '/pdf';
+        $cancellation = '/receipts/' . self::id(72) . '/pdf';
+        $this->request('GET', '/my' . $sale, user: null, status: 401, mount: '');
+        $this->request('GET', '/admin' . $sale, user: 'parent', status: 403, mount: '');
+        $this->request('GET', '/my' . $sale, user: 'outsider', status: 404, mount: '');
+        $this->request('GET', '/my' . $sale, user: 'acting-outsider', status: 404, mount: '');
+        $this->request('GET', '/admin' . $sale, user: 'acting-outsider', status: 403, mount: '');
+        $this->request('GET', '/my' . $cancellation, user: 'outsider', status: 404, mount: '');
+        $this->request('GET', '/admin/receipts/' . self::id(73) . '/pdf', user: 'office', status: 404, mount: '');
+        $this->request('GET', '/my/receipts/invalid/pdf', status: 422, mount: '');
+        self::assertCount(1, $this->db->fetchFirstColumn('SELECT receipt_id FROM receipt_pdfs'));
+
+        foreach ([
+            ['/admin' . $sale, 'office'],
+            ['/my' . $sale, 'guardian'],
+            ['/my' . $sale, 'acting-parent'],
+        ] as [$path, $user]) {
+            $response = $this->response('GET', $path, null, $user, '');
+            self::assertSame(200, $response->getStatusCode());
+            self::assertSame('application/pdf', $response->getHeaderLine('Content-Type'));
+            self::assertSame('attachment; filename="R-2026-71.pdf"', $response->getHeaderLine('Content-Disposition'));
+            self::assertSame('private, no-store', $response->getHeaderLine('Cache-Control'));
+            self::assertSame('%PDF-fixture', (string) $response->getBody());
+        }
+
+        $response = $this->response('GET', '/my' . $cancellation, null, 'guardian', '');
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('attachment; filename="R-2026-72.pdf"', $response->getHeaderLine('Content-Disposition'));
+        $pdf = (string) $response->getBody();
+        self::assertStringStartsWith('%PDF-', $pdf);
+        self::assertCount(2, $this->db->fetchFirstColumn('SELECT receipt_id FROM receipt_pdfs'));
+
+        $this->db->executeStatement('DELETE FROM person_guardians WHERE dependent_id = ?', [$this->uuid(3)]);
+        $this->request('GET', '/my' . $cancellation, user: 'guardian', status: 404, mount: '');
+        $response = $this->response('GET', '/my' . $cancellation, null, 'parent', '');
+        self::assertSame(200, $response->getStatusCode()); // This payer's old profile was merged into theirs.
+        self::assertSame($pdf, (string) $response->getBody());
+        self::assertSame(405, $this->response('HEAD', '/my' . $sale, null, 'parent', '')->getStatusCode());
+    }
+
+    public function testReceiptPdfRechecksFamilyWhenAnotherRequestCachesItWhileRendering(): void
+    {
+        $this->account(6, 'member');
+        $this->seedExportHistory();
+        $this->db->executeStatement('UPDATE event_registrations SET person_id = ? WHERE id = ?', [$this->uuid(3), $this->uuid(61)]);
+
+        $store = new AttachmentStore($this->db);
+        $receipt = self::id(72);
+        $attachments = new Attachments($store, function () use ($store, $receipt): string {
+            $this->db->executeStatement('DELETE FROM person_guardians WHERE guardian_id = ?', [$this->uuid(6)]);
+            $store->put($receipt, '%PDF-original');
+
+            return '%PDF-rendered';
+        });
+        self::assertNull($attachments->findForPerson($receipt, self::id(6)));
+        self::assertSame(['filename' => 'R-2026-72.pdf', 'pdf' => '%PDF-original'], $store->find($receipt));
+    }
+
     private function seedExportHistory(): void
     {
         $stamp = '2026-11-18 23:30:00';
@@ -425,6 +500,18 @@ final class FamilyRoutesTest extends TestCase
      */
     private function request(string $method, string $path, array|string|null $input = null, ?string $user = 'parent', int $status = 200, string $mount = '/family'): array
     {
+        $response = $this->response($method, $path, $input, $user, $mount);
+        self::assertSame($status, $response->getStatusCode(), (string) $response->getBody());
+        self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
+        $body = json_decode((string) $response->getBody(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($body);
+
+        return $body;
+    }
+
+    /** @param array<string,mixed>|string|null $input */
+    private function response(string $method, string $path, array|string|null $input, ?string $user, string $mount): ResponseInterface
+    {
         $request = (new ServerRequestFactory())->createServerRequest($method, self::BASE . '/api/v1' . $mount . $path);
         if ($user !== null) {
             $request = $request->withCookieParams(['studio_session' => 'fixture-' . $user]);
@@ -442,7 +529,7 @@ final class FamilyRoutesTest extends TestCase
                 return new DateTimeImmutable($this->now);
             }
         };
-        $response = Bootstrap::handle(
+        return Bootstrap::handle(
             static fn() => $request,
             dirname(__DIR__),
             '/missing',
@@ -450,12 +537,6 @@ final class FamilyRoutesTest extends TestCase
             static fn(string $key): ?string => $env[$key] ?? null,
             clock: $clock,
         );
-        self::assertSame($status, $response->getStatusCode(), (string) $response->getBody());
-        self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
-        $body = json_decode((string) $response->getBody(), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($body);
-
-        return $body;
     }
 
     private function uuid(int $id): string

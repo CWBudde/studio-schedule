@@ -14,8 +14,23 @@ final readonly class Attachments
     public function __construct(private AttachmentStore $store, private ?Closure $render = null) {}
 
     /** @return array{filename: string, pdf: string}|null */
+    public function findForPerson(string $receiptId, string $personId): ?array
+    {
+        return $this->resolve($receiptId, $personId);
+    }
+
+    /** @return array{filename: string, pdf: string}|null */
     public function find(string $receiptId): ?array
     {
+        return $this->resolve($receiptId, null);
+    }
+
+    /** @return array{filename: string, pdf: string}|null */
+    private function resolve(string $receiptId, ?string $personId): ?array
+    {
+        if ($personId !== null && !$this->store->canDownload($receiptId, $personId)) {
+            return null;
+        }
         $cached = $this->store->find($receiptId);
         if ($cached !== null) {
             return $cached;
@@ -35,6 +50,11 @@ final readonly class Attachments
             $this->store->put($receiptId, $pdf);
         } catch (UniqueConstraintViolationException $error) {
             // Go or another PHP request may have stored the immutable original meanwhile.
+            // Access may also have changed during rendering.
+            if ($personId !== null && !$this->store->canDownload($receiptId, $personId)) {
+                return null;
+            }
+
             return $this->store->find($receiptId) ?? throw $error;
         }
 

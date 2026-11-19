@@ -266,6 +266,7 @@ func TestBackendConformance(t *testing.T) {
 		{"duplicate persons", mergeDuplicates},
 		{"events and registrations", eventRegistration},
 		{"pass sales and receipts", passReceipt},
+		{"receipt pdf downloads", receiptPDFDownloads},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			b.seed(t)

@@ -1467,6 +1467,11 @@ backends.
     - [ ] Enable `participant_roster_and_history` in PHP CI after PHP sign-in lands.
   - [ ] Calendar feeds (ADR 0011)
   - [ ] Passes, redemption ledger, receipts with the gapless counter and PDF (ADR 0012)
+    - [x] Download the original receipt or cancellation PDF as office staff, the payer, or an
+          eligible event participant or guardian. Store the first PDF for older receipts without
+          one. The shared `receipt_pdf_downloads` case passes at both mount paths on all three
+          PHP databases with the authentication draft.
+    - [ ] Enable `receipt_pdf_downloads` in PHP CI after PHP sign-in lands.
   - [ ] Settings, branding, themes, `init` (ADR 0013, 0018)
     - [x] Initialize school settings and issue the first administrator's one-time setup link
           through `init` or the web installer on PostgreSQL, MySQL and MariaDB.
