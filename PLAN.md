@@ -1344,7 +1344,7 @@ backends.
       `/api/test/…` to set the clock, reset the database, load the demo seed and read the outbox.
       Register it only with `TEST_CONTROL=true`, refuse it at startup with an `https://`
       `BASE_URL`, and keep it out of `api/openapi.json`.
-  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 38
+  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 39
         scenarios at the domain root and under `/dance/schedule`.
   - [x] PHP test controls for clock, reset, demo seed and outbox. The CI fixture job exercises
         them on PostgreSQL, MySQL 8.0 and MariaDB 10.6 at the root and under `/dance/schedule`.
@@ -1489,6 +1489,10 @@ backends.
           The shared `participant_roster_and_history` case passes at both mount paths on all
           three PHP databases.
     - [x] Run `participant_roster_and_history` in PHP CI.
+    - [x] Preview waiting-list invites using their stored token hashes. Show expiry, requeue
+          position and booking closure without taking a place. Rate-limit lookups per client
+          and redact tokens from request logs. The shared `waitlist_invite_lookup_limits` case
+          runs in PHP CI on all three databases at both mount paths.
   - [x] Calendar feeds (ADR 0011). Create, list and revoke booking, teaching and schedule
         feeds. Private iCalendar downloads use the account's current permissions and hide the
         token from lists and logs. The shared `calendar_subscription` case passes on all three

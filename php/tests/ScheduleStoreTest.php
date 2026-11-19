@@ -20,17 +20,22 @@ use StudioSchedule\Http\CatalogAdminRoutes;
 use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Http\StatisticsEndpoint;
+use StudioSchedule\Http\TrustedProxies;
+use StudioSchedule\Http\WaitlistInviteEndpoint;
 use StudioSchedule\Service\OneOffLesson;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\StatisticsService;
+use StudioSchedule\Service\WaitlistInvites;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\Migrator;
 use StudioSchedule\Store\PublicSettingsStore;
+use StudioSchedule\Store\RateLimitStore;
 use StudioSchedule\Store\ScheduleStore;
 use StudioSchedule\Store\Schema;
 use StudioSchedule\Store\StatisticsStore;
 use StudioSchedule\Store\TimetableStore;
+use StudioSchedule\Store\WaitlistInviteStore;
 
 final class ScheduleStoreTest extends TestCase
 {
@@ -189,6 +194,80 @@ final class ScheduleStoreTest extends TestCase
                 return $current;
             });
         }
+    }
+
+    public function testWaitlistInvitePreviewShowsInviteStateWithoutTakingAPlace(): void
+    {
+        $this->insert('waitlist_entries', [
+            'id' => 215, 'lesson_id' => 100, 'person_id' => 5, 'status' => 'waiting',
+            'stay_on_list' => true, 'joined_at' => '2026-10-22 14:00:00',
+            'invite_token_hash' => hash('sha256', 'requeued-test-token', true),
+        ]);
+        $this->insert('waitlist_entries', [
+            'id' => 216, 'lesson_id' => 103, 'person_id' => 5, 'status' => 'withdrawn',
+            'stay_on_list' => false, 'joined_at' => '2026-10-22 14:00:00', 'invited_at' => '2026-10-23 14:00:00',
+            'expires_at' => '2026-10-27 14:00:00', 'invite_token_hash' => hash('sha256', 'withdrawn-test-token', true),
+        ]);
+
+        $this->insert('waitlist_entries', [
+            'id' => 217, 'lesson_id' => 107, 'person_id' => 5, 'status' => 'withdrawn',
+            'stay_on_list' => false, 'joined_at' => '2026-10-22 14:00:00', 'invited_at' => '2026-10-23 14:00:00',
+            'expires_at' => '2026-10-27 14:00:00', 'invite_token_hash' => hash('sha256', 'historical-session-token', true),
+        ]);
+
+        $app = $this->app('2026-10-25T09:00:00Z');
+        $path = '/waitlist-invites/';
+        $active = self::get($app, $path . '213');
+        self::assertSame('invited', $active['state']);
+        self::assertSame('Third', $active['givenName']);
+        self::assertSame('2026-10-26T17:00:00Z', $active['expiresAt']);
+        self::assertArrayNotHasKey('closed', $active);
+        self::assertArrayNotHasKey('position', $active);
+        self::assertSame(self::id(100), self::inviteLessonId($active));
+        self::assertArrayNotHasKey('booking', $active);
+
+        $requeued = self::get($app, $path . 'requeued-test-token');
+        self::assertSame('waiting', $requeued['state']);
+        self::assertSame(3, $requeued['position']);
+        self::assertArrayNotHasKey('expiresAt', $requeued);
+        $withdrawn = self::get($app, $path . 'withdrawn-test-token');
+        self::assertSame('withdrawn', $withdrawn['state']);
+        self::assertSame('canceled', $withdrawn['closed']);
+        self::assertSame('2026-10-27T14:00:00Z', $withdrawn['expiresAt']);
+        self::assertSame(self::id(103), self::inviteLessonId($withdrawn));
+        $historicalSession = self::get($app, $path . 'historical-session-token')['lesson'];
+        self::assertIsArray($historicalSession);
+        self::assertSame(self::id(121), $historicalSession['eventId']);
+        self::assertSame(4, $historicalSession['capacity']);
+        self::assertArrayNotHasKey('eventSlug', $historicalSession);
+
+        $atCutoff = self::get($this->app('2026-10-25T09:59:59.999999Z'), $path . '213');
+        self::assertSame('cutoff', $atCutoff['closed']);
+        $expired = self::get($this->app('2026-10-25T16:59:59Z'), $path . '214');
+        self::assertSame('expired', $expired['state']);
+        self::assertSame('started', $expired['closed']);
+        self::assertSame('2026-10-25T16:59:59Z', $expired['expiresAt']);
+
+        $request = (new ServerRequestFactory())->createServerRequest('GET', '/api/v1' . $path . '213');
+        $response = $app->handle($request);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
+        self::assertSame(405, $app->handle($request->withMethod('HEAD'))->getStatusCode());
+        self::get($app, $path . str_repeat('a', 129), status: 422);
+        self::get($app, $path . 'unrecognized-token', status: 404);
+        self::assertContains($this->database->fetchOne('SELECT COUNT(*) FROM bookings'), [4, '4']);
+        self::assertContains($this->database->fetchOne("SELECT COUNT(*) FROM waitlist_entries WHERE status = 'invited'"), [2, '2']);
+    }
+
+    /** @param array<array-key,mixed> $invite */
+    private static function inviteLessonId(array $invite): string
+    {
+        $lesson = $invite['lesson'];
+        self::assertIsArray($lesson);
+        $id = $lesson['id'];
+        self::assertIsString($id);
+
+        return $id;
     }
 
     public function testPublicEventsIncludeOnlyUpcomingPublishedEventsAndUseTheirOwnSignupWindows(): void
@@ -726,6 +805,11 @@ final class ScheduleStoreTest extends TestCase
         };
         $scheduleStore = new ScheduleStore($this->database);
         ScheduleRoutes::register($app, $scheduleStore, $clock);
+        $app->get('/api/v1/waitlist-invites/{token}', new WaitlistInviteEndpoint(
+            new WaitlistInvites(new WaitlistInviteStore($this->database, $scheduleStore), $clock),
+            TrustedProxies::parse(''),
+            new RateLimitStore($this->database, $clock),
+        ));
         CatalogAdminRoutes::registerLessonCreation($app, new OneOffLesson(new TimetableStore($this->database), $clock));
         $app->get('/api/v1/admin/statistics', new StatisticsEndpoint(new StatisticsService(new StatisticsStore($this->database), $scheduleStore, $clock)));
         EventRoutes::register($app, new EventStore($this->database), $clock);

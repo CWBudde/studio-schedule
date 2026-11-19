@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -133,6 +134,24 @@ func lessonWaitlist(t *testing.T, b *backend) {
 	final := read[roster](t, b.call(t, office, list, http.StatusOK))
 	if final.Active != 4 || final.Held != 0 || final.Waiting != 2 || final.FreePlaces != 0 {
 		t.Errorf("accepting did not settle the held place: %+v", final)
+	}
+}
+
+func waitlistInviteLookupLimits(t *testing.T, b *backend) {
+	t.Helper()
+
+	guest := browser(t)
+	const token = "unknown-fixture-invite"
+	in := request{method: http.MethodGet, path: "/api/v1/waitlist-invites/{token}", params: map[string]string{"token": token}}
+	for range 20 {
+		out := b.call(t, guest, in, http.StatusNotFound)
+		if strings.Contains(string(out.body), token) {
+			t.Fatal("invalid invitation response repeats the token")
+		}
+	}
+	limited := b.call(t, guest, in, http.StatusTooManyRequests)
+	if limited.header.Get("Retry-After") == "" || strings.Contains(string(limited.body), token) {
+		t.Fatal("invite rate limit omitted retry timing or repeated the token")
 	}
 }
 

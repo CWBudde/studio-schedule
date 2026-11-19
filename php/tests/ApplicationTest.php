@@ -108,19 +108,21 @@ final class ApplicationTest extends TestCase
         $this->assertProblem($app->handle($forged), 403);
 
         $secret = 'example-fixture-token';
-        $missing = $req->createServerRequest('GET', $base . '/api/v1/event-invites/' . $secret . '?debug=private')
-            ->withHeader('X-Request-Id', 'client-chosen-id');
-        $answer = $app->handle($missing);
-        $this->assertProblem($answer, 404);
-        self::assertNotSame('client-chosen-id', $answer->getHeaderLine('X-Request-Id'));
-        self::assertStringNotContainsString($secret, (string) $answer->getBody());
-        self::assertStringContainsString('<redacted>', urldecode((string) $answer->getBody()));
+        foreach (['event-invites', 'waitlist-invites'] as $route) {
+            $missing = $req->createServerRequest('GET', $base . '/api/v1/' . $route . '/' . $secret . '?debug=private')
+                ->withHeader('X-Request-Id', 'client-chosen-id');
+            $answer = $app->handle($missing);
+            $this->assertProblem($answer, 404);
+            self::assertNotSame('client-chosen-id', $answer->getHeaderLine('X-Request-Id'));
+            self::assertStringNotContainsString($secret, (string) $answer->getBody());
+            self::assertStringContainsString('<redacted>', urldecode((string) $answer->getBody()));
 
-        $contexts = array_map(static fn($record): array => $record->context, $records->getRecords());
-        $log = json_encode($contexts, JSON_THROW_ON_ERROR);
-        self::assertStringContainsString($answer->getHeaderLine('X-Request-Id'), $log);
-        self::assertStringNotContainsString($secret, $log);
-        self::assertStringNotContainsString('debug=private', $log);
+            $contexts = array_map(static fn($record): array => $record->context, $records->getRecords());
+            $log = json_encode($contexts, JSON_THROW_ON_ERROR);
+            self::assertStringContainsString($answer->getHeaderLine('X-Request-Id'), $log);
+            self::assertStringNotContainsString($secret, $log);
+            self::assertStringNotContainsString('debug=private', $log);
+        }
     }
 
     public function testRequestIDsComeFromTrustedPeers(): void

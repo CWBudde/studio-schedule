@@ -51,6 +51,7 @@ use StudioSchedule\Http\Responses;
 use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Http\SessionMiddleware;
 use StudioSchedule\Http\StatisticsEndpoint;
+use StudioSchedule\Http\WaitlistInviteEndpoint;
 use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Mail\SmtpMailer;
 use StudioSchedule\Push\Sender;
@@ -91,6 +92,7 @@ use StudioSchedule\Service\SessionAuthentication;
 use StudioSchedule\Service\StatisticsService;
 use StudioSchedule\Service\SystemClock;
 use StudioSchedule\Service\TermAdmin;
+use StudioSchedule\Service\WaitlistInvites;
 use StudioSchedule\Store\AdminAccountsStore;
 use StudioSchedule\Store\AdminAuditStore;
 use StudioSchedule\Store\AnnouncementRecipients;
@@ -122,6 +124,7 @@ use StudioSchedule\Store\Schema;
 use StudioSchedule\Store\SessionStore;
 use StudioSchedule\Store\StatisticsStore;
 use StudioSchedule\Store\TimetableStore;
+use StudioSchedule\Store\WaitlistInviteStore;
 use Symfony\Component\Uid\Uuid;
 use Throwable;
 
@@ -336,6 +339,11 @@ final class Bootstrap
                     (new ReceiptPdfRoutes(new Attachments(new AttachmentStore($connection))))->register($app);
                     (new ReceiptReadRoutes(new ReceiptReadStore($connection, $clock)))->register($app);
                     ScheduleRoutes::register($app, $schedule, $clock);
+                    $app->get('/api/v1/waitlist-invites/{token}', new WaitlistInviteEndpoint(
+                        new WaitlistInvites(new WaitlistInviteStore($connection, $schedule), $clock),
+                        $config->trustedProxies,
+                        $limits,
+                    ));
                     $app->get('/api/v1/admin/statistics', new StatisticsEndpoint(new StatisticsService(new StatisticsStore($connection), $schedule, $clock)));
                     $pushRoutes = new PushRoutes(new PushSubscriptionStore($connection), $clock, $pushSender);
                     $app->get('/api/v1/my/push', $pushRoutes);
