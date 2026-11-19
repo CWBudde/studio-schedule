@@ -1424,10 +1424,15 @@ backends.
           also matched Go on a shared PostgreSQL fixture at the root and under a prefix.
     - [ ] Pass the shared `schedule_release_and_visibility` scenario on PHP at both mount paths
           on all three engines. The scenario signs in a member to verify the visibility rules.
-  - [ ] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006). PHP serves
-        `/api/v1/auth/me` and reads sessions issued by Go. Sign-in, rate limits and the remaining
-        account operations are open, including requesting a replacement password reset link by
-        email.
+  - [ ] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006). Sign-in,
+        rate limits and the remaining account operations are open, including requesting a
+        replacement password reset link by email.
+    - [x] Serve `/api/v1/auth/me` from existing Go-compatible sessions. The PHP suite covers
+          cookie handling at both mount paths, expiry, renewal, and sessions already in
+          impersonation on PostgreSQL, MySQL and MariaDB.
+    - [x] Confirm one-time password reset links, including the first-admin setup link. The PHP
+          suite verifies that a successful reset revokes existing sessions and queues the
+          password-change notice in the same transaction on PostgreSQL, MySQL and MariaDB.
   - [ ] Family, persons, invitations, catalogue and timetable administration (ADR 0007, 0008)
   - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
         order (`SELECT … FOR UPDATE` on all three databases, term → class → lesson → passes)
