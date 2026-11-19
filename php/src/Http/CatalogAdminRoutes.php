@@ -315,7 +315,7 @@ final readonly class CatalogAdminRoutes
 
     public static function failure(ServerRequestInterface $request, CatalogFailure $failure): ResponseInterface
     {
-        if ($failure->status === 422) {
+        if ($failure->status === 422 && $failure->location !== '') {
             return Responses::problem($request, 422, 'validation failed', errors: [
                 ['location' => $failure->location, 'message' => $failure->getMessage()],
             ]);

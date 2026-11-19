@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Service;
 
+use Closure;
 use DateTimeImmutable;
 use Psr\Clock\ClockInterface;
 use SensitiveParameter;
@@ -14,10 +15,12 @@ use StudioSchedule\Domain\PublishedLesson;
 /** @phpstan-import-type RegistrationCounts from EventPersistence */
 final readonly class EventService
 {
+    /** @param Closure():EventWaitlist $waitlist */
     public function __construct(
         private EventPersistence $store,
         private ClockInterface $clock,
         private OneOffLesson $lessons,
+        private Closure $waitlist,
     ) {}
 
     /** @return array<string,mixed> */
@@ -30,6 +33,45 @@ final readonly class EventService
 
             return self::officeDocument($event, [], null);
         });
+    }
+
+    /** @return array<string,mixed> */
+    public function update(string $id, EventData $data): array
+    {
+        try {
+            return $this->store->write(function () use ($id, $data): array {
+                $event = $this->locked($id);
+                $now = $this->clock->now();
+                $sessions = $this->store->sessions([$id]);
+                if ($sessions !== [] && $event->courseType['id'] !== $data->courseTypeId) {
+                    throw CatalogFailure::field('courseTypeId', 'the course type of an event with sessions cannot be changed');
+                }
+                $taken = $this->store->occupiedPlaces([$id], $now)[$id] ?? 0;
+                if ($data->capacity < $event->capacity && $data->capacity < $taken) {
+                    throw CatalogFailure::field('capacity', "$taken places are taken, more than the capacity");
+                }
+                $data->validate();
+                if ($now < $event->createdAt) {
+                    throw new CatalogFailure(422, 'an event cannot be updated before it was created');
+                }
+                $updated = $this->store->updateEvent($id, $data, $data->slug === '' ? $event->slug : $data->slug, $now);
+                $this->store->requireSchool();
+                $capacityChanged = $updated->capacity !== $event->capacity;
+                foreach ($sessions as $session) {
+                    // Serialize with concurrent lesson edits when the event's capacity changes.
+                    if ($session->startsAt > $now && ($capacityChanged || $session->capacity !== $updated->capacity)) {
+                        $this->store->resizeSession($id, $session->id, $updated->capacity, $now);
+                    }
+                }
+                if ($updated->capacity > $event->capacity) {
+                    ($this->waitlist)()->offerLocked($updated, $now);
+                }
+
+                return $this->eventDetail($updated, $this->store->sessions([$id]), $this->clock->now());
+            });
+        } catch (SettingsNotFound) {
+            throw new CatalogFailure(404, 'resource not found');
+        }
     }
 
     private function availableSlug(string $base): string

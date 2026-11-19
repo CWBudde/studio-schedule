@@ -130,8 +130,12 @@ final readonly class EventWaitlist
         }
     }
 
-    /** @param Settings|null $settings */
-    private function offerLocked(Event $event, DateTimeImmutable $now, ?array $settings = null): void
+    /**
+     * Offer every open place the event can fill while the caller holds its lock.
+     *
+     * @param Settings|null $settings
+     */
+    public function offerLocked(Event $event, DateTimeImmutable $now, ?array $settings = null): void
     {
         if ($event->status !== 'published') {
             return;

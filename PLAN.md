@@ -1612,7 +1612,11 @@ backends.
           a held place while signed in. Let the office register a person or guest and explicitly
           confirm exceeding capacity. The shared `event_signup` case runs in PHP CI on all
           three databases at both mount paths and verifies confirmation mail and audit records.
-    - [ ] Let the office edit events and cancel an event with its future sessions and registrations.
+    - [x] Let the office edit events. Keep the status and an omitted slug, update future session
+          capacities, and offer added places to the waiting list. The shared `event_signup` case
+          checks capacity, active invitations and duplicate slugs on all three PHP databases at
+          both mount paths.
+    - [ ] Let the office cancel an event with its future sessions and registrations, including refunds.
     - [ ] Let members and the office cancel individual registrations, including eligible refunds.
     - [ ] Let the office record event payments and issue receipts.
 - [ ] CLI parity: port the operator commands to the PHP `bin/studio-schedule` executable.

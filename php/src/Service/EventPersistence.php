@@ -30,6 +30,12 @@ interface EventPersistence
 
     public function createDraft(EventData $data, string $slug, string $actor, DateTimeImmutable $now): Event;
 
+    public function updateEvent(string $id, EventData $data, string $slug, DateTimeImmutable $now): Event;
+
+    public function requireSchool(): void;
+
+    public function resizeSession(string $eventId, string $lessonId, int $capacity, DateTimeImmutable $now): void;
+
     public function lockEvent(string $id): ?Event;
 
     public function hasRegistrations(string $id, bool $onlyOpen): bool;

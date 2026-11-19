@@ -607,6 +607,25 @@ final class ScheduleStoreTest extends TestCase
         $preserved = self::get($app, $draft, $office);
         self::assertIsArray($preserved['sessions']);
         self::assertSame(self::ids(108, 109), array_column($preserved['sessions'], 'id'));
+
+        $this->insertLesson(110, '2026-10-24', 'workshop', 'public', ['event_id' => 122]);
+        $edit = ['title' => 'Updated event', 'slug' => 'edited-workshop', 'capacity' => 6, 'price' => 12000, 'vatRate' => 1900,
+            'courseTypeId' => self::id(22)];
+        $call('PUT', $draft, 400);
+        $call('PUT', $base . '/' . self::id(999), 404, $edit);
+        $conflict = $call('PUT', $draft, 409, array_replace($edit, ['slug' => 'winter-workshop']));
+        self::assertStringContainsString('"reason":"duplicate"', (string) $conflict->getBody());
+        $invalid = $call('PUT', $draft, 422, array_replace($edit, ['courseTypeId' => self::id(999)]));
+        self::assertStringContainsString('body.courseTypeId', (string) $invalid->getBody());
+        $resized = json_decode((string) $call('PUT', $draft, 200, $edit)->getBody(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($resized);
+        self::assertSame('edited-workshop', $resized['slug']);
+        self::assertSame('draft', $resized['status']);
+        self::assertSame(12000, $resized['price']);
+        self::assertIsArray($resized['sessions']);
+        self::assertSame(self::ids(110, 108, 109), array_column($resized['sessions'], 'id'));
+        self::assertSame([4, 6, 6], array_column($resized['sessions'], 'capacity'));
+        self::assertSame(['scheduled', 'canceled', 'scheduled'], array_column($resized['sessions'], 'status'));
     }
 
     public function testEventRegistrationReadsRespectFamilyPrivacyAndInviteCutoffs(): void
@@ -1405,7 +1424,6 @@ final class ScheduleStoreTest extends TestCase
         CatalogAdminRoutes::registerLessonCreation($app, $lessons);
         $app->get('/api/v1/admin/statistics', new StatisticsEndpoint(new StatisticsService(new StatisticsStore($this->database), $scheduleStore, $clock)));
         $eventStore = new EventStore($this->database);
-        EventRoutes::register($app, $eventStore, $clock, $lessons);
         $registrationStore = new EventRegistrationStore($this->database);
         $registrations = new EventRegistrationReads($eventStore, $registrationStore, $clock);
         $app->get('/api/v1/event-invites/{token}', new WaitlistInviteEndpoint($registrations->invite(...), $proxies, $limits));
@@ -1417,6 +1435,7 @@ final class ScheduleStoreTest extends TestCase
             'https://school.example.test/dance/schedule',
             false,
         );
+        EventRoutes::register($app, $eventStore, $clock, $lessons, static fn(): EventWaitlist => $waitlist);
         (new EventRegistrationRoutes(
             $registrations,
             static fn(): EventRegistrationWrites => new EventRegistrationWrites($eventStore, $registrationStore, $waitlist, $clock),

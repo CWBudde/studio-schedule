@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Http;
 
+use Closure;
 use DateTimeImmutable;
 use DateTimeZone;
 use InvalidArgumentException;
@@ -19,6 +20,7 @@ use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\EventData;
 use StudioSchedule\Service\EventPersistence;
 use StudioSchedule\Service\EventService;
+use StudioSchedule\Service\EventWaitlist;
 use StudioSchedule\Service\EventSessionData;
 use StudioSchedule\Service\LessonRoomTaken;
 use StudioSchedule\Service\OneOffLesson;
@@ -32,10 +34,11 @@ final readonly class EventRoutes
     /**
      * @template TContainer of ContainerInterface|null
      * @param App<TContainer> $app
+     * @param Closure():EventWaitlist $waitlist
      */
-    public static function register(App $app, EventPersistence $store, ClockInterface $clock, OneOffLesson $lessons): void
+    public static function register(App $app, EventPersistence $store, ClockInterface $clock, OneOffLesson $lessons, Closure $waitlist): void
     {
-        $service = new EventService($store, $clock, $lessons);
+        $service = new EventService($store, $clock, $lessons, $waitlist);
         $routes = new self($service);
         $app->get('/api/v1/events', static fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
             => Responses::json($response, ['items' => $service->upcoming()]));
@@ -47,6 +50,7 @@ final readonly class EventRoutes
         $app->get('/api/v1/admin/events/{eventId}', $routes->officeDetail(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->get('/api/v1/admin/events/{eventId}/image', $routes->officeImage(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->post('/api/v1/admin/events', $routes->createDraft(...))->add(CatalogAdminRoutes::requireOffice(...));
+        $app->put('/api/v1/admin/events/{eventId}', $routes->update(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->delete('/api/v1/admin/events/{eventId}', $routes->delete(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->post('/api/v1/admin/events/{eventId}/sessions', $routes->addSession(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->post('/api/v1/admin/events/{eventId}/publish', $routes->publish(...))->add(CatalogAdminRoutes::requireOffice(...));
@@ -57,16 +61,39 @@ final readonly class EventRoutes
 
     private function createDraft(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
+        $data = self::eventData($request);
+        if ($data instanceof ResponseInterface) {
+            return $data;
+        }
+        $principal = $request->getAttribute('sessionPrincipal');
+        assert($principal instanceof SessionPrincipal);
+
+        return Responses::json($response->withStatus(201), $this->service->createDraft($data, $principal))
+            ->withHeader('Cache-Control', 'no-store');
+    }
+
+    /** @param array{eventId:string} $args */
+    private function update(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = self::officeId($request, $args['eventId']);
+        $data = self::eventData($request);
+        if ($data instanceof ResponseInterface) {
+            return $data;
+        }
+
+        return Responses::json($response, $this->service->update($id, $data))->withHeader('Cache-Control', 'no-store');
+    }
+
+    private static function eventData(ServerRequestInterface $request): EventData|ResponseInterface
+    {
         $body = CatalogAdminRoutes::fields($request, [
             'slug', 'title', 'description', 'coursetypeid', 'capacity', 'price', 'vatrate', 'signupopensat', 'signupclosesat', 'canceluntil',
         ]);
         if ($body instanceof ResponseInterface) {
             return $body;
         }
-        $principal = $request->getAttribute('sessionPrincipal');
-        assert($principal instanceof SessionPrincipal);
         $description = SetupInput::trim(CatalogAdminRoutes::text($body, 'description', 10000) ?? '');
-        $data = new EventData(
+        return new EventData(
             slug: SetupInput::trim(CatalogAdminRoutes::text($body, 'slug', 80) ?? ''),
             title: SetupInput::trim(CatalogAdminRoutes::text($body, 'title', 200, true)),
             description: $description === '' ? null : $description,
@@ -79,8 +106,6 @@ final readonly class EventRoutes
             cancelUntil: self::instant($body['canceluntil'] ?? null, 'cancelUntil'),
         );
 
-        return Responses::json($response->withStatus(201), $this->service->createDraft($data, $principal))
-            ->withHeader('Cache-Control', 'no-store');
     }
 
     /** @param array{eventId:string} $args */

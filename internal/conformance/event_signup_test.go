@@ -166,4 +166,42 @@ func eventSignup(t *testing.T, b *backend) {
 			t.Errorf("missing audit action %s for registration %s", want.action, want.id)
 		}
 	}
+
+	b.call(t, member, join, http.StatusCreated)
+	update := edit
+	update.method = http.MethodPut
+	update.body = jsonBody(t, map[string]any{
+		"title": " Updated signup fixture ", "courseTypeId": fixture["courseTypeId"],
+		"capacity": 3, "price": 3500, "vatRate": 1900,
+	})
+	b.call(t, guest, update, http.StatusUnauthorized)
+	b.call(t, member, update, http.StatusForbidden)
+	updated := read[struct {
+		Slug, Title, Status      string
+		Capacity, Price, Invited int
+		Sessions                 []struct{ Capacity int }
+	}](t, b.call(t, office, update, http.StatusOK))
+	if updated.Title != "Updated signup fixture" || updated.Slug != created.Slug || updated.Status != "published" ||
+		updated.Capacity != 3 || updated.Price != 3500 || updated.Invited != 1 ||
+		len(updated.Sessions) != 1 || updated.Sessions[0].Capacity != 3 {
+		t.Fatalf("updated event: %+v", updated)
+	}
+	token := mailToken(t, b, memberEmail, "event-invite", "/events/invite")
+	offer := request{method: http.MethodGet, path: "/api/v1/event-invites/{token}", params: map[string]string{"token": token}}
+	b.call(t, guest, offer, http.StatusOK)
+
+	capacity := update
+	capacity.body = strings.Replace(update.body, `"capacity":3`, `"capacity":2`, 1)
+	if failed := b.call(t, office, capacity, http.StatusUnprocessableEntity); !containsJSON(failed.body, `"location":"body.capacity"`) {
+		t.Fatalf("lowering capacity below registrations and active invites: %s", failed.body)
+	}
+	duplicate := update
+	duplicate.body = strings.Replace(update.body, `"title":`, `"slug":"open-ballet-taster","title":`, 1)
+	expectConflict(t, b, office, duplicate, "duplicate")
+	b.call(t, guest, offer, http.StatusOK)
+
+	b.fixture(t, http.MethodPut, "clock", `{"now":"2026-10-23T15:59:59Z"}`, http.StatusNoContent)
+	if failed := b.call(t, office, update, http.StatusUnprocessableEntity); !containsJSON(failed.body, "an event cannot be updated before it was created") {
+		t.Fatalf("updating before the event was created: %s", failed.body)
+	}
 }

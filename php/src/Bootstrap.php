@@ -329,7 +329,6 @@ final class Bootstrap
                     $lessons = new OneOffLesson($timetableStore, $clock);
                     CatalogAdminRoutes::registerLessonCreation($app, $lessons);
                     $eventStore = new EventStore($connection);
-                    EventRoutes::register($app, $eventStore, $clock, $lessons);
                     $registrationStore = new EventRegistrationStore($connection);
                     $eventRegistrations = new EventRegistrationReads($eventStore, $registrationStore, $clock);
                     $eventWaitlist = static fn(): EventWaitlist => new EventWaitlist(
@@ -340,6 +339,7 @@ final class Bootstrap
                         $eventURL(),
                         $pushSender() !== null,
                     );
+                    EventRoutes::register($app, $eventStore, $clock, $lessons, $eventWaitlist);
                     (new EventRegistrationRoutes(
                         $eventRegistrations,
                         static fn(): EventRegistrationWrites => new EventRegistrationWrites($eventStore, $registrationStore, $eventWaitlist(), $clock),

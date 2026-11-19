@@ -77,26 +77,62 @@ final readonly class EventStore implements EventPersistence
 
     public function createDraft(EventData $data, string $slug, string $actor, DateTimeImmutable $now): Event
     {
-        $course = $this->encodeId($data->courseTypeId);
-        if ($this->connection->fetchOne('SELECT id FROM course_types WHERE id = ? FOR UPDATE', [$course], [$this->idType()]) === false) {
-            throw CatalogFailure::field('courseTypeId', 'course type does not exist');
-        }
-
         $id = Uuid::v7()->toRfc4122();
         $instant = Database::sqlInstant($this->connection, $now);
         try {
-            $this->connection->insert('events', [
-                'id' => $this->encodeId($id), 'slug' => $slug, 'title' => $data->title, 'description' => $data->description,
-                'course_type_id' => $course, 'capacity' => $data->capacity, 'price' => $data->price, 'vat_rate_bp' => $data->vatRate,
-                'status' => 'draft', 'signup_opens_at' => $this->sqlInstant($data->signupOpensAt),
-                'signup_closes_at' => $this->sqlInstant($data->signupClosesAt), 'cancel_until' => $this->sqlInstant($data->cancelUntil),
-                'created_at' => $instant, 'updated_at' => $instant, 'created_by' => $this->encodeId($actor),
+            $this->connection->insert('events', $this->editableFields($data, $slug, $now) + [
+                'id' => $this->encodeId($id), 'status' => 'draft',
+                'created_at' => $instant, 'created_by' => $this->encodeId($actor),
             ]);
         } catch (UniqueConstraintViolationException) {
             throw new CatalogFailure(409, 'a record with these values exists already', reason: 'duplicate');
         }
 
         return $this->officeEvent($id) ?? throw new RuntimeException('The new event was not stored');
+    }
+
+    public function updateEvent(string $id, EventData $data, string $slug, DateTimeImmutable $now): Event
+    {
+        $fields = $this->editableFields($data, $slug, $now);
+        try {
+            $this->connection->update('events', $fields, ['id' => $this->encodeId($id)]);
+        } catch (UniqueConstraintViolationException) {
+            throw new CatalogFailure(409, 'a record with these values exists already', reason: 'duplicate');
+        }
+
+        return $this->officeEvent($id) ?? throw new RuntimeException('The event disappeared during its update');
+    }
+
+    /** @return array<string,int|string|null> */
+    private function editableFields(EventData $data, string $slug, DateTimeImmutable $now): array
+    {
+        $course = $this->encodeId($data->courseTypeId);
+        if ($this->connection->fetchOne('SELECT id FROM course_types WHERE id = ? FOR UPDATE', [$course], [$this->idType()]) === false) {
+            throw CatalogFailure::field('courseTypeId', 'course type does not exist');
+        }
+
+        return [
+            'slug' => $slug, 'title' => $data->title, 'description' => $data->description,
+            'course_type_id' => $course, 'capacity' => $data->capacity, 'price' => $data->price, 'vat_rate_bp' => $data->vatRate,
+            'signup_opens_at' => $this->sqlInstant($data->signupOpensAt),
+            'signup_closes_at' => $this->sqlInstant($data->signupClosesAt), 'cancel_until' => $this->sqlInstant($data->cancelUntil),
+            'updated_at' => Database::sqlInstant($this->connection, $now),
+        ];
+    }
+
+    public function requireSchool(): void
+    {
+        (new FamilyStore($this->connection))->schoolTimezone();
+    }
+
+    public function resizeSession(string $eventId, string $lessonId, int $capacity, DateTimeImmutable $now): void
+    {
+        // Recheck the event and start time while locking the session to update its capacity.
+        $this->connection->executeStatement(
+            'UPDATE lessons SET capacity = ? WHERE id = ? AND event_id = ? AND starts_at > ?',
+            [$capacity, $this->encodeId($lessonId), $this->encodeId($eventId), Database::sqlInstant($this->connection, $now)],
+            [ParameterType::INTEGER, $this->idType(), $this->idType(), ParameterType::STRING],
+        );
     }
 
     public function lockEvent(string $id): ?Event
