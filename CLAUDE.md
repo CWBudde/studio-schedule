@@ -304,12 +304,19 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
 
 - **No real data.** Never add real school names, people, addresses, prices or credentials. Seed and
   test data are fictional. Secrets come from env/config only.
-- **One app, two targets.** Everything goes through `internal/app.New`. Nothing may be demo-only
+- **One Go application for the server and demo.** Both Go targets go through `internal/app.New`.
+  Nothing may be demo-only
   except the transport (WASM bridge) and the store, mailer and PDF renderer implementations (the
   typst module runs with wazero on the server, in the browser's WebAssembly in the demo). `cmd/wasm`
   must not depend on pgx, goose, cobra, net/smtp, httptest, os/exec, wazero or prometheus
   (`just check-wasm-deps`). Keep request
   handlers cheap: the WASM runtime is single-threaded.
+- **Go and PHP backend parity.** New shared features land in both backends. Update both when
+  changing behavior they already share. `api/openapi.json` defines the shared API, and
+  [ADR 0023](docs/decisions/0023-php-backend.md) covers the Go-only administration commands, MCP
+  server and WASM demo.
+  Record open PHP parity work in `PLAN.md`. Use the shared HTTP conformance cases for API changes
+  and run `just php-test` for affected PHP behavior on PostgreSQL, MySQL and MariaDB.
 - **Layering:** `httpapi` → `service` → `store` interfaces. Services never import a concrete store.
   Keep Go SQL in `internal/store/postgres` and PHP SQL in the store layer. A PostgreSQL
   migration needs a same-version MySQL/MariaDB twin in `php/migrations/mysql`. Run `just php-test`

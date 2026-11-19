@@ -1477,10 +1477,12 @@ backends.
         and 80 % per namespace. `just php-test` and the PHP CI job run these checks.
   - [ ] Add concurrency cases for capacity, redemption and receipt numbers on each real database,
         run `web/e2e-server` against PHP, and include all checks in `just ci` and CI.
-- [ ] Docs: deployment on shared hosting (upload, document root or subdirectory, cron,
+- [x] Docs: deployment on shared hosting (upload, document root or subdirectory, cron,
       `SETUP_TOKEN` and the installer, upgrades) and in a container (docs/operations.md), choosing
       a backend and a database, switching with `db:copy`, ADR 0001 amended (the WASM demo stays
-      Go), CLAUDE.md rules for changes in both backends (a Go migration needs its MySQL twin)
+      Go), CLAUDE.md rules for changes in both backends (a Go migration needs its MySQL twin).
+      Verified the native dump/restore procedures on all three engines and a PHP CLI transfer
+      from MySQL through PostgreSQL to MariaDB.
 
 ## Phase 14 — Optional modules
 

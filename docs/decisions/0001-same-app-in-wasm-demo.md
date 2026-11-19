@@ -24,9 +24,20 @@ Alternatives considered:
   ~3 MB, it is immature, and Go would block on JS promises inside the driver. Kept as a fallback
   spike if maintaining the memory store becomes too costly.
 
+## Amendment — PHP server backend
+
+[ADR 0023](0023-php-backend.md) adds PHP as a production backend for shared hosting and
+containers. It uses the same web UI, OpenAPI contract and PostgreSQL schema as the Go server.
+It also has paired migrations for MySQL and MariaDB. HTTP conformance checks compare the server
+implementations against the shared contract.
+
+The public demo continues to build the Go application and in-memory store into its WebAssembly
+module. The Go server and demo share their service and store interfaces.
+
 ## Consequences
 
-- Every repository method is implemented twice (memory, Postgres) and covered by `storetest`.
+- Every Go repository method is implemented in its memory and PostgreSQL stores and covered by
+  `storetest`.
 - Repositories stay narrow. Aggregations and statistics are computed in Go services.
 - `cmd/wasm` must not import server-only packages (guarded in CI).
 - The demo resets on reload. The README, `docs/demo-mode.md` and a banner in the demo UI say so.

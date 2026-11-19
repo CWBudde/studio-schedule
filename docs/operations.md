@@ -1,8 +1,8 @@
 # Operations
 
-How to configure, deploy, back up, update and release Studio Schedule. The app runs as **one
-instance** (see [One instance](#one-instance)).
+How to configure, deploy, back up, update and release Studio Schedule.
 
+- [Choose a backend and database](#choose-a-backend-and-database)
 - [Configuration reference](#configuration-reference)
 - [Deployment guide](#deployment-guide)
 - [Container image](#container-image)
@@ -14,9 +14,20 @@ instance** (see [One instance](#one-instance)).
 - [Releases](#releases)
 - [Privacy](#privacy)
 
+## Choose a backend and database
+
+| Backend | Database                                        | Hosting                                                                                                                                                   |
+| ------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Go      | PostgreSQL 15+                                  | A single Go server process, with the full application, administration CLI, and MCP server.                                                                |
+| PHP     | PostgreSQL 15+, MySQL 8.0.19+, or MariaDB 10.6+ | Shared hosting with PHP 8.3+ and cron, or the PHP-FPM and nginx image. See the [Phase 13 plan](../PLAN.md#phase-13--php-backend) for API parity progress. |
+
+Use PostgreSQL if you plan to run Go operator tools against the database of a PHP installation.
+Both backends use the same PostgreSQL schema and migration history. Use the
+[database transfer procedure](#switching-backends-or-databases) when changing engines.
+
 ## Configuration reference
 
-The server binary `studio-schedule` reads its configuration from environment variables and
+The Go server binary `studio-schedule` reads its configuration from environment variables and
 command-line flags. A flag given on the command line wins over the environment; an empty
 environment variable counts as unset. `serve` checks every value at startup and names each bad one
 in a single error, without printing secrets. The other commands check the same values, except the
@@ -24,6 +35,7 @@ log settings, which only `serve` uses. `.env.example` lists the variables with e
 recipes load a local `.env`.
 
 Prefer the environment for secrets: flags are visible in the process list.
+See [PHP configuration](#php-configuration) for the PHP backend.
 
 ### Environment variables
 
@@ -341,9 +353,9 @@ full API conformance suite against PHP.
 ## Reverse proxy and TLS
 
 The app speaks plain HTTP. Put a reverse proxy in front of it that terminates TLS, and set
-`BASE_URL` to the public `https://` origin: the session cookie is then `Secure` and browsers get
-`Strict-Transport-Security` (one year, subdomains included). The app must be served from the root
-of its host (`BASE_URL` has no path).
+`BASE_URL` to the public `https://` URL, including the path if the app is mounted in a subdirectory.
+The session cookie is then `Secure` and browsers get `Strict-Transport-Security` (one year,
+subdomains included).
 
 **HSTS and subdomains.** A browser that has seen the header refuses plain HTTP for a year, not only
 for the app's host but, by default, for every subdomain of it. Serving the app on an apex domain
@@ -429,6 +441,42 @@ in the environment passed to PHP. If a shared Apache host requires `app/` to sit
 subdirectory under the document root, enable access overrides there so `app/.htaccess` denies
 every HTTP request into it. On nginx, keep the application directory outside every document root.
 
+#### PHP configuration
+
+Use 64-bit PHP 8.3 or later with `curl`, `gd`, `iconv`, `json`, `mbstring`, `openssl`, `pdo` and
+`zlib`. Enable `pdo_pgsql` for PostgreSQL or `pdo_mysql` for MySQL and MariaDB. PHP needs Argon2id
+password hashing through PHP's password extension or Sodium. Give PHP access to a writable log
+destination if the host writes logs to a file.
+
+Set `BASE_URL` to the public HTTPS URL, including the mount path, and `DATABASE_URL` to a URL for
+the selected database. Percent-encode special characters in the username or password. The server
+environment takes precedence over `app/config/.env`.
+
+```dotenv
+BASE_URL=https://school.example.test/schedule
+DATABASE_URL=mysql://studio:replace-me@db.example.test:3306/studio
+```
+
+Use `mariadb://` for MariaDB or `postgresql://` and the PostgreSQL port for PostgreSQL. Use the
+installation account with permissions to create the schema and its triggers when running setup
+and migrations.
+
+#### PHP first setup
+
+1. Upload the release and configure it for an empty database. Set `SETUP_TOKEN` to a random
+   secret. For example, generate one with `openssl rand -hex 32` and store it with your secrets.
+2. Open `/setup?token=<SETUP_TOKEN>` under `BASE_URL`. Enter the school details and the first
+   administrator's details. Setup applies the migrations and displays a one-time password link.
+3. Open that link privately and set the administrator password. Those credentials authenticate
+   future installer upgrades and copies. The PHP application sign-in endpoint remains a separate
+   [Phase 13 milestone](../PLAN.md#phase-13--php-backend). Remove `SETUP_TOKEN` to close the installer.
+4. Check `/readyz` at the mount path and add the [PHP cron command](#mail-smtp) to the host's
+   scheduler.
+
+Configure hosting and proxy access logs to omit query strings for `/setup` where your host
+allows it. If a first install on MySQL or MariaDB is interrupted, keep traffic paused and retry
+setup against a fresh empty database.
+
 ### PHP container
 
 The PHP CI job also checks a PHP-FPM and nginx image on PostgreSQL, MySQL and MariaDB. Download
@@ -445,7 +493,7 @@ docker run -d --name studio-schedule-php --env-file ./studio-php.env \
   --publish 127.0.0.1:8080:8080 studio-schedule-php:artifact
 ```
 
-Use the [upgrade procedure](#upgrades) before applying migrations. An upgrade of an existing
+Use the [PHP upgrade procedure](#php-upgrades) before applying migrations. An upgrade of an existing
 MySQL or MariaDB schema requires a verified full backup. The container health check probes
 `/healthz`. Use `/readyz` at the configured base path to check whether the database is ready for
 traffic. Run the installer or the CLI explicitly to change the schema, and schedule
@@ -496,12 +544,15 @@ is already running.
 
 ### One instance
 
-Run exactly one instance of `serve` per database. The rate limits are counted in the process's
+For Go, run exactly one instance of `serve` per database. The rate limits are counted in the process's
 memory, and the background jobs (lesson generation, mail delivery, waiting-list invitations, data
 retention) run in the process on their own timers. A second instance would double every limit and
 run every job twice. The mail delivery is safe against that (`FOR UPDATE SKIP LOCKED`), the others
 are not designed for it. A restart resets the rate limits. For updates, stop the old instance
 before the new one starts (Compose's `docker compose up -d` does this).
+
+For PHP, schedule `jobs:run` every minute for the database. The job lock skips an invocation of
+a job that is already running.
 
 ### Health and readiness
 
@@ -661,8 +712,8 @@ remove the `mailpit` service or keep its port private.
 
 ## Backups and restore
 
-Back up the **PostgreSQL database**, and nothing else: it holds every record, the settings, the
-logo, the stored receipt PDFs and the mail outbox. The app keeps no other state. The wazero cache
+Back up the **application database**. It holds every record, the settings, the logo, the stored
+receipt PDFs and the mail outbox. The wazero cache
 (`XDG_CACHE_HOME`, the volume `cache`) is rebuilt on start and needs no backup; the configuration
 (`.env`, the secrets) belongs in your own secret store.
 
@@ -670,6 +721,9 @@ A backup holds the personal data of members and their children. Encrypt it, keep
 server, restrict who can read it, and delete old ones by your retention policy (below).
 
 ### Taking a backup
+
+These commands apply to PostgreSQL. For PHP on MySQL or MariaDB, use the matching
+[dump and restore tools](#mysql-and-mariadb-backup-and-restore).
 
 `pg_dump` in its custom format (`--format=custom`) writes a compressed, consistent snapshot while
 the app keeps running. Use a `pg_dump` of the server's major version or newer. With Compose, run
@@ -693,7 +747,9 @@ also of a later major version or another provider.
 
 ### Restoring
 
-Restore into an **empty** database, with the app stopped, then let the binary check the schema:
+For recovery of an existing Go Compose deployment, stop the app and restore into an **empty**
+database. The commands below replace the database named by `POSTGRES_DB`. To rehearse a
+restore, [use a separate database](#restore-to-a-separate-postgresql-database).
 
 ```sh
 docker compose stop app
@@ -710,6 +766,54 @@ database user than the one that wrote it needs `--no-owner` (the objects then be
 restoring user, which must be the app's user). If the dump comes from an older version of the app,
 run `migrate up` with the current binary after the restore; `serve` refuses to start until the
 schema matches. A dump from a newer version needs that newer binary.
+
+### Restore to a separate PostgreSQL database
+
+Create an empty database named `studio_restore` on the restore server. Set the PostgreSQL
+client's connection settings and credentials for that server and restore the custom-format dump.
+
+```sh
+pg_restore --exit-on-error --single-transaction --dbname=studio_restore studio.dump
+```
+
+For a PHP installation, [verify the restored database](#verify-a-php-restore) with the PHP CLI.
+
+### MySQL and MariaDB backup and restore
+
+Before a PHP upgrade, stop application writes and cron. Make a complete dump of the database,
+including triggers and the migration history. Restore it to a separate empty database using the
+matching engine's client. The examples use private client option files for credentials and
+connection details. Prepare `studio_restore` as an empty database, use a restore account that
+can create the saved schema and triggers, and provision the trigger definer accounts on a
+replacement server.
+
+For MySQL, use `mysqldump` and `mysql`. [MySQL dump options](https://dev.mysql.com/doc/refman/8.0/en/mysqldump.html)
+
+```sh
+umask 077
+mysqldump --defaults-extra-file=/secure/mysql-source.cnf \
+  --single-transaction --no-tablespaces --set-gtid-purged=OFF \
+  --routines --events --triggers --hex-blob studio_source > studio-backup.sql &&
+  mysql --defaults-extra-file=/secure/mysql-restore.cnf studio_restore < studio-backup.sql
+```
+
+For MariaDB, use `mariadb-dump` and `mariadb`.
+[MariaDB dump options](https://mariadb.com/docs/server/clients-and-utilities/backup-restore-and-import-clients/mariadb-dump)
+
+```sh
+umask 077
+mariadb-dump --defaults-extra-file=/secure/mariadb-source.cnf \
+  --single-transaction --routines --events --triggers --hex-blob studio_source > studio-backup.sql &&
+  mariadb --defaults-extra-file=/secure/mariadb-restore.cnf studio_restore < studio-backup.sql
+```
+
+### Verify a PHP restore
+
+Use the release that made the backup to verify the restored database. In a separate CLI session,
+set `DATABASE_URL` to the restored database and run `php app/bin/studio-schedule migrate status`
+and `php app/bin/studio-schedule db check`. Check that migration history, representative records and
+receipt data match the source. Keep the verified dump until the upgrade and post-upgrade checks
+are complete.
 
 ### Restore drill
 
@@ -862,7 +966,9 @@ The crontab (`crontab -e` as the user that may read `cron.env`):
 
 ## Upgrades
 
-To update the app:
+### Go upgrades
+
+To update the Go backend:
 
 1. Read the release notes in `CHANGELOG.md` and on the GitHub release (release-please writes them
    from the commits); breaking changes are listed first.
@@ -895,6 +1001,55 @@ the latest migration and exists for development: it can drop columns and tables 
 To go back to an older version, restore the backup taken before the update, together with the old
 image. Don't skip `migrate up` across several releases: it applies all pending migrations in order
 in one go.
+
+### PHP upgrades
+
+1. Stop writes and scheduled jobs. Keep public traffic paused at the web server during the
+   upgrade and its checks. Allow access to `/setup` for the operator if using the web installer.
+   Take a full backup and verify it by restoring it to a separate database. Use the
+   [PostgreSQL](#restore-to-a-separate-postgresql-database) or
+   [MySQL and MariaDB](#mysql-and-mariadb-backup-and-restore) instructions, then
+   [verify the restore](#verify-a-php-restore).
+2. Upload the new archive or start the new PHP image. With migrations pending, `/readyz` and the
+   API return HTTP 503. The live process still answers `/healthz`.
+3. Enable `SETUP_TOKEN` and open `/setup?token=<SETUP_TOKEN>` under `BASE_URL`. The installer lists
+   the pending migrations. Submit the current email and password of an active administrator.
+   For MySQL and MariaDB, confirm the full backup was verified. With the CLI, use
+   `php app/bin/studio-schedule migrate up` and pass `--backup-verified` for an existing MySQL or
+   MariaDB schema after verification.
+4. Check migration status, `db check` and `/readyz` using the new release. Remove `SETUP_TOKEN`
+   when finished, then resume writes and cron.
+
+If MySQL or MariaDB reports an interrupted migration, keep the site in maintenance and cron
+paused. Restore the verified pre-upgrade dump into an empty database and confirm its schema and
+data with the pre-upgrade release. Point `DATABASE_URL` at that restored database. Either resume
+service with the pre-upgrade release or apply a corrected upgrade and verify readiness before
+resuming writes. The interrupted database remains blocked until backup recovery.
+
+### Switching backends or databases
+
+Pause writes and jobs on the source and verify a backup before switching. When both backends
+use the same PostgreSQL database, match their release and migration versions, point the new
+backend's `DATABASE_URL` at the database, and check `/readyz`, `db check` and the application
+flows the school needs before reopening traffic.
+
+For a transfer between PostgreSQL and MySQL or MariaDB, run the copy through the PHP installer
+or operator CLI.
+
+1. Bring the source migrations up to date and check the source with `db check`. On a machine
+   that can reach the target database, set `DATABASE_URL` to the empty target and run
+   `php app/bin/studio-schedule migrate up` using that same release. This prepares the target
+   schema with only the migrations' lookup data.
+2. Point PHP at the source. Open its token-protected `/setup` page and use the database copy form
+   with an active administrator's credentials and the target database URL. The CLI equivalent is
+   `php app/bin/studio-schedule db:copy --target-database-url "$TARGET_DATABASE_URL"`, with the
+   source in `DATABASE_URL`. Use the setup form when credentials must stay out of process arguments.
+3. The copy checks row counts and foreign keys and runs the integrity checks before committing
+   the target. Point the destination backend at the target and verify `db check`, `/readyz` and
+   key application flows. Resume writes and cron on the destination after verification.
+
+To move between MySQL and MariaDB, use a freshly migrated PostgreSQL database as the
+intermediate target and repeat the copy to the final database.
 
 ## Upgrading PostgreSQL to a new major version
 
