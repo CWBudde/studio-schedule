@@ -13,6 +13,7 @@ use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Psr\Clock\ClockInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Log\AbstractLogger;
@@ -494,6 +495,90 @@ final class PublicSettingsTest extends TestCase
         self::assertEquals($update + $locked, self::decoded($this->adminRequest('PUT', 'regional', $update)));
     }
 
+    public function testBookingRulesReadStoredCutoffsAndWindow(): void
+    {
+        $this->initialize();
+        $clock = self::createStub(ClockInterface::class);
+        $now = new DateTimeImmutable('2026-10-23T18:00:00.123456+02:00');
+        $clock->method('now')->willReturn($now);
+        $this->openSettingsSession($now);
+        $this->db->executeStatement("UPDATE accounts SET role = 'office'");
+        $postgres = $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform;
+        $book = $postgres ? "INTERVAL '119.9 seconds'" : '119900000';
+        $invite = $postgres ? "INTERVAL '3 hours 2 minutes 1 second'" : '10921000000';
+        $this->db->executeStatement(
+            "UPDATE settings SET booking_cutoff = $book, waitlist_invite_expiry = $invite, released_through = '2026-11-20'",
+        );
+        $path = 'booking-rules';
+        self::assertSame(401, $this->adminRequest('GET', $path, signedIn: false, clock: $clock)->getStatusCode());
+        $rules = self::decoded($this->adminRequest('GET', $path, clock: $clock));
+        self::assertEquals([
+            'releaseWeekday' => 0, 'releaseTime' => '18:00', 'releaseWeeksAhead' => 2,
+            'bookingCutoffMinutes' => 1, 'cancellationCutoffMinutes' => 120, 'waitlistInviteExpiryMinutes' => 182,
+            'defaultVisibleDays' => 14, 'releasedThrough' => '2026-11-20', 'generatedLessons' => 0,
+            'window' => [
+                'now' => '2026-10-23T16:00:00.123456Z', 'lastReleaseAt' => '2026-10-18T16:00:00Z',
+                'nextReleaseAt' => '2026-10-25T17:00:00Z', 'releasedUntil' => '2026-11-20T23:00:00Z',
+                'ruleReleasedUntil' => '2026-11-01T23:00:00Z',
+            ],
+        ], $rules);
+        $this->db->executeStatement('DELETE FROM settings');
+        self::assertSame(404, $this->adminRequest('GET', $path, clock: $clock)->getStatusCode());
+    }
+
+    public function testBookingRulesPreviewUsesSchoolDatesWithoutSavingChanges(): void
+    {
+        $this->initialize();
+        $clock = self::createStub(ClockInterface::class);
+        $now = new DateTimeImmutable('2026-10-25T01:00:00Z');
+        $clock->method('now')->willReturn($now);
+        $this->openSettingsSession($now);
+        $this->db->executeStatement("UPDATE accounts SET role = 'member'");
+        $path = 'booking-rules/preview';
+        $query = 'releaseWeekday=0&releaseTime=02:30&releaseWeeksAhead=1';
+        self::assertSame(403, $this->adminRequest('GET', "$path?$query", clock: $clock)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'office'");
+        self::assertSame(405, $this->adminRequest('HEAD', "$path?$query", clock: $clock)->getStatusCode());
+        $missing = $this->adminRequest('GET', $path, clock: $clock);
+        self::assertSame(422, $missing->getStatusCode());
+        $missingDetails = self::decoded($missing)['errors'];
+        self::assertIsArray($missingDetails);
+        self::assertSame(['query.releaseWeekday', 'query.releaseTime', 'query.releaseWeeksAhead'], array_column($missingDetails, 'location'));
+        $before = self::decoded($this->adminRequest('GET', 'booking-rules', clock: $clock));
+        self::assertArrayNotHasKey('releasedThrough', $before);
+        $window = [
+            'now' => '2026-10-25T01:00:00Z', 'lastReleaseAt' => '2026-10-25T00:30:00Z',
+            'nextReleaseAt' => '2026-11-01T01:30:00Z', 'releasedUntil' => '2026-11-01T23:00:00Z',
+            'ruleReleasedUntil' => '2026-11-01T23:00:00Z',
+        ];
+        self::assertEquals($window, self::decoded($this->adminRequest('GET', "$path?$query", clock: $clock)));
+        self::assertEquals($window, self::decoded($this->adminRequest('GET', "$path?$query&releasedThrough=2026-10-20", clock: $clock)));
+        self::assertEquals(['releasedUntil' => '2026-11-03T23:00:00Z'] + $window, self::decoded(
+            $this->adminRequest('GET', "$path?$query&releasedThrough=2026-11-03", clock: $clock),
+        ));
+        $lateClock = self::createStub(ClockInterface::class);
+        $lateClock->method('now')->willReturn(new DateTimeImmutable('2026-10-25T23:30:00Z'));
+        // The school date is October 26, so October 25 next year is exactly 52 weeks ahead.
+        self::assertSame(200, $this->adminRequest('GET', "$path?$query&releasedThrough=2027-10-25", clock: $lateClock)->getStatusCode());
+        self::assertSame(422, $this->adminRequest('GET', "$path?$query&releasedThrough=2027-10-26", clock: $lateClock)->getStatusCode());
+        $invalid = [
+            'releaseWeekday' => 'releaseTime=02:30&releaseWeeksAhead=1',
+            'releaseTime' => str_replace('02:30', '25:00', $query),
+            'releaseWeeksAhead' => str_replace('Ahead=1', 'Ahead=53', $query),
+            'releasedThrough' => "$query&releasedThrough=2027-12-01",
+        ];
+        foreach ($invalid as $field => $params) {
+            $response = $this->adminRequest('GET', "$path?$params", clock: $clock);
+            self::assertSame(422, $response->getStatusCode());
+            $details = self::decoded($response)['errors'];
+            self::assertIsArray($details);
+            self::assertIsArray($details[0]);
+            self::assertSame('query.' . $field, $details[0]['location']);
+        }
+        self::assertSame(422, $this->adminRequest('GET', "$path?$query&releasedThrough=2026-02-30", clock: $clock)->getStatusCode());
+        self::assertSame($before, self::decoded($this->adminRequest('GET', 'booking-rules', clock: $clock)));
+    }
+
     /** @param array<string, string|bool> $expected */
     private function assertRegionalSettings(array $expected): void
     {
@@ -511,12 +596,12 @@ final class PublicSettingsTest extends TestCase
         return $id;
     }
 
-    private function openSettingsSession(): void
+    private function openSettingsSession(?DateTimeImmutable $now = null): void
     {
         $postgres = $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform;
         $id = Uuid::v7();
         $digest = $postgres ? "decode(?, 'hex')" : 'UNHEX(?)';
-        $now = new DateTimeImmutable();
+        $now ??= new DateTimeImmutable();
         $created = Database::sqlInstant($this->db, $now);
         $this->db->executeStatement(
             'INSERT INTO sessions (id, account_id, token_hash, created_at, last_seen_at, expires_at) '
@@ -528,7 +613,7 @@ final class PublicSettingsTest extends TestCase
     }
 
     /** @param array<string, mixed>|null $body */
-    private function adminRequest(string $method, string $path, ?array $body = null, bool $signedIn = true): ResponseInterface
+    private function adminRequest(string $method, string $path, ?array $body = null, bool $signedIn = true, ?ClockInterface $clock = null): ResponseInterface
     {
         $request = (new ServerRequestFactory())->createServerRequest($method, '/studio/api/v1/admin/settings/' . $path);
         if ($signedIn) {
@@ -540,7 +625,7 @@ final class PublicSettingsTest extends TestCase
             $request->getBody()->rewind();
         }
 
-        return $this->bootstrapRequest($request);
+        return $this->bootstrapRequest($request, $clock);
     }
 
     private static function fixtureDsn(): string
@@ -576,7 +661,7 @@ final class PublicSettingsTest extends TestCase
         return $app->handle($request);
     }
 
-    private function bootstrapRequest(ServerRequestInterface $request): ResponseInterface
+    private function bootstrapRequest(ServerRequestInterface $request, ?ClockInterface $clock = null): ResponseInterface
     {
         return Bootstrap::handle(
             static fn() => $request,
@@ -589,6 +674,7 @@ final class PublicSettingsTest extends TestCase
                 'LOG_LEVEL' => 'error',
                 default => '',
             },
+            clock: $clock,
         );
     }
 

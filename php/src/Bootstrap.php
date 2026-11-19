@@ -35,6 +35,7 @@ use StudioSchedule\Mail\SmtpMailer;
 use StudioSchedule\Push\Sender;
 use StudioSchedule\Service\AdminSettings;
 use StudioSchedule\Service\BackgroundJobs;
+use StudioSchedule\Service\BookingRuleSettings;
 use StudioSchedule\Service\CommonPasswords;
 use StudioSchedule\Service\DatabaseReadiness;
 use StudioSchedule\Service\Family;
@@ -157,15 +158,15 @@ final class Bootstrap
                 $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $pushSender): void {
                     $app->get('/api/v1/auth/me', new MeEndpoint($sessionStore));
                     $settingsStore = new PublicSettingsStore($connection);
+                    $scheduleStore = new ScheduleStore($connection);
                     (new PublicSettingsEndpoint(new PublicSettings($settingsStore)))->register($app);
-                    (new AdminSettingsRoutes(new AdminSettings($settingsStore)))->register($app);
+                    (new AdminSettingsRoutes(new AdminSettings($settingsStore), new BookingRuleSettings($scheduleStore, $clock)))->register($app);
                     CatalogRoutes::register($app, new CatalogStore($connection));
                     EventRoutes::register($app, new EventStore($connection), $clock);
                     $familyStore = new FamilyStore($connection);
                     (new FamilyRoutes(new Family($familyStore, $clock)))->register($app);
                     (new PersonExportRoutes(new PersonExport(new PersonExportStore($connection), $familyStore, $clock)))->register($app);
                     (new MailLogRoutes(new MailLog(new MailLogStore($connection), $clock)))->register($app);
-                    $scheduleStore = new ScheduleStore($connection);
                     ScheduleRoutes::register($app, $scheduleStore, $clock);
                     $app->get('/api/v1/admin/statistics', new StatisticsEndpoint(new StatisticsService(new StatisticsStore($connection), $scheduleStore, $clock)));
                     $pushRoutes = new PushRoutes(new PushSubscriptionStore($connection), $clock, $pushSender);

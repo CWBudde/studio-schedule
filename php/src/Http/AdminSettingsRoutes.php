@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Http;
 
+use InvalidArgumentException;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -11,16 +12,20 @@ use Psr\Http\Server\RequestHandlerInterface;
 use SensitiveParameter;
 use Slim\App;
 use Slim\Routing\RouteCollectorProxy;
+use Slim\Routing\RouteContext;
 use stdClass;
+use StudioSchedule\Domain\Date;
+use StudioSchedule\Domain\TimeOfDay;
 use StudioSchedule\Service\AdminSettings;
 use StudioSchedule\Service\AdminSettingsConflict;
 use StudioSchedule\Service\AdminSettingsFieldError;
+use StudioSchedule\Service\BookingRuleSettings;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\SettingsNotFound;
 
 final readonly class AdminSettingsRoutes
 {
-    public function __construct(private AdminSettings $service) {}
+    public function __construct(private AdminSettings $service, private BookingRuleSettings $bookingRules) {}
 
     /**
      * @template TContainer of ContainerInterface|null
@@ -33,15 +38,19 @@ final readonly class AdminSettingsRoutes
             $routes->map(['GET', 'PUT'], '/branding', $this->branding(...));
             $routes->map(['PUT', 'DELETE'], '/branding/background', $this->background(...));
             $routes->map(['GET', 'PUT'], '/regional', $this->regional(...));
+            $routes->get('/booking-rules', $this->bookingRules(...));
+            $routes->get('/booking-rules/preview', $this->preview(...));
         })->add(self::authorize(...));
     }
 
     private static function authorize(#[SensitiveParameter] ServerRequestInterface $request, RequestHandlerInterface $next): ResponseInterface
     {
         $method = $request->getMethod();
-        // Slim dispatches HEAD to GET. The v1 settings cards expose GET and PUT.
+        // Slim dispatches HEAD to GET. Only the methods registered in v1 are allowed.
         if ($method === 'HEAD') {
-            return Responses::problem($request, 405, 'method not allowed')->withHeader('Allow', 'GET, PUT');
+            $allowed = RouteContext::fromRequest($request)->getRoute()?->getMethods() ?? ['GET'];
+
+            return Responses::problem($request, 405, 'method not allowed')->withHeader('Allow', implode(', ', $allowed));
         }
         $principal = $request->getAttribute('sessionPrincipal');
         if (!$principal instanceof SessionPrincipal) {
@@ -129,6 +138,63 @@ final readonly class AdminSettingsRoutes
             self::text($fields, 'defaultLocale', required: true),
             self::text($fields, 'currency', required: true),
         ));
+    }
+
+    private function bookingRules(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        return Responses::json($response, $this->bookingRules->read());
+    }
+
+    private function preview(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $query = QueryParameters::read($request);
+        $weekday = self::queryInteger($query['releaseWeekday'] ?? '', 0, 6);
+        $time = $query['releaseTime'] ?? '';
+        $validTime = preg_match('/\A[0-2][0-9]:[0-5][0-9]\z/', $time) === 1;
+        $weeks = self::queryInteger($query['releaseWeeksAhead'] ?? '', 1, 52);
+        try {
+            $through = Date::fromText($query['releasedThrough'] ?? '');
+        } catch (InvalidArgumentException) {
+            $through = null;
+        }
+        if ($weekday === null || !$validTime || $weeks === null || $through === null) {
+            $errors = [];
+            foreach ([
+                'releaseWeekday' => $weekday === null ? 'expected an integer between 0 and 6' : null,
+                'releaseTime' => !$validTime ? 'expected a time in HH:MM form' : null,
+                'releaseWeeksAhead' => $weeks === null ? 'expected an integer between 1 and 52' : null,
+                'releasedThrough' => $through === null ? 'invalid released-through date' : null,
+            ] as $field => $message) {
+                if ($message !== null) {
+                    $errors[] = ['location' => 'query.' . $field, 'message' => $message];
+                }
+            }
+
+            return Responses::problem($request, 422, 'validation failed', errors: $errors);
+        }
+
+        try {
+            $at = TimeOfDay::parse($time);
+        } catch (InvalidArgumentException) {
+            return Responses::problem($request, 422, 'validation failed', errors: [
+                ['location' => 'query.releaseTime', 'message' => 'invalid time of day'],
+            ]);
+        }
+
+        try {
+            return Responses::json($response, $this->bookingRules->preview($weekday, $at, $weeks, $through->isZero() ? null : $through));
+        } catch (AdminSettingsFieldError $error) {
+            return Responses::problem($request, 422, 'validation failed', errors: [
+                ['location' => 'query.' . $error->field, 'message' => $error->getMessage()],
+            ]);
+        }
+    }
+
+    private static function queryInteger(string $text, int $min, int $max): ?int
+    {
+        $value = (int) $text;
+
+        return preg_match('/\A[+-]?[0-9]+\z/', $text) === 1 && $value >= $min && $value <= $max ? $value : null;
     }
 
     /**

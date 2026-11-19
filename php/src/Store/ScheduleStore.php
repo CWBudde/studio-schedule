@@ -58,13 +58,15 @@ final readonly class ScheduleStore implements SchedulePersistence
     {
         $book = 'booking_cutoff';
         $cancel = 'cancellation_cutoff';
+        $invite = 'waitlist_invite_expiry';
         if ($this->isPostgres()) {
-            $book = self::intervalMicros('booking_cutoff');
-            $cancel = self::intervalMicros('cancellation_cutoff');
+            $book = self::intervalMicros($book);
+            $cancel = self::intervalMicros($cancel);
+            $invite = self::intervalMicros($invite);
         }
         $row = $this->connection->fetchAssociative(
             'SELECT timezone, release_weekday, release_time, release_weeks_ahead, released_through, '
-            . "default_visible_days, $book AS booking_micros, $cancel AS cancellation_micros FROM settings WHERE id = TRUE",
+            . "default_visible_days, $book AS booking_micros, $cancel AS cancellation_micros, $invite AS invite_micros FROM settings WHERE id = TRUE",
         );
         if ($row === false) {
             throw new SettingsNotFound();
@@ -80,6 +82,7 @@ final readonly class ScheduleStore implements SchedulePersistence
             self::integer($row['default_visible_days']),
             self::integer($row['booking_micros']),
             self::integer($row['cancellation_micros']),
+            self::integer($row['invite_micros']),
         );
     }
 

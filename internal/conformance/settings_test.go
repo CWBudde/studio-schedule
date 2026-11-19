@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"net/http"
+	"net/url"
 	"testing"
 )
 
@@ -73,6 +74,61 @@ func settingsAndBranding(t *testing.T, b *backend) {
 	}
 
 	checkRegionalSettings(t, b, guest, office, admin)
+	checkBookingRules(t, b, office)
+}
+
+func checkBookingRules(t *testing.T, b *backend, office *http.Client) {
+	t.Helper()
+
+	const path = "/api/v1/admin/settings/booking-rules"
+	type window struct {
+		Now, LastReleaseAt, NextReleaseAt, ReleasedUntil, RuleReleasedUntil string
+	}
+	type rules struct {
+		ReleaseTime, ReleasedThrough                                                       string
+		ReleaseWeekday, ReleaseWeeksAhead, BookingCutoffMinutes, CancellationCutoffMinutes int
+		WaitlistInviteExpiryMinutes, DefaultVisibleDays, GeneratedLessons                  int
+		Window                                                                             window
+	}
+	want := rules{
+		ReleaseTime: "18:00", ReleaseWeeksAhead: 1, CancellationCutoffMinutes: 120, WaitlistInviteExpiryMinutes: 720,
+		DefaultVisibleDays: 14, Window: window{
+			Now: demoNow, LastReleaseAt: "2026-10-18T16:00:00Z", NextReleaseAt: "2026-10-25T17:00:00Z",
+			ReleasedUntil: "2026-10-25T23:00:00Z", RuleReleasedUntil: "2026-10-25T23:00:00Z",
+		},
+	}
+	if got := read[rules](t, get(t, b, office, path)); got != want {
+		t.Fatalf("seeded booking rules: got %+v, want %+v", got, want)
+	}
+	preview := request{method: http.MethodGet, path: path + "/preview", query: url.Values{
+		"releaseWeekday": {"5"}, "releaseTime": {"09:00"}, "releaseWeeksAhead": {"2"}, "releasedThrough": {"2026-11-20"},
+	}}
+	wantPreview := window{
+		Now: demoNow, LastReleaseAt: "2026-10-23T07:00:00Z", NextReleaseAt: "2026-10-30T08:00:00Z",
+		ReleasedUntil: "2026-11-20T23:00:00Z", RuleReleasedUntil: "2026-11-06T23:00:00Z",
+	}
+	if got := read[window](t, b.call(t, office, preview, http.StatusOK)); got != wantPreview {
+		t.Fatalf("release preview: got %+v, want %+v", got, wantPreview)
+	}
+	missing := request{method: http.MethodGet, path: preview.path}
+	problem := read[struct{ Errors []struct{ Location string } }](t, b.call(t, office, missing, http.StatusUnprocessableEntity))
+	locations := []string{"query.releaseWeekday", "query.releaseTime", "query.releaseWeeksAhead"}
+	if len(problem.Errors) != len(locations) {
+		t.Fatalf("missing preview query: got %+v, want errors at %v", problem.Errors, locations)
+	}
+	for i, location := range locations {
+		if problem.Errors[i].Location != location {
+			t.Errorf("preview error %d: got %q, want %q", i, problem.Errors[i].Location, location)
+		}
+	}
+	preview.query.Set("releasedThrough", "2027-10-23")
+	bad := b.call(t, office, preview, http.StatusUnprocessableEntity)
+	if !containsJSON(bad.body, `"location":"query.releasedThrough"`) {
+		t.Error("the overlong preview was not reported at query.releasedThrough")
+	}
+	if got := read[rules](t, get(t, b, office, path)); got != want {
+		t.Errorf("booking rules changed after preview: got %+v, want %+v", got, want)
+	}
 }
 
 func checkRegionalSettings(t *testing.T, b *backend, guest, office, admin *http.Client) {
