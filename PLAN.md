@@ -1438,6 +1438,10 @@ backends.
           dependents. Managed dependents are read-only. The shared `family_profiles` case passes
           at both mount paths on all three engines with the PHP authentication draft.
     - [ ] Remove dependents and pass any freed waitlist places on to the next eligible people.
+    - [x] Let the office manage locations, rooms, course types, levels and staff. Room and level
+          orders are saved as a whole, and inactive staff appear in the office list. The shared
+          `catalog_administration` case passes at both mount paths on all three PHP databases with
+          the authentication draft.
   - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
         order (`SELECT … FOR UPDATE` on all three databases, term → class → lesson → passes)
   - [ ] Calendar feeds (ADR 0011)

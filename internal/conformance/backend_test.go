@@ -239,6 +239,7 @@ func TestBackendConformance(t *testing.T) {
 		run  func(*testing.T, *backend)
 	}{
 		{"public settings and catalog", publicCatalog},
+		{"catalog administration", catalogAdministration},
 		{"public event details", publicEventDetails},
 		{"schedule release and visibility", publicSchedule},
 		{"registration and session", registrationSession},

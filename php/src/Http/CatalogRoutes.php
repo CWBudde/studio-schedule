@@ -8,6 +8,8 @@ use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App;
+use StudioSchedule\Service\CatalogAdmin;
+use StudioSchedule\Service\CatalogAdminPersistence;
 use StudioSchedule\Service\CatalogPersistence;
 use StudioSchedule\Service\CatalogService;
 
@@ -19,12 +21,13 @@ final readonly class CatalogRoutes
      * @template TContainer of ContainerInterface|null
      * @param App<TContainer> $app
      */
-    public static function register(App $app, CatalogPersistence $store): void
+    public static function register(App $app, CatalogPersistence&CatalogAdminPersistence $store): void
     {
         $routes = new self(new CatalogService($store));
         foreach (CatalogService::COLLECTIONS as $collection) {
             $app->get('/api/v1/' . $collection, $routes->handler($collection));
         }
+        (new CatalogAdminRoutes(new CatalogAdmin($store)))->register($app);
     }
 
     /**

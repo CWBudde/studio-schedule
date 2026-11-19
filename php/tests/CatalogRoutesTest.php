@@ -12,6 +12,7 @@ use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use StudioSchedule\Http\CatalogRoutes;
+use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Store\CatalogStore;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\Migrator;
@@ -110,6 +111,13 @@ final class CatalogRoutesTest extends TestCase
                 ['id' => self::id(16), 'name' => 'First', 'startsOn' => '2026-05-21', 'endsOn' => '2026-09-30'],
                 ['id' => self::id(15), 'name' => 'Second', 'startsOn' => '2026-10-01', 'endsOn' => '2026-12-31'],
             ], self::get($app, '/terms')['items']);
+
+            self::checkOfficeRooms($app);
+            self::checkOfficeLevels($app);
+            if (!$postgres) {
+                self::assertContains($database->fetchOne("SELECT IS_FREE_LOCK(SHA2(CONCAT('studio-schedule:', DATABASE(), ':level-scale'), 256))"), [1, '1']);
+            }
+            self::checkOfficeStaffAndCourses($app);
         } finally {
             if (!$postgres) {
                 $database->executeStatement('SET FOREIGN_KEY_CHECKS = 0');
@@ -123,6 +131,134 @@ final class CatalogRoutesTest extends TestCase
             }
             $database->close();
         }
+    }
+
+    /** @param App<ContainerInterface|null> $app */
+    private static function checkOfficeRooms(App $app): void
+    {
+        $path = '/locations';
+        self::admin($app, 'POST', $path, ['name' => 'New studio'], 401, null);
+        self::admin($app, 'POST', $path, ['name' => 'New studio'], 403, 'member');
+        $location = self::admin($app, 'POST', $path, ['name' => ' New studio ', 'address' => ' Test road '], 201);
+        self::assertIsString($location['id']);
+        $locationId = $location['id'];
+        self::assertSame(['id' => $locationId, 'name' => 'New studio', 'address' => 'Test road'], $location);
+        self::assertSame('duplicate', self::admin($app, 'POST', $path, ['name' => 'new studio'], 409)['reason']);
+        self::assertSame(['id' => $locationId, 'name' => 'New studio'], self::admin($app, 'PUT', "$path/$locationId", ['name' => 'New studio']));
+        self::admin($app, 'PUT', "$path/$locationId", ['name' => '  '], 422);
+        self::admin($app, 'POST', $path, ['address' => 'Only an address'], 422);
+        self::admin($app, 'POST', $path, ['name' => 'Invalid field', 'capacity' => 15], 422);
+        $values = ['locationId' => $locationId, 'name' => 'First room', 'capacity' => 15];
+        self::admin($app, 'POST', '/rooms', ['locationId' => self::id(99)] + $values, 422);
+        self::admin($app, 'POST', '/rooms', ['locationId' => 'invalid'] + $values, 422);
+        self::admin($app, 'POST', '/rooms', ['capacity' => 1001] + $values, 422);
+        $first = self::admin($app, 'POST', '/rooms', $values, 201);
+        $second = self::admin($app, 'POST', '/rooms', ['name' => 'Second room'] + $values, 201);
+        self::assertIsString($first['id']);
+        self::assertIsString($second['id']);
+        self::assertSame(1, $first['position']);
+        self::assertSame(2, $second['position']);
+        self::assertSame('duplicate', self::admin($app, 'POST', '/rooms', ['name' => 'first room'] + $values, 409)['reason']);
+        self::assertSame('in-use', self::admin($app, 'DELETE', "$path/$locationId", status: 409)['reason']);
+
+        $order = "$path/$locationId/room-order";
+        self::admin($app, 'PUT', $order, ['roomIds' => false], 422);
+        self::admin($app, 'PUT', $order, ['roomIds' => [$first['id']]], 422);
+        self::admin($app, 'PUT', $order, ['roomIds' => [$first['id'], $first['id']]], 422);
+        self::admin($app, 'PUT', $order, ['roomIds' => [$second['id'], $first['id']]], 204);
+        $room = '/rooms/' . $first['id'];
+        $changed = self::admin($app, 'PUT', $room, ['capacity' => 20] + $values);
+        self::assertSame(2, $changed['position']);
+        $moved = self::admin($app, 'PUT', $room, ['locationId' => self::id(1)] + $values);
+        self::assertSame(3, $moved['position']);
+        self::assertSame(self::id(1), $moved['locationId']);
+        self::admin($app, 'DELETE', $room, status: 204);
+        self::admin($app, 'DELETE', '/rooms/' . $second['id'], status: 204);
+        self::admin($app, 'PUT', $order, ['roomIds' => []], 204);
+        self::admin($app, 'DELETE', "$path/$locationId", status: 204);
+        self::admin($app, 'PUT', $order, ['roomIds' => []], 404);
+    }
+
+    /** @param App<ContainerInterface|null> $app */
+    private static function checkOfficeLevels(App $app): void
+    {
+        $path = '/levels';
+        $added = self::admin($app, 'POST', $path, ['name' => 'Intermediate', 'code' => ' I '], 201);
+        self::assertIsString($added['id']);
+        $level = $path . '/' . $added['id'];
+        self::assertSame(3, $added['position']);
+        self::assertSame('I', $added['code']);
+        self::assertSame('duplicate', self::admin($app, 'POST', $path, ['name' => 'Other', 'code' => 'i'], 409)['reason']);
+        self::admin($app, 'PUT', '/level-order', ['levelIds' => [self::id(13), self::id(14)]], 422);
+        self::admin($app, 'PUT', '/level-order', ['levelIds' => [$added['id'], self::id(14), self::id(13)]], 204);
+        self::assertSame(['id' => $added['id'], 'name' => 'Developing', 'position' => 1], self::admin($app, 'PUT', $level, ['name' => 'Developing']));
+        self::admin($app, 'DELETE', $level, status: 204);
+        self::admin($app, 'DELETE', $level, status: 404);
+    }
+
+    /** @param App<ContainerInterface|null> $app */
+    private static function checkOfficeStaffAndCourses(App $app): void
+    {
+        $path = '/staff';
+        $add = ['displayName' => ' New instructor ', 'kind' => 'instructor', 'active' => true, 'personId' => self::id(7)];
+        self::admin($app, 'POST', $path, ['personId' => self::id(99)] + $add, 422);
+        self::admin($app, 'POST', $path, ['kind' => 'member'] + $add, 422);
+        self::admin($app, 'POST', $path, ['active' => 0] + $add, 422);
+        $added = self::admin($app, 'POST', $path, $add, 201);
+        self::assertIsString($added['id']);
+        $staff = $path . '/' . $added['id'];
+        self::assertSame(['id' => self::id(7), 'givenName' => 'Ada', 'familyName' => 'Example'], $added['person']);
+        $old = self::admin($app, 'PUT', $staff, ['displayName' => 'Former Instructor', 'kind' => 'instructor', 'active' => false]);
+        self::assertSame(['id' => $added['id'], 'displayName' => 'Former Instructor', 'kind' => 'instructor', 'active' => false], $old);
+        self::admin($app, 'GET', '/admin/staff', status: 403, role: 'member');
+        self::admin($app, 'HEAD', '/admin/staff', status: 405);
+        $office = self::admin($app, 'GET', '/admin/staff')['items'];
+        $public = self::get($app, '/staff')['items'];
+        self::assertIsArray($office);
+        self::assertIsArray($public);
+        self::assertContains($added['id'], array_column($office, 'id'));
+        self::assertNotContains($added['id'], array_column($public, 'id'));
+        self::admin($app, 'DELETE', $staff, status: 204);
+
+        $create = ['name' => ' New course ', 'description' => ' Sample '];
+        $course = self::admin($app, 'POST', '/course-types', $create, 201);
+        self::assertIsString($course['id']);
+        self::assertSame(['id' => $course['id'], 'name' => 'New course', 'description' => 'Sample'], $course);
+        self::assertSame('duplicate', self::admin($app, 'POST', '/course-types', ['name' => 'new course'], 409)['reason']);
+        $coursePath = '/course-types/' . $course['id'];
+        self::assertSame(['id' => $course['id'], 'name' => 'Edited course'], self::admin($app, 'PUT', $coursePath, ['name' => 'Edited course']));
+        self::admin($app, 'DELETE', $coursePath, status: 204);
+        self::admin($app, 'DELETE', $coursePath, status: 404);
+    }
+
+    /**
+     * @param App<ContainerInterface|null> $app
+     * @param array<string,mixed>|null $body
+     * @return array<string,mixed>
+     */
+    private static function admin(App $app, string $method, string $path, ?array $body = null, int $status = 200, ?string $role = 'office'): array
+    {
+        $request = (new ServerRequestFactory())->createServerRequest($method, '/dance/schedule/api/v1' . $path);
+        if ($role !== null) {
+            $request = $request->withAttribute('sessionPrincipal', new SessionPrincipal(self::id(8), self::id(7), $role));
+        }
+        if ($body !== null) {
+            $request = $request->withHeader('Content-Type', 'application/json');
+            $request->getBody()->write(json_encode((object) $body, JSON_THROW_ON_ERROR));
+            $request->getBody()->rewind();
+        }
+        $response = $app->handle($request);
+        self::assertSame($status, $response->getStatusCode(), $method . ' ' . $path . ' ' . (string) $response->getBody());
+        if ($status === 204 || $method === 'HEAD') {
+            self::assertSame('', (string) $response->getBody());
+
+            return [];
+        }
+        $document = json_decode((string) $response->getBody(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($document);
+
+        /** @var array<string,mixed> $document */
+        return $document;
     }
 
     private static function id(int $number): string
