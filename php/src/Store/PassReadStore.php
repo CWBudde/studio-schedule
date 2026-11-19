@@ -43,8 +43,22 @@ final readonly class PassReadStore implements PassReadPersistence
 
     public function passes(string $person, bool $family): array
     {
-        $scope = $this->ownerScope($family);
-        $note = $family ? 'NULL AS note' : 'p.note';
+        return $this->selectPasses($this->ownerScope($family), $this->ownerKeys($person, $family), !$family);
+    }
+
+    /** @return PassDocument|null */
+    public function byId(string $id): ?array
+    {
+        return $this->selectPasses('p.id = ?', [$this->key($id)], true)[0] ?? null;
+    }
+
+    /**
+     * @param list<string> $keys
+     * @return list<PassDocument>
+     */
+    private function selectPasses(string $scope, array $keys, bool $includeNote): array
+    {
+        $note = $includeNote ? 'p.note' : 'NULL AS note';
         $rows = $this->connection->fetchAllAssociative(
             'SELECT p.id, p.pass_type_id, t.name AS type_name, p.person_id, p.payer_person_id, p.kind, '
             . 'COALESCE(p.visits_total, 0) AS visits_total, COALESCE(p.visits_remaining, 0) AS visits_remaining, '
@@ -53,8 +67,8 @@ final readonly class PassReadStore implements PassReadPersistence
             . "CONCAT(payer.given_name, ' ', payer.family_name) AS payer_name, payer.anonymized_at AS payer_anonymized_at, $note "
             . 'FROM passes p JOIN pass_types t ON t.id = p.pass_type_id JOIN persons owner ON owner.id = p.person_id '
             . "LEFT JOIN persons payer ON payer.id = p.payer_person_id WHERE $scope ORDER BY p.sold_at DESC, p.id DESC",
-            $this->ownerKeys($person, $family),
-            array_fill(0, $family ? 2 : 1, $this->keyType()),
+            $keys,
+            array_fill(0, count($keys), $this->keyType()),
         );
 
         return array_map($this->pass(...), $rows);

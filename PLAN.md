@@ -1531,6 +1531,10 @@ backends.
           `pass_lists` case passes at both mount paths on all three PHP databases.
     - [x] Run `receipt_pdf_downloads`, `receipt_lists_and_search`, `receipt_settings_and_logo`,
           `pass_type_administration` and `pass_lists` in PHP CI.
+    - [x] Let the office sell or assign a pass of an active type. Snapshot visits, validity and
+          price. Sales allocate a receipt number, store the original PDF and queue mail in the same
+          transaction. The shared `pass_issuance` case runs in PHP CI at both mount paths on all
+          three databases.
   - [x] Settings, branding, themes, `init` (ADR 0013, 0018)
     - [x] Initialize school settings and issue the first administrator's one-time setup link
           through `init` or the web installer on PostgreSQL, MySQL and MariaDB.

@@ -43,6 +43,7 @@ use StudioSchedule\Http\MeEndpoint;
 use StudioSchedule\Http\MemberImportRoutes;
 use StudioSchedule\Http\ParticipantReadRoutes;
 use StudioSchedule\Http\AttendanceRoutes;
+use StudioSchedule\Http\PassIssueRoutes;
 use StudioSchedule\Http\PassReadRoutes;
 use StudioSchedule\Http\PasswordFailureLimit;
 use StudioSchedule\Http\PasswordResetEndpoint;
@@ -100,6 +101,7 @@ use StudioSchedule\Service\TeachingSchedule;
 use StudioSchedule\Service\MemberImports;
 use StudioSchedule\Service\ParticipantRead;
 use StudioSchedule\Service\Attendance;
+use StudioSchedule\Service\PassIssuance;
 use StudioSchedule\Service\PassRead;
 use StudioSchedule\Service\PasswordAuthentication;
 use StudioSchedule\Service\PasswordChange;
@@ -135,6 +137,7 @@ use StudioSchedule\Store\MailLogStore;
 use StudioSchedule\Store\MemberImportStore;
 use StudioSchedule\Store\ParticipantReadStore;
 use StudioSchedule\Store\AttendanceStore;
+use StudioSchedule\Store\PassIssueStore;
 use StudioSchedule\Store\PassReadStore;
 use StudioSchedule\Store\OutboxStore;
 use StudioSchedule\Store\PasswordResetStore;
@@ -424,7 +427,14 @@ final class Bootstrap
                     (new ParticipantReadRoutes(new ParticipantRead($participants, $clock)))->register($app);
                     (new TeachingScheduleRoutes(new TeachingSchedule($schedule, $clock)))->register($app);
                     (new LessonSignupRoutes(new LessonSignup($schedule, $participants, $familyStore, $clock)))->register($app);
-                    (new PassReadRoutes(new PassRead(new PassReadStore($connection, $schedule), $clock)))->register($app);
+                    $passReads = new PassReadStore($connection, $schedule);
+                    (new PassReadRoutes(new PassRead($passReads, $clock)))->register($app);
+                    (new PassIssueRoutes(new PassIssuance(
+                        new PassIssueStore($connection, $familyStore, $passReads, $eventStore),
+                        $eventReceipts,
+                        $clock,
+                        $wakeMail,
+                    )))->register($app);
                     (new ReceiptPdfRoutes(new Attachments(new AttachmentStore($connection))))->register($app);
                     (new ReceiptReadRoutes(new ReceiptReadStore($connection, $clock)))->register($app);
                     ScheduleRoutes::register($app, $schedule, $clock);

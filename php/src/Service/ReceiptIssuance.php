@@ -148,6 +148,19 @@ final readonly class ReceiptIssuance
         ], $lines, static fn(string $lang): string => $lang === Document::language($original['locale']) ? $lines[0]['description'] : '');
     }
 
+    /** @return ReceiptLine */
+    public static function saleLine(string $description, int $gross, int $rate, ?string $taxMode): array
+    {
+        $rate = $taxMode === 'standard' ? $rate : 0;
+        $denominator = 10000 + $rate;
+        $net = intdiv($gross * 10000 + intdiv($denominator, 2), $denominator);
+
+        return [
+            'position' => 1, 'description' => $description, 'quantity' => 1, 'unit_price' => $gross,
+            'vat_rate_bp' => $rate, 'net' => $net, 'vat' => $gross - $net, 'gross' => $gross,
+        ];
+    }
+
     /** @param Settings $settings */
     public static function requireIssuer(array $settings): void
     {

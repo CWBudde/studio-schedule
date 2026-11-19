@@ -78,13 +78,7 @@ final readonly class EventPayments
             $item = static fn(string $lang): string => self::description($lang, $event->title, $participant, $first, $last);
 
             $gross = $registration->price;
-            $rate = $settings['tax_mode'] === 'standard' ? $registration->vatRate : 0;
-            $denominator = 10000 + $rate;
-            $net = intdiv($gross * 10000 + intdiv($denominator, 2), $denominator);
-            $lines = [[
-                'position' => 1, 'description' => $item(Document::language($locale)), 'quantity' => 1, 'unit_price' => $gross,
-                'vat_rate_bp' => $rate, 'net' => $net, 'vat' => $gross - $net, 'gross' => $gross,
-            ]];
+            $lines = [ReceiptIssuance::saleLine($item(Document::language($locale)), $gross, $registration->vatRate, $settings['tax_mode'])];
             $receipt = $this->receipts->issue($settings, $actor, $now, [
                 'kind' => 'sale', 'tax_mode' => $settings['tax_mode'] ?? '', 'tax_note' => $settings['tax_note'],
                 'currency' => $settings['currency'], 'gross' => $gross, 'recipient_name' => $name,

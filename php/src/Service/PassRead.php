@@ -83,7 +83,7 @@ final readonly class PassRead
     }
 
     /** @param PassDocument $pass */
-    private static function covers(array $pass, string $today): bool
+    public static function covers(array $pass, string $today): bool
     {
         return $pass['status'] === 'active' && $today >= $pass['validFrom']
             && (!isset($pass['validUntil']) || $today <= $pass['validUntil'])

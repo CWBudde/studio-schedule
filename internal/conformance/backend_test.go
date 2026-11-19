@@ -283,6 +283,7 @@ func TestBackendConformance(t *testing.T) {
 		{"events and registrations", eventRegistration},
 		{"pass type administration", passTypeAdministration},
 		{"pass lists", passLists},
+		{"pass issuance", passIssuance},
 		{"pass sales and receipts", passReceipt},
 		{"receipt pdf downloads", receiptPDFDownloads},
 		{"receipt lists and search", receiptListsAndSearch},

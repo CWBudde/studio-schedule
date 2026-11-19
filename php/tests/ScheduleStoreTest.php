@@ -9,6 +9,7 @@ use DateTimeImmutable;
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\DBAL\Logging\Middleware;
 use Doctrine\DBAL\ParameterType;
@@ -32,6 +33,7 @@ use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\LessonAdminRoutes;
 use StudioSchedule\Http\LessonNoticeRoutes;
 use StudioSchedule\Http\LessonSignupRoutes;
+use StudioSchedule\Http\PassIssueRoutes;
 use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Http\TeachingScheduleRoutes;
 use StudioSchedule\Http\StatisticsEndpoint;
@@ -52,6 +54,7 @@ use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
 use StudioSchedule\Service\JobResult;
 use StudioSchedule\Service\OneOffLesson;
+use StudioSchedule\Service\PassIssuance;
 use StudioSchedule\Service\ScheduleRecipients;
 use StudioSchedule\Service\ReceiptIssuance;
 use StudioSchedule\Service\SessionPrincipal;
@@ -69,6 +72,8 @@ use StudioSchedule\Store\LessonWriteStore;
 use StudioSchedule\Store\LessonNoticeStore;
 use StudioSchedule\Store\Migrator;
 use StudioSchedule\Store\ParticipantReadStore;
+use StudioSchedule\Store\PassIssueStore;
+use StudioSchedule\Store\PassReadStore;
 use StudioSchedule\Store\PublicSettingsStore;
 use StudioSchedule\Store\RateLimitStore;
 use StudioSchedule\Store\ScheduleStore;
@@ -1099,6 +1104,80 @@ final class ScheduleStoreTest extends TestCase
         self::assertIsArray($guest);
         self::assertSame('R-2027-0002', $guest['number']);
         self::assertSame(['receipt-payer@example.test'], $this->database->fetchFirstColumn('SELECT recipient FROM outbox_mails'));
+    }
+
+    public function testPassSaleRollsBackTheReceiptNumberAndPdfOnFailure(): void
+    {
+        $this->insert('pass_types', [
+            'id' => 301, 'name' => 'Ten visits', 'kind' => 'visits', 'visits' => 10, 'validity_days' => 0,
+            'price' => 2250, 'vat_rate_bp' => 1900, 'active' => true, 'created_at' => '2026-12-01 13:00:00',
+        ]);
+        $now = '2026-12-31T23:30:00Z';
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office', impersonatorId: self::id(10));
+        $sell = '/admin/persons/' . self::id(2) . '/passes/sell';
+        $pay = ['passTypeId' => self::id(301), 'payerId' => self::id(1), 'recipientEmail' => 'ignored@example.test'];
+        $app = $this->app($now);
+        self::assertSame('receipt-settings-incomplete', self::post($app, $sell, $office, 409, $pay)['reason']);
+
+        $this->database->executeStatement(
+            "UPDATE settings SET issuer_name = 'Fixture Studio', issuer_address = 'Room 1', issuer_tax_id = '123', tax_mode = 'standard'",
+        );
+        self::post($app, $sell, $office, 422, ['passTypeId' => self::id(999)]);
+        self::post($app, $sell, $office, 422, ['passTypeId' => self::id(301), 'payerId' => self::id(999)]);
+        self::post($app, '/admin/persons/' . self::id(999) . '/passes/assign', $office, 404, ['passTypeId' => self::id(301)]);
+
+        $fails = $this->app($now, renderReceipt: static fn(): never => throw new RuntimeException('Fixture pass receipt render failure'));
+        try {
+            self::post($fails, $sell, $office, 201, $pay);
+            self::fail('Expected the render failure to roll back the sale');
+        } catch (RuntimeException $error) {
+            self::assertSame('Fixture pass receipt render failure', $error->getMessage());
+        }
+        foreach (['passes', 'receipts', 'receipt_counters', 'receipt_lines', 'receipt_pdfs', 'outbox_mails'] as $table) {
+            self::assertSame([], $this->database->fetchFirstColumn("SELECT 1 FROM $table"), $table);
+        }
+
+        $concurrent = DriverManager::getConnection($this->database->getParams());
+        try {
+            $concurrent->executeStatement($this->postgres ? "SET lock_timeout = '500ms'" : 'SET SESSION innodb_lock_wait_timeout = 1');
+            $saleWithConcurrentRetirement = $this->app($now, renderReceipt: function (array $document, string $logo) use ($concurrent): string {
+                try {
+                    $concurrent->executeStatement('UPDATE pass_types SET active = FALSE');
+                    self::fail('Pass type could be retired while a sale used its terms');
+                } catch (DriverException $error) {
+                    if ($this->postgres) {
+                        self::assertSame('55P03', $error->getSQLState());
+                    } else {
+                        self::assertSame(1205, (int) $error->getCode());
+                    }
+                }
+
+                return (new \StudioSchedule\Receipt\Renderer())->render($document, $logo);
+            });
+            $sale = self::post($saleWithConcurrentRetirement, $sell, $office, 201, $pay);
+        } finally {
+            $concurrent->close();
+        }
+        self::assertSame(10, $sale['visitsRemaining']);
+        self::assertSame('2027-01-01', $sale['validFrom']);
+        self::assertTrue($sale['usable']);
+        self::assertArrayNotHasKey('validUntil', $sale);
+        self::assertIsArray($sale['payer']);
+        self::assertSame(self::id(1), $sale['payer']['id'] ?? null);
+        self::assertSame(['R-2027-0001'], $this->database->fetchFirstColumn('SELECT number FROM receipts'));
+        self::assertSame(['member@example.test'], $this->database->fetchFirstColumn('SELECT recipient FROM outbox_mails'));
+        self::assertNull($this->database->fetchOne('SELECT recipient_email FROM receipts'));
+        $actor = $this->postgres ? self::id(10) : hex2bin(str_replace('-', '', self::id(10)));
+        self::assertSame($actor, $this->database->fetchOne('SELECT created_by FROM receipts'));
+        self::assertSame($actor, $this->database->fetchOne('SELECT sold_by FROM passes'));
+        self::assertIsString($sale['receiptId']);
+        $attachment = (new \StudioSchedule\Receipt\AttachmentStore($this->database))->find($sale['receiptId']);
+        self::assertIsArray($attachment);
+        self::assertStringStartsWith('%PDF-', $attachment['pdf']);
+
+        $this->database->executeStatement('UPDATE pass_types SET active = FALSE');
+        self::post($app, $sell, $office, 422, $pay);
+        self::assertSame(['R-2027-0001'], $this->database->fetchFirstColumn('SELECT number FROM receipts'));
     }
 
     public function testOfficeEventRefundKeepsOriginalAmountsAndRollsBackOnPdfFailure(): void
@@ -2398,6 +2477,16 @@ final class ScheduleStoreTest extends TestCase
         );
         $eventWaitlist = static fn(): EventWaitlist => $waitlist;
         $eventReceipts = new ReceiptIssuance(new ReceiptWriteStore($this->database), new Renderer(), $renderReceipt);
+        (new PassIssueRoutes(new PassIssuance(
+            new PassIssueStore(
+                $this->database,
+                new FamilyStore($this->database),
+                new PassReadStore($this->database, $scheduleStore),
+                $eventStore,
+            ),
+            $eventReceipts,
+            $clock,
+        )))->register($app);
         $eventCancellations = new EventCancellations($eventStore, $registrationStore, $eventReceipts, $clock, $eventWaitlist);
         EventRoutes::register($app, $eventStore, $clock, $lessons, $eventWaitlist, $eventCancellations);
         (new EventRegistrationRoutes(
