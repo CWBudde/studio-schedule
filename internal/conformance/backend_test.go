@@ -263,6 +263,7 @@ func TestBackendConformance(t *testing.T) {
 		{"admin impersonation", adminImpersonation},
 		{"account lifecycle", accountLifecycle},
 		{"member booking and cancellation", memberBooking},
+		{"member cancellation of a seeded booking", memberCancellation},
 		{"lesson waitlist", lessonWaitlist},
 		{"waitlist invite lookup limits", waitlistInviteLookupLimits},
 		{"participant roster and history", participantRosterAndHistory},

@@ -10,15 +10,15 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use StudioSchedule\Domain\Instant;
-use StudioSchedule\Service\AttendancePersistence;
+use StudioSchedule\Service\BookingPersistence;
 use Symfony\Component\Uid\Uuid;
 
 /**
- * @phpstan-import-type Booking from AttendancePersistence
+ * @phpstan-import-type Booking from BookingPersistence
  * @phpstan-type BookingRow array{id:string,lesson_id:string,person_id:?string,guest_name:?string,guest_email:?string,
  *     status:string,source:string,trial:bool|int|string,trial_note:?string,booked_at:string,canceled_at:?string,late:bool|int|string}
  */
-final readonly class AttendanceStore implements AttendancePersistence
+final readonly class BookingStore implements BookingPersistence
 {
     private const string COLUMNS = 'id, lesson_id, person_id, guest_name, guest_email, status, source, trial, trial_note, booked_at, canceled_at, late';
 
@@ -42,9 +42,24 @@ final readonly class AttendanceStore implements AttendancePersistence
         return $lesson === false ? null : $this->decodeId($lesson);
     }
 
+    public function lock(string $lesson): bool
+    {
+        return $this->lessons->lock($lesson);
+    }
+
+    public function redemptionOnBooking(): bool
+    {
+        return $this->lessons->redemptionOnBooking();
+    }
+
+    public function recipient(string $account): ?array
+    {
+        return (new SessionStore($this->db))->profile($account);
+    }
+
     public function lockLesson(string $lesson, ?string $staffPerson): ?array
     {
-        return $this->lessons->lock($lesson) ? $this->participants->lesson($lesson, $staffPerson) : null;
+        return $this->lock($lesson) ? $this->participants->lesson($lesson, $staffPerson) : null;
     }
 
     public function booking(string $id): ?array
@@ -76,6 +91,15 @@ final readonly class AttendanceStore implements AttendancePersistence
         $this->db->executeStatement('UPDATE bookings SET status = ? WHERE id = ?', [$status, $this->encodeId($booking)], [ParameterType::STRING, $this->idType()]);
     }
 
+    public function cancelLocked(string $booking, DateTimeImmutable $now, bool $late): void
+    {
+        $this->db->executeStatement(
+            "UPDATE bookings SET status = 'canceled', canceled_at = ?, late = ?, released = TRUE WHERE id = ?",
+            [Database::sqlInstant($this->db, $now), $late, $this->encodeId($booking)],
+            [ParameterType::STRING, ParameterType::BOOLEAN, $this->idType()],
+        );
+    }
+
     public function settle(array $charges, array $refunds, string $schoolDate, DateTimeImmutable $now): void
     {
         (new LessonPaymentStore($this->db))->settle(
@@ -88,13 +112,13 @@ final readonly class AttendanceStore implements AttendancePersistence
         );
     }
 
-    public function record(string $booking, string $actor, string $status, DateTimeImmutable $now): void
+    public function record(string $booking, string $actor, string $status, DateTimeImmutable $now, bool $late = false): void
     {
         $type = $this->idType();
         $this->db->executeStatement(
-            'INSERT INTO booking_events (id, booking_id, actor_account_id, at, status) VALUES (?, ?, ?, ?, ?)',
-            [$this->encodeId(Uuid::v7()->toRfc4122()), $this->encodeId($booking), $this->encodeId($actor), Database::sqlInstant($this->db, $now), $status],
-            [$type, $type, $type, ParameterType::STRING, ParameterType::STRING],
+            'INSERT INTO booking_events (id, booking_id, actor_account_id, at, status, late) VALUES (?, ?, ?, ?, ?, ?)',
+            [$this->encodeId(Uuid::v7()->toRfc4122()), $this->encodeId($booking), $this->encodeId($actor), Database::sqlInstant($this->db, $now), $status, $late],
+            [$type, $type, $type, ParameterType::STRING, ParameterType::STRING, ParameterType::BOOLEAN],
         );
     }
 

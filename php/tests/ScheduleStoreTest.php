@@ -15,6 +15,7 @@ use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Logging\Middleware;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Clock\ClockInterface;
 use Psr\Container\ContainerInterface;
@@ -27,10 +28,12 @@ use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
 use Stringable;
+use StudioSchedule\Domain\Instant;
 use StudioSchedule\Http\CatalogAdminRoutes;
 use StudioSchedule\Bootstrap;
 use StudioSchedule\Http\AfterResponse;
 use StudioSchedule\Http\AttendanceRoutes;
+use StudioSchedule\Http\BookingRoutes;
 use StudioSchedule\Http\EventRegistrationRoutes;
 use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\LessonAdminRoutes;
@@ -48,6 +51,7 @@ use StudioSchedule\Push\VapidKeys;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\Attendance;
+use StudioSchedule\Service\BookingCancellation;
 use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
@@ -72,7 +76,7 @@ use StudioSchedule\Service\StatisticsService;
 use StudioSchedule\Service\TeachingSchedule;
 use StudioSchedule\Service\WaitlistInvites;
 use StudioSchedule\Store\Database;
-use StudioSchedule\Store\AttendanceStore;
+use StudioSchedule\Store\BookingStore;
 use StudioSchedule\Store\EventRegistrationStore;
 use StudioSchedule\Store\ReceiptWriteStore;
 use StudioSchedule\Store\ReceiptReadStore;
@@ -173,6 +177,181 @@ final class ScheduleStoreTest extends TestCase
         self::assertSame(['registered'], $this->database->fetchFirstColumn('SELECT status FROM event_registrations'));
         self::assertSame(['event-registration-added'], $this->database->fetchFirstColumn('SELECT action FROM audit_events'));
         self::assertSame(['fixture-301@example.test'], $this->database->fetchFirstColumn('SELECT recipient FROM outbox_mails'));
+    }
+
+    #[DataProvider('bookingCancellationPassCases')]
+    public function testMemberCancellationSettlesPassAndRecordsTheActor(
+        string $mode,
+        bool $paid,
+        bool $schoolCanceled,
+        string $now,
+        bool $late,
+        int $visits,
+    ): void {
+        $this->database->executeStatement('UPDATE settings SET redemption_mode = ?', [$mode]);
+        $this->insertLesson(108, '2026-10-28', 'regular', 'public', $schoolCanceled ? ['status' => 'canceled'] : []);
+        $this->seedMemberCancellationPass($paid);
+
+        $wakes = 0;
+        $app = $this->app($now, wakeLessonMail: static function () use (&$wakes): void {
+            ++$wakes;
+        });
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member', impersonatorId: self::id(11));
+        $path = '/bookings/' . self::id(301) . '/cancel';
+        $booking = self::post($app, $path, $member, 200);
+        self::assertSame([
+            'id' => self::id(301), 'lessonId' => self::id(108), 'personId' => self::id(2), 'status' => 'canceled',
+            'source' => 'self', 'bookedAt' => '2026-10-22T13:00:00Z',
+            'canceledAt' => Instant::format(new DateTimeImmutable($now)), 'late' => $late,
+        ], $booking);
+        self::assertSame('already-canceled', self::post($app, $path, $member, 409)['reason']);
+        self::assertSame(1, $wakes);
+        self::assertSame(['booking-canceled'], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
+        self::assertSame(['member@example.test'], $this->database->fetchFirstColumn('SELECT recipient FROM outbox_mails'));
+        self::assertContains($this->database->fetchOne('SELECT visits_remaining FROM passes'), [$visits, (string) $visits]);
+        self::assertCount(1 - $visits, $this->database->fetchFirstColumn('SELECT booking_id FROM pass_redemptions'));
+        $actor = $this->postgres ? self::id(11) : pack('H*', str_replace('-', '', self::id(11)));
+        self::assertSame([$actor], $this->database->fetchFirstColumn('SELECT actor_account_id FROM booking_events'));
+        self::assertSame([$late ? 'canceled' : ''], $this->database->fetchFirstColumn(
+            "SELECT CASE WHEN late = TRUE THEN status ELSE '' END FROM booking_events",
+        ));
+        self::assertSame(['canceled'], $this->database->fetchFirstColumn("SELECT status FROM bookings WHERE released = TRUE"));
+    }
+
+    /** @return iterable<string,array{string,bool,bool,string,bool,int}> */
+    public static function bookingCancellationPassCases(): iterable
+    {
+        yield 'timely booking-mode cancellation refunds' => ['booking', true, false, '2026-10-28T08:00:00.499999Z', false, 1];
+        yield 'booking-mode cancellation at cutoff keeps charge' => ['booking', true, false, '2026-10-28T08:00:00.500000Z', true, 0];
+        yield 'booking-mode cancellation cannot charge an already unpaid booking' => ['booking', false, false, '2026-10-28T08:00:00.500000Z', true, 1];
+        yield 'attendance-mode cancellation at cutoff charges' => ['attendance', false, false, '2026-10-28T08:00:00.500000Z', true, 0];
+        yield 'a canceled lesson does not incur late charges' => ['attendance', false, true, '2026-10-28T08:00:00.500000Z', false, 1];
+    }
+
+    public function testMemberCancellationUsesTheOriginalPassModeAndCurrentOfferCutoff(): void
+    {
+        $this->insertLesson(108, '2026-10-28', 'regular', 'public', ['capacity' => 1]);
+        $this->seedMemberCancellationPass(true);
+        $this->database->executeStatement("UPDATE settings SET redemption_mode = 'booking'");
+        $this->database->executeStatement("UPDATE accounts SET confirmed_at = '2026-10-01 00:00:00' WHERE email = 'member@example.test'");
+        $this->insert('waitlist_entries', [
+            'id' => 301, 'lesson_id' => 108, 'person_id' => 6, 'status' => 'waiting',
+            'stay_on_list' => false, 'joined_at' => '2026-10-23 09:00:00',
+        ]);
+
+        // Simulate a committed rules update between the cancellation's read and its lesson lock.
+        $updateSettings = function (): void {
+            $duration = $this->postgres ? "INTERVAL '4 hours'" : '14400000000';
+            $this->database->executeStatement("UPDATE settings SET booking_cutoff = $duration, redemption_mode = 'attendance'");
+        };
+        $logger = new class ($updateSettings) extends AbstractLogger {
+            public bool $updated = false;
+
+            /** @param Closure():void $update */
+            public function __construct(private readonly Closure $update) {}
+
+            /** @param array<string,mixed> $context */
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                if (!$this->updated && ($context['sql'] ?? null) === 'SELECT id FROM lessons WHERE id = ? FOR UPDATE') {
+                    ($this->update)();
+                    $this->updated = true;
+                }
+            }
+        };
+        $config = new Configuration();
+        $config->setMiddlewares([new Middleware($logger)]);
+        $writer = DriverManager::getConnection($this->database->getParams(), $config);
+        $clock = self::createStub(ClockInterface::class);
+        $clock->method('now')->willReturn(new DateTimeImmutable('2026-10-28T07:00:00Z'));
+        $schedule = new ScheduleStore($writer);
+        $lessons = new LessonWriteStore($writer);
+        $messages = new EventWaitlistStore($writer);
+        $mail = new Renderer();
+        $offers = new LessonWaitlistOffers(
+            $schedule,
+            $lessons,
+            $messages,
+            $mail,
+            static fn(): string => 'https://school.example.test',
+            static fn(): bool => false,
+        );
+        $cancellations = new BookingCancellation(
+            new BookingStore($writer, new EventStore($writer), $lessons, new ParticipantReadStore($writer)),
+            $schedule,
+            $messages,
+            $offers,
+            $mail,
+            $clock,
+        );
+
+        try {
+            $member = new SessionPrincipal(self::id(10), self::id(1), 'member');
+            self::assertFalse($cancellations->cancel($member, self::id(301))['late']);
+            self::assertTrue($logger->updated);
+            self::assertSame(['booking-canceled'], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails ORDER BY template'));
+            self::assertSame([], $this->database->fetchFirstColumn('SELECT booking_id FROM pass_redemptions'));
+            self::assertContains($this->database->fetchOne('SELECT visits_remaining FROM passes'), [1, '1']);
+        } finally {
+            $writer->close();
+        }
+    }
+
+    private function seedMemberCancellationPass(bool $paid): void
+    {
+        $this->insert('bookings', [
+            'id' => 301, 'person_id' => 2, 'lesson_id' => 108, 'source' => 'self', 'trial' => false,
+            'status' => 'booked', 'booked_at' => '2026-10-22 13:00:00',
+        ]);
+        $this->insert('pass_types', [
+            'id' => 301, 'name' => 'One visit', 'kind' => 'visits', 'visits' => 1, 'validity_days' => 0,
+            'price' => 0, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => '2026-10-21 13:00:00',
+        ]);
+        $this->insert('passes', [
+            'id' => 303, 'pass_type_id' => 301, 'person_id' => 2, 'kind' => 'visits', 'origin' => 'assignment',
+            'visits_total' => 1, 'visits_remaining' => $paid ? 0 : 1, 'status' => 'active',
+            'valid_from' => '2026-10-28', 'valid_until' => '2026-10-28', 'price_paid' => 0, 'sold_at' => '2026-10-21 13:00:00',
+        ]);
+        if ($paid) {
+            $this->insert('pass_redemptions', ['pass_id' => 303, 'booking_id' => 301, 'at' => '2026-10-22 13:00:00']);
+        }
+    }
+
+    public function testMemberCancellationRollsBackTheOfferWhenMailCannotBeQueued(): void
+    {
+        $this->database->executeStatement("UPDATE accounts SET confirmed_at = '2026-10-01 00:00:00' WHERE email = 'member@example.test'");
+        $this->database->executeStatement('UPDATE lessons SET capacity = 5 WHERE accompanist_id IS NOT NULL');
+        $this->database->executeStatement(
+            "ALTER TABLE outbox_mails ADD CONSTRAINT fixture_no_cancellation_mail CHECK (template <> 'booking-canceled')",
+        );
+        $wakes = 0;
+        $app = $this->app('2026-10-25T06:00:00Z', wakeLessonMail: static function () use (&$wakes): void {
+            ++$wakes;
+        });
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member');
+        $path = '/bookings/' . self::id(201) . '/cancel';
+        try {
+            self::post($app, $path, $member, 200);
+            self::fail('Canceled a booking even though its mail could not be queued');
+        } catch (DriverException $error) {
+            self::assertStringContainsString('fixture_no_cancellation_mail', $error->getMessage());
+        }
+        self::assertSame(['booked', 'attended', 'canceled', 'no_show'], $this->database->fetchFirstColumn('SELECT status FROM bookings ORDER BY id'));
+        self::assertSame(['waiting', 'waiting', 'invited', 'invited'], $this->database->fetchFirstColumn('SELECT status FROM waitlist_entries ORDER BY id'));
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT status FROM booking_events'));
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
+        self::assertSame(0, $wakes);
+    }
+
+    public function testMemberCancellationRejectsAnInvalidIdAndAStartedLesson(): void
+    {
+        $app = $this->app('2026-10-25T10:00:00.500000Z');
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member');
+        $invalid = self::post($app, '/bookings/invalid/cancel', $member, 422);
+        self::assertSame([['location' => 'path.bookingId', 'message' => 'invalid ID']], $invalid['errors']);
+        $started = self::post($app, '/bookings/' . self::id(201) . '/cancel', $member, 422);
+        self::assertSame([['location' => 'path.bookingId', 'message' => 'the lesson has started']], $started['errors']);
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
     }
 
     public function testConcurrentAttendanceConsumesTheFinalPassVisitOnlyOnce(): void
@@ -2486,7 +2665,7 @@ final class ScheduleStoreTest extends TestCase
         $writer = DriverManager::getConnection($this->database->getParams(), $config);
         $clock = self::createStub(ClockInterface::class);
         $clock->method('now')->willReturn(new DateTimeImmutable(self::BEFORE_RELEASE));
-        $attendance = new Attendance(new AttendanceStore(
+        $attendance = new Attendance(new BookingStore(
             $writer,
             new EventStore($writer),
             new LessonWriteStore($writer),
@@ -2952,10 +3131,8 @@ final class ScheduleStoreTest extends TestCase
         $app->get('/api/v1/event-invites/{token}', new WaitlistInviteEndpoint($registrations->invite(...), $proxies, $limits));
         $recipients = new EventWaitlistStore($this->database);
         $lessonWrites = new LessonWriteStore($this->database);
-        (new AttendanceRoutes(new Attendance(
-            new AttendanceStore($this->database, $eventStore, $lessonWrites, new ParticipantReadStore($this->database)),
-            $clock,
-        )))->register($app);
+        $bookings = new BookingStore($this->database, $eventStore, $lessonWrites, new ParticipantReadStore($this->database));
+        (new AttendanceRoutes(new Attendance($bookings, $clock)))->register($app);
         $lessonParticipants = new LessonRecipients($lessonWrites, $registrationStore, new ScheduleRecipients($recipients));
         (new LessonNoticeRoutes(new LessonNotices(
             new LessonNoticeStore($this->database, $eventStore, $lessonWrites, $scheduleStore),
@@ -2973,6 +3150,15 @@ final class ScheduleStoreTest extends TestCase
             static fn(): string => 'https://school.example.test/dance/schedule',
             static fn(): bool => true,
         );
+        (new BookingRoutes(new BookingCancellation(
+            $bookings,
+            $scheduleStore,
+            $recipients,
+            $lessonOffers,
+            new Renderer(),
+            $clock,
+            $wakeLessonMail,
+        )))->register($app);
         (new LessonAdminRoutes(new LessonAdministration(
             $eventStore,
             $lessonWrites,

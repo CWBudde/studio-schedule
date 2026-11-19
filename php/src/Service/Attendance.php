@@ -11,11 +11,11 @@ use StudioSchedule\Domain\Date;
 
 /**
  * @phpstan-import-type RosterLesson from ParticipantReadPersistence
- * @phpstan-import-type Booking from AttendancePersistence
+ * @phpstan-import-type Booking from BookingPersistence
  */
 final readonly class Attendance
 {
-    public function __construct(private AttendancePersistence $store, private ClockInterface $clock) {}
+    public function __construct(private BookingPersistence $store, private ClockInterface $clock) {}
 
     /** @return array<string,mixed> */
     public function set(SessionPrincipal $principal, string $id, string $status): array

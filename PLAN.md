@@ -1501,6 +1501,11 @@ backends.
           position and booking closure without taking a place. Rate-limit lookups per client
           and redact tokens from request logs. The shared `waitlist_invite_lookup_limits` case
           runs in PHP CI on all three databases at both mount paths.
+    - [x] Let signed-in members cancel one booking for themselves or a dependent. Settle pass
+          visits at the cancellation cutoff, record the real account, and offer the freed
+          place to the waiting list in the same transaction as the mail. The shared
+          `member_cancellation_of_a_seeded_booking` case runs in PHP CI at both mount paths on
+          PostgreSQL, MySQL and MariaDB.
     - [ ] Add lesson invite acceptance and decline for signed-in families and invite links.
           Lesson edits and restores can offer places again, with mail and configured push
           delivery. Link acceptance still requires the lesson booking writes.
@@ -1726,7 +1731,8 @@ backends.
     - [ ] Run the full server browser suite against packaged PHP-FPM and wire it into CI and
           `just ci`. Local runs on PostgreSQL passed six of seven tests at both the root and
           `/dance/schedule` after PHP `jobs:run` generated upcoming class lessons. The member
-          booking test passes against Go. PHP still returns 404 for the cancellation request.
+          booking test passes against Go. In PHP, cancellation persists after reload and the
+          subsequent rebooking request still returns 404.
 - [x] Docs: deployment on shared hosting (upload, document root or subdirectory, cron,
       `SETUP_TOKEN` and the installer, upgrades) and in a container (docs/operations.md), choosing
       a backend and a database, switching with `db:copy`, ADR 0001 amended (the WASM demo stays

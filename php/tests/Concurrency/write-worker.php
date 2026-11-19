@@ -23,7 +23,7 @@ use StudioSchedule\Service\EventWaitlist;
 use StudioSchedule\Service\PassIssuance;
 use StudioSchedule\Service\ReceiptIssuance;
 use StudioSchedule\Service\SessionPrincipal;
-use StudioSchedule\Store\AttendanceStore;
+use StudioSchedule\Store\BookingStore;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\EventRegistrationStore;
 use StudioSchedule\Store\EventStore;
@@ -102,7 +102,7 @@ try {
             $registrations->signup(new SessionPrincipal($actor, $target, 'member'), 'winter-workshop', $target, waiting: false);
             break;
         case 'redemption':
-            $attendance = new Attendance(new AttendanceStore($db, $events, new LessonWriteStore($db), new ParticipantReadStore($db)), $clock);
+            $attendance = new Attendance(new BookingStore($db, $events, new LessonWriteStore($db), new ParticipantReadStore($db)), $clock);
             $attendance->set(new SessionPrincipal($actor, '00000000-0000-7000-8000-000000000005', 'office'), $target, 'attended');
             break;
         case 'receipt':
