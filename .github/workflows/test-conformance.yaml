@@ -56,7 +56,7 @@ jobs:
           public_settings_and_catalog public_event_details office_event_reads office_event_lifecycle event_registration_reads event_signup
           events_and_registrations event_session_signup_guards
           schedule_release_and_visibility
-          registration_and_session password_recovery credential_changes login_rate_limit admin_impersonation account_lifecycle
+          registration_and_session password_recovery credential_changes login_rate_limit admin_impersonation account_lifecycle office_account_invitation
           catalog_administration term_administration class_lists_and_roster class_creation_and_deletion one_off_lesson_creation lesson_cancellation_and_deletion lesson_editing_and_restoration lesson_notices teaching_schedule lesson_attendance
           member_cancellation_of_a_seeded_booking member_cancellation_of_following_bookings my_lessons_and_history
           family_profiles office_person_and_guardian_writes person_detail participant_roster_and_history waitlist_invite_lookup_limits calendar_subscription family_and_privacy

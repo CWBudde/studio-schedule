@@ -1464,6 +1464,10 @@ backends.
           school-local birth dates and unique member numbers, keep login email independent of the
           contact email, and reject guardianship cycles. The shared `office_person_and_guardian_writes`
           case runs in PHP CI on all three databases at both mount paths.
+    - [x] Let the office invite an existing person to activate a pending account using a 72-hour
+          password reset link. Only an admin may invite another admin. Account, token and mail
+          commit together. The shared `office_account_invitation` case runs in PHP CI on all three
+          databases at both mount paths.
     - [ ] Remove dependents and pass any freed waitlist places on to the next eligible people.
     - [x] Let the office manage locations, rooms, course types, levels and staff. Room and level
           orders are saved as a whole, and inactive staff appear in the office list. The shared

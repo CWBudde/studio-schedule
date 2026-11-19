@@ -17,6 +17,7 @@ use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use StudioSchedule\Http\DuplicateRoutes;
 use StudioSchedule\Http\AccountAdministrationRoutes;
+use StudioSchedule\Http\AccountInvitationEndpoint;
 use StudioSchedule\Http\AccountRegistrationEndpoint;
 use StudioSchedule\Http\AdminAccountsEndpoint;
 use StudioSchedule\Http\AdminAuditEndpoint;
@@ -82,6 +83,7 @@ use StudioSchedule\Service\ReceiptCancellation;
 use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
 use StudioSchedule\Service\AccountAdministration;
+use StudioSchedule\Service\AccountInvitation;
 use StudioSchedule\Service\AccountConfirmation;
 use StudioSchedule\Service\AccountRegistration;
 use StudioSchedule\Service\AdminSettings;
@@ -126,6 +128,7 @@ use StudioSchedule\Service\SystemClock;
 use StudioSchedule\Service\TermAdmin;
 use StudioSchedule\Service\WaitlistInvites;
 use StudioSchedule\Store\AdminAccountsStore;
+use StudioSchedule\Store\AccountInvitationStore;
 use StudioSchedule\Store\AdminAuditStore;
 use StudioSchedule\Store\AnnouncementRecipients;
 use StudioSchedule\Store\AnnouncementStore;
@@ -443,6 +446,13 @@ final class Bootstrap
                     (new DuplicateRoutes(new PersonDuplicates($duplicates)))->register($app);
                     (new FamilyRoutes(new Family($familyStore, $clock)))->register($app);
                     (new PersonAdministrationRoutes(new PersonAdministration($familyStore, $clock)))->register($app);
+                    $app->post('/api/v1/admin/persons/{personId}/account', new AccountInvitationEndpoint(new AccountInvitation(
+                        new AccountInvitationStore($connection),
+                        $clock,
+                        $mail,
+                        $applicationURL,
+                        $wakeMail,
+                    )))->add(CatalogAdminRoutes::requireOffice(...));
                     $personExport = new PersonExportStore($connection);
                     (new PersonExportRoutes(new PersonExport($personExport, $familyStore, $clock)))->register($app);
                     $app->get('/api/v1/admin/persons/{personId}', new PersonDetailEndpoint(new PersonDetailStore($connection, $personExport, $catalog)))

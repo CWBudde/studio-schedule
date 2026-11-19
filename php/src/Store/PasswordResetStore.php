@@ -88,6 +88,7 @@ final readonly class PasswordResetStore implements PasswordResetPersistence
         DateTimeImmutable $expiresAt,
         #[\SensitiveParameter]
         Rendered $rendered,
+        string $template = 'reset-password',
     ): void {
         $this->connection->executeStatement("DELETE FROM account_tokens WHERE account_id = ? AND purpose = 'reset-password'", [$accountId]);
         $digest = $this->isPostgres() ? "decode(?, 'hex')" : 'UNHEX(?)';
@@ -96,7 +97,7 @@ final readonly class PasswordResetStore implements PasswordResetPersistence
             . "VALUES ($digest, ?, 'reset-password', ?, ?, ?)",
             [$tokenHash, $accountId, $email, $this->timestamp($createdAt), $this->timestamp($expiresAt)],
         );
-        $this->queueMail($email, 'reset-password', $rendered, $createdAt);
+        $this->queueMail($email, $template, $rendered, $createdAt);
     }
 
     public function transactional(Closure $write): mixed

@@ -32,6 +32,7 @@ use StudioSchedule\Domain\Instant;
 use StudioSchedule\Http\CatalogAdminRoutes;
 use StudioSchedule\Bootstrap;
 use StudioSchedule\Http\AfterResponse;
+use StudioSchedule\Http\AccountInvitationEndpoint;
 use StudioSchedule\Http\AttendanceRoutes;
 use StudioSchedule\Http\BookingRoutes;
 use StudioSchedule\Http\EventRegistrationRoutes;
@@ -51,6 +52,7 @@ use StudioSchedule\Http\WaitlistInviteEndpoint;
 use StudioSchedule\Push\Sender;
 use StudioSchedule\Push\VapidKeys;
 use StudioSchedule\Service\BackgroundJobs;
+use StudioSchedule\Service\AccountInvitation;
 use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\Attendance;
 use StudioSchedule\Service\BookingCancellation;
@@ -80,6 +82,7 @@ use StudioSchedule\Service\StatisticsService;
 use StudioSchedule\Service\TeachingSchedule;
 use StudioSchedule\Service\WaitlistInvites;
 use StudioSchedule\Store\Database;
+use StudioSchedule\Store\AccountInvitationStore;
 use StudioSchedule\Store\BookingStore;
 use StudioSchedule\Store\EventRegistrationStore;
 use StudioSchedule\Store\ReceiptWriteStore;
@@ -285,6 +288,64 @@ final class ScheduleStoreTest extends TestCase
             self::assertFalse($this->database->isTransactionActive());
             throw $failure;
         }
+    }
+
+    public function testOfficeAccountInvitationCommitsTheAccountAndLinkOnlyWithMail(): void
+    {
+        $this->database->executeStatement("UPDATE settings SET default_locale = 'de'");
+        $this->database->executeStatement(
+            "ALTER TABLE outbox_mails ADD CONSTRAINT fixture_reject_invitation CHECK (recipient <> 'rejected-invite@example.test')",
+        );
+        $clock = self::createStub(ClockInterface::class);
+        $clock->method('now')->willReturn(new DateTimeImmutable('2026-10-23T16:00:00Z'));
+        $wakes = 0;
+        $service = new AccountInvitation(
+            new AccountInvitationStore($this->database),
+            $clock,
+            new Renderer(),
+            static fn(): string => 'https://school.example.test/dance/schedule',
+            function () use (&$wakes): void {
+                self::assertFalse($this->database->isTransactionActive());
+                ++$wakes;
+            },
+        );
+        $endpoint = new AccountInvitationEndpoint($service);
+        $app = AppFactory::create();
+        $app->post('/api/v1/admin/persons/{personId}/account', $endpoint)->add(CatalogAdminRoutes::requireOffice(...));
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $path = '/admin/persons/' . self::id(2) . '/account';
+        self::post($app, '/admin/persons/invalid/account', $office, 422, ['email' => 'invite@example.test', 'role' => 'member']);
+        self::post($app, $path, $office, 403, ['email' => 'invite@example.test', 'role' => 'admin']);
+        self::post($app, $path, $office, 422, ['email' => 'invite@example.test', 'role' => 'guest']);
+        self::post($app, $path, $office, 422, ['email' => 'invalid', 'role' => 'member']);
+        self::assertSame('duplicate', self::post($app, $path, $office, 409, ['email' => 'MEMBER@example.test', 'role' => 'member'])['reason']);
+
+        try {
+            $service->create($office, self::id(2), 'rejected-invite@example.test', 'member');
+            self::fail('Expected the outbox insert to fail');
+        } catch (DriverException) {
+            self::assertFalse($this->database->fetchOne('SELECT id FROM accounts WHERE email = ?', ['rejected-invite@example.test']));
+            self::assertSame([], $this->database->fetchFirstColumn('SELECT purpose FROM account_tokens'));
+            self::assertSame(0, $wakes);
+        }
+
+        $response = self::post($app, $path, $office, 201, ['email' => ' invite@example.test ', 'role' => 'instructor']);
+        self::assertSame('pending', $response['status']);
+        self::assertSame('invite@example.test', $response['email']);
+        self::assertSame('instructor', $response['role']);
+        self::assertSame('has-account', self::post($app, $path, $office, 409, ['email' => 'another@example.test', 'role' => 'member'])['reason']);
+        self::assertSame(1, $wakes);
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT account_id FROM account_credentials'));
+        self::assertSame(['reset-password'], $this->database->fetchFirstColumn('SELECT purpose FROM account_tokens'));
+        $text = $this->database->fetchOne("SELECT body_text FROM outbox_mails WHERE template = 'invite'");
+        self::assertIsString($text);
+        self::assertStringContainsString('72 Stunden', $text);
+        $pattern = '~https://school\.example\.test/dance/schedule/reset-password\?token=([A-Za-z0-9_-]+)~';
+        if (preg_match($pattern, $text, $link) !== 1) {
+            self::fail('Expected a reset link under the configured application path');
+        }
+        $digest = $this->postgres ? "encode(token_hash, 'hex')" : 'LOWER(HEX(token_hash))';
+        self::assertSame(hash('sha256', $link[1]), $this->database->fetchOne("SELECT $digest FROM account_tokens"));
     }
 
     public function testConcurrentEventSignupsDoNotOverbookTheFinalPlace(): void

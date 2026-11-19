@@ -262,6 +262,7 @@ func TestBackendConformance(t *testing.T) {
 		{"login rate limit", loginRateLimit},
 		{"admin impersonation", adminImpersonation},
 		{"account lifecycle", accountLifecycle},
+		{"office account invitation", officeAccountInvitation},
 		{"member booking and cancellation", memberBooking},
 		{"member cancellation of a seeded booking", memberCancellation},
 		{"member cancellation of following bookings", memberCancellationFollowing},
