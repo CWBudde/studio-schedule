@@ -1382,7 +1382,7 @@ backends.
 - [ ] MySQL/MariaDB schema: `php/migrations/mysql` has one twin per Go migration at the same
       version. Use `DATETIME(6)` in UTC for `timestamptz`, generated columns with unique indexes
       for partial unique indexes, and `SIGNAL` triggers for immutable receipts.
-  - [x] Port PostgreSQL versions 1–38 and compare tables, columns, nullability, keys, unique
+  - [x] Port PostgreSQL versions 1–39 and compare tables, columns, nullability, keys, unique
         constraints and checks in CI on PostgreSQL, MySQL 8.0 and MariaDB 10.6.
   - [ ] Add the shared rate-limit and readiness-cache tables to both migration sets.
 - [x] Shared building blocks: PSR-20 clock and school time zone (never the server zone), UUIDv7
