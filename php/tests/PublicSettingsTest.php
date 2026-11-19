@@ -70,9 +70,9 @@ final class PublicSettingsTest extends TestCase
         }
         try {
             if (self::$dsn !== null) {
-                foreach (['booking_events', 'bookings', 'event_registrations', 'events', 'passes', 'pass_types', 'lessons',
+                foreach (['booking_events', 'pass_redemptions', 'bookings', 'waitlist_entries', 'event_registrations', 'lessons', 'events', 'passes', 'pass_types',
                     'class_members', 'classes', 'terms', 'levels', 'staff', 'rooms', 'locations', 'course_types', 'sessions',
-                    'account_tokens', 'accounts', 'persons', 'settings', 'job_runs'] as $table) {
+                    'account_tokens', 'accounts', 'person_guardians', 'persons', 'settings', 'job_runs'] as $table) {
                     $this->db->executeStatement('DELETE FROM ' . $table);
                 }
             }
@@ -1026,6 +1026,175 @@ final class PublicSettingsTest extends TestCase
                 $this->db->executeStatement('DROP FUNCTION fixture_refuse_class_slot()');
             }
         }
+    }
+
+    public function testStaffRosterIncludesContactsPaymentsAndExpiredInvitations(): void
+    {
+        $clock = $this->generationFixture();
+        $lesson = $this->db->fetchOne('SELECT id FROM lessons');
+        self::assertIsString($lesson);
+        $person = $this->db->fetchOne("SELECT id FROM persons WHERE given_name = 'Mia'");
+        self::assertIsString($person);
+        $guardian = $this->db->fetchOne('SELECT person_id FROM accounts');
+        $this->db->executeStatement("UPDATE persons SET phone = '555-0123' WHERE given_name = 'Ada'");
+        $this->db->insert('person_guardians', ['guardian_id' => $guardian, 'dependent_id' => $person]);
+        $this->db->executeStatement("UPDATE lessons SET status = 'scheduled', capacity = 4");
+        $booked = $this->insertRegionalFixture('bookings', [
+            'lesson_id' => $lesson, 'person_id' => $person, 'status' => 'booked', 'trial' => 0,
+            'source' => 'self', 'booked_at' => '2026-10-23 09:00:00',
+        ]);
+        $this->insertRegionalFixture('bookings', [
+            'lesson_id' => $lesson, 'guest_name' => 'Fixture guest', 'guest_email' => 'guest@example.test',
+            'status' => 'canceled', 'trial' => 0, 'source' => 'staff', 'late' => 1,
+            'booked_at' => '2026-10-24 09:00:00', 'canceled_at' => '2026-10-24 10:00:00',
+        ]);
+        $digest = $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform ? "decode(?, 'hex')" : 'UNHEX(?)';
+        foreach (['A Waiting' => null, 'B Expired' => '2026-10-25 00:00:00', 'C Invited' => '2026-10-25 01:00:00'] as $name => $expiry) {
+            $waiting = $this->insertRegionalFixture('persons', ['given_name' => $name, 'family_name' => 'Example']);
+            $this->db->executeStatement(
+                'INSERT INTO waitlist_entries (id, lesson_id, person_id, status, joined_at, stay_on_list, invite_token_hash, invited_at, expires_at) '
+                . "VALUES (?, ?, ?, ?, '2026-10-24 09:00:00', TRUE, $digest, ?, ?)",
+                [$this->fixtureId(), $lesson, $waiting, $expiry === null ? 'waiting' : 'invited',
+                    $expiry === null ? null : hash('sha256', $name), $expiry === null ? null : '2026-10-24 12:00:00', $expiry],
+            );
+        }
+        $path = '/lessons/' . $this->fixtureUuid($lesson) . '/participants';
+        self::assertSame(401, $this->apiRequest('GET', $path, signedIn: false, clock: $clock)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'member'");
+        self::assertSame(403, $this->apiRequest('GET', $path, clock: $clock)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'instructor'");
+        self::assertSame(404, $this->apiRequest('GET', $path, clock: $clock)->getStatusCode());
+        $this->db->executeStatement('UPDATE staff SET person_id = ?', [$guardian]);
+        $response = $this->apiRequest('GET', $path, clock: $clock);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
+        $roster = self::decoded($response);
+        self::assertSame(4, $roster['capacity']);
+        self::assertSame(1, $roster['active']);
+        self::assertSame(1, $roster['held']);
+        self::assertSame(1, $roster['waiting']);
+        self::assertSame(2, $roster['freePlaces']);
+        self::assertSame('2026-11-02T23:00:00Z', $roster['dayOverAt']);
+        self::assertIsArray($roster['bookings']);
+        self::assertEquals([
+            'bookingId' => $this->fixtureUuid($booked), 'personId' => $this->fixtureUuid($person),
+            'name' => 'Mia Example', 'contactEmail' => 'admin@example.org', 'contactPhone' => '555-0123',
+            'status' => 'booked', 'guest' => false, 'source' => 'self', 'trial' => false, 'late' => false,
+            'bookedAt' => '2026-10-23T09:00:00Z', 'payment' => ['status' => 'pending'],
+        ], $roster['bookings'][0]);
+        self::assertIsArray($roster['bookings'][1]);
+        self::assertTrue($roster['bookings'][1]['guest']);
+        self::assertSame('Fixture guest', $roster['bookings'][1]['name']);
+        self::assertSame(['status' => 'unpaid'], $roster['bookings'][1]['payment']);
+        self::assertIsArray($roster['waitlist']);
+        self::assertSame(['waiting', 'expired', 'invited'], array_column($roster['waitlist'], 'status'));
+        self::assertIsArray($roster['waitlist'][0]);
+        self::assertIsArray($roster['waitlist'][1]);
+        self::assertIsArray($roster['waitlist'][2]);
+        self::assertSame(1, $roster['waitlist'][0]['position']);
+        self::assertArrayNotHasKey('expiresAt', $roster['waitlist'][1]);
+        self::assertSame('2026-10-25T01:00:00Z', $roster['waitlist'][2]['expiresAt']);
+
+        $this->db->executeStatement('UPDATE staff SET active = FALSE');
+        self::assertSame(404, $this->apiRequest('GET', $path, clock: $clock)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'office'");
+        $this->db->executeStatement("UPDATE bookings SET status = 'attended' WHERE id = ?", [$booked]);
+        $type = $this->insertRegionalFixture('pass_types', [
+            'name' => 'Fixture four visits', 'kind' => 'visits', 'visits' => 4, 'validity_days' => 30,
+            'price' => 0, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => '2026-10-01 09:00:00',
+        ]);
+        $pass = $this->insertRegionalFixture('passes', [
+            'pass_type_id' => $type, 'person_id' => $person, 'kind' => 'visits', 'visits_total' => 4, 'visits_remaining' => 3,
+            'valid_from' => '2026-10-20', 'valid_until' => '2026-11-18', 'status' => 'active', 'origin' => 'assignment',
+            'sold_at' => '2026-10-20 09:00:00', 'price_paid' => 0,
+        ]);
+        $this->db->insert('pass_redemptions', ['pass_id' => $pass, 'booking_id' => $booked, 'at' => '2026-10-25 00:00:00']);
+        $paid = $this->apiRequest('GET', $path, clock: $clock);
+        self::assertSame(200, $paid->getStatusCode());
+        $paidRows = self::decoded($paid)['bookings'];
+        self::assertIsArray($paidRows);
+        self::assertIsArray($paidRows[0]);
+        self::assertSame([
+            'status' => 'paid',
+            'pass' => ['id' => $this->fixtureUuid($pass), 'name' => 'Fixture four visits', 'kind' => 'visits',
+                'visitsRemaining' => 3, 'validUntil' => '2026-11-18'],
+        ], $paidRows[0]['payment']);
+    }
+
+    public function testEventSessionRosterUsesRegisteredPeopleAndEventCapacity(): void
+    {
+        $clock = $this->generationFixture();
+        $event = $this->insertRegionalFixture('events', [
+            'slug' => 'fixture-event', 'title' => 'Fixture event', 'course_type_id' => $this->db->fetchOne('SELECT id FROM course_types'),
+            'capacity' => 7, 'price' => 0, 'vat_rate_bp' => 0, 'status' => 'published',
+            'created_at' => '2026-10-24 09:00:00', 'updated_at' => '2026-10-24 09:00:00',
+        ]);
+        $this->db->executeStatement("UPDATE lessons SET class_id = NULL, slot_date = NULL, kind = 'workshop', event_id = ?", [$event]);
+        $record = ['event_id' => $event, 'payment' => 'unpaid', 'price' => 0, 'vat_rate_bp' => 0,
+            'created_at' => '2026-10-24 09:00:00', 'updated_at' => '2026-10-24 09:00:00'];
+        $registered = $this->insertRegionalFixture('event_registrations', ['guest_name' => 'Fixture registrant', 'status' => 'registered'] + $record);
+        $this->insertRegionalFixture('event_registrations', [
+            'person_id' => $this->db->fetchOne("SELECT id FROM persons WHERE given_name = 'Mia'"), 'status' => 'waiting',
+        ] + $record);
+        $lesson = $this->fixtureUuid($this->db->fetchOne('SELECT id FROM lessons'));
+        $response = $this->apiRequest('GET', "/lessons/$lesson/participants", clock: $clock);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertEquals([
+            'lessonId' => $lesson, 'capacity' => 7, 'dayOverAt' => '2026-11-02T23:00:00Z',
+            'active' => 1, 'held' => 0, 'waiting' => 1, 'freePlaces' => 6,
+            'registrants' => [['id' => $this->fixtureUuid($registered), 'name' => 'Fixture registrant', 'guest' => true]],
+            'bookings' => [], 'waitlist' => [],
+        ], self::decoded($response));
+    }
+
+    public function testRosterKeepsTheFinalSchoolDateWithARepresentableUtcCutoff(): void
+    {
+        $clock = $this->generationFixture();
+        $this->db->executeStatement("UPDATE settings SET timezone = 'Pacific/Kiritimati'");
+        $this->db->executeStatement("UPDATE lessons SET starts_at = '9999-12-31 05:00:00', ends_at = '9999-12-31 06:00:00'");
+        $lesson = $this->fixtureUuid($this->db->fetchOne('SELECT id FROM lessons'));
+        $response = $this->apiRequest('GET', "/lessons/$lesson/participants", clock: $clock);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('9999-12-31T10:00:00Z', self::decoded($response)['dayOverAt']);
+    }
+
+    public function testOnlyOfficeCanReadBookingHistoryWithTheRecordedActor(): void
+    {
+        $clock = $this->generationFixture();
+        $booking = $this->insertRegionalFixture('bookings', [
+            'lesson_id' => $this->db->fetchOne('SELECT id FROM lessons'), 'person_id' => $this->db->fetchOne('SELECT person_id FROM accounts'),
+            'status' => 'booked', 'trial' => 0, 'source' => 'member', 'booked_at' => '2026-10-23 09:00:00',
+        ]);
+        $account = $this->fixtureUuid($this->db->fetchOne('SELECT id FROM accounts'));
+        $this->insertRegionalFixture('booking_events', [
+            'booking_id' => $booking, 'at' => '2026-10-24 09:00:00', 'status' => 'attended',
+            'actor_account_id' => $this->db->fetchOne('SELECT id FROM accounts'), 'note' => 'fixture',
+        ]);
+        $this->insertRegionalFixture('booking_events', [
+            'booking_id' => $booking, 'at' => '2026-10-23 09:00:00', 'status' => 'booked', 'override' => 1,
+        ]);
+        $path = '/admin/bookings/' . $this->fixtureUuid($booking) . '/events';
+        self::assertSame(401, $this->apiRequest('GET', $path, signedIn: false, clock: $clock)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'instructor'");
+        self::assertSame(403, $this->apiRequest('GET', $path, clock: $clock)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'office'");
+        $result = $this->apiRequest('GET', $path, clock: $clock);
+        self::assertSame(200, $result->getStatusCode());
+        $items = self::decoded($result)['items'];
+        self::assertIsArray($items);
+        self::assertCount(2, $items);
+        self::assertIsArray($items[0]);
+        self::assertIsArray($items[1]);
+        self::assertSame('booked', $items[0]['status']);
+        self::assertSame(true, $items[0]['override']);
+        self::assertArrayNotHasKey('actor', $items[0]);
+        self::assertSame('2026-10-24T09:00:00Z', $items[1]['at']);
+        self::assertSame('fixture', $items[1]['note']);
+        self::assertSame(['accountId' => $account, 'name' => 'Ada Example', 'email' => 'admin@example.org'], $items[1]['actor']);
+        $missing = $this->fixtureUuid($this->fixtureId());
+        self::assertSame(404, $this->apiRequest('GET', "/admin/bookings/$missing/events", clock: $clock)->getStatusCode());
+        $this->db->executeStatement('DELETE FROM booking_events');
+        self::assertSame(['items' => []], self::decoded($this->apiRequest('GET', $path, clock: $clock)));
     }
 
     /** @return array{courseTypeId:string, roomId:string, instructorId:string, weekday:int, startTime:string, durationMinutes:int, capacity:int, ageFromMonths:int} */

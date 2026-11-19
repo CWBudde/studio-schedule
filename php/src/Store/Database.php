@@ -80,6 +80,17 @@ final class Database
         return str_starts_with($text, '0000-') ? '0001' . substr($text, 4) . ' BC' : $text;
     }
 
+    public static function instant(string $text): DateTimeImmutable
+    {
+        // PostgreSQL writes year zero as year one BC. MySQL timestamps are stored in UTC.
+        if (str_starts_with($text, '0001-') && str_ends_with($text, ' BC')) {
+            $text = '0000' . substr($text, 4, -3);
+        }
+        $utc = new DateTimeZone('UTC');
+
+        return (new DateTimeImmutable($text, $utc))->setTimezone($utc);
+    }
+
     /** Convert a PostgreSQL interval using Go's 30-day months. */
     public static function intervalMicros(string $column): string
     {

@@ -1460,6 +1460,11 @@ backends.
           databases with the authentication draft.
   - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
         order (`SELECT … FOR UPDATE` on all three databases, term → class → lesson → passes)
+    - [ ] Run the roster and booking history case in PHP CI after PHP sign-in lands. Linked
+          active staff can read their lessons' bookings, payments and waitlist or event
+          registrations. The office can read every roster and the recorded booking history.
+          The shared `participant_roster_and_history` case passes at both mount paths on all
+          three PHP databases with the authentication draft.
   - [ ] Calendar feeds (ADR 0011)
   - [ ] Passes, redemption ledger, receipts with the gapless counter and PDF (ADR 0012)
   - [ ] Settings, branding, themes, `init` (ADR 0013, 0018)

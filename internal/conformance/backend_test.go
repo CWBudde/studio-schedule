@@ -252,6 +252,7 @@ func TestBackendConformance(t *testing.T) {
 		{"admin impersonation", adminImpersonation},
 		{"member booking and cancellation", memberBooking},
 		{"lesson waitlist", lessonWaitlist},
+		{"participant roster and history", participantRosterAndHistory},
 		{"participant roles", participantRoles},
 		{"calendar subscription", calendarSubscription},
 		{"family profiles", familyProfiles},

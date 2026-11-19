@@ -147,6 +147,23 @@ func expectConflict(t *testing.T, b *backend, client *http.Client, in request, r
 func participantRoles(t *testing.T, b *backend) {
 	t.Helper()
 
+	alina, felix, in, ute := checkWorkshopRoster(t, b)
+	b.call(t, felix, request{
+		method: http.MethodPut, path: "/api/v1/bookings/{bookingId}/participant",
+		params: map[string]string{"bookingId": ute}, body: `{"trial":true,"trialNote":"Back after a break"}`,
+	}, http.StatusOK)
+	refreshed := read[roster](t, b.call(t, alina, in, http.StatusOK))
+	for _, person := range refreshed.Bookings {
+		if person.BookingID == ute && person.Trial && person.TrialNote == "Back after a break" {
+			return
+		}
+	}
+	t.Error("the instructor did not see the updated trial note")
+}
+
+func checkWorkshopRoster(t *testing.T, b *backend) (instructor, accompanist *http.Client, in request, trialBooking string) {
+	t.Helper()
+
 	alina := browser(t)
 	felix := browser(t)
 	clara := browser(t)
@@ -154,7 +171,7 @@ func participantRoles(t *testing.T, b *backend) {
 	login(t, b, felix, "felix.keysworth@example.net", demoPassword)
 	login(t, b, clara, "clara.amberly@example.org", demoPassword)
 	lesson := lessonOn(t, b, "2026-11-16", "2026-11-17", "Classical Ballet")
-	in := request{
+	in = request{
 		method: http.MethodGet, path: "/api/v1/lessons/{lessonId}/participants",
 		params: map[string]string{"lessonId": lesson},
 	}
@@ -178,15 +195,48 @@ func participantRoles(t *testing.T, b *backend) {
 	if list.Capacity != 16 || list.Active != 3 || list.FreePlaces != 13 || !mara || !pia || ute == "" {
 		t.Fatalf("unexpected workshop participants: %+v", list)
 	}
-	b.call(t, felix, request{
-		method: http.MethodPut, path: "/api/v1/bookings/{bookingId}/participant",
-		params: map[string]string{"bookingId": ute}, body: `{"trial":true,"trialNote":"Back after a break"}`,
-	}, http.StatusOK)
-	refreshed := read[roster](t, b.call(t, alina, in, http.StatusOK))
-	for _, person := range refreshed.Bookings {
-		if person.BookingID == ute && person.Trial && person.TrialNote == "Back after a break" {
-			return
-		}
+
+	return alina, felix, in, ute
+}
+
+func participantRosterAndHistory(t *testing.T, b *backend) {
+	t.Helper()
+
+	_, felix, _, booking := checkWorkshopRoster(t, b)
+	guest, office := browser(t), browser(t)
+	login(t, b, office, "olga.ledgerby@example.net", demoPassword)
+	history := request{
+		method: http.MethodGet, path: "/api/v1/admin/bookings/{bookingId}/events",
+		params: map[string]string{"bookingId": booking},
 	}
-	t.Error("the instructor did not see the updated trial note")
+	b.call(t, guest, history, http.StatusUnauthorized)
+	b.call(t, felix, history, http.StatusForbidden)
+	items := read[struct {
+		Items []struct {
+			ID, Status, At string
+			Actor          *struct{ AccountID, Name, Email string }
+		}
+	}](t, b.call(t, office, history, http.StatusOK)).Items
+	if len(items) == 0 || items[0].Status != "booked" || items[0].Actor == nil || items[0].Actor.Name == "" || items[0].Actor.Email == "" {
+		t.Fatalf("workshop booking is missing its initial history: %+v", items)
+	}
+
+	event := read[eventSummary](t, b.call(t, guest, request{
+		method: http.MethodGet, path: "/api/v1/events/{slug}", params: map[string]string{"slug": "open-ballet-taster"},
+	}, http.StatusOK))
+	if len(event.Sessions) != 1 {
+		t.Fatal("fixture event must have one session")
+	}
+	session := request{
+		method: http.MethodGet, path: "/api/v1/lessons/{lessonId}/participants",
+		params: map[string]string{"lessonId": event.Sessions[0].ID},
+	}
+	view := read[struct {
+		roster
+		Registrants []struct{ Name string }
+	}](t, b.call(t, office, session, http.StatusOK))
+	if view.Registrants == nil || len(view.Bookings) != 0 || len(view.Waitlist) != 0 || view.Active != len(view.Registrants) ||
+		view.Capacity != 20 || view.FreePlaces != event.FreePlaces {
+		t.Fatalf("session roster does not use the event registrations and capacity: %+v", view)
+	}
 }

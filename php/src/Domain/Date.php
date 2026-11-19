@@ -84,7 +84,17 @@ final readonly class Date implements JsonSerializable, Stringable
      */
     public function at(TimeOfDay $time, DateTimeZone $schoolTimeZone): DateTimeImmutable
     {
-        $wall = $this->utc()->setTime($time->hour, $time->minute);
+        return self::wallClockInstant($this->utc()->setTime($time->hour, $time->minute), $schoolTimeZone);
+    }
+
+    /** The next school midnight can fit in UTC even when the local date is outside the Date range. */
+    public function nextMidnight(DateTimeZone $schoolTimeZone): DateTimeImmutable
+    {
+        return self::wallClockInstant($this->utc()->modify('+1 day'), $schoolTimeZone);
+    }
+
+    private static function wallClockInstant(DateTimeImmutable $wall, DateTimeZone $schoolTimeZone): DateTimeImmutable
+    {
         $seconds = $wall->getTimestamp();
 
         // A full day on each side covers both offsets at a transition, even near the date line.

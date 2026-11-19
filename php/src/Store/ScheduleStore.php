@@ -402,13 +402,7 @@ final readonly class ScheduleStore implements SchedulePersistence
 
     private static function instant(mixed $value): DateTimeImmutable
     {
-        $text = self::string($value);
-        if (str_starts_with($text, '0001-') && str_ends_with($text, ' BC')) {
-            $text = '0000' . substr($text, 4, -3);
-        }
-        $utc = new DateTimeZone('UTC');
-
-        return (new DateTimeImmutable($text, $utc))->setTimezone($utc);
+        return Database::instant(self::string($value));
     }
 
     private static function string(mixed $value): string
