@@ -315,3 +315,67 @@ func passTypeAdministration(t *testing.T, b *backend) {
 	b.call(t, admin, remove, http.StatusNoContent)
 	b.call(t, admin, retire, http.StatusNotFound)
 }
+
+func passLists(t *testing.T, b *backend) {
+	t.Helper()
+
+	type person struct{ ID, Name string }
+	type passUse struct {
+		BookingID, BookingStatus, RedeemedAt string
+		Lesson                               struct{ ID, StartsAt string }
+	}
+	type pass struct {
+		ID, ReceiptID, SoldAt, Kind      string
+		Owner                            person
+		Payer                            *person
+		PassType                         struct{ ID, Name string }
+		Usable                           bool
+		UseCount, VisitsTotal, PricePaid int
+		Uses                             []passUse
+	}
+	type wallet struct {
+		Timezone, Today, RedemptionMode string
+		Items                           []pass
+	}
+
+	member := browser(t)
+	mine := request{method: http.MethodGet, path: "/api/v1/my/passes"}
+	b.call(t, member, mine, http.StatusUnauthorized)
+	login(t, b, member, "clara.amberly@example.org", demoPassword)
+	view := read[wallet](t, b.call(t, member, mine, http.StatusOK))
+	if view.Timezone != "Europe/Berlin" || view.Today != demoDate || view.RedemptionMode != "attendance" || len(view.Items) != 2 {
+		t.Fatalf("unexpected family pass wallet: %+v", view)
+	}
+
+	child, parent := view.Items[0], view.Items[1]
+	if child.Owner.Name != "Ella Amberly" || parent.Owner.Name != "Clara Amberly" || child.Payer == nil ||
+		*child.Payer != parent.Owner || parent.Payer != nil || !child.Usable || !parent.Usable {
+		t.Fatalf("family pass ownership, payer or ordering is wrong: child %+v, parent %+v", child, parent)
+	}
+	for _, item := range view.Items {
+		if item.ID == "" || item.ReceiptID == "" || item.PricePaid <= 0 || item.Kind != "visits" ||
+			item.VisitsTotal != 10 || item.PassType.Name != "10-visit pass" || item.UseCount != len(item.Uses) || item.UseCount == 0 {
+			t.Fatalf("pass is missing its purchase or redemption history: %+v", item)
+		}
+		for i, use := range item.Uses {
+			if use.BookingID == "" || use.BookingStatus != "attended" || use.RedeemedAt == "" ||
+				use.Lesson.ID == "" || use.Lesson.StartsAt == "" || (i > 0 && use.Lesson.StartsAt > item.Uses[i-1].Lesson.StartsAt) {
+				t.Fatalf("unexpected pass use or lesson order: %+v", use)
+			}
+		}
+	}
+
+	ref := request{
+		method: http.MethodGet, path: "/api/v1/admin/persons/{personId}/passes",
+		params: map[string]string{"personId": child.Owner.ID},
+	}
+	b.call(t, member, ref, http.StatusForbidden)
+	office := browser(t)
+	login(t, b, office, "olga.ledgerby@example.net", demoPassword)
+	owned := read[struct{ Items []pass }](t, b.call(t, office, ref, http.StatusOK)).Items
+	if len(owned) != 1 || owned[0].ID != child.ID || owned[0].Owner != child.Owner || owned[0].UseCount != child.UseCount {
+		t.Fatalf("office pass list did not select Ella's pass: %+v", owned)
+	}
+	ref.params["personId"] = "a961f110-a017-7241-8123-123456789abc"
+	b.call(t, office, ref, http.StatusNotFound)
+}

@@ -1483,8 +1483,13 @@ backends.
           use returns a conflict on deletion. Existing passes retain their visits, dates and price.
           The shared `pass_type_administration` case passes at both mount paths on all three PHP
           databases with the authentication draft.
-    - [ ] Enable `receipt_pdf_downloads`, `receipt_lists_and_search`, `receipt_settings_and_logo`
-          and `pass_type_administration` in PHP CI after PHP sign-in lands.
+    - [x] Show each person's passes to the office and the signed-in person's family passes
+          to them. Show usable passes first using the school date, with the total use count and
+          up to ten recent redemptions. Office notes appear only in the office list. The shared
+          `pass_lists` case passes at both mount paths on all three PHP databases with the
+          authentication draft.
+    - [ ] Enable `receipt_pdf_downloads`, `receipt_lists_and_search`, `receipt_settings_and_logo`,
+          `pass_type_administration` and `pass_lists` in PHP CI after PHP sign-in lands.
   - [ ] Settings, branding, themes, `init` (ADR 0013, 0018)
     - [x] Initialize school settings and issue the first administrator's one-time setup link
           through `init` or the web installer on PostgreSQL, MySQL and MariaDB.

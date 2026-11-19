@@ -535,6 +535,97 @@ final class FamilyRoutesTest extends TestCase
         }
     }
 
+    public function testPassListsUseSchoolDayDirectFamilyAndBoundedRedemptions(): void
+    {
+        $this->account(6, 'office');
+        $this->session(6, 'office', 36);
+        $this->seedExportHistory();
+        $this->db->executeStatement("UPDATE passes SET note = 'Office only' WHERE id = ?", [$this->uuid(60)]);
+        $this->db->executeStatement("UPDATE settings SET redemption_mode = 'booking'");
+
+        foreach ([82 => 2, 83 => 8, 84 => 7, 85 => 3, 86 => 1, 87 => 1] as $id => $owner) {
+            $status = $id === 87 ? 'voided' : 'active';
+            $this->insert('passes', [
+                'id' => $id, 'pass_type_id' => 59, 'person_id' => $owner, 'kind' => 'time',
+                'valid_from' => $id === 86 ? '2026-11-20' : '2026-11-01',
+                'valid_until' => $id === 86 ? '2026-12-01' : '2026-11-19',
+                'status' => $status, 'voided_at' => $status === 'voided' ? '2026-11-18 21:00:00' : null,
+                'origin' => 'sale', 'price_paid' => 900, 'payer_person_id' => 6,
+                'sold_at' => $id === 85 ? '2026-11-02 12:00:00' : '2026-11-02 12:00:00.000001',
+                'note' => 'Private sale note',
+            ]);
+        }
+        $this->db->executeStatement("UPDATE persons SET given_name = 'Deleted', family_name = 'person', anonymized_at = ? WHERE id = ?", [
+            '2026-11-18 20:00:00', $this->uuid(6),
+        ]);
+
+        for ($day = 1; $day <= 12; $day++) {
+            $date = sprintf('2026-11-%02d', $day);
+            $this->insert('lessons', [
+                'id' => 200 + $day, 'course_type_id' => 52, 'room_id' => 51, 'instructor_id' => 21,
+                'starts_at' => "$date 11:00:00", 'ends_at' => "$date 12:00:00",
+                'kind' => $day === 10 ? 'workshop' : 'regular', 'event_id' => $day === 10 ? 62 : null,
+                'visibility' => 'hidden', 'status' => 'scheduled', 'capacity' => 8,
+            ]);
+            $this->insert('bookings', [
+                'id' => 250 + $day, 'lesson_id' => 200 + $day, 'person_id' => 2,
+                'status' => 'attended', 'booked_at' => "$date 09:00:00", 'trial' => false,
+            ]);
+            $this->insert('pass_redemptions', [
+                'pass_id' => 82, 'booking_id' => 250 + $day, 'at' => sprintf('2026-11-18 %02d:30:00', 24 - $day),
+            ]);
+        }
+
+        $mine = '/my/passes';
+        $person = '/admin/persons/' . self::id(1) . '/passes';
+        $this->request('GET', $mine, user: null, status: 401, mount: '');
+        $this->request('GET', $person, status: 403, mount: '');
+        $family = $this->request('GET', $mine, user: 'acting-parent', mount: '');
+        self::assertSame('Europe/Berlin', $family['timezone']);
+        self::assertSame('2026-11-19', $family['today']);
+        self::assertSame('booking', $family['redemptionMode']);
+        self::assertIsArray($family['items']);
+        self::assertSame(array_map(self::id(...), [82, 85, 60, 87, 86]), array_column($family['items'], 'id'));
+        self::assertSame([true, true, true, false, false], array_column($family['items'], 'usable'));
+        self::assertSame([], array_column($family['items'], 'note'));
+
+        [$time, , $visits, $voided] = $family['items'];
+        self::assertIsArray($time);
+        self::assertIsArray($visits);
+        self::assertIsArray($voided);
+        self::assertEquals(['id' => self::id(2), 'name' => 'Teen Zebra'], $time['owner']);
+        self::assertEquals(['id' => self::id(59), 'name' => 'Two visits'], $time['passType']);
+        self::assertEquals(['id' => self::id(6), 'name' => 'Deleted person', 'anonymized' => true], $time['payer']);
+        self::assertSame(0, $time['visitsTotal']);
+        self::assertSame(12, $time['useCount']);
+        self::assertIsArray($time['uses']);
+        self::assertSame(array_map(self::id(...), range(260, 251)), array_column($time['uses'], 'bookingId'));
+        $newest = $time['uses'][0];
+        self::assertIsArray($newest);
+        self::assertSame('2026-11-18T14:30:00Z', $newest['redeemedAt']);
+        self::assertSame('Teen Zebra', $newest['personName']);
+        self::assertIsArray($newest['lesson']);
+        self::assertSame('hidden', $newest['lesson']['visibility']);
+        self::assertSame(8, $newest['lesson']['capacity']);
+        self::assertSame(self::id(62), $newest['lesson']['eventId']);
+        self::assertArrayNotHasKey('eventSlug', $newest['lesson']);
+        self::assertSame('2026-11-18T21:00:00Z', $voided['voidedAt']);
+
+        self::assertSame(1, $visits['useCount']);
+        self::assertIsArray($visits['uses']);
+        $late = $visits['uses'][0];
+        self::assertIsArray($late);
+        self::assertSame('canceled', $late['bookingStatus']);
+        self::assertTrue($late['late']);
+        $office = $this->request('GET', $person, user: 'office', mount: '');
+        self::assertIsArray($office['items']);
+        self::assertSame(array_map(self::id(...), [60, 87, 86]), array_column($office['items'], 'id'));
+        self::assertSame('Office only', array_column($office['items'], 'note')[0]);
+        self::assertSame(['items' => []], $this->request('GET', '/admin/persons/' . self::id(4) . '/passes', user: 'office', mount: ''));
+        $this->request('GET', '/admin/persons/' . self::id(100) . '/passes', user: 'office', status: 404, mount: '');
+        $this->request('GET', '/admin/persons/invalid/passes', user: 'office', status: 422, mount: '');
+    }
+
     private function seedExportHistory(): void
     {
         $stamp = '2026-11-18 23:30:00';

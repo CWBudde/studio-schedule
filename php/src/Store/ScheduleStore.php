@@ -158,6 +158,29 @@ final readonly class ScheduleStore implements SchedulePersistence
     }
 
     /**
+     * @param list<string> $lessonIds
+     * @return list<PublishedLesson>
+     */
+    public function lessonsById(array $lessonIds): array
+    {
+        $lessons = [];
+        foreach (array_chunk($lessonIds, 1000) as $ids) {
+            $rows = $this->connection->fetchAllAssociative(
+                self::LESSONS . ' WHERE l.id IN (?)',
+                [$this->encodeIds($ids)],
+                [$this->idListType()],
+            );
+            foreach ($rows as $row) {
+                $lessons[] = $this->publishedLesson(['capacity' => $row['lesson_capacity']] + $row);
+            }
+        }
+        usort($lessons, static fn(PublishedLesson $first, PublishedLesson $second): int
+            => [$first->startsAt, $first->id] <=> [$second->startsAt, $second->id]);
+
+        return $lessons;
+    }
+
+    /**
      * @param list<string> $eventIds
      * @return list<PublishedLesson>
      */
