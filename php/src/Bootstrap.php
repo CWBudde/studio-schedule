@@ -61,6 +61,7 @@ use StudioSchedule\Service\ClassAdmin;
 use StudioSchedule\Service\CalendarFeedManagement;
 use StudioSchedule\Service\CalendarFeedRendering;
 use StudioSchedule\Service\CommonPasswords;
+use StudioSchedule\Service\CachedReadiness;
 use StudioSchedule\Service\DatabaseReadiness;
 use StudioSchedule\Service\EmailChange;
 use StudioSchedule\Service\Family;
@@ -293,6 +294,7 @@ final class Bootstrap
                 $resetPassword,
                 $sessions,
                 $registerRoutes,
+                new CachedReadiness($config->databaseURL, $expectedVersions, $clock, $logger),
             )->handle($request);
         } catch (Throwable $error) {
             $id = Uuid::v7()->toRfc4122();

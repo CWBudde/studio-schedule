@@ -1363,8 +1363,9 @@ backends.
       `fastcgi_finish_request()`. PHP 8.3 now serves the mounted HTTP shell, validates the Goose
       migration history, and tests the DBAL connection and job lock on PostgreSQL, MySQL 8.0 and
       MariaDB 10.6. PHP accepts existing session cookies, checks impersonation and expires and renews
-      sessions on all three engines. Shared caches, the readiness deadline, metrics, and
-      after-response wakes for the remaining jobs are open.
+      sessions on all three engines. PHP caches readiness for two seconds in APCu or the database.
+      APCu rate limits, the readiness deadline, metrics, and after-response wakes for the
+      remaining jobs are open.
   - [x] Schedule `purge-sessions` and `deliver-mail` through `jobs:run`, with per-job locks and
         history in `job_runs`. SMTP delivery uses the outbox. A deadline for the entire SMTP
         attempt and the remaining jobs are open.
@@ -1379,14 +1380,15 @@ backends.
   - [x] Run `deliver-push` from cron when VAPID is configured. Claim and send up to 50 messages
         per run, apply Go's retry and expiry rules, and remove a subscription on a current 404
         or 410 response.
-- [ ] MySQL/MariaDB schema: `php/migrations/mysql` has one twin per Go migration at the same
+- [x] MySQL/MariaDB schema: `php/migrations/mysql` has one twin per Go migration at the same
       version. Use `DATETIME(6)` in UTC for `timestamptz`, generated columns with unique indexes
       for partial unique indexes, and `SIGNAL` triggers for immutable receipts.
-  - [x] Port PostgreSQL versions 1–40 and compare tables, columns, nullability, keys, unique
+  - [x] Port PostgreSQL versions 1–41 and compare tables, columns, nullability, keys, unique
         constraints and checks in CI on PostgreSQL, MySQL 8.0 and MariaDB 10.6.
   - [x] Add the shared rate-limit table to both migration sets and verify that concurrent PHP
         workers share the same limits on all three databases.
-  - [ ] Add the shared readiness-cache table to both migration sets.
+  - [x] Add the shared readiness-cache table as migration 41 in both sets. Readiness expiry,
+        release changes, and API maintenance pass on all three engines, with and without APCu.
 - [x] Shared building blocks: PSR-20 clock and school time zone (never the server zone), UUIDv7
       IDs, `Money`/`Date`/`TimeOfDay` value objects, argon2id through `password_verify` (or
       `sodium_crypto_pwhash_str_verify` where PHP lacks Argon2) on the existing PHC hashes, new

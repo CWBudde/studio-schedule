@@ -51,6 +51,15 @@ final class Database
         return DriverManager::getConnection($params);
     }
 
+    /** Set the lock budget on a dedicated connection used for a readiness probe. */
+    public static function limitReadinessLockWait(Connection $connection): void
+    {
+        $postgres = ($connection->getParams()['driver'] ?? null) === 'pdo_pgsql';
+        $connection->executeStatement($postgres
+            ? "SET lock_timeout = '1s'"
+            : 'SET SESSION lock_wait_timeout = 1, innodb_lock_wait_timeout = 1');
+    }
+
     /** @return 'pdo_pgsql'|'pdo_mysql'|null */
     public static function driverForURL(#[\SensitiveParameter] string $url): ?string
     {

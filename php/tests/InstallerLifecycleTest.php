@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Tests;
 
+use DateTimeImmutable;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\TestCase;
+use Psr\Clock\ClockInterface;
 use Psr\Http\Message\ResponseInterface;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
@@ -43,6 +45,9 @@ final class InstallerLifecycleTest extends TestCase
         }
 
         try {
+            self::assertSame(200, $this->request($app, $dsn, 'GET', '/dance/healthz')->getStatusCode());
+            self::assertSame(503, $this->request($app, $dsn, 'GET', '/dance/readyz')->getStatusCode());
+
             $page = $this->request($app, $dsn, 'GET', '/dance/setup', query: ['token' => self::ACCESS_TOKEN]);
             self::assertSame(200, $page->getStatusCode(), (string) $page->getBody());
             self::assertStringContainsString('action="/dance/setup"', (string) $page->getBody());
@@ -139,6 +144,46 @@ final class InstallerLifecycleTest extends TestCase
             self::assertContains('installer_probe', $schema->relations());
             $ready = $this->request($app, $dsn, 'GET', '/dance/readyz');
             self::assertSame(200, $ready->getStatusCode(), (string) $ready->getBody());
+            $start = new DateTimeImmutable('2040-01-01T00:00:00Z');
+            $probe = $this->request($app, $dsn, 'GET', '/dance/readyz', clock: $this->clockAt($start));
+            self::assertSame(200, $probe->getStatusCode());
+            self::assertSame('no-store', $probe->getHeaderLine('Cache-Control'));
+
+            $usesApcu = function_exists('apcu_enabled') && apcu_enabled();
+            $versionHash = $database->fetchOne('SELECT version_hash FROM http_readiness_cache');
+            self::assertIsString($versionHash);
+            self::assertSame($usesApcu ? 0 : 64, strlen($versionHash));
+
+            $database->executeStatement('INSERT INTO goose_db_version (version_id, is_applied) VALUES (99002, TRUE)');
+            try {
+                $cached = $this->request($app, $dsn, 'HEAD', '/dance/readyz', clock: $this->clockAt($start->modify('+1999999 microseconds')));
+                self::assertSame(200, $cached->getStatusCode());
+                self::assertSame('', (string) $cached->getBody());
+
+                $maintenance = $this->request($app, $dsn, 'GET', '/dance/api/v1/health');
+                self::assertSame(503, $maintenance->getStatusCode());
+                self::assertStringContainsString('urn:studio-schedule:maintenance', (string) $maintenance->getBody());
+
+                $elapsed = $this->request($app, $dsn, 'GET', '/dance/readyz', clock: $this->clockAt($start->modify('+2 seconds')));
+                self::assertSame(503, $elapsed->getStatusCode());
+                self::assertSame('no-store', $elapsed->getHeaderLine('Cache-Control'));
+            } finally {
+                $database->executeStatement('DELETE FROM goose_db_version WHERE version_id = 99002');
+            }
+            $cachedFailure = $this->request($app, $dsn, 'HEAD', '/dance/readyz', clock: $this->clockAt($start->modify('+3 seconds')));
+            self::assertSame(503, $cachedFailure->getStatusCode());
+            self::assertSame('', (string) $cachedFailure->getBody());
+            self::assertSame(200, $this->request($app, $dsn, 'GET', '/dance/readyz', clock: $this->clockAt($start->modify('+4 seconds')))->getStatusCode());
+
+            $futureMigration = $migrations . '/99003_future_probe.sql';
+            touch($futureMigration);
+            try {
+                $newRelease = $this->request($app, $dsn, 'GET', '/dance/readyz', clock: $this->clockAt($start->modify('+4 seconds')));
+                self::assertSame(503, $newRelease->getStatusCode());
+            } finally {
+                unlink($futureMigration);
+            }
+
             if (!$postgres) {
                 file_put_contents(
                     $migrations . '/99001_interrupted_probe.sql',
@@ -168,6 +213,14 @@ final class InstallerLifecycleTest extends TestCase
         }
     }
 
+    private function clockAt(DateTimeImmutable $instant): ClockInterface
+    {
+        $clock = $this->createStub(ClockInterface::class);
+        $clock->method('now')->willReturn($instant);
+
+        return $clock;
+    }
+
     /**
      * @param array<string,string> $body
      * @param array<string,string> $query
@@ -182,6 +235,7 @@ final class InstallerLifecycleTest extends TestCase
         array $body = [],
         array $query = [],
         array $json = [],
+        ?ClockInterface $clock = null,
     ): ResponseInterface {
         $request = (new ServerRequestFactory())->createServerRequest($method, 'https://school.example.test' . $path)
             ->withParsedBody($body)
@@ -205,6 +259,7 @@ final class InstallerLifecycleTest extends TestCase
             $app . '/postgres',
             static fn(string $key): ?string => $environment[$key] ?? null,
             getenv('STUDIO_PHP_TEST_COMMON_PASSWORDS') ?: __DIR__ . '/../../internal/auth/password/common-passwords.txt',
+            $clock,
         );
     }
 }

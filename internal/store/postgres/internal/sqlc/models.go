@@ -211,6 +211,13 @@ type HttpRateLimit struct {
 	Generation  []byte
 }
 
+type HttpReadinessCache struct {
+	ID          int32
+	VersionHash string
+	CheckedAtUs int64
+	Ready       bool
+}
+
 type ImportRun struct {
 	ID               pgtype.UUID
 	FileName         string

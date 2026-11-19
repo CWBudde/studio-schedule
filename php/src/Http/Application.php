@@ -30,6 +30,7 @@ final class Application
         ?callable $resetPassword = null,
         ?SessionMiddleware $sessions = null,
         ?callable $registerRoutes = null,
+        ?Readiness $probeReadiness = null,
     ): RequestHandlerInterface {
         $app = AppFactory::create(new ResponseFactory());
         $app->setBasePath($config->basePath);
@@ -39,11 +40,12 @@ final class Application
                 ->withHeader('Cache-Control', 'no-store');
 
         $app->map(['GET', 'HEAD'], '/healthz', $healthy);
+        $probeReadiness ??= $readiness;
         $app->map(['GET', 'HEAD'], '/readyz', static function (
             ServerRequestInterface $r,
             ResponseInterface $res,
-        ) use ($readiness, $healthy): ResponseInterface {
-            return $readiness->ready() ? $healthy($r, $res) : Responses::problem($r, 503, 'not ready');
+        ) use ($probeReadiness, $healthy): ResponseInterface {
+            return $probeReadiness->ready() ? $healthy($r, $res) : Responses::problem($r, 503, 'not ready');
         });
         $app->get('/api/v1/health', $healthy);
         if ($resetPassword !== null) {
