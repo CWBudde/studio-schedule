@@ -19,6 +19,30 @@ interface EventPersistence
      */
     public function inReadSnapshot(Closure $read): mixed;
 
+    /**
+     * @template T
+     * @param Closure():T $operation
+     * @return T
+     */
+    public function write(Closure $operation): mixed;
+
+    public function slugInUse(string $slug): bool;
+
+    public function createDraft(EventData $data, string $slug, string $actor, DateTimeImmutable $now): Event;
+
+    public function lockEvent(string $id): ?Event;
+
+    public function hasRegistrations(string $id, bool $onlyOpen): bool;
+
+    /** @param list<PublishedLesson> $sessions */
+    public function deleteEvent(string $id, array $sessions): void;
+
+    public function setStatus(string $id, string $status, DateTimeImmutable $now): Event;
+
+    public function setImage(string $id, string $contentType, string $data, string $digest): void;
+
+    public function removeImage(string $id): void;
+
     /** @return list<Event> */
     public function upcoming(DateTimeImmutable $now): array;
 

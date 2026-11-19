@@ -315,8 +315,9 @@ final class Bootstrap
                     (new MemberImportRoutes(new MemberImports($memberDirectory, $clock)))->register($app);
                     CatalogAdminRoutes::registerTerms($app, new TermAdmin($timetableStore, $generator, $clock));
                     CatalogAdminRoutes::registerClasses($app, new ClassAdmin($timetableStore, $generator, $clock));
-                    CatalogAdminRoutes::registerLessonCreation($app, new OneOffLesson($timetableStore, $clock));
-                    EventRoutes::register($app, new EventStore($connection), $clock);
+                    $lessons = new OneOffLesson($timetableStore, $clock);
+                    CatalogAdminRoutes::registerLessonCreation($app, $lessons);
+                    EventRoutes::register($app, new EventStore($connection), $clock, $lessons);
                     $familyStore = new FamilyStore($connection);
                     $duplicates = new DuplicateStore($connection, $memberDirectory, $familyStore, $clock);
                     (new DuplicateRoutes(new PersonDuplicates($duplicates)))->register($app);

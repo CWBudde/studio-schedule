@@ -1594,6 +1594,10 @@ backends.
     - [x] Let the office list all events and read event details and images, including drafts and
           canceled events. Report registration and waitlist counts without expired invites. The shared
           `office_event_reads` case runs in PHP CI on all three databases at both mount paths.
+    - [x] Let the office create event drafts, add sessions, replace or remove images, publish or
+          return an event to draft, and delete unregistered events before any session starts.
+          The shared `office_event_lifecycle` case runs in PHP CI at both mount paths on
+          PostgreSQL, MySQL and MariaDB.
 - [ ] CLI parity: port the operator commands to the PHP `bin/studio-schedule` executable.
       The Phase 11 admin commands and Phase 12 MCP server stay Go-only (ADR 0023). On PostgreSQL
       a school can run the Go binary against its database. On MySQL and MariaDB it uses the web

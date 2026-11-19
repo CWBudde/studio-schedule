@@ -146,14 +146,19 @@ final readonly class CatalogAdminRoutes
         try {
             return Responses::json($response->withStatus(201), $service->create($data))->withHeader('Cache-Control', 'no-store');
         } catch (LessonRoomTaken $error) {
-            $overlap = $error->lesson;
-            $lesson = ['id' => $overlap->id, 'startsAt' => Instant::format($overlap->startsAt), 'endsAt' => Instant::format($overlap->endsAt)];
-            if ($overlap->courseType !== null) {
-                $lesson['courseType'] = $overlap->courseType;
-            }
-
-            return Responses::problem($request, 409, $error->getMessage(), reason: 'room-taken', extensions: ['lesson' => $lesson]);
+            return self::roomTaken($request, $error);
         }
+    }
+
+    public static function roomTaken(#[SensitiveParameter] ServerRequestInterface $request, LessonRoomTaken $error): ResponseInterface
+    {
+        $overlap = $error->lesson;
+        $lesson = ['id' => $overlap->id, 'startsAt' => Instant::format($overlap->startsAt), 'endsAt' => Instant::format($overlap->endsAt)];
+        if ($overlap->courseType !== null) {
+            $lesson['courseType'] = $overlap->courseType;
+        }
+
+        return Responses::problem($request, 409, $error->getMessage(), reason: 'room-taken', extensions: ['lesson' => $lesson]);
     }
 
     private static function createClass(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, ClassAdmin $service, string $term): ResponseInterface
@@ -192,7 +197,7 @@ final readonly class CatalogAdminRoutes
     }
 
     /** @param array<array-key,mixed> $body */
-    private static function optionalId(array $body, string $field): ?string
+    public static function optionalId(array $body, string $field): ?string
     {
         $value = self::value($body, $field, false);
 
@@ -200,7 +205,7 @@ final readonly class CatalogAdminRoutes
     }
 
     /** @param array<array-key,mixed> $body */
-    private static function flag(array $body, string $field): bool
+    public static function flag(array $body, string $field): bool
     {
         $value = self::value($body, $field, false) ?? false;
         if (!is_bool($value)) {
@@ -214,7 +219,7 @@ final readonly class CatalogAdminRoutes
      * @param array<array-key,mixed> $body
      * @return ($required is true ? int : ?int)
      */
-    private static function number(array $body, string $field, int $min, int $max, bool $required = false): ?int
+    public static function number(array $body, string $field, int $min, int $max, bool $required = false): ?int
     {
         $value = self::value($body, $field, $required);
         if ($value === null && !$required) {
@@ -278,7 +283,7 @@ final readonly class CatalogAdminRoutes
     }
 
     /** @param array<array-key,mixed> $body */
-    private static function date(array $body, string $field): Date
+    public static function date(array $body, string $field): Date
     {
         try {
             return Date::parse(self::text($body, $field, 10, true));
@@ -420,9 +425,9 @@ final readonly class CatalogAdminRoutes
      * @param list<string> $allowed
      * @return array<array-key,mixed>|ResponseInterface
      */
-    private static function fields(#[SensitiveParameter] ServerRequestInterface $request, array $allowed): array|ResponseInterface
+    public static function fields(#[SensitiveParameter] ServerRequestInterface $request, array $allowed, ?int $maxBytes = null): array|ResponseInterface
     {
-        $body = JsonObject::read($request);
+        $body = $maxBytes === null ? JsonObject::read($request) : JsonObject::read($request, $maxBytes);
         if ($body instanceof ResponseInterface) {
             return $body;
         }
@@ -453,7 +458,7 @@ final readonly class CatalogAdminRoutes
      * @param array<array-key,mixed> $body
      * @return ($required is true ? string : ?string)
      */
-    private static function text(array $body, string $field, int $max, bool $required = false): ?string
+    public static function text(array $body, string $field, int $max, bool $required = false): ?string
     {
         $value = self::value($body, $field, $required);
         if ($value === null && !$required) {
@@ -464,6 +469,12 @@ final readonly class CatalogAdminRoutes
         }
 
         return $value;
+    }
+
+    /** @param array<array-key,mixed> $body */
+    public static function requiredId(array $body, string $field): string
+    {
+        return self::id(self::value($body, $field, true), 'body.' . $field);
     }
 
     private static function id(mixed $value, string $location): string

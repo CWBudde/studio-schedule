@@ -474,6 +474,131 @@ final class ScheduleStoreTest extends TestCase
         self::assertSame('', (string) $unchanged->getBody());
     }
 
+    public function testOfficeEventLifecycleCommitsTheActorAndProtectsStartedSessions(): void
+    {
+        $app = $this->app(self::AT_RELEASE);
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office', null, self::id(10));
+        /** @param array<string,mixed>|null $body */
+        $call = static function (string $method, string $path, int $status, ?array $body = null) use ($app, $office): ResponseInterface {
+            $request = (new ServerRequestFactory())->createServerRequest($method, '/api/v1' . $path)
+                ->withAttribute('sessionPrincipal', $office);
+            if ($body !== null) {
+                $request = $request->withHeader('Content-Type', 'application/json')
+                    ->withBody((new StreamFactory())->createStream(json_encode($body, JSON_THROW_ON_ERROR)));
+            }
+            $result = $app->handle($request);
+            self::assertSame($status, $result->getStatusCode(), (string) $result->getBody());
+
+            return $result;
+        };
+        $base = '/admin/events';
+        $input = [
+            'title' => ' À la carte ', 'courseTypeId' => self::id(22), 'capacity' => 1700, 'price' => 2500, 'vatRate' => 1900,
+            'description' => ' A draft event ', 'signupOpensAt' => '2026-10-26T11:00:00+01:00',
+            'signupClosesAt' => '2026-11-04T12:00:00+01:00', 'cancelUntil' => '2026-11-04T10:00:00Z',
+        ];
+        /** @param array<string,mixed> $fields */
+        $wrong = static fn(array $fields): ResponseInterface => $call('POST', $base, 422, array_replace($input, $fields));
+        self::assertStringContainsString('body.slug', (string) $wrong(['title' => '  '])->getBody());
+        self::assertStringContainsString('body.title', (string) $wrong(['title' => '  ', 'slug' => 'blank-title'])->getBody());
+        self::assertStringContainsString('body.slug', (string) $wrong(['slug' => 'bad--slug'])->getBody());
+        self::assertStringContainsString('body.slug', (string) $wrong(['title' => '♪'])->getBody());
+        self::assertStringContainsString('body.signupOpensAt', (string) $wrong(['signupOpensAt' => '2026-11-31T12:00:00Z'])->getBody());
+        self::assertStringContainsString('body.signupClosesAt', (string) $wrong(['signupClosesAt' => '2026-10-26T10:00:00Z'])->getBody());
+        self::assertStringContainsString('body.signupClosesAt', (string) $wrong(['signupClosesAt' => '9999-12-31T23:59:59-01:00'])->getBody());
+        self::assertStringContainsString('body.courseTypeId', (string) $wrong(['courseTypeId' => self::id(999)])->getBody());
+
+        $created = $call('POST', $base, 201, $input);
+        $response = json_decode((string) $created->getBody(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($response);
+        self::assertIsString($response['id']);
+        self::assertSame('a-la-carte', $response['slug']);
+        self::assertSame('À la carte', $response['title']);
+        self::assertSame('A draft event', $response['description']);
+        self::assertSame('2026-10-26T10:00:00Z', $response['signupOpensAt']);
+        self::assertSame('2026-11-04T11:00:00Z', $response['signupClosesAt']);
+        self::assertSame('2026-11-04T10:00:00Z', $response['cancelUntil']);
+        self::assertSame(self::AT_RELEASE, $response['createdAt']);
+        $actor = self::id(10);
+        self::assertSame($this->postgres ? $actor : pack('H*', str_replace('-', '', $actor)), $this->database->fetchOne(
+            'SELECT created_by FROM events WHERE slug = ?',
+            ['a-la-carte'],
+        ));
+        $numbered = $call('POST', $base, 201, $input);
+        self::assertStringContainsString('"slug":"a-la-carte-2"', (string) $numbered->getBody());
+        $duplicate = $call('POST', $base, 409, $input + ['slug' => 'a-la-carte']);
+        self::assertStringContainsString('"reason":"duplicate"', (string) $duplicate->getBody());
+
+        $path = $base . '/' . $response['id'];
+        $publish = $path . '/publish';
+        $unpublish = $path . '/unpublish';
+        self::assertStringContainsString('"reason":"no-sessions"', (string) $call('POST', $publish, 409)->getBody());
+        $data = [
+            'date' => '2026-11-05', 'startTime' => '10:00', 'durationMinutes' => 60,
+            'roomId' => self::id(21), 'instructorId' => self::id(23),
+        ];
+        $session = $call('POST', $path . '/sessions', 201, $data);
+        self::assertStringContainsString('"eventSlug":"a-la-carte"', (string) $session->getBody());
+        self::assertStringContainsString('"capacity":1700', (string) $session->getBody());
+        $overlap = $call('POST', $path . '/sessions', 409, $data);
+        self::assertStringContainsString('"reason":"room-taken"', (string) $overlap->getBody());
+        self::assertStringContainsString('"status":"published"', (string) $call('POST', $publish, 200)->getBody());
+        self::assertStringContainsString('"reason":"not-draft"', (string) $call('POST', $publish, 409)->getBody());
+        self::assertStringContainsString('"status":"draft"', (string) $call('POST', $unpublish, 200)->getBody());
+        self::assertStringContainsString('"reason":"not-published"', (string) $call('POST', $unpublish, 409)->getBody());
+
+        $image = $path . '/image';
+        $call('PUT', $image, 422, ['contentType' => 'image/jpeg', 'data' => 'aGVsbG8=']);
+        $call('PUT', $image, 204, ['contentType' => 'image/png', 'data' => 'iVBORw0KGgo=']);
+        $call('PUT', $image, 204, ['contentType' => 'image/jpeg', 'data' => '/9j/']);
+        $asset = $call('GET', $image, 200);
+        self::assertSame('image/jpeg', $asset->getHeaderLine('Content-Type'));
+        self::assertSame("\xff\xd8\xff", (string) $asset->getBody());
+        self::assertSame('"' . hash('sha256', "image/jpeg\n\xff\xd8\xff") . '"', $asset->getHeaderLine('ETag'));
+        $call('DELETE', $image, 204);
+        $call('GET', $image, 404);
+        $call('PUT', $image, 204, ['contentType' => 'image/png', 'data' => 'iVBORw0KGgo=']);
+        $call('DELETE', $path, 204);
+        $call('DELETE', $path, 404);
+        self::assertContains($this->database->fetchOne('SELECT COUNT(*) FROM event_images'), [0, '0']);
+
+        $past = $base . '/' . self::id(121);
+        $data['date'] = '2026-10-24';
+        self::assertStringContainsString('"reason":"past"', (string) $call('POST', $past . '/sessions', 409, $data)->getBody());
+        $call('POST', $past . '/sessions', 201, $data + ['confirmPast' => true, 'confirmRoomOverlap' => true]);
+        self::assertStringContainsString('"reason":"in-use"', (string) $call('DELETE', $past, 409)->getBody());
+        $registered = $base . '/' . self::id(120);
+        self::assertStringContainsString('"reason":"in-use"', (string) $call('DELETE', $registered, 409)->getBody());
+        self::assertStringContainsString('"reason":"in-use"', (string) $call('POST', $registered . '/unpublish', 409)->getBody());
+
+        foreach ([122 => 'draft', 123 => 'canceled'] as $id => $status) {
+            $this->insert('events', [
+                'id' => $id, 'slug' => 'test-event-' . $id, 'title' => 'Test event', 'status' => $status,
+                'course_type_id' => 22, 'capacity' => 5, 'price' => 0, 'vat_rate_bp' => 0,
+                'created_at' => '2026-10-24 10:00:00', 'updated_at' => '2026-10-24 10:00:00',
+            ]);
+        }
+        $data['date'] = '2026-11-05';
+        $closed = $call('POST', $base . '/' . self::id(123) . '/sessions', 409, $data);
+        self::assertStringContainsString('"reason":"closed"', (string) $closed->getBody());
+        $draft = $base . '/' . self::id(122);
+        $this->insertLesson(108, '2026-11-07', 'workshop', 'public', [
+            'event_id' => 122, 'status' => 'canceled', 'canceled_at' => '2026-10-25 14:00:00',
+        ]);
+        self::assertStringContainsString('"reason":"no-sessions"', (string) $call('POST', $draft . '/publish', 409)->getBody());
+
+        // A legacy booking on an event session restricts deletion of that lesson.
+        $this->insertLesson(109, '2026-11-08', 'workshop', 'public', ['event_id' => 122]);
+        $this->insert('bookings', [
+            'id' => 250, 'lesson_id' => 109, 'person_id' => 1, 'status' => 'booked', 'trial' => false, 'booked_at' => '2026-10-24 14:00:00',
+        ]);
+        $failed = $call('DELETE', $draft, 409);
+        self::assertStringContainsString('"detail":"conflict"', (string) $failed->getBody());
+        $preserved = self::get($app, $draft, $office);
+        self::assertIsArray($preserved['sessions']);
+        self::assertSame(self::ids(108, 109), array_column($preserved['sessions'], 'id'));
+    }
+
     public function testReleaseVisibilityFiltersAndAvailabilityThroughPublishedRoutes(): void
     {
         $app = $this->app(self::BEFORE_RELEASE);
@@ -881,9 +1006,10 @@ final class ScheduleStoreTest extends TestCase
             TrustedProxies::parse(''),
             new RateLimitStore($this->database, $clock),
         ));
-        CatalogAdminRoutes::registerLessonCreation($app, new OneOffLesson(new TimetableStore($this->database), $clock));
+        $lessons = new OneOffLesson(new TimetableStore($this->database), $clock);
+        CatalogAdminRoutes::registerLessonCreation($app, $lessons);
         $app->get('/api/v1/admin/statistics', new StatisticsEndpoint(new StatisticsService(new StatisticsStore($this->database), $scheduleStore, $clock)));
-        EventRoutes::register($app, new EventStore($this->database), $clock);
+        EventRoutes::register($app, new EventStore($this->database), $clock, $lessons);
         $app->addRoutingMiddleware();
 
         return $app;

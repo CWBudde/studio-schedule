@@ -23,6 +23,7 @@ final readonly class OneOffLessonData
         public string $renter,
         public bool $confirmRoomOverlap,
         public bool $confirmPast,
+        public ?string $eventId = null,
     ) {}
 
     public function validate(): void
@@ -30,7 +31,7 @@ final readonly class OneOffLessonData
         if ($this->durationMinutes > 1440 - $this->startTime->minutesSinceMidnight()) {
             throw CatalogFailure::field('durationMinutes', 'the lesson must not run past midnight');
         }
-        if ($this->capacity > 1000) {
+        if ($this->eventId === null && $this->capacity > 1000) {
             throw CatalogFailure::field('capacity', 'lesson capacity must not exceed 1000');
         }
         if ($this->kind === 'rental') {

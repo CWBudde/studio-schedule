@@ -17,7 +17,7 @@ use StudioSchedule\Domain\Currency;
 final readonly class AdminSettings
 {
     private const int MAX_BACKGROUND_BYTES = 1024 * 1024;
-    private const int MAX_BACKGROUND_BASE64 = 1398104;
+    public const int MAX_BACKGROUND_BASE64 = 1398104;
     public const int MAX_BACKGROUND_BODY = self::MAX_BACKGROUND_BASE64 + 64 * 1024;
     private const int MAX_LOGO_BYTES = 512 * 1024;
     private const int MAX_LOGO_BASE64 = 699052;
@@ -79,6 +79,12 @@ final readonly class AdminSettings
 
     public function updateBackground(string $type, string $encoded): void
     {
+        $data = self::backgroundData($type, $encoded);
+        $this->persistence->writeImage(BrandingImage::Background, $type, $data, BrandingImage::digest($type, $data));
+    }
+
+    public static function backgroundData(string $type, #[SensitiveParameter] string $encoded): string
+    {
         if (!in_array($type, ['image/jpeg', 'image/png', 'image/webp'], true)) {
             throw new AdminSettingsFieldError('contentType', 'the background must be a JPEG, PNG or WebP image');
         }
@@ -94,7 +100,7 @@ final readonly class AdminSettings
             throw new AdminSettingsFieldError('data', "the background's data does not match its type");
         }
 
-        $this->persistence->writeImage(BrandingImage::Background, $type, $data, BrandingImage::digest($type, $data));
+        return $data;
     }
 
     public function deleteBackground(): void

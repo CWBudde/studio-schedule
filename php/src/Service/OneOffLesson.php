@@ -6,6 +6,7 @@ namespace StudioSchedule\Service;
 
 use DateInterval;
 use Psr\Clock\ClockInterface;
+use StudioSchedule\Domain\ScheduleRules;
 
 final readonly class OneOffLesson
 {
@@ -16,39 +17,54 @@ final readonly class OneOffLesson
     {
         $data->validate();
 
-        return $this->store->writeOneOff(function () use ($data): array {
-            // Settings and lesson generation share this lock. The time zone and room
-            // overlap check stay current until the lesson has been stored.
-            try {
-                $rules = $this->store->lockRules();
-            } catch (SettingsNotFound) {
-                throw new CatalogFailure(404, 'resource not found');
-            }
-            $start = $data->date->at($data->startTime, $rules->timezone);
-            $end = $start->add(new DateInterval("PT{$data->durationMinutes}M"));
-            if ($start->format('Y-m-d H:i:s') === '0001-01-01 00:00:00' || (int) $start->format('Y') > 9999) {
-                throw CatalogFailure::field('date', 'the lesson start is outside the supported UTC date range');
-            }
-            if ((int) $end->format('Y') > 9999) {
-                throw CatalogFailure::field('durationMinutes', 'the lesson end is outside the supported UTC date range');
-            }
-            $this->store->lockLessonReferences($data);
-            if (!$data->confirmPast && $start <= $this->clock->now()) {
-                throw new CatalogFailure(409, 'the lesson would start in the past', reason: 'past');
-            }
-            if (!$data->confirmRoomOverlap) {
-                $overlap = $this->store->roomOverlap($data->roomId, $start, $end);
-                if ($overlap !== null) {
-                    throw new LessonRoomTaken($overlap);
-                }
-            }
+        return $this->store->writeOneOff(fn(): array => $this->persist($data, $this->lockRules()));
+    }
 
-            $lesson = $this->store->createOneOffLesson($data, $start, $end);
+    public function lockRules(): ScheduleRules
+    {
+        // Settings and lesson generation share this lock, which also serializes room checks.
+        try {
+            return $this->store->lockRules();
+        } catch (SettingsNotFound) {
+            throw new CatalogFailure(404, 'resource not found');
+        }
+    }
 
-            return ScheduleService::lessonSummary($lesson)
-                + ScheduleService::availability($lesson, $rules, occupied: 0)
-                + ['admin' => ['activeBookings' => 0, 'detached' => false]]
-                + ScheduleService::lessonDescriptions($lesson);
-        });
+    /** @return array<string,mixed> */
+    public function createEventSession(OneOffLessonData $data, ScheduleRules $rules): array
+    {
+        $data->validate();
+
+        return $this->persist($data, $rules);
+    }
+
+    /** @return array<string,mixed> */
+    private function persist(OneOffLessonData $data, ScheduleRules $rules): array
+    {
+        $start = $data->date->at($data->startTime, $rules->timezone);
+        $end = $start->add(new DateInterval("PT{$data->durationMinutes}M"));
+        if ($start->format('Y-m-d H:i:s') === '0001-01-01 00:00:00' || (int) $start->format('Y') > 9999) {
+            throw CatalogFailure::field('date', 'the lesson start is outside the supported UTC date range');
+        }
+        if ((int) $end->format('Y') > 9999) {
+            throw CatalogFailure::field('durationMinutes', 'the lesson end is outside the supported UTC date range');
+        }
+        $this->store->lockLessonReferences($data);
+        if (!$data->confirmPast && $start <= $this->clock->now()) {
+            throw new CatalogFailure(409, 'the lesson would start in the past', reason: 'past');
+        }
+        if (!$data->confirmRoomOverlap) {
+            $overlap = $this->store->roomOverlap($data->roomId, $start, $end);
+            if ($overlap !== null) {
+                throw new LessonRoomTaken($overlap);
+            }
+        }
+
+        $lesson = $this->store->createOneOffLesson($data, $start, $end);
+
+        return ScheduleService::lessonSummary($lesson)
+            + ScheduleService::availability($lesson, $rules, occupied: 0)
+            + ['admin' => ['activeBookings' => 0, 'detached' => false]]
+            + ScheduleService::lessonDescriptions($lesson);
     }
 }

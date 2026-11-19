@@ -8,10 +8,15 @@ use Closure;
 use DateTimeImmutable;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use RuntimeException;
+use SensitiveParameter;
 use StudioSchedule\Domain\Event;
+use StudioSchedule\Service\CatalogFailure;
+use StudioSchedule\Service\EventData;
 use StudioSchedule\Service\EventPersistence;
 use Symfony\Component\Uid\Uuid;
 
@@ -52,6 +57,117 @@ final readonly class EventStore implements EventPersistence
     public function inReadSnapshot(Closure $read): mixed
     {
         return Database::inReadSnapshot($this->connection, $read);
+    }
+
+    public function write(Closure $operation): mixed
+    {
+        return Database::retryWrite($this->connection, function () use ($operation): mixed {
+            if ($this->isPostgres()) {
+                $this->connection->executeStatement("SET LOCAL DateStyle TO 'ISO, YMD'");
+            }
+
+            return $operation();
+        }, readCommitted: true);
+    }
+
+    public function slugInUse(string $slug): bool
+    {
+        return $this->connection->fetchOne('SELECT 1 FROM events WHERE slug = ?', [$slug]) !== false;
+    }
+
+    public function createDraft(EventData $data, string $slug, string $actor, DateTimeImmutable $now): Event
+    {
+        $course = $this->encodeId($data->courseTypeId);
+        if ($this->connection->fetchOne('SELECT id FROM course_types WHERE id = ? FOR UPDATE', [$course], [$this->idType()]) === false) {
+            throw CatalogFailure::field('courseTypeId', 'course type does not exist');
+        }
+
+        $id = Uuid::v7()->toRfc4122();
+        $instant = Database::sqlInstant($this->connection, $now);
+        try {
+            $this->connection->insert('events', [
+                'id' => $this->encodeId($id), 'slug' => $slug, 'title' => $data->title, 'description' => $data->description,
+                'course_type_id' => $course, 'capacity' => $data->capacity, 'price' => $data->price, 'vat_rate_bp' => $data->vatRate,
+                'status' => 'draft', 'signup_opens_at' => $this->sqlInstant($data->signupOpensAt),
+                'signup_closes_at' => $this->sqlInstant($data->signupClosesAt), 'cancel_until' => $this->sqlInstant($data->cancelUntil),
+                'created_at' => $instant, 'updated_at' => $instant, 'created_by' => $this->encodeId($actor),
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            throw new CatalogFailure(409, 'a record with these values exists already', reason: 'duplicate');
+        }
+
+        return $this->officeEvent($id) ?? throw new RuntimeException('The new event was not stored');
+    }
+
+    public function lockEvent(string $id): ?Event
+    {
+        $found = $this->connection->fetchOne(
+            'SELECT id FROM events WHERE id = ? FOR UPDATE',
+            [$this->encodeId($id)],
+            [$this->idType()],
+        );
+
+        return $found === false ? null : $this->officeEvent($id);
+    }
+
+    public function hasRegistrations(string $id, bool $onlyOpen): bool
+    {
+        $status = $onlyOpen ? " AND status IN ('waiting', 'invited', 'registered')" : '';
+
+        return $this->connection->fetchOne(
+            'SELECT 1 FROM event_registrations WHERE event_id = ?' . $status . ' LIMIT 1',
+            [$this->encodeId($id)],
+            [$this->idType()],
+        ) !== false;
+    }
+
+    public function deleteEvent(string $id, array $sessions): void
+    {
+        $type = $this->idType();
+        // The caller holds the event lock. Take session locks in their start order.
+        try {
+            foreach ($sessions as $session) {
+                $lesson = $this->encodeId($session->id);
+                $this->connection->fetchOne('SELECT id FROM lessons WHERE id = ? FOR UPDATE', [$lesson], [$type]);
+                $this->connection->executeStatement('DELETE FROM lessons WHERE id = ?', [$lesson], [$type]);
+            }
+            $this->connection->executeStatement('DELETE FROM events WHERE id = ?', [$this->encodeId($id)], [$type]);
+        } catch (ForeignKeyConstraintViolationException) {
+            throw new CatalogFailure(409, 'conflict');
+        }
+    }
+
+    public function setStatus(string $id, string $status, DateTimeImmutable $now): Event
+    {
+        $this->connection->executeStatement(
+            'UPDATE events SET status = ?, updated_at = ? WHERE id = ?',
+            [$status, Database::sqlInstant($this->connection, $now), $this->encodeId($id)],
+            [ParameterType::STRING, ParameterType::STRING, $this->idType()],
+        );
+
+        return $this->officeEvent($id) ?? throw new RuntimeException('The event disappeared during its update');
+    }
+
+    public function setImage(string $id, string $contentType, #[SensitiveParameter] string $data, string $digest): void
+    {
+        $update = $this->isPostgres()
+            ? 'ON CONFLICT (event_id) DO UPDATE SET image = EXCLUDED.image, image_type = EXCLUDED.image_type, image_digest = EXCLUDED.image_digest'
+            : 'ON DUPLICATE KEY UPDATE image = VALUES(image), image_type = VALUES(image_type), image_digest = VALUES(image_digest)';
+        $this->connection->executeStatement(
+            "INSERT INTO event_images (event_id, image, image_type, image_digest) VALUES (?, ?, ?, ?) $update",
+            [$this->encodeId($id), $data, $contentType, $digest],
+            [$this->idType(), ParameterType::BINARY, ParameterType::STRING, ParameterType::STRING],
+        );
+    }
+
+    public function removeImage(string $id): void
+    {
+        $this->connection->executeStatement('DELETE FROM event_images WHERE event_id = ?', [$this->encodeId($id)], [$this->idType()]);
+    }
+
+    private function sqlInstant(?DateTimeImmutable $value): ?string
+    {
+        return $value === null ? null : Database::sqlInstant($this->connection, $value);
     }
 
     public function upcoming(DateTimeImmutable $now): array

@@ -152,6 +152,7 @@ final readonly class TimetableStore implements TimetableAdminPersistence, OneOff
             'starts_at' => Database::sqlInstant($this->db, $start), 'ends_at' => Database::sqlInstant($this->db, $end),
             'kind' => $data->kind, 'visibility' => $data->visibility, 'capacity' => $data->capacity,
             'status' => 'scheduled', 'renter' => $data->renter === '' ? null : $data->renter,
+            'event_id' => $data->eventId === null ? null : $this->encodeId($data->eventId),
         ]);
 
         return (new ScheduleStore($this->db))->lesson($id) ?? throw new \RuntimeException('The new lesson was not stored');

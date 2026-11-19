@@ -6,13 +6,149 @@ namespace StudioSchedule\Service;
 
 use DateTimeImmutable;
 use Psr\Clock\ClockInterface;
+use SensitiveParameter;
+use StudioSchedule\Domain\BrandingImage;
 use StudioSchedule\Domain\Event;
 use StudioSchedule\Domain\PublishedLesson;
 
 /** @phpstan-import-type RegistrationCounts from EventPersistence */
 final readonly class EventService
 {
-    public function __construct(private EventPersistence $store, private ClockInterface $clock) {}
+    public function __construct(
+        private EventPersistence $store,
+        private ClockInterface $clock,
+        private OneOffLesson $lessons,
+    ) {}
+
+    /** @return array<string,mixed> */
+    public function createDraft(EventData $data, SessionPrincipal $principal): array
+    {
+        return $this->store->write(function () use ($data, $principal): array {
+            $slug = $data->slug === '' ? $this->availableSlug($data->derivedSlug()) : $data->slug;
+            $data->validate();
+            $event = $this->store->createDraft($data, $slug, $principal->impersonatorId ?? $principal->accountId, $this->clock->now());
+
+            return self::officeDocument($event, [], null);
+        });
+    }
+
+    private function availableSlug(string $base): string
+    {
+        if ($base === '') {
+            throw CatalogFailure::field('slug', 'the title gives no slug: choose one of lowercase letters, digits and hyphens');
+        }
+        for ($number = 1; $number <= 50; ++$number) {
+            $slug = $number === 1 ? $base : EventData::numberedSlug($base, $number);
+            if (!$this->store->slugInUse($slug)) {
+                return $slug;
+            }
+        }
+
+        throw new CatalogFailure(409, 'a record with these values exists already', reason: 'duplicate');
+    }
+
+    /** @return array<string,mixed> */
+    public function addSession(string $id, EventSessionData $data): array
+    {
+        return $this->store->write(function () use ($id, $data): array {
+            $rules = $this->lessons->lockRules();
+            $event = $this->locked($id);
+            if ($event->status === 'canceled') {
+                throw new CatalogFailure(409, 'the event takes no registrations', reason: 'closed');
+            }
+
+            return $this->lessons->createEventSession(new OneOffLessonData(
+                date: $data->date,
+                startTime: $data->startTime,
+                durationMinutes: $data->durationMinutes,
+                roomId: $data->roomId,
+                courseTypeId: $event->courseType['id'],
+                instructorId: $data->instructorId,
+                accompanistId: $data->accompanistId,
+                capacity: $event->capacity,
+                visibility: 'public',
+                kind: 'workshop',
+                renter: '',
+                confirmRoomOverlap: $data->confirmRoomOverlap,
+                confirmPast: $data->confirmPast,
+                eventId: $event->id,
+            ), $rules);
+        });
+    }
+
+    /** @return array<string,mixed> */
+    public function publish(string $id, bool $publish): array
+    {
+        return $this->store->write(function () use ($id, $publish): array {
+            $event = $this->locked($id);
+            $sessions = $this->store->sessions([$event->id]);
+            if ($publish) {
+                if ($event->status !== 'draft') {
+                    throw new CatalogFailure(409, 'the event is not a draft', reason: 'not-draft');
+                }
+                if (!in_array('scheduled', array_column($sessions, 'status'), true)) {
+                    throw new CatalogFailure(409, 'the event has no scheduled session', reason: 'no-sessions');
+                }
+            } else {
+                if ($event->status !== 'published') {
+                    throw new CatalogFailure(409, 'the event is not published', reason: 'not-published');
+                }
+                if ($this->store->hasRegistrations($event->id, onlyOpen: true)) {
+                    throw new CatalogFailure(409, 'the record is still in use', reason: 'in-use');
+                }
+            }
+
+            $now = $this->clock->now();
+            $updated = $this->store->setStatus($event->id, $publish ? 'published' : 'draft', $now);
+
+            return $this->eventDetail($updated, $sessions, $now);
+        });
+    }
+
+    public function delete(string $id): void
+    {
+        $this->store->write(function () use ($id): void {
+            $event = $this->locked($id);
+            if ($this->store->hasRegistrations($event->id, onlyOpen: false)) {
+                throw new CatalogFailure(409, 'the record is still in use', reason: 'in-use');
+            }
+            $sessions = $this->store->sessions([$event->id]);
+            $now = $this->clock->now();
+            foreach ($sessions as $session) {
+                if ($session->startsAt <= $now) {
+                    throw new CatalogFailure(409, 'the record is still in use', reason: 'in-use');
+                }
+            }
+
+            $this->store->deleteEvent($event->id, $sessions);
+        });
+    }
+
+    public function uploadImage(string $id, string $type, #[SensitiveParameter] string $encoded): void
+    {
+        try {
+            $data = AdminSettings::backgroundData($type, $encoded);
+        } catch (AdminSettingsFieldError $error) {
+            throw CatalogFailure::field($error->field, $error->getMessage());
+        }
+        $this->store->write(function () use ($id, $type, $data): void {
+            $this->locked($id);
+            $this->store->setImage($id, $type, $data, BrandingImage::digest($type, $data));
+        });
+    }
+
+    public function deleteImage(string $id): void
+    {
+        $this->store->write(function () use ($id): void {
+            $this->locked($id);
+            $this->store->removeImage($id);
+        });
+    }
+
+    private function locked(string $id): Event
+    {
+        return $this->store->lockEvent($id) ?? throw new CatalogFailure(404, 'resource not found');
+    }
 
     /** @return list<array<string,mixed>> */
     public function upcoming(): array
@@ -81,12 +217,20 @@ final readonly class EventService
                 return null;
             }
 
-            $sessions = $this->store->sessions([$event->id]);
-            $counts = $this->store->registrationCounts([$event->id], $this->clock->now());
-            $image = $this->store->imageInfo($event->id);
-
-            return self::officeDocument($event, $sessions, $counts[$event->id] ?? null) + ($image === null ? [] : ['image' => $image]);
+            return $this->eventDetail($event, $this->store->sessions([$event->id]), $this->clock->now());
         });
+    }
+
+    /**
+     * @param list<PublishedLesson> $sessions
+     * @return array<string,mixed>
+     */
+    private function eventDetail(Event $event, array $sessions, DateTimeImmutable $now): array
+    {
+        $counts = $this->store->registrationCounts([$event->id], $now);
+        $image = $this->store->imageInfo($event->id);
+
+        return self::officeDocument($event, $sessions, $counts[$event->id] ?? null) + ($image === null ? [] : ['image' => $image]);
     }
 
     /**
