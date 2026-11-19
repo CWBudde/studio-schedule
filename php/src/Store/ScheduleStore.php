@@ -193,15 +193,16 @@ final readonly class ScheduleStore implements SchedulePersistence
     }
 
     /**
-     * @param list<string> $eventIds
+     * @param list<string>|null $eventIds Null selects the sessions of all events.
      * @return list<PublishedLesson>
      */
-    public function eventSessions(array $eventIds): array
+    public function eventSessions(?array $eventIds): array
     {
+        $where = $eventIds === null ? ' WHERE l.event_id IS NOT NULL' : ' WHERE l.event_id IN (?)';
         $rows = $this->connection->fetchAllAssociative(
-            self::LESSONS . ' WHERE l.event_id IN (?) ORDER BY l.starts_at, l.id',
-            [$this->encodeIds($eventIds)],
-            [$this->idListType()],
+            self::LESSONS . $where . ' ORDER BY l.starts_at, l.id',
+            $eventIds === null ? [] : [$this->encodeIds($eventIds)],
+            $eventIds === null ? [] : [$this->idListType()],
         );
 
         return array_map(fn(array $row): PublishedLesson => $this->publishedLesson(['capacity' => $row['lesson_capacity']] + $row), $rows);

@@ -45,6 +45,66 @@ func publicEventDetails(t *testing.T, b *backend) {
 	}
 }
 
+func officeEventReads(t *testing.T, b *backend) {
+	t.Helper()
+
+	const events = "/api/v1/admin/events"
+	guest, member, office := browser(t), browser(t), browser(t)
+	login(t, b, member, "clara.amberly@example.org", "demo-password")
+	login(t, b, office, "olga.ledgerby@example.net", "demo-password")
+
+	type adminEvent struct {
+		eventSummary
+		ID           string
+		CourseTypeID string
+		Capacity     int
+		Registered   int
+		Invited      int
+		Waiting      int
+	}
+
+	list := request{method: http.MethodGet, path: events}
+	b.call(t, guest, list, http.StatusUnauthorized)
+	b.call(t, member, list, http.StatusForbidden)
+	all := read[struct{ Items []adminEvent }](t, b.call(t, office, list, http.StatusOK))
+	bySlug := make(map[string]adminEvent, len(all.Items))
+	for _, item := range all.Items {
+		bySlug[item.Slug] = item
+	}
+	public := bySlug["open-ballet-taster"]
+	if public.Status != "published" || public.Capacity-public.Registered-public.Invited != 17 ||
+		public.Registered == 0 || public.CourseTypeID == "" || len(public.Sessions) != 1 {
+		t.Fatalf("published workshop in office list: %+v", public)
+	}
+
+	draft := bySlug["summer-showcase-rehearsal"]
+	if draft.Status != "draft" || draft.ID == "" {
+		t.Fatalf("draft workshop in office list: %+v", draft)
+	}
+	detail := request{
+		method: http.MethodGet, path: events + "/{eventId}", params: map[string]string{"eventId": draft.ID},
+	}
+	b.call(t, guest, detail, http.StatusUnauthorized)
+	b.call(t, member, detail, http.StatusForbidden)
+	found := read[adminEvent](t, b.call(t, office, detail, http.StatusOK))
+	if found.ID != draft.ID || found.Slug != draft.Slug || found.Status != "draft" ||
+		found.Registered != draft.Registered || found.Invited != draft.Invited || found.Waiting != draft.Waiting {
+		t.Fatalf("office workshop detail: got %+v, listed %+v", found, draft)
+	}
+
+	invalid := detail
+	invalid.params = map[string]string{"eventId": draft.ID + "/image"}
+	problem := b.call(t, office, invalid, http.StatusUnprocessableEntity)
+	if !containsJSON(problem.body, `"location":"path.eventId"`) {
+		t.Fatalf("invalid event reference: %s", problem.body)
+	}
+
+	detail.path += "/image"
+	b.call(t, guest, detail, http.StatusUnauthorized)
+	b.call(t, member, detail, http.StatusForbidden)
+	b.call(t, office, detail, http.StatusNotFound)
+}
+
 func eventRegistration(t *testing.T, b *backend) {
 	t.Helper()
 

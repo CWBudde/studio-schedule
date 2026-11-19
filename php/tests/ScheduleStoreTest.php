@@ -403,6 +403,77 @@ final class ScheduleStoreTest extends TestCase
         }
     }
 
+    public function testOfficeEventReadsIncludePrivateAndHistoricalEventsAndTheirImages(): void
+    {
+        $fields = [
+            'course_type_id' => 22, 'capacity' => 7, 'price' => 2500, 'vat_rate_bp' => 1900,
+            'created_at' => '2026-10-24 10:00:00', 'updated_at' => '2026-10-25 12:00:00.125',
+        ];
+        $this->insert('events', [
+            'id' => 118, 'slug' => 'without-session', 'title' => 'Without a session', 'status' => 'draft',
+        ] + $fields);
+        $this->insert('events', [
+            'id' => 119, 'slug' => 'canceled-workshop', 'title' => 'Canceled workshop', 'status' => 'canceled',
+            'signup_closes_at' => '2026-11-02 08:00:00',
+        ] + $fields);
+        $this->insertLesson(108, '2026-11-02', 'workshop', 'public', [
+            'event_id' => 119, 'status' => 'canceled', 'canceled_at' => '2026-10-25 12:00:00',
+        ]);
+        $this->insert('event_registrations', [
+            'id' => 224, 'event_id' => 120, 'person_id' => 4, 'status' => 'waiting', 'payment' => 'unpaid',
+            'price' => 0, 'vat_rate_bp' => 0, 'created_at' => '2026-10-22 14:00:00', 'updated_at' => '2026-10-23 14:00:00',
+        ]);
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWZkAAAAASUVORK5CYII=');
+        $digest = hash('sha256', "image/png\n" . $png);
+        $this->insert('event_images', [
+            'event_id' => 121, 'image' => $png, 'image_type' => 'image/png', 'image_digest' => $digest,
+        ]);
+
+        $app = $this->app(self::BEFORE_RELEASE);
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office', null, null);
+        $events = '/admin/events';
+        $draftPath = $events . '/' . self::id(121);
+        $list = self::get($app, $events, $office)['items'];
+        self::assertIsArray($list);
+        self::assertSame(self::ids(119, 120, 121, 118), array_column($list, 'id'));
+        [$canceled, $published, $draft, $withoutSession] = $list;
+        self::assertSame([], array_column($list, 'image'));
+        self::assertIsArray($canceled);
+        self::assertIsArray($published);
+        self::assertIsArray($draft);
+        self::assertIsArray($withoutSession);
+        self::assertSame('canceled', $canceled['status']);
+        self::assertSame(self::id(22), $canceled['courseTypeId']);
+        self::assertSame('2026-10-25T12:00:00.125Z', $canceled['updatedAt']);
+        self::assertSame('2026-11-02T08:00:00Z', $canceled['signupClosesAt']);
+        self::assertIsArray($canceled['sessions']);
+        self::assertSame(['canceled'], array_column($canceled['sessions'], 'status'));
+        self::assertSame('draft', $draft['status']);
+        self::assertSame([], $withoutSession['sessions']);
+        self::assertSame([1, 1, 1], [$published['registered'], $published['invited'], $published['waiting']]);
+        self::assertArrayNotHasKey('signupClosesAt', $published);
+        $past = self::get($this->app('2026-10-26T17:00:00Z'), $events . '/' . self::id(120), $office);
+        self::assertSame(0, $past['invited']);
+
+        $detail = self::get($app, $draftPath, $office);
+        self::assertSame($draft + ['image' => ['contentType' => 'image/png', 'digest' => $digest]], $detail);
+        self::get($app, $events . '/invalid', $office, status: 422);
+        self::get($app, $events . '/' . self::id(999), $office, status: 404);
+        self::get($app, $events . '/' . self::id(120) . '/image', $office, status: 404);
+        self::get($app, $draftPath . '/image', status: 401);
+
+        $request = (new ServerRequestFactory())->createServerRequest('GET', '/api/v1' . $draftPath . '/image')
+            ->withAttribute('sessionPrincipal', $office);
+        $image = $app->handle($request);
+        self::assertSame(200, $image->getStatusCode());
+        self::assertSame('image/png', $image->getHeaderLine('Content-Type'));
+        self::assertSame('"' . $digest . '"', $image->getHeaderLine('ETag'));
+        self::assertSame($png, (string) $image->getBody());
+        $unchanged = $app->handle($request->withHeader('If-None-Match', 'W/"' . $digest . '"'));
+        self::assertSame(304, $unchanged->getStatusCode());
+        self::assertSame('', (string) $unchanged->getBody());
+    }
+
     public function testReleaseVisibilityFiltersAndAvailabilityThroughPublishedRoutes(): void
     {
         $app = $this->app(self::BEFORE_RELEASE);

@@ -1591,6 +1591,9 @@ backends.
     - [x] Serve public event details and images, including past and canceled events. Drafts
           stay private and image requests support conditional responses. The shared
           `public_event_details` case passes on all three PHP databases at both mount paths.
+    - [x] Let the office list all events and read event details and images, including drafts and
+          canceled events. Report registration and waitlist counts without expired invites. The shared
+          `office_event_reads` case runs in PHP CI on all three databases at both mount paths.
 - [ ] CLI parity: port the operator commands to the PHP `bin/studio-schedule` executable.
       The Phase 11 admin commands and Phase 12 MCP server stay Go-only (ADR 0023). On PostgreSQL
       a school can run the Go binary against its database. On MySQL and MariaDB it uses the web
