@@ -9,11 +9,20 @@ use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\TestCase;
 use Psr\Clock\ClockInterface;
 use Psr\Http\Message\ResponseInterface;
+use Psr\Log\NullLogger;
+use RuntimeException;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
 use StudioSchedule\Bootstrap;
+use StudioSchedule\Console\JobsCommand;
+use StudioSchedule\Service\BackgroundJobs;
+use StudioSchedule\Service\JobResult;
+use StudioSchedule\Service\JobRunner;
 use StudioSchedule\Service\PasswordHash;
 use StudioSchedule\Store\Database;
+use StudioSchedule\Store\JobLocks;
+use StudioSchedule\Store\JobRunStore;
+use StudioSchedule\Store\MetricsStore;
 use StudioSchedule\Store\Schema;
 
 final class InstallerLifecycleTest extends TestCase
@@ -175,6 +184,8 @@ final class InstallerLifecycleTest extends TestCase
             self::assertSame('', (string) $cachedFailure->getBody());
             self::assertSame(200, $this->request($app, $dsn, 'GET', '/dance/readyz', clock: $this->clockAt($start->modify('+4 seconds')))->getStatusCode());
 
+            $this->assertMetrics($app, $dsn, $migrations);
+
             $futureMigration = $migrations . '/99003_future_probe.sql';
             touch($futureMigration);
             try {
@@ -213,6 +224,87 @@ final class InstallerLifecycleTest extends TestCase
         }
     }
 
+    private function assertMetrics(string $app, #[\SensitiveParameter] string $dsn, string $migrations): void
+    {
+        $path = '/dance/metrics';
+        $token = 'fictional-monitoring-token';
+        self::assertSame(404, $this->request($app, $dsn, 'GET', $path)->getStatusCode());
+        $denied = $this->request($app, $dsn, 'GET', $path, query: ['token' => $token], metricsToken: $token);
+        self::assertSame(401, $denied->getStatusCode());
+        self::assertSame('Bearer', $denied->getHeaderLine('WWW-Authenticate'));
+        self::assertStringNotContainsString($token, (string) $denied->getBody());
+
+        $authorization = 'Bearer ' . $token;
+        self::assertSame(401, $this->request($app, $dsn, 'GET', $path, metricsToken: $token, authorization: 'Bearer wrong')->getStatusCode());
+        self::assertSame(404, $this->request($app, $dsn, 'GET', '/metrics', metricsToken: $token, authorization: $authorization)->getStatusCode());
+        for ($i = 0; $i < 2; ++$i) {
+            self::assertSame(200, $this->request($app, $dsn, 'GET', '/dance/api/v1/health', metricsToken: $token)->getStatusCode());
+        }
+        self::assertSame(404, $this->request($app, $dsn, 'GET', '/dance/ical/fictional-private-feed.ics', metricsToken: $token)->getStatusCode());
+        self::assertSame(404, $this->request($app, $dsn, 'GET', '/dance/not-a-route-fictional', metricsToken: $token)->getStatusCode());
+
+        $id = '018f0000-0000-7000-8000-000000000001';
+        foreach (['disable', 'enable'] as $action) {
+            self::assertSame(401, $this->request($app, $dsn, 'POST', "/dance/api/v1/admin/accounts/$id/$action", metricsToken: $token)->getStatusCode());
+        }
+        self::assertSame(401, $this->request($app, $dsn, 'PUT', "/dance/api/v1/locations/$id/room-order", metricsToken: $token)->getStatusCode());
+
+        $output = fopen('php://memory', 'w+');
+        self::assertIsResource($output);
+        try {
+            $jobs = new JobsCommand($migrations, $migrations);
+            $environment = static fn(string $key): string => $key === 'METRICS_TOKEN' ? $token : '';
+            self::assertSame([0, 0], [
+                $jobs->run($dsn, $environment, $output, $output),
+                $jobs->run($dsn, $environment, $output, $output),
+            ]);
+        } finally {
+            fclose($output);
+        }
+
+        $database = Database::connect($dsn);
+        try {
+            $logger = new NullLogger();
+            $runner = new JobRunner(new JobLocks($dsn), new JobRunStore($database), $this->clockAt(new DateTimeImmutable('2040-01-01T00:00:00Z')), $logger, new MetricsStore($dsn, $logger));
+            self::assertSame(JobResult::Failed, $runner->runNow(BackgroundJobs::DELIVER_MAIL, static function (): void {
+                throw new RuntimeException('fictional background failure details');
+            }));
+        } finally {
+            $database->close();
+        }
+
+        $scrape = $this->request($app, $dsn, 'GET', $path, metricsToken: $token, authorization: $authorization);
+        self::assertSame(200, $scrape->getStatusCode());
+        self::assertSame('text/plain; version=0.0.4; charset=utf-8', $scrape->getHeaderLine('Content-Type'));
+        self::assertSame('no-store', $scrape->getHeaderLine('Cache-Control'));
+        $body = (string) $scrape->getBody();
+        self::assertStringContainsString('studio_schedule_http_requests_total{method="GET",route="/api/v1/health",status="200"} 2', $body);
+        self::assertStringContainsString('studio_schedule_http_request_duration_seconds_bucket{method="GET",route="/api/v1/health",le="+Inf"} 2', $body);
+        self::assertStringContainsString('studio_schedule_http_requests_total{method="GET",route="/ical/{token}.ics",status="404"} 1', $body);
+        self::assertStringContainsString('studio_schedule_http_requests_total{method="GET",route="other",status="404"}', $body);
+        self::assertStringContainsString('route="/api/v1/admin/accounts/{accountId}/disable",status="401"} 1', $body);
+        self::assertStringContainsString('route="/api/v1/admin/accounts/{accountId}/enable",status="401"} 1', $body);
+        self::assertStringContainsString('route="/api/v1/locations/{locationId}/room-order",status="401"} 1', $body);
+        self::assertStringNotContainsString($id, $body);
+        self::assertStringContainsString('studio_schedule_job_runs_total{job="purge-sessions",result="success"} 1', $body);
+        self::assertStringContainsString('studio_schedule_job_runs_total{job="deliver-mail",result="failure"} 1', $body);
+        self::assertStringNotContainsString('studio_schedule_job_last_success_timestamp_seconds{job="deliver-mail"}', $body);
+        self::assertStringNotContainsString('fictional background failure details', $body);
+        self::assertStringContainsString('studio_schedule_job_duration_seconds_count{job="purge-sessions"} 1', $body);
+        self::assertStringContainsString('studio_schedule_job_last_success_timestamp_seconds{job="purge-sessions"} ', $body);
+        self::assertStringContainsString('studio_schedule_outbox_mails{status="pending"} 0', $body);
+        self::assertStringContainsString('studio_schedule_outbox_mails{status="failed"} 0', $body);
+        self::assertStringContainsString('studio_schedule_build_info{version="', $body);
+        self::assertStringNotContainsString('route="/metrics"', $body);
+        self::assertStringNotContainsString('fictional-private-feed', $body);
+        self::assertStringNotContainsString('not-a-route-fictional', $body);
+        self::assertStringNotContainsString($token, $body);
+
+        $head = $this->request($app, $dsn, 'HEAD', $path, metricsToken: $token, authorization: $authorization);
+        self::assertSame(200, $head->getStatusCode());
+        self::assertSame('', (string) $head->getBody());
+    }
+
     private function clockAt(DateTimeImmutable $instant): ClockInterface
     {
         $clock = $this->createStub(ClockInterface::class);
@@ -236,10 +328,15 @@ final class InstallerLifecycleTest extends TestCase
         array $query = [],
         array $json = [],
         ?ClockInterface $clock = null,
+        string $metricsToken = '',
+        string $authorization = '',
     ): ResponseInterface {
         $request = (new ServerRequestFactory())->createServerRequest($method, 'https://school.example.test' . $path)
             ->withParsedBody($body)
             ->withQueryParams($query);
+        if ($authorization !== '') {
+            $request = $request->withHeader('Authorization', $authorization);
+        }
         if ($json !== []) {
             $request = $request->withHeader('Content-Type', 'application/json')
                 ->withParsedBody(null)
@@ -248,6 +345,7 @@ final class InstallerLifecycleTest extends TestCase
         $environment = [
             'SETUP_TOKEN' => self::ACCESS_TOKEN,
             'DATABASE_URL' => $dsn,
+            'METRICS_TOKEN' => $metricsToken,
             'BASE_URL' => 'https://school.example.test/dance',
             'LOG_LEVEL' => 'error',
         ];

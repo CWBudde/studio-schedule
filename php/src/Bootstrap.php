@@ -30,6 +30,7 @@ use StudioSchedule\Http\CredentialRoutes;
 use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\FamilyRoutes;
 use StudioSchedule\Http\Installer;
+use StudioSchedule\Http\MetricsEndpoint;
 use StudioSchedule\Http\MailLogRoutes;
 use StudioSchedule\Http\MeEndpoint;
 use StudioSchedule\Http\ParticipantReadRoutes;
@@ -86,6 +87,7 @@ use StudioSchedule\Store\AdminAuditStore;
 use StudioSchedule\Store\CalendarFeedStore;
 use StudioSchedule\Store\CatalogStore;
 use StudioSchedule\Store\Database;
+use StudioSchedule\Store\MetricsStore;
 use StudioSchedule\Store\DatabaseCopy;
 use StudioSchedule\Store\EmailChangeStore;
 use StudioSchedule\Store\EventStore;
@@ -153,6 +155,24 @@ final class Bootstrap
             $migrations = $postgres ? $postgresMigrations : $mysqlMigrations;
             $expectedVersions = Schema::migrationVersions($migrations);
             $readiness = new DatabaseReadiness($schema, $expectedVersions, $logger);
+            $metrics = null;
+            $observeRequest = null;
+            if ($config->metricsToken !== '') {
+                $store = $config->databaseURL === '' ? null : new MetricsStore($config->databaseURL, $logger);
+                $versionFile = $appDirectory . '/version.txt';
+                $version = is_file($versionFile) ? file_get_contents($versionFile) : false;
+                $metrics = new MetricsEndpoint($config->metricsToken, $store, trim($version ?: 'dev'), $logger);
+                if ($store !== null) {
+                    $observeRequest = static function (string $method, string $route, int $status, int $duration) use ($store, $afterResponse): void {
+                        if ($afterResponse === null) {
+                            $store->observeRequest($method, $route, $status, $duration);
+                        } else {
+                            $afterResponse->wake('record-http-metrics', static fn() => $store->observeRequest($method, $route, $status, $duration));
+                        }
+                    };
+                }
+            }
+
 
             $wakeMail = $afterResponse === null ? null : static function () use ($afterResponse, $appDirectory, $environment, $config, $expectedVersions, $clock, $logger): void {
                 $afterResponse->wake(BackgroundJobs::DELIVER_MAIL, static function () use ($appDirectory, $environment, $config, $expectedVersions, $clock, $logger): void {
@@ -164,7 +184,7 @@ final class Bootstrap
                     $database = Database::connect($config->databaseURL, dedicated: true);
                     try {
                         if ((new DatabaseReadiness(new Schema($database), $expectedVersions, $logger))->ready()) {
-                            (new BackgroundJobs($database, $config->databaseURL, $clock, $logger))->deliverMail($mailer, immediate: true);
+                            (new BackgroundJobs($database, $config->databaseURL, $clock, $logger, collectMetrics: $config->metricsToken !== ''))->deliverMail($mailer, immediate: true);
                         }
                     } finally {
                         $database->close();
@@ -295,6 +315,8 @@ final class Bootstrap
                 $sessions,
                 $registerRoutes,
                 new CachedReadiness($config->databaseURL, $expectedVersions, $clock, $logger),
+                $metrics,
+                $observeRequest,
             )->handle($request);
         } catch (Throwable $error) {
             $id = Uuid::v7()->toRfc4122();

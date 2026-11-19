@@ -34,7 +34,13 @@ final readonly class AccountAdministrationRoutes
     public function register(App $app): void
     {
         $app->group('/api/v1/admin/accounts/{accountId}', function (RouteCollectorProxyInterface $routes): void {
-            $routes->post('/{action:disable|enable}', $this->setDisabled(...));
+            foreach (['disable', 'enable'] as $action) {
+                $routes->post('/' . $action, function (ServerRequestInterface $request, ResponseInterface $response, array $args) use ($action): ResponseInterface {
+                    $id = $args['accountId'] ?? null;
+
+                    return $this->setDisabled($request, $response, is_string($id) ? $id : '', $action === 'disable');
+                });
+            }
             $routes->put('/role', $this->setRole(...));
             $routes->delete('', $this->delete(...));
         })->add(self::requireAdmin(...));
@@ -54,17 +60,16 @@ final readonly class AccountAdministrationRoutes
         return $next->handle($request);
     }
 
-    /** @param array{accountId:string,action:string} $args */
-    public function setDisabled(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    private function setDisabled(ServerRequestInterface $request, ResponseInterface $response, string $accountId, bool $disabled): ResponseInterface
     {
         $principal = $request->getAttribute('sessionPrincipal');
         assert($principal instanceof SessionPrincipal);
-        $id = self::accountId($request, $response, $args['accountId']);
+        $id = self::accountId($request, $response, $accountId);
         if ($id instanceof ResponseInterface) {
             return $id;
         }
 
-        return self::result($request, $response, $this->accounts->setDisabled($principal, $id, $args['action'] === 'disable'));
+        return self::result($request, $response, $this->accounts->setDisabled($principal, $id, $disabled));
     }
 
     /** @param array{accountId:string} $args */

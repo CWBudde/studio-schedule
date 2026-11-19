@@ -9,7 +9,7 @@ trap 'rm -rf -- "$work"' EXIT
 unzip -tq "$archive"
 unzip -q "$archive" -d "$work"
 for path in public/index.php public/.htaccess public/index.html public/sw.js \
-	app/.htaccess app/bin/studio-schedule app/vendor/autoload.php app/common-passwords.txt app/LICENSE \
+	app/.htaccess app/bin/studio-schedule app/version.txt app/vendor/autoload.php app/common-passwords.txt app/LICENSE \
 	app/GPL-2.0-NOTICE.txt app/vendor/mpdf/mpdf/LICENSE.txt; do
 	if [[ ! -s $work/$path ]]; then
 		echo "Missing release file: $path" >&2

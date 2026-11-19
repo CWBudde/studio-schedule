@@ -75,8 +75,8 @@ final readonly class DatabaseCopy
             throw new CopyError('The source and target foreign keys differ.');
         }
         $tables = CopyCatalog::order($columns, $keys);
-        // The release migrations seed each database's own readiness cache.
-        unset($tables['http_readiness_cache']);
+        // Readiness and monitoring counters describe the local database and its traffic.
+        unset($tables['http_readiness_cache'], $tables['php_metrics']);
 
         if (!$fromPostgres) {
             $names = array_map($target->quoteSingleIdentifier(...), array_keys($tables));

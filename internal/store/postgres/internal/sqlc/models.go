@@ -373,6 +373,17 @@ type PersonGuardian struct {
 	DependentID pgtype.UUID
 }
 
+type PhpMetric struct {
+	Family        string
+	Name          string
+	Label         string
+	Status        int32
+	Bucket        int32
+	Observations  int64
+	DurationUs    int64
+	LastSuccessUs int64
+}
+
 type PushOutbox struct {
 	ID             pgtype.UUID
 	SubscriptionID pgtype.UUID

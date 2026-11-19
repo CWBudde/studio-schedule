@@ -29,6 +29,10 @@ cp -R "$root/internal/store/postgres/migrations" "$bundle/app/migrations/postgre
 cp "$root/php/composer.json" "$root/php/composer.lock" "$root/LICENSE" \
 	"$root/internal/auth/password/common-passwords.txt" "$bundle/app/"
 
+if ! git -C "$root" describe --tags --always >"$bundle/app/version.txt" 2>/dev/null; then
+	printf '%s\n' dev >"$bundle/app/version.txt"
+fi
+
 cat >"$bundle/app/GPL-2.0-NOTICE.txt" <<'NOTICE'
 Studio Schedule PHP release bundle
 

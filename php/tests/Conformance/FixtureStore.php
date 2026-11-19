@@ -67,7 +67,7 @@ final readonly class FixtureStore
             }
             $database = $target->quoteSingleIdentifier($this->schemaName($target));
             foreach ($this->tables($target) as $table) {
-                if (in_array($table, ['goose_db_version', 'audit_actions', 'http_readiness_cache'], true)) {
+                if (in_array($table, ['goose_db_version', 'audit_actions', 'http_readiness_cache', 'php_metrics'], true)) {
                     continue;
                 }
                 $name = $target->quoteSingleIdentifier($table);

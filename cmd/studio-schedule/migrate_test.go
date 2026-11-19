@@ -316,20 +316,20 @@ func TestMigrateDownWithoutMigrations(t *testing.T) {
 }
 
 // migrateFailNewest rolls back the two newest migrations of a new database,
-// breaks the newest one (the table created by 00041 already exists) and runs migrate up, which must fail. It returns the
-// database, the embedded migrations, and the output and error of up.
+// breaks the newest one by creating its table first, and runs migrate up.
+// It returns the database, the embedded migrations, and the output and error of up.
 func migrateFailNewest(t *testing.T) (url string, embedded []string, out string, err error) {
 	t.Helper()
 
 	embedded = migrateEmbedded(t)
-	if last := embedded[len(embedded)-1]; last != "00041_http_readiness_cache.sql" {
-		t.Fatalf("the newest migration is %s; migrateFailNewest breaks 00041 on purpose and needs updating", last)
+	if last := embedded[len(embedded)-1]; last != "00042_php_metrics.sql" {
+		t.Fatalf("the newest migration is %s; migrateFailNewest breaks 00042 on purpose and needs updating", last)
 	}
 
 	url = newTestDatabase(t)
 	migrateRun(t, url, "down")
 	migrateRun(t, url, "down")
-	execSQL(t, url, "CREATE TABLE http_readiness_cache (id INTEGER PRIMARY KEY)")
+	execSQL(t, url, "CREATE TABLE php_metrics (id INTEGER PRIMARY KEY)")
 
 	out, err = execute(map[string]string{"DATABASE_URL": url}, "migrate", "up")
 	if err == nil {

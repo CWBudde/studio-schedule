@@ -39,9 +39,12 @@ docker rm "$app" >/dev/null
 
 probe() {
 	docker exec "$app" php -r '
-		[$script, $path, $expectedStatus, $expectedBody] = $argv;
+		[$script, $path, $expectedStatus, $expectedBody, $token] = array_pad($argv, 5, "");
 		$curl = curl_init("http://127.0.0.1:8080$path");
 		curl_setopt_array($curl, [CURLOPT_PROXY => "", CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT_MS => 1500]);
+		if ($token !== "") {
+			curl_setopt($curl, CURLOPT_HTTPHEADER, ["Authorization: Bearer $token"]);
+		}
 		$body = curl_exec($curl);
 		$status = curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
 		if ($status !== (int) $expectedStatus || !is_string($body) || !str_contains($body, $expectedBody)) {
@@ -51,6 +54,7 @@ probe() {
 	' "$@"
 }
 
+metrics_token=fictional-metrics-fixture-token
 for engine in postgres mysql mariadb; do
 	mount=/dance/schedule
 	case "$engine" in
@@ -74,7 +78,7 @@ for engine in postgres mysql mariadb; do
 		;;
 	esac
 	docker run -d --name "$app" --network "$network" --read-only --tmpfs /tmp:rw,nosuid,nodev,mode=1777 \
-		-e "DATABASE_URL=$dsn" -e "BASE_URL=https://school.example.test$mount" "$image" >/dev/null
+		-e "DATABASE_URL=$dsn" -e "BASE_URL=https://school.example.test$mount" -e "METRICS_TOKEN=$metrics_token" "$image" >/dev/null
 	ready=false
 	for _ in $(seq 1 45); do
 		if docker exec "$app" studio-schedule healthcheck --addr 127.0.0.1:8080 >/dev/null 2>&1 &&
@@ -96,14 +100,20 @@ for engine in postgres mysql mariadb; do
 		exit 1
 	fi
 	probe "$mount/readyz" 503 'not ready'
+	probe "$mount/metrics" 401 'metrics bearer token required'
+	probe "$mount/metrics" 503 'metrics unavailable' "$metrics_token"
 	probe "$mount/api/v1/health" 503 'urn:studio-schedule:maintenance'
 	probe "$mount/" 200 "<base href=\"$mount/\">"
 	probe "$mount/sw.js" 200 'precache'
 	probe "$mount/app/config/.env" 404 'no route'
 	docker exec "$app" studio-schedule migrate up
 	probe "$mount/readyz" 200 '"status":"ok"'
+	probe "$mount/healthz" 200 '"status":"ok"'
 	probe "$mount/api/v1/health" 200 '"status":"ok"'
 	docker exec "$app" studio-schedule jobs:run
+	probe "$mount/metrics" 200 'studio_schedule_build_info{version="' "$metrics_token"
+	probe "$mount/metrics" 200 'studio_schedule_http_requests_total{method="GET",route="/api/v1/health",status="200"}' "$metrics_token"
+	probe "$mount/metrics" 200 'studio_schedule_job_runs_total{job="purge-sessions",result="success"} 1' "$metrics_token"
 
 	if [[ $engine == mariadb ]]; then
 		# If one server exits, the container exits so a restart policy can restart the pair.

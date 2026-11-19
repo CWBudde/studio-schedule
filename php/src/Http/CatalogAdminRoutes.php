@@ -39,18 +39,19 @@ final readonly class CatalogAdminRoutes
                 $path = '/' . $resource->value;
                 $routes->post($path, fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
                     => $this->write($request, $response, $resource, null));
-                $routes->map(['PUT', 'DELETE'], $path . '/{id}', fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
-                    => $this->write($request, $response, $resource, self::id($args['id'] ?? null, 'path.' . $resource->idField())));
+                $idField = $resource->idField();
+                $routes->map(['PUT', 'DELETE'], $path . '/{' . $idField . '}', fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+                    => $this->write($request, $response, $resource, self::id($args[$idField] ?? null, 'path.' . $idField)));
             }
             $routes->get('/admin/pass-types', fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
                 => Responses::json($response, ['items' => $this->service->passTypes()]));
             $routes->post('/admin/pass-types', fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
                 => $this->writePassType($request, $response, null));
-            $routes->map(['PUT', 'DELETE'], '/admin/pass-types/{id}', fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
-                => $this->writePassType($request, $response, self::id($args['id'] ?? null, 'path.passTypeId')));
-            $routes->post('/admin/pass-types/{id}/retire', fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
-                => Responses::json($response, $this->service->retirePassType(self::id($args['id'] ?? null, 'path.passTypeId'))));
-            $routes->put('/locations/{id}/room-order', $this->roomOrder(...));
+            $routes->map(['PUT', 'DELETE'], '/admin/pass-types/{passTypeId}', fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+                => $this->writePassType($request, $response, self::id($args['passTypeId'] ?? null, 'path.passTypeId')));
+            $routes->post('/admin/pass-types/{passTypeId}/retire', fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+                => Responses::json($response, $this->service->retirePassType(self::id($args['passTypeId'] ?? null, 'path.passTypeId'))));
+            $routes->put('/locations/{locationId}/room-order', $this->roomOrder(...));
             $routes->put('/level-order', $this->levelOrder(...));
             $routes->get('/admin/staff', fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
                 => Responses::json($response, ['items' => $this->service->allStaff()]));
@@ -66,8 +67,8 @@ final readonly class CatalogAdminRoutes
         $app->group('/api/v1/terms', static function (RouteCollectorProxy $routes) use ($service): void {
             $routes->post('', static fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
                 => self::writeTerm($request, $response, $service, null));
-            $routes->map(['PUT', 'DELETE'], '/{id}', static fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
-                => self::writeTerm($request, $response, $service, self::id($args['id'] ?? null, 'path.termId')));
+            $routes->map(['PUT', 'DELETE'], '/{termId}', static fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+                => self::writeTerm($request, $response, $service, self::id($args['termId'] ?? null, 'path.termId')));
         })->add(self::requireOffice(...));
     }
 
@@ -306,10 +307,10 @@ final readonly class CatalogAdminRoutes
         };
     }
 
-    /** @param array{id?: string} $args */
+    /** @param array{locationId?: string} $args */
     private function roomOrder(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        $location = self::id($args['id'] ?? null, 'path.locationId');
+        $location = self::id($args['locationId'] ?? null, 'path.locationId');
         $body = self::fields($request, ['roomids']);
         if ($body instanceof ResponseInterface) {
             return $body;

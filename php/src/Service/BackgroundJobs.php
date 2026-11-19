@@ -15,6 +15,7 @@ use StudioSchedule\Receipt\AttachmentStore;
 use StudioSchedule\Receipt\Attachments;
 use StudioSchedule\Store\JobLocks;
 use StudioSchedule\Store\JobRunStore;
+use StudioSchedule\Store\MetricsStore;
 use StudioSchedule\Store\OutboxStore;
 use StudioSchedule\Store\PushOutboxStore;
 use StudioSchedule\Store\RetentionStore;
@@ -38,8 +39,10 @@ final readonly class BackgroundJobs
         string $dsn,
         private ClockInterface $clock,
         private LoggerInterface $logger,
+        bool $collectMetrics = false,
     ) {
-        $this->runner = new JobRunner(new JobLocks($dsn), new JobRunStore($database), $clock, $logger);
+        $metrics = $collectMetrics ? new MetricsStore($dsn, $logger) : null;
+        $this->runner = new JobRunner(new JobLocks($dsn), new JobRunStore($database), $clock, $logger, $metrics);
     }
 
     public function purgeSessions(): ?JobResult

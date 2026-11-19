@@ -572,7 +572,7 @@ see it in the web app's footer).
 
 ### Metrics
 
-With `METRICS_ADDR` set (e.g. `127.0.0.1:9464`, or `:9464` inside a container on a private
+On Go, with `METRICS_ADDR` set (e.g. `127.0.0.1:9464`, or `:9464` inside a container on a private
 network), a second server answers `GET /metrics` in the Prometheus format, and nothing else. It is
 never on the public port. Expose it to your monitoring only: the request counts by route reveal
 the activity of the school.
@@ -602,6 +602,17 @@ scrape_configs:
     static_configs:
       - targets: ["studio-schedule.internal:9464"]
 ```
+
+On PHP, set `METRICS_TOKEN` in the environment or `app/config/.env`. Scrape `<base>/metrics` on
+the same HTTPS host as the school and supply `Authorization: Bearer <METRICS_TOKEN>`. Use
+Prometheus's `authorization.credentials_file` to read the bearer token from a private file. On
+Apache hosts, configure `CGIPassAuth` to forward the header to PHP.
+[Apache HTTP Server documentation](https://httpd.apache.org/docs/2.4/mod/core.html#cgipassauth)
+
+PHP workers and cron share database-backed counters. On PHP-FPM, HTTP observations are written
+after the response. The liveness and readiness probes bypass collection to preserve their
+response behavior. Switching databases with `db:copy` leaves each database's
+monitoring counters local to that database.
 
 ### Logs
 

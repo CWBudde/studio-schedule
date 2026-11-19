@@ -55,7 +55,7 @@ final readonly class JobsCommand
                 throw new CommandError($error->getMessage(), 2);
             }
 
-            $jobs = new BackgroundJobs($database, $dsn, $clock, new NullLogger());
+            $jobs = new BackgroundJobs($database, $dsn, $clock, new NullLogger(), collectMetrics: $environment('METRICS_TOKEN') !== '');
             $plan = [
                 BackgroundJobs::GENERATE_LESSONS => $jobs->generateLessons(...),
                 BackgroundJobs::PURGE_SESSIONS => $jobs->purgeSessions(...),

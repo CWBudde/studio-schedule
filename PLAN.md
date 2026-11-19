@@ -1364,8 +1364,12 @@ backends.
       migration history, and tests the DBAL connection and job lock on PostgreSQL, MySQL 8.0 and
       MariaDB 10.6. PHP accepts existing session cookies, checks impersonation and expires and renews
       sessions on all three engines. PHP caches readiness for two seconds in APCu or the database.
-      APCu rate limits, the readiness deadline, metrics, and after-response wakes for the
-      remaining jobs are open.
+      APCu rate limits, the readiness deadline, and after-response wakes for the remaining
+      jobs are open.
+  - [x] Serve Prometheus metrics at the mounted `/metrics` endpoint when `METRICS_TOKEN` is set.
+        Request and job metrics are shared in the database, with outbox and build gauges at scrape
+        time. The packaged PHP-FPM checks verify bearer authorization and metrics on PostgreSQL,
+        MySQL 8.0 and MariaDB 10.6.
   - [x] Schedule `purge-sessions` and `deliver-mail` through `jobs:run`, with per-job locks and
         history in `job_runs`. SMTP delivery uses the outbox. A deadline for the entire SMTP
         attempt and the remaining jobs are open.
@@ -1383,7 +1387,7 @@ backends.
 - [x] MySQL/MariaDB schema: `php/migrations/mysql` has one twin per Go migration at the same
       version. Use `DATETIME(6)` in UTC for `timestamptz`, generated columns with unique indexes
       for partial unique indexes, and `SIGNAL` triggers for immutable receipts.
-  - [x] Port PostgreSQL versions 1–41 and compare tables, columns, nullability, keys, unique
+  - [x] Port PostgreSQL versions 1–42 and compare tables, columns, nullability, keys, unique
         constraints and checks in CI on PostgreSQL, MySQL 8.0 and MariaDB 10.6.
   - [x] Add the shared rate-limit table to both migration sets and verify that concurrent PHP
         workers share the same limits on all three databases.

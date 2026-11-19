@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Http;
 
+use Closure;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -12,6 +13,7 @@ use Psr\Log\LoggerInterface;
 use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ResponseFactory;
+use Slim\Routing\RouteContext;
 use StudioSchedule\Config;
 use StudioSchedule\Service\Readiness;
 
@@ -20,6 +22,7 @@ final class Application
     /**
      * @param (callable(ServerRequestInterface, ResponseInterface):ResponseInterface)|null $resetPassword
      * @param (callable(App<ContainerInterface|null>):void)|null $registerRoutes
+     * @param (Closure(string,string,int,int):void)|null $observeRequest
      */
     public static function create(
         Config $config,
@@ -31,6 +34,8 @@ final class Application
         ?SessionMiddleware $sessions = null,
         ?callable $registerRoutes = null,
         ?Readiness $probeReadiness = null,
+        ?MetricsEndpoint $metrics = null,
+        ?Closure $observeRequest = null,
     ): RequestHandlerInterface {
         $app = AppFactory::create(new ResponseFactory());
         $app->setBasePath($config->basePath);
@@ -48,6 +53,9 @@ final class Application
             return $probeReadiness->ready() ? $healthy($r, $res) : Responses::problem($r, 503, 'not ready');
         });
         $app->get('/api/v1/health', $healthy);
+        if ($metrics !== null) {
+            $app->map(['GET', 'HEAD'], MetricsEndpoint::PATH, $metrics);
+        }
         if ($resetPassword !== null) {
             $app->post('/api/v1/auth/password-reset/confirm', $resetPassword);
         }
@@ -61,8 +69,19 @@ final class Application
         if ($sessions !== null) {
             $app->add($sessions);
         }
+        if ($observeRequest !== null) {
+            $app->add(static function (ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface {
+                $observation = $request->getAttribute(RequestMetricRoute::class);
+                $pattern = RouteContext::fromRequest($request)->getRoute()?->getPattern();
+                if ($observation instanceof RequestMetricRoute && $pattern !== null) {
+                    $observation->pattern = preg_replace('/\{(\w+):[^{}]+}/', '{$1}', $pattern) ?? $pattern;
+                }
+
+                return $handler->handle($request);
+            });
+        }
         $app->addRoutingMiddleware();
-        $app->add(new RequestMiddleware($config, new StaticFiles($publicDirectory, $config->basePath), $readiness, $logger));
+        $app->add(new RequestMiddleware($config, new StaticFiles($publicDirectory, $config->basePath), $readiness, $logger, $observeRequest));
 
         return $app;
     }

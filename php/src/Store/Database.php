@@ -51,8 +51,8 @@ final class Database
         return DriverManager::getConnection($params);
     }
 
-    /** Set the lock budget on a dedicated connection used for a readiness probe. */
-    public static function limitReadinessLockWait(Connection $connection): void
+    /** Set the lock budget on a dedicated connection used for readiness or metrics. */
+    public static function limitMonitoringLockWait(Connection $connection): void
     {
         $postgres = ($connection->getParams()['driver'] ?? null) === 'pdo_pgsql';
         $connection->executeStatement($postgres

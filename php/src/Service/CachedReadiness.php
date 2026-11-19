@@ -54,7 +54,7 @@ final readonly class CachedReadiness implements Readiness
     {
         $connection = Database::connect($this->databaseURL, dedicated: true, timeoutSeconds: 2);
         try {
-            Database::limitReadinessLockWait($connection);
+            Database::limitMonitoringLockWait($connection);
             $probe = new DatabaseReadiness(new Schema($connection), $this->expectedVersions, $this->logger);
             if ($sharedVersionHash === null) {
                 return $probe->ready();

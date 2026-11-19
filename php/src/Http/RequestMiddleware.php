@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Http;
 
+use Closure;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
@@ -19,11 +20,13 @@ use Throwable;
 
 final readonly class RequestMiddleware implements MiddlewareInterface
 {
+    /** @param (Closure(string,string,int,int):void)|null $observeRequest */
     public function __construct(
         private Config $config,
         private StaticFiles $staticFiles,
         private Readiness $readiness,
         private LoggerInterface $logger,
+        private ?Closure $observeRequest = null,
     ) {}
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
@@ -34,6 +37,11 @@ final readonly class RequestMiddleware implements MiddlewareInterface
         $localPath = $this->localPath($path);
         $redacted = self::redact($localPath ?? $path);
         $start = hrtime(true);
+        $observation = null;
+        if ($this->observeRequest !== null && !in_array($localPath, [MetricsEndpoint::PATH, '/healthz', '/readyz'], true)) {
+            $observation = new RequestMetricRoute();
+            $request = $request->withAttribute(RequestMetricRoute::class, $observation);
+        }
 
         try {
             $response = $this->dispatch($request, $handler, $localPath, $redacted);
@@ -42,12 +50,17 @@ final readonly class RequestMiddleware implements MiddlewareInterface
             $response = Responses::problem($request, 500, 'internal server error');
         }
 
+        $duration = hrtime(true) - $start;
+        if ($observation !== null) {
+            ($this->observeRequest)($request->getMethod(), $observation->pattern, $response->getStatusCode(), intdiv($duration, 1_000));
+        }
+
         $this->logger->log($response->getStatusCode() >= 500 ? 'error' : 'info', 'http request', [
             'requestId' => $id,
             'method' => $request->getMethod(),
             'path' => $redacted,
             'status' => $response->getStatusCode(),
-            'durationMs' => (hrtime(true) - $start) / 1_000_000,
+            'durationMs' => $duration / 1_000_000,
         ]);
 
         $response = Responses::secure($response, $id);

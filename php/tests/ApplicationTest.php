@@ -92,7 +92,7 @@ final class ApplicationTest extends TestCase
         $sw = $app->handle($req->createServerRequest('GET', $base . '/sw.js'));
         self::assertSame('no-cache', $sw->getHeaderLine('Cache-Control'));
 
-        foreach (['/api/v1/unimplemented', '/assets/missing.js', '/ical/missing.ics'] as $path) {
+        foreach (['/api/v1/unimplemented', '/assets/missing.js', '/ical/missing.ics', '/metrics'] as $path) {
             $this->assertProblem($app->handle($req->createServerRequest('GET', $base . $path)), 404);
         }
     }

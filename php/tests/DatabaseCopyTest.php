@@ -27,8 +27,13 @@ final class DatabaseCopyTest extends TestCase
             $pg->executeStatement('INSERT INTO audit_actions (action) VALUES (?)', [self::ACTION]);
             $pg->executeStatement('UPDATE http_readiness_cache SET checked_at_us = 10');
             $my->executeStatement('UPDATE http_readiness_cache SET checked_at_us = 20');
+            $observation = "INSERT INTO php_metrics (family, name, label, status, bucket, observations, duration_us, last_success_us)
+                VALUES ('http', 'other', 'GET', 200, 0, ?, 100, 0)";
+            $pg->executeStatement($observation, [3]);
+            $my->executeStatement($observation, [7]);
             self::assertSame(2, $copy->copy($pgURL, $myURL));
             self::assertContains($my->fetchOne('SELECT checked_at_us FROM http_readiness_cache'), [20, '20']);
+            self::assertContains($my->fetchOne('SELECT observations FROM php_metrics'), [7, '7']);
             self::assertSame('Éva', $my->fetchOne('SELECT given_name FROM persons WHERE id = UNHEX(?)', [self::PERSON]));
             self::assertSame(self::ACTION, $my->fetchOne('SELECT action FROM audit_actions WHERE action = ?', [self::ACTION]));
             self::rejects('already contains data', static fn() => $copy->copy($pgURL, $myURL));
@@ -36,6 +41,7 @@ final class DatabaseCopyTest extends TestCase
             self::clear($pg);
             self::assertSame(2, $copy->copy($myURL, $pgURL));
             self::assertContains($pg->fetchOne('SELECT checked_at_us FROM http_readiness_cache'), [10, '10']);
+            self::assertContains($pg->fetchOne('SELECT observations FROM php_metrics'), [3, '3']);
             self::assertSame('Éva', $pg->fetchOne('SELECT given_name FROM persons WHERE id = ?::uuid', [self::PERSON]));
             self::assertSame(self::ACTION, $pg->fetchOne('SELECT action FROM audit_actions WHERE action = ?', [self::ACTION]));
         });
@@ -96,6 +102,7 @@ final class DatabaseCopyTest extends TestCase
         } finally {
             foreach ([$pg, $my] as $db) {
                 self::clear($db);
+                $db->executeStatement('DELETE FROM php_metrics');
                 $db->executeStatement("UPDATE http_readiness_cache SET version_hash = '', checked_at_us = 0, ready = FALSE");
                 $db->close();
             }
