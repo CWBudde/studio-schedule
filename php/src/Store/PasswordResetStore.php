@@ -98,12 +98,7 @@ final readonly class PasswordResetStore implements PasswordResetPersistence
 
     public function queuePasswordChanged(string $email, Rendered $rendered, DateTimeImmutable $now): void
     {
-        $instant = $this->timestamp($now);
-        $this->connection->executeStatement(
-            'INSERT INTO outbox_mails (id, recipient, subject, body_text, body_html, template, attempts, created_at, next_attempt_at) '
-            . "VALUES (?, ?, ?, ?, ?, 'password-changed', 0, ?, ?)",
-            [$this->newId(), $email, $rendered->subject, $rendered->text, $rendered->html, $instant, $instant],
-        );
+        (new OutboxStore($this->connection))->enqueue($email, 'password-changed', $rendered, $now);
     }
 
     private function endSessions(string $accountId, DateTimeImmutable $now): void

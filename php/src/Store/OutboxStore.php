@@ -9,6 +9,8 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use SensitiveParameter;
+use StudioSchedule\Mail\Rendered;
 use Symfony\Component\Uid\Uuid;
 
 /**
@@ -20,6 +22,17 @@ final readonly class OutboxStore
     private const array RETRY_DELAYS = ['PT5M', 'PT15M', 'PT1H', 'PT3H'];
 
     public function __construct(private Connection $connection) {}
+
+    public function enqueue(#[SensitiveParameter] string $email, string $template, #[SensitiveParameter] Rendered $mail, DateTimeImmutable $now): void
+    {
+        $id = Uuid::v7();
+        $instant = $this->timestamp($now);
+        $this->connection->executeStatement(
+            'INSERT INTO outbox_mails (id, recipient, subject, body_text, body_html, template, attempts, created_at, next_attempt_at) '
+            . 'VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)',
+            [$this->isPostgres() ? $id->toRfc4122() : $id->toBinary(), $email, $mail->subject, $mail->text, $mail->html, $template, $instant, $instant],
+        );
+    }
 
     /** @return array{bodies:int,deleted:int} */
     public function purge(DateTimeImmutable $now): array

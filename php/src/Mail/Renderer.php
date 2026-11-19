@@ -62,4 +62,26 @@ final readonly class Renderer
             $this->twig->render("$base.html.twig", $data),
         );
     }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array{title: string, body: string}
+     */
+    public function renderPush(string $locale, string $template, array $data): array
+    {
+        if (!in_array($template, ['waitlist-invite', 'event-invite'], true)) {
+            throw new InvalidArgumentException('Unknown push template.');
+        }
+        $data = TemplateData::prepare($template, $data);
+        $locale = $this->resolveLocale($locale);
+        $text = $this->twig->render("$locale/$template.push.txt.twig", ['locale' => $locale] + $data);
+        [$title, $body] = explode("\n", trim($text), 2) + [1 => ''];
+        $title = Formatting::singleLine($title);
+        $body = Formatting::singleLine($body);
+        if ($title === '' || $body === '') {
+            throw new InvalidArgumentException('The push title and body must have text.');
+        }
+
+        return ['title' => $title, 'body' => $body];
+    }
 }

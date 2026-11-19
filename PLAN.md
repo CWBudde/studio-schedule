@@ -1509,6 +1509,8 @@ backends.
           the privacy export on all three PHP databases at both mount paths with the authentication
           draft.
           Waiting-list invite queueing and after-response delivery are open.
+    - [x] Render lesson and event invite push text in English and German using the Go fixtures.
+          The notification names the lesson or event without naming the participant.
   - [ ] Events and workshops (Phase 10)
     - [x] Serve public event details and images, including past and canceled events. Drafts
           stay private and image requests support conditional responses. The shared

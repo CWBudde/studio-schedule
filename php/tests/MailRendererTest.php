@@ -19,11 +19,21 @@ final class MailRendererTest extends TestCase
     {
         $dir = self::goldenDirectory();
         $prefix = "$dir/$locale/$golden";
-        $mail = (new Renderer())->render($locale, $template, $data);
+        $renderer = new Renderer();
+        $mail = $renderer->render($locale, $template, $data);
 
         self::assertStringEqualsFile("$prefix.subject.golden", $mail->subject . "\n");
         self::assertStringEqualsFile("$prefix.txt.golden", $mail->text);
         self::assertStringEqualsFile("$prefix.html.golden", $mail->html);
+        if ($template === 'event-invite') {
+            $push = $renderer->renderPush($locale, $template, $data);
+            self::assertStringEqualsFile("$prefix.push.golden", $push['title'] . "\n" . $push['body'] . "\n");
+        } elseif ($template === 'waitlist-invite') {
+            $want = $locale === 'en'
+                ? ['title' => 'A place is free: Imaginary Ballet', 'body' => 'Tuesday, 27 October 2026, 18:00–19:15. Reserved until Monday, 26 October 2026, 21:30: open to take it.']
+                : ['title' => 'Ein Platz ist frei: Imaginary Ballet', 'body' => 'Dienstag, 27. Oktober 2026, 18:00–19:15. Reserviert bis Montag, 26. Oktober 2026, 21:30: zum Annehmen öffnen.'];
+            self::assertSame($want, $renderer->renderPush($locale, $template, $data));
+        }
     }
 
     public function testEveryGoMailGoldenIsCovered(): void
