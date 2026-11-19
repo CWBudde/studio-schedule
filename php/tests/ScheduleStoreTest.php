@@ -54,12 +54,15 @@ use StudioSchedule\Push\VapidKeys;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\AccountInvitation;
 use StudioSchedule\Service\CatalogFailure;
+use StudioSchedule\Service\ClassAdmin;
+use StudioSchedule\Service\ClassLessonSync;
 use StudioSchedule\Service\Attendance;
 use StudioSchedule\Service\BookingCancellation;
 use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
 use StudioSchedule\Service\LessonAdministration;
+use StudioSchedule\Service\LessonGenerator;
 use StudioSchedule\Service\LessonRecipients;
 use StudioSchedule\Service\LessonNotices;
 use StudioSchedule\Service\LessonSignup;
@@ -346,6 +349,124 @@ final class ScheduleStoreTest extends TestCase
         }
         $digest = $this->postgres ? "encode(token_hash, 'hex')" : 'LOWER(HEX(token_hash))';
         self::assertSame(hash('sha256', $link[1]), $this->database->fetchOne("SELECT $digest FROM account_tokens"));
+    }
+
+    public function testOfficeClassEditProtectsPlacesAndRechecksMovedBookingPayments(): void
+    {
+        $this->database->executeStatement("UPDATE settings SET redemption_mode = 'booking'");
+        $this->database->executeStatement("UPDATE accounts SET confirmed_at = '2026-10-24 09:00:00'");
+        $this->insertLesson(108, '2026-11-01', 'regular', 'public', [
+            'class_id' => 40, 'slot_date' => '2026-11-01', 'starts_at' => '2026-11-01 10:00:00', 'ends_at' => '2026-11-01 11:00:00',
+        ]);
+        $this->insert('bookings', [
+            'id' => 301, 'person_id' => 2, 'lesson_id' => 108, 'source' => 'self',
+            'status' => 'booked', 'trial' => false, 'booked_at' => '2026-10-24 10:00:00',
+        ]);
+        $this->insert('pass_types', [
+            'id' => 302, 'name' => 'Fixture Visits', 'kind' => 'visits', 'visits' => 2, 'validity_days' => 0,
+            'price' => 0, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => '2026-10-20 10:00:00',
+        ]);
+        $this->insert('passes', [
+            'id' => 303, 'pass_type_id' => 302, 'kind' => 'visits', 'visits_total' => 2, 'visits_remaining' => 1,
+            'valid_from' => '2026-11-01', 'person_id' => 2, 'status' => 'active', 'origin' => 'assignment',
+            'price_paid' => 0, 'sold_at' => '2026-10-20 10:00:00',
+        ]);
+        $this->insert('pass_redemptions', ['pass_id' => 303, 'booking_id' => 301, 'at' => '2026-10-24 10:00:00']);
+        $waiting = ['lesson_id' => 108, 'stay_on_list' => false, 'joined_at' => '2026-10-24 10:00:00'];
+        $this->insert('waitlist_entries', [
+            'id' => 304, 'person_id' => 6, 'status' => 'invited', 'invited_at' => '2026-10-25 10:00:00',
+            'expires_at' => '2026-10-28 10:00:00', 'invite_token_hash' => hash('sha256', 'held class invite', true),
+        ] + $waiting);
+        $this->insert('waitlist_entries', ['id' => 305, 'person_id' => 3, 'status' => 'waiting'] + $waiting);
+        $wakes = 0;
+        $app = $this->app('2026-10-26T12:00:00Z', wakeLessonMail: function () use (&$wakes): void {
+            self::assertFalse($this->database->isTransactionActive());
+            ++$wakes;
+        });
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $path = '/classes/' . self::id(40);
+        $lesson = '/lessons/' . self::id(108);
+        $data = [
+            'courseTypeId' => self::id(22), 'roomId' => self::id(21), 'instructorId' => self::id(23),
+            'weekday' => 6, 'startTime' => '11:30', 'durationMinutes' => 60,
+        ];
+        $lower = ['capacity' => 1] + $data;
+        self::send($app, 'PUT', '/classes/' . self::id(999), $office, 404, $lower);
+        foreach ([2, 3] as $member) {
+            $this->insert('class_members', ['class_id' => 40, 'person_id' => $member]);
+        }
+        $failure = self::send($app, 'PUT', $path, $office, 422, $lower);
+        self::assertStringContainsString('the class has 2 members', json_encode($failure, JSON_THROW_ON_ERROR));
+        $this->database->executeStatement('DELETE FROM class_members');
+        $failure = self::send($app, 'PUT', $path, $office, 422, $lower);
+        self::assertStringContainsString('places reserved for the waiting list', json_encode($failure, JSON_THROW_ON_ERROR));
+        self::assertSame('2026-11-01T10:00:00Z', self::get($app, $lesson, $office)['startsAt']);
+        self::assertSame(0, $wakes);
+        self::assertCount(1, $this->database->fetchFirstColumn('SELECT booking_id FROM pass_redemptions'));
+
+        $raise = ['capacity' => 5] + $data;
+        self::assertSame(5, self::send($app, 'PUT', $path, $office, 200, $raise)['capacity']);
+        self::assertSame('2026-10-31T10:30:00Z', self::get($app, $lesson, $office)['startsAt']);
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT booking_id FROM pass_redemptions'));
+        self::assertContains($this->database->fetchOne('SELECT visits_remaining FROM passes'), [2, '2']);
+        self::assertSame(['waitlist-invite'], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
+        self::assertSame(1, $wakes);
+
+        self::assertTrue(self::send($app, 'PUT', $path, $office, 200, ['retired' => true] + $raise)['retired']);
+        self::assertSame('2026-10-31T10:30:00Z', self::get($app, $lesson, $office)['startsAt']);
+        self::assertSame(1, $wakes);
+    }
+
+    public function testOfficeClassEditKeepsALessonThatStartsWhileWaitingForItsLock(): void
+    {
+        $this->insertLesson(108, '2026-11-01', 'regular', 'public', [
+            'class_id' => 40, 'slot_date' => '2026-11-01', 'starts_at' => '2026-11-01 10:00:00', 'ends_at' => '2026-11-01 11:00:00',
+        ]);
+        $clock = new class implements ClockInterface {
+            public DateTimeImmutable $time;
+
+            public function now(): DateTimeImmutable
+            {
+                return $this->time;
+            }
+        };
+        $clock->time = new DateTimeImmutable('2026-11-01T09:59:59Z');
+        $advance = static function () use ($clock): void {
+            $clock->time = new DateTimeImmutable('2026-11-01T10:00:00Z');
+        };
+        $logger = new class ($advance) extends AbstractLogger {
+            /** @param Closure():void $advance */
+            public function __construct(private readonly Closure $advance) {}
+
+            /** @param array<string,mixed> $context */
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                $sql = $context['sql'] ?? '';
+                if (is_string($sql) && str_starts_with($sql, 'SELECT id, slot_date, starts_at, ends_at, status') && str_ends_with($sql, ' FOR UPDATE')) {
+                    ($this->advance)();
+                }
+            }
+        };
+        $config = new Configuration();
+        $config->setMiddlewares([new Middleware($logger)]);
+        $fixture = $this->database;
+        $this->database = DriverManager::getConnection($fixture->getParams(), $config);
+        try {
+            $app = $this->app($clock);
+            $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+            $response = self::send($app, 'PUT', '/classes/' . self::id(40), $office, 200, [
+                'courseTypeId' => self::id(22), 'roomId' => self::id(21), 'instructorId' => self::id(23),
+                'weekday' => 0, 'startTime' => '11:00', 'durationMinutes' => 60, 'capacity' => 4, 'retired' => true,
+            ]);
+            self::assertTrue($response['retired']);
+            self::assertSame('2026-11-01T10:00:00Z', $clock->now()->format('Y-m-d\TH:i:s\Z'));
+            $lesson = self::get($app, '/lessons/' . self::id(108), $office);
+            self::assertSame('2026-11-01T10:00:00Z', $lesson['startsAt']);
+            self::assertSame('scheduled', $lesson['status']);
+        } finally {
+            $this->database->close();
+            $this->database = $fixture;
+        }
     }
 
     public function testConcurrentEventSignupsDoNotOverbookTheFinalPlace(): void
@@ -3579,17 +3700,17 @@ final class ScheduleStoreTest extends TestCase
      * @param (Closure():void)|null $wakeLessonMail
      * @return App<ContainerInterface|null>
      */
-    private function app(string $now, ?Closure $renderReceipt = null, ?Closure $wakeLessonMail = null): App
+    private function app(string|ClockInterface $now, ?Closure $renderReceipt = null, ?Closure $wakeLessonMail = null): App
     {
         $app = AppFactory::create();
-        $clock = new class ($now) implements ClockInterface {
+        $clock = is_string($now) ? new class ($now) implements ClockInterface {
             public function __construct(private string $now) {}
 
             public function now(): DateTimeImmutable
             {
                 return new DateTimeImmutable($this->now);
             }
-        };
+        } : $now;
         $scheduleStore = new ScheduleStore($this->database);
         (new PersonAdministrationRoutes(new PersonAdministration(new FamilyStore($this->database), $clock)))->register($app);
         ScheduleRoutes::register($app, $scheduleStore, $clock);
@@ -3637,6 +3758,14 @@ final class ScheduleStoreTest extends TestCase
             static fn(): string => 'https://school.example.test/dance/schedule',
             static fn(): bool => true,
         );
+        CatalogAdminRoutes::registerClasses($app, new ClassAdmin(
+            $timetable,
+            new LessonGenerator($timetable, $clock),
+            $clock,
+            $eventStore,
+            new ClassLessonSync($timetable, $scheduleStore, $lessonWrites, $recipients, $lessonOffers, $clock),
+            $wakeLessonMail,
+        ));
         (new BookingRoutes(new BookingCancellation(
             $bookings,
             $scheduleStore,

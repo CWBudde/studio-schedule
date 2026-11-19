@@ -91,6 +91,7 @@ use StudioSchedule\Service\Announcements;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\BookingRuleSettings;
 use StudioSchedule\Service\ClassAdmin;
+use StudioSchedule\Service\ClassLessonSync;
 use StudioSchedule\Service\CalendarFeedManagement;
 use StudioSchedule\Service\CalendarFeedRendering;
 use StudioSchedule\Service\CommonPasswords;
@@ -383,7 +384,6 @@ final class Bootstrap
                     $memberDirectory = new MemberImportStore($connection);
                     (new MemberImportRoutes(new MemberImports($memberDirectory, $clock)))->register($app);
                     CatalogAdminRoutes::registerTerms($app, new TermAdmin($timetableStore, $generator, $clock));
-                    CatalogAdminRoutes::registerClasses($app, new ClassAdmin($timetableStore, $generator, $clock));
                     $lessons = new OneOffLesson($timetableStore, $clock);
                     CatalogAdminRoutes::registerLessonCreation($app, $lessons);
                     $eventStore = new EventStore($connection);
@@ -411,6 +411,14 @@ final class Bootstrap
                         $applicationURL,
                         static fn(): bool => $pushSender() !== null,
                     );
+                    CatalogAdminRoutes::registerClasses($app, new ClassAdmin(
+                        $timetableStore,
+                        $generator,
+                        $clock,
+                        $eventStore,
+                        new ClassLessonSync($timetableStore, $schedule, $lessonWrites, $lessonRecipients, $lessonOffers, $clock),
+                        $wakeMail,
+                    ));
                     (new LessonAdminRoutes(new LessonAdministration(
                         $eventStore,
                         $lessonWrites,

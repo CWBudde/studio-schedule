@@ -26,6 +26,7 @@ use Symfony\Component\Uid\Uuid;
  * @phpstan-import-type ClassRow from LessonGenerationPersistence
  * @phpstan-import-type MemberRow from LessonGenerationPersistence
  * @phpstan-import-type ClassLesson from TimetableAdminPersistence
+ * @phpstan-import-type ScheduledClassLesson from TimetableAdminPersistence
  */
 final readonly class TimetableStore implements TimetableAdminPersistence, OneOffLessonPersistence
 {
@@ -62,14 +63,36 @@ final readonly class TimetableStore implements TimetableAdminPersistence, OneOff
 
     public function lockClasses(string $term, bool $includeRetired = false): array
     {
-        $duration = $this->isPostgres() ? Database::intervalMicros('duration') : 'duration';
         $active = $includeRetired ? '' : ' AND retired = FALSE';
+
+        return $this->classRows("term_id = ?$active ORDER BY weekday, start_time, id", $term);
+    }
+
+    public function classTerm(string $classId): string
+    {
+        $term = $this->db->fetchOne('SELECT term_id FROM classes WHERE id = ?', [$this->encodeId($classId)]);
+        if (!is_string($term)) {
+            throw new CatalogFailure(404, 'resource not found');
+        }
+
+        return $this->decodeId($term);
+    }
+
+    public function lockClass(string $classId): array
+    {
+        return $this->classRows('id = ?', $this->encodeId($classId))[0] ?? throw new CatalogFailure(404, 'resource not found');
+    }
+
+    /** @return list<ClassRow> */
+    private function classRows(string $filter, string $id): array
+    {
+        $duration = $this->isPostgres() ? Database::intervalMicros('duration') : 'duration';
         /** @var list<array{id: string, course_type_id: string, room_id: string, instructor_id: string, accompanist_id: ?string,
          *     weekday: int|numeric-string, start_time: string, duration_micros: int|numeric-string, capacity: int|numeric-string, retired: int|string|bool}> $rows */
         $rows = $this->db->fetchAllAssociative(
             'SELECT id, course_type_id, room_id, instructor_id, accompanist_id, weekday, start_time, capacity, retired, '
-            . "$duration AS duration_micros FROM classes WHERE term_id = ?$active ORDER BY weekday, start_time, id FOR UPDATE",
-            [$term],
+            . "$duration AS duration_micros FROM classes WHERE $filter FOR UPDATE",
+            [$id],
         );
 
         return array_map(static function (array $row): array {
@@ -158,7 +181,7 @@ final readonly class TimetableStore implements TimetableAdminPersistence, OneOff
         return (new ScheduleStore($this->db))->lesson($id) ?? throw new \RuntimeException('The new lesson was not stored');
     }
 
-    public function createClass(string $term, ClassData $data): array
+    public function saveClass(string $term, ClassData $data, ?string $storedId = null): array
     {
         $course = $this->requireReference('course_types', $data->courseTypeId, 'courseTypeId', 'course type');
         $room = $this->requireReference('rooms', $data->roomId, 'roomId', 'room');
@@ -167,16 +190,23 @@ final readonly class TimetableStore implements TimetableAdminPersistence, OneOff
         [$from, $to] = $this->lockClassLevels($data->levelFromId, $data->levelToId);
         $duration = $data->durationMinutes * 60_000_000;
         $class = [
-            'id' => $this->newId(), 'course_type_id' => $course, 'room_id' => $room,
+            'id' => $storedId ?? $this->newId(), 'course_type_id' => $course, 'room_id' => $room,
             'instructor_id' => $instructor, 'accompanist_id' => $accompanist,
             'weekday' => $data->weekday, 'start_time' => (string) $data->startTime,
             'capacity' => $data->capacity, 'retired' => $data->retired,
         ];
-        $this->db->insert('classes', $class + [
+        $fields = $class + [
             'term_id' => $term, 'level_from_id' => $from, 'level_to_id' => $to, 'all_levels' => $data->allLevels,
             'stage' => $data->stage, 'age_from_months' => $data->ageFromMonths, 'age_to_months' => $data->ageToMonths,
             'duration' => $this->isPostgres() ? "{$data->durationMinutes} minutes" : $duration,
-        ], ['all_levels' => ParameterType::BOOLEAN, 'retired' => ParameterType::BOOLEAN]);
+        ];
+        $types = ['all_levels' => ParameterType::BOOLEAN, 'retired' => ParameterType::BOOLEAN];
+        if ($storedId === null) {
+            $this->db->insert('classes', $fields, $types);
+        } else {
+            unset($fields['id'], $fields['term_id']);
+            $this->db->update('classes', $fields, ['id' => $storedId], $types);
+        }
 
         return $class + ['duration_micros' => $duration];
     }
@@ -208,6 +238,46 @@ final readonly class TimetableStore implements TimetableAdminPersistence, OneOff
     public function lockClassLessons(string $class, DateTimeImmutable $now): array
     {
         return $this->lockLessons($class, $now, null);
+    }
+
+    public function lockClassEditLessons(string $class, Date $from): array
+    {
+        // Use point locks in lesson ID order, the same order used by pass voiding.
+        /** @var list<string> $ids */
+        $ids = $this->db->fetchFirstColumn(
+            'SELECT id FROM lessons WHERE class_id = ? AND slot_date >= ? ORDER BY id',
+            [$class, (string) $from],
+        );
+        $lessons = [];
+        foreach ($ids as $id) {
+            /** @var array{id:string,slot_date:string,starts_at:string,ends_at:string,status:string,visibility:string,
+             *     kind:string,detached:bool|int|string,course_type_id:?string,room_id:string,instructor_id:?string,
+             *     accompanist_id:?string,capacity:int|numeric-string}|false $row */
+            $row = $this->db->fetchAssociative(
+                'SELECT id, slot_date, starts_at, ends_at, status, visibility, kind, detached, course_type_id, room_id, '
+                . 'instructor_id, accompanist_id, capacity FROM lessons WHERE id = ? FOR UPDATE',
+                [$id],
+            );
+            if ($row === false) {
+                continue;
+            }
+            $row['detached'] = in_array($row['detached'], [true, 1, '1', 't'], true);
+            $row['lessonId'] = $this->decodeId($row['id']);
+            $lessons[] = $row;
+        }
+        usort($lessons, static fn(array $a, array $b): int => [$a['slot_date'], $a['id']] <=> [$b['slot_date'], $b['id']]);
+
+        return $lessons;
+    }
+
+    public function moveClassLesson(string $lesson, array $class, Date $slot, DateTimeImmutable $start, DateTimeImmutable $end): void
+    {
+        $this->db->update('lessons', [
+            'slot_date' => (string) $slot, 'starts_at' => Database::sqlInstant($this->db, $start),
+            'ends_at' => Database::sqlInstant($this->db, $end), 'course_type_id' => $class['course_type_id'],
+            'room_id' => $class['room_id'], 'instructor_id' => $class['instructor_id'],
+            'accompanist_id' => $class['accompanist_id'], 'capacity' => $class['capacity'],
+        ], ['id' => $lesson]);
     }
 
     private function requireReference(string $table, string $id, string $field, string $label): string
@@ -348,6 +418,11 @@ final readonly class TimetableStore implements TimetableAdminPersistence, OneOff
     private function encodeId(string $id): string
     {
         return $this->isPostgres() ? $id : Uuid::fromString($id)->toBinary();
+    }
+
+    private function decodeId(string $id): string
+    {
+        return $this->isPostgres() ? $id : Uuid::fromBinary($id)->toRfc4122();
     }
 
     private function isPostgres(): bool

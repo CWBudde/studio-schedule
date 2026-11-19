@@ -1487,6 +1487,11 @@ backends.
           shared `class_creation_and_deletion` case passes at both mount paths on all three PHP
           databases.
     - [x] Run `class_lists_and_roster` and `class_creation_and_deletion` in PHP CI.
+    - [x] Let the office edit and retire classes. Move future generated lessons with the class,
+          preserve started and detached lessons, and protect occupied and reserved places. Recheck
+          pass charges when the school date changes and offer added places to the waitlist. The
+          shared `class_editing_and_retirement` case runs in PHP CI on all three databases at both
+          mount paths.
     - [x] Let the office create one-off lessons and room rentals in school-local time, with
           confirmation for past starts and room overlaps. The shared `one_off_lesson_creation`
           case runs in PHP CI on all three databases at both mount paths.

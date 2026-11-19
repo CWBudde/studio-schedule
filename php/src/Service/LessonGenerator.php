@@ -93,7 +93,7 @@ final readonly class LessonGenerator
         return $created;
     }
 
-    private static function weekOf(Date $date): Date
+    public static function weekOf(Date $date): Date
     {
         return $date->addDays(-(($date->weekday() + 6) % 7));
     }

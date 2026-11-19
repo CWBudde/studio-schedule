@@ -85,7 +85,9 @@ final readonly class CatalogAdminRoutes
     {
         $app->group('/api/v1', static function (RouteCollectorProxy $routes) use ($service): void {
             $routes->post('/terms/{termId}/classes', static fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
-                => self::createClass($request, $response, $service, self::id($args['termId'] ?? null, 'path.termId')));
+                => self::writeClass($request, $response, $service, self::id($args['termId'] ?? null, 'path.termId')));
+            $routes->put('/classes/{classId}', static fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+                => self::writeClass($request, $response, $service, self::id($args['classId'] ?? null, 'path.classId')));
             $routes->delete('/classes/{classId}', static function (ServerRequestInterface $request, ResponseInterface $response, array $args) use ($service): ResponseInterface {
                 $service->delete(self::id($args['classId'] ?? null, 'path.classId'));
 
@@ -173,7 +175,7 @@ final readonly class CatalogAdminRoutes
         return Responses::problem($request, 409, $error->getMessage(), reason: 'room-taken', extensions: ['lesson' => $lesson]);
     }
 
-    private static function createClass(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, ClassAdmin $service, string $term): ResponseInterface
+    private static function writeClass(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, ClassAdmin $service, string $id): ResponseInterface
     {
         $body = self::fields($request, [
             'coursetypeid', 'roomid', 'instructorid', 'accompanistid', 'levelfromid', 'leveltoid',
@@ -205,7 +207,11 @@ final readonly class CatalogAdminRoutes
             retired: self::flag($body, 'retired'),
         );
 
-        return Responses::json($response->withStatus(201), $service->create($term, $data));
+        if ($request->getMethod() === 'PUT') {
+            return Responses::json($response, $service->update($id, $data));
+        }
+
+        return Responses::json($response->withStatus(201), $service->create($id, $data));
     }
 
     /** @param array<array-key,mixed> $body */
