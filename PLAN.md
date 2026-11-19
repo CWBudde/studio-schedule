@@ -1723,6 +1723,10 @@ backends.
           pass sales that share a receipt counter. Confirm database lock waits and verify that a
           failed PDF render leaves its receipt number available. These cases run in PHP CI on
           PostgreSQL, MySQL and MariaDB.
+    - [ ] Run the full server browser suite against packaged PHP-FPM and wire it into CI and
+          `just ci`. Local runs on PostgreSQL passed six of seven tests at both the root and
+          `/dance/schedule` after PHP `jobs:run` generated upcoming class lessons. The member
+          booking test passes against Go. PHP still returns 404 for the cancellation request.
 - [x] Docs: deployment on shared hosting (upload, document root or subdirectory, cron,
       `SETUP_TOKEN` and the installer, upgrades) and in a container (docs/operations.md), choosing
       a backend and a database, switching with `db:copy`, ADR 0001 amended (the WASM demo stays
