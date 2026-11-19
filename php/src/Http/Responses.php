@@ -52,6 +52,7 @@ final class Responses
         string $detail,
         string $type = '',
         array $errors = [],
+        string $reason = '',
     ): ResponseInterface {
         $response = new Response($status);
         $body = ['title' => $response->getReasonPhrase(), 'status' => $status, 'detail' => $detail];
@@ -64,6 +65,9 @@ final class Responses
         }
         if ($errors !== []) {
             $body['errors'] = $errors;
+        }
+        if ($reason !== '') {
+            $body['reason'] = $reason;
         }
 
         return self::json($response, $body, $request->getMethod() === 'HEAD')

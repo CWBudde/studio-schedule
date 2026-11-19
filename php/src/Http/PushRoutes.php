@@ -6,7 +6,6 @@ namespace StudioSchedule\Http;
 
 use Closure;
 use InvalidArgumentException;
-use JsonException;
 use Psr\Clock\ClockInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -19,8 +18,6 @@ use StudioSchedule\Store\PushSubscriptionStore;
 
 final readonly class PushRoutes
 {
-    private const int MAX_BODY_BYTES = 1024 * 1024;
-
     /** @param Closure():?Sender $sender */
     public function __construct(private PushSubscriptionStore $store, private ClockInterface $clock, private Closure $sender) {}
 
@@ -42,7 +39,7 @@ final readonly class PushRoutes
             return Responses::json($response, $sender === null ? ['enabled' => false] : ['enabled' => true, 'publicKey' => $sender->publicKey()]);
         }
 
-        $body = self::body($request);
+        $body = JsonObject::read($request);
         if ($body instanceof ResponseInterface) {
             return $body;
         }
@@ -124,37 +121,6 @@ final readonly class PushRoutes
         $this->store->save($principal->accountId, $endpoint, $publicKey, $secret, $label === '' ? null : $label, $this->clock->now());
 
         return $response->withStatus(204);
-    }
-
-    private static function body(#[SensitiveParameter] ServerRequestInterface $request): stdClass|ResponseInterface
-    {
-        $stream = $request->getBody();
-        $body = '';
-        while (!$stream->eof() && strlen($body) < self::MAX_BODY_BYTES) {
-            $chunk = $stream->read(self::MAX_BODY_BYTES - strlen($body));
-            if ($chunk === '') {
-                break;
-            }
-            $body .= $chunk;
-        }
-        if (strlen($body) >= self::MAX_BODY_BYTES) {
-            return Responses::problem($request, 413, 'request body is too large limit=' . self::MAX_BODY_BYTES . ' bytes');
-        }
-        if ($body === '') {
-            return Responses::problem($request, 400, 'request body is required');
-        }
-        $mediaType = strtolower(trim(explode(';', $request->getHeaderLine('Content-Type'), 2)[0]));
-        if ($mediaType !== '' && $mediaType !== 'application/json' && !str_ends_with($mediaType, '+json')) {
-            return Responses::problem($request, 415, 'unsupported content type');
-        }
-
-        try {
-            $decoded = json_decode($body, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return Responses::problem($request, 400, 'invalid JSON');
-        }
-
-        return $decoded instanceof stdClass ? $decoded : Responses::problem($request, 422, 'expected an object');
     }
 
     private static function invalid(ServerRequestInterface $request, ResponseInterface $response, string $field, string $message): ResponseInterface

@@ -1440,6 +1440,10 @@ backends.
   - [ ] Passes, redemption ledger, receipts with the gapless counter and PDF (ADR 0012)
   - [ ] Settings, branding, themes, `init` (ADR 0013, 0018)
   - [ ] Announcements, mail log, statistics (ADR 0014)
+    - [x] Serve the administrator mail log with filtered search, detail and audited requeue.
+          Secret-link bodies stay private. Tests pass on PostgreSQL, MySQL and MariaDB,
+          including the shared `mail_log` scenario at both mount paths with the PHP
+          authentication draft.
   - [ ] Import, duplicates and merge (ADR 0015)
   - [ ] Privacy, export, anonymisation, retention jobs (ADR 0016)
   - [ ] Web push with VAPID (ADR 0017)

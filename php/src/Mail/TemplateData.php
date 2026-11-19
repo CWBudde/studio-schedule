@@ -38,6 +38,17 @@ final class TemplateData
         'test' => ['Server'],
     ];
 
+    public static function isLogTemplate(string $template): bool
+    {
+        // Test mail is sent directly by the operator and is not an outbox template.
+        return $template !== 'test' && isset(self::REQUIRED_TEXT[$template]);
+    }
+
+    public static function secretLink(?string $template): bool
+    {
+        return in_array($template, ['confirm-email', 'change-email', 'reset-password', 'invite', 'waitlist-invite', 'event-invite'], true);
+    }
+
     /**
      * @param array<string, mixed> $data
      * @return array<string, mixed>
