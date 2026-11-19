@@ -1606,7 +1606,11 @@ backends.
         SMTP login, VAPID keys, the public URL, and sample receipt rendering. It prints the same
         check order and report format as Go and never sends mail.
   - [x] `vapid-keys` prints a matching key pair in the environment-file format shared with Go.
-  - [ ] `seed`, `import`, and the remaining `jobs:run` jobs.
+  - [x] `import` previews member CSV changes by default and applies valid rows with `--apply`.
+        It requires a confirmed, enabled office or admin account and records that account in the
+        import history. It reports results as text or JSON and exits with status 1 when any row
+        fails. Tests cover PostgreSQL, MySQL and MariaDB.
+  - [ ] `seed` and the remaining `jobs:run` jobs.
 - [x] `db:copy` (command and installer action): copies a complete database into an empty one of
       another kind, MySQL/MariaDB → PostgreSQL and back, at the same schema version, in one
       transaction on the target, then runs the `db check` checks there and rolls back on a

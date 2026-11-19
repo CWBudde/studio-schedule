@@ -8,7 +8,7 @@ use StudioSchedule\Domain\PersonName;
 
 final readonly class MemberImportMapping
 {
-    private const array FIELDS = [
+    public const array FIELDS = [
         'memberNo', 'givenName', 'familyName', 'email', 'phone', 'birthDate', 'notes',
         'guardian1GivenName', 'guardian1FamilyName', 'guardian1Email', 'guardian1Phone',
         'guardian2GivenName', 'guardian2FamilyName', 'guardian2Email', 'guardian2Phone',

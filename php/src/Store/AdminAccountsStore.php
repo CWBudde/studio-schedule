@@ -35,6 +35,18 @@ final readonly class AdminAccountsStore
         return array_map($this->project(...), $rows);
     }
 
+    /** @return AccountEntry|null */
+    public function byEmail(#[\SensitiveParameter] string $email): ?array
+    {
+        if (preg_match('/\A[^\x00]+\z/u', $email) !== 1) {
+            return null;
+        }
+        $lookup = $this->isPostgres() ? 'lower(a.email) = lower(CAST(? AS text) COLLATE "C")' : 'a.email_folded = ?';
+        $row = $this->connection->fetchAssociative(self::ENTRIES . " WHERE $lookup", [strtolower($email)]);
+
+        return $row === false ? null : $this->project($row);
+    }
+
     /**
      * @template T
      * @param Closure():T $operation

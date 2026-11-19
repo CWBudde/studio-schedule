@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace StudioSchedule\Console;
 
 use Doctrine\DBAL\Exception as DatabaseError;
-use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use InvalidArgumentException;
 use StudioSchedule\Config;
 use StudioSchedule\Push\VapidKeys;
@@ -19,7 +18,6 @@ use StudioSchedule\Store\Database;
 use StudioSchedule\Store\DatabaseCopy;
 use StudioSchedule\Store\IntegrityStore;
 use StudioSchedule\Store\MigrationRecoveryRequired;
-use StudioSchedule\Store\Schema;
 use StudioSchedule\Store\SetupStore;
 use Throwable;
 
@@ -42,6 +40,7 @@ final readonly class Operator
         . "  vapid-keys    Print a new VAPID key pair for web push\n"
         . "  migrate       Apply, roll back or list database migrations\n"
         . "  db check      Check the data for inconsistencies\n"
+        . "  import        Import members from a CSV file (dry run unless --apply)\n"
         . "  jobs:run      Run due background jobs\n"
         . "  db:copy       Copy the data to an empty database on another engine\n";
 
@@ -65,8 +64,10 @@ final readonly class Operator
         $errors,
         ?callable $environment = null,
     ): int {
+        $command = '';
+        $flags = [];
         try {
-            [$command, $flags, $help, $only] = self::parse($arguments);
+            [$help, $only, $importFile, $maps, $notes] = self::parse($arguments, $command, $flags);
             if ($help || in_array($command, ['', 'migrate', 'db'], true)) {
                 fwrite($output, self::help($command));
 
@@ -101,8 +102,24 @@ final readonly class Operator
                 return 0;
             }
 
+            if ($command === 'import') {
+                assert($importFile !== null);
+
+                return (new ImportCommand($this->currentSchema()))->run(
+                    SetupInput::trim($flags['database-url'] ?? $get('DATABASE_URL')),
+                    SetupInput::trim($flags['as'] ?? $get('STUDIO_AS')),
+                    $importFile,
+                    $maps,
+                    $notes,
+                    ($flags['apply'] ?? 'false') === 'true',
+                    ($flags['output'] ?? 'text') === 'json',
+                    $output,
+                    $errors,
+                );
+            }
+
             if ($command === 'db check') {
-                return (new DbCheck($this->postgresDirectory(), $this->appDirectory . '/migrations/mysql'))->run(
+                return (new DbCheck($this->currentSchema()))->run(
                     SetupInput::trim($flags['database-url'] ?? $get('DATABASE_URL')),
                     $only,
                     $flags['output'] ?? 'text',
@@ -158,7 +175,11 @@ final readonly class Operator
 
             return 0;
         } catch (CommandError $error) {
-            fwrite($errors, 'error: ' . $error->getMessage() . "\n");
+            if ($command === 'import' && ($flags['output'] ?? '') === 'json') {
+                ImportCommand::report($errors, true, 400, $error->getMessage());
+            } else {
+                fwrite($errors, 'error: ' . $error->getMessage() . "\n");
+            }
 
             return $error->status;
         } catch (MigrationRecoveryRequired|CopyError $error) {
@@ -179,24 +200,31 @@ final readonly class Operator
 
     /**
      * @param list<string> $arguments
-     * @return array{string,array<string,string>,bool,list<string>}
+     * @param array<string,string> $flags
+     * @param-out array<string,string> $flags
+     * @return array{bool,list<string>,?string,list<string>,list<string>}
      */
-    private static function parse(#[\SensitiveParameter] array $arguments): array
+    private static function parse(#[\SensitiveParameter] array $arguments, string &$command, #[\SensitiveParameter] array &$flags): array
     {
-        $command = '';
-        $flags = [];
         $help = false;
-        $only = [];
+        $only = $maps = $notes = [];
+        $importFiles = [];
+        $options = true;
         for ($index = 0; $index < count($arguments); $index++) {
             $arg = $arguments[$index];
-            if ($arg === '--help' || $arg === '-h') {
+            if ($options && ($arg === '--help' || $arg === '-h')) {
                 $help = true;
                 continue;
             }
-            if ($arg === '--' && $index === count($arguments) - 1) {
-                break;
+            if ($options && $arg === '--') {
+                $options = false;
+                continue;
             }
-            if (!str_starts_with($arg, '-')) {
+            if (!$options || !str_starts_with($arg, '-')) {
+                if ($command === 'import') {
+                    $importFiles[] = $arg;
+                    continue;
+                }
                 if ($command === 'migrate') {
                     if (!in_array($arg, ['up', 'down', 'status'], true)) {
                         throw new CommandError('unknown migration command', 2);
@@ -214,7 +242,7 @@ final readonly class Operator
                 if ($command !== '') {
                     throw new CommandError('unexpected argument', 2);
                 }
-                if (!in_array($arg, ['init', 'healthcheck', 'doctor', 'vapid-keys', 'migrate', 'db', 'db:copy', 'jobs:run'], true)) {
+                if (!in_array($arg, ['init', 'healthcheck', 'doctor', 'vapid-keys', 'migrate', 'db', 'db:copy', 'jobs:run', 'import'], true)) {
                     throw new CommandError('unknown command', 2);
                 }
                 $command = $arg;
@@ -231,13 +259,23 @@ final readonly class Operator
                 $flags['backup-verified'] = $value ?? 'true';
                 continue;
             }
+            if ($name === '--apply' && $command === 'import') {
+                $boolean = $value ?? 'true';
+                $flags['apply'] = match ($boolean) {
+                    '1', 't', 'T', 'TRUE', 'true', 'True' => 'true',
+                    '0', 'f', 'F', 'FALSE', 'false', 'False' => 'false',
+                    default => throw new CommandError('--apply accepts true or false', 2),
+                };
+                continue;
+            }
             $known = match ($name) {
                 '--database-url', '--output', '-o' => true,
                 '--base-url' => in_array($command, ['init', 'healthcheck', 'doctor'], true),
                 '--target-database-url' => $command === 'db:copy',
                 '--addr' => in_array($command, ['healthcheck', 'doctor'], true),
                 '--log-format', '--log-level' => $command === 'doctor',
-                '--as' => in_array($command, ['db check', 'doctor'], true),
+                '--as' => in_array($command, ['', 'db check', 'doctor', 'import'], true),
+                '--map', '--notes' => $command === 'import',
                 '--only' => $command === 'db check',
                 default => $command === 'init' && str_starts_with($name, '--') && isset(self::INIT_FIELDS[substr($name, 2)]),
             };
@@ -258,11 +296,19 @@ final readonly class Operator
                 }
                 continue;
             }
+            if ($name === '--map') {
+                $maps[] = $value;
+                continue;
+            }
+            if ($name === '--notes') {
+                $notes[] = $value;
+                continue;
+            }
             $flags[$name === '-o' ? 'output' : substr($name, 2)] = $value;
         }
 
         $format = $flags['output'] ?? 'text';
-        $canPrintJson = in_array($command, ['db check', 'doctor'], true);
+        $canPrintJson = in_array($command, ['db check', 'doctor', 'import'], true);
         if ($canPrintJson && !in_array($format, ['text', 'json'], true)) {
             throw new CommandError('output format must be text or json', 2);
         }
@@ -270,7 +316,14 @@ final readonly class Operator
             throw new CommandError('this command prints text only', 2);
         }
 
-        return [$command, $flags, $help, $only];
+        if ($command === 'import' && !$help && count($importFiles) !== 1) {
+            throw new CommandError('accepts 1 arg(s), received ' . count($importFiles), 2);
+        }
+        if (isset($flags['as']) && !in_array($command, ['', 'db check', 'doctor', 'import'], true)) {
+            throw new CommandError('unknown flag', 2);
+        }
+
+        return [$help, $only, $importFiles[0] ?? null, $maps, $notes];
     }
 
     private static function help(string $command): string
@@ -291,6 +344,8 @@ final readonly class Operator
                 . '  Checks: ' . implode(', ', IntegrityStore::CHECKS) . "\n",
             'db:copy' => "Usage: studio-schedule db:copy [--database-url URL] --target-database-url URL\n"
                 . "Stop writes to the source and migrate the empty target to the same release before copying.\n",
+            'import' => "Usage: studio-schedule import [--database-url URL] [--as EMAIL] [--output text|json] <file.csv>\n"
+                . "  --apply  --map FIELD=HEADER (repeatable)  --notes HEADER (repeatable)\n",
             'jobs:run' => "Usage: studio-schedule jobs:run [--database-url URL]\n",
             default => self::HELP,
         };
@@ -344,20 +399,7 @@ final readonly class Operator
             throw new CommandError('DATABASE_URL must name PostgreSQL, MySQL or MariaDB', 2);
         }
         try {
-            $postgres = $database->getDatabasePlatform() instanceof PostgreSQLPlatform;
-            $migrations = $postgres ? $this->postgresDirectory() : $this->appDirectory . '/migrations/mysql';
-            $expected = Schema::migrationVersions($migrations);
-            if ($expected === []) {
-                throw new CommandError('the release has no migration files');
-            }
-            $schema = new Schema($database);
-            $applied = in_array('goose_db_version', $schema->relations(), true) ? $schema->appliedVersions() : [];
-            if (array_diff($applied, $expected) !== []) {
-                throw new CommandError('the database schema is newer than this binary: run a newer studio-schedule');
-            }
-            if ($applied !== $expected) {
-                throw new CommandError('the database schema is not up to date: run studio-schedule migrate up');
-            }
+            $this->currentSchema()->requireCurrent($database);
 
             $values = [];
             foreach (self::INIT_FIELDS as $name => [$prompt, $fallback]) {
@@ -388,6 +430,11 @@ final readonly class Operator
         } finally {
             $database->close();
         }
+    }
+
+    private function currentSchema(): CurrentSchema
+    {
+        return new CurrentSchema($this->postgresDirectory(), $this->appDirectory . '/migrations/mysql');
     }
 
     private function postgresDirectory(): string

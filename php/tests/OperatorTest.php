@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Tests;
 
+use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\TestCase;
 use StudioSchedule\Console\Operator;
@@ -31,6 +32,7 @@ final class OperatorTest extends TestCase
         self::assertStringContainsString('jobs:run', (string) $out);
         self::assertStringContainsString('doctor', (string) $out);
         self::assertStringContainsString('vapid-keys', (string) $out);
+        self::assertStringContainsString('import', (string) $out);
         self::assertSame('', $error);
     }
 
@@ -93,6 +95,25 @@ final class OperatorTest extends TestCase
             self::assertSame('', $out);
             self::assertStringContainsString($contains, $error);
             self::assertStringNotContainsString('secret', $error);
+        }
+    }
+
+    public function testImportReportsUsageErrorsInTheRequestedFormat(): void
+    {
+        foreach ([
+            [[], 'accepts 1 arg(s), received 0'],
+            [['members.csv', 'extra.csv'], 'accepts 1 arg(s), received 2'],
+            [['members.csv', '--unknown'], 'unknown flag'],
+            [['members.csv', '--apply=invalid'], '--apply accepts true or false'],
+            [['members.csv'], 'no database URL: set DATABASE_URL or --database-url'],
+        ] as [$arguments, $detail]) {
+            [$code, $out, $error] = self::execute(['--output=json', 'import', ...$arguments]);
+            self::assertSame(2, $code);
+            self::assertSame('', $out);
+            self::assertSame(
+                ['title' => 'Bad Request', 'status' => 400, 'detail' => $detail],
+                json_decode($error, true, flags: JSON_THROW_ON_ERROR),
+            );
         }
     }
 
@@ -309,6 +330,7 @@ final class OperatorTest extends TestCase
             self::assertSame(0, $jobCode, $jobError);
             self::assertSame("deliver-push ok\n", $jobOutput);
             self::assertSame(['ok'], $database->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'deliver-push'"));
+            self::assertMemberImportCommand($database, $dsn, $postgresMigrations);
         } finally {
             if (!$postgres) {
                 $database->executeStatement('SET FOREIGN_KEY_CHECKS = 0');
@@ -360,6 +382,104 @@ final class OperatorTest extends TestCase
             fclose($pipes[1]);
             fclose($pipes[2]);
             proc_close($process);
+        }
+    }
+
+    private static function assertMemberImportCommand(Connection $database, #[\SensitiveParameter] string $dsn, string $migrations): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'studio-import-');
+        self::assertIsString($file);
+        try {
+            $csv = "Mitgliedsnummer;Vorname;Nachname;Geburtsdatum;Kurs;Gruppe\n"
+                . "M90;René;Bauer;2012-02-03;Walzer;A\n"
+                . "M91;Emil;Bauer;31.02.2015;Tango;B\n";
+            self::assertSame(strlen($csv), file_put_contents($file, $csv));
+            $environment = ['DATABASE_URL' => $dsn, 'STUDIO_AS' => 'ada@example.test'];
+
+            [$code, $out, $error] = self::execute(['import', $file], ['DATABASE_URL' => $dsn], postgresMigrations: $migrations);
+            self::assertSame(2, $code);
+            self::assertSame('', $out);
+            self::assertStringContainsString('give --as <email> or set STUDIO_AS', $error);
+            [$code, $out, $error] = self::execute(['import', $file, '-o', 'json'], $environment, postgresMigrations: $migrations);
+            self::assertSame(3, $code);
+            self::assertSame('', $out);
+            self::assertStringContainsString('"status": 404', $error);
+            self::assertStringContainsString('not confirmed or is disabled', $error);
+
+            $database->executeStatement("UPDATE accounts SET confirmed_at = '2026-11-01 09:00:00', role = 'member'");
+            [$code, , $error] = self::execute(['import', '--apply', $file, '--output=json'], $environment, postgresMigrations: $migrations);
+            self::assertSame(4, $code);
+            self::assertStringContainsString('"status": 403', $error);
+            $database->executeStatement("UPDATE accounts SET role = 'office'");
+            [$code, , $error] = self::execute(['import', $file, '--as=absent@example.test'], $environment, postgresMigrations: $migrations);
+            self::assertSame(3, $code);
+            self::assertStringContainsString('no account has this email', $error);
+
+            [$code, $out, $error] = self::execute(['import', '--notes', 'Kurs', $file], $environment, postgresMigrations: $migrations);
+            self::assertSame(1, $code, $error);
+            self::assertStringContainsString('line 2  create  M90  René Bauer', $out);
+            self::assertStringContainsString('would import 2 rows: 1 created, 0 updated, 0 unchanged, 1 failed', $out);
+            self::assertStringContainsString('dry run: nothing was written; run again with --apply to import', $out);
+            self::assertSame("error: rows failed: 1 of 2 (see the lines marked error)\n", $error);
+            self::assertContains($database->fetchOne('SELECT COUNT(*) FROM persons WHERE member_no IS NOT NULL'), [0, '0']);
+            self::assertContains($database->fetchOne('SELECT COUNT(*) FROM import_runs'), [0, '0']);
+
+            $mapping = [
+                '--map=memberNo=Mitgliedsnummer', '--map', 'givenName=Vorname', '--map=familyName=Nachname',
+                '--map=birthDate=Geburtsdatum', '--notes=Kurs', '--notes', 'Gruppe',
+            ];
+            [$code, $out, $error] = self::execute(
+                ['--as', ' ADA@example.test ', '--output=json', 'import', ...$mapping, '--apply', '--', $file],
+                ['DATABASE_URL' => $dsn, 'STUDIO_AS' => 'absent@example.test'],
+                postgresMigrations: $migrations,
+            );
+            self::assertSame(1, $code, $error);
+            self::assertSame('', $error);
+            self::assertStringContainsString('"applied": true', $out);
+            self::assertStringContainsString('"runId":', $out);
+            self::assertStringContainsString('"created": 1', $out);
+            self::assertStringContainsString('"failed": 1', $out);
+            self::assertSame("Kurs: Walzer\nGruppe: A", $database->fetchOne("SELECT notes FROM persons WHERE member_no = 'M90'"));
+            self::assertSame('ada@example.test', $database->fetchOne(
+                'SELECT a.email FROM accounts a JOIN import_runs r ON r.actor_id = a.id',
+            ));
+            self::assertSame(basename($file), $database->fetchOne('SELECT file_name FROM import_runs'));
+
+            [$code, $out, $error] = self::execute(
+                ['import', $file, '--map=memberNo=Unknown', '--output=json'],
+                $environment,
+                postgresMigrations: $migrations,
+            );
+            self::assertSame(2, $code);
+            self::assertSame('', $out);
+            self::assertStringContainsString('"status": 422', $error);
+            self::assertStringContainsString('"location": "--map memberNo"', $error);
+
+            $validCsv = "Mitgliedsnummer;Vorname;Nachname;Geburtsdatum\nM90;René;Bauer;2012-02-03\n";
+            self::assertSame(strlen($validCsv), file_put_contents($file, $validCsv));
+            [$code, $out, $error] = self::execute(
+                ['import', $file, '--apply=false', '--output=json'],
+                $environment,
+                postgresMigrations: $migrations,
+            );
+            self::assertSame(0, $code, $error);
+            self::assertSame('', $error);
+            self::assertStringContainsString('"applied": false', $out);
+            self::assertStringContainsString('"unchanged": 1', $out);
+
+            self::assertSame(0, file_put_contents($file, ''));
+            [$code, $out, $error] = self::execute(
+                ['import', $file, '--map=invalid', '--output=json'],
+                $environment,
+                postgresMigrations: $migrations,
+            );
+            self::assertSame(2, $code);
+            self::assertSame('', $out);
+            self::assertStringContainsString('"status": 400', $error);
+            self::assertStringContainsString('invalid --map', $error);
+            self::assertContains($database->fetchOne('SELECT COUNT(*) FROM import_runs'), [1, '1']);
+        } finally {
+            unlink($file);
         }
     }
 

@@ -4,20 +4,17 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Console;
 
-use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use InvalidArgumentException;
 use SensitiveParameter;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\IntegrityStore;
 use StudioSchedule\Store\MigrationRecoveryRequired;
-use StudioSchedule\Store\Schema;
 use Throwable;
 
 /** @phpstan-import-type Finding from IntegrityStore */
 final readonly class DbCheck
 {
-    public function __construct(private string $postgresMigrations, private string $mysqlMigrations) {}
+    public function __construct(private CurrentSchema $schema) {}
 
     /**
      * @param list<string> $only
@@ -54,7 +51,7 @@ final readonly class DbCheck
                 return self::error($errors, $json, 400, 'DATABASE_URL must name PostgreSQL, MySQL or MariaDB');
             }
             $findings = Database::inReadSnapshot($database, function () use ($database, $checks): array {
-                $this->checkSchema($database);
+                $this->schema->requireCurrent($database);
 
                 return (new IntegrityStore($database))->findings($checks);
             });
@@ -82,24 +79,6 @@ final readonly class DbCheck
         fwrite($errors, $count === 1 ? "error: 1 finding\n" : "error: $count findings\n");
 
         return 1;
-    }
-
-    private function checkSchema(Connection $database): void
-    {
-        $expected = Schema::migrationVersions(
-            $database->getDatabasePlatform() instanceof PostgreSQLPlatform ? $this->postgresMigrations : $this->mysqlMigrations,
-        );
-        if ($expected === []) {
-            throw new CommandError('the release has no migration files');
-        }
-        $schema = new Schema($database);
-        $applied = in_array('goose_db_version', $schema->relations(), true) ? $schema->appliedVersions() : [];
-        if (array_diff($applied, $expected) !== []) {
-            throw new CommandError('the database schema is newer than this binary: run a newer studio-schedule');
-        }
-        if ($applied !== $expected) {
-            throw new CommandError('the database schema is not up to date: run studio-schedule migrate up');
-        }
     }
 
     /**
