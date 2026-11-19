@@ -241,6 +241,7 @@ func TestBackendConformance(t *testing.T) {
 		{"public settings and catalog", publicCatalog},
 		{"catalog administration", catalogAdministration},
 		{"term administration", termAdministration},
+		{"class lists and roster", classListsAndRoster},
 		{"public event details", publicEventDetails},
 		{"schedule release and visibility", publicSchedule},
 		{"registration and session", registrationSession},
@@ -297,6 +298,7 @@ func publicCatalog(t *testing.T, b *backend) {
 	}
 
 	verifyPublicRoomFilter(t, b, client)
+	readSeededTimetable(t, b, client)
 
 	response := get(t, b, client, "/manifest.webmanifest")
 	manifest := read[struct {

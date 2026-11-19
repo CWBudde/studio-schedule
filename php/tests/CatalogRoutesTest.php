@@ -13,6 +13,7 @@ use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use StudioSchedule\Http\CatalogRoutes;
 use StudioSchedule\Service\SessionPrincipal;
+use StudioSchedule\Service\SystemClock;
 use StudioSchedule\Store\CatalogStore;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\Migrator;
@@ -271,7 +272,7 @@ final class CatalogRoutesTest extends TestCase
     {
         $app = AppFactory::create();
         $app->setBasePath('/dance/schedule');
-        CatalogRoutes::register($app, new CatalogStore($database));
+        CatalogRoutes::register($app, new CatalogStore($database), new SystemClock());
         $app->addRoutingMiddleware();
 
         return $app;

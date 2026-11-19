@@ -1446,6 +1446,13 @@ backends.
           and protect started lessons and bookings made outside automatic class enrollment.
           The shared `term_administration` case passes at both mount paths on all three PHP
           databases with the authentication draft.
+    - [x] Serve the public weekly class list with staff and audience, hiding retired classes.
+          The PHP public catalogue CI scenario covers the list at both mount paths on all three
+          databases.
+    - [ ] Run the office class and roster conformance case in PHP CI after PHP sign-in lands.
+          The office can read retired classes and rosters with current membership pauses. The
+          shared `class_lists_and_roster` case passes at both mount paths on all three PHP
+          databases with the authentication draft.
   - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
         order (`SELECT … FOR UPDATE` on all three databases, term → class → lesson → passes)
   - [ ] Calendar feeds (ADR 0011)

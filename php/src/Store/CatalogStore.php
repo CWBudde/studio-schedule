@@ -12,6 +12,7 @@ use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use RuntimeException;
 use StudioSchedule\Domain\CatalogResource;
+use StudioSchedule\Domain\TimeOfDay;
 use StudioSchedule\Service\CatalogAdminPersistence;
 use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\CatalogPersistence;
@@ -20,6 +21,7 @@ use Symfony\Component\Uid\Uuid;
 /**
  * @phpstan-import-type CatalogData from CatalogAdminPersistence
  * @phpstan-import-type CatalogDocument from CatalogAdminPersistence
+ * @phpstan-import-type PersonMatch from CatalogPersistence
  */
 final readonly class CatalogStore implements CatalogPersistence, CatalogAdminPersistence
 {
@@ -123,6 +125,119 @@ final readonly class CatalogStore implements CatalogPersistence, CatalogAdminPer
         }
 
         return $items;
+    }
+
+    public function classes(string $term, bool $withRetired): ?array
+    {
+        $duration = $this->isPostgres() ? Database::intervalMicros('c.duration') : 'c.duration';
+        $active = $withRetired ? '' : ' AND c.retired = FALSE';
+        // Keep an empty term distinguishable from an unknown term using a single read.
+        $rows = $this->connection->fetchAllAssociative(
+            "SELECT c.id, c.term_id, c.course_type_id, c.room_id, c.weekday, c.start_time, $duration AS duration_micros, "
+            . 'c.capacity, c.retired, c.all_levels, c.stage, c.age_from_months, c.age_to_months, '
+            . 'i.id AS instructor_id, i.display_name AS instructor_name, a.id AS accompanist_id, a.display_name AS accompanist_name, '
+            . 'f.id AS from_id, f.name AS from_name, f.code AS from_code, f.position AS from_position, '
+            . 'l.id AS to_id, l.name AS to_name, l.code AS to_code, l.position AS to_position '
+            . "FROM terms t LEFT JOIN classes c ON c.term_id = t.id$active "
+            . 'LEFT JOIN staff i ON i.id = c.instructor_id LEFT JOIN staff a ON a.id = c.accompanist_id '
+            . 'LEFT JOIN levels f ON f.id = c.level_from_id LEFT JOIN levels l ON l.id = c.level_to_id '
+            . 'WHERE t.id = ? ORDER BY c.weekday, c.start_time, c.id',
+            [$this->encodeId($term)],
+        );
+        if ($rows === []) {
+            return null;
+        }
+
+        $items = [];
+        foreach ($rows as $row) {
+            if ($row['id'] !== null) {
+                $items[] = $this->classDocument($row, $withRetired);
+            }
+        }
+
+        return $items;
+    }
+
+    public function classMembers(string $class): ?array
+    {
+        $rows = Database::inReadSnapshot($this->connection, fn(): array => $this->connection->fetchAllAssociative(
+            'SELECT m.person_id, m.since, m.paused_until, p.given_name, p.family_name, p.email, p.member_no, p.anonymized_at, s.timezone '
+            . 'FROM classes c LEFT JOIN class_members m ON m.class_id = c.id LEFT JOIN persons p ON p.id = m.person_id '
+            . 'LEFT JOIN settings s ON s.id = TRUE WHERE c.id = ?',
+            [$this->encodeId($class)],
+        ));
+        if ($rows === []) {
+            return null;
+        }
+
+        $members = [];
+        foreach ($rows as $row) {
+            if ($row['person_id'] !== null) {
+                $members[] = [
+                    'person' => $this->person($row),
+                    'since' => $row['since'] === null ? null : self::text($row['since']),
+                    'pausedUntil' => $row['paused_until'] === null ? null : self::text($row['paused_until']),
+                ];
+            }
+        }
+        $zone = $rows[0]['timezone'];
+
+        return ['timezone' => $zone === null ? null : self::text($zone), 'members' => $members];
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return CatalogDocument
+     */
+    private function classDocument(array $row, bool $withRetired): array
+    {
+        $entry = [
+            'id' => $this->id($row['id']), 'termId' => $this->id($row['term_id']),
+            'courseTypeId' => $this->id($row['course_type_id']), 'roomId' => $this->id($row['room_id']),
+            'instructor' => ['id' => $this->id($row['instructor_id']), 'displayName' => self::text($row['instructor_name'])],
+            'weekday' => self::number($row['weekday']), 'startTime' => (string) TimeOfDay::parse(substr(self::text($row['start_time']), 0, 5)),
+            'durationMinutes' => intdiv(self::number($row['duration_micros']), 60_000_000), 'capacity' => self::number($row['capacity']),
+        ];
+        if ($row['accompanist_id'] !== null) {
+            $entry['accompanist'] = ['id' => $this->id($row['accompanist_id']), 'displayName' => self::text($row['accompanist_name'])];
+        }
+        if ($row['from_id'] !== null) {
+            $from = $this->classLevel($row, 'from');
+            $to = $this->classLevel($row, 'to');
+            if ([$row['from_position'], $from['id']] > [$row['to_position'], $to['id']]) {
+                [$from, $to] = [$to, $from];
+            }
+            $entry['levelFrom'] = $from;
+            $entry['levelTo'] = $to;
+        }
+        if (in_array($row['all_levels'], [true, 1, '1', 't'], true)) {
+            $entry['allLevels'] = true;
+        }
+        foreach (['stage' => 'stage', 'ageFromMonths' => 'age_from_months', 'ageToMonths' => 'age_to_months'] as $key => $column) {
+            if ($row[$column] !== null) {
+                $entry[$key] = self::number($row[$column]);
+            }
+        }
+        if ($withRetired) {
+            $entry['retired'] = in_array($row['retired'], [true, 1, '1', 't'], true);
+        }
+
+        return $entry;
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return array{id: string, name: string, code?: string}
+     */
+    private function classLevel(array $row, string $end): array
+    {
+        $level = ['id' => $this->id($row[$end . '_id']), 'name' => self::text($row[$end . '_name'])];
+        $code = $row[$end . '_code'];
+        if ($code !== null && $code !== '') {
+            $level['code'] = self::text($code);
+        }
+
+        return $level;
     }
 
     public function allStaff(): array
@@ -281,7 +396,7 @@ final readonly class CatalogStore implements CatalogPersistence, CatalogAdminPer
 
     /**
      * @param array<string,mixed> $row
-     * @return array<string,string|bool>
+     * @return PersonMatch
      */
     private function person(array $row): array
     {

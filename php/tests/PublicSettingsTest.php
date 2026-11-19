@@ -71,7 +71,7 @@ final class PublicSettingsTest extends TestCase
         try {
             if (self::$dsn !== null) {
                 foreach (['booking_events', 'bookings', 'event_registrations', 'events', 'passes', 'pass_types', 'lessons',
-                    'class_members', 'classes', 'terms', 'staff', 'rooms', 'locations', 'course_types', 'sessions',
+                    'class_members', 'classes', 'terms', 'levels', 'staff', 'rooms', 'locations', 'course_types', 'sessions',
                     'account_tokens', 'accounts', 'persons', 'settings', 'job_runs'] as $table) {
                     $this->db->executeStatement('DELETE FROM ' . $table);
                 }
@@ -778,6 +778,123 @@ final class PublicSettingsTest extends TestCase
         self::assertSame([['location' => 'body.startsOn', 'message' => "the lesson of $slot would lie outside the term, but it has started"]], self::decoded($response)['errors']);
         self::assertSame($slot, $this->db->fetchOne('SELECT starts_on FROM terms'));
         self::assertSame($slot, $this->db->fetchOne('SELECT slot_date FROM lessons'));
+    }
+
+    public function testClassListsResolveAudienceAndKeepRetirementPrivate(): void
+    {
+        $clock = $this->generationFixture();
+        $advanced = $this->insertRegionalFixture('levels', ['name' => 'Advanced', 'code' => 'A', 'position' => 2]);
+        $beginner = $this->insertRegionalFixture('levels', ['name' => 'Beginner', 'position' => 1]);
+        $accompanist = $this->insertRegionalFixture('staff', ['display_name' => 'Fixture accompanist', 'kind' => 'accompanist', 'active' => true]);
+        $this->db->executeStatement("UPDATE staff SET active = FALSE WHERE kind = 'instructor'");
+        $this->db->executeStatement('UPDATE classes SET weekday = 3, all_levels = TRUE WHERE retired = TRUE');
+        $this->db->executeStatement(
+            'UPDATE classes SET level_from_id = ?, level_to_id = ?, stage = 2, age_from_months = 60, age_to_months = 120, '
+            . 'accompanist_id = ? WHERE retired = FALSE',
+            [$advanced, $beginner, $accompanist],
+        );
+        $term = $this->fixtureUuid($this->db->fetchOne('SELECT id FROM terms'));
+        $public = '/terms/' . $term . '/classes';
+        $office = '/admin' . $public;
+        $response = $this->apiRequest('GET', $public, signedIn: false, clock: $clock);
+        self::assertSame(200, $response->getStatusCode());
+        $list = self::decoded($response)['items'];
+        self::assertIsArray($list);
+        self::assertCount(1, $list);
+        self::assertEquals([
+            'id' => $this->fixtureUuid($this->db->fetchOne('SELECT id FROM classes WHERE retired = FALSE')),
+            'termId' => $term,
+            'courseTypeId' => $this->fixtureUuid($this->db->fetchOne('SELECT id FROM course_types')),
+            'roomId' => $this->fixtureUuid($this->db->fetchOne('SELECT id FROM rooms')),
+            'instructor' => [
+                'id' => $this->fixtureUuid($this->db->fetchOne("SELECT id FROM staff WHERE kind = 'instructor'")),
+                'displayName' => 'Fixture instructor',
+            ],
+            'accompanist' => ['id' => $this->fixtureUuid($accompanist), 'displayName' => 'Fixture accompanist'],
+            'levelFrom' => ['id' => $this->fixtureUuid($beginner), 'name' => 'Beginner'],
+            'levelTo' => ['id' => $this->fixtureUuid($advanced), 'name' => 'Advanced', 'code' => 'A'],
+            'stage' => 2, 'ageFromMonths' => 60, 'ageToMonths' => 120,
+            'weekday' => 0, 'startTime' => '02:30', 'durationMinutes' => 45, 'capacity' => 1,
+        ], $list[0]);
+        self::assertSame(401, $this->apiRequest('GET', $office, signedIn: false, clock: $clock)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'office'");
+        $response = $this->apiRequest('GET', $office, clock: $clock);
+        self::assertSame(200, $response->getStatusCode());
+        $all = self::decoded($response)['items'];
+        self::assertIsArray($all);
+        self::assertCount(2, $all);
+        self::assertIsArray($all[0]);
+        self::assertIsArray($all[1]);
+        self::assertIsArray($list[0]);
+        self::assertEquals($list[0] + ['retired' => false], $all[0]);
+        self::assertSame(true, $all[1]['retired']);
+        self::assertSame(3, $all[1]['weekday']);
+        self::assertSame(true, $all[1]['allLevels']);
+        self::assertArrayNotHasKey('accompanist', $all[1]);
+        self::assertArrayNotHasKey('levelFrom', $all[1]);
+        $missing = $this->fixtureUuid($this->fixtureId());
+        self::assertSame(404, $this->apiRequest('GET', "/terms/$missing/classes", clock: $clock)->getStatusCode());
+        $invalid = $this->apiRequest('GET', '/terms/mistyped/classes', clock: $clock);
+        self::assertSame(422, $invalid->getStatusCode());
+        self::assertStringContainsString('path.termId', (string) $invalid->getBody());
+        $empty = $this->insertRegionalFixture('terms', ['name' => 'Empty', 'starts_on' => '2026-10-18', 'ends_on' => '2026-11-15']);
+        self::assertSame(['items' => []], self::decoded($this->apiRequest('GET', '/terms/' . $this->fixtureUuid($empty) . '/classes', clock: $clock)));
+    }
+
+    public function testClassRosterRequiresOfficeAndShowsOnlyCurrentPauses(): void
+    {
+        // It is already October 25 in Vienna while UTC is still October 24.
+        $clock = $this->generationFixture(new DateTimeImmutable('2026-10-24T23:00:00Z'));
+        $this->db->executeStatement("UPDATE persons SET family_name = 'Zoo', member_no = '42' WHERE given_name = 'Ada'");
+        $this->db->executeStatement("UPDATE persons SET family_name = 'Ähren' WHERE given_name = 'Mia'");
+        $this->db->executeStatement("UPDATE class_members SET paused_until = '2026-10-25' WHERE since IS NULL");
+        $this->db->executeStatement("UPDATE class_members SET since = '2026-10-19', paused_until = '2026-10-24' WHERE since IS NOT NULL");
+        $class = $this->fixtureUuid($this->db->fetchOne('SELECT id FROM classes WHERE retired = FALSE'));
+        $path = "/admin/classes/$class/members";
+        self::assertSame(401, $this->apiRequest('GET', $path, signedIn: false, clock: $clock)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'member'");
+        self::assertSame(403, $this->apiRequest('GET', $path, clock: $clock)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'office'");
+        $response = $this->apiRequest('GET', $path, clock: $clock);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertEquals([
+            [
+                'person' => [
+                    'id' => $this->fixtureUuid($this->db->fetchOne("SELECT id FROM persons WHERE given_name = 'Ada'")),
+                    'givenName' => 'Ada', 'familyName' => 'Zoo', 'memberNo' => '42', 'email' => 'admin@example.org',
+                ],
+                'pausedUntil' => '2026-10-25',
+            ],
+            [
+                'person' => ['id' => $this->fixtureUuid($this->db->fetchOne("SELECT id FROM persons WHERE given_name = 'Mia'")), 'givenName' => 'Mia', 'familyName' => 'Ähren'],
+                'since' => '2026-10-19',
+            ],
+        ], self::decoded($response)['items']);
+        $empty = $this->fixtureUuid($this->db->fetchOne('SELECT id FROM classes WHERE retired = TRUE'));
+        self::assertSame(['items' => []], self::decoded($this->apiRequest('GET', "/admin/classes/$empty/members", clock: $clock)));
+        $missing = $this->fixtureUuid($this->fixtureId());
+        self::assertSame(404, $this->apiRequest('GET', "/admin/classes/$missing/members", clock: $clock)->getStatusCode());
+        $invalid = $this->apiRequest('GET', '/admin/classes/mistyped/members', clock: $clock);
+        self::assertSame(422, $invalid->getStatusCode());
+        self::assertStringContainsString('path.classId', (string) $invalid->getBody());
+    }
+
+    public function testClassListRejectsAStoredStartTimeOutsideTheDomain(): void
+    {
+        $clock = $this->generationFixture();
+        $this->db->executeStatement("UPDATE classes SET start_time = '24:00:00' WHERE retired = FALSE");
+        $term = $this->fixtureUuid($this->db->fetchOne('SELECT id FROM terms'));
+
+        $response = $this->apiRequest('GET', "/terms/$term/classes", signedIn: false, clock: $clock);
+        self::assertSame(500, $response->getStatusCode());
+        self::assertSame('application/problem+json', $response->getHeaderLine('Content-Type'));
+    }
+
+    private function fixtureUuid(mixed $storedId): string
+    {
+        self::assertIsString($storedId);
+
+        return $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform ? $storedId : Uuid::fromBinary($storedId)->toRfc4122();
     }
 
     /** @return array<string, int|string> */

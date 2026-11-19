@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Http;
 
+use Psr\Clock\ClockInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App;
+use StudioSchedule\Domain\Id;
 use StudioSchedule\Service\CatalogAdmin;
 use StudioSchedule\Service\CatalogAdminPersistence;
 use StudioSchedule\Service\CatalogPersistence;
@@ -15,18 +17,23 @@ use StudioSchedule\Service\CatalogService;
 
 final readonly class CatalogRoutes
 {
-    private function __construct(private CatalogService $service) {}
+    private function __construct(private CatalogService $service, private ClockInterface $clock) {}
 
     /**
      * @template TContainer of ContainerInterface|null
      * @param App<TContainer> $app
      */
-    public static function register(App $app, CatalogPersistence&CatalogAdminPersistence $store): void
+    public static function register(App $app, CatalogPersistence&CatalogAdminPersistence $store, ClockInterface $clock): void
     {
-        $routes = new self(new CatalogService($store));
+        $routes = new self(new CatalogService($store), $clock);
         foreach (CatalogService::COLLECTIONS as $collection) {
             $app->get('/api/v1/' . $collection, $routes->handler($collection));
         }
+        $app->get('/api/v1/terms/{termId}/classes', static fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+            => $routes->classes($request, $response, $args['termId'] ?? '', false));
+        $app->get('/api/v1/admin/terms/{termId}/classes', static fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+            => $routes->classes($request, $response, $args['termId'] ?? '', true))->add(CatalogAdminRoutes::requireOffice(...));
+        $app->get('/api/v1/admin/classes/{classId}/members', $routes->classMembers(...))->add(CatalogAdminRoutes::requireOffice(...));
         (new CatalogAdminRoutes(new CatalogAdmin($store)))->register($app);
     }
 
@@ -38,16 +45,47 @@ final readonly class CatalogRoutes
     {
         return function (ServerRequestInterface $request, ResponseInterface $response) use ($collection): ResponseInterface {
             $location = $collection === 'rooms' ? self::location($request) : '';
-            if ($location !== '' && !self::validId($location)) {
-                return self::invalidLocation($request, $response, $location);
+            if ($location !== '' && !Id::valid($location)) {
+                return self::invalidId($request, 'query.location', $location);
             }
 
             $items = $this->service->items($collection, $location === '' ? null : strtolower($location));
 
-            return $items === null
-                ? Responses::problem($request, 404, 'resource not found')
-                : Responses::json($response, ['items' => $items]);
+            return self::listResponse($request, $response, $items);
         };
+    }
+
+    private function classes(ServerRequestInterface $request, ResponseInterface $response, mixed $term, bool $withRetired): ResponseInterface
+    {
+        if ($request->getMethod() === 'HEAD') {
+            return Responses::problem($request, 405, 'method not allowed')->withHeader('Allow', 'GET');
+        }
+        if (!is_string($term) || !Id::valid($term)) {
+            return self::invalidId($request, 'path.termId', is_string($term) ? $term : '');
+        }
+
+        return self::listResponse($request, $response, $this->service->classes(strtolower($term), $withRetired));
+    }
+
+    /** @param array<string,mixed> $args */
+    private function classMembers(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $class = $args['classId'] ?? '';
+        if (!is_string($class) || !Id::valid($class)) {
+            return self::invalidId($request, 'path.classId', is_string($class) ? $class : '');
+        }
+
+        $items = $this->service->classMembers(strtolower($class), $this->clock->now());
+
+        return self::listResponse($request, $response, $items)->withHeader('Cache-Control', 'no-store');
+    }
+
+    /** @param list<array<string,mixed>>|null $items */
+    private static function listResponse(ServerRequestInterface $request, ResponseInterface $response, ?array $items): ResponseInterface
+    {
+        return $items === null
+            ? Responses::problem($request, 404, 'resource not found')
+            : Responses::json($response, ['items' => $items]);
     }
 
     private static function location(ServerRequestInterface $request): string
@@ -80,29 +118,12 @@ final readonly class CatalogRoutes
         return '';
     }
 
-    private static function validId(string $value): bool
+    private static function invalidId(ServerRequestInterface $request, string $location, string $value): ResponseInterface
     {
-        return $value !== '00000000-0000-0000-0000-000000000000'
-            && preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i', $value) === 1;
-    }
+        $quoted = json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
 
-    private static function invalidLocation(ServerRequestInterface $request, ResponseInterface $response, string $location): ResponseInterface
-    {
-        $response = $response->withStatus(422);
-        $quoted = json_encode($location, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
-        $body = [
-            'title' => $response->getReasonPhrase(),
-            'status' => 422,
-            'detail' => 'validation failed',
-            'errors' => [['location' => 'query.location', 'message' => 'invalid value: validation failed: invalid ID ' . $quoted]],
-        ];
-        $requestId = $request->getAttribute('requestId');
-        if (is_string($requestId)) {
-            $body['requestId'] = $requestId;
-        }
-
-        return Responses::json($response, $body)
-            ->withHeader('Content-Type', 'application/problem+json')
-            ->withHeader('Cache-Control', 'no-store');
+        return Responses::problem($request, 422, 'validation failed', errors: [
+            ['location' => $location, 'message' => 'invalid value: validation failed: invalid ID ' . $quoted],
+        ]);
     }
 }

@@ -88,7 +88,7 @@ final readonly class CatalogAdminRoutes
         }
     }
 
-    private static function requireOffice(#[SensitiveParameter] ServerRequestInterface $request, RequestHandlerInterface $next): ResponseInterface
+    public static function requireOffice(#[SensitiveParameter] ServerRequestInterface $request, RequestHandlerInterface $next): ResponseInterface
     {
         if ($request->getMethod() === 'HEAD') {
             // Slim falls back to GET, but the office list exposes GET only.

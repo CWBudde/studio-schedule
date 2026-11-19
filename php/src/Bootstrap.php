@@ -167,7 +167,7 @@ final class Bootstrap
                     $timetableStore = new TimetableStore($connection);
                     $generator = new LessonGenerator($timetableStore, $clock);
                     (new AdminSettingsRoutes(new AdminSettings($settingsStore), new BookingRuleSettings($scheduleStore, $clock, $generator, $logger)))->register($app);
-                    CatalogRoutes::register($app, new CatalogStore($connection));
+                    CatalogRoutes::register($app, new CatalogStore($connection), $clock);
                     CatalogAdminRoutes::registerTerms($app, new TermAdmin($timetableStore, $generator, $clock));
                     EventRoutes::register($app, new EventStore($connection), $clock);
                     $familyStore = new FamilyStore($connection);
