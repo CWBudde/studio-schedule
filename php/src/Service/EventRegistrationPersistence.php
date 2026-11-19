@@ -17,6 +17,8 @@ interface EventRegistrationPersistence
     /** @phpstan-impure */
     public function find(string $id): ?EventRegistration;
 
+    public function lockGuest(string $id): ?EventRegistration;
+
     public function inFamily(string $guardianId, string $personId, bool $forUpdate = false): bool;
 
     public function lockPerson(string $personId, bool $liveOnly): bool;
@@ -36,7 +38,9 @@ interface EventRegistrationPersistence
     /** @return Recipient */
     public function actingRecipient(string $accountId, string $participant): array;
 
-    public function audit(EventRegistration $registration, string $actorId, bool $added, DateTimeImmutable $now): void;
+    public function markPaid(string $id, string $receiptId, DateTimeImmutable $now): EventRegistration;
+
+    public function audit(EventRegistration $registration, string $actorId, string $action, DateTimeImmutable $now): void;
 
     /** @return list<EventRegistration> */
     public function forEvent(string $eventId): array;

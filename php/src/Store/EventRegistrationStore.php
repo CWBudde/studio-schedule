@@ -39,6 +39,17 @@ final readonly class EventRegistrationStore implements EventRegistrationPersiste
         return $row === false ? null : $this->registration($row);
     }
 
+    public function lockGuest(string $id): ?EventRegistration
+    {
+        $found = $this->connection->fetchOne(
+            'SELECT id FROM event_registrations WHERE id = ? AND person_id IS NULL FOR UPDATE',
+            [$this->encodeId($id)],
+            [$this->idType()],
+        );
+
+        return $found === false ? null : $this->find($id);
+    }
+
     public function inFamily(string $guardianId, string $personId, bool $forUpdate = false): bool
     {
         return $guardianId === $personId || (new FamilyStore($this->connection))->isGuardian($guardianId, $personId, $forUpdate);
@@ -106,13 +117,27 @@ final readonly class EventRegistrationStore implements EventRegistrationPersiste
         ];
     }
 
-    public function audit(EventRegistration $registration, string $actorId, bool $added, DateTimeImmutable $now): void
+    public function markPaid(string $id, string $receiptId, DateTimeImmutable $now): EventRegistration
+    {
+        $affected = $this->connection->executeStatement(
+            "UPDATE event_registrations SET payment = 'paid', receipt_id = ?, updated_at = ? WHERE id = ? AND payment = 'unpaid' AND status = 'registered'",
+            [$this->encodeId($receiptId), Database::sqlInstant($this->connection, $now), $this->encodeId($id)],
+            [$this->idType(), ParameterType::STRING, $this->idType()],
+        );
+        if ($affected !== 1) {
+            throw new RuntimeException('The registration changed while being paid');
+        }
+
+        return $this->find($id) ?? throw new RuntimeException('The paid registration was not found');
+    }
+
+    public function audit(EventRegistration $registration, string $actorId, string $action, DateTimeImmutable $now): void
     {
         $person = $registration->person['id'] ?? null;
         $target = $person === null ? null : $this->encodeId($person);
         (new AdminAccountsStore($this->connection))->audit(
             $actorId,
-            $added ? 'event-registration-added' : 'event-registration-canceled',
+            $action,
             $target === null ? null : 'person',
             $target,
             $now,

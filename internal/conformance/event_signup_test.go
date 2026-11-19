@@ -108,6 +108,52 @@ func eventSignup(t *testing.T, b *backend) {
 		t.Fatalf("office guest signup: %s", added.body)
 	}
 
+	pay := request{
+		method: http.MethodPost, path: "/api/v1/admin/event-registrations/{registrationId}/pay",
+		params: map[string]string{"registrationId": booked.Registration.ID}, body: `{"paymentMethod":"card","recipientEmail":"not-used"}`,
+	}
+	b.call(t, guest, pay, http.StatusUnauthorized)
+	b.call(t, member, pay, http.StatusForbidden)
+	type paymentResult struct {
+		Receipt      struct{ ID, Number, IssueDate string }
+		Registration struct{ Payment, ReceiptID string }
+	}
+	paid := read[paymentResult](t, b.call(t, office, pay, http.StatusOK))
+	if paid.Registration.Payment != "paid" || paid.Registration.ReceiptID != paid.Receipt.ID ||
+		paid.Receipt.Number == "" || paid.Receipt.IssueDate != "2026-10-23" {
+		t.Fatalf("paid registration and its receipt: %+v", paid)
+	}
+	expectConflict(t, b, office, pay, "already-paid")
+	pay.params = map[string]string{"registrationId": guestID}
+	pay.body = jsonBody(t, map[string]any{"payerId": kin.Me.ID})
+	if failed := b.call(t, office, pay, http.StatusUnprocessableEntity); !containsJSON(failed.body, `"location":"body.payerId"`) {
+		t.Fatalf("guest cannot name a payer: %s", failed.body)
+	}
+	pay.body = `{}`
+	guestPaid := read[paymentResult](t, b.call(t, office, pay, http.StatusOK))
+	if guestPaid.Registration.Payment != "paid" || guestPaid.Registration.ReceiptID != guestPaid.Receipt.ID ||
+		guestPaid.Receipt.Number == paid.Receipt.Number {
+		t.Fatalf("paid guest registration: %+v", guestPaid)
+	}
+	receipt := request{
+		method: http.MethodGet, path: "/api/v1/admin/receipts/{receiptId}",
+		params: map[string]string{"receiptId": guestPaid.Receipt.ID},
+	}
+	details := read[struct {
+		RecipientName, RecipientEmail, PaymentMethod string
+		Gross                                        int
+		Lines                                        []struct{ Gross int }
+	}](t, b.call(t, office, receipt, http.StatusOK))
+	if details.RecipientName != "Desk guest" || details.RecipientEmail != "guest@example.test" ||
+		details.PaymentMethod != "cash" || details.Gross != 2250 || len(details.Lines) != 1 || details.Lines[0].Gross != 2250 {
+		t.Fatalf("guest receipt details: %+v", details)
+	}
+	receipt.path = "/api/v1/my/receipts/{receiptId}/pdf"
+	receipt.params = map[string]string{"receiptId": paid.Receipt.ID}
+	if pdf := b.call(t, member, receipt, http.StatusOK); !strings.HasPrefix(string(pdf.body), "%PDF-") {
+		t.Fatal("the payer could not download the receipt PDF")
+	}
+
 	free := request{
 		method: http.MethodPost, path: "/api/v1/events/{slug}/registrations",
 		params: map[string]string{"slug": "open-ballet-taster"}, body: person(kin.Dependents[1].ID),
@@ -146,6 +192,8 @@ func eventSignup(t *testing.T, b *backend) {
 		{enqueued.Registration.ID, "event-registration-added", memberEmail, child},
 		{enqueued.Registration.ID, "event-registration-canceled", memberEmail, child},
 		{guestID, "event-registration-added", officeEmail, ""},
+		{guestID, "event-registration-paid", officeEmail, ""},
+		{booked.Registration.ID, "event-registration-paid", officeEmail, kin.Me.ID},
 	}
 	page := read[struct{ Items []auditEvent }](t, get(t, b, adminClient, "/api/v1/admin/audit"))
 	for _, want := range expected {

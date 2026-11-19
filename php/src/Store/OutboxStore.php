@@ -23,14 +23,17 @@ final readonly class OutboxStore
 
     public function __construct(private Connection $connection) {}
 
-    public function enqueue(#[SensitiveParameter] string $email, string $template, #[SensitiveParameter] Rendered $mail, DateTimeImmutable $now): void
+    public function enqueue(#[SensitiveParameter] string $email, string $template, #[SensitiveParameter] Rendered $mail, DateTimeImmutable $now, ?string $receiptId = null): void
     {
         $id = Uuid::v7();
         $instant = $this->timestamp($now);
         $this->connection->executeStatement(
-            'INSERT INTO outbox_mails (id, recipient, subject, body_text, body_html, template, attempts, created_at, next_attempt_at) '
-            . 'VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)',
-            [$this->isPostgres() ? $id->toRfc4122() : $id->toBinary(), $email, $mail->subject, $mail->text, $mail->html, $template, $instant, $instant],
+            'INSERT INTO outbox_mails (id, recipient, subject, body_text, body_html, template, receipt_id, attempts, created_at, next_attempt_at) '
+            . 'VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)',
+            [
+                $this->isPostgres() ? $id->toRfc4122() : $id->toBinary(), $email, $mail->subject, $mail->text, $mail->html, $template,
+                $receiptId === null || $this->isPostgres() ? $receiptId : Uuid::fromString($receiptId)->toBinary(), $instant, $instant,
+            ],
         );
     }
 

@@ -1618,7 +1618,11 @@ backends.
           both mount paths.
     - [ ] Let the office cancel an event with its future sessions and registrations, including refunds.
     - [ ] Let members and the office cancel individual registrations, including eligible refunds.
-    - [ ] Let the office record event payments and issue receipts.
+    - [x] Let the office record event payments and issue receipts. Use the signup fee and VAT
+          snapshot with the issuer's tax mode. Allocate the next school-year receipt number,
+          store the original PDF and queue it for the payer or guest. The shared `event_signup`
+          case checks payment, audit and PDF access at both mount paths. PHP tests verify that
+          failed rendering rolls back the payment and receipt number on all three databases.
 - [ ] CLI parity: port the operator commands to the PHP `bin/studio-schedule` executable.
       The Phase 11 admin commands and Phase 12 MCP server stay Go-only (ADR 0023). On PostgreSQL
       a school can run the Go binary against its database. On MySQL and MariaDB it uses the web

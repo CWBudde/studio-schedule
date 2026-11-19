@@ -52,7 +52,7 @@ final readonly class EventRegistrationWrites
 
             $actor = $principal->impersonatorId ?? $principal->accountId;
             $registration = $this->store->create($event, $person, null, $actor, $waiting, $now);
-            $this->store->audit($registration, $actor, true, $now);
+            $this->store->audit($registration, $actor, 'event-registration-added', $now);
             if (!$waiting) {
                 ++$occupied;
                 $this->confirm($principal, $registration, $event, $sessions, $cancelUntil, $now);
@@ -107,7 +107,7 @@ final readonly class EventRegistrationWrites
 
             $actor = $principal->impersonatorId ?? $principal->accountId;
             $registration = $this->store->create($event, $person, $guest, $actor, false, $now);
-            $this->store->audit($registration, $actor, true, $now);
+            $this->store->audit($registration, $actor, 'event-registration-added', $now);
 
             return EventRegistrationReads::officeDocument($registration);
         });
@@ -151,7 +151,7 @@ final readonly class EventRegistrationWrites
             $this->lockFamily($principal, $person, liveOnly: $accept);
             $this->waitlist->finishLocked($event, $id, $now, $accept, $held);
             $updated = $this->store->find($id) ?? throw new RuntimeException('The updated registration is missing');
-            $this->store->audit($updated, $principal->impersonatorId ?? $principal->accountId, $accept, $now);
+            $this->store->audit($updated, $principal->impersonatorId ?? $principal->accountId, $accept ? 'event-registration-added' : 'event-registration-canceled', $now);
             if ($accept) {
                 $this->confirm($principal, $updated, $event, $sessions, $cancelUntil, $now);
             }

@@ -59,6 +59,7 @@ use StudioSchedule\Mail\SmtpMailer;
 use StudioSchedule\Push\Sender;
 use StudioSchedule\Receipt\AttachmentStore;
 use StudioSchedule\Receipt\Attachments;
+use StudioSchedule\Service\EventPayments;
 use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
@@ -125,6 +126,7 @@ use StudioSchedule\Store\PublicSettingsStore;
 use StudioSchedule\Store\PushSubscriptionStore;
 use StudioSchedule\Store\RateLimitStore;
 use StudioSchedule\Store\ReceiptReadStore;
+use StudioSchedule\Store\ReceiptWriteStore;
 use StudioSchedule\Store\RegistrationStore;
 use StudioSchedule\Store\ScheduleStore;
 use StudioSchedule\Store\Schema;
@@ -343,6 +345,7 @@ final class Bootstrap
                     (new EventRegistrationRoutes(
                         $eventRegistrations,
                         static fn(): EventRegistrationWrites => new EventRegistrationWrites($eventStore, $registrationStore, $eventWaitlist(), $clock),
+                        new EventPayments($eventStore, $registrationStore, new ReceiptWriteStore($connection), $clock, $mail, $wakeMail),
                     ))->register($app);
                     $familyStore = new FamilyStore($connection);
                     $duplicates = new DuplicateStore($connection, $memberDirectory, $familyStore, $clock);

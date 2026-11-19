@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Tests;
 
+use Closure;
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
@@ -13,6 +14,7 @@ use Psr\Clock\ClockInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Log\NullLogger;
+use RuntimeException;
 use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
@@ -26,6 +28,7 @@ use StudioSchedule\Http\TrustedProxies;
 use StudioSchedule\Http\WaitlistInviteEndpoint;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Mail\Renderer;
+use StudioSchedule\Service\EventPayments;
 use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
@@ -36,6 +39,7 @@ use StudioSchedule\Service\StatisticsService;
 use StudioSchedule\Service\WaitlistInvites;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\EventRegistrationStore;
+use StudioSchedule\Store\ReceiptWriteStore;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\EventWaitlistStore;
 use StudioSchedule\Store\Migrator;
@@ -47,6 +51,7 @@ use StudioSchedule\Store\StatisticsStore;
 use StudioSchedule\Store\TimetableStore;
 use StudioSchedule\Store\WaitlistInviteStore;
 
+/** @phpstan-import-type ReceiptDocument from \StudioSchedule\Receipt\Renderer */
 final class ScheduleStoreTest extends TestCase
 {
     private const string RANGE = '/schedule?from=2026-10-25&to=2026-11-05';
@@ -995,6 +1000,71 @@ final class ScheduleStoreTest extends TestCase
         return $result;
     }
 
+    public function testEventPaymentIssuesAnImmutablePdfAndDoesNotSkipNumbersAfterRenderFailure(): void
+    {
+        $registrationPath = '/admin/event-registrations/' . self::id(221) . '/pay';
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office', impersonatorId: self::id(10));
+        $now = '2026-12-31T23:30:00Z';
+        $app = $this->app($now);
+        $this->database->executeStatement("UPDATE event_registrations SET price = 2250, vat_rate_bp = 1900 WHERE status = 'registered'");
+        $pay = ['paymentMethod' => 'transfer', 'payerId' => self::id(6), 'recipientEmail' => 'receipt-payer@example.test'];
+        self::post($app, $registrationPath, $office, 422, ['paymentMethod' => 'other']);
+        self::post($app, '/admin/event-registrations/' . self::id(999) . '/pay', $office, 404, []);
+        self::assertSame('not-registered', self::post($app, '/admin/event-registrations/' . self::id(222) . '/pay', $office, 409, [])['reason']);
+        self::assertSame('receipt-settings-incomplete', self::post($app, $registrationPath, $office, 409, $pay)['reason']);
+        $this->database->executeStatement(
+            "UPDATE settings SET issuer_name = 'Fixture Studio', issuer_address = 'Room 1', issuer_tax_id = '123', tax_mode = 'standard'",
+        );
+        self::post($app, $registrationPath, $office, 422, ['payerId' => self::id(998)]);
+        self::post($app, $registrationPath, $office, 422, ['recipientEmail' => 'bad address', 'payerId' => self::id(6)]);
+        $fails = $this->app($now, renderReceipt: static fn(): never => throw new RuntimeException('Fixture PDF rendering error'));
+        try {
+            self::post($fails, $registrationPath, $office, 200, $pay);
+            self::fail('Expected a rendering error to abort the payment');
+        } catch (RuntimeException $error) {
+            self::assertSame('Fixture PDF rendering error', $error->getMessage());
+        }
+        foreach (['receipts', 'receipt_counters', 'receipt_lines', 'receipt_pdfs', 'outbox_mails', 'audit_events'] as $table) {
+            self::assertSame([], $this->database->fetchFirstColumn("SELECT 1 FROM $table"), $table);
+        }
+        self::assertSame(['unpaid'], $this->database->fetchFirstColumn("SELECT payment FROM event_registrations WHERE status = 'registered'"));
+
+        $paid = self::post($app, $registrationPath, $office, 200, $pay);
+        $receipt = $paid['receipt'];
+        self::assertIsArray($receipt);
+        self::assertSame('R-2027-0001', $receipt['number']);
+        self::assertSame('2027-01-01', $receipt['issueDate']);
+        self::assertIsArray($paid['registration']);
+        self::assertSame('paid', $paid['registration']['payment']);
+        self::assertSame($receipt['id'], $paid['registration']['receiptId']);
+        self::assertSame('already-paid', self::post($app, $registrationPath, $office, 409, $pay)['reason']);
+        $amounts = $this->database->fetchNumeric('SELECT net, vat, gross FROM receipts');
+        self::assertIsArray($amounts);
+        self::assertSame([1891, 359, 2250], array_map(static fn(mixed $value): int => is_numeric($value) ? (int) $value : -1, $amounts));
+        self::assertSame(['receipt-payer@example.test'], $this->database->fetchFirstColumn(
+            'SELECT m.recipient FROM outbox_mails m JOIN receipts r ON r.id = m.receipt_id',
+        ));
+        self::assertSame(['event-registration-paid'], $this->database->fetchFirstColumn('SELECT action FROM audit_events'));
+        self::assertSame(
+            $this->postgres ? self::id(10) : hex2bin(str_replace('-', '', self::id(10))),
+            $this->database->fetchOne('SELECT created_by FROM receipts'),
+        );
+        self::assertIsString($receipt['id']);
+        $attachment = (new \StudioSchedule\Receipt\AttachmentStore($this->database))->find($receipt['id']);
+        self::assertIsArray($attachment);
+        self::assertStringStartsWith('%PDF-', $attachment['pdf']);
+
+        $this->insert('event_registrations', [
+            'id' => 224, 'event_id' => 120, 'guest_name' => 'Guest', 'status' => 'registered',
+            'payment' => 'unpaid', 'price' => 2250, 'vat_rate_bp' => 1900,
+            'created_at' => '2026-10-22 14:00:00', 'updated_at' => '2026-10-22 14:00:00',
+        ]);
+        $guest = self::post($app, '/admin/event-registrations/' . self::id(224) . '/pay', $office, 200, [])['receipt'];
+        self::assertIsArray($guest);
+        self::assertSame('R-2027-0002', $guest['number']);
+        self::assertSame(['receipt-payer@example.test'], $this->database->fetchFirstColumn('SELECT recipient FROM outbox_mails'));
+    }
+
     private function eventExpiryJobs(DateTimeImmutable $now): BackgroundJobs
     {
         $dsn = getenv('STUDIO_PHP_TEST_DATABASE_URL');
@@ -1399,8 +1469,11 @@ final class ScheduleStoreTest extends TestCase
         $this->database->insert($table, $params, $types);
     }
 
-    /** @return App<ContainerInterface|null> */
-    private function app(string $now): App
+    /**
+     * @param (Closure(ReceiptDocument,string):string)|null $renderReceipt
+     * @return App<ContainerInterface|null>
+     */
+    private function app(string $now, ?Closure $renderReceipt = null): App
     {
         $app = AppFactory::create();
         $clock = new class ($now) implements ClockInterface {
@@ -1439,6 +1512,7 @@ final class ScheduleStoreTest extends TestCase
         (new EventRegistrationRoutes(
             $registrations,
             static fn(): EventRegistrationWrites => new EventRegistrationWrites($eventStore, $registrationStore, $waitlist, $clock),
+            new EventPayments($eventStore, $registrationStore, new ReceiptWriteStore($this->database), $clock, new Renderer(), render: $renderReceipt),
         ))->register($app);
         $app->post('/api/v1/event-invites/{token}/accept', new WaitlistInviteEndpoint(
             static fn(string $token): ?true => $waitlist->respondByToken($token, accept: true),

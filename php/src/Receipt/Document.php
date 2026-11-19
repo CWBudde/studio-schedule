@@ -59,7 +59,7 @@ final class Document
      */
     public static function fromSnapshot(#[SensitiveParameter] array $receipt, #[SensitiveParameter] array $lines): array
     {
-        $lang = explode('-', strtolower($receipt['locale']), 2)[0] === 'de' ? 'de' : 'en';
+        $lang = self::language($receipt['locale']);
         $labels = self::LABELS[$lang];
         $kind = $receipt['kind'];
         $method = $receipt['payment_method'];
@@ -69,13 +69,13 @@ final class Document
         $money = static fn(int $amount): string => (new Money($amount))->format($currency, $lang);
         $meta = [
             [$labels['number'], $receipt['number']],
-            [$labels['date'], self::date($receipt['issue_date'], $lang)],
+            [$labels['date'], self::formatDate($receipt['issue_date'], $lang)],
             [$labels['payment'], $labels['methods'][$method]],
         ];
         $intro = $labels['intro'];
         if ($receipt['original_number'] !== null && $receipt['original_date'] !== null) {
             $number = $receipt['original_number'];
-            $date = self::date($receipt['original_date'], $lang);
+            $date = self::formatDate($receipt['original_date'], $lang);
             $intro = sprintf($labels['cancellation'], $number, $date);
             $meta[] = [$labels['cancels'], $number . ' ' . $labels['of'] . ' ' . $date];
         }
@@ -150,7 +150,12 @@ final class Document
         ];
     }
 
-    private static function date(string $iso, string $lang): string
+    public static function language(string $locale): string
+    {
+        return explode('-', strtolower($locale), 2)[0] === 'de' ? 'de' : 'en';
+    }
+
+    public static function formatDate(string $iso, string $lang): string
     {
         $date = new DateTimeImmutable($iso, new DateTimeZone('UTC'));
 

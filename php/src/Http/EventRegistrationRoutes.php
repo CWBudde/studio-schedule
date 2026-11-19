@@ -14,6 +14,7 @@ use Slim\App;
 use stdClass;
 use StudioSchedule\Domain\Id;
 use StudioSchedule\Service\CatalogFailure;
+use StudioSchedule\Service\EventPayments;
 use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\SessionPrincipal;
@@ -23,7 +24,11 @@ use StudioSchedule\Service\SetupInput;
 final readonly class EventRegistrationRoutes
 {
     /** @param Closure():EventRegistrationWrites $writes */
-    public function __construct(private EventRegistrationReads $registrations, private Closure $writes) {}
+    public function __construct(
+        private EventRegistrationReads $registrations,
+        private Closure $writes,
+        private EventPayments $payments,
+    ) {}
 
     /**
      * @template TContainer of ContainerInterface|null
@@ -34,6 +39,7 @@ final readonly class EventRegistrationRoutes
         $app->get('/api/v1/admin/events/{eventId}/registrations', $this->office(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->get('/api/v1/my/events', $this->mine(...));
         $app->post('/api/v1/admin/events/{eventId}/registrations', $this->desk(...))->add(CatalogAdminRoutes::requireOffice(...));
+        $app->post('/api/v1/admin/event-registrations/{registrationId}/pay', $this->pay(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->post('/api/v1/events/{slug}/{action:registrations|waitlist}', $this->signup(...))->add(self::requireSignedIn(...));
         $app->post('/api/v1/event-registrations/{registrationId}/{action:accept|decline|leave}', $this->respond(...))
             ->add(self::requireSignedIn(...));
@@ -68,6 +74,30 @@ final readonly class EventRegistrationRoutes
         $registration = ($this->writes)()->desk($principal, $id, $person, $guest === null ? null : self::guest($guest), $confirm);
 
         return Responses::json($response->withStatus(201), $registration);
+    }
+
+    /** @param array{registrationId:string} $args */
+    private function pay(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = self::pathId($request, $args['registrationId'], 'registrationId');
+        $body = CatalogAdminRoutes::fields($request, ['paymentmethod', 'payerid', 'recipientname', 'recipientaddress', 'recipientemail']);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        $method = CatalogAdminRoutes::text($body, 'paymentMethod', 8) ?? 'cash';
+        if (!in_array($method, ['cash', 'transfer', 'card'], true)) {
+            throw CatalogFailure::field('paymentMethod', 'expected cash, transfer or card');
+        }
+        $principal = $request->getAttribute('sessionPrincipal');
+        assert($principal instanceof SessionPrincipal);
+
+        return Responses::json($response, $this->payments->pay($principal, $id, [
+            'method' => $method,
+            'payerId' => CatalogAdminRoutes::optionalId($body, 'payerId'),
+            'name' => SetupInput::trim(CatalogAdminRoutes::text($body, 'recipientName', 200) ?? ''),
+            'address' => SetupInput::trim(CatalogAdminRoutes::text($body, 'recipientAddress', 500) ?? ''),
+            'email' => SetupInput::trim(CatalogAdminRoutes::text($body, 'recipientEmail', 254) ?? ''),
+        ]))->withHeader('Cache-Control', 'no-store');
     }
 
     /** @return array{name:string,email:string} */
