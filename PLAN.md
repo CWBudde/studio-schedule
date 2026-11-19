@@ -1449,22 +1449,22 @@ backends.
     - [x] Serve the public weekly class list with staff and audience, hiding retired classes.
           The PHP public catalogue CI scenario covers the list at both mount paths on all three
           databases.
-    - [ ] Run the office class and roster conformance case in PHP CI after PHP sign-in lands.
-          The office can read retired classes and rosters with current membership pauses. The
-          shared `class_lists_and_roster` case passes at both mount paths on all three PHP
+    - [x] Let the office read retired classes and rosters with current membership pauses.
+          The shared `class_lists_and_roster` case passes at both mount paths on all three PHP
           databases with the authentication draft.
-    - [ ] Run class creation and deletion in PHP CI after PHP sign-in lands. The office can
-          create a class with its future lessons and delete it while it has no members, started
-          lessons or bookings made outside automatic class enrollment. The shared
-          `class_creation_and_deletion` case passes at both mount paths on all three PHP
+    - [x] Let the office create a class with its future lessons and delete it while it has no
+          members, started lessons or bookings made outside automatic class enrollment. The
+          shared `class_creation_and_deletion` case passes at both mount paths on all three PHP
           databases with the authentication draft.
+    - [ ] Enable `class_lists_and_roster` and `class_creation_and_deletion` in PHP CI after PHP
+          sign-in lands.
   - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
         order (`SELECT … FOR UPDATE` on all three databases, term → class → lesson → passes)
-    - [ ] Run the roster and booking history case in PHP CI after PHP sign-in lands. Linked
-          active staff can read their lessons' bookings, payments and waitlist or event
+    - [x] Let linked active staff read their lessons' bookings, payments and waitlist or event
           registrations. The office can read every roster and the recorded booking history.
           The shared `participant_roster_and_history` case passes at both mount paths on all
           three PHP databases with the authentication draft.
+    - [ ] Enable `participant_roster_and_history` in PHP CI after PHP sign-in lands.
   - [ ] Calendar feeds (ADR 0011)
   - [ ] Passes, redemption ledger, receipts with the gapless counter and PDF (ADR 0012)
   - [ ] Settings, branding, themes, `init` (ADR 0013, 0018)
