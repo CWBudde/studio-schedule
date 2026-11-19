@@ -11,6 +11,13 @@ use StudioSchedule\Config;
 
 final class ConfigTest extends TestCase
 {
+    public function testApplicationURLUsesTheMountOrTheConfiguredLocalPort(): void
+    {
+        self::assertSame('https://school.example.test/dance', Config::applicationURL('https://school.example.test/dance', ':9110'));
+        self::assertSame('http://localhost:9110', Config::applicationURL('', ':9110'));
+        self::assertSame('http://localhost:8080', Config::applicationURL('', ''));
+    }
+
     public function testEnvironmentWinsOverFileIncludingAnExplicitEmptyValue(): void
     {
         $file = tempnam(sys_get_temp_dir(), 'studio-env-');

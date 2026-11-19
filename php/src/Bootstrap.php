@@ -11,6 +11,7 @@ use Monolog\Logger;
 use Psr\Clock\ClockInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use SensitiveParameter;
 use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use StudioSchedule\Http\DuplicateRoutes;
@@ -59,6 +60,7 @@ use StudioSchedule\Push\Sender;
 use StudioSchedule\Receipt\AttachmentStore;
 use StudioSchedule\Receipt\Attachments;
 use StudioSchedule\Service\EventRegistrationReads;
+use StudioSchedule\Service\EventWaitlist;
 use StudioSchedule\Service\AccountAdministration;
 use StudioSchedule\Service\AccountConfirmation;
 use StudioSchedule\Service\AccountRegistration;
@@ -108,6 +110,7 @@ use StudioSchedule\Store\DuplicateStore;
 use StudioSchedule\Store\EmailChangeStore;
 use StudioSchedule\Store\EventRegistrationStore;
 use StudioSchedule\Store\EventStore;
+use StudioSchedule\Store\EventWaitlistStore;
 use StudioSchedule\Store\FamilyStore;
 use StudioSchedule\Store\MailLogStore;
 use StudioSchedule\Store\MemberImportStore;
@@ -258,7 +261,11 @@ final class Bootstrap
                 $sessionStore = new SessionStore($connection);
                 $sessions = new SessionMiddleware($config, new SessionAuthentication($sessionStore, $clock));
                 $pushSender = static fn(): ?Sender => Sender::fromEnvironment(Config::lookup($appDirectory . '/config/.env', $environment), $clock);
-                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $config, $logger, $commonPasswordFile, $wakeMail, $wakeAnnouncements, $pushSender): void {
+                $eventURL = static fn(): string => Config::applicationURL(
+                    $config->baseURL,
+                    Config::lookup($appDirectory . '/config/.env', $environment)('HTTP_ADDR'),
+                );
+                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $config, $logger, $commonPasswordFile, $wakeMail, $wakeAnnouncements, $pushSender, $eventURL): void {
                     $profile = new MeEndpoint($sessionStore);
                     $limits = new RateLimitStore($connection, $clock, $logger);
                     $mailLimit = new AuthMailLimit($config->trustedProxies, $limits);
@@ -353,6 +360,28 @@ final class Bootstrap
                     ));
                     $app->get('/api/v1/event-invites/{token}', new WaitlistInviteEndpoint(
                         $eventRegistrations->invite(...),
+                        $config->trustedProxies,
+                        $limits,
+                    ));
+                    $respond = static function (#[SensitiveParameter] string $token, bool $accept) use ($eventStore, $connection, $clock, $mail, $eventURL, $pushSender): ?true {
+                        $waitlist = new EventWaitlist(
+                            $eventStore,
+                            new EventWaitlistStore($connection),
+                            $clock,
+                            $mail,
+                            $eventURL(),
+                            $pushSender() !== null,
+                        );
+
+                        return $waitlist->respondByToken($token, $accept);
+                    };
+                    $app->post('/api/v1/event-invites/{token}/accept', new WaitlistInviteEndpoint(
+                        static fn(#[SensitiveParameter] string $token): ?true => $respond($token, true),
+                        $config->trustedProxies,
+                        $limits,
+                    ));
+                    $app->post('/api/v1/event-invites/{token}/decline', new WaitlistInviteEndpoint(
+                        static fn(#[SensitiveParameter] string $token): ?true => $respond($token, false),
                         $config->trustedProxies,
                         $limits,
                     ));

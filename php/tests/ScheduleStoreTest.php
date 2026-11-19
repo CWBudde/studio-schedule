@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Clock\ClockInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
+use Psr\Log\NullLogger;
 use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
@@ -23,7 +24,11 @@ use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Http\StatisticsEndpoint;
 use StudioSchedule\Http\TrustedProxies;
 use StudioSchedule\Http\WaitlistInviteEndpoint;
+use StudioSchedule\Service\BackgroundJobs;
+use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Service\EventRegistrationReads;
+use StudioSchedule\Service\EventWaitlist;
+use StudioSchedule\Service\JobResult;
 use StudioSchedule\Service\OneOffLesson;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\StatisticsService;
@@ -31,6 +36,7 @@ use StudioSchedule\Service\WaitlistInvites;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\EventRegistrationStore;
 use StudioSchedule\Store\EventStore;
+use StudioSchedule\Store\EventWaitlistStore;
 use StudioSchedule\Store\Migrator;
 use StudioSchedule\Store\PublicSettingsStore;
 use StudioSchedule\Store\RateLimitStore;
@@ -686,6 +692,170 @@ final class ScheduleStoreTest extends TestCase
         self::get($app, $link, status: 404);
     }
 
+    public function testEventInviteExpiryQueuesTheNextReachableOfferInCron(): void
+    {
+        $this->database->executeStatement("UPDATE events SET capacity = 3, signup_closes_at = '2026-10-25 18:00:00' WHERE slug = 'winter-workshop'");
+        $this->database->executeStatement("UPDATE accounts SET confirmed_at = '2026-10-01 00:00:00', locale = 'de' WHERE email = 'member@example.test'");
+        foreach ([224 => 4, 225 => 6, 226 => 7] as $registration => $person) {
+            $this->insert('event_registrations', [
+                'id' => $registration, 'event_id' => 120, 'person_id' => $person, 'status' => 'waiting', 'payment' => 'paid',
+                'price' => 0, 'vat_rate_bp' => 0, 'created_at' => '2026-10-24 14:00:00', 'updated_at' => '2026-10-24 14:00:00',
+            ]);
+        }
+        $pk = $this->postgres ? '\x' . str_repeat('04', 65) : str_repeat("\x04", 65);
+        $secret = $this->postgres ? '\x' . str_repeat('05', 16) : str_repeat("\x05", 16);
+        $this->insert('push_subscriptions', [
+            'id' => 301, 'account_id' => 10, 'endpoint' => 'https://push.example.test/device',
+            'p256dh' => $pk, 'auth' => $secret, 'created_at' => '2026-10-23 10:00:00', 'last_used_at' => '2026-10-23 10:00:00',
+        ]);
+        $baseUrl = 'https://school.example.test/dance/schedule';
+        $jobs = $this->eventExpiryJobs(new DateTimeImmutable(self::BEFORE_RELEASE));
+        self::assertSame(JobResult::Ok, $jobs->expireEventInvites($baseUrl, pushEnabled: true));
+        self::assertNull($jobs->expireEventInvites($baseUrl, pushEnabled: true));
+        self::assertSame(['ok'], $this->database->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'waitlist-expiry'"));
+
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office', null, null);
+        $app = $this->app(self::BEFORE_RELEASE);
+        $roster = self::get($app, '/admin/events/' . self::id(120) . '/registrations', $office)['items'];
+        self::assertIsArray($roster);
+        self::assertSame(self::ids(221, 222, 223, 224, 225, 226), array_column($roster, 'id'));
+        self::assertSame(['registered', 'invited', 'canceled', 'waiting', 'invited', 'waiting'], array_column($roster, 'status'));
+        self::assertIsArray($roster[2]);
+        self::assertSame(self::BEFORE_RELEASE, $roster[2]['canceledAt']);
+        self::assertIsArray($roster[4]);
+        self::assertSame('2026-10-25T18:00:00Z', $roster[4]['inviteExpiresAt']);
+        self::assertSame([], $this->database->fetchFirstColumn("SELECT id FROM event_registrations WHERE status = 'canceled' AND invite_token_hash IS NOT NULL"));
+
+        $mail = $this->database->fetchAllAssociative('SELECT template, recipient, body_text FROM outbox_mails ORDER BY template');
+        self::assertSame(['event-invite', 'event-invite-expired'], array_column($mail, 'template'));
+        self::assertSame(['member@example.test', 'member@example.test'], array_column($mail, 'recipient'));
+        self::assertIsString($mail[0]['body_text']);
+        self::assertStringContainsString('Nia Zebra', $mail[0]['body_text']);
+        $found = preg_match('~https://school\.example\.test/dance/schedule/events/invite\?token=([A-Za-z0-9_-]{43})~', $mail[0]['body_text'], $parts);
+        self::assertSame(1, $found);
+        $document = self::get($app, '/event-invites/' . $parts[1]);
+        self::assertSame('Nia', $document['givenName']);
+        self::get($app, '/event-invites/223', status: 404);
+
+        $payload = $this->database->fetchOne('SELECT payload FROM push_outbox');
+        self::assertIsString($payload);
+        $note = json_decode($payload, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($note);
+        self::assertSame($parts[0], $note['url']);
+        self::assertSame('event-invite-' . self::id(120), $note['tag']);
+        self::assertSame('de', $note['lang']);
+        self::assertIsString($note['body']);
+        self::assertStringNotContainsString('Nia', $note['body']);
+
+        $atClose = '2026-10-25T18:00:00Z';
+        self::assertSame(JobResult::Ok, $this->eventExpiryJobs(new DateTimeImmutable($atClose))->expireEventInvites($baseUrl, pushEnabled: true));
+        $closed = self::get($this->app($atClose), '/admin/events/' . self::id(120) . '/registrations', $office)['items'];
+        self::assertIsArray($closed);
+        self::assertSame(['registered', 'invited', 'canceled', 'waiting', 'canceled', 'waiting'], array_column($closed, 'status'));
+        self::assertSame(['event-invite', 'event-invite-expired', 'event-invite-expired'], $this->database->fetchFirstColumn(
+            'SELECT template FROM outbox_mails ORDER BY template',
+        ));
+        self::get($this->app($atClose), '/event-invites/' . $parts[1], status: 404);
+    }
+
+    public function testEventInviteExpiryRollsBackOneEventAndContinuesWithTheNext(): void
+    {
+        $this->database->executeStatement("UPDATE accounts SET confirmed_at = '2026-10-01 00:00:00' WHERE email = 'member@example.test'");
+        $this->database->executeStatement("UPDATE persons SET email = 'invalid address' WHERE given_name = 'Zoe'");
+        $this->insert('event_registrations', [
+            'id' => 224, 'event_id' => 121, 'person_id' => 2, 'status' => 'invited', 'payment' => 'paid',
+            'price' => 0, 'vat_rate_bp' => 0, 'created_at' => '2026-10-22 14:00:00', 'updated_at' => '2026-10-24 14:00:00',
+            'invited_at' => '2026-10-24 14:00:00', 'expires_at' => '2026-10-25 16:59:59',
+            'invite_token_hash' => hash('sha256', '224', true),
+        ]);
+        $jobs = $this->eventExpiryJobs(new DateTimeImmutable(self::BEFORE_RELEASE));
+        self::assertSame(JobResult::Failed, $jobs->expireEventInvites('https://school.example.test/dance'));
+        self::assertSame(['failed'], $this->database->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'waitlist-expiry'"));
+
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office', null, null);
+        $app = $this->app(self::BEFORE_RELEASE);
+        $first = self::get($app, '/admin/events/' . self::id(120) . '/registrations', $office)['items'];
+        $second = self::get($app, '/admin/events/' . self::id(121) . '/registrations', $office)['items'];
+        self::assertIsArray($first);
+        self::assertIsArray($second);
+        self::assertSame(['registered', 'invited', 'invited'], array_column($first, 'status'));
+        self::assertSame(['canceled'], array_column($second, 'status'));
+        self::assertSame(['event-invite-expired'], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT id FROM push_outbox'));
+    }
+
+    public function testEventInviteLinkActionsConsumeTokensAndSettleExpiredOffers(): void
+    {
+        $this->database->executeStatement("UPDATE accounts SET confirmed_at = '2026-10-01 00:00:00', locale = 'de' WHERE email = 'member@example.test'");
+        $this->database->executeStatement("UPDATE event_registrations SET price = 12500 WHERE expires_at = '2026-10-26 17:00:00'");
+        $this->database->executeStatement("UPDATE events SET capacity = 3 WHERE slug = 'winter-workshop'");
+        $this->insert('event_registrations', [
+            'id' => 224, 'event_id' => 120, 'person_id' => 6, 'status' => 'waiting', 'payment' => 'paid',
+            'price' => 0, 'vat_rate_bp' => 0, 'created_at' => '2026-10-24 14:00:00', 'updated_at' => '2026-10-24 14:00:00',
+        ]);
+        $this->database->executeStatement("UPDATE persons SET email = 'third@example.test' WHERE given_name = 'Third'");
+        $this->insert('event_registrations', [
+            'id' => 225, 'event_id' => 120, 'person_id' => 7, 'status' => 'waiting', 'payment' => 'paid',
+            'price' => 0, 'vat_rate_bp' => 0, 'created_at' => '2026-10-24 14:00:00', 'updated_at' => '2026-10-24 14:00:00',
+        ]);
+        $app = $this->app(self::BEFORE_RELEASE);
+        $respond = static function (string $token, string $action, int $status) use ($app): void {
+            $request = (new ServerRequestFactory())->createServerRequest('POST', '/api/v1/event-invites/' . $token . '/' . $action);
+            $response = $app->handle($request);
+            self::assertSame($status, $response->getStatusCode(), (string) $response->getBody());
+            self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
+            if ($status === 204) {
+                self::assertSame('', (string) $response->getBody());
+            }
+        };
+        $respond('222', 'accept', 204);
+        $respond('222', 'accept', 404);
+        self::get($app, '/event-invites/222', status: 404);
+        $mail = $this->database->fetchOne("SELECT body_text FROM outbox_mails WHERE template = 'event-registered'");
+        self::assertIsString($mail);
+        self::assertStringContainsString('Ari Zebra', $mail);
+        self::assertStringContainsString("125,00\u{00a0}€", $mail);
+
+        $respond('223', 'accept', 404);
+        $offer = $this->database->fetchOne("SELECT body_text FROM outbox_mails WHERE template = 'event-invite'");
+        self::assertIsString($offer);
+        self::assertSame(1, preg_match('~https://school[.]example[.]test/dance/schedule/events/invite[?]token=([A-Za-z0-9_-]{43})~', $offer, $match));
+        $token = $match[1] ?? '';
+        self::assertNotSame('', $token);
+        $invited = self::get($app, '/event-invites/' . $token);
+        self::assertSame('Nia', $invited['givenName']);
+        $respond($token, 'decline', 204);
+        $respond($token, 'decline', 404);
+        $next = $this->database->fetchOne("SELECT body_text FROM outbox_mails WHERE template = 'event-invite' AND recipient = 'third@example.test'");
+        self::assertIsString($next);
+        self::assertStringContainsString('Third Person', $next);
+
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office', null, null);
+        $roster = self::get($app, '/admin/events/' . self::id(120) . '/registrations', $office)['items'];
+        self::assertIsArray($roster);
+        self::assertSame(['registered', 'registered', 'canceled', 'canceled', 'invited'], array_column($roster, 'status'));
+        self::assertSame(
+            ['event-invite', 'event-invite', 'event-invite-expired', 'event-registered'],
+            $this->database->fetchFirstColumn('SELECT template FROM outbox_mails ORDER BY template'),
+        );
+    }
+
+    private function eventExpiryJobs(DateTimeImmutable $now): BackgroundJobs
+    {
+        $dsn = getenv('STUDIO_PHP_TEST_DATABASE_URL');
+        self::assertIsString($dsn);
+        $clock = new class ($now) implements ClockInterface {
+            public function __construct(private readonly DateTimeImmutable $instant) {}
+
+            public function now(): DateTimeImmutable
+            {
+                return $this->instant;
+            }
+        };
+
+        return new BackgroundJobs($this->database, $dsn, $clock, new NullLogger());
+    }
+
     public function testReleaseVisibilityFiltersAndAvailabilityThroughPublishedRoutes(): void
     {
         $app = $this->app(self::BEFORE_RELEASE);
@@ -1103,6 +1273,24 @@ final class ScheduleStoreTest extends TestCase
         $registrations = new EventRegistrationReads($eventStore, new EventRegistrationStore($this->database), $clock);
         (new EventRegistrationRoutes($registrations))->register($app);
         $app->get('/api/v1/event-invites/{token}', new WaitlistInviteEndpoint($registrations->invite(...), $proxies, $limits));
+        $waitlist = new EventWaitlist(
+            $eventStore,
+            new EventWaitlistStore($this->database),
+            $clock,
+            new Renderer(),
+            'https://school.example.test/dance/schedule',
+            false,
+        );
+        $app->post('/api/v1/event-invites/{token}/accept', new WaitlistInviteEndpoint(
+            static fn(string $token): ?true => $waitlist->respondByToken($token, accept: true),
+            $proxies,
+            $limits,
+        ));
+        $app->post('/api/v1/event-invites/{token}/decline', new WaitlistInviteEndpoint(
+            static fn(string $token): ?true => $waitlist->respondByToken($token, accept: false),
+            $proxies,
+            $limits,
+        ));
         $app->addRoutingMiddleware();
 
         return $app;

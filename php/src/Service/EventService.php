@@ -279,9 +279,9 @@ final readonly class EventService
 
     /**
      * @param list<PublishedLesson> $sessions
-     * @return array<string,mixed>
+     * @return array{?DateTimeImmutable,?DateTimeImmutable,bool}
      */
-    public static function publicDocument(Event $event, array $sessions, int $occupied, DateTimeImmutable $now): array
+    public static function signupWindow(Event $event, array $sessions, DateTimeImmutable $now): array
     {
         $closesAt = $event->signupClosesAt;
         if ($closesAt === null) {
@@ -294,6 +294,17 @@ final readonly class EventService
         }
         $open = $event->status === 'published' && $closesAt !== null && $now < $closesAt
             && ($event->signupOpensAt === null || $now >= $event->signupOpensAt);
+
+        return [$closesAt, $event->cancelUntil ?? $closesAt, $open];
+    }
+
+    /**
+     * @param list<PublishedLesson> $sessions
+     * @return array<string,mixed>
+     */
+    public static function publicDocument(Event $event, array $sessions, int $occupied, DateTimeImmutable $now): array
+    {
+        [$closesAt, $cancelUntil, $open] = self::signupWindow($event, $sessions, $now);
 
         return [
             'slug' => $event->slug,
@@ -311,7 +322,7 @@ final readonly class EventService
             'description' => $event->description,
             'signupOpensAt' => self::instant($event->signupOpensAt),
             'signupClosesAt' => self::instant($closesAt),
-            'cancelUntil' => self::instant($event->cancelUntil ?? $closesAt),
+            'cancelUntil' => self::instant($cancelUntil),
         ], static fn(?string $value): bool => $value !== null && $value !== '');
     }
 

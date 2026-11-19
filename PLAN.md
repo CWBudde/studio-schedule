@@ -1603,6 +1603,11 @@ backends.
           the place. Event and lesson invite links share the client rate limit. The shared
           `event_registration_reads` and `waitlist_invite_lookup_limits` cases run in PHP CI
           on all three databases at both mount paths.
+    - [x] Expire due event invitations through `jobs:run` and offer freed places to the first
+          reachable people on the waiting list while registration is open. Store the new offer,
+          mail and configured push notifications in the same event transaction. Let recipients
+          accept or decline by token. Tests cover expiry, mounted links, single-use tokens and
+          per-event rollback on all three databases.
 - [ ] CLI parity: port the operator commands to the PHP `bin/studio-schedule` executable.
       The Phase 11 admin commands and Phase 12 MCP server stay Go-only (ADR 0023). On PostgreSQL
       a school can run the Go binary against its database. On MySQL and MariaDB it uses the web

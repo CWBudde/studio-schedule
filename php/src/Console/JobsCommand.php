@@ -9,10 +9,12 @@ use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use InvalidArgumentException;
 use Psr\Log\NullLogger;
 use SensitiveParameter;
+use StudioSchedule\Config;
 use StudioSchedule\Mail\SmtpMailer;
 use StudioSchedule\Push\Sender;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\JobResult;
+use StudioSchedule\Service\SetupInput;
 use StudioSchedule\Service\SystemClock;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\Schema;
@@ -51,6 +53,8 @@ final readonly class JobsCommand
             try {
                 $mailer = SmtpMailer::fromEnvironment($environment);
                 $pusher = Sender::fromEnvironment($environment, $clock);
+                [$baseURL] = Config::parseBaseURL(SetupInput::trim($environment('BASE_URL')));
+                $baseURL = Config::applicationURL($baseURL, $environment('HTTP_ADDR'));
             } catch (InvalidArgumentException $error) {
                 throw new CommandError($error->getMessage(), 2);
             }
@@ -58,6 +62,7 @@ final readonly class JobsCommand
             $jobs = new BackgroundJobs($database, $dsn, $clock, new NullLogger(), collectMetrics: $environment('METRICS_TOKEN') !== '');
             $plan = [
                 BackgroundJobs::GENERATE_LESSONS => $jobs->generateLessons(...),
+                BackgroundJobs::WAITLIST_EXPIRY => static fn(): ?JobResult => $jobs->expireEventInvites($baseURL, $pusher !== null),
                 BackgroundJobs::ANNOUNCEMENTS => $jobs->queueAnnouncements(...),
                 BackgroundJobs::PURGE_SESSIONS => $jobs->purgeSessions(...),
                 BackgroundJobs::PURGE_MAIL => $jobs->purgeMail(...),

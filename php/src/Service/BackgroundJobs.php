@@ -16,6 +16,8 @@ use StudioSchedule\Receipt\AttachmentStore;
 use StudioSchedule\Receipt\Attachments;
 use StudioSchedule\Store\AnnouncementRecipients;
 use StudioSchedule\Store\AnnouncementStore;
+use StudioSchedule\Store\EventStore;
+use StudioSchedule\Store\EventWaitlistStore;
 use StudioSchedule\Store\JobLocks;
 use StudioSchedule\Store\JobRunStore;
 use StudioSchedule\Store\MetricsStore;
@@ -28,6 +30,7 @@ use StudioSchedule\Store\TimetableStore;
 final readonly class BackgroundJobs
 {
     public const string GENERATE_LESSONS = 'generate-lessons';
+    public const string WAITLIST_EXPIRY = 'waitlist-expiry';
     public const string ANNOUNCEMENTS = 'announcements';
     public const string DELIVER_MAIL = 'deliver-mail';
     public const string DELIVER_PUSH = 'deliver-push';
@@ -67,6 +70,24 @@ final readonly class BackgroundJobs
             }
             if ($created > 0) {
                 $this->logger->info('lessons generated', ['created' => $created]);
+            }
+        });
+    }
+
+    public function expireEventInvites(string $baseURL, bool $pushEnabled = false): ?JobResult
+    {
+        return $this->runner->runDue(self::WAITLIST_EXPIRY, new DateInterval('PT1M'), function () use ($baseURL, $pushEnabled): void {
+            $waitlist = new EventWaitlist(
+                new EventStore($this->database),
+                new EventWaitlistStore($this->database),
+                $this->clock,
+                new Renderer(),
+                $baseURL,
+                $pushEnabled,
+            );
+            $expired = $waitlist->expireDue();
+            if ($expired > 0) {
+                $this->logger->info('event waiting lists settled', ['entries' => $expired]);
             }
         });
     }

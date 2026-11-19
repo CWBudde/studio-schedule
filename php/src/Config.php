@@ -127,6 +127,40 @@ final readonly class Config
         return [str_ends_with($raw, '/') ? substr($raw, 0, -1) : $raw, $path, $scheme === 'https'];
     }
 
+    public static function applicationURL(string $baseURL, string $httpAddress): string
+    {
+        if ($baseURL !== '') {
+            return $baseURL;
+        }
+        $httpAddress = trim($httpAddress);
+        [, $port] = self::parseHTTPAddress($httpAddress === '' ? ':8080' : $httpAddress, 'HTTP_ADDR');
+
+        return "http://localhost:$port";
+    }
+
+    /** @return array{string,string} The host formatted for an HTTP URL and the listen port. */
+    public static function parseHTTPAddress(string $addr, string $setting): array
+    {
+        $pattern = '~\A(\[[a-zA-Z0-9:.%_+-]+\]|[^:\[\]/?#@%\x00-\x20\x5C\x7f]*):([0-9]+)\z~D';
+        if (preg_match($pattern, $addr, $parts) !== 1 || (int) $parts[2] > 65535) {
+            throw new InvalidArgumentException("$setting needs a host and numeric port (0-65535)");
+        }
+        $host = $parts[1];
+        if (str_starts_with($host, '[')) {
+            $ip = explode('%', substr($host, 1, -1), 2)[0];
+            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false) {
+                throw new InvalidArgumentException("$setting needs a valid IPv6 address inside brackets");
+            }
+        } else {
+            $ip = $host;
+        }
+
+        $packed = $ip === '' ? false : inet_pton($ip);
+        $unspecified = $packed !== false && trim($packed, "\0") === '';
+
+        return [$host === '' || $unspecified ? '127.0.0.1' : str_replace('%', '%25', $host), $parts[2]];
+    }
+
     private static function boolean(string $key, string $value, bool $default): bool
     {
         return match ($value) {

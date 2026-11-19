@@ -354,24 +354,11 @@ final readonly class Operator
     /** @return array{string,string} The host formatted for an HTTP URL and the listen port. */
     private static function address(string $addr, string $setting): array
     {
-        $pattern = '~\A(\[[a-zA-Z0-9:.%_+-]+\]|[^:\[\]/?#@%\x00-\x20\x5C\x7f]*):([0-9]+)\z~D';
-        if (preg_match($pattern, $addr, $parts) !== 1 || (int) $parts[2] > 65535) {
-            throw new CommandError("$setting needs a host and numeric port (0-65535)", 2);
+        try {
+            return Config::parseHTTPAddress($addr, $setting);
+        } catch (InvalidArgumentException $error) {
+            throw new CommandError($error->getMessage(), 2);
         }
-        $host = $parts[1];
-        if (str_starts_with($host, '[')) {
-            $ip = explode('%', substr($host, 1, -1), 2)[0];
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false) {
-                throw new CommandError("$setting needs a valid IPv6 address inside brackets", 2);
-            }
-        } else {
-            $ip = $host;
-        }
-
-        $packed = $ip === '' ? false : inet_pton($ip);
-        $unspecified = $packed !== false && trim($packed, "\0") === '';
-
-        return [$host === '' || $unspecified ? '127.0.0.1' : str_replace('%', '%25', $host), $parts[2]];
     }
 
     /**

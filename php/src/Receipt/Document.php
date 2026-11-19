@@ -7,7 +7,7 @@ namespace StudioSchedule\Receipt;
 use DateTimeImmutable;
 use DateTimeZone;
 use SensitiveParameter;
-use StudioSchedule\Domain\Currency;
+use StudioSchedule\Domain\Money;
 use StudioSchedule\Service\SetupInput;
 
 /**
@@ -20,7 +20,6 @@ use StudioSchedule\Service\SetupInput;
 final class Document
 {
     private const string SPACE = "\u{00a0}";
-    private const array SYMBOLS = ['EUR' => '€', 'USD' => '$', 'GBP' => '£'];
 
     private const array LABELS = [
         'en' => [
@@ -67,8 +66,7 @@ final class Document
         $heading = $labels['heading'][$kind];
         $showVat = $receipt['tax_mode'] === 'standard';
         $currency = $receipt['currency'];
-        $exponent = Currency::exponent($currency) ?? 2;
-        $money = static fn(int $amount): string => self::money($amount, $currency, $exponent, $lang === 'de');
+        $money = static fn(int $amount): string => (new Money($amount))->format($currency, $lang);
         $meta = [
             [$labels['number'], $receipt['number']],
             [$labels['date'], self::date($receipt['issue_date'], $lang)],
@@ -157,24 +155,6 @@ final class Document
         $date = new DateTimeImmutable($iso, new DateTimeZone('UTC'));
 
         return $lang === 'de' ? $date->format('d.m.Y') : $date->format('j M ') . (int) $date->format('Y');
-    }
-
-    private static function money(int $amount, string $currency, int $exponent, bool $german): string
-    {
-        // Keep the amount in decimal digits to retain the full minor-unit precision.
-        $digits = str_pad(ltrim((string) $amount, '-'), 1 + $exponent, '0', STR_PAD_LEFT);
-        $whole = substr($digits, 0, strlen($digits) - $exponent);
-        $number = (string) preg_replace('/\B(?=(?:[0-9]{3})+\z)/', $german ? '.' : ',', $whole);
-        if ($exponent > 0) {
-            $number .= ($german ? ',' : '.') . substr($digits, -$exponent);
-        }
-        $symbol = self::SYMBOLS[$currency] ?? $currency;
-        $signed = $amount < 0 ? '−' : '';
-        if ($german) {
-            return $signed . $number . self::SPACE . $symbol;
-        }
-
-        return $signed . $symbol . (isset(self::SYMBOLS[$currency]) ? '' : self::SPACE) . $number;
     }
 
     private static function rate(int $basisPoints, bool $german): string

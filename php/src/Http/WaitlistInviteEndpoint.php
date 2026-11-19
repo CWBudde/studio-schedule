@@ -13,9 +13,9 @@ use StudioSchedule\Store\RateLimitStore;
 
 final readonly class WaitlistInviteEndpoint
 {
-    /** @param Closure(string): (?array<string,mixed>) $view */
+    /** @param Closure(string): (array<string,mixed>|true|null) $action */
     public function __construct(
-        private Closure $view,
+        private Closure $action,
         private TrustedProxies $proxies,
         private RateLimitStore $limits,
     ) {}
@@ -45,9 +45,13 @@ final readonly class WaitlistInviteEndpoint
             return Responses::tooManyAttempts($request, $retry);
         }
         try {
-            $document = ($this->view)($token);
+            $document = ($this->action)($token);
         } catch (SettingsNotFound) {
             $document = null;
+        }
+
+        if ($document === true) {
+            return $response->withStatus(204)->withHeader('Cache-Control', 'no-store');
         }
 
         return $document === null ? Responses::problem($request, 404, 'resource not found')
