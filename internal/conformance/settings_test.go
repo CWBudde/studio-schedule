@@ -177,3 +177,90 @@ func checkRegionalSettings(t *testing.T, b *backend, guest, office, admin *http.
 		t.Errorf("public locale %q, want %q", public.DefaultLocale, want.DefaultLocale)
 	}
 }
+
+func receiptSettingsAndLogo(t *testing.T, b *backend) {
+	t.Helper()
+
+	const path = "/api/v1/admin/settings/receipts"
+	const logo = path + "/logo"
+	admin, office, guest := browser(t), browser(t), browser(t)
+	login(t, b, admin, demoAdmin, demoPassword)
+	login(t, b, office, "olga.ledgerby@example.net", demoPassword)
+	b.call(t, guest, request{method: http.MethodGet, path: path}, http.StatusUnauthorized)
+	b.call(t, guest, request{method: http.MethodGet, path: logo}, http.StatusUnauthorized)
+
+	search := request{method: http.MethodPost, path: "/api/v1/admin/receipts/search", body: `{"limit":1}`}
+	page := read[struct{ Items []struct{ ID string } }](t, b.call(t, office, search, http.StatusOK))
+	if len(page.Items) != 1 {
+		t.Fatal("expected an issued receipt in the demo seed")
+	}
+	detail := request{
+		method: http.MethodGet, path: "/api/v1/admin/receipts/{receiptId}",
+		params: map[string]string{"receiptId": page.Items[0].ID},
+	}
+	issued := b.call(t, office, detail, http.StatusOK)
+
+	type settings struct {
+		IssuerName, IssuerAddress, TaxNumber, TaxMode, ReceiptPrefix, LogoType, Missing string
+		Complete                                                                        bool
+		LogoMaxBytes, AddressRequiredAbove                                              int
+	}
+	update := request{
+		method: http.MethodPut, path: path,
+		body: `{"issuerName":" Fixture Studio ","issuerAddress":" Road 1\r\n\r\n  Example Town ",` +
+			`"taxNumber":" 123 ","taxMode":"standard","receiptPrefix":" DEMO2 "}`,
+	}
+	b.call(t, office, update, http.StatusForbidden)
+	want := settings{
+		IssuerName: "Fixture Studio", IssuerAddress: "Road 1\nExample Town", TaxNumber: "123",
+		TaxMode: "standard", ReceiptPrefix: "DEMO2", Complete: true, LogoMaxBytes: 524288, AddressRequiredAbove: 25000,
+	}
+	if got := read[settings](t, b.call(t, admin, update, http.StatusOK)); got != want {
+		t.Fatalf("receipt settings after normalization: got %+v, want %+v", got, want)
+	}
+
+	invalid := update
+	invalid.body = strings.Replace(invalid.body, "DEMO2", "demo2", 1)
+	b.call(t, admin, invalid, http.StatusUnprocessableEntity)
+	if got := read[settings](t, get(t, b, office, path)); got != want {
+		t.Fatalf("receipt settings changed after an invalid prefix: got %+v, want %+v", got, want)
+	}
+
+	const encoded = "iVBORw0KGgo="
+	upload := request{method: http.MethodPut, path: logo, body: `{"contentType":"image/png","data":"` + encoded + `"}`}
+	b.call(t, office, upload, http.StatusForbidden)
+	wrongType := upload
+	wrongType.body = strings.Replace(wrongType.body, "image/png", "image/jpeg", 1)
+	b.call(t, admin, wrongType, http.StatusUnprocessableEntity)
+	b.call(t, admin, upload, http.StatusNoContent)
+
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	asset := get(t, b, office, logo)
+	if !bytes.Equal(asset.body, data) || asset.header.Get("Content-Type") != "image/png" ||
+		asset.header.Get("Cache-Control") != "no-cache" || asset.header.Get("Content-Disposition") != "inline" {
+		t.Fatal("receipt logo bytes or headers do not match")
+	}
+	want.LogoType = "image/png"
+	if got := read[settings](t, get(t, b, office, path)); got != want {
+		t.Fatalf("receipt settings with logo: got %+v, want %+v", got, want)
+	}
+
+	update.body = strings.Replace(update.body, "standard", "exempt", 1)
+	want.TaxMode, want.Complete, want.Missing, want.AddressRequiredAbove = "exempt", false, "taxNote", 0
+	if got := read[settings](t, b.call(t, admin, update, http.StatusOK)); got != want {
+		t.Fatalf("incomplete exempt receipt settings: got %+v, want %+v", got, want)
+	}
+	upload.method, upload.body = http.MethodDelete, ""
+	b.call(t, office, upload, http.StatusForbidden)
+	b.call(t, admin, upload, http.StatusNoContent)
+	b.call(t, office, request{method: http.MethodGet, path: logo}, http.StatusNotFound)
+	if got := read[settings](t, get(t, b, office, path)); got.LogoType != "" {
+		t.Fatal("the deleted logo still appears in receipt settings")
+	}
+	if got := b.call(t, office, detail, http.StatusOK); !bytes.Equal(issued.body, got.body) {
+		t.Fatal("changing receipt settings modified an issued receipt")
+	}
+}

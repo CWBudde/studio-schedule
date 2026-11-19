@@ -1475,8 +1475,12 @@ backends.
           search and page receipts and read their lines, refunds and current cancellation
           eligibility. The shared `receipt_lists_and_search` case passes at both mount paths on
           all three PHP databases with the authentication draft.
-    - [ ] Enable `receipt_pdf_downloads` and `receipt_lists_and_search` in PHP CI after PHP sign-in
-          lands.
+    - [x] Let the office read receipt settings and the logo. Let administrators edit the issuer,
+          tax settings and number prefix, and upload or remove the logo. The shared
+          `receipt_settings_and_logo` case verifies that issued receipts keep their snapshots,
+          at both mount paths on all three PHP databases with the authentication draft.
+    - [ ] Enable `receipt_pdf_downloads`, `receipt_lists_and_search` and `receipt_settings_and_logo`
+          in PHP CI after PHP sign-in lands.
   - [ ] Settings, branding, themes, `init` (ADR 0013, 0018)
     - [x] Initialize school settings and issue the first administrator's one-time setup link
           through `init` or the web installer on PostgreSQL, MySQL and MariaDB.

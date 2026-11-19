@@ -344,6 +344,82 @@ final class PublicSettingsTest extends TestCase
         self::assertSame(404, $this->adminRequest('PUT', 'school', ['schoolName' => 'Example Studio'])->getStatusCode());
     }
 
+    public function testReceiptSettingsAndLogoMatchTheOfficeAndAdminContract(): void
+    {
+        $this->initialize();
+        $this->openSettingsSession();
+        $path = 'receipts';
+        $logoPath = 'receipts/logo';
+        $initial = ['receiptPrefix' => 'R', 'complete' => false, 'missing' => 'issuerName', 'logoMaxBytes' => 524288];
+        $input = [
+            'issuerName' => ' Example Studio ', 'issuerAddress' => " Road 1\r\n   \r\n  10000 Example Town  ", 'taxNumber' => ' 123 ',
+            'email' => ' mail@example.test ', 'phone' => ' +49 555 ', 'taxMode' => 'standard',
+            'taxNote' => ' Fixture note ', 'footer' => " Bank\r\n\r\n Account ", 'receiptPrefix' => ' SD2 ',
+        ];
+
+        self::assertSame(401, $this->adminRequest('GET', $path, signedIn: false)->getStatusCode());
+        self::assertSame(401, $this->adminRequest('GET', $logoPath, signedIn: false)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'member'");
+        self::assertSame(403, $this->adminRequest('GET', $path)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'office'");
+        self::assertEquals($initial, self::decoded($this->adminRequest('GET', $path)));
+        self::assertSame(404, $this->adminRequest('GET', $logoPath)->getStatusCode());
+        self::assertSame(403, $this->adminRequest('PUT', $path, $input)->getStatusCode());
+        self::assertSame(403, $this->adminRequest('PUT', $logoPath, ['contentType' => 'image/png', 'data' => base64_encode(self::PNG)])->getStatusCode());
+        self::assertSame(403, $this->adminRequest('DELETE', $logoPath)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'admin'");
+
+        $complete = [
+            'issuerName' => 'Example Studio', 'issuerAddress' => "Road 1\n10000 Example Town", 'taxNumber' => '123',
+            'email' => 'mail@example.test', 'phone' => '+49 555', 'taxMode' => 'standard',
+            'taxNote' => 'Fixture note', 'footer' => "Bank\nAccount", 'receiptPrefix' => 'SD2', 'complete' => true,
+            'logoMaxBytes' => 524288, 'addressRequiredAbove' => 25000,
+        ];
+        self::assertEquals($complete, self::decoded($this->adminRequest('PUT', $path, $input)));
+        foreach ([
+            ['receiptPrefix' => 'lowercase'], ['receiptPrefix' => str_repeat('R', 17)], ['taxNumber' => "12\n34"],
+            ['email' => 'Name <mail@example.test>'], ['phone' => "1\n2"], ['taxMode' => 'invalid'],
+            ['taxNote' => str_repeat('ä', 501)], ['issuerName' => "bad\0name"],
+        ] as $bad) {
+            self::assertSame(422, $this->adminRequest('PUT', $path, $bad + $input)->getStatusCode());
+        }
+        self::assertSame(422, $this->adminRequest('PUT', $path, ['issuerName' => 'Missing prefix'])->getStatusCode());
+        self::assertEquals($complete, self::decoded($this->adminRequest('GET', $path)));
+
+        $logo = str_pad(self::JPEG, 524288, "\0");
+        foreach ([
+            ['image/png', ''], ['image/png', base64_encode(self::JPEG)], ['image/webp', base64_encode(self::WEBP)],
+            ['image/jpeg', base64_encode($logo . 'x')], ['image/jpeg', rtrim(base64_encode($logo), '=')],
+        ] as [$type, $data]) {
+            self::assertSame(422, $this->adminRequest('PUT', $logoPath, ['contentType' => $type, 'data' => $data])->getStatusCode());
+        }
+        foreach (['image/jpeg' => $logo, 'image/png' => self::PNG] as $type => $bytes) {
+            self::assertSame(204, $this->adminRequest('PUT', $logoPath, ['contentType' => $type, 'data' => base64_encode($bytes)])->getStatusCode());
+            $file = $this->adminRequest('GET', $logoPath);
+            self::assertSame(200, $file->getStatusCode());
+            self::assertSame($type, $file->getHeaderLine('Content-Type'));
+            self::assertSame('inline', $file->getHeaderLine('Content-Disposition'));
+            self::assertSame('no-cache', $file->getHeaderLine('Cache-Control'));
+            self::assertSame($bytes, (string) $file->getBody());
+            self::assertSame($bytes, (string) $this->get('logo')->getBody());
+            self::assertSame($type, self::decoded($this->adminRequest('GET', $path))['logoType']);
+        }
+
+        $exempt = $this->adminRequest('PUT', $path, ['taxMode' => 'exempt', 'taxNote' => ''] + $input);
+        $body = self::decoded($exempt);
+        self::assertFalse($body['complete']);
+        self::assertSame('taxNote', $body['missing']);
+        self::assertSame('image/png', $body['logoType']);
+        self::assertArrayNotHasKey('addressRequiredAbove', $body);
+        self::assertArrayNotHasKey('taxNote', $body);
+        self::assertSame(204, $this->adminRequest('DELETE', $logoPath)->getStatusCode());
+        self::assertSame(404, $this->adminRequest('GET', $logoPath)->getStatusCode());
+        self::assertSame(404, $this->get('logo')->getStatusCode());
+        self::assertEquals(['receiptPrefix' => 'RT', 'complete' => false, 'missing' => 'issuerName', 'logoMaxBytes' => 524288], self::decoded(
+            $this->adminRequest('PUT', $path, ['receiptPrefix' => 'RT']),
+        ));
+    }
+
     public function testBrandingRejectsLowContrastAndKeepsAnOmittedTheme(): void
     {
         $this->initialize();

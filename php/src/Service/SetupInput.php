@@ -72,7 +72,7 @@ final readonly class SetupInput
         return $value;
     }
 
-    private static function validEmail(string $email): bool
+    public static function validEmail(string $email): bool
     {
         // Go accepts bare dot-atoms, including UTF-8, and IP literals. Its
         // exact address comparison rejects display names and quoted local parts.

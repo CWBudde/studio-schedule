@@ -38,6 +38,8 @@ final readonly class AdminSettingsRoutes
             $routes->map(['GET', 'PUT'], '/branding', $this->branding(...));
             $routes->map(['PUT', 'DELETE'], '/branding/background', $this->background(...));
             $routes->map(['GET', 'PUT'], '/regional', $this->regional(...));
+            $routes->map(['GET', 'PUT'], '/receipts', $this->receipts(...));
+            $routes->map(['GET', 'PUT', 'DELETE'], '/receipts/logo', $this->receiptLogo(...));
             $routes->map(['GET', 'PUT'], '/booking-rules', $this->bookingRules(...));
             $routes->get('/booking-rules/preview', $this->preview(...));
         })->add(self::authorize(...));
@@ -118,6 +120,55 @@ final readonly class AdminSettingsRoutes
         }
         $fields = self::fields($body, ['contenttype', 'data']);
         $this->service->updateBackground(self::text($fields, 'contentType', required: true), self::text($fields, 'data', required: true));
+
+        return $response->withStatus(204);
+    }
+
+    private function receipts(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        if ($request->getMethod() === 'GET') {
+            return Responses::json($response, $this->service->receiptSettings());
+        }
+        $body = JsonObject::read($request);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        $names = array_keys(AdminSettings::RECEIPT_TEXT_LIMITS);
+        $fields = self::fields($body, array_map(strtolower(...), $names));
+        $input = [];
+        foreach ($names as $field) {
+            $value = self::text($fields, $field, required: $field === 'receiptPrefix');
+            if ($value !== null) {
+                $input[$field] = $value;
+            }
+        }
+
+        return Responses::json($response, $this->service->updateReceiptSettings($input));
+    }
+
+    private function receiptLogo(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        if ($request->getMethod() === 'GET') {
+            $image = $this->service->receiptLogo();
+            if ($image === null) {
+                return Responses::problem($request, 404, 'no logo');
+            }
+            $response->getBody()->write($image['data']);
+
+            return $response->withHeader('Content-Type', $image['type'])
+                ->withHeader('Content-Disposition', 'inline')->withHeader('Cache-Control', 'no-cache');
+        }
+        if ($request->getMethod() === 'DELETE') {
+            $this->service->deleteReceiptLogo();
+
+            return $response->withStatus(204);
+        }
+        $body = JsonObject::read($request);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        $fields = self::fields($body, ['contenttype', 'data']);
+        $this->service->updateReceiptLogo(self::text($fields, 'contentType', required: true), self::text($fields, 'data', required: true));
 
         return $response->withStatus(204);
     }

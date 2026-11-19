@@ -268,6 +268,7 @@ func TestBackendConformance(t *testing.T) {
 		{"pass sales and receipts", passReceipt},
 		{"receipt pdf downloads", receiptPDFDownloads},
 		{"receipt lists and search", receiptListsAndSearch},
+		{"receipt settings and logo", receiptSettingsAndLogo},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			b.seed(t)

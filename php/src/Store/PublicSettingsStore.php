@@ -8,12 +8,16 @@ use Closure;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 use RuntimeException;
+use SensitiveParameter;
 use StudioSchedule\Domain\BrandingImage;
 use StudioSchedule\Service\AdminSettingsPersistence;
 use StudioSchedule\Service\PublicSettingsPersistence;
 use StudioSchedule\Service\SettingsNotFound;
 
-/** @phpstan-import-type SettingsRow from PublicSettingsPersistence */
+/**
+ * @phpstan-import-type SettingsRow from PublicSettingsPersistence
+ * @phpstan-import-type ReceiptRow from AdminSettingsPersistence
+ */
 final readonly class PublicSettingsStore implements AdminSettingsPersistence
 {
     public function __construct(private Connection $connection) {}
@@ -79,15 +83,43 @@ final readonly class PublicSettingsStore implements AdminSettingsPersistence
         });
     }
 
-    public function writeBackground(?string $type, ?string $data, ?string $digest): void
+    public function writeImage(BrandingImage $image, ?string $type, #[SensitiveParameter] ?string $data, ?string $digest): void
     {
-        Database::retryWrite($this->connection, function () use ($type, $data, $digest): void {
+        $name = $image->value;
+        Database::retryWrite($this->connection, function () use ($name, $type, $data, $digest): void {
             $this->lockSettings();
             $this->connection->executeStatement(
-                'UPDATE settings SET background = ?, background_type = ?, background_digest = ?',
+                "UPDATE settings SET $name = ?, {$name}_type = ?, {$name}_digest = ?",
                 [$data, $type, $digest],
                 [$data === null ? ParameterType::NULL : ParameterType::LARGE_OBJECT, ParameterType::STRING, ParameterType::STRING],
             );
+        });
+    }
+
+    public function receiptSettings(): ?array
+    {
+        /** @var ReceiptRow|false $row */
+        $row = $this->connection->fetchAssociative(
+            'SELECT receipt_prefix, issuer_name, issuer_address, issuer_tax_id, issuer_email, issuer_phone, '
+            . 'tax_mode, tax_note, receipt_footer, currency, logo_type FROM settings',
+        );
+
+        return $row === false ? null : $row;
+    }
+
+    public function writeReceiptSettings(#[SensitiveParameter] array $values): array
+    {
+        return Database::retryWrite($this->connection, function () use ($values): array {
+            $this->connection->executeStatement(
+                'UPDATE settings SET receipt_prefix = ?, issuer_name = ?, issuer_address = ?, issuer_tax_id = ?, '
+                . 'issuer_email = ?, issuer_phone = ?, tax_mode = ?, tax_note = ?, receipt_footer = ?',
+                [
+                    $values['receipt_prefix'], $values['issuer_name'], $values['issuer_address'], $values['issuer_tax_id'],
+                    $values['issuer_email'], $values['issuer_phone'], $values['tax_mode'], $values['tax_note'], $values['receipt_footer'],
+                ],
+            );
+
+            return $this->receiptSettings() ?? throw new SettingsNotFound();
         });
     }
 
