@@ -14,19 +14,19 @@ final class JsonObject
 {
     private const int MAX_BODY_BYTES = 1024 * 1024;
 
-    public static function read(#[SensitiveParameter] ServerRequestInterface $request): stdClass|ResponseInterface
+    public static function read(#[SensitiveParameter] ServerRequestInterface $request, int $maxBytes = self::MAX_BODY_BYTES): stdClass|ResponseInterface
     {
         $stream = $request->getBody();
         $body = '';
-        while (!$stream->eof() && strlen($body) < self::MAX_BODY_BYTES) {
-            $chunk = $stream->read(self::MAX_BODY_BYTES - strlen($body));
+        while (!$stream->eof() && strlen($body) < $maxBytes) {
+            $chunk = $stream->read($maxBytes - strlen($body));
             if ($chunk === '') {
                 break;
             }
             $body .= $chunk;
         }
-        if (strlen($body) >= self::MAX_BODY_BYTES) {
-            return Responses::problem($request, 413, 'request body is too large limit=' . self::MAX_BODY_BYTES . ' bytes');
+        if (strlen($body) >= $maxBytes) {
+            return Responses::problem($request, 413, 'request body is too large limit=' . $maxBytes . ' bytes');
         }
         if ($body === '') {
             return Responses::problem($request, 400, 'request body is required');

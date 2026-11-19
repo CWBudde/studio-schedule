@@ -7,6 +7,7 @@ namespace StudioSchedule\Service;
 use StudioSchedule\Domain\AccentColor;
 use StudioSchedule\Domain\BrandingImage;
 
+/** @phpstan-import-type SettingsRow from PublicSettingsPersistence */
 final readonly class PublicSettings
 {
     public function __construct(private PublicSettingsPersistence $persistence) {}
@@ -17,31 +18,53 @@ final readonly class PublicSettings
         $settings = $this->persistence->settings() ?? throw new SettingsNotFound();
         $locale = strtolower(str_replace('_', '-', SetupInput::trim($settings['default_locale'])));
         $language = explode('-', $locale, 2)[0];
-        $theme = $settings['theme'] ?? '';
-        $notice = $settings['legal_notice'] ?? '';
-        $accent = $settings['accent_color'] ?? '';
 
-        $public = [
-            'schoolName' => $settings['school_name'],
-            'theme' => $theme === '' ? 'programme' : $theme,
-            'hasLogo' => ($settings['logo_digest'] ?? '') !== '',
-            'hasBackground' => ($settings['background_digest'] ?? '') !== '',
+        return [
+            ...self::schoolFields($settings),
+            ...self::brandingFields($settings),
             'timezone' => $settings['timezone'],
             'defaultLocale' => $language === 'de' ? 'de' : 'en',
             'currency' => $settings['currency'],
         ];
+    }
+
+    /**
+     * @param SettingsRow $settings
+     * @return array<string, string>
+     */
+    public static function schoolFields(array $settings): array
+    {
+        $school = ['schoolName' => $settings['school_name']];
+        $notice = $settings['legal_notice'] ?? '';
         if ($notice !== '') {
-            $public['legalNotice'] = $notice;
+            $school['legalNotice'] = $notice;
         }
+
+        return $school;
+    }
+
+    /**
+     * @param SettingsRow $settings
+     * @return array<string, string|bool>
+     */
+    public static function brandingFields(array $settings): array
+    {
+        $theme = $settings['theme'] ?? '';
+        $accent = $settings['accent_color'] ?? '';
+        $branding = [
+            'theme' => $theme === '' ? 'programme' : $theme,
+            'hasLogo' => ($settings['logo_digest'] ?? '') !== '',
+            'hasBackground' => ($settings['background_digest'] ?? '') !== '',
+        ];
         if ($accent !== '') {
-            $public['accentColor'] = $accent;
+            $branding['accentColor'] = $accent;
             $dark = AccentColor::dark($accent);
             if ($dark !== null) {
-                $public['accentColorDark'] = $dark;
+                $branding['accentColorDark'] = $dark;
             }
         }
 
-        return $public;
+        return $branding;
     }
 
     /**
@@ -69,6 +92,6 @@ final readonly class PublicSettings
 
         $contentType = $asset['contentType'] ?? '';
 
-        return ['digest' => hash('sha256', $contentType . "\n" . $data), 'contentType' => $contentType, 'data' => $data];
+        return ['digest' => BrandingImage::digest($contentType, $data), 'contentType' => $contentType, 'data' => $data];
     }
 }

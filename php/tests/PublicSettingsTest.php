@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Tests;
 
+use DateTimeImmutable;
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
@@ -32,6 +33,7 @@ use StudioSchedule\Store\Migrator;
 use StudioSchedule\Store\PublicSettingsStore;
 use StudioSchedule\Store\Schema;
 use StudioSchedule\Store\SetupStore;
+use Symfony\Component\Uid\Uuid;
 
 final class PublicSettingsTest extends TestCase
 {
@@ -64,7 +66,7 @@ final class PublicSettingsTest extends TestCase
         }
         try {
             if (self::$dsn !== null) {
-                foreach (['account_tokens', 'accounts', 'persons', 'settings'] as $table) {
+                foreach (['sessions', 'account_tokens', 'accounts', 'persons', 'settings'] as $table) {
                     $this->db->executeStatement('DELETE FROM ' . $table);
                 }
             }
@@ -303,6 +305,133 @@ final class PublicSettingsTest extends TestCase
     public function testDarkAccentMatchesGo(string $light, ?string $dark): void
     {
         self::assertSame($dark, AccentColor::dark($light));
+    }
+
+    public function testOfficeCanReadSchoolSettingsAndOnlyAdminCanWriteThem(): void
+    {
+        $this->initialize();
+        $this->openSettingsSession();
+        self::assertSame(405, $this->adminRequest('HEAD', 'school', signedIn: false)->getStatusCode());
+        self::assertSame(401, $this->adminRequest('GET', 'school', signedIn: false)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'member'");
+        self::assertSame(403, $this->adminRequest('GET', 'school')->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'office'");
+        self::assertSame(['schoolName' => 'Example Studio'], self::decoded($this->adminRequest('GET', 'school')));
+        self::assertSame(403, $this->adminRequest('PUT', 'school', ['schoolName' => 'New Name'])->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'admin'");
+
+        foreach ([[], ['schoolName' => '   '], ['schoolName' => 'Name', 'legalNotice' => str_repeat('ü', 2001)]] as $body) {
+            self::assertSame(422, $this->adminRequest('PUT', 'school', $body)->getStatusCode());
+        }
+        $unknown = $this->adminRequest('PUT', 'school', ['schoolName' => 'Name', 'timezone' => 'UTC']);
+        self::assertSame(422, $unknown->getStatusCode());
+        self::assertSame([['location' => 'body.timezone', 'message' => 'unexpected property']], self::decoded($unknown)['errors']);
+        self::assertSame(['schoolName' => 'Fixture Dance Hall', 'legalNotice' => "Street\r\nSecond line"], self::decoded(
+            $this->adminRequest('PUT', 'school', ['schoolName' => ' Fixture Dance Hall ', 'legalNotice' => " Street\r\nSecond line\n "]),
+        ));
+        self::assertSame('Fixture Dance Hall', self::decoded($this->get('public'))['schoolName']);
+        self::assertSame(['schoolName' => 'Fixture Dance Hall'], self::decoded(
+            $this->adminRequest('PUT', 'school', ['SchoolName' => 'Fixture Dance Hall']),
+        ));
+        $this->db->executeStatement('DELETE FROM settings');
+        self::assertSame(404, $this->adminRequest('GET', 'school')->getStatusCode());
+        self::assertSame(404, $this->adminRequest('PUT', 'school', ['schoolName' => 'Example Studio'])->getStatusCode());
+    }
+
+    public function testBrandingRejectsLowContrastAndKeepsAnOmittedTheme(): void
+    {
+        $this->initialize();
+        $this->openSettingsSession();
+        $this->writeImage('logo', 'image/png', self::PNG);
+        self::assertSame(['theme' => 'programme', 'hasLogo' => true, 'hasBackground' => false, 'minContrast' => 4.5], self::decoded(
+            $this->adminRequest('GET', 'branding'),
+        ));
+        foreach ([['accentColor' => '#ff0000'], ['accentColor' => 'blue'], ['accentColor' => 42], ['theme' => ''], ['theme' => 'unknown']] as $body) {
+            self::assertSame(422, $this->adminRequest('PUT', 'branding', $body)->getStatusCode());
+        }
+        $branding = self::decoded($this->adminRequest('PUT', 'branding', ['accentColor' => '#1D4ED8', 'theme' => 'werkstatt']));
+        self::assertSame('#1d4ed8', $branding['accentColor']);
+        self::assertSame('#97b7f8', $branding['accentColorDark']);
+        self::assertSame('werkstatt', $branding['theme']);
+        self::assertSame(['theme' => 'werkstatt', 'hasLogo' => true, 'hasBackground' => false, 'minContrast' => 4.5], self::decoded(
+            $this->adminRequest('PUT', 'branding', []),
+        ));
+        self::assertSame('werkstatt', self::decoded($this->get('public'))['theme']);
+    }
+
+    public function testBackgroundUploadValidatesTheBytesAndUpdatesPublicImages(): void
+    {
+        $this->initialize();
+        $this->openSettingsSession();
+        $path = 'branding/background';
+        $webp = ['contentType' => 'image/webp', 'data' => base64_encode(self::WEBP)];
+        $this->db->executeStatement("UPDATE accounts SET role = 'office'");
+        self::assertSame(403, $this->adminRequest('PUT', $path, $webp)->getStatusCode());
+        self::assertSame(403, $this->adminRequest('DELETE', $path)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'admin'");
+        foreach ([
+            ['contentType' => 'image/gif', 'data' => base64_encode('GIF89a')],
+            ['contentType' => 'image/png', 'data' => base64_encode(self::JPEG)],
+            ['contentType' => 'image/jpeg', 'data' => ''],
+            ['contentType' => 'image/jpeg', 'data' => '%%%'],
+            ['contentType' => 'image/jpeg', 'data' => base64_encode(self::JPEG) . "\n"],
+            ['contentType' => 'image/jpeg', 'data' => rtrim(base64_encode(self::JPEG . 'x'), '=')],
+            ['contentType' => 'image/png', 'data' => base64_encode(self::PNG . str_repeat('x', 1024 * 1024))],
+        ] as $body) {
+            self::assertSame(422, $this->adminRequest('PUT', $path, $body)->getStatusCode());
+        }
+        self::assertSame(404, $this->get('background')->getStatusCode());
+        $boundary = str_pad(self::JPEG, 1024 * 1024, "\x00");
+        foreach (['image/jpeg' => $boundary, 'image/png' => self::PNG, 'image/webp' => self::WEBP] as $type => $bytes) {
+            self::assertSame(204, $this->adminRequest('PUT', $path, ['contentType' => $type, 'data' => base64_encode($bytes)])->getStatusCode());
+            $asset = $this->get('background');
+            self::assertSame(200, $asset->getStatusCode());
+            self::assertSame($type, $asset->getHeaderLine('Content-Type'));
+            self::assertSame($bytes, (string) $asset->getBody());
+            self::assertSame(self::etag($type, $bytes), $asset->getHeaderLine('ETag'));
+            self::assertSame(304, $this->get('background', self::etag($type, $bytes))->getStatusCode());
+        }
+        self::assertTrue(self::decoded($this->adminRequest('GET', 'branding'))['hasBackground']);
+        self::assertTrue(self::decoded($this->get('public'))['hasBackground']);
+        for ($attempt = 0; $attempt < 2; ++$attempt) {
+            self::assertSame(204, $this->adminRequest('DELETE', $path)->getStatusCode());
+        }
+        self::assertFalse(self::decoded($this->get('public'))['hasBackground']);
+        self::assertSame(404, $this->get('background')->getStatusCode());
+        $this->db->executeStatement('DELETE FROM settings');
+        self::assertSame(404, $this->adminRequest('DELETE', $path)->getStatusCode());
+    }
+
+    private function openSettingsSession(): void
+    {
+        $postgres = $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform;
+        $id = Uuid::v7();
+        $digest = $postgres ? "decode(?, 'hex')" : 'UNHEX(?)';
+        $now = new DateTimeImmutable();
+        $created = Database::sqlInstant($this->db, $now);
+        $this->db->executeStatement(
+            'INSERT INTO sessions (id, account_id, token_hash, created_at, last_seen_at, expires_at) '
+            . "SELECT ?, id, $digest, ?, ?, ? FROM accounts",
+            [$postgres ? $id->toRfc4122() : $id->toBinary(), hash('sha256', 'fixture-settings-session'),
+                $created, $created, Database::sqlInstant($this->db, $now->modify('+1 day'))],
+        );
+        $this->db->executeStatement('UPDATE accounts SET confirmed_at = ?', [$created]);
+    }
+
+    /** @param array<string, mixed>|null $body */
+    private function adminRequest(string $method, string $path, ?array $body = null, bool $signedIn = true): ResponseInterface
+    {
+        $request = (new ServerRequestFactory())->createServerRequest($method, '/studio/api/v1/admin/settings/' . $path);
+        if ($signedIn) {
+            $request = $request->withCookieParams(['studio_session' => 'fixture-settings-session']);
+        }
+        if ($body !== null) {
+            $request = $request->withHeader('Content-Type', 'application/json');
+            $request->getBody()->write(json_encode((object) $body, JSON_THROW_ON_ERROR));
+            $request->getBody()->rewind();
+        }
+
+        return $this->bootstrapRequest($request);
     }
 
     private static function fixtureDsn(): string

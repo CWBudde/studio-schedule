@@ -1445,6 +1445,9 @@ backends.
   - [ ] Settings, branding, themes, `init` (ADR 0013, 0018)
     - [x] Initialize school settings and issue the first administrator's one-time setup link
           through `init` or the web installer on PostgreSQL, MySQL and MariaDB.
+    - [x] Serve the school profile and branding cards, including theme selection, accent contrast,
+          and background upload and removal. The shared `settings_and_branding` case passes on all
+          three PHP databases at both mount paths with the authentication draft.
   - [ ] Announcements, mail log, statistics (ADR 0014)
     - [x] Serve the administrator mail log with filtered search, detail and audited requeue.
           Secret-link bodies stay private. Tests pass on PostgreSQL, MySQL and MariaDB,

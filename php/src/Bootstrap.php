@@ -13,6 +13,7 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
+use StudioSchedule\Http\AdminSettingsRoutes;
 use StudioSchedule\Http\AfterResponse;
 use StudioSchedule\Http\Application;
 use StudioSchedule\Http\CatalogRoutes;
@@ -32,6 +33,7 @@ use StudioSchedule\Http\StatisticsEndpoint;
 use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Mail\SmtpMailer;
 use StudioSchedule\Push\Sender;
+use StudioSchedule\Service\AdminSettings;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\CommonPasswords;
 use StudioSchedule\Service\DatabaseReadiness;
@@ -154,7 +156,9 @@ final class Bootstrap
                 $pushSender = static fn(): ?Sender => Sender::fromEnvironment(Config::lookup($appDirectory . '/config/.env', $environment), $clock);
                 $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $pushSender): void {
                     $app->get('/api/v1/auth/me', new MeEndpoint($sessionStore));
-                    (new PublicSettingsEndpoint(new PublicSettings(new PublicSettingsStore($connection))))->register($app);
+                    $settingsStore = new PublicSettingsStore($connection);
+                    (new PublicSettingsEndpoint(new PublicSettings($settingsStore)))->register($app);
+                    (new AdminSettingsRoutes(new AdminSettings($settingsStore)))->register($app);
                     CatalogRoutes::register($app, new CatalogStore($connection));
                     EventRoutes::register($app, new EventStore($connection), $clock);
                     $familyStore = new FamilyStore($connection);

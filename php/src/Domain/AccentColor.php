@@ -6,8 +6,35 @@ namespace StudioSchedule\Domain;
 
 final class AccentColor
 {
+    public const float MIN_CONTRAST = 4.5;
+
     private const float DARK_LIGHTNESS = 0.78;
     private const float DARK_MAX_CHROMA = 0.1;
+
+    public static function hasMinimumContrast(string $hex): bool
+    {
+        $accent = self::luminance($hex);
+        // Match the reference theme colors and its rounding to sRGB.
+        $foreground = self::fromOKLCh(0.985, 0.008, 75);
+        $background = self::fromOKLCh(0.978, 0.008, 75);
+        assert($foreground !== null && $background !== null);
+
+        foreach ([$foreground, $background] as $color) {
+            $light = self::luminance($color);
+            if ((max($accent, $light) + 0.05) / (min($accent, $light) + 0.05) < self::MIN_CONTRAST) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static function luminance(string $hex): float
+    {
+        return 0.2126 * self::linear((int) hexdec(substr($hex, 1, 2)))
+            + 0.7152 * self::linear((int) hexdec(substr($hex, 3, 2)))
+            + 0.0722 * self::linear((int) hexdec(substr($hex, 5, 2)));
+    }
 
     /** Match the OKLCh conversion in internal/domain/color.go. */
     public static function dark(string $hex): ?string
@@ -31,22 +58,22 @@ final class AccentColor
 
         // Reduce chroma until the lighter variant fits into sRGB.
         for ($chroma = min(hypot($labA, $labB), self::DARK_MAX_CHROMA); $chroma > 0; $chroma -= 0.002) {
-            $dark = self::fromOKLCh($chroma, $hue);
+            $dark = self::fromOKLCh(self::DARK_LIGHTNESS, $chroma, $hue);
             if ($dark !== null) {
                 return $dark;
             }
         }
 
-        return self::fromOKLCh(0, 0);
+        return self::fromOKLCh(self::DARK_LIGHTNESS, 0, 0);
     }
 
-    private static function fromOKLCh(float $chroma, float $hue): ?string
+    private static function fromOKLCh(float $lightness, float $chroma, float $hue): ?string
     {
         $a = $chroma * cos($hue * M_PI / 180);
         $b = $chroma * sin($hue * M_PI / 180);
-        $l = self::DARK_LIGHTNESS + 0.3963377774 * $a + 0.2158037573 * $b;
-        $m = self::DARK_LIGHTNESS - 0.1055613458 * $a - 0.0638541728 * $b;
-        $s = self::DARK_LIGHTNESS - 0.0894841775 * $a - 1.2914855480 * $b;
+        $l = $lightness + 0.3963377774 * $a + 0.2158037573 * $b;
+        $m = $lightness - 0.1055613458 * $a - 0.0638541728 * $b;
+        $s = $lightness - 0.0894841775 * $a - 1.2914855480 * $b;
         $l = $l * $l * $l;
         $m = $m * $m * $m;
         $s = $s * $s * $s;
