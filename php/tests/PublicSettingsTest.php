@@ -66,7 +66,8 @@ final class PublicSettingsTest extends TestCase
         }
         try {
             if (self::$dsn !== null) {
-                foreach (['sessions', 'account_tokens', 'accounts', 'persons', 'settings'] as $table) {
+                foreach (['event_registrations', 'events', 'passes', 'pass_types', 'lessons', 'staff', 'rooms', 'locations',
+                    'course_types', 'sessions', 'account_tokens', 'accounts', 'persons', 'settings'] as $table) {
                     $this->db->executeStatement('DELETE FROM ' . $table);
                 }
             }
@@ -400,6 +401,114 @@ final class PublicSettingsTest extends TestCase
         self::assertSame(404, $this->get('background')->getStatusCode());
         $this->db->executeStatement('DELETE FROM settings');
         self::assertSame(404, $this->adminRequest('DELETE', $path)->getStatusCode());
+    }
+
+    public function testRegionalSettingsValidateAndUpdateUnlockedValues(): void
+    {
+        $this->initialize();
+        $this->openSettingsSession();
+        $this->db->executeStatement('UPDATE settings SET default_locale = ?', ['de_AT']);
+        $this->db->executeStatement("UPDATE accounts SET role = 'office'");
+        self::assertSame([
+            'timezone' => 'Europe/Vienna', 'defaultLocale' => 'de', 'currency' => 'EUR',
+            'timezoneLocked' => false, 'currencyLocked' => false,
+        ], self::decoded($this->adminRequest('GET', 'regional')));
+        $values = ['timezone' => ' America/New_York ', 'defaultLocale' => 'de', 'currency' => 'USD'];
+        self::assertSame(403, $this->adminRequest('PUT', 'regional', $values)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'admin'");
+
+        foreach ([['defaultLocale' => 'de-AT'], ['timezone' => 'Local'], ['timezone' => '+02:00'],
+            ['timezone' => str_repeat('A', 65)], ['currency' => 'usd'], ['currency' => 'ZZZ']] as $invalid) {
+            $error = $this->adminRequest('PUT', 'regional', $invalid + $values);
+            self::assertSame(422, $error->getStatusCode());
+            $details = self::decoded($error)['errors'];
+            self::assertIsArray($details);
+            self::assertIsArray($details[0]);
+            self::assertSame('body.' . array_key_first($invalid), $details[0]['location']);
+        }
+        $expected = ['timezone' => 'America/New_York', 'defaultLocale' => 'de', 'currency' => 'USD'];
+        self::assertSame($expected + ['timezoneLocked' => false, 'currencyLocked' => false], self::decoded(
+            $this->adminRequest('PUT', 'regional', $values),
+        ));
+        self::assertSame($expected, array_intersect_key(self::decoded($this->get('public')), $expected));
+
+        $this->db->executeStatement('DELETE FROM settings');
+        self::assertSame(404, $this->adminRequest('GET', 'regional')->getStatusCode());
+        self::assertSame(404, $this->adminRequest('PUT', 'regional', $values)->getStatusCode());
+    }
+
+    public function testRegionalSettingsLockChangesWhenLessonsOrPricesExist(): void
+    {
+        $this->initialize();
+        $this->openSettingsSession();
+        $stamp = '2026-11-19 12:00:00';
+        $values = ['timezone' => 'Europe/Vienna', 'defaultLocale' => 'en', 'currency' => 'EUR'];
+        $passType = $this->insertRegionalFixture('pass_types', [
+            'name' => 'Test pass', 'kind' => 'visits', 'visits' => 2, 'validity_days' => 30,
+            'price' => 100, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => $stamp,
+        ]);
+        $currencyLocked = ['timezoneLocked' => false, 'currencyLocked' => true];
+        $this->assertRegionalSettings($values + $currencyLocked);
+        $this->db->executeStatement('UPDATE pass_types SET price = 0');
+        $this->assertRegionalSettings($values + ['timezoneLocked' => false, 'currencyLocked' => false]);
+
+        $this->insertRegionalFixture('passes', [
+            'pass_type_id' => $passType, 'person_id' => $this->db->fetchOne('SELECT id FROM persons'),
+            'kind' => 'visits', 'visits_total' => 2, 'visits_remaining' => 2, 'valid_from' => '2026-11-19',
+            'status' => 'active', 'origin' => 'sale', 'sold_at' => $stamp, 'price_paid' => 100,
+        ]);
+        $this->assertRegionalSettings($values + $currencyLocked);
+        $this->db->executeStatement('DELETE FROM passes');
+        $course = $this->insertRegionalFixture('course_types', ['name' => 'Fixture ballet']);
+        $event = $this->insertRegionalFixture('events', [
+            'slug' => 'test-workshop', 'title' => 'Test workshop', 'course_type_id' => $course,
+            'capacity' => 10, 'price' => 100, 'vat_rate_bp' => 0, 'status' => 'draft',
+            'created_at' => $stamp, 'updated_at' => $stamp,
+        ]);
+        $this->assertRegionalSettings($values + $currencyLocked);
+        $this->db->executeStatement('UPDATE events SET price = 0');
+        $this->insertRegionalFixture('event_registrations', [
+            'event_id' => $event, 'guest_name' => 'Fixture Guest', 'status' => 'registered', 'payment' => 'unpaid',
+            'price' => 100, 'vat_rate_bp' => 0, 'created_at' => $stamp, 'updated_at' => $stamp,
+        ]);
+        $this->assertRegionalSettings($values + $currencyLocked);
+
+        $location = $this->insertRegionalFixture('locations', ['name' => 'Fixture location']);
+        $room = $this->insertRegionalFixture('rooms', ['name' => 'Room', 'capacity' => 10, 'location_id' => $location, 'position' => 1]);
+        $staff = $this->insertRegionalFixture('staff', ['display_name' => 'Fixture instructor', 'kind' => 'instructor', 'active' => true]);
+        $this->insertRegionalFixture('lessons', [
+            'course_type_id' => $course, 'room_id' => $room, 'instructor_id' => $staff,
+            'starts_at' => $stamp, 'ends_at' => '2026-11-19 13:00:00', 'status' => 'scheduled',
+            'visibility' => 'public', 'kind' => 'regular', 'capacity' => 10,
+        ]);
+        $locked = ['timezoneLocked' => true, 'currencyLocked' => true];
+        $this->assertRegionalSettings($values + $locked);
+
+        foreach (['timezone' => 'Europe/Berlin', 'currency' => 'USD'] as $field => $replacement) {
+            $response = $this->adminRequest('PUT', 'regional', [$field => $replacement, 'defaultLocale' => 'de'] + $values);
+            self::assertSame(409, $response->getStatusCode());
+            self::assertSame($field . '-locked', self::decoded($response)['reason']);
+        }
+        $this->assertRegionalSettings($values + $locked);
+        $update = ['defaultLocale' => 'de'] + $values;
+        self::assertEquals($update + $locked, self::decoded($this->adminRequest('PUT', 'regional', $update)));
+    }
+
+    /** @param array<string, string|bool> $expected */
+    private function assertRegionalSettings(array $expected): void
+    {
+        self::assertSame($expected, self::decoded($this->adminRequest('GET', 'regional')));
+    }
+
+    /** @param array<string, mixed> $values */
+    private function insertRegionalFixture(string $table, array $values): string
+    {
+        $uuid = Uuid::v7();
+        $id = $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform ? $uuid->toRfc4122() : $uuid->toBinary();
+        $types = isset($values['active']) ? ['active' => ParameterType::BOOLEAN] : [];
+        $this->db->insert($table, ['id' => $id] + $values, $types);
+
+        return $id;
     }
 
     private function openSettingsSession(): void

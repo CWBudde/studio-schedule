@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Service;
 
+use DateTimeZone;
 use StudioSchedule\Domain\AccentColor;
 use StudioSchedule\Domain\BrandingImage;
+use StudioSchedule\Domain\Currency;
 
+/** @phpstan-import-type RegionalRow from AdminSettingsPersistence */
 final readonly class AdminSettings
 {
     private const int MAX_BACKGROUND_BYTES = 1024 * 1024;
@@ -94,5 +97,60 @@ final readonly class AdminSettings
     public function deleteBackground(): void
     {
         $this->persistence->writeBackground(null, null, null);
+    }
+
+    /** @return array<string, string|bool> */
+    public function regional(): array
+    {
+        return self::regionalFields($this->persistence->regional() ?? throw new SettingsNotFound());
+    }
+
+    /** @return array<string, string|bool> */
+    public function updateRegional(string $timezone, string $locale, string $currency): array
+    {
+        if ($timezone === '' || mb_strlen($timezone, 'UTF-8') > 64) {
+            throw new AdminSettingsFieldError('timezone', 'time zone must contain 1 to 64 characters');
+        }
+        if (!in_array($locale, ['en', 'de'], true)) {
+            throw new AdminSettingsFieldError('defaultLocale', 'default locale must be en or de');
+        }
+        if (preg_match('/\A[A-Z]{3}\z/', $currency) !== 1) {
+            throw new AdminSettingsFieldError('currency', 'currency must be three uppercase letters');
+        }
+        $timezone = SetupInput::trim($timezone);
+
+        $settings = $this->persistence->changeRegional(static function (array $current) use ($timezone, $locale, $currency): array {
+            if ($current['timezone_locked'] && $timezone !== $current['timezone']) {
+                throw new AdminSettingsConflict('timezone-locked', 'the time zone cannot change once lessons exist');
+            }
+            if ($current['currency_locked'] && $currency !== $current['currency']) {
+                throw new AdminSettingsConflict('currency-locked', 'the currency cannot change once prices or receipts exist');
+            }
+            if (!in_array($timezone, DateTimeZone::listIdentifiers(DateTimeZone::ALL_WITH_BC), true)) {
+                throw new AdminSettingsFieldError('timezone', 'choose an IANA time zone');
+            }
+            if (Currency::exponent($currency) === null) {
+                throw new AdminSettingsFieldError('currency', 'currency must be an ISO 4217 code');
+            }
+
+            return ['timezone' => $timezone, 'default_locale' => $locale, 'currency' => $currency];
+        });
+
+        return self::regionalFields($settings);
+    }
+
+    /**
+     * @param RegionalRow $settings
+     * @return array<string, string|bool>
+     */
+    private static function regionalFields(array $settings): array
+    {
+        return [
+            'timezone' => $settings['timezone'],
+            'defaultLocale' => PublicSettings::schoolLocale($settings['default_locale']),
+            'currency' => $settings['currency'],
+            'timezoneLocked' => $settings['timezone_locked'],
+            'currencyLocked' => $settings['currency_locked'],
+        ];
     }
 }

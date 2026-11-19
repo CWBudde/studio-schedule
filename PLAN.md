@@ -1448,6 +1448,10 @@ backends.
     - [x] Serve the school profile and branding cards, including theme selection, accent contrast,
           and background upload and removal. The shared `settings_and_branding` case passes on all
           three PHP databases at both mount paths with the authentication draft.
+    - [x] Serve regional settings. Existing lessons lock the time zone, and prices or receipts lock
+          the currency. Administrators can still change the default language. The shared
+          `settings_and_branding` case verifies both locks and the public language update on all
+          three PHP databases at both mount paths with the authentication draft.
   - [ ] Announcements, mail log, statistics (ADR 0014)
     - [x] Serve the administrator mail log with filtered search, detail and audited requeue.
           Secret-link bodies stay private. Tests pass on PostgreSQL, MySQL and MariaDB,

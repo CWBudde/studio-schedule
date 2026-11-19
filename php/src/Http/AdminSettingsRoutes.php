@@ -13,6 +13,7 @@ use Slim\App;
 use Slim\Routing\RouteCollectorProxy;
 use stdClass;
 use StudioSchedule\Service\AdminSettings;
+use StudioSchedule\Service\AdminSettingsConflict;
 use StudioSchedule\Service\AdminSettingsFieldError;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\SettingsNotFound;
@@ -31,6 +32,7 @@ final readonly class AdminSettingsRoutes
             $routes->map(['GET', 'PUT'], '/school', $this->school(...));
             $routes->map(['GET', 'PUT'], '/branding', $this->branding(...));
             $routes->map(['PUT', 'DELETE'], '/branding/background', $this->background(...));
+            $routes->map(['GET', 'PUT'], '/regional', $this->regional(...));
         })->add(self::authorize(...));
     }
 
@@ -53,6 +55,8 @@ final readonly class AdminSettingsRoutes
             return $next->handle($request);
         } catch (SettingsNotFound) {
             return Responses::problem($request, 404, 'resource not found');
+        } catch (AdminSettingsConflict $error) {
+            return Responses::problem($request, 409, $error->getMessage(), reason: $error->reason);
         } catch (AdminSettingsFieldError $error) {
             return Responses::problem($request, 422, 'validation failed', errors: [
                 ['location' => $error->field === '' ? 'body' : 'body.' . $error->field, 'message' => $error->getMessage()],
@@ -107,6 +111,24 @@ final readonly class AdminSettingsRoutes
         $this->service->updateBackground(self::text($fields, 'contentType', required: true), self::text($fields, 'data', required: true));
 
         return $response->withStatus(204);
+    }
+
+    private function regional(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        if ($request->getMethod() !== 'PUT') {
+            return Responses::json($response, $this->service->regional());
+        }
+        $body = JsonObject::read($request);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        $fields = self::fields($body, ['timezone', 'defaultlocale', 'currency']);
+
+        return Responses::json($response, $this->service->updateRegional(
+            self::text($fields, 'timezone', required: true),
+            self::text($fields, 'defaultLocale', required: true),
+            self::text($fields, 'currency', required: true),
+        ));
     }
 
     /**

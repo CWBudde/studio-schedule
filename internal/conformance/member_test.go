@@ -136,8 +136,10 @@ func familyProfiles(t *testing.T, b *backend) {
 	if initial.Me.GivenName != "Clara" || len(initial.Dependents) != 2 || len(initial.Dependents[0].Guardians) == 0 {
 		t.Fatalf("unexpected fixture family: %+v", initial)
 	}
-	me := request{method: http.MethodPut, path: path + "/me",
-		body: `{"givenName":"Clara","familyName":"Amberly","phone":" 0123 "}`}
+	me := request{
+		method: http.MethodPut, path: path + "/me",
+		body: `{"givenName":"Clara","familyName":"Amberly","phone":" 0123 "}`,
+	}
 	bad := me
 	bad.body = `{"givenName":"Clara","familyName":"Amberly","birthDate":""}`
 	if res := b.call(t, parent, bad, http.StatusUnprocessableEntity); !containsJSON(res.body, `"location":"body.birthDate"`) {
@@ -147,14 +149,18 @@ func familyProfiles(t *testing.T, b *backend) {
 		t.Fatalf("unexpected saved profile: %+v", updated)
 	}
 
-	child := request{method: http.MethodPost, path: path + "/dependents",
-		body: `{"givenName":"New","familyName":"Fixture","birthDate":"2010-02-03"}`}
+	child := request{
+		method: http.MethodPost, path: path + "/dependents",
+		body: `{"givenName":"New","familyName":"Fixture","birthDate":"2010-02-03"}`,
+	}
 	created := read[profile](t, b.call(t, parent, child, http.StatusCreated))
 	if created.ID == "" || created.GivenName != "New" || created.BirthDate != "2010-02-03" {
 		t.Fatalf("unexpected saved dependent: %+v", created)
 	}
-	edit := request{method: http.MethodPut, path: path + "/dependents/{personId}",
-		params: map[string]string{"personId": created.ID}, body: `{"givenName":"Edited","familyName":"Fixture"}`}
+	edit := request{
+		method: http.MethodPut, path: path + "/dependents/{personId}",
+		params: map[string]string{"personId": created.ID}, body: `{"givenName":"Edited","familyName":"Fixture"}`,
+	}
 	b.call(t, outsider, edit, http.StatusNotFound)
 	if updated := read[profile](t, b.call(t, parent, edit, http.StatusOK)); updated.ID != created.ID || updated.GivenName != "Edited" || updated.BirthDate != "" {
 		t.Fatalf("unexpected edited dependent: %+v", updated)
@@ -213,7 +219,7 @@ func familyPrivacy(t *testing.T, b *backend) {
 	}
 	b.call(t, parent, adminExport, http.StatusForbidden)
 	login(t, b, office, "olga.ledgerby@example.net", demoPassword)
-	if copy := b.call(t, office, adminExport, http.StatusOK); !bytes.Equal(copy.body, signed.body) {
+	if officeExport := b.call(t, office, adminExport, http.StatusOK); !bytes.Equal(officeExport.body, signed.body) {
 		t.Error("office and self exports of the same person differ")
 	}
 	export.query.Set("person", family.Dependents[0].ID)

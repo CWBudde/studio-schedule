@@ -16,16 +16,21 @@ final readonly class PublicSettings
     public function settings(): array
     {
         $settings = $this->persistence->settings() ?? throw new SettingsNotFound();
-        $locale = strtolower(str_replace('_', '-', SetupInput::trim($settings['default_locale'])));
-        $language = explode('-', $locale, 2)[0];
 
         return [
             ...self::schoolFields($settings),
             ...self::brandingFields($settings),
             'timezone' => $settings['timezone'],
-            'defaultLocale' => $language === 'de' ? 'de' : 'en',
+            'defaultLocale' => self::schoolLocale($settings['default_locale']),
             'currency' => $settings['currency'],
         ];
+    }
+
+    public static function schoolLocale(string $locale): string
+    {
+        $locale = strtolower(str_replace('_', '-', SetupInput::trim($locale)));
+
+        return explode('-', $locale, 2)[0] === 'de' ? 'de' : 'en';
     }
 
     /**

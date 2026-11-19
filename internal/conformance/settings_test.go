@@ -71,4 +71,37 @@ func settingsAndBranding(t *testing.T, b *backend) {
 	if public().HasBackground {
 		t.Error("removed background is still visible in settings")
 	}
+
+	checkRegionalSettings(t, b, guest, office, admin)
+}
+
+func checkRegionalSettings(t *testing.T, b *backend, guest, office, admin *http.Client) {
+	t.Helper()
+
+	const path = "/api/v1/admin/settings/regional"
+	type regional struct {
+		Timezone, DefaultLocale, Currency string
+		TimezoneLocked, CurrencyLocked    bool
+	}
+	want := regional{Timezone: "Europe/Berlin", DefaultLocale: "en", Currency: "EUR", TimezoneLocked: true, CurrencyLocked: true}
+	if got := read[regional](t, get(t, b, office, path)); got != want {
+		t.Fatalf("seeded regional settings: got %+v, want %+v", got, want)
+	}
+	update := request{method: http.MethodPut, path: path, body: `{"timezone":"Europe/Berlin","defaultLocale":"de","currency":"EUR"}`}
+	b.call(t, office, update, http.StatusForbidden)
+	timezone := request{method: http.MethodPut, path: path, body: `{"timezone":"Europe/Vienna","defaultLocale":"de","currency":"EUR"}`}
+	expectConflict(t, b, admin, timezone, "timezone-locked")
+	currency := request{method: http.MethodPut, path: path, body: `{"timezone":"Europe/Berlin","defaultLocale":"de","currency":"USD"}`}
+	expectConflict(t, b, admin, currency, "currency-locked")
+	if got := read[regional](t, get(t, b, office, path)); got != want {
+		t.Fatalf("regional settings after conflicts: got %+v, want %+v", got, want)
+	}
+	want.DefaultLocale = "de"
+	if got := read[regional](t, b.call(t, admin, update, http.StatusOK)); got != want {
+		t.Fatalf("updated regional settings: got %+v, want %+v", got, want)
+	}
+	public := read[struct{ DefaultLocale string }](t, get(t, b, guest, "/api/v1/settings/public"))
+	if public.DefaultLocale != want.DefaultLocale {
+		t.Errorf("public locale %q, want %q", public.DefaultLocale, want.DefaultLocale)
+	}
 }

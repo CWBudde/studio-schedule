@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Store;
 
+use Closure;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 use RuntimeException;
@@ -81,14 +82,52 @@ final readonly class PublicSettingsStore implements AdminSettingsPersistence
     public function writeBackground(?string $type, ?string $data, ?string $digest): void
     {
         Database::retryWrite($this->connection, function () use ($type, $data, $digest): void {
-            if ($this->connection->fetchOne('SELECT 1 FROM settings FOR UPDATE') === false) {
-                throw new SettingsNotFound();
-            }
+            $this->lockSettings();
             $this->connection->executeStatement(
                 'UPDATE settings SET background = ?, background_type = ?, background_digest = ?',
                 [$data, $type, $digest],
                 [$data === null ? ParameterType::NULL : ParameterType::LARGE_OBJECT, ParameterType::STRING, ParameterType::STRING],
             );
         });
+    }
+
+    public function regional(): ?array
+    {
+        /** @var array{timezone: string, default_locale: string, currency: string, timezone_locked: bool|int|string, currency_locked: bool|int|string}|false $row */
+        $row = $this->connection->fetchAssociative(
+            'SELECT timezone, default_locale, currency, EXISTS (SELECT 1 FROM lessons) AS timezone_locked, ('
+            . 'EXISTS (SELECT 1 FROM pass_types WHERE price > 0) OR EXISTS (SELECT 1 FROM passes WHERE price_paid > 0) '
+            . 'OR EXISTS (SELECT 1 FROM events WHERE price > 0) OR EXISTS (SELECT 1 FROM event_registrations WHERE price > 0) '
+            . 'OR EXISTS (SELECT 1 FROM receipts)) AS currency_locked FROM settings',
+        );
+        if ($row === false) {
+            return null;
+        }
+        $row['timezone_locked'] = in_array($row['timezone_locked'], [true, 1, '1', 't'], true);
+        $row['currency_locked'] = in_array($row['currency_locked'], [true, 1, '1', 't'], true);
+
+        return $row;
+    }
+
+    public function changeRegional(Closure $change): array
+    {
+        return Database::retryWrite($this->connection, function () use ($change): array {
+            $this->lockSettings();
+            $current = $this->regional() ?? throw new SettingsNotFound();
+            $updated = $change($current);
+            $this->connection->executeStatement(
+                'UPDATE settings SET timezone = ?, default_locale = ?, currency = ?',
+                [$updated['timezone'], $updated['default_locale'], $updated['currency']],
+            );
+
+            return $updated + $current;
+        });
+    }
+
+    private function lockSettings(): void
+    {
+        if ($this->connection->fetchOne('SELECT 1 FROM settings FOR UPDATE') === false) {
+            throw new SettingsNotFound();
+        }
     }
 }
