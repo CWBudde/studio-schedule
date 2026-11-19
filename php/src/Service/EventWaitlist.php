@@ -12,7 +12,6 @@ use SensitiveParameter;
 use StudioSchedule\Domain\Event;
 use StudioSchedule\Domain\EventRegistration;
 use StudioSchedule\Domain\Money;
-use StudioSchedule\Domain\PersonName;
 use StudioSchedule\Domain\PublishedLesson;
 use StudioSchedule\Mail\Renderer;
 use Throwable;
@@ -237,37 +236,12 @@ final readonly class EventWaitlist
         DateTimeImmutable $now,
         array $school,
     ): void {
-        $personIds = [];
-        foreach ($canceled as $change) {
-            $person = $change['registration']->person;
-            if ($person !== null) {
-                $personIds[] = $person['id'];
-            }
-        }
-        $people = $this->store->recipients($personIds);
-        $messages = [];
-        foreach ($canceled as $change) {
-            $registration = $change['registration'];
-            $recipients = $people[$registration->person['id'] ?? ''] ?? [];
-            $guest = $registration->guest;
-            if ($guest !== null && isset($guest['email']) && $guest['email'] !== '') {
-                $recipients = [[
-                    'email' => $guest['email'], 'locale' => '', 'accountId' => null,
-                    'givenName' => $guest['name'], 'participant' => $guest['name'],
-                ]];
-            }
-            foreach ($recipients as $recipient) {
-                $address = PersonName::lower($recipient['email']);
-                $messages[$address] ??= ['recipient' => $recipient, 'participants' => [], 'refunded' => false];
-                if ($recipient['accountId'] !== null && $messages[$address]['recipient']['accountId'] === null) {
-                    $messages[$address]['recipient'] = $recipient;
-                }
-                if (!in_array($recipient['participant'], $messages[$address]['participants'], true)) {
-                    $messages[$address]['participants'][] = $recipient['participant'];
-                }
-                $messages[$address]['refunded'] = $messages[$address]['refunded'] || $change['refunded'];
-            }
-        }
+        $parties = array_map(static fn(array $change): array => [
+            'personId' => $change['registration']->person['id'] ?? null,
+            'guest' => $change['registration']->guest,
+            'refunded' => $change['refunded'],
+        ], $canceled);
+        $messages = (new ScheduleRecipients($this->store))->group($parties);
 
         $first = ($sessions[0] ?? null)?->startsAt->setTimezone($school['timezone']);
         $last = $sessions === [] ? null : $sessions[array_key_last($sessions)]->startsAt->setTimezone($school['timezone']);

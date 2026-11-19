@@ -1621,9 +1621,13 @@ backends.
           event notice per recipient. The shared `events_and_registrations` case verifies refunds
           and notices after an event has started. PHP tests check transaction rollback on all
           three databases.
-    - [ ] Let the office edit, cancel, restore or remove an individual event session through
-          lesson administration. Keep the event's inherited capacity and the existing rules for
-          sessions of canceled events.
+    - [x] Let the office cancel and remove individual lessons, including event sessions.
+          Cancellation releases invite holds, restores eligible pass visits and mails affected
+          recipients. Deletion protects started and generated lessons, existing bookings, and
+          open event registrations. The shared `lesson_cancellation_and_deletion` case runs in
+          PHP CI at both mount paths on all three databases.
+    - [ ] Let the office edit or restore an individual event session through lesson administration.
+          Keep the event's inherited capacity and the existing rules for sessions of canceled events.
     - [ ] Return `event-session` when someone tries to book or join the lesson waitlist for one
           session of an event through the lesson routes.
     - [x] Let members and the office cancel individual registrations. Enforce the member deadline

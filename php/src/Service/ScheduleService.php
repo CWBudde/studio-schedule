@@ -194,6 +194,26 @@ final readonly class ScheduleService
         return $out;
     }
 
+    /** @return array<string,mixed> */
+    public function officeWriteDocument(PublishedLesson $lesson, ScheduleRules $rules): array
+    {
+        $id = $lesson->id;
+        $now = $this->clock->now();
+        $active = $this->store->activeBookings([$id])[$id] ?? 0;
+        $held = 0;
+        foreach ($this->store->waitlist([$id])[$id] ?? [] as $entry) {
+            if ($entry['status'] === 'invited' && $entry['expiresAt'] !== null && $entry['expiresAt'] > $now) {
+                ++$held;
+            }
+        }
+
+        $summary = self::lessonSummary($lesson);
+        unset($summary['eventSlug']);
+
+        return $summary + self::availability($lesson, $rules, $active + $held)
+            + self::lessonDescriptions($lesson) + ['admin' => $this->admin($id, $active)];
+    }
+
     /** @return array<string, mixed> */
     private function admin(string $lessonId, int $activeBookings): array
     {

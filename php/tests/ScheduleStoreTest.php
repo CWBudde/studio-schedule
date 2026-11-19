@@ -22,6 +22,7 @@ use Slim\Psr7\Factory\StreamFactory;
 use StudioSchedule\Http\CatalogAdminRoutes;
 use StudioSchedule\Http\EventRegistrationRoutes;
 use StudioSchedule\Http\EventRoutes;
+use StudioSchedule\Http\LessonAdminRoutes;
 use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Http\StatisticsEndpoint;
 use StudioSchedule\Http\TrustedProxies;
@@ -30,6 +31,7 @@ use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
+use StudioSchedule\Service\LessonAdministration;
 use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
@@ -44,6 +46,7 @@ use StudioSchedule\Store\EventRegistrationStore;
 use StudioSchedule\Store\ReceiptWriteStore;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\EventWaitlistStore;
+use StudioSchedule\Store\LessonWriteStore;
 use StudioSchedule\Store\Migrator;
 use StudioSchedule\Store\PublicSettingsStore;
 use StudioSchedule\Store\RateLimitStore;
@@ -1228,6 +1231,80 @@ final class ScheduleStoreTest extends TestCase
         self::assertCount(2, $this->database->fetchFirstColumn("SELECT 1 FROM outbox_mails WHERE template = 'event-canceled'"));
     }
 
+    public function testOfficeLessonCancellationAndDeletionProtectExistingBookingsAndNotes(): void
+    {
+        $this->insertLesson(108, '2026-11-05', 'regular', 'public', ['class_id' => 40, 'slot_date' => '2026-11-05']);
+        $this->insertLesson(109, '2026-11-05', 'workshop', 'public', []);
+        $this->insertLesson(110, '2026-11-05', 'workshop', 'public', []);
+        $this->insertLesson(111, '2026-10-24', 'workshop', 'public', []);
+        $this->insert('bookings', [
+            'id' => 250, 'lesson_id' => 109, 'status' => 'booked', 'trial' => false, 'booked_at' => '2026-10-24 14:00:00',
+            'guest_name' => 'Lesson Guest', 'guest_email' => 'invalid address',
+        ]);
+        $this->insert('bookings', [
+            'id' => 251, 'lesson_id' => 110, 'person_id' => 4, 'status' => 'canceled', 'trial' => false,
+            'booked_at' => '2026-10-24 14:00:00', 'canceled_at' => '2026-10-24 14:30:00',
+        ]);
+        $this->insertLesson(112, '2026-11-07', 'workshop', 'public', []);
+        $this->insert('waitlist_entries', [
+            'id' => 252, 'lesson_id' => 112, 'person_id' => 4, 'status' => 'waiting', 'stay_on_list' => false,
+            'joined_at' => '2026-10-24 10:00:00',
+        ]);
+
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office', impersonatorId: self::id(10));
+        $wakes = 0;
+        $wake = static function () use (&$wakes): void {
+            ++$wakes;
+        };
+        $app = $this->app(self::BEFORE_RELEASE, wakeLessonMail: $wake);
+        $path = static fn(int $id): string => '/lessons/' . self::id($id);
+        $delete = static function (string $id, int $status) use ($app, $office): string {
+            $request = (new ServerRequestFactory())->createServerRequest('DELETE', '/api/v1' . $id)
+                ->withAttribute('sessionPrincipal', $office);
+            $response = $app->handle($request);
+            self::assertSame($status, $response->getStatusCode(), (string) $response->getBody());
+
+            return (string) $response->getBody();
+        };
+        self::assertStringContainsString('"reason":"generated"', $delete($path(108), 409));
+        self::assertStringContainsString('"reason":"in-use"', $delete($path(110), 409));
+        self::assertStringContainsString('"location":"path.lessonId"', $delete($path(111), 422));
+        self::assertStringContainsString('"reason":"in-use"', $delete($path(106), 409));
+        $delete('/lessons/invalid', 422);
+        $delete($path(999), 404);
+        self::assertSame('', $delete($path(112), 204));
+        self::get($app, $path(112), $office, 404);
+
+        self::post($app, $path(111) . '/cancel', $office, 422, ['note' => 'Too late']);
+        self::post($app, $path(108) . '/cancel', $office, 422, ['note' => str_repeat('ä', 501)]);
+        $class = self::post($app, $path(108) . '/cancel', $office, 200, ['note' => '    ']);
+        self::assertIsArray($class['admin']);
+        self::assertTrue($class['admin']['detached']);
+        self::assertArrayNotHasKey('cancelNote', $class['admin']);
+        try {
+            self::post($app, $path(109) . '/cancel', $office, 200, ['note' => 'Fixture cancellation']);
+            self::fail('Expected invalid mail data to roll back the cancellation');
+        } catch (RuntimeException $error) {
+            self::assertSame('A lesson cancellation recipient has an invalid email address', $error->getMessage());
+        }
+        self::assertSame('scheduled', self::get($app, $path(109), $office)['status']);
+        $this->database->executeStatement("UPDATE bookings SET guest_email = 'lesson-guest@example.test' WHERE guest_name = 'Lesson Guest'");
+        $canceled = self::post($app, $path(109) . '/cancel', $office, 200, ['note' => ' Fixture cancellation ']);
+        self::assertSame('canceled', $canceled['status']);
+        self::assertIsArray($canceled['admin']);
+        self::assertSame(1, $canceled['admin']['activeBookings']);
+        self::assertSame('Fixture cancellation', $canceled['admin']['cancelNote']);
+        self::assertSame(['id' => self::id(10), 'name' => 'Mara Steps'], $canceled['admin']['canceledBy']);
+        self::assertStringContainsString('"reason":"in-use"', $delete($path(109), 409));
+        $later = $this->app('2026-12-01T10:00:00Z', wakeLessonMail: $wake);
+        $repeated = self::post($later, $path(109) . '/cancel', $office, 200, ['note' => 'Different note']);
+        self::assertSame($canceled['admin'], $repeated['admin']);
+        self::assertSame(1, $wakes);
+        self::assertSame(['lesson-guest@example.test'], $this->database->fetchFirstColumn(
+            "SELECT recipient FROM outbox_mails WHERE template = 'lesson-canceled'",
+        ));
+    }
+
     private function eventExpiryJobs(DateTimeImmutable $now): BackgroundJobs
     {
         $dsn = getenv('STUDIO_PHP_TEST_DATABASE_URL');
@@ -1634,9 +1711,10 @@ final class ScheduleStoreTest extends TestCase
 
     /**
      * @param (Closure(ReceiptDocument,string):string)|null $renderReceipt
+     * @param (Closure():void)|null $wakeLessonMail
      * @return App<ContainerInterface|null>
      */
-    private function app(string $now, ?Closure $renderReceipt = null): App
+    private function app(string $now, ?Closure $renderReceipt = null, ?Closure $wakeLessonMail = null): App
     {
         $app = AppFactory::create();
         $clock = new class ($now) implements ClockInterface {
@@ -1663,9 +1741,20 @@ final class ScheduleStoreTest extends TestCase
         $registrationStore = new EventRegistrationStore($this->database);
         $registrations = new EventRegistrationReads($eventStore, $registrationStore, $clock);
         $app->get('/api/v1/event-invites/{token}', new WaitlistInviteEndpoint($registrations->invite(...), $proxies, $limits));
+        $recipients = new EventWaitlistStore($this->database);
+        (new LessonAdminRoutes(new LessonAdministration(
+            $eventStore,
+            new LessonWriteStore($this->database),
+            $scheduleStore,
+            $registrationStore,
+            $recipients,
+            new Renderer(),
+            $clock,
+            $wakeLessonMail,
+        )))->register($app);
         $waitlist = new EventWaitlist(
             $eventStore,
-            new EventWaitlistStore($this->database),
+            $recipients,
             $clock,
             new Renderer(),
             'https://school.example.test/dance/schedule',

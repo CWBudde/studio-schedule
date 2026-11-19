@@ -158,7 +158,7 @@ final readonly class ScheduleStore implements SchedulePersistence
         return $row === false ? null : $this->publishedLesson($row);
     }
 
-    public function lesson(string $id): ?PublishedLesson
+    public function lesson(string $id, bool $storedCapacity = false): ?PublishedLesson
     {
         $row = $this->connection->fetchAssociative(
             self::LESSONS . ' WHERE l.id = ?',
@@ -166,7 +166,11 @@ final readonly class ScheduleStore implements SchedulePersistence
             [$this->idType()],
         );
 
-        return $row === false ? null : $this->publishedLesson($row);
+        if ($row === false) {
+            return null;
+        }
+
+        return $this->publishedLesson($storedCapacity ? ['capacity' => $row['lesson_capacity']] + $row : $row);
     }
 
     /**

@@ -32,6 +32,7 @@ use StudioSchedule\Http\CatalogRoutes;
 use StudioSchedule\Http\CredentialRoutes;
 use StudioSchedule\Http\EventRegistrationRoutes;
 use StudioSchedule\Http\EventRoutes;
+use StudioSchedule\Http\LessonAdminRoutes;
 use StudioSchedule\Http\FamilyRoutes;
 use StudioSchedule\Http\Installer;
 use StudioSchedule\Http\MetricsEndpoint;
@@ -61,6 +62,7 @@ use StudioSchedule\Receipt\AttachmentStore;
 use StudioSchedule\Receipt\Attachments;
 use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
+use StudioSchedule\Service\LessonAdministration;
 use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\ReceiptIssuance;
 use StudioSchedule\Service\EventRegistrationWrites;
@@ -115,6 +117,7 @@ use StudioSchedule\Store\EmailChangeStore;
 use StudioSchedule\Store\EventRegistrationStore;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\EventWaitlistStore;
+use StudioSchedule\Store\LessonWriteStore;
 use StudioSchedule\Store\FamilyStore;
 use StudioSchedule\Store\MailLogStore;
 use StudioSchedule\Store\MemberImportStore;
@@ -335,9 +338,20 @@ final class Bootstrap
                     $eventStore = new EventStore($connection);
                     $registrationStore = new EventRegistrationStore($connection);
                     $eventRegistrations = new EventRegistrationReads($eventStore, $registrationStore, $clock);
+                    $lessonRecipients = new EventWaitlistStore($connection);
+                    (new LessonAdminRoutes(new LessonAdministration(
+                        $eventStore,
+                        new LessonWriteStore($connection),
+                        $schedule,
+                        $registrationStore,
+                        $lessonRecipients,
+                        $mail,
+                        $clock,
+                        $wakeMail,
+                    )))->register($app);
                     $eventWaitlist = static fn(): EventWaitlist => new EventWaitlist(
                         $eventStore,
-                        new EventWaitlistStore($connection),
+                        $lessonRecipients,
                         $clock,
                         $mail,
                         $eventURL(),

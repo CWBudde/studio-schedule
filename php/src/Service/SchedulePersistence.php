@@ -29,7 +29,8 @@ interface SchedulePersistence
      */
     public function lessons(DateTimeImmutable $from, DateTimeImmutable $to, array $filters): array;
 
-    public function lesson(string $id): ?PublishedLesson;
+    /** @phpstan-impure */
+    public function lesson(string $id, bool $storedCapacity = false): ?PublishedLesson;
 
     /**
      * @param list<string> $lessonIds
