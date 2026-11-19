@@ -1460,6 +1460,10 @@ backends.
     - [x] Read a signed-in person's family, edit their own profile, and create or edit their
           dependents. Managed dependents are read-only. The shared `family_profiles` case passes
           at both mount paths on all three engines.
+    - [x] Let the office create and replace person records and link or unlink guardians. Validate
+          school-local birth dates and unique member numbers, keep login email independent of the
+          contact email, and reject guardianship cycles. The shared `office_person_and_guardian_writes`
+          case runs in PHP CI on all three databases at both mount paths.
     - [ ] Remove dependents and pass any freed waitlist places on to the next eligible people.
     - [x] Let the office manage locations, rooms, course types, levels and staff. Room and level
           orders are saved as a whole, and inactive staff appear in the office list. The shared

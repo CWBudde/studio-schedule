@@ -282,6 +282,7 @@ func TestBackendConformance(t *testing.T) {
 		{"member import", importMembers},
 		{"duplicate detection", detectDuplicates},
 		{"person detail", personDetail},
+		{"office person and guardian writes", officePersonWrites},
 		{"duplicate persons", mergeDuplicates},
 		{"events and registrations", eventRegistration},
 		{"pass type administration", passTypeAdministration},

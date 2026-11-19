@@ -41,6 +41,7 @@ use StudioSchedule\Http\LessonNoticeRoutes;
 use StudioSchedule\Http\LessonSignupRoutes;
 use StudioSchedule\Http\MyLessonsRoutes;
 use StudioSchedule\Http\PassIssueRoutes;
+use StudioSchedule\Http\PersonAdministrationRoutes;
 use StudioSchedule\Http\ReceiptReadRoutes;
 use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Http\TeachingScheduleRoutes;
@@ -70,6 +71,7 @@ use StudioSchedule\Service\MyLessons;
 use StudioSchedule\Service\PassIssuance;
 use StudioSchedule\Service\PassVoiding;
 use StudioSchedule\Service\PassRead;
+use StudioSchedule\Service\PersonAdministration;
 use StudioSchedule\Service\ScheduleRecipients;
 use StudioSchedule\Service\ReceiptIssuance;
 use StudioSchedule\Service\ReceiptCancellation;
@@ -156,6 +158,132 @@ final class ScheduleStoreTest extends TestCase
             }
         } finally {
             $this->database->close();
+        }
+    }
+
+    public function testOfficePersonUsesTheSchoolDateAndReplacesOptionalFields(): void
+    {
+        $app = $this->app('2026-10-26T23:30:00Z');
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $path = '/admin/persons';
+        $names = ['givenName' => ' Ada ', 'familyName' => ' Niemann '];
+        self::post($app, $path, $office, 422, $names + ['birthDate' => '2026-02-29']);
+        self::post($app, $path, $office, 422, $names + ['birthDate' => '2026-10-28']);
+        self::post($app, $path, $office, 422, $names + ['email' => 'wrong address']);
+        $details = ['birthDate' => '2026-10-27', 'memberNo' => ' 0 ', 'email' => ' ada@example.test ', 'phone' => ' 123 ', 'notes' => ' 0 '];
+        $person = self::post($app, $path, $office, 201, $names + $details);
+        self::assertIsString($person['id']);
+        self::assertEquals([
+            'id' => $person['id'], 'givenName' => 'Ada', 'familyName' => 'Niemann', 'birthDate' => '2026-10-27',
+            'memberNo' => '0', 'email' => 'ada@example.test', 'phone' => '123', 'notes' => '0',
+        ], $person);
+        self::post($app, $path, $office, 409, $names + $details);
+        self::assertEquals(
+            ['id' => $person['id'], 'givenName' => 'Ada', 'familyName' => 'Niemann'],
+            self::send($app, 'PUT', $path . '/' . $person['id'], $office, 200, $names),
+        );
+        self::send($app, 'PUT', $path . '/' . self::id(999), $office, 404, $names);
+        self::post($app, $path, $office, 201, $names + $details);
+    }
+
+    public function testOfficeGuardianLinkRejectsCyclesAndOnlyRemovesTheLink(): void
+    {
+        $app = $this->app('2026-10-26T23:30:00Z');
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member');
+        $paths = [];
+        $ids = [];
+        foreach (['Anja', 'Barbara', 'Carla'] as $name) {
+            $person = self::post($app, '/admin/persons', $office, 201, ['givenName' => $name, 'familyName' => 'Falk']);
+            self::assertIsString($person['id']);
+            $ids[] = $person['id'];
+            $paths[] = '/admin/persons/' . $person['id'] . '/guardians';
+        }
+        [$anja, $barbara, $carla] = $ids;
+        [$anjaGuardians, $barbaraGuardians, $carlaGuardians] = $paths;
+        self::post($app, $barbaraGuardians, $member, 403, ['guardianId' => $anja]);
+        self::assertEquals(
+            ['id' => $anja, 'givenName' => 'Anja', 'familyName' => 'Falk'],
+            self::post($app, $barbaraGuardians, $office, 201, ['guardianId' => $anja]),
+        );
+        self::post($app, $barbaraGuardians, $office, 409, ['guardianId' => $anja]);
+        self::post($app, $carlaGuardians, $office, 201, ['guardianId' => $barbara]);
+        self::post($app, $anjaGuardians, $office, 422, ['guardianId' => $carla]);
+        self::post($app, $barbaraGuardians, $office, 422, ['guardianId' => $barbara]);
+        self::post($app, $barbaraGuardians, $office, 422, ['guardianId' => self::id(999)]);
+        $link = $barbaraGuardians . '/' . $anja;
+        $delete = (new ServerRequestFactory())->createServerRequest('DELETE', '/api/v1' . $link)
+            ->withAttribute('sessionPrincipal', $office);
+        self::assertSame(204, $app->handle($delete)->getStatusCode());
+        self::send($app, 'DELETE', $link, $office, 404);
+        self::post($app, $anjaGuardians, $office, 201, ['guardianId' => $carla]);
+    }
+
+    public function testOfficeGuardianSeesACommittedLinkAfterLockingAnIntermediatePerson(): void
+    {
+        for ($id = 901; $id <= 904; ++$id) {
+            $this->insert('persons', ['id' => $id, 'given_name' => 'Guardian', 'family_name' => 'Fixture']);
+        }
+        $this->insert('person_guardians', ['guardian_id' => 901, 'dependent_id' => 902]);
+        $this->insert('person_guardians', ['guardian_id' => 903, 'dependent_id' => 904]);
+
+        // The fixture connection commits a link with disjoint endpoints after
+        // the worker has read the first edge, just before it locks person 902.
+        $linkMeanwhile = function (): void {
+            $this->insert('person_guardians', ['guardian_id' => 902, 'dependent_id' => 903]);
+        };
+        $key = $this->postgres ? self::id(902) : str_replace('-', '', self::id(902));
+        $logger = new class ($key, $linkMeanwhile) extends AbstractLogger {
+            public bool $linked = false;
+
+            /** @param Closure():void $link */
+            public function __construct(private readonly string $key, private readonly Closure $link) {}
+
+            /** @param array<string,mixed> $context */
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                $sql = $context['sql'] ?? '';
+                if (!$this->linked && is_string($sql) && str_starts_with($sql, 'SELECT id FROM persons WHERE id = ')
+                    && str_ends_with($sql, ' FOR UPDATE') && in_array($this->key, (array) ($context['params'] ?? []), true)
+                ) {
+                    ($this->link)();
+                    $this->linked = true;
+                }
+            }
+        };
+        $config = new Configuration();
+        $config->setMiddlewares([new Middleware($logger)]);
+        $writer = DriverManager::getConnection($this->database->getParams(), $config);
+        try {
+            $store = new FamilyStore($writer);
+            $service = new PersonAdministration($store, self::createStub(ClockInterface::class));
+            $app = AppFactory::create();
+            (new PersonAdministrationRoutes($service))->register($app);
+            $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+            $problem = self::post($app, '/admin/persons/' . self::id(901) . '/guardians', $office, 422, ['guardianId' => self::id(904)]);
+            self::assertSame([['location' => 'body.guardianId', 'message' => 'a dependent of the person cannot be their guardian']], $problem['errors']);
+            self::assertTrue($logger->linked);
+            self::assertFalse($store->isGuardian(self::id(904), self::id(901)));
+        } finally {
+            $writer->close();
+        }
+    }
+
+    public function testOfficePersonWriteReturnsConflictAfterRetriesAreExhausted(): void
+    {
+        $store = new FamilyStore($this->database);
+        $attempts = 0;
+        $this->expectException(CatalogFailure::class);
+        try {
+            $store->inOfficeTransaction(static function () use (&$attempts): never {
+                ++$attempts;
+                throw new class extends RuntimeException implements RetryableException {};
+            });
+        } catch (CatalogFailure $failure) {
+            self::assertSame(409, $failure->status);
+            self::assertGreaterThan(1, $attempts);
+            self::assertFalse($this->database->isTransactionActive());
+            throw $failure;
         }
     }
 
@@ -3402,6 +3530,7 @@ final class ScheduleStoreTest extends TestCase
             }
         };
         $scheduleStore = new ScheduleStore($this->database);
+        (new PersonAdministrationRoutes(new PersonAdministration(new FamilyStore($this->database), $clock)))->register($app);
         ScheduleRoutes::register($app, $scheduleStore, $clock);
         (new MyLessonsRoutes(new MyLessons(new MyLessonsStore($this->database), $scheduleStore, $clock)))->register($app);
         (new TeachingScheduleRoutes(new TeachingSchedule($scheduleStore, $clock)))->register($app);

@@ -51,6 +51,7 @@ use StudioSchedule\Http\PassReadRoutes;
 use StudioSchedule\Http\PasswordFailureLimit;
 use StudioSchedule\Http\PasswordResetEndpoint;
 use StudioSchedule\Http\PasswordResetRequestEndpoint;
+use StudioSchedule\Http\PersonAdministrationRoutes;
 use StudioSchedule\Http\PersonDetailEndpoint;
 use StudioSchedule\Http\PersonExportRoutes;
 use StudioSchedule\Http\PublicSettingsEndpoint;
@@ -115,6 +116,7 @@ use StudioSchedule\Service\PasswordChange;
 use StudioSchedule\Service\PasswordHash;
 use StudioSchedule\Service\PasswordReset;
 use StudioSchedule\Service\PasswordResetRequests;
+use StudioSchedule\Service\PersonAdministration;
 use StudioSchedule\Service\PersonDuplicates;
 use StudioSchedule\Service\PersonExport;
 use StudioSchedule\Service\PublicSettings;
@@ -440,6 +442,7 @@ final class Bootstrap
                     $duplicates = new DuplicateStore($connection, $memberDirectory, $familyStore, $clock);
                     (new DuplicateRoutes(new PersonDuplicates($duplicates)))->register($app);
                     (new FamilyRoutes(new Family($familyStore, $clock)))->register($app);
+                    (new PersonAdministrationRoutes(new PersonAdministration($familyStore, $clock)))->register($app);
                     $personExport = new PersonExportStore($connection);
                     (new PersonExportRoutes(new PersonExport($personExport, $familyStore, $clock)))->register($app);
                     $app->get('/api/v1/admin/persons/{personId}', new PersonDetailEndpoint(new PersonDetailStore($connection, $personExport, $catalog)))

@@ -6,15 +6,21 @@ namespace StudioSchedule\Store;
 
 use Closure;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
+use Doctrine\DBAL\Exception\RetryableException;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use RuntimeException;
 use SensitiveParameter;
 use StudioSchedule\Domain\Date;
 use StudioSchedule\Domain\PersonData;
+use StudioSchedule\Domain\PersonRecord;
+use StudioSchedule\Service\CatalogFailure;
+use StudioSchedule\Service\PersonAdministrationPersistence;
 use StudioSchedule\Service\SettingsNotFound;
 use Symfony\Component\Uid\Uuid;
 
-final readonly class FamilyStore
+final readonly class FamilyStore implements PersonAdministrationPersistence
 {
     private const string PERSON_COLUMNS = 'p.id, p.given_name, p.family_name, p.phone, p.birth_date';
     private const string MANAGED = <<<'SQL'
@@ -44,6 +50,20 @@ final readonly class FamilyStore
     public function inTransaction(Closure $write): mixed
     {
         return Database::retryWrite($this->db, $write);
+    }
+
+    /**
+     * @template T
+     * @param Closure():T $write
+     * @return T
+     */
+    public function inOfficeTransaction(Closure $write): mixed
+    {
+        try {
+            return Database::retryWrite($this->db, $write, readCommitted: true);
+        } catch (RetryableException) {
+            throw new CatalogFailure(409, 'conflict');
+        }
     }
 
     /** @return array<string,mixed>|null */
@@ -142,6 +162,76 @@ final readonly class FamilyStore
             'UPDATE persons SET given_name = ?, family_name = ?, phone = ?, birth_date = ? WHERE id = ' . $this->idParameter(),
             [...self::fields($data), $this->idValue($id)],
         );
+    }
+
+    public function saveOfficePerson(string $id, #[SensitiveParameter] PersonRecord $record, bool $create): void
+    {
+        $idParameter = $this->idParameter();
+        $fields = [...self::fields($record->profile), $record->email ?: null, $record->notes !== '' ? $record->notes : null,
+            $record->memberNo !== '' ? $record->memberNo : null];
+        try {
+            if ($create) {
+                $this->db->executeStatement(
+                    "INSERT INTO persons (id, given_name, family_name, phone, birth_date, email, notes, member_no) VALUES ($idParameter, ?, ?, ?, ?, ?, ?, ?)",
+                    [$this->idValue($id), ...$fields],
+                );
+            } else {
+                $this->db->executeStatement(
+                    "UPDATE persons SET given_name = ?, family_name = ?, phone = ?, birth_date = ?, email = ?, notes = ?, member_no = ? WHERE id = $idParameter",
+                    [...$fields, $this->idValue($id)],
+                );
+            }
+        } catch (UniqueConstraintViolationException) {
+            throw new CatalogFailure(409, 'the record already exists', reason: 'duplicate');
+        }
+    }
+
+    public function personMatch(string $id): ?array
+    {
+        /** @var array{id:string,given_name:string,family_name:string,email:?string,member_no:?string}|false $row */
+        $row = $this->db->fetchAssociative(
+            'SELECT id, given_name, family_name, email, member_no FROM persons WHERE id = ' . $this->idParameter(),
+            [$this->idValue($id)],
+        );
+        if ($row === false) {
+            return null;
+        }
+
+        return ['id' => $this->id($row['id']), 'givenName' => $row['given_name'], 'familyName' => $row['family_name']]
+            + array_filter(['email' => $row['email'], 'memberNo' => $row['member_no']], static fn(?string $value): bool => $value !== null && $value !== '');
+    }
+
+    public function dependentIds(string $guardian): array
+    {
+        return array_map($this->id(...), $this->db->fetchFirstColumn(
+            'SELECT dependent_id FROM person_guardians WHERE guardian_id = ' . $this->idParameter() . ' ORDER BY dependent_id',
+            [$this->idValue($guardian)],
+        ));
+    }
+
+    public function linkGuardian(string $guardian, string $dependent): void
+    {
+        $parameter = $this->idParameter();
+        try {
+            $this->db->executeStatement(
+                "INSERT INTO person_guardians (guardian_id, dependent_id) VALUES ($parameter, $parameter)",
+                [$this->idValue($guardian), $this->idValue($dependent)],
+            );
+        } catch (UniqueConstraintViolationException) {
+            throw new CatalogFailure(409, 'the guardian is linked already', reason: 'duplicate');
+        } catch (ForeignKeyConstraintViolationException) {
+            throw new CatalogFailure(404, 'resource not found');
+        }
+    }
+
+    public function unlinkGuardian(string $guardian, string $dependent): bool
+    {
+        $parameter = $this->idParameter();
+
+        return $this->db->executeStatement(
+            "DELETE FROM person_guardians WHERE guardian_id = $parameter AND dependent_id = $parameter",
+            [$this->idValue($guardian), $this->idValue($dependent)],
+        ) === 1;
     }
 
     public function createDependent(string $id, string $guardian, #[SensitiveParameter] PersonData $data): void
