@@ -1490,7 +1490,7 @@ backends.
           authentication draft.
     - [ ] Enable `receipt_pdf_downloads`, `receipt_lists_and_search`, `receipt_settings_and_logo`,
           `pass_type_administration` and `pass_lists` in PHP CI after PHP sign-in lands.
-  - [ ] Settings, branding, themes, `init` (ADR 0013, 0018)
+  - [x] Settings, branding, themes, `init` (ADR 0013, 0018)
     - [x] Initialize school settings and issue the first administrator's one-time setup link
           through `init` or the web installer on PostgreSQL, MySQL and MariaDB.
     - [x] Serve the school profile and branding cards, including theme selection, accent contrast,
