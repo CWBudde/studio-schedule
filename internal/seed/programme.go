@@ -385,6 +385,14 @@ func programme() schoolSpec {
 				courseType: "Creative Dance", days: -1, expiresDays: 14,
 			},
 		},
+		// drafts are saved, never shown or mailed until the office publishes them.
+		drafts: []announcementSpec{
+			{
+				title: "Open day in spring",
+				body: "We open our doors on a Saturday in spring: trial lessons for every age, " +
+					"and the instructors answer your questions.\nThe date follows.",
+			},
+		},
 		// Two pairs of persons the office's duplicate detection finds (ADR
 		// 0015): Lena twice with the same email, ignoring case (a strong
 		// match), and Jonas twice with the same name, once without a birth date

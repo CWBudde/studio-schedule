@@ -162,7 +162,135 @@ async function toastTitled(title: string) {
 /** When the API saved an edit (after every publication time of the fixtures but the future ones). */
 const savedAt = '2026-11-02T08:00:00Z';
 
+/** A draft, which the office's list puts first (ADR 0014, amendment). */
+const draft: Announcement = {
+  id: id(917),
+  audience: 'everyone',
+  title: 'Open day',
+  body: 'The date follows.',
+  email: true,
+  draft: true,
+  emailRecipients: 0,
+  ...written,
+};
+
+const withDraft = {
+  ...asOffice,
+  '/api/v1/admin/announcements': { body: { items: [draft, ...announcements] } },
+};
+
 describe('AnnouncementsPage', () => {
+  it('lists a draft as not published, to be emailed at publication', async () => {
+    mockApiGet(withDraft);
+
+    renderPage();
+
+    const open = await row('Open day');
+    expect(open.getByText('Draft')).toBeInTheDocument();
+    expect(open.getByText('Not yet')).toBeInTheDocument();
+    expect(open.getByText('Emailed at publication')).toBeInTheDocument();
+  });
+
+  it('saves a new announcement as a draft without asking about its email or keeping a date', async () => {
+    mockApiGet(asOffice);
+    const post = mockApiPost({
+      '/api/v1/admin/announcements': ({ body }) => ({
+        status: 201,
+        body: { id: id(925), emailRecipients: 0, ...written, ...(body as object) },
+      }),
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const sheet = await openAdd(user);
+    await user.type(sheet.getByLabelText('Title'), 'Open day');
+    await user.type(sheet.getByLabelText('Text'), 'The date follows.');
+    await user.type(sheet.getByLabelText('Publish on'), '2099-05-01');
+    await user.type(sheet.getByLabelText('Publication time'), '09:00');
+    await user.click(sheet.getByRole('switch', { name: 'Also send by email' }));
+    await user.click(sheet.getByRole('button', { name: 'Save as draft' }));
+
+    expect(await screen.findByText('“Open day” is saved as a draft.')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith('/api/v1/admin/announcements', {
+      body: {
+        audience: 'everyone',
+        title: 'Open day',
+        body: 'The date follows.',
+        email: true,
+        draft: true,
+      },
+    });
+  });
+
+  it('saves a draft whatever its unfinished publication date says', async () => {
+    mockApiGet(asOffice);
+    const post = mockApiPost({
+      '/api/v1/admin/announcements': ({ body }) => ({
+        status: 201,
+        body: { id: id(926), emailRecipients: 0, ...written, ...(body as object) },
+      }),
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const sheet = await openAdd(user);
+    await user.type(sheet.getByLabelText('Title'), 'Summer show');
+    await user.type(sheet.getByLabelText('Text'), 'The date follows.');
+    // A date without its time, and later than the expiry.
+    await user.type(sheet.getByLabelText('Publish on'), '2099-05-01');
+    await user.type(sheet.getByLabelText('Expires on'), '2099-04-01');
+    await user.type(sheet.getByLabelText('Expiry time'), '18:00');
+    await user.click(sheet.getByRole('button', { name: 'Save as draft' }));
+
+    expect(await screen.findByText('“Summer show” is saved as a draft.')).toBeInTheDocument();
+    expect(post).toHaveBeenCalledWith('/api/v1/admin/announcements', {
+      body: expect.objectContaining({ draft: true, expiresAt: '2099-04-01T16:00:00.000Z' }),
+    });
+    expect(post.mock.calls[0]?.[1]).not.toHaveProperty('body.publishAt');
+  });
+
+  it('publishes a draft, asking before its email', async () => {
+    mockApiGet(withDraft);
+    mockApiPost({ '/api/v1/admin/announcements/recipients': { body: { recipients: 5 } } });
+    const put = mockApiPut({
+      '/api/v1/admin/announcements/{announcementId}': ({ body }) => ({
+        body: {
+          ...draft,
+          ...(body as object),
+          draft: undefined,
+          publishAt: savedAt,
+          updatedAt: savedAt,
+        },
+      }),
+    });
+    const user = userEvent.setup();
+
+    renderPage();
+    const sheet = await openEdit(user, 'Open day');
+    expect(sheet.getByRole('button', { name: 'Save as draft' })).toBeInTheDocument();
+    await user.click(sheet.getByRole('button', { name: 'Publish' }));
+    await confirmEmail(user);
+
+    expect(
+      await screen.findByText('“Open day” is published; its email is queued.'),
+    ).toBeInTheDocument();
+    expect(put).toHaveBeenCalledWith('/api/v1/admin/announcements/{announcementId}', {
+      params: { path: { announcementId: id(917) } },
+      body: { audience: 'everyone', title: 'Open day', body: 'The date follows.', email: true },
+    });
+  });
+
+  it('saves a published announcement without offering a draft', async () => {
+    mockApiGet(asOffice);
+    const user = userEvent.setup();
+
+    renderPage();
+    const sheet = await openEdit(user, 'Welcome');
+    expect(sheet.getByRole('button', { name: 'Save changes' })).toBeInTheDocument();
+    expect(sheet.queryByRole('button', { name: 'Save as draft' })).not.toBeInTheDocument();
+  });
+
   it('publishes an announcement to the selected event', async () => {
     mockApiGet({
       ...asOffice,

@@ -76,19 +76,26 @@ export function FormSheetActions({
   submitLabel,
   pendingLabel,
   icon,
+  extra,
+  disabled = false,
 }: {
   pending: boolean;
   submitLabel: string;
   pendingLabel?: string;
   icon?: ReactNode;
+  /** A further action beside the submit button, e.g. saving as a draft. */
+  extra?: ReactNode;
+  /** Disables the submit button without showing it pending (while `extra` runs). */
+  disabled?: boolean;
 }) {
   const { t } = useTranslation('admin');
   return (
     <div className="flex flex-wrap gap-2 pt-2">
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending || disabled}>
         <PendingIcon pending={pending} icon={icon} />
         {pending ? (pendingLabel ?? t('form.saving')) : submitLabel}
       </Button>
+      {extra}
       <SheetClose asChild>
         <Button type="button" variant="outline">
           {t('form.cancel')}

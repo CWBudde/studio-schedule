@@ -1170,14 +1170,14 @@ type AnnouncementRepo interface {
 	// otherwise.
 	Lock(ctx context.Context, id domain.AnnouncementID) (domain.Announcement, error)
 	Delete(ctx context.Context, id domain.AnnouncementID) error
-	// List returns all announcements, newest first: ordered by PublishAt
-	// and ID, both descending.
+	// List returns all announcements, the drafts (zero PublishAt) first,
+	// then newest first: ordered by PublishAt and ID, both descending.
 	List(ctx context.Context) ([]domain.Announcement, error)
 	// ListShown returns the announcements shown at now (published at or
-	// before it, not expired at it), ordered like List.
+	// before it, not expired at it; never a draft), ordered like List.
 	ListShown(ctx context.Context, now time.Time) ([]domain.Announcement, error)
 	// ListDueForMail returns at most limit announcements to be emailed
-	// whose PublishAt is at or before now and that are not emailed yet
+	// (never a draft) whose PublishAt is at or before now and that are not emailed yet
 	// (being sent included), ordered by PublishAt and ID. Like OutboxRepo.ListDue it needs a
 	// ReadWrite transaction and skips those another transaction has locked.
 	ListDueForMail(ctx context.Context, now time.Time, limit int) ([]domain.Announcement, error)

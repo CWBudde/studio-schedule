@@ -52,17 +52,20 @@ func registerAnnouncements(api huma.API, h *handlers) {
 		Method:      http.MethodGet,
 		Path:        BasePath + "/admin/announcements",
 		Summary:     "List all announcements",
-		Description: "Returns every announcement, scheduled and expired ones included, newest publication first.",
-		Tags:        []string{"announcements"},
+		Description: "Returns every announcement, drafts, scheduled and expired ones included: the drafts first, then " +
+			"newest publication first.",
+		Tags: []string{"announcements"},
 	}, h.listAllAnnouncements)
 
 	register(api, AccessOffice, write(huma.Operation{
 		OperationID: "createAnnouncement",
 		Method:      http.MethodPost,
 		Path:        BasePath + "/admin/announcements",
-		Summary:     "Publish an announcement",
+		Summary:     "Publish an announcement or save a draft",
 		Description: fmt.Sprintf("Publishes an announcement at `publishAt` (default: now) until `expiresAt` "+
-			"(optional). The title is one line of 1 to %d characters, the text plain text of 1 to %d (line "+
+			"(optional), or with `draft` saves it as a draft without `publishAt` (a 422 with one): neither "+
+			"shown nor mailed, and not counted in the daily limit, until an update without `draft` publishes "+
+			"it. The title is one line of 1 to %d characters, the text plain text of 1 to %d (line "+
 			"breaks normalized to `\\n`, trimmed, no control characters but line breaks and tabs, no invisible "+
 			"format characters but the zero-width joiners; a 422 on the field otherwise). With `email`, it is "+
 			"mailed once to its audience, each address once, in its account's language: at once if it publishes "+
@@ -79,8 +82,10 @@ func registerAnnouncements(api huma.API, h *handlers) {
 		Path:        BasePath + "/admin/announcements/{announcementId}",
 		Summary:     "Update an announcement",
 		Description: "Replaces an announcement's fields, like `createAnnouncement`, until it expires; an expired " +
-			"one is a 409 `expired`. An edit never mails again: one emailed already stays emailed, whatever " +
-			"`email` says; one not emailed yet is emailed like a new one.",
+			"one is a 409 `expired`. A draft stays one with `draft` and is published like a new one without it; " +
+			"its expiry may have passed, but the new one must lie in the future. A published announcement " +
+			"never becomes a draft again (a 422 on `draft`). An edit never mails again: one emailed already " +
+			"stays emailed, whatever `email` says; one not emailed yet is emailed like a new one.",
 	}), h.updateAnnouncement)
 
 	register(api, AccessOffice, write(huma.Operation{
@@ -126,15 +131,16 @@ type AnnouncementData struct {
 
 	Title     string    `doc:"One line." json:"title" maxLength:"500" minLength:"1"`
 	Body      string    `doc:"Plain text with line breaks." json:"body" maxLength:"20000" minLength:"1"`
-	PublishAt time.Time `doc:"When it shows; default: now. It may lie in the future." json:"publishAt,omitzero" required:"false"`
+	PublishAt time.Time `doc:"When it shows; default: now. It may lie in the future. Absent for a draft, which must not have one (a 422)." json:"publishAt,omitzero" required:"false"`
 	ExpiresAt time.Time `doc:"When it stops showing; absent: never." json:"expiresAt,omitzero" required:"false"`
-	Email     bool      `doc:"Whether it is mailed to its audience once, at publishAt." json:"email,omitempty" required:"false"`
+	Email     bool      `doc:"Whether it is mailed to its audience once, at publishAt (a draft's once it is published)." json:"email,omitempty" required:"false"`
+	Draft     bool      `doc:"A draft: saved, but neither shown nor mailed, and not counted in the daily mail limit, until a write without draft publishes it. A published announcement cannot become a draft again (a 422)." json:"draft,omitempty" required:"false"`
 }
 
 func (d AnnouncementData) service() service.AnnouncementInput {
 	return service.AnnouncementInput{
 		AnnouncementAudience: d.AnnouncementAudienceData.service(), Title: d.Title, Body: d.Body,
-		PublishAt: d.PublishAt, ExpiresAt: d.ExpiresAt, Email: d.Email,
+		PublishAt: d.PublishAt, ExpiresAt: d.ExpiresAt, Email: d.Email, Draft: d.Draft,
 	}
 }
 
@@ -194,7 +200,7 @@ type Announcement struct {
 
 // AnnouncementList is the response body of listAllAnnouncements.
 type AnnouncementList struct {
-	Items []Announcement `doc:"All announcements, newest publication first." json:"items" nullable:"false"`
+	Items []Announcement `doc:"All announcements: the drafts first, then newest publication first." json:"items" nullable:"false"`
 }
 
 // AnnouncementListOutput is the response of listAllAnnouncements.
@@ -274,7 +280,7 @@ func (h *handlers) listAllAnnouncements(ctx context.Context, _ *struct{}) (*Anno
 
 	items := make([]Announcement, 0, len(entries))
 	for _, e := range entries {
-		items = append(items, announcementBody(e))
+		items = append(items, NewAnnouncement(e))
 	}
 
 	return &AnnouncementListOutput{Body: AnnouncementList{Items: items}}, nil
@@ -330,11 +336,13 @@ func (h *handlers) announcementOutput(
 			return nil, h.toHTTPError(ctx, err)
 		}
 
-		return &AnnouncementOutput{Body: announcementBody(e)}, nil
+		return &AnnouncementOutput{Body: NewAnnouncement(e)}, nil
 	}
 }
 
-func announcementBody(e service.AnnouncementEntry) Announcement {
+// NewAnnouncement is an announcement as the office lists it (the body of
+// createAnnouncement and the items of listAllAnnouncements).
+func NewAnnouncement(e service.AnnouncementEntry) Announcement {
 	a := e.Announcement
 	out := Announcement{
 		ID: a.ID, EventTitle: e.Event.Title,
@@ -344,6 +352,7 @@ func announcementBody(e service.AnnouncementEntry) Announcement {
 				LessonID: a.LessonID, EventID: a.EventID,
 			},
 			Title: a.Title, Body: a.Body, PublishAt: a.PublishAt, ExpiresAt: a.ExpiresAt, Email: a.Email,
+			Draft: a.Draft(),
 		},
 		EmailedAt: a.EmailedAt, EmailRecipients: a.EmailRecipients, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 	}

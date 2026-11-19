@@ -24,7 +24,7 @@ import (
 // programmeDigest is the SHA-256 of the programme school's dataset for
 // FixedDemoAnchor, JSON-encoded. A deliberate change to the programme data
 // updates it: the test prints the new digest when it fails.
-const programmeDigest = "09d2f6bf0d50573bc23ac88224e7b9ca7bb1af0ff65e3c06a6661e2da421e59f"
+const programmeDigest = "7946984839b4d7f4d9b9bf872dd35bba074c6080e1b13eef258d3435f3e098d1"
 
 // TestProgrammeDatasetUnchanged pins every field of the programme school's
 // dataset, so that building the demo schools from their own tables leaves

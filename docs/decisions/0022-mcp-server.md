@@ -152,3 +152,17 @@ group goes with them: `--allow-writes` takes `bookings`, `lessons`, `mail` and `
 `announcements` is an unknown group (exit 2). The prompt `canceled_lesson_announcement` still
 drafts the text, which the office publishes in the app. A draft state, and the group with it, can
 come back as its own item.
+
+## Amendment (2026-11-18): announcement drafts
+
+Announcements have a draft state now (ADR 0014, amendment of 2026-11-18), so the `announcements`
+write group is back, in its documented place (`bookings`, `lessons`, `announcements`, `mail`,
+`jobs`). It holds one tool, `draft_announcement` (office). The tool calls
+`AnnouncementService.Create` with `Draft` and returns the body of `createAnnouncement`. Its input
+takes no publish time, and no tool edits, publishes or deletes an announcement: the office reviews
+the draft and publishes it in the app. Nothing reaches anyone before then, so the tool is not
+destructive. It is not idempotent either, because each call saves a new draft. The tool is listed
+without `--personal-data`; without the flag its result leaves out the author's name. It has no
+command, so it has no parity test (as for `free_rooms`). The prompt `canceled_lesson_announcement`
+tells the model to save its text with the tool when the tool is listed, and to give the text only
+otherwise.

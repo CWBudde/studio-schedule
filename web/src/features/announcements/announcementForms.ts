@@ -25,9 +25,11 @@ const length = (s: string) => [...s].length;
 /**
  * The form of an announcement, its dates and times in the school's time
  * zone `timeZone`. Every field is checked at once, and the output is the
- * request body (without a publication time: now).
+ * request body (without a publication time: now). The form of a `draft`
+ * leaves out the publication fields, which a draft never keeps, and checks
+ * its expiry against now.
  */
-export const announcementSchema = (timeZone: string) =>
+export const announcementSchema = (timeZone: string, draft = false) =>
   z
     .object({
       title: z.string(),
@@ -93,7 +95,7 @@ export const announcementSchema = (timeZone: string) =>
         }
         return instantAt(date, time, timeZone);
       };
-      const publishAt = instant(v.publishDate, v.publishTime, 'publishDate');
+      const publishAt = draft ? undefined : instant(v.publishDate, v.publishTime, 'publishDate');
       const expiresAt = instant(v.expiresDate, v.expiresTime, 'expiresDate');
       if (expiresAt && Date.parse(expiresAt) <= Date.parse(publishAt ?? new Date().toISOString())) {
         issue('expiresDate', 'expiresBeforePublish');
@@ -106,6 +108,7 @@ export const announcementSchema = (timeZone: string) =>
         ...(publishAt ? { publishAt } : {}),
         ...(expiresAt ? { expiresAt } : {}),
         ...(v.email ? { email: true } : {}),
+        ...(draft ? { draft: true } : {}),
       };
     });
 
@@ -182,7 +185,6 @@ export const audienceOf = ({
   ...(eventId ? { eventId } : {}),
 });
 
-/** Whether an announcement is scheduled, shown or expired at `now`. */
 /**
  * Whether the mailing of the announcement has begun: it is emailed, or being
  * sent (some addresses have it). Its email can no longer be turned off.
@@ -191,8 +193,13 @@ export function mailStarted(a: Pick<Announcement, 'emailedAt' | 'emailRecipients
   return Boolean(a.emailedAt) || a.emailRecipients > 0;
 }
 
+/**
+ * Whether an announcement is a draft (no publication time: neither shown nor
+ * mailed until the office publishes it), scheduled, shown or expired at `now`.
+ */
 export function statusAt(a: Pick<Announcement, 'publishAt' | 'expiresAt'>, now: number) {
-  if (a.publishAt && Date.parse(a.publishAt) > now) return 'scheduled' as const;
+  if (!a.publishAt) return 'draft' as const;
+  if (Date.parse(a.publishAt) > now) return 'scheduled' as const;
   if (a.expiresAt && Date.parse(a.expiresAt) <= now) return 'expired' as const;
   return 'shown' as const;
 }

@@ -1,6 +1,8 @@
 package seed
 
 import (
+	"time"
+
 	"github.com/cwbudde/studio-schedule/internal/domain"
 	"github.com/cwbudde/studio-schedule/internal/ids"
 )
@@ -14,15 +16,20 @@ type announcementSpec struct {
 	expiresDays int
 }
 
-// announcements adds the school's announcements, written by the office.
-func (b *builder) announcements(anchor domain.Date) {
+// announcements adds announcements written by the office: drafts (without
+// a publish time; days is ignored) or published ones.
+func (b *builder) announcements(anchor domain.Date, specs []announcementSpec, drafts bool) {
 	office := b.accountOf(lookup(b.persons, b.s.office))
 
-	for _, spec := range b.s.announcements {
+	for _, spec := range specs {
 		publish := anchor.AddDays(spec.days).At(at(9, 0), b.loc)
 		a := domain.Announcement{
 			ID: ids.New[domain.AnnouncementID](b.seq), AuthorID: office, Title: spec.title, Body: spec.body,
 			Audience: domain.AudienceEveryone, PublishAt: publish, CreatedAt: publish, UpdatedAt: publish,
+		}
+
+		if drafts {
+			a.PublishAt = time.Time{}
 		}
 
 		if spec.courseType != "" {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -144,12 +145,19 @@ func TestAnnouncementFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(written.Items) == 0 || written.Items[0].ID != ann.ID || written.Items[0].EmailedAt == "" ||
-		written.Items[0].EmailRecipients == 0 {
+	// The newest after the demo's drafts, which the office's list puts first.
+	at := slices.IndexFunc(written.Items, func(i struct {
+		ID, EmailedAt   string
+		EmailRecipients int
+	},
+	) bool {
+		return i.EmailedAt != ""
+	})
+	if at < 0 || written.Items[at].ID != ann.ID || written.Items[at].EmailRecipients == 0 {
 		t.Fatalf("after the job: %+v", written.Items)
 	}
 
-	ann.EmailRecipients = written.Items[0].EmailRecipients
+	ann.EmailRecipients = written.Items[at].EmailRecipients
 
 	type item struct {
 		ID, Title string
@@ -219,6 +227,70 @@ func TestAnnouncementFlow(t *testing.T) {
 		`{"audience":"class","classId":"0190a000-0000-7000-8000-000000000999","title":"x","body":"y"}`, office)
 	if !strings.Contains(string(body), `"location":"body.classId"`) {
 		t.Errorf("unknown class: %s", body)
+	}
+}
+
+// TestAnnouncementDraftFlow: the office saves a draft, which members do not
+// see, and publishes it; a draft has no publish time, and a published
+// announcement does not become a draft again (ADR 0014, amendment).
+func TestAnnouncementDraftFlow(t *testing.T) {
+	t.Parallel()
+
+	a := newAuthApp(t, app.Deps{})
+	office := a.login(demoLogin(t, domain.RoleOffice).Email)
+	member := a.login(demoLogin(t, domain.RoleMember).Email)
+	const draftBody = `{"audience":"everyone","title":"Summer party","body":"Save the date.","draft":true}`
+
+	created := a.expect(http.StatusCreated, http.MethodPost, "/api/v1/admin/announcements", draftBody, office)
+
+	var ann struct {
+		ID        string
+		Draft     bool
+		PublishAt string
+	}
+	if err := json.Unmarshal(created, &ann); err != nil {
+		t.Fatal(err)
+	}
+
+	if !ann.Draft || ann.PublishAt != "" {
+		t.Fatalf("created %s, want a draft without publishAt", created)
+	}
+
+	seen := func() bool {
+		var list struct{ Items []struct{ ID string } }
+		if err := json.Unmarshal(a.expect(http.StatusOK, http.MethodGet, "/api/v1/announcements", "", member), &list); err != nil {
+			t.Fatal(err)
+		}
+
+		return slices.ContainsFunc(list.Items, func(i struct{ ID string }) bool { return i.ID == ann.ID })
+	}
+
+	if seen() {
+		t.Fatal("the member sees the draft")
+	}
+
+	a.expect(http.StatusNotFound, http.MethodPost, "/api/v1/announcements/"+ann.ID+"/dismiss", "", member)
+
+	body := a.expect(http.StatusUnprocessableEntity, http.MethodPut, "/api/v1/admin/announcements/"+ann.ID,
+		`{"audience":"everyone","title":"Summer party","body":"Save the date.","draft":true,"publishAt":"2030-01-01T10:00:00Z"}`,
+		office)
+	if !strings.Contains(string(body), `"location":"body.publishAt"`) {
+		t.Errorf("draft with publishAt: %s", body)
+	}
+
+	published := a.expect(http.StatusOK, http.MethodPut, "/api/v1/admin/announcements/"+ann.ID,
+		`{"audience":"everyone","title":"Summer party","body":"Save the date."}`, office)
+	if strings.Contains(string(published), `"draft"`) || !strings.Contains(string(published), `"publishAt"`) {
+		t.Errorf("published %s", published)
+	}
+
+	if !seen() {
+		t.Error("the member does not see the published draft")
+	}
+
+	body = a.expect(http.StatusUnprocessableEntity, http.MethodPut, "/api/v1/admin/announcements/"+ann.ID, draftBody, office)
+	if !strings.Contains(string(body), `"location":"body.draft"`) {
+		t.Errorf("published back to a draft: %s", body)
 	}
 }
 

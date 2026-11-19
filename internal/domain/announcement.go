@@ -10,7 +10,8 @@ import (
 // Announcements (ADR 0014): what the office tells everyone, a role, the
 // members of a class or a course type, or the participants of one lesson,
 // shown in the app from PublishAt until ExpiresAt and optionally emailed
-// once.
+// once. One without a PublishAt is a draft: saved, never shown or mailed
+// until the office publishes it.
 
 // Bounds of announcements.
 const (
@@ -72,11 +73,13 @@ type Announcement struct {
 	CourseTypeID CourseTypeID
 	LessonID     LessonID
 	EventID      EventID `json:",omitzero"`
-	// PublishAt is when it shows; it may lie in the future.
+	// PublishAt is when it shows; it may lie in the future. Zero: a draft,
+	// neither shown nor mailed (nor counted in the daily limit).
 	PublishAt time.Time
 	// ExpiresAt is when it stops showing (optional).
 	ExpiresAt time.Time
-	// Email tells that it is emailed to its audience once, at PublishAt.
+	// Email tells that it is emailed to its audience once, at PublishAt (a
+	// draft once it is published).
 	Email bool
 	// EmailedAt is when it was emailed to its last recipient (or found to
 	// reach nobody, or to have expired before it was sent); zero until
@@ -118,7 +121,6 @@ func (a Announcement) Validate() error {
 		on("lessonId", (a.Audience == AudienceLesson) == !a.LessonID.IsZero(),
 			"a lesson is needed exactly for the lesson audience"),
 		on("eventId", (a.Audience == AudienceEvent) == !a.EventID.IsZero(), "an event is needed exactly for the event audience"),
-		on("publishAt", !a.PublishAt.IsZero(), "publish time must be set"),
 		on("expiresAt", a.ExpiresAt.IsZero() || a.ExpiresAt.After(a.PublishAt), "must expire after it is published"),
 		rule{a.EmailedAt.IsZero() || a.Email, "only an emailed announcement has a mail time"},
 		rule{a.EmailRecipients >= 0, "email recipients must not be negative"},
@@ -127,20 +129,28 @@ func (a Announcement) Validate() error {
 			a.EmailRecipients == 0 || !a.EmailedAt.IsZero() || a.MailCursor != "",
 			"recipients are counted while and when it is emailed",
 		},
+		rule{
+			!a.Draft() || (a.EmailedAt.IsZero() && a.MailCursor == "" && a.EmailRecipients == 0),
+			"a draft is not emailed",
+		},
 		rule{!a.CreatedAt.IsZero(), "announcement creation time must be set"},
 		rule{!a.UpdatedAt.Before(a.CreatedAt), "announcement cannot be updated before it is created"},
 	)
 }
 
+// Draft reports whether the announcement is a draft: it has no publish
+// time, so it is neither shown nor mailed.
+func (a Announcement) Draft() bool { return a.PublishAt.IsZero() }
+
 // ShownAt reports whether the announcement shows at now: published and not
 // expired.
 func (a Announcement) ShownAt(now time.Time) bool {
-	return !a.PublishAt.After(now) && !a.ExpiredAt(now)
+	return !a.Draft() && !a.PublishAt.After(now) && !a.ExpiredAt(now)
 }
 
 // MailPending reports whether the announcement is to be emailed and not
-// (completely) emailed yet: scheduled, or being sent.
-func (a Announcement) MailPending() bool { return a.Email && a.EmailedAt.IsZero() }
+// (completely) emailed yet: scheduled, or being sent. A draft is not.
+func (a Announcement) MailPending() bool { return !a.Draft() && a.Email && a.EmailedAt.IsZero() }
 
 // MailStarted reports whether mailing the announcement has begun: it is
 // emailed, or being sent.

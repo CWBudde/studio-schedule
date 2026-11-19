@@ -201,9 +201,10 @@ func (q *Queries) ListAnnouncementMailings(ctx context.Context, arg ListAnnounce
 }
 
 const listAnnouncements = `-- name: ListAnnouncements :many
-SELECT id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at, email, emailed_at, email_recipients, mail_cursor, created_at, updated_at, event_id FROM announcements ORDER BY publish_at DESC, id DESC
+SELECT id, author_id, title, body, audience, role, class_id, course_type_id, lesson_id, publish_at, expires_at, email, emailed_at, email_recipients, mail_cursor, created_at, updated_at, event_id FROM announcements ORDER BY publish_at DESC NULLS FIRST, id DESC
 `
 
+// Drafts (no publish time) first.
 func (q *Queries) ListAnnouncements(ctx context.Context) ([]Announcement, error) {
 	rows, err := q.db.Query(ctx, listAnnouncements)
 	if err != nil {

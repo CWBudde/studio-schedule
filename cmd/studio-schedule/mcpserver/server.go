@@ -55,19 +55,19 @@ type Options struct {
 // 0022).
 type WriteGroup string
 
-// The write groups. There is no announcements group: an announcement has
-// no draft state, so no tool writes one (ADR 0022, amendment of
-// 2026-11-03).
+// The write groups. The announcements group only saves drafts, which the
+// office publishes (ADR 0022, amendment of 2026-11-18).
 const (
-	WriteBookings WriteGroup = "bookings"
-	WriteLessons  WriteGroup = "lessons"
-	WriteMail     WriteGroup = "mail"
-	WriteJobs     WriteGroup = "jobs"
+	WriteBookings      WriteGroup = "bookings"
+	WriteLessons       WriteGroup = "lessons"
+	WriteAnnouncements WriteGroup = "announcements"
+	WriteMail          WriteGroup = "mail"
+	WriteJobs          WriteGroup = "jobs"
 )
 
 // WriteGroups returns the write groups in their documented order.
 func WriteGroups() []WriteGroup {
-	return []WriteGroup{WriteBookings, WriteLessons, WriteMail, WriteJobs}
+	return []WriteGroup{WriteBookings, WriteLessons, WriteAnnouncements, WriteMail, WriteJobs}
 }
 
 // Valid reports whether g is a write group.

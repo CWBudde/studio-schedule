@@ -145,13 +145,15 @@ func demoAt(anchor domain.Date, s schoolSpec) (Dataset, error) {
 	b.passes(anchor)
 	b.attendance(anchor)
 	b.visitors(anchor)
-	b.announcements(anchor)
+	b.announcements(anchor, b.s.announcements, false)
 	b.duplicates()
 	// After the other entities, so they keep their IDs.
 	b.rental(anchor, s.rental)
 	// Last, so the entities before them keep their IDs; the fees' receipts
 	// follow the passes'.
 	b.events(anchor)
+	// After the events, for the same reason.
+	b.announcements(anchor, b.s.drafts, true)
 
 	return b.d, nil
 }
@@ -198,6 +200,9 @@ type schoolSpec struct {
 	passes []passSpec
 	// announcements are the office's announcements.
 	announcements []announcementSpec
+	// drafts are the office's announcement drafts (ADR 0014, amendment):
+	// their days are ignored.
+	drafts []announcementSpec
 	// duplicates are the persons that the duplicate detection finds in pairs.
 	duplicates []domain.Person
 	// office is the person key of the office worker whose account sells the

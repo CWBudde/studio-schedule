@@ -315,6 +315,14 @@ func werkstatt() schoolSpec {
 				courseType: "Tanzzwerge", days: -1, expiresDays: 14,
 			},
 		},
+		// drafts are saved, never shown or mailed until the office publishes them.
+		drafts: []announcementSpec{
+			{
+				title: "Tag der offenen Tür im Frühling",
+				body: "An einem Samstag im Frühling öffnen wir unsere Türen: Probestunden für jedes Alter, " +
+					"und die Lehrkräfte beantworten Ihre Fragen.\nDer Termin folgt.",
+			},
+		},
 		// Two pairs of persons the office's duplicate detection finds (ADR
 		// 0015): Lea twice with the same email, ignoring case (a strong
 		// match), and Timo twice with the same name, once without a birth

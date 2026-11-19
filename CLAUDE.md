@@ -164,7 +164,9 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   `Announcements().LockMail`); only `SendDue`, the `announcements` job (`app/jobs_communication.go`,
   woken through `Deps.Wake` when one is due now), mails it, in batches with a `MailCursor`. Lock
   order: `LockMail` → the announcement (`Announcements().Lock`); `Update` never writes the mail
-  state (`SetMailState` does).
+  state (`SetMailState` does). A zero `PublishAt` is a draft (`Announcement.Draft`, ADR 0014
+  amendment): never shown, mailed or counted in the limit, listed first; `draft` on a write saves
+  one, a write without it publishes it, and a published one never becomes a draft again.
 - **Mail log:** `service.MailLogService` (`service/mail_log.go`, ADR 0014; `/api/v1/admin/mails`,
   admins only): filtered, paged outbox, bodies never for `mail.SecretLink` templates, requeue of a
   failed mail (audited as `mail-requeued`), and the daily `purge-mail` job. `audit_events` targets
@@ -266,7 +268,8 @@ pnpm -C web exec vitest run src/features/home          # one frontend file or di
   the services and return the `httpapi.New…` documents of the commands they mirror (parity tests in
   `cmd/studio-schedule/mcp_test.go`, goldens in `mcpserver/testdata`); `cmd/studio-schedule/diagnose`
   computes the `doctor` and `db check` reports for both. The write tools (`tools_writes_*.go`) are
-  listed per `--allow-writes` group (`bookings`, `lessons`, `mail`, `jobs`; no `announcements`) with
+  listed per `--allow-writes` group (`bookings`, `lessons`, `announcements` (only
+  `draft_announcement`, which saves a draft), `mail`, `jobs`) with
   `writeAnnotations` in place of `--yes`; `run_job` runs `Options.Jobs` (`cli.Env.Jobs`) and marks
   each job's effect in `jobEffects`, tested against `app.Jobs`. The resources (`resources.go`: `school://`
   settings, timetable and glossary, the templates `lesson://{id}` and `person://{id}`) are listed

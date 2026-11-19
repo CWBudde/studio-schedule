@@ -133,13 +133,13 @@ export interface paths {
         };
         /**
          * List all announcements
-         * @description Returns every announcement, scheduled and expired ones included, newest publication first.
+         * @description Returns every announcement, drafts, scheduled and expired ones included: the drafts first, then newest publication first.
          */
         get: operations["listAllAnnouncements"];
         put?: never;
         /**
-         * Publish an announcement
-         * @description Publishes an announcement at `publishAt` (default: now) until `expiresAt` (optional). The title is one line of 1 to 120 characters, the text plain text of 1 to 4000 (line breaks normalized to `\n`, trimmed, no control characters but line breaks and tabs, no invisible format characters but the zero-width joiners; a 422 on the field otherwise). With `email`, it is mailed once to its audience, each address once, in its account's language: at once if it publishes now, else at `publishAt`. Registered event guests are emailed for event and session audiences. A school day has at most 3 emailed announcements, sent and scheduled together; beyond that a 409 `mail-limit`. An unknown class, course type or lesson is a 422 on its field.
+         * Publish an announcement or save a draft
+         * @description Publishes an announcement at `publishAt` (default: now) until `expiresAt` (optional), or with `draft` saves it as a draft without `publishAt` (a 422 with one): neither shown nor mailed, and not counted in the daily limit, until an update without `draft` publishes it. The title is one line of 1 to 120 characters, the text plain text of 1 to 4000 (line breaks normalized to `\n`, trimmed, no control characters but line breaks and tabs, no invisible format characters but the zero-width joiners; a 422 on the field otherwise). With `email`, it is mailed once to its audience, each address once, in its account's language: at once if it publishes now, else at `publishAt`. Registered event guests are emailed for event and session audiences. A school day has at most 3 emailed announcements, sent and scheduled together; beyond that a 409 `mail-limit`. An unknown class, course type or lesson is a 422 on its field.
          */
         post: operations["createAnnouncement"];
         delete?: never;
@@ -178,7 +178,7 @@ export interface paths {
         get?: never;
         /**
          * Update an announcement
-         * @description Replaces an announcement's fields, like `createAnnouncement`, until it expires; an expired one is a 409 `expired`. An edit never mails again: one emailed already stays emailed, whatever `email` says; one not emailed yet is emailed like a new one.
+         * @description Replaces an announcement's fields, like `createAnnouncement`, until it expires; an expired one is a 409 `expired`. A draft stays one with `draft` and is published like a new one without it; its expiry may have passed, but the new one must lie in the future. A published announcement never becomes a draft again (a 422 on `draft`). An edit never mails again: one emailed already stays emailed, whatever `email` says; one not emailed yet is emailed like a new one.
          */
         put: operations["updateAnnouncement"];
         post?: never;
@@ -3515,7 +3515,9 @@ export interface components {
              * @description When it was written.
              */
             createdAt: string;
-            /** @description Whether it is mailed to its audience once, at publishAt. */
+            /** @description A draft: saved, but neither shown nor mailed, and not counted in the daily mail limit, until a write without draft publishes it. A published announcement cannot become a draft again (a 422). */
+            draft?: boolean;
+            /** @description Whether it is mailed to its audience once, at publishAt (a draft's once it is published). */
             email?: boolean;
             /**
              * Format: int64
@@ -3553,7 +3555,7 @@ export interface components {
             lessonId?: string;
             /**
              * Format: date-time
-             * @description When it shows; default: now. It may lie in the future.
+             * @description When it shows; default: now. It may lie in the future. Absent for a draft, which must not have one (a 422).
              */
             publishAt?: string;
             /**
@@ -3641,7 +3643,9 @@ export interface components {
              * @description The course type; only with audience course-type.
              */
             courseTypeId?: string;
-            /** @description Whether it is mailed to its audience once, at publishAt. */
+            /** @description A draft: saved, but neither shown nor mailed, and not counted in the daily mail limit, until a write without draft publishes it. A published announcement cannot become a draft again (a 422). */
+            draft?: boolean;
+            /** @description Whether it is mailed to its audience once, at publishAt (a draft's once it is published). */
             email?: boolean;
             /**
              * Format: uuid
@@ -3660,7 +3664,7 @@ export interface components {
             lessonId?: string;
             /**
              * Format: date-time
-             * @description When it shows; default: now. It may lie in the future.
+             * @description When it shows; default: now. It may lie in the future. Absent for a draft, which must not have one (a 422).
              */
             publishAt?: string;
             /**
@@ -3717,7 +3721,7 @@ export interface components {
             startsAt: string;
         };
         AnnouncementList: {
-            /** @description All announcements, newest publication first. */
+            /** @description All announcements: the drafts first, then newest publication first. */
             items: components["schemas"]["Announcement"][];
         };
         AnonymizeResult: {

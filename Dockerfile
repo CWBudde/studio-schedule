@@ -33,7 +33,7 @@ RUN VITE_BASE=/ pnpm build
 
 # ---------------------------------------------------------------- server
 
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24 AS server
+FROM --platform=$BUILDPLATFORM golang:1.27.4-alpine3.24 AS server
 
 WORKDIR /src
 

@@ -947,7 +947,13 @@ func TestAnnouncementValidate(t *testing.T) {
 			"guest role": func(a *domain.Announcement) {
 				a.Audience, a.ClassID, a.Role = domain.AudienceRole, domain.ClassID{}, domain.RoleGuest
 			},
-			"no publish":       func(a *domain.Announcement) { a.PublishAt = time.Time{} },
+			"mailed draft": func(a *domain.Announcement) { a.PublishAt = time.Time{} },
+			"sending draft": func(a *domain.Announcement) {
+				a.PublishAt, a.EmailedAt, a.EmailRecipients, a.MailCursor = time.Time{}, time.Time{}, 0, "a@example.org"
+			},
+			"counted draft": func(a *domain.Announcement) {
+				a.PublishAt, a.EmailedAt, a.MailCursor = time.Time{}, time.Time{}, "a@example.org"
+			},
 			"expires at pub":   func(a *domain.Announcement) { a.ExpiresAt = a.PublishAt },
 			"mailed, no email": func(a *domain.Announcement) { a.Email = false },
 			"counted unmailed": func(a *domain.Announcement) { a.EmailedAt = time.Time{} },
@@ -993,6 +999,33 @@ func TestAnnouncementValidate(t *testing.T) {
 		a.ExpiresAt = time.Time{}
 		if !a.ShownAt(t0.Add(1000 * time.Hour)) {
 			t.Error("an announcement without expiry stops showing")
+		}
+	})
+
+	t.Run("Draft", func(t *testing.T) {
+		t.Parallel()
+
+		// A draft has no publish time: it is valid, never shown and never
+		// mailed, whatever its email says, until it is published.
+		draft := domain.Announcement{
+			ID: newID[domain.AnnouncementID](), AuthorID: newID[domain.AccountID](), Title: "Soon", Body: "Hi",
+			Audience: domain.AudienceEveryone, ExpiresAt: t0.Add(time.Hour), Email: true, CreatedAt: t0,
+			UpdatedAt: t0,
+		}
+		if err := draft.Validate(); err != nil {
+			t.Fatalf("draft: %v", err)
+		}
+
+		if !draft.Draft() || draft.ShownAt(t0) || draft.MailPending() {
+			t.Errorf("draft: Draft %v, ShownAt %v, MailPending %v; want true, false, false",
+				draft.Draft(), draft.ShownAt(t0), draft.MailPending())
+		}
+
+		published := draft
+		published.PublishAt = t0
+		if published.Draft() || !published.ShownAt(t0) || !published.MailPending() {
+			t.Errorf("published: Draft %v, ShownAt %v, MailPending %v; want false, true, true",
+				published.Draft(), published.ShownAt(t0), published.MailPending())
 		}
 	})
 

@@ -69,6 +69,7 @@ func TestWriteToolsPerGroup(t *testing.T) {
 	}{
 		{WriteBookings, []string{"book_lesson", "cancel_booking"}},
 		{WriteLessons, []string{"cancel_lesson"}},
+		{WriteAnnouncements, []string{"draft_announcement"}},
 		{WriteMail, []string{"requeue_mail"}},
 		{WriteJobs, []string{"run_job"}},
 	} {
@@ -184,15 +185,15 @@ func TestWriteToolsNeedTheirGroup(t *testing.T) {
 }
 
 // TestWriteToolsPersonalData: without --personal-data the booking tools
-// and requeue_mail are not listed even with their groups; cancel_lesson
-// and run_job are.
+// and requeue_mail are not listed even with their groups; cancel_lesson,
+// draft_announcement and run_job are.
 func TestWriteToolsPersonalData(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
 	cs := f.session(t, demoAdmin, Options{AllowWrites: WriteGroups()}, registry)
 
-	if got, want := wtWrites(toolNames(t, cs)), []string{"cancel_lesson", "run_job"}; !slices.Equal(got, want) {
+	if got, want := wtWrites(toolNames(t, cs)), []string{"cancel_lesson", "draft_announcement", "run_job"}; !slices.Equal(got, want) {
 		t.Errorf("without --personal-data the write tools are %v, want %v", got, want)
 	}
 
@@ -217,7 +218,7 @@ func TestWriteToolsRoles(t *testing.T) {
 		tools []string
 	}{
 		{demoAdmin, writeTools},
-		{demoOffice, []string{"book_lesson", "cancel_booking", "cancel_lesson"}},
+		{demoOffice, []string{"book_lesson", "cancel_booking", "cancel_lesson", "draft_announcement"}},
 		{demoInstructor, nil},
 		{demoMember, nil},
 	} {
@@ -244,11 +245,12 @@ func TestWriteToolsAnnotations(t *testing.T) {
 	}
 
 	want := map[string]struct{ destructive, idempotent, openWorld bool }{
-		"book_lesson":    {false, true, false},
-		"cancel_booking": {true, true, false},
-		"cancel_lesson":  {true, true, false},
-		"requeue_mail":   {true, false, false},
-		"run_job":        {true, false, true},
+		"book_lesson":        {false, true, false},
+		"cancel_booking":     {true, true, false},
+		"cancel_lesson":      {true, true, false},
+		"draft_announcement": {false, false, false},
+		"requeue_mail":       {true, false, false},
+		"run_job":            {true, false, true},
 	}
 
 	var seen []string
@@ -293,8 +295,11 @@ func wtArgs(m wmMails) map[string]map[string]any {
 		"book_lesson":    {"lessonId": wtBookable, "personId": wtUnbooked},
 		"cancel_booking": {"lessonId": wtBookable, "personId": wtBooked},
 		"cancel_lesson":  {"lessonId": wtCancelable, "note": "The studio's heating is broken."},
-		"requeue_mail":   {"mailId": m.failed.String()},
-		"run_job":        {"name": "generate-lessons"},
+		"draft_announcement": {
+			"title": "Heating broken", "body": "Today's lessons are canceled.", "audience": "everyone",
+		},
+		"requeue_mail": {"mailId": m.failed.String()},
+		"run_job":      {"name": "generate-lessons"},
 	}
 }
 
@@ -317,12 +322,13 @@ func wtAnnouncements(t *testing.T, f *fixture) []domain.Announcement {
 	return out
 }
 
-// TestWriteToolsNoAnnouncements: no tool writes an announcement (ADR
-// 0022, amendment of 2026-11-03). A session with every flag calls every
-// tool it lists, each on its happy path, and the store's announcements
-// are as they were; the table of arguments must cover every listed tool,
-// so a new tool is called here too.
-func TestWriteToolsNoAnnouncements(t *testing.T) {
+// TestWriteToolsOnlyDraftAnnouncements: no tool but draft_announcement
+// writes an announcement, and it only adds a draft (ADR 0022, amendments).
+// A session with every flag calls every tool it lists, each on its happy
+// path, and the store's announcements are as they were but for the one new
+// draft; the table of arguments must cover every listed tool, so a new
+// tool is called here too.
+func TestWriteToolsOnlyDraftAnnouncements(t *testing.T) {
 	t.Parallel()
 
 	f, m := wmFixture(t)
@@ -345,8 +351,16 @@ func TestWriteToolsNoAnnouncements(t *testing.T) {
 		}
 	}
 
-	if after := wtAnnouncements(t, f); !reflect.DeepEqual(after, before) {
-		t.Errorf("the announcements changed:\n%+v\nbefore:\n%+v", after, before)
+	after := wtAnnouncements(t, f)
+	added := slices.DeleteFunc(slices.Clone(after), func(a domain.Announcement) bool {
+		return slices.ContainsFunc(before, func(b domain.Announcement) bool { return b.ID == a.ID })
+	})
+	kept := slices.DeleteFunc(slices.Clone(after), func(a domain.Announcement) bool {
+		return slices.ContainsFunc(added, func(b domain.Announcement) bool { return b.ID == a.ID })
+	})
+
+	if len(added) != 1 || !added[0].Draft() || added[0].Title != "Heating broken" || !reflect.DeepEqual(kept, before) {
+		t.Errorf("the announcements changed beyond one draft:\n%+v\nbefore:\n%+v", after, before)
 	}
 
 	// The writes happened: the comparison is not of a session that wrote

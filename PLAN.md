@@ -1150,7 +1150,7 @@ command groups by need: recovery and diagnosis first, then data, then reports.
       CLAUDE.md code map lists the groups, `db check`'s `IntegrityService`, the shared helpers
       and two useful commands
 
-## Phase 12 — MCP server
+## Phase 12 — MCP server — ✅ DONE (2026-11-18)
 
 Goal: an assistant (Claude Desktop, Claude Code or any other MCP client) can work with a school.
 It can answer "who is on the waiting list for Thursday's ballet class?", find a free room, draft an
@@ -1234,10 +1234,19 @@ resources and prompts, then opt-in writes, then the remote transport if the ADR 
       decision (ADR 0022, amendment 2026-11-03): no announcement draft, because announcements
       have no draft state; the `announcements` group is gone (`--allow-writes announcements`
       exits 2)
-- [ ] Announcement drafts for the assistant: a draft state for announcements (saved, never
+- [x] Announcement drafts for the assistant: a draft state for announcements (saved, never
       mailed or shown until the office publishes it), then a `draft_announcement` tool in an
       `announcements` write group. Its own item by the ADR 0022 amendment; decide the draft state
-      first, and ask
+      first, and ask (2026-11-18) — asked: a zero `PublishAt` is a draft, the office drafts in the
+      web too, the group holds `draft_announcement` only. ADR 0014 and 0022 amendments of
+      2026-11-18; migration 00039 (`publish_at` nullable, a draft has no mail state); drafts are
+      listed first, never shown, dismissed, mailed or counted in the daily limit; `draft` on a
+      write saves one, a write without it publishes it, a published one never becomes a draft
+      (422). The announcement form's "Save as draft" and the list's Draft status; a demo draft
+      "Open day in spring" in both schools (built last, so the seed's IDs stay);
+      `draft_announcement` (office, listed without `--personal-data`, author left out then), the
+      `canceled_lesson_announcement` prompt saves with it when listed; e2e
+      `announcements.spec.ts` publishes the demo draft
 - [x] Remote transport (if decided): `/mcp` behind the access middleware, with rate limits,
       request IDs and the ADR's authentication. The WASM demo has no MCP server (its transport
       is the browser), and it shows nothing that suggests one (2026-11-01) — not chosen: ADR 0022

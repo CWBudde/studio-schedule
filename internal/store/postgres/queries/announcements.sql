@@ -24,7 +24,8 @@ UPDATE announcements SET emailed_at = $2, email_recipients = $3, mail_cursor = $
 DELETE FROM announcements WHERE id = $1;
 
 -- name: ListAnnouncements :many
-SELECT * FROM announcements ORDER BY publish_at DESC, id DESC;
+-- Drafts (no publish time) first.
+SELECT * FROM announcements ORDER BY publish_at DESC NULLS FIRST, id DESC;
 
 -- name: ListShownAnnouncements :many
 SELECT * FROM announcements
