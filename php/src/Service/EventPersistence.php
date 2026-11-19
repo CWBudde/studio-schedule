@@ -56,6 +56,12 @@ interface EventPersistence
 
     public function officeEvent(string $id): ?Event;
 
+    /**
+     * @param list<string> $ids
+     * @return list<Event>
+     */
+    public function byIds(array $ids): array;
+
     /** @return array{contentType:string,digest:string}|null */
     public function imageInfo(string $id): ?array;
 

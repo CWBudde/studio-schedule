@@ -4,17 +4,18 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Http;
 
+use Closure;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use SensitiveParameter;
 use StudioSchedule\Service\SettingsNotFound;
-use StudioSchedule\Service\WaitlistInvites;
 use StudioSchedule\Store\RateLimitStore;
 
 final readonly class WaitlistInviteEndpoint
 {
+    /** @param Closure(string): (?array<string,mixed>) $view */
     public function __construct(
-        private WaitlistInvites $invites,
+        private Closure $view,
         private TrustedProxies $proxies,
         private RateLimitStore $limits,
     ) {}
@@ -44,7 +45,7 @@ final readonly class WaitlistInviteEndpoint
             return Responses::tooManyAttempts($request, $retry);
         }
         try {
-            $document = $this->invites->view($token);
+            $document = ($this->view)($token);
         } catch (SettingsNotFound) {
             $document = null;
         }

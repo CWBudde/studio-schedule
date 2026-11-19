@@ -1598,6 +1598,11 @@ backends.
           return an event to draft, and delete unregistered events before any session starts.
           The shared `office_event_lifecycle` case runs in PHP CI at both mount paths on
           PostgreSQL, MySQL and MariaDB.
+    - [x] Let the office read event rosters and signed-in members read their family's
+          registrations and receipt links. Preview active event invitations without taking
+          the place. Event and lesson invite links share the client rate limit. The shared
+          `event_registration_reads` and `waitlist_invite_lookup_limits` cases run in PHP CI
+          on all three databases at both mount paths.
 - [ ] CLI parity: port the operator commands to the PHP `bin/studio-schedule` executable.
       The Phase 11 admin commands and Phase 12 MCP server stay Go-only (ADR 0023). On PostgreSQL
       a school can run the Go binary against its database. On MySQL and MariaDB it uses the web

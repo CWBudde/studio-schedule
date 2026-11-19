@@ -143,15 +143,21 @@ func waitlistInviteLookupLimits(t *testing.T, b *backend) {
 	guest := browser(t)
 	const token = "unknown-fixture-invite"
 	in := request{method: http.MethodGet, path: "/api/v1/waitlist-invites/{token}", params: map[string]string{"token": token}}
-	for range 20 {
-		out := b.call(t, guest, in, http.StatusNotFound)
-		if strings.Contains(string(out.body), token) {
-			t.Fatal("invalid invitation response repeats the token")
+	event := in
+	event.path = "/api/v1/event-invites/{token}"
+	for _, route := range []request{in, event} {
+		for range 10 {
+			out := b.call(t, guest, route, http.StatusNotFound)
+			if strings.Contains(string(out.body), token) {
+				t.Fatal("invalid invitation response repeats the token")
+			}
 		}
 	}
-	limited := b.call(t, guest, in, http.StatusTooManyRequests)
-	if limited.header.Get("Retry-After") == "" || strings.Contains(string(limited.body), token) {
-		t.Fatal("invite rate limit omitted retry timing or repeated the token")
+	for _, route := range []request{in, event} {
+		limited := b.call(t, guest, route, http.StatusTooManyRequests)
+		if limited.header.Get("Retry-After") == "" || strings.Contains(string(limited.body), token) {
+			t.Fatal("invite rate limit omitted retry timing or repeated the token")
+		}
 	}
 }
 

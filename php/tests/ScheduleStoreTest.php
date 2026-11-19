@@ -17,16 +17,19 @@ use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
 use StudioSchedule\Http\CatalogAdminRoutes;
+use StudioSchedule\Http\EventRegistrationRoutes;
 use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Http\StatisticsEndpoint;
 use StudioSchedule\Http\TrustedProxies;
 use StudioSchedule\Http\WaitlistInviteEndpoint;
+use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\OneOffLesson;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\StatisticsService;
 use StudioSchedule\Service\WaitlistInvites;
 use StudioSchedule\Store\Database;
+use StudioSchedule\Store\EventRegistrationStore;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\Migrator;
 use StudioSchedule\Store\PublicSettingsStore;
@@ -599,6 +602,90 @@ final class ScheduleStoreTest extends TestCase
         self::assertSame(self::ids(108, 109), array_column($preserved['sessions'], 'id'));
     }
 
+    public function testEventRegistrationReadsRespectFamilyPrivacyAndInviteCutoffs(): void
+    {
+        $this->insert('events', [
+            'id' => 122, 'slug' => 'sessionless', 'title' => 'Sessionless event', 'course_type_id' => 22,
+            'status' => 'published', 'capacity' => 5, 'price' => 0, 'vat_rate_bp' => 0,
+            'created_at' => '2026-10-20 10:00:00', 'updated_at' => '2026-10-24 12:00:00',
+        ]);
+        $free = ['payment' => 'paid', 'price' => 0, 'vat_rate_bp' => 1900];
+        $timestamps = ['created_at' => '2026-10-22 14:00:00', 'updated_at' => '2026-10-23 14:00:00'];
+        $this->insert('event_registrations', [
+            'id' => 224, 'event_id' => 120, 'person_id' => 1, 'status' => 'canceled',
+            'created_at' => '2026-10-20 14:00:00.25', 'updated_at' => '2026-10-21 14:00:00', 'canceled_at' => '2026-10-21 14:00:00',
+        ] + $free);
+        $this->insert('event_registrations', [
+            'id' => 225, 'event_id' => 121, 'person_id' => 1, 'status' => 'registered',
+        ] + $free + $timestamps);
+        $this->insert('event_registrations', [
+            'id' => 226, 'event_id' => 120, 'guest_name' => 'Guest', 'status' => 'canceled', 'canceled_at' => '2026-10-23 14:00:00',
+        ] + $free + $timestamps);
+        $this->insert('event_registrations', [
+            'id' => 227, 'event_id' => 122, 'person_id' => 6, 'status' => 'registered',
+        ] + $free + $timestamps);
+        $this->database->executeStatement("UPDATE persons SET anonymized_at = '2026-10-24 12:00:00' WHERE given_name = 'Zoe'");
+
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member', null, null);
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office', null, null);
+        $app = $this->app(self::BEFORE_RELEASE);
+        $rosterPath = '/admin/events/' . self::id(120) . '/registrations';
+        self::get($app, $rosterPath, status: 401);
+        self::get($app, $rosterPath, $member, 403);
+        self::get($app, '/admin/events/invalid/registrations', $office, 422);
+        $roster = self::get($app, $rosterPath, $office)['items'];
+        self::assertIsArray($roster);
+        self::assertSame(self::ids(224, 221, 222, 223, 226), array_column($roster, 'id'));
+        self::assertIsArray($roster[0]);
+        self::assertSame('2026-10-20T14:00:00.25Z', $roster[0]['createdAt']);
+        self::assertSame('2026-10-21T14:00:00Z', $roster[0]['canceledAt']);
+        self::assertSame(1900, $roster[0]['vatRate']);
+        self::assertIsArray($roster[2]);
+        self::assertSame('2026-10-26T17:00:00Z', $roster[2]['inviteExpiresAt']);
+        self::assertIsArray($roster[3]);
+        self::assertSame(['id' => self::id(3), 'name' => 'Zoe Alpha', 'anonymized' => true], $roster[3]['person']);
+        self::assertIsArray($roster[4]);
+        self::assertSame(['name' => 'Guest'], $roster[4]['guest']);
+        self::assertArrayNotHasKey('person', $roster[4]);
+
+        $mine = self::get($app, '/my/events', $member)['items'];
+        self::assertIsArray($mine);
+        $registrations = array_column($mine, 'registration');
+        self::assertSame(self::ids(221, 222, 223, 227, 224), array_column($registrations, 'id'));
+        self::assertSame([true, false, false, false, false], array_column($registrations, 'cancelable'));
+        self::assertIsArray($registrations[1]);
+        self::assertSame('2026-10-26T17:00:00Z', $registrations[1]['expiresAt']);
+        foreach (['eventId', 'vatRate', 'guest', 'updatedAt', 'inviteExpiresAt'] as $officeField) {
+            self::assertArrayNotHasKey($officeField, $registrations[1]);
+        }
+        self::assertSame(['items' => []], self::get($app, '/my/events', $office));
+        self::get($app, '/my/events', status: 401);
+
+        $link = '/event-invites/222';
+        $request = (new ServerRequestFactory())->createServerRequest('GET', '/api/v1' . $link);
+        $preview = $app->handle($request);
+        self::assertSame(200, $preview->getStatusCode());
+        self::assertSame('no-store', $preview->getHeaderLine('Cache-Control'));
+        $document = self::get($app, $link);
+        self::assertSame('Ari', $document['givenName']);
+        self::assertSame('2026-10-26T17:00:00Z', $document['expiresAt']);
+        self::assertIsArray($document['event']);
+        self::assertSame('winter-workshop', $document['event']['slug']);
+        self::assertSame(5, $document['event']['freePlaces']);
+        self::assertSame($roster, self::get($app, $rosterPath, $office)['items']);
+        self::get($app, '/event-invites/223', status: 404);
+        self::get($app, '/event-invites/wrong-token', status: 404);
+        self::get($this->app('2026-10-26T17:00:00Z'), $link, status: 404);
+        $this->database->executeStatement("UPDATE events SET signup_closes_at = '2026-10-25 16:00:00' WHERE slug = 'winter-workshop'");
+        self::get($app, $link, status: 404);
+        $this->database->executeStatement(
+            "UPDATE event_registrations SET status = 'registered', invite_token_hash = NULL, invited_at = NULL, expires_at = NULL "
+            . "WHERE expires_at = '2026-10-26 17:00:00'",
+        );
+        $this->database->executeStatement("UPDATE events SET signup_closes_at = NULL WHERE slug = 'winter-workshop'");
+        self::get($app, $link, status: 404);
+    }
+
     public function testReleaseVisibilityFiltersAndAvailabilityThroughPublishedRoutes(): void
     {
         $app = $this->app(self::BEFORE_RELEASE);
@@ -1001,15 +1088,21 @@ final class ScheduleStoreTest extends TestCase
         };
         $scheduleStore = new ScheduleStore($this->database);
         ScheduleRoutes::register($app, $scheduleStore, $clock);
+        $limits = new RateLimitStore($this->database, $clock);
+        $proxies = TrustedProxies::parse('');
         $app->get('/api/v1/waitlist-invites/{token}', new WaitlistInviteEndpoint(
-            new WaitlistInvites(new WaitlistInviteStore($this->database, $scheduleStore), $clock),
-            TrustedProxies::parse(''),
-            new RateLimitStore($this->database, $clock),
+            (new WaitlistInvites(new WaitlistInviteStore($this->database, $scheduleStore), $clock))->view(...),
+            $proxies,
+            $limits,
         ));
         $lessons = new OneOffLesson(new TimetableStore($this->database), $clock);
         CatalogAdminRoutes::registerLessonCreation($app, $lessons);
         $app->get('/api/v1/admin/statistics', new StatisticsEndpoint(new StatisticsService(new StatisticsStore($this->database), $scheduleStore, $clock)));
-        EventRoutes::register($app, new EventStore($this->database), $clock, $lessons);
+        $eventStore = new EventStore($this->database);
+        EventRoutes::register($app, $eventStore, $clock, $lessons);
+        $registrations = new EventRegistrationReads($eventStore, new EventRegistrationStore($this->database), $clock);
+        (new EventRegistrationRoutes($registrations))->register($app);
+        $app->get('/api/v1/event-invites/{token}', new WaitlistInviteEndpoint($registrations->invite(...), $proxies, $limits));
         $app->addRoutingMiddleware();
 
         return $app;

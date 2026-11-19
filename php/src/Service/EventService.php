@@ -166,7 +166,7 @@ final readonly class EventService
 
             return array_map(
                 static fn(Event $event): array
-                    => self::document($event, $sessions[$event->id] ?? [], $occupied[$event->id] ?? 0, $now),
+                    => self::publicDocument($event, $sessions[$event->id] ?? [], $occupied[$event->id] ?? 0, $now),
                 $events,
             );
         });
@@ -185,7 +185,7 @@ final readonly class EventService
             $sessions = $this->store->sessions([$event->id]);
             $occupied = $this->store->occupiedPlaces([$event->id], $now);
 
-            return self::document($event, $sessions, $occupied[$event->id] ?? 0, $now);
+            return self::publicDocument($event, $sessions, $occupied[$event->id] ?? 0, $now);
         });
     }
 
@@ -281,7 +281,7 @@ final readonly class EventService
      * @param list<PublishedLesson> $sessions
      * @return array<string,mixed>
      */
-    private static function document(Event $event, array $sessions, int $occupied, DateTimeImmutable $now): array
+    public static function publicDocument(Event $event, array $sessions, int $occupied, DateTimeImmutable $now): array
     {
         $closesAt = $event->signupClosesAt;
         if ($closesAt === null) {

@@ -53,7 +53,7 @@ jobs:
       - name: Check the implemented PHP API against OpenAPI on all three databases
         run: >-
           ./scripts/conformance-php.sh all --scenario
-          public_settings_and_catalog public_event_details office_event_reads office_event_lifecycle
+          public_settings_and_catalog public_event_details office_event_reads office_event_lifecycle event_registration_reads
           schedule_release_and_visibility
           registration_and_session password_recovery credential_changes login_rate_limit admin_impersonation account_lifecycle
           catalog_administration term_administration class_lists_and_roster class_creation_and_deletion one_off_lesson_creation

@@ -29,6 +29,7 @@ use StudioSchedule\Http\CalendarFeedRoutes;
 use StudioSchedule\Http\CatalogAdminRoutes;
 use StudioSchedule\Http\CatalogRoutes;
 use StudioSchedule\Http\CredentialRoutes;
+use StudioSchedule\Http\EventRegistrationRoutes;
 use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\FamilyRoutes;
 use StudioSchedule\Http\Installer;
@@ -57,6 +58,7 @@ use StudioSchedule\Mail\SmtpMailer;
 use StudioSchedule\Push\Sender;
 use StudioSchedule\Receipt\AttachmentStore;
 use StudioSchedule\Receipt\Attachments;
+use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\AccountAdministration;
 use StudioSchedule\Service\AccountConfirmation;
 use StudioSchedule\Service\AccountRegistration;
@@ -104,6 +106,7 @@ use StudioSchedule\Store\MetricsStore;
 use StudioSchedule\Store\DatabaseCopy;
 use StudioSchedule\Store\DuplicateStore;
 use StudioSchedule\Store\EmailChangeStore;
+use StudioSchedule\Store\EventRegistrationStore;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\FamilyStore;
 use StudioSchedule\Store\MailLogStore;
@@ -317,7 +320,10 @@ final class Bootstrap
                     CatalogAdminRoutes::registerClasses($app, new ClassAdmin($timetableStore, $generator, $clock));
                     $lessons = new OneOffLesson($timetableStore, $clock);
                     CatalogAdminRoutes::registerLessonCreation($app, $lessons);
-                    EventRoutes::register($app, new EventStore($connection), $clock, $lessons);
+                    $eventStore = new EventStore($connection);
+                    EventRoutes::register($app, $eventStore, $clock, $lessons);
+                    $eventRegistrations = new EventRegistrationReads($eventStore, new EventRegistrationStore($connection), $clock);
+                    (new EventRegistrationRoutes($eventRegistrations))->register($app);
                     $familyStore = new FamilyStore($connection);
                     $duplicates = new DuplicateStore($connection, $memberDirectory, $familyStore, $clock);
                     (new DuplicateRoutes(new PersonDuplicates($duplicates)))->register($app);
@@ -341,7 +347,12 @@ final class Bootstrap
                     (new ReceiptReadRoutes(new ReceiptReadStore($connection, $clock)))->register($app);
                     ScheduleRoutes::register($app, $schedule, $clock);
                     $app->get('/api/v1/waitlist-invites/{token}', new WaitlistInviteEndpoint(
-                        new WaitlistInvites(new WaitlistInviteStore($connection, $schedule), $clock),
+                        (new WaitlistInvites(new WaitlistInviteStore($connection, $schedule), $clock))->view(...),
+                        $config->trustedProxies,
+                        $limits,
+                    ));
+                    $app->get('/api/v1/event-invites/{token}', new WaitlistInviteEndpoint(
+                        $eventRegistrations->invite(...),
                         $config->trustedProxies,
                         $limits,
                     ));

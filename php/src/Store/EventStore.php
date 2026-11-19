@@ -205,6 +205,18 @@ final readonly class EventStore implements EventPersistence
         return $row === false ? null : self::event($row, $this->isPostgres());
     }
 
+    public function byIds(array $ids): array
+    {
+        $postgres = $this->isPostgres();
+        $rows = $this->connection->fetchAllAssociative(
+            self::EVENT . ' WHERE e.id IN (?)',
+            [array_map($this->encodeId(...), $ids)],
+            [$postgres ? ArrayParameterType::STRING : ArrayParameterType::BINARY],
+        );
+
+        return array_map(static fn(array $row): Event => self::event($row, $postgres), $rows);
+    }
+
     public function imageInfo(string $id): ?array
     {
         $row = $this->connection->fetchNumeric(
