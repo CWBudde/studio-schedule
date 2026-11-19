@@ -13,11 +13,18 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
+use StudioSchedule\Http\AccountRegistrationEndpoint;
+use StudioSchedule\Http\AdminAccountsEndpoint;
 use StudioSchedule\Http\AdminSettingsRoutes;
 use StudioSchedule\Http\AfterResponse;
 use StudioSchedule\Http\Application;
+use StudioSchedule\Http\AuthMailLimit;
+use StudioSchedule\Http\AuthSessionRoutes;
+use StudioSchedule\Http\CalendarFeedDownload;
+use StudioSchedule\Http\CalendarFeedRoutes;
 use StudioSchedule\Http\CatalogAdminRoutes;
 use StudioSchedule\Http\CatalogRoutes;
+use StudioSchedule\Http\CredentialRoutes;
 use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\FamilyRoutes;
 use StudioSchedule\Http\Installer;
@@ -25,7 +32,9 @@ use StudioSchedule\Http\MailLogRoutes;
 use StudioSchedule\Http\MeEndpoint;
 use StudioSchedule\Http\ParticipantReadRoutes;
 use StudioSchedule\Http\PassReadRoutes;
+use StudioSchedule\Http\PasswordFailureLimit;
 use StudioSchedule\Http\PasswordResetEndpoint;
+use StudioSchedule\Http\PasswordResetRequestEndpoint;
 use StudioSchedule\Http\PersonExportRoutes;
 use StudioSchedule\Http\PublicSettingsEndpoint;
 use StudioSchedule\Http\PushRoutes;
@@ -40,28 +49,40 @@ use StudioSchedule\Mail\SmtpMailer;
 use StudioSchedule\Push\Sender;
 use StudioSchedule\Receipt\AttachmentStore;
 use StudioSchedule\Receipt\Attachments;
+use StudioSchedule\Service\AccountConfirmation;
+use StudioSchedule\Service\AccountRegistration;
 use StudioSchedule\Service\AdminSettings;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\BookingRuleSettings;
 use StudioSchedule\Service\ClassAdmin;
-use StudioSchedule\Service\LessonGenerator;
+use StudioSchedule\Service\CalendarFeedManagement;
+use StudioSchedule\Service\CalendarFeedRendering;
 use StudioSchedule\Service\CommonPasswords;
 use StudioSchedule\Service\DatabaseReadiness;
+use StudioSchedule\Service\EmailChange;
 use StudioSchedule\Service\Family;
+use StudioSchedule\Service\Impersonation;
+use StudioSchedule\Service\LessonGenerator;
 use StudioSchedule\Service\MailLog;
 use StudioSchedule\Service\ParticipantRead;
 use StudioSchedule\Service\PassRead;
+use StudioSchedule\Service\PasswordAuthentication;
+use StudioSchedule\Service\PasswordChange;
 use StudioSchedule\Service\PasswordHash;
 use StudioSchedule\Service\PasswordReset;
+use StudioSchedule\Service\PasswordResetRequests;
 use StudioSchedule\Service\PersonExport;
 use StudioSchedule\Service\PublicSettings;
 use StudioSchedule\Service\SessionAuthentication;
 use StudioSchedule\Service\StatisticsService;
 use StudioSchedule\Service\SystemClock;
 use StudioSchedule\Service\TermAdmin;
+use StudioSchedule\Store\AdminAccountsStore;
+use StudioSchedule\Store\CalendarFeedStore;
 use StudioSchedule\Store\CatalogStore;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\DatabaseCopy;
+use StudioSchedule\Store\EmailChangeStore;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\FamilyStore;
 use StudioSchedule\Store\MailLogStore;
@@ -71,7 +92,9 @@ use StudioSchedule\Store\PasswordResetStore;
 use StudioSchedule\Store\PersonExportStore;
 use StudioSchedule\Store\PublicSettingsStore;
 use StudioSchedule\Store\PushSubscriptionStore;
+use StudioSchedule\Store\RateLimitStore;
 use StudioSchedule\Store\ReceiptReadStore;
+use StudioSchedule\Store\RegistrationStore;
 use StudioSchedule\Store\ScheduleStore;
 use StudioSchedule\Store\Schema;
 use StudioSchedule\Store\SessionStore;
@@ -171,14 +194,52 @@ final class Bootstrap
                 $sessionStore = new SessionStore($connection);
                 $sessions = new SessionMiddleware($config, new SessionAuthentication($sessionStore, $clock));
                 $pushSender = static fn(): ?Sender => Sender::fromEnvironment(Config::lookup($appDirectory . '/config/.env', $environment), $clock);
-                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $logger, $pushSender): void {
-                    $app->get('/api/v1/auth/me', new MeEndpoint($sessionStore));
+                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $config, $logger, $commonPasswordFile, $wakeMail, $pushSender): void {
+                    $profile = new MeEndpoint($sessionStore);
+                    $limits = new RateLimitStore($connection, $clock, $logger);
+                    $mailLimit = new AuthMailLimit($config->trustedProxies, $limits);
+                    $failures = new PasswordFailureLimit($limits);
+                    $passwords = new PasswordHash();
+                    $commonPasswords = new CommonPasswords($commonPasswordFile);
+                    $resetStore = new PasswordResetStore($connection);
+                    $mail = new Renderer();
+                    $app->get('/api/v1/auth/me', $profile);
+                    $app->put('/api/v1/auth/locale', $profile->updateLocale(...));
+                    $app->get('/api/v1/admin/accounts', new AdminAccountsEndpoint(new AdminAccountsStore($connection)));
+                    $app->post('/api/v1/auth/register', new AccountRegistrationEndpoint(
+                        new AccountRegistration(new RegistrationStore($connection), $passwords, $commonPasswords, $clock, $mail, $config->baseURL, $wakeMail),
+                        $mailLimit,
+                        $config->baseURL,
+                    ));
+                    $app->post('/api/v1/auth/password-reset', new PasswordResetRequestEndpoint(
+                        $config,
+                        new PasswordResetRequests($resetStore, $clock, $mail, $config->baseURL, $wakeMail),
+                        $mailLimit,
+                    ));
+                    (new AuthSessionRoutes(
+                        $config,
+                        new PasswordAuthentication($sessionStore, $passwords, $clock),
+                        new AccountConfirmation($sessionStore, $passwords, $clock),
+                        new Impersonation($sessionStore, $clock),
+                        $profile,
+                        $limits,
+                        $failures,
+                        $logger,
+                    ))->register($app);
+                    (new CredentialRoutes(
+                        new PasswordChange($resetStore, $passwords, $commonPasswords, $clock, $mail, $wakeMail),
+                        new EmailChange(new EmailChangeStore($connection), $passwords, $clock, $mail, $config->baseURL, $wakeMail),
+                        $sessionStore,
+                        $failures,
+                        $mailLimit,
+                        $config->baseURL,
+                    ))->register($app);
                     $settingsStore = new PublicSettingsStore($connection);
-                    $scheduleStore = new ScheduleStore($connection);
+                    $schedule = new ScheduleStore($connection);
                     (new PublicSettingsEndpoint(new PublicSettings($settingsStore)))->register($app);
                     $timetableStore = new TimetableStore($connection);
                     $generator = new LessonGenerator($timetableStore, $clock);
-                    (new AdminSettingsRoutes(new AdminSettings($settingsStore), new BookingRuleSettings($scheduleStore, $clock, $generator, $logger)))->register($app);
+                    (new AdminSettingsRoutes(new AdminSettings($settingsStore), new BookingRuleSettings($schedule, $clock, $generator, $logger)))->register($app);
                     CatalogRoutes::register($app, new CatalogStore($connection), $clock);
                     CatalogAdminRoutes::registerTerms($app, new TermAdmin($timetableStore, $generator, $clock));
                     CatalogAdminRoutes::registerClasses($app, new ClassAdmin($timetableStore, $generator, $clock));
@@ -188,14 +249,25 @@ final class Bootstrap
                     (new PersonExportRoutes(new PersonExport(new PersonExportStore($connection), $familyStore, $clock)))->register($app);
                     (new MailLogRoutes(new MailLog(new MailLogStore($connection), $clock)))->register($app);
                     (new ParticipantReadRoutes(new ParticipantRead(new ParticipantReadStore($connection), $clock)))->register($app);
-                    (new PassReadRoutes(new PassRead(new PassReadStore($connection, $scheduleStore), $clock)))->register($app);
+                    (new PassReadRoutes(new PassRead(new PassReadStore($connection, $schedule), $clock)))->register($app);
                     (new ReceiptPdfRoutes(new Attachments(new AttachmentStore($connection))))->register($app);
                     (new ReceiptReadRoutes(new ReceiptReadStore($connection, $clock)))->register($app);
-                    ScheduleRoutes::register($app, $scheduleStore, $clock);
-                    $app->get('/api/v1/admin/statistics', new StatisticsEndpoint(new StatisticsService(new StatisticsStore($connection), $scheduleStore, $clock)));
+                    ScheduleRoutes::register($app, $schedule, $clock);
+                    $app->get('/api/v1/admin/statistics', new StatisticsEndpoint(new StatisticsService(new StatisticsStore($connection), $schedule, $clock)));
                     $pushRoutes = new PushRoutes(new PushSubscriptionStore($connection), $clock, $pushSender);
                     $app->get('/api/v1/my/push', $pushRoutes);
                     $app->map(['POST', 'DELETE'], '/api/v1/my/push/subscriptions', $pushRoutes);
+                    $calendarFeeds = new CalendarFeedStore($connection);
+                    (new CalendarFeedRoutes(
+                        new CalendarFeedManagement($calendarFeeds, $clock),
+                        $config->basePath,
+                        $config->baseURL,
+                    ))->register($app);
+                    $app->get('/ical/{token:[^/.]+}.ics', new CalendarFeedDownload(
+                        new CalendarFeedRendering($calendarFeeds, $schedule, $clock, $config->baseURL),
+                        $limits,
+                        $config->trustedProxies,
+                    ));
                 };
             }
 

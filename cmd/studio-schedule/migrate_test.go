@@ -316,21 +316,21 @@ func TestMigrateDownWithoutMigrations(t *testing.T) {
 }
 
 // migrateFailNewest rolls back the two newest migrations of a new database,
-// breaks the newest one (00039 adds the constraint announcements_draft_unmailed,
+// breaks the newest one (00040 creates the index http_rate_limits_expiry_idx,
 // which then exists already) and runs migrate up, which must fail. It returns the
 // database, the embedded migrations, and the output and error of up.
 func migrateFailNewest(t *testing.T) (url string, embedded []string, out string, err error) {
 	t.Helper()
 
 	embedded = migrateEmbedded(t)
-	if last := embedded[len(embedded)-1]; last != "00039_announcement_drafts.sql" {
-		t.Fatalf("the newest migration is %s; migrateFailNewest breaks 00039 on purpose and needs updating", last)
+	if last := embedded[len(embedded)-1]; last != "00040_http_rate_limits.sql" {
+		t.Fatalf("the newest migration is %s; migrateFailNewest breaks 00040 on purpose and needs updating", last)
 	}
 
 	url = newTestDatabase(t)
 	migrateRun(t, url, "down")
 	migrateRun(t, url, "down")
-	execSQL(t, url, "ALTER TABLE announcements ADD CONSTRAINT announcements_draft_unmailed CHECK (true)")
+	execSQL(t, url, "CREATE INDEX http_rate_limits_expiry_idx ON accounts (id)")
 
 	out, err = execute(map[string]string{"DATABASE_URL": url}, "migrate", "up")
 	if err == nil {

@@ -23,6 +23,17 @@ final class TrustedProxiesTest extends TestCase
         self::assertFalse(TrustedProxies::parse('')->contains('127.0.0.1'));
     }
 
+    public function testRateLimitAddressOnlyTrustsTheForwardedChainFromTheRight(): void
+    {
+        $trusted = TrustedProxies::parse('10.0.0.0/8, 2001:db8:1234::/48');
+        self::assertSame('198.51.100.2', $trusted->clientIP('::ffff:198.51.100.2', '192.0.2.4'));
+        self::assertSame('198.51.100.3', $trusted->clientIP('10.0.0.1', '192.0.2.4, ::ffff:198.51.100.3, 2001:db8:1234::9'));
+        self::assertSame('2001:db8:1234::9', $trusted->clientIP('10.0.0.1', '192.0.2.4, garbage, 2001:db8:1234::9'));
+        self::assertSame('10.0.0.2', $trusted->clientIP('[2001:db8:1234::1]:8080', '10.0.0.2, 2001:db8:1234::9'));
+        self::assertSame('10.0.0.1', $trusted->clientIP('10.0.0.1:1234', ''));
+        self::assertSame('invalid IP', $trusted->clientIP('invalid', '198.51.100.3'));
+    }
+
     /** @return list<array{string}> */
     public static function invalid(): array
     {

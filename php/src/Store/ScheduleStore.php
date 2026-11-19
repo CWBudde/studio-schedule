@@ -24,7 +24,7 @@ use Symfony\Component\Uid\Uuid;
 final readonly class ScheduleStore implements SchedulePersistence
 {
     private const string LESSONS = <<<'SQL'
-        SELECT l.id, l.class_id, l.starts_at, l.ends_at, l.status, l.kind, l.visibility, l.renter, l.event_id,
+        SELECT l.id, l.class_id, l.starts_at, l.ends_at, l.status, l.kind, l.visibility, l.renter, l.event_id, l.cancel_note,
                l.capacity AS lesson_capacity, COALESCE(e.capacity, l.capacity) AS capacity,
                e.slug AS event_slug, e.status AS event_status,
                ct.id AS course_type_id, ct.name AS course_type_name, ct.description AS course_type_description,
@@ -195,6 +195,65 @@ final readonly class ScheduleStore implements SchedulePersistence
         return array_map(fn(array $row): PublishedLesson => $this->publishedLesson(['capacity' => $row['lesson_capacity']] + $row), $rows);
     }
 
+    /** @return array<string,true> Active staff IDs linked to the account's person. */
+    public function activeStaff(string $personId): array
+    {
+        $ids = $this->connection->fetchFirstColumn(
+            'SELECT id FROM staff WHERE person_id = ? AND active = TRUE',
+            [$this->encodeId($personId)],
+            [$this->idType()],
+        );
+        $staff = [];
+        foreach ($ids as $id) {
+            $staff[$this->id($id)] = true;
+        }
+
+        return $staff;
+    }
+
+    /**
+     * @param non-empty-list<string> $staffIds
+     * @return list<PublishedLesson>
+     */
+    public function teachingLessons(DateTimeImmutable $from, DateTimeImmutable $until, array $staffIds): array
+    {
+        $ids = $this->encodeIds($staffIds);
+        $rows = $this->connection->fetchAllAssociative(
+            self::LESSONS . ' WHERE l.starts_at >= ? AND l.starts_at < ? AND (l.instructor_id IN (?) OR l.accompanist_id IN (?)) '
+            . 'ORDER BY l.starts_at, l.id',
+            [$this->sqlInstant($from), $this->sqlInstant($until), $ids, $ids],
+            [ParameterType::STRING, ParameterType::STRING, $this->idListType(), $this->idListType()],
+        );
+
+        return array_map($this->publishedLesson(...), $rows);
+    }
+
+    /**
+     * @param non-empty-list<string> $personIds
+     * @return array<string,array<string,true>> Lesson ID to actively booked or registered person IDs.
+     */
+    public function bookedPeople(DateTimeImmutable $from, array $personIds): array
+    {
+        $ids = $this->encodeIds($personIds);
+        $start = $this->sqlInstant($from);
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT b.lesson_id, b.person_id FROM bookings b JOIN lessons l ON l.id = b.lesson_id '
+            . "WHERE l.starts_at >= ? AND b.person_id IN (?) AND b.status <> 'canceled' "
+            . 'UNION '
+            . 'SELECT l.id AS lesson_id, r.person_id FROM event_registrations r JOIN events e ON e.id = r.event_id '
+            . 'JOIN lessons l ON l.event_id = e.id WHERE l.starts_at >= ? AND r.person_id IN (?) '
+            . "AND r.status = 'registered' AND e.status <> 'draft'",
+            [$start, $ids, $start, $ids],
+            [ParameterType::STRING, $this->idListType(), ParameterType::STRING, $this->idListType()],
+        );
+        $people = [];
+        foreach ($rows as $row) {
+            $people[$this->id($row['lesson_id'])][$this->id($row['person_id'])] = true;
+        }
+
+        return $people;
+    }
+
     public function activeBookings(array $lessonIds): array
     {
         $counts = $this->connection->fetchAllAssociative(
@@ -342,6 +401,7 @@ final readonly class ScheduleStore implements SchedulePersistence
             eventId: $this->optionalId($row['event_id']),
             eventSlug: self::optionalString($row['event_slug']),
             eventStatus: self::optionalString($row['event_status']),
+            cancelNote: self::optionalString($row['cancel_note']),
         );
     }
 

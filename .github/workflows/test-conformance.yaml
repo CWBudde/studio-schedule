@@ -50,7 +50,12 @@ jobs:
           go-version-file: go.mod
       - name: Check PHP test controls and seeded reads on all three databases
         run: ./scripts/conformance-php.sh all --controls-only
-      - name: Check PHP public catalogue against OpenAPI on all three databases
-        run: ./scripts/conformance-php.sh all --scenario public_settings_and_catalog
-      - name: Check PHP public event details against OpenAPI on all three databases
-        run: ./scripts/conformance-php.sh all --scenario public_event_details
+      - name: Check the implemented PHP API against OpenAPI on all three databases
+        run: >-
+          ./scripts/conformance-php.sh all --scenario
+          public_settings_and_catalog public_event_details schedule_release_and_visibility
+          registration_and_session password_recovery credential_changes login_rate_limit admin_impersonation
+          catalog_administration term_administration class_lists_and_roster class_creation_and_deletion
+          family_profiles participant_roster_and_history calendar_subscription family_and_privacy
+          mail_log statistics settings_and_branding push_subscriptions
+          pass_type_administration pass_lists receipt_pdf_downloads receipt_lists_and_search receipt_settings_and_logo

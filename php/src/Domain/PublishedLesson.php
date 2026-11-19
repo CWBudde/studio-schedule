@@ -49,5 +49,6 @@ final readonly class PublishedLesson
         public ?string $eventId,
         public ?string $eventSlug,
         public ?string $eventStatus,
+        public ?string $cancelNote,
     ) {}
 }

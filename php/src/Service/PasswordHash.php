@@ -71,6 +71,13 @@ final class PasswordHash
         return function_exists('sodium_crypto_pwhash_str_verify') && @sodium_crypto_pwhash_str_verify($encoded, $password);
     }
 
+    public function needsRehash(#[\SensitiveParameter] string $encoded): bool
+    {
+        $current = sprintf('$argon2id$v=19$m=%d,t=%d,p=%d$', self::MEMORY_KIB, self::PASSES, self::LANES);
+
+        return !str_starts_with($encoded, $current) || !self::isBoundedHash($encoded);
+    }
+
     private static function nativeArgon(): bool
     {
         return function_exists('password_algos') && in_array('argon2id', password_algos(), true);

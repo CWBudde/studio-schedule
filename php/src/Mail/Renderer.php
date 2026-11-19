@@ -30,12 +30,17 @@ final readonly class Renderer
 
     public function resolveLocale(string $locale): string
     {
+        return $this->matchLocale($locale) ?? self::DEFAULT_LOCALE;
+    }
+
+    public function matchLocale(string $locale): ?string
+    {
         $normalized = strtolower(str_replace('_', '-', Formatting::trimWhitespace($locale)));
         $language = explode('-', $normalized, 2)[0];
 
         return match ($language) {
             'de', 'en' => $language,
-            default => self::DEFAULT_LOCALE,
+            default => null,
         };
     }
 

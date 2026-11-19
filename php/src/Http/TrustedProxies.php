@@ -71,6 +71,44 @@ final readonly class TrustedProxies
         return false;
     }
 
+    public function clientIP(string $remote, string $forwarded): string
+    {
+        $peer = self::normalized($remote);
+        if ($peer === null && preg_match('/\A(?:\[([^\]]+)\]|([^:]+)):\d+\z/', $remote, $match) === 1) {
+            $peer = self::normalized($match[1] === '' ? $match[2] : $match[1]);
+        }
+        if ($peer === null) {
+            return 'invalid IP';
+        }
+        if (!$this->contains($peer)) {
+            return $peer;
+        }
+
+        $last = $peer;
+        foreach (array_reverse(explode(',', $forwarded)) as $entry) {
+            $address = self::normalized(trim($entry));
+            if ($address === null) {
+                return $last;
+            }
+            if (!$this->contains($address)) {
+                return $address;
+            }
+            $last = $address;
+        }
+
+        return $last;
+    }
+
+    private static function normalized(string $address): ?string
+    {
+        if (str_contains($address, ':')) {
+            $address = explode('%', $address, 2)[0];
+        }
+        $packed = inet_pton($address);
+
+        return $packed === false ? null : (inet_ntop(self::unmap($packed)) ?: null);
+    }
+
     private static function unmap(string $packed): string
     {
         return strlen($packed) === 16 && str_starts_with($packed, "\0\0\0\0\0\0\0\0\0\0\xff\xff")

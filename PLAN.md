@@ -1344,7 +1344,7 @@ backends.
       `/api/test/…` to set the clock, reset the database, load the demo seed and read the outbox.
       Register it only with `TEST_CONTROL=true`, refuse it at startup with an `https://`
       `BASE_URL`, and keep it out of `api/openapi.json`.
-  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 23
+  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 33
         scenarios at the domain root and under `/dance/schedule`.
   - [x] PHP test controls for clock, reset, demo seed and outbox. The CI fixture job exercises
         them on PostgreSQL, MySQL 8.0 and MariaDB 10.6 at the root and under `/dance/schedule`.
@@ -1382,9 +1382,11 @@ backends.
 - [ ] MySQL/MariaDB schema: `php/migrations/mysql` has one twin per Go migration at the same
       version. Use `DATETIME(6)` in UTC for `timestamptz`, generated columns with unique indexes
       for partial unique indexes, and `SIGNAL` triggers for immutable receipts.
-  - [x] Port PostgreSQL versions 1–39 and compare tables, columns, nullability, keys, unique
+  - [x] Port PostgreSQL versions 1–40 and compare tables, columns, nullability, keys, unique
         constraints and checks in CI on PostgreSQL, MySQL 8.0 and MariaDB 10.6.
-  - [ ] Add the shared rate-limit and readiness-cache tables to both migration sets.
+  - [x] Add the shared rate-limit table to both migration sets and verify that concurrent PHP
+        workers share the same limits on all three databases.
+  - [ ] Add the shared readiness-cache table to both migration sets.
 - [x] Shared building blocks: PSR-20 clock and school time zone (never the server zone), UUIDv7
       IDs, `Money`/`Date`/`TimeOfDay` value objects, argon2id through `password_verify` (or
       `sodium_crypto_pwhash_str_verify` where PHP lacks Argon2) on the existing PHC hashes, new
@@ -1415,18 +1417,24 @@ backends.
         migrations are complete.
 - [ ] API areas, each done when its conformance cases pass on PHP with PostgreSQL, MySQL and
       MariaDB:
-  - [ ] Public settings, schedule and visibility, release window (ADR 0003). PHP serves the
+  - [x] Public settings, schedule and visibility, release window (ADR 0003). PHP serves the
         settings, branding images, schedule and lesson reads on all three database engines.
     - [x] Public catalogue lists, upcoming events, and the web manifest.
           The shared OpenAPI scenario passes on PostgreSQL, MySQL and MariaDB at both mount paths.
     - [x] Cover schedule and lesson reads, the release window, and role-based visibility in the
           PHP test suite on PostgreSQL, MySQL and MariaDB. The settings, schedule and lesson JSON
           also matched Go on a shared PostgreSQL fixture at the root and under a prefix.
-    - [ ] Pass the shared `schedule_release_and_visibility` scenario on PHP at both mount paths
+    - [x] Pass the shared `schedule_release_and_visibility` scenario on PHP at both mount paths
           on all three engines. The scenario signs in a member to verify the visibility rules.
-  - [ ] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006). Sign-in,
-        rate limits and the remaining account operations are open, including requesting a
-        replacement password reset link by email.
+  - [ ] Accounts, sessions, credentials, rate limits, impersonation (ADR 0004–0006).
+        The administrator audit log and account management writes, including self-deletion
+        under ADR 0016, remain open.
+    - [x] Register and confirm accounts, sign in and out, update locale, request a replacement
+          reset link, and change passwords and email addresses. Login and credential requests use
+          database-backed rate limits. Shared registration, recovery, credential and rate-limit
+          scenarios pass on all three PHP databases at both mount paths.
+    - [x] Let administrators list accounts and start and stop audited impersonation. The shared
+          `admin_impersonation` scenario passes on all three PHP databases at both mount paths.
     - [x] Serve `/api/v1/auth/me` from existing Go-compatible sessions. The PHP suite covers
           cookie handling at both mount paths, expiry, renewal, and sessions already in
           impersonation on PostgreSQL, MySQL and MariaDB.
@@ -1436,92 +1444,91 @@ backends.
   - [ ] Family, persons, invitations, catalogue and timetable administration (ADR 0007, 0008)
     - [x] Read a signed-in person's family, edit their own profile, and create or edit their
           dependents. Managed dependents are read-only. The shared `family_profiles` case passes
-          at both mount paths on all three engines with the PHP authentication draft.
+          at both mount paths on all three engines.
     - [ ] Remove dependents and pass any freed waitlist places on to the next eligible people.
     - [x] Let the office manage locations, rooms, course types, levels and staff. Room and level
           orders are saved as a whole, and inactive staff appear in the office list. The shared
-          `catalog_administration` case passes at both mount paths on all three PHP databases with
-          the authentication draft.
+          `catalog_administration` case passes at both mount paths on all three PHP databases.
     - [x] Let the office create, update and delete terms. Date changes reconcile future lessons
           and protect started lessons and bookings made outside automatic class enrollment.
           The shared `term_administration` case passes at both mount paths on all three PHP
-          databases with the authentication draft.
+          databases.
     - [x] Serve the public weekly class list with staff and audience, hiding retired classes.
           The PHP public catalogue CI scenario covers the list at both mount paths on all three
           databases.
     - [x] Let the office read retired classes and rosters with current membership pauses.
           The shared `class_lists_and_roster` case passes at both mount paths on all three PHP
-          databases with the authentication draft.
+          databases.
     - [x] Let the office create a class with its future lessons and delete it while it has no
           members, started lessons or bookings made outside automatic class enrollment. The
           shared `class_creation_and_deletion` case passes at both mount paths on all three PHP
-          databases with the authentication draft.
-    - [ ] Enable `class_lists_and_roster` and `class_creation_and_deletion` in PHP CI after PHP
-          sign-in lands.
+          databases.
+    - [x] Run `class_lists_and_roster` and `class_creation_and_deletion` in PHP CI.
   - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
         order (`SELECT … FOR UPDATE` on all three databases, term → class → lesson → passes)
     - [x] Let linked active staff read their lessons' bookings, payments and waitlist or event
           registrations. The office can read every roster and the recorded booking history.
           The shared `participant_roster_and_history` case passes at both mount paths on all
-          three PHP databases with the authentication draft.
-    - [ ] Enable `participant_roster_and_history` in PHP CI after PHP sign-in lands.
-  - [ ] Calendar feeds (ADR 0011)
+          three PHP databases.
+    - [x] Run `participant_roster_and_history` in PHP CI.
+  - [x] Calendar feeds (ADR 0011). Create, list and revoke booking, teaching and schedule
+        feeds. Private iCalendar downloads use the account's current permissions and hide the
+        token from lists and logs. The shared `calendar_subscription` case passes on all three
+        PHP databases at both mount paths.
   - [ ] Passes, redemption ledger, receipts with the gapless counter and PDF (ADR 0012)
     - [x] Download the original receipt or cancellation PDF as office staff, the payer, or an
           eligible event participant or guardian. Store the first PDF for older receipts without
           one. The shared `receipt_pdf_downloads` case passes at both mount paths on all three
-          PHP databases with the authentication draft.
+          PHP databases.
     - [x] List the signed-in payer's receipts, including those of a merged profile. Let the office
           search and page receipts and read their lines, refunds and current cancellation
           eligibility. The shared `receipt_lists_and_search` case passes at both mount paths on
-          all three PHP databases with the authentication draft.
+          all three PHP databases.
     - [x] Let the office read receipt settings and the logo. Let administrators edit the issuer,
           tax settings and number prefix, and upload or remove the logo. The shared
           `receipt_settings_and_logo` case verifies that issued receipts keep their snapshots,
-          at both mount paths on all three PHP databases with the authentication draft.
+          at both mount paths on all three PHP databases.
     - [x] List, create, edit, retire and delete pass types in the office catalogue. A type in
           use returns a conflict on deletion. Existing passes retain their visits, dates and price.
           The shared `pass_type_administration` case passes at both mount paths on all three PHP
-          databases with the authentication draft.
+          databases.
     - [x] Show each person's passes to the office and the signed-in person's family passes
           to them. Show usable passes first using the school date, with the total use count and
           up to ten recent redemptions. Office notes appear only in the office list. The shared
-          `pass_lists` case passes at both mount paths on all three PHP databases with the
-          authentication draft.
-    - [ ] Enable `receipt_pdf_downloads`, `receipt_lists_and_search`, `receipt_settings_and_logo`,
-          `pass_type_administration` and `pass_lists` in PHP CI after PHP sign-in lands.
+          `pass_lists` case passes at both mount paths on all three PHP databases.
+    - [x] Run `receipt_pdf_downloads`, `receipt_lists_and_search`, `receipt_settings_and_logo`,
+          `pass_type_administration` and `pass_lists` in PHP CI.
   - [x] Settings, branding, themes, `init` (ADR 0013, 0018)
     - [x] Initialize school settings and issue the first administrator's one-time setup link
           through `init` or the web installer on PostgreSQL, MySQL and MariaDB.
     - [x] Serve the school profile and branding cards, including theme selection, accent contrast,
           and background upload and removal. The shared `settings_and_branding` case passes on all
-          three PHP databases at both mount paths with the authentication draft.
+          three PHP databases at both mount paths.
     - [x] Serve regional settings. Existing lessons lock the time zone, and prices or receipts lock
           the currency. Administrators can still change the default language. The shared
           `settings_and_branding` case verifies both locks and the public language update on all
-          three PHP databases at both mount paths with the authentication draft.
+          three PHP databases at both mount paths.
     - [x] Read booking rules and preview release windows using the school time zone. The shared
           `settings_and_branding` case verifies the stored and preview windows on all three PHP
-          databases at both mount paths with the authentication draft.
+          databases at both mount paths.
     - [x] Save booking rules and generate lessons with their class-member bookings when a change
           widens the window. The hourly `generate-lessons` job fills missing slots, including after
           a failed generation attempt. The shared `settings_and_branding` case passes on all three
-          PHP databases at both mount paths with the authentication draft.
+          PHP databases at both mount paths.
   - [ ] Announcements, mail log, statistics (ADR 0014)
     - [x] Serve the administrator mail log with filtered search, detail and audited requeue.
           Secret-link bodies stay private. Tests pass on PostgreSQL, MySQL and MariaDB,
-          including the shared `mail_log` scenario at both mount paths with the PHP
-          authentication draft.
+          including the shared `mail_log` scenario at both mount paths.
     - [x] Serve office statistics in school-local dates with lesson, attendance, waitlist,
           participant, pass-sale and event totals. Merged and anonymized people are omitted from
           the named participant list. Tests pass on all three engines, including the shared
-          `statistics` scenario at both mount paths with the PHP authentication draft.
+          `statistics` scenario at both mount paths.
   - [ ] Import, duplicates and merge (ADR 0015)
   - [ ] Privacy, export, anonymisation, retention jobs (ADR 0016)
     - [x] Export the version 1 person document for members, guardians and the office, including
           historical records. All exports omit secrets and receipt PDFs. Guardian exports also
           omit data belonging to the dependent's own account. The shared `family_and_privacy`
-          case passes on all three PHP databases at both mount paths with the authentication draft.
+          case passes on all three PHP databases at both mount paths.
     - [x] Run personal-data retention daily through `jobs:run`. Tests on all three databases
           verify the cutoff boundaries, rollback on failure, and guest anonymization that
           preserves booking and registration history.

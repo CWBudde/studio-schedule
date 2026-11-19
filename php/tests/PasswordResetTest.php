@@ -7,6 +7,8 @@ namespace StudioSchedule\Tests;
 use Closure;
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\DriverException;
+use Doctrine\DBAL\Platforms\MariaDBPlatform;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use PHPUnit\Framework\TestCase;
 use Psr\Clock\ClockInterface;
@@ -17,17 +19,25 @@ use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Response;
 use Slim\Psr7\Stream;
 use StudioSchedule\Bootstrap;
+use StudioSchedule\Config;
 use StudioSchedule\Http\AfterResponse;
 use StudioSchedule\Http\PasswordResetEndpoint;
+use StudioSchedule\Http\AuthMailLimit;
+use StudioSchedule\Http\PasswordResetRequestEndpoint;
 use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Service\CommonPasswords;
+use StudioSchedule\Service\PasswordChange;
+use StudioSchedule\Service\PasswordChangeFailure;
 use StudioSchedule\Service\PasswordHash;
 use StudioSchedule\Service\PasswordReset;
+use StudioSchedule\Service\PasswordResetRequests;
 use StudioSchedule\Service\SchoolSetup;
+use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\SetupInput;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\Migrator;
 use StudioSchedule\Store\PasswordResetStore;
+use StudioSchedule\Store\RateLimitStore;
 use StudioSchedule\Store\Schema;
 use StudioSchedule\Store\SetupStore;
 
@@ -38,6 +48,7 @@ final class PasswordResetTest extends TestCase
     private const string EMAIL = 'ada@fictional-studio.example';
     private const string NOW = '2026-03-26 10:15:27.123456';
     private const string PASSWORD = 'rêverie sous les projecteurs';
+    private const string PREVIOUS_PASSWORD = 'fictional current account passphrase';
 
     private static ?string $dsn = null;
     private static bool $migrated = false;
@@ -69,7 +80,7 @@ final class PasswordResetTest extends TestCase
     {
         try {
             if (self::$migrated) {
-                foreach (['job_runs', 'audit_events', 'outbox_mails', 'push_subscriptions', 'sessions', 'account_tokens', 'account_credentials', 'accounts', 'persons', 'settings'] as $table) {
+                foreach (['job_runs', 'http_rate_limits', 'audit_events', 'outbox_mails', 'push_subscriptions', 'sessions', 'account_tokens', 'account_credentials', 'accounts', 'persons', 'settings'] as $table) {
                     $this->db->executeStatement('DELETE FROM ' . $table);
                 }
             }
@@ -127,6 +138,114 @@ final class PasswordResetTest extends TestCase
         self::assertStringContainsString('the link is invalid or has expired', (string) $used->getBody());
         self::assertStringNotContainsString($result->token, (string) $used->getBody());
         self::assertSame($hash, $this->db->fetchOne('SELECT password_hash FROM account_credentials'));
+    }
+
+    public function testResetRequestReplacesInvitationsAndProtectsAccountPrivacy(): void
+    {
+        $this->migrate();
+        $setup = new SchoolSetup(new SetupStore($this->db), self::clock());
+        $invitation = $setup->init(new SetupInput('Example Studio', 'UTC', 'de', 'EUR', self::EMAIL, 'Ada', 'Example'));
+        $this->addAccount(self::OTHER, 'pending@example.test', false);
+        $this->db->executeStatement(
+            'INSERT INTO account_credentials (account_id, password_hash, changed_at) VALUES (?, ?, ?)',
+            [$this->id(self::OTHER), 'fictional pending credential', self::NOW],
+        );
+        $noMail = ['missing@example.test', 'pending@example.test', "\u{00a0}"];
+        $wakes = 0;
+        $wakeMail = function () use (&$wakes): void {
+            self::assertFalse($this->db->isTransactionActive());
+            ++$wakes;
+        };
+        foreach ($noMail as $address) {
+            $ignored = $this->issueReset(['email' => $address], wakeMail: $wakeMail);
+            self::assertSame(202, $ignored->getStatusCode());
+            self::assertSame('', (string) $ignored->getBody());
+        }
+        self::assertSame(0, $this->countRows('outbox_mails'));
+        self::assertSame(0, $wakes);
+
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            $issued = $this->issueReset(['email' => ' ' . strtoupper(self::EMAIL) . ' ', 'locale' => 'en'], wakeMail: $wakeMail);
+            self::assertSame(202, $issued->getStatusCode());
+            self::assertSame('', (string) $issued->getBody());
+        }
+        self::assertSame(1, $this->countRows('account_tokens'));
+        self::assertSame(2, $this->countRows('outbox_mails'));
+        self::assertSame(2, $wakes);
+        $mail = $this->db->fetchAssociative('SELECT recipient, template, subject, body_text FROM outbox_mails ORDER BY id DESC LIMIT 1');
+        self::assertIsArray($mail);
+        self::assertSame(self::EMAIL, $mail['recipient']);
+        self::assertSame('reset-password', $mail['template']);
+        self::assertIsString($mail['subject']);
+        self::assertStringContainsString('Passwort', $mail['subject']);
+        self::assertIsString($mail['body_text']);
+        self::assertSame(1, preg_match('~https://fixture.example.test/dance/reset-password\?token=([A-Za-z0-9_-]{43})~', $mail['body_text'], $link));
+        $digest = $this->db->fetchOne($this->postgres
+            ? "SELECT encode(token_hash, 'hex') FROM account_tokens"
+            : 'SELECT LOWER(HEX(token_hash)) FROM account_tokens');
+        $token = $link[1] ?? throw new \LogicException('Expected the replacement reset token');
+        self::assertSame(hash('sha256', $token), $digest);
+        self::assertSame(self::clock()->now()->getTimestamp() + 3600, $this->timestamp('SELECT expires_at FROM account_tokens'));
+        self::assertSame(410, $this->confirm($invitation->token)->getStatusCode());
+
+        $limited = $this->issueReset(['email' => self::EMAIL]);
+        self::assertSame(429, $limited->getStatusCode());
+        self::assertSame('3600', $limited->getHeaderLine('Retry-After'));
+        self::assertSame(2, $this->countRows('outbox_mails'));
+    }
+
+    public function testRecoveryLocaleFallbackUsesTheRequesterAndThenTheSchool(): void
+    {
+        $this->migrate();
+        $setup = new SchoolSetup(new SetupStore($this->db), self::clock());
+        $setup->init(new SetupInput('Example Studio', 'UTC', 'de', 'EUR', self::EMAIL, 'Ada', 'Example'));
+        $this->db->executeStatement('UPDATE accounts SET locale = NULL');
+
+        foreach ([
+            ['en', 'Reset your password for Example Studio'],
+            ["de\0", 'Reset your password for Example Studio'],
+            [' ', 'Reset your password for Example Studio'],
+            [null, 'Setze dein Passwort für Example Studio zurück'],
+        ] as [$locale, $subject]) {
+            $response = $this->issueReset(['Email' => self::EMAIL, 'Locale' => $locale]);
+            self::assertSame(202, $response->getStatusCode());
+            self::assertSame($subject, $this->db->fetchOne('SELECT subject FROM outbox_mails ORDER BY id DESC LIMIT 1'));
+        }
+    }
+
+    public function testRecoveryPreservesThePriorLinkIfQueuingItsReplacementFails(): void
+    {
+        $this->migrate();
+        $setup = new SchoolSetup(new SetupStore($this->db), self::clock());
+        $old = $setup->init(new SetupInput('Example Studio', 'UTC', 'en', 'EUR', self::EMAIL, 'Ada', 'Example'));
+        $this->db->executeStatement('ALTER TABLE outbox_mails ADD CONSTRAINT fixture_reject_recovery CHECK (attempts > 0)');
+        $platform = $this->db->getDatabasePlatform();
+        $drop = $platform instanceof \Doctrine\DBAL\Platforms\AbstractMySQLPlatform
+            && !$platform instanceof \Doctrine\DBAL\Platforms\MariaDBPlatform ? 'DROP CHECK' : 'DROP CONSTRAINT';
+        $this->expectException(DriverException::class);
+        try {
+            $this->issueReset(['email' => self::EMAIL]);
+        } finally {
+            $this->db->executeStatement("ALTER TABLE outbox_mails $drop fixture_reject_recovery");
+            self::assertSame(1, $this->countRows('account_tokens'));
+            self::assertSame(0, $this->countRows('outbox_mails'));
+            self::assertSame(204, $this->confirm($old->token)->getStatusCode());
+        }
+    }
+
+    public function testResetRequestValidatesBeforeUsingTheDatabase(): void
+    {
+        foreach ([[], ['email' => 7], ['email' => ''], ['email' => self::EMAIL, 'locale' => str_repeat('x', 36)],
+            ['email' => null], ['email' => self::EMAIL, 'extra' => true]] as $body
+        ) {
+            $response = $this->issueReset($body);
+            self::assertSame(422, $response->getStatusCode());
+            self::assertSame('application/problem+json', $response->getHeaderLine('Content-Type'));
+        }
+
+        foreach ([self::EMAIL, 'missing@example.test'] as $address) {
+            self::assertSame(503, $this->issueReset(['email' => $address], baseURL: '')->getStatusCode());
+        }
     }
 
     public function testRetriedResetRevokesSessionsTokensAndPushAndQueuesOnePasswordChangeNotice(): void
@@ -404,6 +523,132 @@ final class PasswordResetTest extends TestCase
         self::assertStringContainsString('the password is one of the most common ones', (string) $response->getBody());
     }
 
+    public function testSignedInPasswordChangeKeepsOnlyTheCallingSessionAndSendsOneNotice(): void
+    {
+        $wakes = 0;
+        $service = $this->passwordChangeFixture(function () use (&$wakes): void {
+            self::assertFalse($this->db->isTransactionActive());
+            self::assertSame(1, $this->countRows('outbox_mails'));
+            ++$wakes;
+        });
+        $id = $this->id(self::ACCOUNT);
+        $other = $this->id(self::OTHER);
+        $principal = new SessionPrincipal(self::ACCOUNT, self::ACCOUNT, 'admin');
+        $sessionsBefore = $this->db->fetchAllAssociative('SELECT id, account_id, created_at, last_seen_at, expires_at FROM sessions ORDER BY id');
+
+        self::assertNull($service->change($principal, 'session3', self::PREVIOUS_PASSWORD, self::PASSWORD));
+        self::assertSame(1, $wakes);
+        $hash = $this->db->fetchOne('SELECT password_hash FROM account_credentials WHERE account_id = ?', [$id]);
+        self::assertIsString($hash);
+        self::assertTrue((new PasswordHash())->verify($hash, self::PASSWORD));
+        self::assertFalse((new PasswordHash())->verify($hash, self::PREVIOUS_PASSWORD));
+        self::assertSame(self::clock()->now()->getTimestamp(), $this->timestamp('SELECT changed_at FROM account_credentials'));
+        self::assertSame(
+            [$sessionsBefore[0], $sessionsBefore[3]],
+            $this->db->fetchAllAssociative('SELECT id, account_id, created_at, last_seen_at, expires_at FROM sessions ORDER BY id'),
+        );
+        self::assertSame([$other], $this->db->fetchFirstColumn('SELECT account_id FROM account_tokens'));
+        self::assertSame([$other], $this->db->fetchFirstColumn('SELECT account_id FROM push_subscriptions'));
+        self::assertSame(
+            [[$id, 'impersonation-ended', 'account', $other]],
+            $this->db->fetchAllNumeric('SELECT actor_id, action, target_kind, target_id FROM audit_events'),
+        );
+        self::assertSame(
+            [[self::EMAIL, 'password-changed', 'Dein Passwort bei Beispielstudio wurde geändert']],
+            $this->db->fetchAllNumeric('SELECT recipient, template, subject FROM outbox_mails'),
+        );
+    }
+
+    public function testPasswordChangeRejectsWrongPasswordExpiredSessionAndImpersonation(): void
+    {
+        $service = $this->passwordChangeFixture();
+        $principal = new SessionPrincipal(self::ACCOUNT, self::ACCOUNT, 'admin');
+        $asMember = new SessionPrincipal(self::OTHER, self::OTHER, 'member', impersonatorId: self::ACCOUNT);
+
+        self::assertSame(PasswordChangeFailure::Impersonating, $service->change($asMember, 'session5', 'wrong', 'Sunshine'));
+        self::assertSame(PasswordChangeFailure::CommonPassword, $service->change($principal, 'session3', 'wrong', 'Sunshine'));
+        self::assertSame(PasswordChangeFailure::WrongPassword, $service->change($principal, 'session3', 'wrong', self::PASSWORD));
+        $this->db->executeStatement('UPDATE sessions SET expires_at = ? WHERE account_id = ?', [self::NOW, $this->id(self::ACCOUNT)]);
+        self::assertSame(PasswordChangeFailure::NoSession, $service->change($principal, 'session3', self::PREVIOUS_PASSWORD, self::PASSWORD));
+        self::assertSame(PasswordChangeFailure::NoSession, $service->change($principal, 'session5', self::PREVIOUS_PASSWORD, self::PASSWORD));
+        self::assertSame(4, $this->countRows('sessions'));
+        self::assertSame(0, $this->countRows('outbox_mails'));
+    }
+
+    public function testPasswordChangeRollsBackRevocationAndSaltedHashWhenTheNoticeFails(): void
+    {
+        $service = $this->passwordChangeFixture();
+        $principal = new SessionPrincipal(self::ACCOUNT, self::ACCOUNT, 'admin');
+        $before = $this->db->fetchAssociative('SELECT password_hash, changed_at FROM account_credentials');
+        $platform = $this->db->getDatabasePlatform();
+        $drop = $this->postgres || $platform instanceof MariaDBPlatform ? 'CONSTRAINT' : 'CHECK';
+        $this->db->executeStatement("ALTER TABLE outbox_mails ADD CONSTRAINT fixture_mail_failure CHECK (template <> 'password-changed')");
+        try {
+            $service->change($principal, 'session3', self::PREVIOUS_PASSWORD, self::PASSWORD);
+            self::fail('The password change mail must fail in this fixture');
+        } catch (DriverException $error) {
+            self::assertStringContainsString('fixture_mail_failure', $error->getMessage());
+            self::assertSame($before, $this->db->fetchAssociative('SELECT password_hash, changed_at FROM account_credentials'));
+            self::assertSame(4, $this->countRows('sessions'));
+            self::assertSame(4, $this->countRows('account_tokens'));
+            self::assertSame(2, $this->countRows('push_subscriptions'));
+            self::assertSame(0, $this->countRows('audit_events'));
+            self::assertSame(0, $this->countRows('outbox_mails'));
+        } finally {
+            $this->db->executeStatement("ALTER TABLE outbox_mails DROP $drop fixture_mail_failure");
+        }
+    }
+
+    /** @param (Closure():void)|null $wakeMail */
+    private function passwordChangeFixture(?Closure $wakeMail = null): PasswordChange
+    {
+        $this->migrate();
+        $this->addAccount(self::ACCOUNT, self::EMAIL, true);
+        $this->addAccount(self::OTHER, 'other@fictional-studio.example', true);
+        $id = $this->id(self::ACCOUNT);
+        $other = $this->id(self::OTHER);
+        $this->db->executeStatement("UPDATE accounts SET locale = 'de' WHERE id = ?", [$id]);
+        $this->db->executeStatement("UPDATE accounts SET role = 'member' WHERE id = ?", [$other]);
+        $duration = $this->postgres ? "'0 seconds'" : '0';
+        $expiry = $this->postgres ? "'12 hours'" : '43200000000';
+        $this->db->executeStatement(
+            'INSERT INTO settings (school_name, timezone, default_locale, currency, receipt_prefix, release_weekday, release_time, '
+            . 'release_weeks_ahead, default_visible_days, booking_cutoff, cancellation_cutoff, waitlist_invite_expiry) '
+            . "VALUES ('Beispielstudio', 'UTC', 'en', 'EUR', 'R', 0, '18:00:00', 2, 14, $duration, $duration, $expiry)",
+        );
+
+        $hasher = new PasswordHash();
+        $this->db->executeStatement('INSERT INTO account_credentials (account_id, password_hash, changed_at) VALUES (?, ?, ?)', [
+            $id, $hasher->hash(self::PREVIOUS_PASSWORD), '2026-03-25 10:15:27',
+        ]);
+        $this->addToken('reset-token');
+        $this->addToken('change-email-token', 'change-email');
+        $this->addToken('confirmation-token', 'confirm-email');
+        $this->addToken('unrelated-token', account: self::OTHER);
+        $this->addSession(3, $id, null, '2026-03-25', '2026-03-27');
+        $this->addSession(4, $id, null, '2026-03-25', '2026-03-27');
+        $this->addSession(5, $other, $id, '2026-03-25', '2026-03-27');
+        $this->addSession(6, $other, null, '2026-03-25', '2026-03-27');
+        $bytes = $this->postgres ? "decode(?, 'hex')" : 'UNHEX(?)';
+        foreach ([7 => $id, 8 => $other] as $number => $owner) {
+            $this->db->executeStatement(
+                'INSERT INTO push_subscriptions (id, account_id, endpoint, p256dh, auth, created_at, last_used_at) '
+                . "VALUES (?, ?, ?, $bytes, $bytes, ?, ?)",
+                [$this->id('00000000-0000-4000-8000-00000000000' . $number), $owner, 'https://push.example.test/' . $number,
+                    str_repeat('42', 65), str_repeat('45', 16), self::NOW, self::NOW],
+            );
+        }
+
+        return new PasswordChange(
+            new PasswordResetStore($this->db),
+            $hasher,
+            new CommonPasswords(getenv('STUDIO_PHP_TEST_COMMON_PASSWORDS') ?: __DIR__ . '/../../internal/auth/password/common-passwords.txt'),
+            self::clock(),
+            new Renderer(),
+            $wakeMail,
+        );
+    }
+
     private function confirm(
         string $token,
         string $password = self::PASSWORD,
@@ -440,6 +685,28 @@ final class PasswordResetTest extends TestCase
         $request->getBody()->rewind();
 
         return $controller($request, new Response());
+    }
+
+    /**
+     * @param array<string,mixed> $fields
+     * @param (Closure():void)|null $wakeMail
+     */
+    private function issueReset(array $fields, string $baseURL = 'https://fixture.example.test/dance', ?Closure $wakeMail = null): ResponseInterface
+    {
+        $config = Config::load('/missing/studio-test/.env', static fn(string $key): string => $key === 'BASE_URL' ? $baseURL : '');
+        $clock = self::clock();
+        $endpoint = new PasswordResetRequestEndpoint(
+            $config,
+            new PasswordResetRequests(new PasswordResetStore($this->db), $clock, new Renderer(), $baseURL, $wakeMail),
+            new AuthMailLimit($config->trustedProxies, new RateLimitStore($this->db, $clock)),
+        );
+        $request = (new ServerRequestFactory())->createServerRequest('POST', '/dance/api/v1/auth/password-reset', [
+            'REMOTE_ADDR' => '192.0.2.6',
+        ])->withHeader('Content-Type', 'application/json');
+        $request->getBody()->write(json_encode((object) $fields, JSON_THROW_ON_ERROR));
+        $request->getBody()->rewind();
+
+        return $endpoint($request, new Response());
     }
 
     private function migrate(): void

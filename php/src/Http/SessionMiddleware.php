@@ -33,6 +33,7 @@ final readonly class SessionMiddleware implements MiddlewareInterface
 
         $token = $supplied[$cookieName] ?? null;
         if (is_string($token) && $token !== '') {
+            $request = $request->withAttribute('sessionToken', $token);
             $session = $this->authentication->authenticate($token);
             if ($session === null) {
                 $headers[] = $cookies->expire($cookieName);
@@ -45,10 +46,9 @@ final readonly class SessionMiddleware implements MiddlewareInterface
         }
 
         $response = $handler->handle($request);
-        foreach ($headers as $header) {
-            $response = $response->withAddedHeader('Set-Cookie', $header);
-        }
-
-        return $response;
+        // Clear stale cookies before the handler's fresh login cookie.
+        return $headers === []
+            ? $response
+            : $response->withHeader('Set-Cookie', array_merge($headers, $response->getHeader('Set-Cookie')));
     }
 }

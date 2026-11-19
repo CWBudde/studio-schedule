@@ -46,6 +46,30 @@ final class Responses
     }
 
     /** @param list<array{location:string,message:string}> $errors */
+    public static function validation(
+        ServerRequestInterface $request,
+        ResponseInterface $response,
+        array $errors,
+    ): ResponseInterface {
+        $response = $response->withStatus(422);
+        $body = ['title' => $response->getReasonPhrase(), 'status' => 422, 'detail' => 'validation failed', 'errors' => $errors];
+        $id = $request->getAttribute('requestId');
+        if (is_string($id)) {
+            $body['requestId'] = $id;
+        }
+
+        return self::json($response, $body)
+            ->withHeader('Content-Type', 'application/problem+json')
+            ->withHeader('Cache-Control', 'no-store');
+    }
+
+    public static function tooManyAttempts(ServerRequestInterface $request, int $retryAfter): ResponseInterface
+    {
+        return self::problem($request, 429, "too many attempts; try again in $retryAfter seconds")
+            ->withHeader('Retry-After', (string) $retryAfter);
+    }
+
+    /** @param list<array{location:string,message:string}> $errors */
     public static function problem(
         ServerRequestInterface $request,
         int $status,

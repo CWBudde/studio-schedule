@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 usage() {
-	echo "usage: $0 [all|postgres|mysql|mariadb] [--controls-only | --scenario NAME]" >&2
+	echo "usage: $0 [all|postgres|mysql|mariadb] [--controls-only | --scenario NAME [NAME ...]]" >&2
 	exit 2
 }
 
@@ -13,20 +13,27 @@ all) engines=(postgres mysql mariadb) ;;
 postgres | mysql | mariadb) engines=("$1") ;;
 *) usage ;;
 esac
-scenario=
+scenarios=()
 case "${2:-}" in
 "") test_name=TestBackendConformance ;;
 --controls-only) test_name=TestPHPFixtureControls ;;
 --scenario)
-	scenario=${3:-}
-	[[ $scenario =~ ^[a-z0-9_]+$ && $# == 3 ]] || usage
+	[[ $# -ge 3 ]] || usage
+	scenarios=("${@:3}")
+	for scenario in "${scenarios[@]}"; do
+		[[ $scenario =~ ^[a-z0-9_]+$ ]] || usage
+	done
 	test_name=TestBackendConformance
 	;;
 *) usage ;;
 esac
 filter="^${test_name}\$"
-if [[ -n $scenario ]]; then
-	filter+="/^${scenario}\$"
+if ((${#scenarios[@]} > 0)); then
+	pattern=$(
+		IFS='|'
+		printf '%s' "${scenarios[*]}"
+	)
+	filter+="/^(${pattern})\$"
 fi
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/studio-php-conformance.XXXXXXXX")
@@ -164,10 +171,12 @@ for engine in "${engines[@]}"; do
 			docker logs --tail 40 "$php_container" >&2
 			exit 1
 		fi
-		if [[ -n $scenario ]] && ! grep -Fq -- "PASS: $test_name/$scenario " "$work/go-test.log"; then
-			echo "Unknown conformance scenario: $scenario" >&2
-			exit 2
-		fi
+		for scenario in "${scenarios[@]}"; do
+			if ! grep -Fq -- "PASS: $test_name/$scenario " "$work/go-test.log"; then
+				echo "Unknown conformance scenario: $scenario" >&2
+				exit 2
+			fi
+		done
 		if [[ $test_name == TestPHPFixtureControls ]]; then
 			queue_fixture_mail
 			go test ./internal/conformance -run '^TestPHPFixtureOutbox$' -count=1 -v -args -conformance

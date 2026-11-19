@@ -86,7 +86,7 @@ final readonly class ScheduleService
         });
     }
 
-    private static function visibleUntil(
+    public static function visibleUntil(
         ?SessionPrincipal $principal,
         ScheduleRules $rules,
         DateTimeImmutable $released,
@@ -99,7 +99,7 @@ final readonly class ScheduleService
         };
     }
 
-    private static function isVisible(PublishedLesson $lesson, ?SessionPrincipal $principal, ?DateTimeImmutable $until): bool
+    public static function isVisible(PublishedLesson $lesson, ?SessionPrincipal $principal, ?DateTimeImmutable $until): bool
     {
         if ($until === null) {
             return true;

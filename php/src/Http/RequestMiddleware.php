@@ -100,7 +100,7 @@ final readonly class RequestMiddleware implements MiddlewareInterface
         if (self::crossOrigin($request)) {
             return Responses::problem($request, 403, 'cross-origin request rejected');
         }
-        if ((self::apiPath($path) || $path === PublicSettingsEndpoint::MANIFEST_PATH) && !$this->readiness->ready()) {
+        if ((self::apiPath($path) || $path === PublicSettingsEndpoint::MANIFEST_PATH || str_starts_with($path, '/ical/')) && !$this->readiness->ready()) {
             return Responses::problem($request, 503, 'maintenance', 'urn:studio-schedule:maintenance');
         }
 
@@ -156,10 +156,16 @@ final readonly class RequestMiddleware implements MiddlewareInterface
 
     private static function redact(string $path): string
     {
-        return preg_replace(
-            '#(/(?:api/v1/(?:event-invites|waitlist-invites)|ical)/).+#s',
-            '$1<redacted>',
+        $feed = preg_replace_callback(
+            '#(/ical/).+#s',
+            static fn(array $match): string => $match[1] . '<redacted>' . (str_ends_with($match[0], '.ics') ? '.ics' : ''),
             $path,
         ) ?? $path;
+
+        return preg_replace(
+            '#(/api/v1/(?:event-invites|waitlist-invites)/).+#s',
+            '$1<redacted>',
+            $feed,
+        ) ?? $feed;
     }
 }

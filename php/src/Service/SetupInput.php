@@ -59,7 +59,7 @@ final readonly class SetupInput
         return preg_replace('/\A[\p{Z}\x09-\x0D\x{85}]+|[\p{Z}\x09-\x0D\x{85}]+\z/u', '', $value) ?? $value;
     }
 
-    private static function name(string $value, string $field, string $label): string
+    public static function name(string $value, string $field, string $label): string
     {
         $value = self::trim($value);
         if ($value === '') {

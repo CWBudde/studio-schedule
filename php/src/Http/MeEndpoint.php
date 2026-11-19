@@ -20,6 +20,31 @@ final readonly class MeEndpoint
             return Responses::problem($request, 401, 'not signed in');
         }
 
+        return $this->signedIn($request, $response, $principal);
+    }
+
+    public function updateLocale(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $principal = $request->getAttribute('sessionPrincipal');
+        if (!$principal instanceof SessionPrincipal) {
+            return Responses::problem($request, 401, 'not signed in');
+        }
+        $input = JsonBody::strings($request, $response, ['locale' => [0, 2]], ['locale']);
+        if ($input instanceof ResponseInterface) {
+            return $input;
+        }
+        $locale = $input['locale'] ?? null;
+        if ($locale !== null && $locale !== 'en' && $locale !== 'de') {
+            return Responses::validation($request, $response, [['location' => 'body.locale', 'message' => 'expected one of: en, de']]);
+        }
+
+        return $this->store->updateLocale($principal->accountId, $locale)
+            ? $response->withStatus(204)
+            : Responses::problem($request, 404, 'resource not found');
+    }
+
+    public function signedIn(ServerRequestInterface $request, ResponseInterface $response, SessionPrincipal $principal): ResponseInterface
+    {
         $profile = $this->store->profile($principal->accountId);
         if ($profile === null) {
             return Responses::problem($request, 404, 'not found');

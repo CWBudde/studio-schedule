@@ -202,6 +202,15 @@ type EventRegistration struct {
 	CanceledAt            pgtype.Timestamptz
 }
 
+type HttpRateLimit struct {
+	Bucket      string
+	KeyHash     []byte
+	Attempts    int32
+	Pending     int32
+	ExpiresAtUs int64
+	Generation  []byte
+}
+
 type ImportRun struct {
 	ID               pgtype.UUID
 	FileName         string
