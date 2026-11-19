@@ -10,7 +10,6 @@ use Psr\Clock\ClockInterface;
 use StudioSchedule\Domain\Instant;
 
 /**
- * @phpstan-import-type RosterBooking from ParticipantReadPersistence
  * @phpstan-import-type RosterLesson from ParticipantReadPersistence
  */
 final readonly class ParticipantRead
@@ -62,7 +61,7 @@ final readonly class ParticipantRead
         $waitlist = [];
         $active = $held = $waiting = 0;
         foreach ($this->store->bookings($id) as $row) {
-            $payment = self::payment($lesson, $row);
+            $payment = BookingPayment::document($row, $lesson['status'], $lesson['mode'] === 'booking');
             unset($row['pass']);
             $bookings[] = array_filter($row, static fn(mixed $field): bool => $field !== null && $field !== '') + ['payment' => $payment];
             if ($row['status'] !== 'canceled') {
@@ -111,24 +110,5 @@ final readonly class ParticipantRead
 
         return ['active' => $active, 'held' => $held, 'waiting' => $waiting, 'freePlaces' => max(0, $capacity - $active - $held),
             'registrants' => $people, 'bookings' => [], 'waitlist' => []];
-    }
-
-    /**
-     * @param RosterLesson $lesson
-     * @param RosterBooking $booking
-     * @return array<string, mixed>
-     */
-    private static function payment(array $lesson, array $booking): array
-    {
-        if ($booking['pass'] !== null) {
-            return ['status' => 'paid', 'pass' => $booking['pass']];
-        }
-
-        return ['status' => match (true) {
-            $booking['source'] === 'member', $booking['trial'], $lesson['status'] === 'canceled' => 'free',
-            $booking['status'] === 'canceled' => $booking['late'] ? 'unpaid' : 'free',
-            $lesson['mode'] === 'attendance' && $booking['status'] === 'booked' => 'pending',
-            default => 'unpaid',
-        }];
     }
 }

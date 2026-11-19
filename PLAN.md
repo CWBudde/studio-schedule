@@ -1512,6 +1512,10 @@ backends.
           while cancellation waits for the lesson locks. The shared
           `member_cancellation_of_following_bookings` case runs in PHP CI at both mount paths
           on PostgreSQL, MySQL and MariaDB.
+    - [x] Show the signed-in family's upcoming bookings and open waiting-list entries, including
+          hidden lessons they booked and managed dependents. History includes canceled bookings,
+          payment details and school-local three-month pages. The shared `my_lessons_and_history`
+          case runs in PHP CI at both mount paths on PostgreSQL, MySQL and MariaDB.
     - [ ] Add lesson invite acceptance and decline for signed-in families and invite links.
           Lesson edits and restores can offer places again, with mail and configured push
           delivery. Link acceptance still requires the lesson booking writes.

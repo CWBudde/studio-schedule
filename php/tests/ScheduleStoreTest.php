@@ -39,6 +39,7 @@ use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\LessonAdminRoutes;
 use StudioSchedule\Http\LessonNoticeRoutes;
 use StudioSchedule\Http\LessonSignupRoutes;
+use StudioSchedule\Http\MyLessonsRoutes;
 use StudioSchedule\Http\PassIssueRoutes;
 use StudioSchedule\Http\ReceiptReadRoutes;
 use StudioSchedule\Http\ScheduleRoutes;
@@ -65,6 +66,7 @@ use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
 use StudioSchedule\Service\JobResult;
 use StudioSchedule\Service\OneOffLesson;
+use StudioSchedule\Service\MyLessons;
 use StudioSchedule\Service\PassIssuance;
 use StudioSchedule\Service\PassVoiding;
 use StudioSchedule\Service\PassRead;
@@ -86,6 +88,7 @@ use StudioSchedule\Store\FamilyStore;
 use StudioSchedule\Store\LessonWriteStore;
 use StudioSchedule\Store\LessonNoticeStore;
 use StudioSchedule\Store\Migrator;
+use StudioSchedule\Store\MyLessonsStore;
 use StudioSchedule\Store\ParticipantReadStore;
 use StudioSchedule\Store\PassIssueStore;
 use StudioSchedule\Store\PassLedgerStore;
@@ -820,6 +823,111 @@ final class ScheduleStoreTest extends TestCase
                 return $current;
             });
         }
+    }
+
+    public function testMyLessonsListsHiddenFamilyBookingsAndTheFullQueuePosition(): void
+    {
+        $this->insertLesson(108, '2026-10-26', 'regular', 'hidden', []);
+        $this->insert('bookings', [
+            'id' => 301, 'person_id' => 2, 'lesson_id' => 108, 'source' => 'self', 'trial' => false,
+            'status' => 'booked', 'booked_at' => '2026-10-22 13:00:00',
+        ]);
+        $this->insert('pass_types', [
+            'id' => 301, 'name' => 'Fixture visit', 'kind' => 'visits', 'visits' => 1, 'validity_days' => 0,
+            'price' => 0, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => '2026-10-21 13:00:00',
+        ]);
+        $this->insert('passes', [
+            'id' => 303, 'pass_type_id' => 301, 'person_id' => 2, 'kind' => 'visits', 'origin' => 'assignment',
+            'visits_total' => 1, 'visits_remaining' => 0, 'status' => 'active', 'valid_from' => '2026-10-20',
+            'valid_until' => '2026-10-29', 'price_paid' => 0, 'sold_at' => '2026-10-21 13:00:00',
+        ]);
+        $this->insert('pass_redemptions', ['pass_id' => 303, 'booking_id' => 301, 'at' => '2026-10-22 13:00:00']);
+        $this->insert('accounts', ['id' => 301, 'person_id' => 2, 'email' => 'dependent@example.test', 'role' => 'member']);
+        $this->database->executeStatement("UPDATE waitlist_entries SET expires_at = '2026-10-25 09:00:00' WHERE expires_at = '2026-10-25 16:59:59'");
+
+        $this->insert('waitlist_entries', [
+            'id' => 301, 'lesson_id' => 107, 'person_id' => 3, 'status' => 'invited', 'stay_on_list' => false,
+            'joined_at' => '2026-10-22 14:00:00', 'invited_at' => '2026-10-23 14:00:00',
+            'invite_token_hash' => hash('sha256', 'missing-expiry-fixture', true),
+        ]);
+
+        $app = $this->app('2026-10-25T09:30:00Z');
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member');
+        $view = self::get($app, '/my/lessons', $member);
+        $bookings = $view['upcoming'];
+        self::assertIsArray($bookings);
+        self::assertCount(4, $bookings);
+        self::assertIsArray($bookings[3]);
+        self::assertIsArray($bookings[3]['lesson']);
+        self::assertSame('hidden', $bookings[3]['lesson']['visibility']);
+        self::assertSame('Ari Zebra', $bookings[3]['personName']);
+        self::assertTrue($bookings[3]['canCancel']);
+        self::assertSame([
+            'status' => 'paid', 'pass' => ['id' => self::id(303), 'name' => 'Fixture visit', 'kind' => 'visits',
+                'visitsRemaining' => 0, 'validUntil' => '2026-10-29'],
+        ], $bookings[3]['payment']);
+        $waiting = $view['waitlist'];
+        self::assertIsArray($waiting);
+        self::assertCount(3, $waiting);
+        self::assertIsArray($waiting[0]);
+        self::assertIsArray($waiting[1]);
+        self::assertSame([
+            'personId' => self::id(2), 'name' => 'Ari Zebra', 'entryId' => self::id(211), 'status' => 'waiting',
+            'stayOnList' => true, 'position' => 2,
+        ], $waiting[0]['entry']);
+        self::assertSame([
+            'personId' => self::id(6), 'name' => 'Nia Zebra', 'entryId' => self::id(214), 'status' => 'expired',
+            'stayOnList' => false, 'expiresAt' => '2026-10-25T09:00:00Z',
+        ], $waiting[1]['entry']);
+        self::assertIsArray($waiting[2]);
+        self::assertSame([
+            'personId' => self::id(3), 'name' => 'Zoe Alpha', 'entryId' => self::id(301), 'status' => 'expired',
+            'stayOnList' => false,
+        ], $waiting[2]['entry']);
+        self::assertIsArray($waiting[2]['lesson']);
+        self::assertSame(self::id(121), $waiting[2]['lesson']['eventId']);
+        self::assertArrayNotHasKey('eventSlug', $waiting[2]['lesson']);
+    }
+
+    public function testMyLessonHistoryPagesAtSchoolLocalMonthBoundaries(): void
+    {
+        foreach ([108 => '09:00:00', 109 => '08:59:59.999999'] as $lesson => $start) {
+            $this->insertLesson($lesson, '2026-08-01', 'regular', 'hidden', [
+                'starts_at' => "2026-08-01 $start", 'ends_at' => '2026-08-01 10:00:00',
+            ]);
+            $this->insert('bookings', [
+                'id' => $lesson + 200, 'person_id' => 2, 'lesson_id' => $lesson, 'source' => 'self', 'trial' => false,
+                'status' => 'canceled', 'booked_at' => '2026-07-22 13:00:00', 'canceled_at' => '2026-07-30 13:00:00',
+            ]);
+        }
+        // 11:00 in Berlin is 10:00 UTC in November and 09:00 UTC in August.
+        $app = $this->app('2026-11-01T10:00:00Z');
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member');
+        $page = self::get($app, '/my/lessons/history?before=2027-01-01T00:00:00Z', $member);
+        self::assertSame('2026-11-01T10:00:00Z', $page['before']);
+        self::assertSame('2026-08-01T09:00:00Z', $page['nextBefore']);
+        self::assertTrue($page['hasMore']);
+        $items = $page['items'];
+        self::assertIsArray($items);
+        $firstPage = end($items);
+        self::assertIsArray($firstPage);
+        self::assertIsArray($firstPage['booking']);
+        self::assertSame(self::id(308), $firstPage['booking']['id']);
+        self::assertFalse($firstPage['canCancel']);
+        self::assertSame(['status' => 'free'], $firstPage['payment']);
+        $older = self::get($app, '/my/lessons/history?before=2026-08-01T11:00:00%2B02:00', $member);
+        self::assertSame('2026-08-01T09:00:00Z', $older['before']);
+        self::assertFalse($older['hasMore']);
+        self::assertIsArray($older['items']);
+        self::assertCount(1, $older['items']);
+        $olderItem = $older['items'][0];
+        self::assertIsArray($olderItem);
+        self::assertIsArray($olderItem['booking']);
+        self::assertSame(self::id(309), $olderItem['booking']['id']);
+
+        $fractional = self::get($app, '/my/lessons/history?before=2026-08-01T11:00:00.123456789%2B02:00', $member);
+        self::assertSame('2026-08-01T09:00:00.123456789Z', $fractional['before']);
+        self::assertSame('2026-05-01T09:00:00.123456789Z', $fractional['nextBefore']);
     }
 
     public function testWaitlistInvitePreviewShowsInviteStateWithoutTakingAPlace(): void
@@ -3295,6 +3403,7 @@ final class ScheduleStoreTest extends TestCase
         };
         $scheduleStore = new ScheduleStore($this->database);
         ScheduleRoutes::register($app, $scheduleStore, $clock);
+        (new MyLessonsRoutes(new MyLessons(new MyLessonsStore($this->database), $scheduleStore, $clock)))->register($app);
         (new TeachingScheduleRoutes(new TeachingSchedule($scheduleStore, $clock)))->register($app);
         (new LessonSignupRoutes(new LessonSignup(
             $scheduleStore,
