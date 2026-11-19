@@ -15,17 +15,22 @@ use Psr\Http\Message\ResponseInterface;
 use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
+use Slim\Psr7\Factory\StreamFactory;
+use StudioSchedule\Http\CatalogAdminRoutes;
 use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Http\StatisticsEndpoint;
+use StudioSchedule\Service\OneOffLesson;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\StatisticsService;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\Migrator;
+use StudioSchedule\Store\PublicSettingsStore;
 use StudioSchedule\Store\ScheduleStore;
 use StudioSchedule\Store\Schema;
 use StudioSchedule\Store\StatisticsStore;
+use StudioSchedule\Store\TimetableStore;
 
 final class ScheduleStoreTest extends TestCase
 {
@@ -78,6 +83,111 @@ final class ScheduleStoreTest extends TestCase
             }
         } finally {
             $this->database->close();
+        }
+    }
+
+    public function testOfficeCreatesOneOffLessonsWithSchoolTimeAndValidatesReferencesAndConflicts(): void
+    {
+        $app = $this->app('2026-10-24T12:00:00Z');
+        $office = new SessionPrincipal(self::id(11), self::id(1), 'office');
+        $data = [
+            'roomId' => self::id(21), 'courseTypeId' => self::id(22), 'instructorId' => self::id(23),
+            'accompanistId' => self::id(24), 'date' => '2026-10-29', 'startTime' => '11:30',
+            'durationMinutes' => 60, 'visibility' => 'members', 'kind' => 'private', 'capacity' => 3,
+        ];
+        $post = static function (array $fields, int $status) use ($app, $office): array {
+            $request = (new ServerRequestFactory())->createServerRequest('POST', '/api/v1/lessons')
+                ->withAttribute('sessionPrincipal', $office)
+                ->withHeader('Content-Type', 'application/json')
+                ->withBody((new StreamFactory())->createStream(json_encode($fields, JSON_THROW_ON_ERROR)));
+            $response = $app->handle($request);
+            self::assertSame($status, $response->getStatusCode(), (string) $response->getBody());
+            self::assertSame('no-store', $response->getHeaderLine('Cache-Control'));
+            $body = json_decode((string) $response->getBody(), true, flags: JSON_THROW_ON_ERROR);
+            self::assertIsArray($body);
+
+            return $body;
+        };
+
+        $unknown = self::id(255);
+        $invalid = [
+            ['date', '2026-02-30'], ['startTime', '29:00'], ['durationMinutes', 1000], ['capacity', 1001],
+            ['courseTypeId', $unknown], ['courseTypeId', null], ['instructorId', $unknown], ['instructorId', null],
+            ['roomId', $unknown], ['accompanistId', $unknown], ['accompanistId', self::id(23)],
+            ['capacity', 0], ['visibility', 'other'], ['kind', 'other'], ['renter', 'A renter'],
+            ['confirmPast', 'yes'], ['unexpected', true],
+        ];
+        foreach ($invalid as [$field, $value]) {
+            $body = $post(array_replace($data, [$field => $value]), 422);
+            self::assertStringContainsString('"location":"body.' . $field . '"', json_encode($body, JSON_THROW_ON_ERROR));
+        }
+
+        $past = array_replace($data, ['date' => '2026-10-24', 'startTime' => '14:00']);
+        self::assertSame('past', $post($past, 409)['reason']);
+        $post($past + ['confirmPast' => true], 201);
+
+        // The only prior lesson in this room at this time is canceled.
+        $created = $post($data, 201);
+        self::assertSame('2026-10-29T10:30:00Z', $created['startsAt']);
+        self::assertSame('2026-10-29T11:30:00Z', $created['endsAt']);
+        self::assertSame(3, $created['freePlaces']);
+        self::assertSame(['activeBookings' => 0, 'detached' => false], $created['admin']);
+        self::assertArrayNotHasKey('classId', $created);
+        $id = $created['id'];
+        self::assertIsString($id);
+        self::assertEquals($created, self::get($app, '/lessons/' . $id, $office));
+        $conflict = $post($data, 409);
+        self::assertSame('room-taken', $conflict['reason']);
+        self::assertSame([
+            'id' => $id, 'startsAt' => $created['startsAt'], 'endsAt' => $created['endsAt'], 'courseType' => $created['courseType'],
+        ], $conflict['lesson']);
+        $post($data + ['confirmRoomOverlap' => true], 201);
+        $post(array_replace($data, ['startTime' => '12:30']), 201);
+
+        $rent = array_replace($data, [
+            'date' => '2026-10-25', 'startTime' => '02:30', 'kind' => 'rental', 'visibility' => 'hidden', 'capacity' => 0,
+            'courseTypeId' => null, 'instructorId' => null, 'accompanistId' => null, 'renter' => ' Fixture club ',
+        ]);
+        foreach ([
+            ['instructorId', self::id(23)], ['accompanistId', self::id(24)], ['capacity', 1],
+            ['visibility', 'public'], ['renter', ' '],
+        ] as [$field, $value]) {
+            $body = $post(array_replace($rent, [$field => $value]), 422);
+            self::assertStringContainsString('"location":"body.' . $field . '"', json_encode($body, JSON_THROW_ON_ERROR));
+        }
+
+        $rental = $post($rent, 201);
+        self::assertSame('2026-10-25T00:30:00Z', $rental['startsAt']);
+        self::assertSame('2026-10-25T01:30:00Z', $rental['endsAt']);
+        self::assertSame('Fixture club', $rental['renter']);
+        self::assertSame(0, $rental['freePlaces']);
+        self::assertArrayNotHasKey('courseType', $rental);
+        self::assertArrayNotHasKey('instructor', $rental);
+        self::assertSame([
+            'id' => $rental['id'], 'startsAt' => $rental['startsAt'], 'endsAt' => $rental['endsAt'],
+        ], $post($rent, 409)['lesson']);
+
+        $this->database->executeStatement("UPDATE settings SET timezone = 'America/New_York'");
+        foreach ([20 => 'date', 18 => 'durationMinutes'] as $hour => $field) {
+            $body = $post(array_replace($data, [
+                'date' => '9999-12-31', 'startTime' => $hour . ':30', 'durationMinutes' => 90,
+            ]), 422);
+            self::assertStringContainsString('"location":"body.' . $field . '"', json_encode($body, JSON_THROW_ON_ERROR));
+        }
+        $this->database->executeStatement("UPDATE settings SET timezone = 'UTC'");
+        $body = $post(array_replace($data, ['date' => '0001-01-01', 'startTime' => '00:00', 'confirmPast' => true]), 422);
+        self::assertStringContainsString('"location":"body.date"', json_encode($body, JSON_THROW_ON_ERROR));
+
+        if ($this->postgres) {
+            $this->database->executeStatement('SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+            $isolation = fn(): mixed => $this->database->fetchOne('SHOW transaction_isolation');
+            self::assertSame('repeatable read', $isolation());
+            self::assertSame('read committed', (new TimetableStore($this->database))->writeOneOff($isolation));
+            (new PublicSettingsStore($this->database))->changeRegional(static function (array $current) use ($isolation): array {
+                self::assertSame('read committed', $isolation());
+
+                return $current;
+            });
         }
     }
 
@@ -616,6 +726,7 @@ final class ScheduleStoreTest extends TestCase
         };
         $scheduleStore = new ScheduleStore($this->database);
         ScheduleRoutes::register($app, $scheduleStore, $clock);
+        CatalogAdminRoutes::registerLessonCreation($app, new OneOffLesson(new TimetableStore($this->database), $clock));
         $app->get('/api/v1/admin/statistics', new StatisticsEndpoint(new StatisticsService(new StatisticsStore($this->database), $scheduleStore, $clock)));
         EventRoutes::register($app, new EventStore($this->database), $clock);
         $app->addRoutingMiddleware();

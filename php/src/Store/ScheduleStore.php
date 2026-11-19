@@ -146,6 +146,18 @@ final readonly class ScheduleStore implements SchedulePersistence
         return array_map($this->publishedLesson(...), $rows);
     }
 
+    public function roomOverlap(string $roomId, DateTimeImmutable $start, DateTimeImmutable $end): ?PublishedLesson
+    {
+        $row = $this->connection->fetchAssociative(
+            self::LESSONS . " WHERE l.room_id = ? AND l.status <> 'canceled' AND l.starts_at < ? AND l.ends_at > ?"
+            . ' ORDER BY l.starts_at, l.id LIMIT 1',
+            [$this->encodeId($roomId), $this->sqlInstant($end), $this->sqlInstant($start)],
+            [$this->idType(), ParameterType::STRING, ParameterType::STRING],
+        );
+
+        return $row === false ? null : $this->publishedLesson($row);
+    }
+
     public function lesson(string $id): ?PublishedLesson
     {
         $row = $this->connection->fetchAssociative(

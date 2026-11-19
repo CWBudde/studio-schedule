@@ -75,6 +75,7 @@ use StudioSchedule\Service\Impersonation;
 use StudioSchedule\Service\JobResult;
 use StudioSchedule\Service\LessonGenerator;
 use StudioSchedule\Service\MailLog;
+use StudioSchedule\Service\OneOffLesson;
 use StudioSchedule\Service\MemberImports;
 use StudioSchedule\Service\ParticipantRead;
 use StudioSchedule\Service\PassRead;
@@ -311,6 +312,7 @@ final class Bootstrap
                     (new MemberImportRoutes(new MemberImports($memberDirectory, $clock)))->register($app);
                     CatalogAdminRoutes::registerTerms($app, new TermAdmin($timetableStore, $generator, $clock));
                     CatalogAdminRoutes::registerClasses($app, new ClassAdmin($timetableStore, $generator, $clock));
+                    CatalogAdminRoutes::registerLessonCreation($app, new OneOffLesson($timetableStore, $clock));
                     EventRoutes::register($app, new EventStore($connection), $clock);
                     $familyStore = new FamilyStore($connection);
                     $duplicates = new DuplicateStore($connection, $memberDirectory, $familyStore, $clock);

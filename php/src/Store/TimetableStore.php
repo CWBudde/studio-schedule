@@ -11,10 +11,13 @@ use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use StudioSchedule\Domain\Date;
+use StudioSchedule\Domain\PublishedLesson;
 use StudioSchedule\Domain\ScheduleRules;
 use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\ClassData;
 use StudioSchedule\Service\LessonGenerationPersistence;
+use StudioSchedule\Service\OneOffLessonData;
+use StudioSchedule\Service\OneOffLessonPersistence;
 use StudioSchedule\Service\TimetableAdminPersistence;
 use Symfony\Component\Uid\Uuid;
 
@@ -24,7 +27,7 @@ use Symfony\Component\Uid\Uuid;
  * @phpstan-import-type MemberRow from LessonGenerationPersistence
  * @phpstan-import-type ClassLesson from TimetableAdminPersistence
  */
-final readonly class TimetableStore implements TimetableAdminPersistence
+final readonly class TimetableStore implements TimetableAdminPersistence, OneOffLessonPersistence
 {
     public function __construct(private Connection $db) {}
 
@@ -111,6 +114,47 @@ final readonly class TimetableStore implements TimetableAdminPersistence
     public function lockExcludedLessons(string $class, Date $startsOn, Date $endsOn, DateTimeImmutable $now): array
     {
         return $this->lockLessons($class, $now, [$startsOn, $endsOn]);
+    }
+
+    public function writeOneOff(Closure $operation): mixed
+    {
+        return Database::retryWrite($this->db, $operation, readCommitted: true);
+    }
+
+    public function lockLessonReferences(OneOffLessonData $data): void
+    {
+        if ($data->courseTypeId !== null) {
+            $this->requireReference('course_types', $data->courseTypeId, 'courseTypeId', 'course type');
+        }
+        $this->requireReference('rooms', $data->roomId, 'roomId', 'room');
+        if ($data->instructorId !== null) {
+            $this->requireReference('staff', $data->instructorId, 'instructorId', 'instructor');
+        }
+        if ($data->accompanistId !== null) {
+            $this->requireReference('staff', $data->accompanistId, 'accompanistId', 'accompanist');
+        }
+    }
+
+    public function roomOverlap(string $roomId, DateTimeImmutable $start, DateTimeImmutable $end): ?PublishedLesson
+    {
+        return (new ScheduleStore($this->db))->roomOverlap($roomId, $start, $end);
+    }
+
+    public function createOneOffLesson(OneOffLessonData $data, DateTimeImmutable $start, DateTimeImmutable $end): PublishedLesson
+    {
+        $id = Uuid::v7()->toRfc4122();
+        $this->db->insert('lessons', [
+            'id' => $this->encodeId($id),
+            'course_type_id' => $data->courseTypeId === null ? null : $this->encodeId($data->courseTypeId),
+            'room_id' => $this->encodeId($data->roomId),
+            'instructor_id' => $data->instructorId === null ? null : $this->encodeId($data->instructorId),
+            'accompanist_id' => $data->accompanistId === null ? null : $this->encodeId($data->accompanistId),
+            'starts_at' => Database::sqlInstant($this->db, $start), 'ends_at' => Database::sqlInstant($this->db, $end),
+            'kind' => $data->kind, 'visibility' => $data->visibility, 'capacity' => $data->capacity,
+            'status' => 'scheduled', 'renter' => $data->renter === '' ? null : $data->renter,
+        ]);
+
+        return (new ScheduleStore($this->db))->lesson($id) ?? throw new \RuntimeException('The new lesson was not stored');
     }
 
     public function createClass(string $term, ClassData $data): array

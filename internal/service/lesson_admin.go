@@ -143,6 +143,13 @@ func (s *LessonService) CreateLesson(ctx context.Context, d NewLesson) (Schedule
 		if err := s.apply(&l, d.LessonData, loc); err != nil {
 			return err
 		}
+		// The UTC instants must fit the shared storage and RFC 3339 response.
+		if l.StartsAt.UTC().Year() > 9999 {
+			return &domain.FieldError{Field: "date", Msg: "the lesson start is outside the supported UTC date range"}
+		}
+		if l.EndsAt.UTC().Year() > 9999 {
+			return &domain.FieldError{Field: "durationMinutes", Msg: "the lesson end is outside the supported UTC date range"}
+		}
 
 		if err := lessonReferences(ctx, tx, l); err != nil {
 			return err

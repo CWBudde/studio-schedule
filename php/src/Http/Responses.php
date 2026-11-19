@@ -69,7 +69,10 @@ final class Responses
             ->withHeader('Retry-After', (string) $retryAfter);
     }
 
-    /** @param list<array{location:string,message:string}> $errors */
+    /**
+     * @param list<array{location:string,message:string}> $errors
+     * @param array<string,mixed> $extensions
+     */
     public static function problem(
         ServerRequestInterface $request,
         int $status,
@@ -77,6 +80,7 @@ final class Responses
         string $type = '',
         array $errors = [],
         string $reason = '',
+        array $extensions = [],
     ): ResponseInterface {
         $response = new Response($status);
         $body = ['title' => $response->getReasonPhrase(), 'status' => $status, 'detail' => $detail];
@@ -94,7 +98,7 @@ final class Responses
             $body['reason'] = $reason;
         }
 
-        return self::json($response, $body, $request->getMethod() === 'HEAD')
+        return self::json($response, $body + $extensions, $request->getMethod() === 'HEAD')
             ->withHeader('Content-Type', 'application/problem+json')
             ->withHeader('Cache-Control', 'no-store');
     }

@@ -1344,7 +1344,7 @@ backends.
       `/api/test/…` to set the clock, reset the database, load the demo seed and read the outbox.
       Register it only with `TEST_CONTROL=true`, refuse it at startup with an `https://`
       `BASE_URL`, and keep it out of `api/openapi.json`.
-  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 37
+  - [x] Go test controls use an isolated PostgreSQL schema, and the Go server passes all 38
         scenarios at the domain root and under `/dance/schedule`.
   - [x] PHP test controls for clock, reset, demo seed and outbox. The CI fixture job exercises
         them on PostgreSQL, MySQL 8.0 and MariaDB 10.6 at the root and under `/dance/schedule`.
@@ -1479,6 +1479,9 @@ backends.
           shared `class_creation_and_deletion` case passes at both mount paths on all three PHP
           databases.
     - [x] Run `class_lists_and_roster` and `class_creation_and_deletion` in PHP CI.
+    - [x] Let the office create one-off lessons and room rentals in school-local time, with
+          confirmation for past starts and room overlaps. The shared `one_off_lesson_creation`
+          case runs in PHP CI on all three databases at both mount paths.
   - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
         order (`SELECT … FOR UPDATE` on all three databases, term → class → lesson → passes)
     - [x] Let linked active staff read their lessons' bookings, payments and waitlist or event

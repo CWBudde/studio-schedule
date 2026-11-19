@@ -153,7 +153,7 @@ final readonly class PublicSettingsStore implements AdminSettingsPersistence
             );
 
             return $updated + $current;
-        });
+        }, readCommitted: true);
     }
 
     private function lockSettings(): void

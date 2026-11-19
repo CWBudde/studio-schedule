@@ -2,7 +2,6 @@ package conformance
 
 import (
 	"bytes"
-	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -204,6 +203,15 @@ func sellAndCancelReceipt(t *testing.T, b *backend, office *http.Client, person,
 func createLesson(t *testing.T, b *backend, office *http.Client, kind string, capacity int) string {
 	t.Helper()
 
+	data := lessonFixture(t, b, office, kind, capacity)
+	in := request{method: http.MethodPost, path: "/api/v1/lessons", body: jsonBody(t, data)}
+
+	return read[struct{ ID string }](t, b.call(t, office, in, http.StatusCreated)).ID
+}
+
+func lessonFixture(t *testing.T, b *backend, office *http.Client, kind string, capacity int) map[string]any {
+	t.Helper()
+
 	terms := read[struct{ Items []struct{ ID string } }](t, get(t, b, office, "/api/v1/terms"))
 	for _, term := range terms.Items {
 		classes := read[struct {
@@ -219,17 +227,91 @@ func createLesson(t *testing.T, b *backend, office *http.Client, kind string, ca
 			if class.CourseTypeID == "" || class.RoomID == "" || class.Instructor.ID == "" {
 				continue
 			}
-			in := request{method: http.MethodPost, path: "/api/v1/lessons", body: fmt.Sprintf(
-				`{"courseTypeId":%q,"date":"2026-10-24","startTime":"08:00","durationMinutes":60,"roomId":%q,`+
-					`"instructorId":%q,"capacity":%d,"visibility":"public","kind":%q,"confirmRoomOverlap":true}`,
-				class.CourseTypeID, class.RoomID, class.Instructor.ID, capacity, kind,
-			)}
-			return read[struct{ ID string }](t, b.call(t, office, in, http.StatusCreated)).ID
+			return map[string]any{
+				"courseTypeId": class.CourseTypeID, "date": "2026-10-24", "startTime": "08:00",
+				"durationMinutes": 60, "roomId": class.RoomID, "instructorId": class.Instructor.ID,
+				"capacity": capacity, "visibility": "public", "kind": kind, "confirmRoomOverlap": true,
+			}
 		}
 	}
 
 	t.Fatal("the fixture has no class with a complete catalog and room assignment")
-	return ""
+
+	return nil
+}
+
+func oneOffLessonCreation(t *testing.T, b *backend) {
+	t.Helper()
+
+	office, member := browser(t), browser(t)
+	login(t, b, office, "olga.ledgerby@example.net", demoPassword)
+	login(t, b, member, demoMember, demoPassword)
+	data := lessonFixture(t, b, office, "regular", 2)
+	delete(data, "confirmRoomOverlap")
+	data["startTime"] = "02:00"
+	const path = "/api/v1/lessons"
+	call := func(client *http.Client, status int) answer {
+		t.Helper()
+		return b.call(t, client, request{method: http.MethodPost, path: path, body: jsonBody(t, data)}, status)
+	}
+	call(browser(t), http.StatusUnauthorized)
+	call(member, http.StatusForbidden)
+
+	type lesson struct {
+		ID, StartsAt, EndsAt, Kind, Renter, Visibility, ClassID, Status string
+		Capacity, FreePlaces                                            int
+		Admin                                                           *struct {
+			ActiveBookings int
+			Detached       bool
+		}
+	}
+	created := read[lesson](t, call(office, http.StatusCreated))
+	if created.ID == "" || created.ClassID != "" || created.Kind != "regular" || created.Status != "scheduled" ||
+		created.StartsAt != "2026-10-24T00:00:00Z" || created.EndsAt != "2026-10-24T01:00:00Z" ||
+		created.FreePlaces != 2 || created.Admin == nil || created.Admin.ActiveBookings != 0 || created.Admin.Detached {
+		t.Fatalf("unexpected one-off lesson: %+v", created)
+	}
+	stored := request{method: http.MethodGet, path: path + "/{lessonId}", params: map[string]string{"lessonId": created.ID}}
+	if saved := read[lesson](t, b.call(t, office, stored, http.StatusOK)); saved.ID != created.ID || saved.StartsAt != created.StartsAt {
+		t.Fatalf("created lesson was not stored: %+v", saved)
+	}
+	taken := read[struct {
+		Reason string
+		Lesson *struct{ ID, StartsAt string }
+	}](t, call(office, http.StatusConflict))
+	if taken.Reason != "room-taken" || taken.Lesson == nil || taken.Lesson.ID != created.ID ||
+		taken.Lesson.StartsAt != created.StartsAt {
+		t.Fatalf("unexpected room conflict: %+v", taken)
+	}
+	data["confirmRoomOverlap"] = true
+	call(office, http.StatusCreated)
+	delete(data, "confirmRoomOverlap")
+	data["startTime"] = "03:00"
+	call(office, http.StatusCreated)
+	data["startTime"] = "23:30"
+	if failed := call(office, http.StatusUnprocessableEntity); !containsJSON(failed.body, `"location":"body.durationMinutes"`) {
+		t.Fatalf("crossing midnight did not identify the duration: %s", failed.body)
+	}
+	data["startTime"] = "03:00"
+	data["date"] = "2026-10-01"
+	if failed := call(office, http.StatusConflict); !containsJSON(failed.body, `"reason":"past"`) {
+		t.Fatalf("past lesson did not request confirmation: %s", failed.body)
+	}
+	data["confirmPast"] = true
+	call(office, http.StatusCreated)
+	delete(data, "confirmPast")
+	data["date"] = "2026-10-25"
+	data["startTime"] = "02:30"
+	data["capacity"], data["kind"], data["visibility"], data["renter"] = 0, "rental", "hidden", " Fixture renter "
+	delete(data, "instructorId")
+	delete(data, "courseTypeId")
+	rental := read[lesson](t, call(office, http.StatusCreated))
+	if rental.Kind != "rental" || rental.Visibility != "hidden" || rental.Renter != "Fixture renter" || rental.Capacity != 0 ||
+		rental.StartsAt != "2026-10-25T00:30:00Z" || rental.EndsAt != "2026-10-25T01:30:00Z" {
+		t.Fatalf("unexpected rental on the repeated school-local hour: %+v", rental)
+	}
+	stored.params["lessonId"] = rental.ID
+	b.call(t, member, stored, http.StatusNotFound)
 }
 
 func passTypeAdministration(t *testing.T, b *backend) {

@@ -15,11 +15,16 @@ use Slim\Routing\RouteCollectorProxy;
 use StudioSchedule\Domain\CatalogResource;
 use StudioSchedule\Domain\Date;
 use StudioSchedule\Domain\Id;
+use StudioSchedule\Domain\Instant;
 use StudioSchedule\Domain\TimeOfDay;
 use StudioSchedule\Service\CatalogAdmin;
 use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\ClassAdmin;
 use StudioSchedule\Service\ClassData;
+use StudioSchedule\Service\LessonRoomTaken;
+use StudioSchedule\Service\OneOffLesson;
+use StudioSchedule\Service\OneOffLessonData;
+use StudioSchedule\Service\SetupInput;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\TermAdmin;
 
@@ -87,6 +92,68 @@ final readonly class CatalogAdminRoutes
                 return $response->withStatus(204);
             });
         })->add(self::requireOffice(...));
+    }
+
+    /**
+     * @template TContainer of ContainerInterface|null
+     * @param App<TContainer> $app
+     */
+    public static function registerLessonCreation(App $app, OneOffLesson $service): void
+    {
+        $app->post('/api/v1/lessons', static fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+            => self::createLesson($request, $response, $service))->add(self::requireOffice(...));
+    }
+
+    private static function createLesson(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, OneOffLesson $service): ResponseInterface
+    {
+        $body = self::fields($request, [
+            'date', 'starttime', 'durationminutes', 'roomid', 'coursetypeid', 'instructorid', 'accompanistid',
+            'capacity', 'visibility', 'kind', 'renter', 'confirmroomoverlap', 'confirmpast',
+        ]);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+
+        $date = self::date($body, 'date');
+        try {
+            $time = TimeOfDay::parse(self::text($body, 'startTime', 5, true));
+        } catch (InvalidArgumentException) {
+            throw CatalogFailure::field('startTime', 'expected a wall-clock time in HH:MM form');
+        }
+        $visibility = self::text($body, 'visibility', 7, true);
+        if (!in_array($visibility, ['public', 'members', 'hidden'], true)) {
+            throw CatalogFailure::field('visibility', 'invalid lesson visibility');
+        }
+        $kind = self::text($body, 'kind', 8, true);
+        if (!in_array($kind, ['regular', 'workshop', 'private', 'rental'], true)) {
+            throw CatalogFailure::field('kind', 'invalid lesson kind');
+        }
+        $data = new OneOffLessonData(
+            date: $date,
+            startTime: $time,
+            durationMinutes: self::number($body, 'durationMinutes', 1, 1440, true),
+            roomId: self::id(self::value($body, 'roomId', true), 'body.roomId'),
+            courseTypeId: self::optionalId($body, 'courseTypeId'),
+            instructorId: self::optionalId($body, 'instructorId'),
+            accompanistId: self::optionalId($body, 'accompanistId'),
+            capacity: self::number($body, 'capacity', 0, 10000, true),
+            visibility: $visibility,
+            kind: $kind,
+            renter: SetupInput::trim(self::text($body, 'renter', 100) ?? ''),
+            confirmRoomOverlap: self::flag($body, 'confirmRoomOverlap'),
+            confirmPast: self::flag($body, 'confirmPast'),
+        );
+        try {
+            return Responses::json($response->withStatus(201), $service->create($data))->withHeader('Cache-Control', 'no-store');
+        } catch (LessonRoomTaken $error) {
+            $overlap = $error->lesson;
+            $lesson = ['id' => $overlap->id, 'startsAt' => Instant::format($overlap->startsAt), 'endsAt' => Instant::format($overlap->endsAt)];
+            if ($overlap->courseType !== null) {
+                $lesson['courseType'] = $overlap->courseType;
+            }
+
+            return Responses::problem($request, 409, $error->getMessage(), reason: 'room-taken', extensions: ['lesson' => $lesson]);
+        }
     }
 
     private static function createClass(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, ClassAdmin $service, string $term): ResponseInterface

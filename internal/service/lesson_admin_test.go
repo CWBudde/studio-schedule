@@ -161,6 +161,32 @@ func fieldsOf(err error) []string {
 	return fields
 }
 
+func TestCreateLessonRejectsInstantsBeyondTheUTCYearRange(t *testing.T) {
+	t.Parallel()
+
+	settings := seed.DemoSettings()
+	settings.Timezone = "America/New_York"
+	f := newGenFixture(t, settings)
+	svc := f.lessonService(t, lessonNow)
+	for _, tt := range []struct {
+		field string
+		hour  int
+	}{
+		{"date", 20},
+		{"durationMinutes", 18},
+	} {
+		t.Run(tt.field, func(t *testing.T) {
+			d := f.lessonData()
+			d.Date = domain.Date{Year: 9999, Month: time.December, Day: 31}
+			d.StartTime = domain.TimeOfDay{Hour: tt.hour, Minute: 30}
+			_, err := svc.CreateLesson(t.Context(), NewLesson{LessonData: d, CourseTypeID: f.courseType})
+			if !slices.Equal(fieldsOf(err), []string{tt.field}) {
+				t.Fatalf("want validation error on %s, got %v", tt.field, err)
+			}
+		})
+	}
+}
+
 func TestCreateLesson(t *testing.T) {
 	t.Parallel()
 

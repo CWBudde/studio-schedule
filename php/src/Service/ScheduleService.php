@@ -79,10 +79,7 @@ final readonly class ScheduleService
             $forOffice = in_array($principal?->role, ['office', 'admin'], true);
             $body = $this->withAvailability([$lesson], $rules, $now, $principal, $forOffice)[0];
 
-            return $body + self::present([
-                'courseTypeDescription' => $lesson->courseTypeDescription,
-                'locationAddress' => $lesson->locationAddress,
-            ]);
+            return $body + self::lessonDescriptions($lesson);
         });
     }
 
@@ -186,11 +183,7 @@ final readonly class ScheduleService
 
             $activeBookings = $active[$id] ?? 0;
             $occupied = $lesson->eventId === null ? $activeBookings + $held : ($eventPlaces[$lesson->eventId] ?? 0);
-            $body = self::lessonSummary($lesson) + [
-                'freePlaces' => max(0, $lesson->capacity - $occupied),
-                'bookingClosesAt' => self::cutoff($lesson->startsAt, $rules->bookingCutoffMicros),
-            ] + self::present([
-                'lateCancelFrom' => $lesson->status === 'canceled' ? null : self::cutoff($lesson->startsAt, $rules->cancellationCutoffMicros),
+            $body = self::lessonSummary($lesson) + self::availability($lesson, $rules, $occupied) + self::present([
                 'bookedFor' => $bookedFor === [] ? null : $bookedFor,
                 'waitlist' => $familyWaitlist === [] ? null : $familyWaitlist,
                 'admin' => $forOffice ? $this->admin($id, $activeBookings) : null,
@@ -213,6 +206,26 @@ final readonly class ScheduleService
             'cancelNote' => $admin['cancelNote'],
             'canceledAt' => $admin['canceledAt'] === null ? null : self::instant($admin['canceledAt']),
             'canceledBy' => $admin['canceledBy'],
+        ]);
+    }
+
+    /** @return array<string, mixed> */
+    public static function availability(PublishedLesson $lesson, ScheduleRules $rules, int $occupied): array
+    {
+        return [
+            'freePlaces' => max(0, $lesson->capacity - $occupied),
+            'bookingClosesAt' => self::cutoff($lesson->startsAt, $rules->bookingCutoffMicros),
+        ] + self::present([
+            'lateCancelFrom' => $lesson->status === 'canceled' ? null : self::cutoff($lesson->startsAt, $rules->cancellationCutoffMicros),
+        ]);
+    }
+
+    /** @return array<string, mixed> */
+    public static function lessonDescriptions(PublishedLesson $lesson): array
+    {
+        return self::present([
+            'courseTypeDescription' => $lesson->courseTypeDescription,
+            'locationAddress' => $lesson->locationAddress,
         ]);
     }
 
