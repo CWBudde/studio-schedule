@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace StudioSchedule\Store;
 
 use Closure;
+use DateTimeImmutable;
+use DateTimeZone;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
@@ -60,6 +62,34 @@ final class Database
         $version = $connection->fetchOne($driver === 'pdo_pgsql' ? 'SHOW server_version_num' : 'SELECT VERSION()');
 
         return is_string($version) ? $version : '';
+    }
+
+    public static function sqlInstant(Connection $connection, DateTimeImmutable $instant): string
+    {
+        $utc = $instant->setTimezone(new DateTimeZone('UTC'));
+        if (!$connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            return $utc->format('Y-m-d H:i:s.u');
+        }
+
+        // School midnight on 0001-01-01 may still be in year zero in UTC.
+        $text = $utc->format('Y-m-d H:i:s.uP');
+
+        return str_starts_with($text, '0000-') ? '0001' . substr($text, 4) . ' BC' : $text;
+    }
+
+    /** @return array{string,string} Inclusive microsecond bounds for a half-open interval. */
+    public static function sqlRange(Connection $connection, DateTimeImmutable $start, DateTimeImmutable $end): array
+    {
+        $utc = new DateTimeZone('UTC');
+        $start = $start->setTimezone($utc);
+        $last = $end->setTimezone($utc)->modify('-1 microsecond');
+        if (!$connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            // School midnight can lie outside DATETIME(6)'s calendar in UTC.
+            $start = max($start, new DateTimeImmutable('0001-01-01T00:00:00Z'));
+            $last = min($last, new DateTimeImmutable('9999-12-31T23:59:59.999999Z'));
+        }
+
+        return [self::sqlInstant($connection, $start), self::sqlInstant($connection, $last)];
     }
 
     /** The lock shared by PHP migrations and copies and by Go Goose on PostgreSQL. */

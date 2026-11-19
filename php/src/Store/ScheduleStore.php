@@ -85,8 +85,8 @@ final readonly class ScheduleStore implements SchedulePersistence
 
     public function lessons(DateTimeImmutable $from, DateTimeImmutable $to, array $filters): array
     {
-        $conditions = ['l.starts_at >= ?', 'l.starts_at < ?'];
-        $params = [$this->sqlInstant($from), $this->sqlInstant($to)];
+        $conditions = ['l.starts_at >= ?', 'l.starts_at <= ?'];
+        $params = Database::sqlRange($this->connection, $from, $to);
         $types = [ParameterType::STRING, ParameterType::STRING];
         $clauses = [
             'location' => 'r.location_id = ?',
@@ -375,15 +375,7 @@ final readonly class ScheduleStore implements SchedulePersistence
 
     private function sqlInstant(DateTimeImmutable $instant): string
     {
-        $utc = $instant->setTimezone(new DateTimeZone('UTC'));
-        if (!$this->isPostgres()) {
-            return $utc->format('Y-m-d H:i:s.u');
-        }
-
-        // School midnight on 0001-01-01 may still be in year zero in UTC.
-        $text = $utc->format('Y-m-d H:i:s.uP');
-
-        return str_starts_with($text, '0000-') ? '0001' . substr($text, 4) . ' BC' : $text;
+        return Database::sqlInstant($this->connection, $instant);
     }
 
     private static function instant(mixed $value): DateTimeImmutable

@@ -1444,6 +1444,10 @@ backends.
           Secret-link bodies stay private. Tests pass on PostgreSQL, MySQL and MariaDB,
           including the shared `mail_log` scenario at both mount paths with the PHP
           authentication draft.
+    - [x] Serve office statistics in school-local dates with lesson, attendance, waitlist,
+          participant, pass-sale and event totals. Merged and anonymized people are omitted from
+          the named participant list. Tests pass on all three engines, including the shared
+          `statistics` scenario at both mount paths with the PHP authentication draft.
   - [ ] Import, duplicates and merge (ADR 0015)
   - [ ] Privacy, export, anonymisation, retention jobs (ADR 0016)
   - [ ] Web push with VAPID (ADR 0017)

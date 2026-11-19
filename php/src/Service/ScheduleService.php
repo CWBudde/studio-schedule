@@ -234,15 +234,23 @@ final readonly class ScheduleService
             'courseType' => $lesson->courseType,
             'instructor' => $lesson->instructor,
             'accompanist' => $lesson->accompanist,
+        ]) + self::audience($lesson) + self::present([
+            'renter' => $lesson->renter,
+            'eventId' => $lesson->eventId,
+            'eventSlug' => $lesson->eventSlug,
+        ]);
+    }
+
+    /** @return array<string, mixed> */
+    public static function audience(PublishedLesson $lesson): array
+    {
+        return self::present([
             'levelFrom' => self::levelRef($lesson->levelFrom),
             'levelTo' => self::levelRef($lesson->levelTo),
             'allLevels' => $lesson->allLevels ? true : null,
             'stage' => $lesson->stage,
             'ageFromMonths' => $lesson->ageFromMonths,
             'ageToMonths' => $lesson->ageToMonths,
-            'renter' => $lesson->renter,
-            'eventId' => $lesson->eventId,
-            'eventSlug' => $lesson->eventSlug,
         ]);
     }
 
@@ -264,7 +272,7 @@ final readonly class ScheduleService
         return self::instant($startsAt->modify("-$micros microseconds"));
     }
 
-    private static function instant(DateTimeImmutable $instant): string
+    public static function instant(DateTimeImmutable $instant): string
     {
         $utc = $instant->setTimezone(new DateTimeZone('UTC'));
         $fraction = rtrim($utc->format('u'), '0');

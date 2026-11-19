@@ -17,12 +17,15 @@ use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\ScheduleRoutes;
+use StudioSchedule\Http\StatisticsEndpoint;
 use StudioSchedule\Service\SessionPrincipal;
+use StudioSchedule\Service\StatisticsService;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\Migrator;
 use StudioSchedule\Store\ScheduleStore;
 use StudioSchedule\Store\Schema;
+use StudioSchedule\Store\StatisticsStore;
 
 final class ScheduleStoreTest extends TestCase
 {
@@ -338,6 +341,137 @@ final class ScheduleStoreTest extends TestCase
         self::assertSame($missing, self::get($app, '/lessons/' . self::id(100), status: 404));
     }
 
+    public function testOfficeStatisticsUseSchoolDatesAndExcludePrivateParticipantNames(): void
+    {
+        $app = $this->app('2026-10-25T23:30:00Z');
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member', impersonatorId: self::id(11));
+        $path = '/admin/statistics';
+        self::get($app, $path, status: 401);
+        self::get($app, $path . '?range=invalid', $member, status: 403);
+        self::get($app, $path . '?range=invalid', $office, status: 422);
+        self::get($app, $path . '?range=custom&from=2026-02-30&to=2026-03-02', $office, status: 422);
+        self::get($app, $path . '?range=custom&from=2026-11-04', $office, status: 422);
+        self::get($app, $path . '?range=custom&from=2026-11-04&to=2026-11-01', $office, status: 422);
+        self::get($app, $path . '?range=custom&from=2025-01-01&to=2026-01-02', $office, status: 422);
+
+        $this->database->executeStatement("UPDATE persons SET anonymized_at = '2026-10-24 12:00:00' WHERE given_name = 'Ari'");
+        $primary = $this->database->fetchOne("SELECT id FROM persons WHERE given_name = 'Mara'");
+        self::assertIsString($primary);
+        $this->database->executeStatement("UPDATE persons SET merged_into = ? WHERE given_name = 'Other'", [$primary], [$this->postgres ? ParameterType::STRING : ParameterType::BINARY]);
+        $this->database->executeStatement("UPDATE bookings SET late = TRUE WHERE status = 'canceled'");
+        $common = ['booked_at' => '2026-10-22 14:00:00', 'status' => 'booked'];
+        $this->insert('bookings', ['id' => 205, 'lesson_id' => 104, 'person_id' => 2, 'trial' => false] + $common);
+        $this->insert('bookings', ['id' => 206, 'lesson_id' => 101, 'person_id' => 4, 'trial' => false] + $common);
+        $this->insert('bookings', ['id' => 207, 'lesson_id' => 101, 'guest_name' => 'Synthetic guest', 'trial' => true] + $common);
+        $this->insert('waitlist_entries', [
+            'id' => 215, 'lesson_id' => 100, 'person_id' => 3, 'status' => 'withdrawn',
+            'joined_at' => '2026-10-22 14:00:00', 'stay_on_list' => false,
+        ]);
+
+        $this->seedStatisticsSales();
+        $preset = self::get($app, $path, $office);
+        self::assertSame(['last4Weeks', '2026-10-05', '2026-10-26', 'week'], [$preset['range'], $preset['from'], $preset['to'], $preset['granularity']]);
+        self::assertSame('2026-08-10', self::get($app, $path . '?range=last12Weeks', $office)['from']);
+        $this->insert('terms', ['id' => 34, 'name' => 'New term', 'starts_on' => '2026-10-20', 'ends_on' => '2026-11-30']);
+        $term = self::get($app, $path . '?range=term', $office);
+        self::assertSame(['id' => self::id(34), 'name' => 'New term'], $term['term']);
+        self::assertSame('2026-10-20', $term['from']);
+        self::assertSame('no term includes today', self::get($this->app('2027-01-01T12:00:00Z'), $path . '?range=term', $office, status: 404)['detail']);
+        $wide = self::get($app, $path . '?range=custom&from=2026-01-05&to=2026-07-06', $office);
+        self::assertSame('month', $wide['granularity']);
+        self::assertIsArray($wide['periods']);
+        self::assertCount(7, $wide['periods']);
+        self::assertSame(['2026-01-05', '2026-02-01', '2026-03-01', '2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01'], array_column($wide['periods'], 'start'));
+
+        $report = self::get($app, $path . '?range=custom&from=2026-10-25&to=2026-11-04', $office);
+        self::assertSame(['Europe/Berlin', 'EUR', '2026-10-26', 'week'], [$report['timezone'], $report['currency'], $report['today'], $report['granularity']]);
+        self::assertIsArray($report['totals']);
+        self::assertEquals([
+            'lessons' => 4, 'capacity' => 16, 'bookings' => 6, 'utilization' => 0.375,
+            'attended' => 1, 'noShows' => 1, 'noShowRate' => 0.5, 'lateCancellations' => 1,
+            'trials' => 1, 'guests' => 1, 'waitlistEntries' => 5, 'canceledLessons' => 1,
+            'activeMembers' => 4, 'passesSold' => 0, 'salesGross' => 0, 'eventFees' => 2500,
+        ], $report['totals']);
+        self::assertIsArray($report['periods']);
+        self::assertSame(['2026-10-25', '2026-10-26', '2026-11-02'], array_column($report['periods'], 'start'));
+        self::assertSame(['2026-10-25', '2026-11-01', '2026-11-04'], array_column($report['periods'], 'end'));
+        self::assertSame([1, -1, 0], array_column($report['periods'], 'passesSold'));
+        self::assertSame([8000, -8000, 0], array_column($report['periods'], 'salesGross'));
+        self::assertIsArray($report['periods'][2]);
+        self::assertArrayNotHasKey('noShowRate', $report['periods'][2]);
+        self::assertIsArray($report['classes']);
+        self::assertSame([self::id(40)], array_column($report['classes'], 'classId'));
+        self::assertSame(self::ids(104, 101, 102), array_column($report['classes'], 'lessonId'));
+        self::assertIsArray($report['classes'][0]);
+        self::assertSame(['id' => self::id(31), 'name' => 'First', 'code' => 'F'], $report['classes'][0]['levelFrom']);
+        self::assertSame(['id' => self::id(32), 'name' => 'Last'], $report['classes'][0]['levelTo']);
+        self::assertSame(0, $report['classes'][0]['weekday']);
+        self::assertSame('11:00', $report['classes'][0]['startTime']);
+        self::assertIsArray($report['classes'][1]);
+        self::assertSame('2026-10-27T10:00:00.5Z', $report['classes'][1]['startsAt']);
+        foreach (['rooms' => 'roomId', 'courseTypes' => 'courseTypeId', 'instructors' => 'staffId'] as $group => $idKey) {
+            self::assertIsArray($report[$group]);
+            self::assertCount(1, $report[$group]);
+            self::assertIsArray($report[$group][0]);
+            self::assertArrayHasKey($idKey, $report[$group][0]);
+            self::assertSame(6, $report[$group][0]['bookings']);
+        }
+        self::assertIsArray($report['topParticipants']);
+        self::assertSame(self::ids(1, 3), array_column($report['topParticipants'], 'personId'));
+        self::assertSame([2, 1], array_column($report['topParticipants'], 'bookings'));
+        self::assertEquals([
+            ['eventId' => self::id(120), 'title' => 'Workshop', 'registered' => 2, 'revenue' => 2500],
+            ['eventId' => self::id(121), 'title' => 'Workshop', 'registered' => 0, 'revenue' => 0],
+        ], $report['events']);
+        $this->database->executeStatement('DELETE FROM settings');
+        self::assertSame('resource not found', self::get($app, $path, $office, status: 404)['detail']);
+    }
+
+    public function testStatisticsIncludeTheLastRepresentableSchoolDate(): void
+    {
+        $this->database->executeStatement("UPDATE settings SET timezone = 'America/New_York'");
+        $this->insertLesson(108, '9999-12-31', 'regular', 'public', [
+            'starts_at' => '9999-12-31 23:00:00.500000', 'ends_at' => '9999-12-31 23:45:00.500000',
+        ]);
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $report = self::get($this->app(self::AT_RELEASE), '/admin/statistics?range=custom&from=9999-12-31&to=9999-12-31', $office);
+        self::assertIsArray($report['totals']);
+        self::assertSame(1, $report['totals']['lessons']);
+        self::assertIsArray($report['periods']);
+        self::assertSame(['9999-12-31'], array_column($report['periods'], 'end'));
+    }
+
+    private function seedStatisticsSales(): void
+    {
+        foreach ([
+            400 => ['2026-10-25', 8000, null],
+            401 => ['2026-10-26', -8000, 400],
+            402 => ['2026-10-27', 2500, null],
+            403 => ['2026-10-27', 1500, null],
+            404 => ['2026-10-28', -1500, 403],
+        ] as $id => [$date, $gross, $cancels]) {
+            $this->insert('receipts', [
+                'id' => $id, 'number' => "R-2026-$id", 'year' => 2026, 'sequence' => $id,
+                'kind' => $cancels === null ? 'sale' : 'cancellation', 'cancels_receipt_id' => $cancels,
+                'issued_at' => "$date 10:00:00", 'issue_date' => $date, 'locale' => 'en',
+                'issuer_name' => 'Fictional Hall', 'issuer_address' => 'Fixture Street', 'issuer_tax_id' => '1234',
+                'tax_mode' => 'exempt', 'recipient_name' => 'Fixture recipient', 'payment_method' => 'cash',
+                'currency' => 'EUR', 'net' => $gross, 'vat' => 0, 'gross' => $gross,
+            ]);
+        }
+        $this->insert('event_registrations', [
+            'id' => 224, 'event_id' => 120, 'person_id' => 6, 'status' => 'registered', 'payment' => 'paid',
+            'price' => 2500, 'vat_rate_bp' => 0, 'receipt_id' => 402,
+            'created_at' => '2026-10-27 10:00:00', 'updated_at' => '2026-10-27 10:00:00',
+        ]);
+        $this->insert('event_registrations', [
+            'id' => 225, 'event_id' => 120, 'person_id' => 7, 'status' => 'canceled', 'payment' => 'refunded',
+            'price' => 1500, 'vat_rate_bp' => 0, 'receipt_id' => 403, 'cancellation_receipt_id' => 404,
+            'created_at' => '2026-10-27 10:00:00', 'updated_at' => '2026-10-28 10:00:00', 'canceled_at' => '2026-10-28 10:00:00',
+        ]);
+    }
+
     private function seedSchedule(): void
     {
         $durations = $this->postgres ? "'0.500001 seconds', '2 hours'" : '500001, 7200000000';
@@ -480,7 +614,9 @@ final class ScheduleStoreTest extends TestCase
                 return new DateTimeImmutable($this->now);
             }
         };
-        ScheduleRoutes::register($app, new ScheduleStore($this->database), $clock);
+        $scheduleStore = new ScheduleStore($this->database);
+        ScheduleRoutes::register($app, $scheduleStore, $clock);
+        $app->get('/api/v1/admin/statistics', new StatisticsEndpoint(new StatisticsService(new StatisticsStore($this->database), $scheduleStore, $clock)));
         EventRoutes::register($app, new EventStore($this->database), $clock);
         $app->addRoutingMiddleware();
 

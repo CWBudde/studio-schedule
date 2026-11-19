@@ -33,7 +33,7 @@ final readonly class ScheduleRoutes
 
     public function schedule(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $params = self::queryParams($request);
+        $params = QueryParameters::read($request);
         $errors = [];
         $dates = [];
         foreach (['from', 'to'] as $name) {
@@ -99,21 +99,6 @@ final readonly class ScheduleRoutes
         return $lesson === null
             ? Responses::problem($request, 404, 'resource not found')
             : Responses::json($response, $lesson);
-    }
-
-    /** @return array<string, string> */
-    private static function queryParams(ServerRequestInterface $request): array
-    {
-        $params = [];
-        // The Go router reads the first value of each name. parse_str() also
-        // interprets bracketed names as arrays and renames keys with spaces.
-        foreach (explode('&', $request->getUri()->getQuery()) as $encoded) {
-            $pair = explode('=', $encoded, 2);
-            $name = urldecode($pair[0]);
-            $params[$name] ??= isset($pair[1]) ? urldecode($pair[1]) : 'true';
-        }
-
-        return $params;
     }
 
     private static function principal(ServerRequestInterface $request): ?SessionPrincipal
