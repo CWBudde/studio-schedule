@@ -12,6 +12,7 @@ use Slim\App;
 use StudioSchedule\Domain\Id;
 use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\LessonAdministration;
+use StudioSchedule\Service\LessonRoomTaken;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\SetupInput;
 
@@ -25,8 +26,42 @@ final readonly class LessonAdminRoutes
      */
     public function register(App $app): void
     {
+        $app->put('/api/v1/lessons/{lessonId}', $this->update(...))->add(CatalogAdminRoutes::requireOffice(...));
+        $app->post('/api/v1/lessons/{lessonId}/restore', $this->restore(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->post('/api/v1/lessons/{lessonId}/cancel', $this->cancel(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->delete('/api/v1/lessons/{lessonId}', $this->delete(...))->add(CatalogAdminRoutes::requireOffice(...));
+    }
+
+    /** @param array{lessonId:string} $args */
+    private function update(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = self::lessonId($request, $args['lessonId']);
+        $data = CatalogAdminRoutes::lessonInput($request);
+        if ($data instanceof ResponseInterface) {
+            return $data;
+        }
+        try {
+            return Responses::json($response, $this->service->update($id, $data))->withHeader('Cache-Control', 'no-store');
+        } catch (LessonRoomTaken $error) {
+            return CatalogAdminRoutes::roomTaken($request, $error);
+        }
+    }
+
+    /** @param array{lessonId:string} $args */
+    private function restore(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = self::lessonId($request, $args['lessonId']);
+        $body = CatalogAdminRoutes::fields($request, ['confirmroomoverlap'], optional: true);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        try {
+            $result = $this->service->restore($id, CatalogAdminRoutes::flag($body, 'confirmRoomOverlap'));
+
+            return Responses::json($response, $result)->withHeader('Cache-Control', 'no-store');
+        } catch (LessonRoomTaken $error) {
+            return CatalogAdminRoutes::roomTaken($request, $error);
+        }
     }
 
     /** @param array{lessonId:string} $args */

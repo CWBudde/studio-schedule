@@ -11,7 +11,10 @@ use StudioSchedule\Domain\Instant;
 use StudioSchedule\Domain\PublishedLesson;
 use StudioSchedule\Domain\ScheduleRules;
 
-/** @phpstan-import-type LevelRef from PublishedLesson */
+/**
+ * @phpstan-import-type LevelRef from PublishedLesson
+ * @phpstan-import-type WaitlistEntry from SchedulePersistence
+ */
 final readonly class ScheduleService
 {
     public function __construct(private SchedulePersistence $store, private ClockInterface $clock) {}
@@ -194,18 +197,20 @@ final readonly class ScheduleService
         return $out;
     }
 
+    /** @param list<WaitlistEntry> $entries */
+    public static function heldPlaces(array $entries, DateTimeImmutable $now): int
+    {
+        return count(array_filter($entries, static fn(array $entry): bool
+            => $entry['status'] === 'invited' && $entry['expiresAt'] !== null && $entry['expiresAt'] > $now));
+    }
+
     /** @return array<string,mixed> */
     public function officeWriteDocument(PublishedLesson $lesson, ScheduleRules $rules): array
     {
         $id = $lesson->id;
         $now = $this->clock->now();
         $active = $this->store->activeBookings([$id])[$id] ?? 0;
-        $held = 0;
-        foreach ($this->store->waitlist([$id])[$id] ?? [] as $entry) {
-            if ($entry['status'] === 'invited' && $entry['expiresAt'] !== null && $entry['expiresAt'] > $now) {
-                ++$held;
-            }
-        }
+        $held = self::heldPlaces($this->store->waitlist([$id])[$id] ?? [], $now);
 
         $summary = self::lessonSummary($lesson);
         unset($summary['eventSlug']);

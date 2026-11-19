@@ -65,6 +65,7 @@ use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
 use StudioSchedule\Service\LessonAdministration;
 use StudioSchedule\Service\LessonSignup;
+use StudioSchedule\Service\LessonWaitlistOffers;
 use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\ReceiptIssuance;
 use StudioSchedule\Service\EventRegistrationWrites;
@@ -271,11 +272,11 @@ final class Bootstrap
                 $sessionStore = new SessionStore($connection);
                 $sessions = new SessionMiddleware($config, new SessionAuthentication($sessionStore, $clock));
                 $pushSender = static fn(): ?Sender => Sender::fromEnvironment(Config::lookup($appDirectory . '/config/.env', $environment), $clock);
-                $eventURL = static fn(): string => Config::applicationURL(
+                $applicationURL = static fn(): string => Config::applicationURL(
                     $config->baseURL,
                     Config::lookup($appDirectory . '/config/.env', $environment)('HTTP_ADDR'),
                 );
-                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $config, $logger, $commonPasswordFile, $wakeMail, $wakeAnnouncements, $pushSender, $eventURL): void {
+                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $config, $logger, $commonPasswordFile, $wakeMail, $wakeAnnouncements, $pushSender, $applicationURL): void {
                     $profile = new MeEndpoint($sessionStore);
                     $limits = new RateLimitStore($connection, $clock, $logger);
                     $mailLimit = new AuthMailLimit($config->trustedProxies, $limits);
@@ -341,12 +342,23 @@ final class Bootstrap
                     $registrationStore = new EventRegistrationStore($connection);
                     $eventRegistrations = new EventRegistrationReads($eventStore, $registrationStore, $clock);
                     $lessonRecipients = new EventWaitlistStore($connection);
+                    $lessonWrites = new LessonWriteStore($connection);
+                    $lessonOffers = new LessonWaitlistOffers(
+                        $schedule,
+                        $lessonWrites,
+                        $lessonRecipients,
+                        $mail,
+                        $applicationURL,
+                        static fn(): bool => $pushSender() !== null,
+                    );
                     (new LessonAdminRoutes(new LessonAdministration(
                         $eventStore,
-                        new LessonWriteStore($connection),
+                        $lessonWrites,
                         $schedule,
                         $registrationStore,
                         $lessonRecipients,
+                        $timetableStore,
+                        $lessonOffers,
                         $mail,
                         $clock,
                         $wakeMail,
@@ -356,7 +368,7 @@ final class Bootstrap
                         $lessonRecipients,
                         $clock,
                         $mail,
-                        $eventURL(),
+                        $applicationURL(),
                         $pushSender() !== null,
                     );
                     $eventReceipts = new ReceiptIssuance(new ReceiptWriteStore($connection), $mail);

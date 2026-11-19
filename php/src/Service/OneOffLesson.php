@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Service;
 
-use DateInterval;
 use Psr\Clock\ClockInterface;
 use StudioSchedule\Domain\ScheduleRules;
 
@@ -41,14 +40,7 @@ final readonly class OneOffLesson
     /** @return array<string,mixed> */
     private function persist(OneOffLessonData $data, ScheduleRules $rules): array
     {
-        $start = $data->date->at($data->startTime, $rules->timezone);
-        $end = $start->add(new DateInterval("PT{$data->durationMinutes}M"));
-        if ($start->format('Y-m-d H:i:s') === '0001-01-01 00:00:00' || (int) $start->format('Y') > 9999) {
-            throw CatalogFailure::field('date', 'the lesson start is outside the supported UTC date range');
-        }
-        if ((int) $end->format('Y') > 9999) {
-            throw CatalogFailure::field('durationMinutes', 'the lesson end is outside the supported UTC date range');
-        }
+        [$start, $end] = $data->instants($rules);
         $this->store->lockLessonReferences($data);
         if (!$data->confirmPast && $start <= $this->clock->now()) {
             throw new CatalogFailure(409, 'the lesson would start in the past', reason: 'past');

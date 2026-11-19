@@ -9,6 +9,7 @@ use DateTimeImmutable;
 use StudioSchedule\Domain\PublishedLesson;
 use StudioSchedule\Domain\ScheduleRules;
 
+/** @phpstan-type WaitlistEntry array{id:string,personId:string,status:string,stayOnList:bool,expiresAt:?DateTimeImmutable} */
 interface SchedulePersistence
 {
     /**
@@ -56,7 +57,7 @@ interface SchedulePersistence
 
     /**
      * @param list<string> $lessonIds
-     * @return array<string, list<array{id: string, personId: string, status: string, stayOnList: bool, expiresAt: ?DateTimeImmutable}>>
+     * @return array<string,list<WaitlistEntry>>
      */
     public function waitlist(array $lessonIds): array;
 

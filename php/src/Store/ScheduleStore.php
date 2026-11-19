@@ -146,14 +146,17 @@ final readonly class ScheduleStore implements SchedulePersistence
         return array_map($this->publishedLesson(...), $rows);
     }
 
-    public function roomOverlap(string $roomId, DateTimeImmutable $start, DateTimeImmutable $end): ?PublishedLesson
+    public function roomOverlap(string $roomId, DateTimeImmutable $start, DateTimeImmutable $end, ?string $excluding = null): ?PublishedLesson
     {
-        $row = $this->connection->fetchAssociative(
-            self::LESSONS . " WHERE l.room_id = ? AND l.status <> 'canceled' AND l.starts_at < ? AND l.ends_at > ?"
-            . ' ORDER BY l.starts_at, l.id LIMIT 1',
-            [$this->encodeId($roomId), $this->sqlInstant($end), $this->sqlInstant($start)],
-            [$this->idType(), ParameterType::STRING, ParameterType::STRING],
-        );
+        $conditions = " WHERE l.room_id = ? AND l.status <> 'canceled' AND l.starts_at < ? AND l.ends_at > ?";
+        $params = [$this->encodeId($roomId), $this->sqlInstant($end), $this->sqlInstant($start)];
+        $types = [$this->idType(), ParameterType::STRING, ParameterType::STRING];
+        if ($excluding !== null) {
+            $conditions .= ' AND l.id <> ?';
+            $params[] = $this->encodeId($excluding);
+            $types[] = $this->idType();
+        }
+        $row = $this->connection->fetchAssociative(self::LESSONS . $conditions . ' ORDER BY l.starts_at, l.id LIMIT 1', $params, $types);
 
         return $row === false ? null : $this->publishedLesson($row);
     }

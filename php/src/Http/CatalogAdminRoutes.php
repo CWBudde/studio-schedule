@@ -106,10 +106,27 @@ final readonly class CatalogAdminRoutes
 
     private static function createLesson(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, OneOffLesson $service): ResponseInterface
     {
-        $body = self::fields($request, [
-            'date', 'starttime', 'durationminutes', 'roomid', 'coursetypeid', 'instructorid', 'accompanistid',
-            'capacity', 'visibility', 'kind', 'renter', 'confirmroomoverlap', 'confirmpast',
-        ]);
+        $data = self::lessonInput($request, creating: true);
+        if ($data instanceof ResponseInterface) {
+            return $data;
+        }
+        try {
+            return Responses::json($response->withStatus(201), $service->create($data))->withHeader('Cache-Control', 'no-store');
+        } catch (LessonRoomTaken $error) {
+            return self::roomTaken($request, $error);
+        }
+    }
+
+    public static function lessonInput(#[SensitiveParameter] ServerRequestInterface $request, bool $creating = false): OneOffLessonData|ResponseInterface
+    {
+        $allowed = [
+            'date', 'starttime', 'durationminutes', 'roomid', 'instructorid', 'accompanistid', 'capacity',
+            'visibility', 'kind', 'renter', 'confirmroomoverlap', 'confirmpast',
+        ];
+        if ($creating) {
+            $allowed[] = 'coursetypeid';
+        }
+        $body = self::fields($request, $allowed);
         if ($body instanceof ResponseInterface) {
             return $body;
         }
@@ -128,7 +145,7 @@ final readonly class CatalogAdminRoutes
         if (!in_array($kind, ['regular', 'workshop', 'private', 'rental'], true)) {
             throw CatalogFailure::field('kind', 'invalid lesson kind');
         }
-        $data = new OneOffLessonData(
+        return new OneOffLessonData(
             date: $date,
             startTime: $time,
             durationMinutes: self::number($body, 'durationMinutes', 1, 1440, true),
@@ -143,11 +160,6 @@ final readonly class CatalogAdminRoutes
             confirmRoomOverlap: self::flag($body, 'confirmRoomOverlap'),
             confirmPast: self::flag($body, 'confirmPast'),
         );
-        try {
-            return Responses::json($response->withStatus(201), $service->create($data))->withHeader('Cache-Control', 'no-store');
-        } catch (LessonRoomTaken $error) {
-            return self::roomTaken($request, $error);
-        }
     }
 
     public static function roomTaken(#[SensitiveParameter] ServerRequestInterface $request, LessonRoomTaken $error): ResponseInterface
@@ -430,9 +442,9 @@ final readonly class CatalogAdminRoutes
      * @param list<string> $allowed
      * @return array<array-key,mixed>|ResponseInterface
      */
-    public static function fields(#[SensitiveParameter] ServerRequestInterface $request, array $allowed, ?int $maxBytes = null): array|ResponseInterface
+    public static function fields(#[SensitiveParameter] ServerRequestInterface $request, array $allowed, ?int $maxBytes = null, bool $optional = false): array|ResponseInterface
     {
-        $body = $maxBytes === null ? JsonObject::read($request) : JsonObject::read($request, $maxBytes);
+        $body = JsonObject::read($request, $maxBytes, $optional);
         if ($body instanceof ResponseInterface) {
             return $body;
         }

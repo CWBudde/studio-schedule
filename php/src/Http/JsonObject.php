@@ -14,8 +14,9 @@ final class JsonObject
 {
     private const int MAX_BODY_BYTES = 1024 * 1024;
 
-    public static function read(#[SensitiveParameter] ServerRequestInterface $request, int $maxBytes = self::MAX_BODY_BYTES): stdClass|ResponseInterface
+    public static function read(#[SensitiveParameter] ServerRequestInterface $request, ?int $maxBytes = null, bool $optional = false): stdClass|ResponseInterface
     {
+        $maxBytes ??= self::MAX_BODY_BYTES;
         $stream = $request->getBody();
         $body = '';
         while (!$stream->eof() && strlen($body) < $maxBytes) {
@@ -29,7 +30,7 @@ final class JsonObject
             return Responses::problem($request, 413, 'request body is too large limit=' . $maxBytes . ' bytes');
         }
         if ($body === '') {
-            return Responses::problem($request, 400, 'request body is required');
+            return $optional ? new stdClass() : Responses::problem($request, 400, 'request body is required');
         }
         $mediaType = strtolower(trim(explode(';', $request->getHeaderLine('Content-Type'), 2)[0]));
         if ($mediaType !== '' && $mediaType !== 'application/json' && !str_ends_with($mediaType, '+json')) {

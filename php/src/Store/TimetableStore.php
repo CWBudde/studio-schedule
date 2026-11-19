@@ -135,9 +135,9 @@ final readonly class TimetableStore implements TimetableAdminPersistence, OneOff
         }
     }
 
-    public function roomOverlap(string $roomId, DateTimeImmutable $start, DateTimeImmutable $end): ?PublishedLesson
+    public function roomOverlap(string $roomId, DateTimeImmutable $start, DateTimeImmutable $end, ?string $excluding = null): ?PublishedLesson
     {
-        return (new ScheduleStore($this->db))->roomOverlap($roomId, $start, $end);
+        return (new ScheduleStore($this->db))->roomOverlap($roomId, $start, $end, $excluding);
     }
 
     public function createOneOffLesson(OneOffLessonData $data, DateTimeImmutable $start, DateTimeImmutable $end): PublishedLesson

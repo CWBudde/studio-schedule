@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace StudioSchedule\Store;
 
 use DateTimeImmutable;
-use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use RuntimeException;
+use SensitiveParameter;
 use StudioSchedule\Service\CatalogFailure;
+use StudioSchedule\Service\OneOffLessonData;
 use StudioSchedule\Service\LessonWritePersistence;
 use Symfony\Component\Uid\Uuid;
 
@@ -69,7 +71,59 @@ final readonly class LessonWriteStore implements LessonWritePersistence
             [$lesson],
             [$type],
         );
-        $this->returnVisits($lesson, $onBooking);
+        (new LessonPaymentStore($this->connection))->cancel($lesson, $onBooking);
+    }
+
+    public function updateLocked(string $id, OneOffLessonData $data, DateTimeImmutable $start, DateTimeImmutable $end): void
+    {
+        $this->connection->executeStatement(
+            'UPDATE lessons SET room_id = ?, instructor_id = ?, accompanist_id = ?, starts_at = ?, ends_at = ?, '
+            . 'kind = ?, visibility = ?, capacity = ?, renter = ?, detached = (class_id IS NOT NULL) WHERE id = ?',
+            [
+                $this->encodeId($data->roomId), $data->instructorId === null ? null : $this->encodeId($data->instructorId),
+                $data->accompanistId === null ? null : $this->encodeId($data->accompanistId),
+                Database::sqlInstant($this->connection, $start), Database::sqlInstant($this->connection, $end),
+                $data->kind, $data->visibility, $data->capacity, $data->renter === '' ? null : $data->renter,
+                $this->encodeId($id),
+            ],
+            [
+                $this->idType(), $data->instructorId === null ? ParameterType::NULL : $this->idType(),
+                $data->accompanistId === null ? ParameterType::NULL : $this->idType(),
+                ParameterType::STRING, ParameterType::STRING, ParameterType::STRING, ParameterType::STRING, ParameterType::INTEGER,
+                $data->renter === '' ? ParameterType::NULL : ParameterType::STRING, $this->idType(),
+            ],
+        );
+    }
+
+    public function recheckPayments(string $id, string $day, DateTimeImmutable $now): void
+    {
+        (new LessonPaymentStore($this->connection))->move($this->encodeId($id), $day, $now);
+    }
+
+    public function restoreLocked(string $id, string $day, DateTimeImmutable $now, bool $onBooking): void
+    {
+        $lesson = $this->encodeId($id);
+        $this->connection->executeStatement(
+            "UPDATE lessons SET status = 'scheduled', detached = (class_id IS NOT NULL), "
+            . 'cancel_note = NULL, canceled_by = NULL, canceled_at = NULL WHERE id = ?',
+            [$lesson],
+            [$this->idType()],
+        );
+        (new LessonPaymentStore($this->connection))->restore($lesson, $onBooking, $day, $now);
+    }
+
+    public function inviteLocked(string $entryId, #[SensitiveParameter] string $tokenHash, DateTimeImmutable $now, DateTimeImmutable $expires): void
+    {
+        $hash = $this->isPostgres() ? "decode(?, 'hex')" : 'UNHEX(?)';
+        $changed = $this->connection->executeStatement(
+            "UPDATE waitlist_entries SET status = 'invited', invited_at = ?, expires_at = ?, "
+            . "invite_token_hash = $hash WHERE id = ? AND status = 'waiting'",
+            [Database::sqlInstant($this->connection, $now), Database::sqlInstant($this->connection, $expires), $tokenHash, $this->encodeId($entryId)],
+            [ParameterType::STRING, ParameterType::STRING, ParameterType::STRING, $this->idType()],
+        );
+        if ($changed !== 1) {
+            throw new RuntimeException('The lesson waiting list changed before the place could be offered');
+        }
     }
 
     public function bookedRecipients(string $id): array
@@ -88,50 +142,6 @@ final readonly class LessonWriteStore implements LessonWritePersistence
                 ['name' => $row['guest_name']] + ($row['guest_email'] === null ? [] : ['email' => $row['guest_email']])
             ),
         ], $rows);
-    }
-
-    private function returnVisits(string $lesson, bool $onBooking): void
-    {
-        $type = $this->idType();
-        $listType = $this->isPostgres() ? ArrayParameterType::STRING : ArrayParameterType::BINARY;
-        $bookings = $this->connection->fetchFirstColumn(
-            "SELECT b.id FROM bookings b WHERE b.lesson_id = ? AND b.person_id IS NOT NULL AND b.source <> 'member' "
-            . 'AND b.trial = FALSE AND ('
-            . " (b.status = 'canceled' AND b.late = TRUE)"
-            . " OR (b.status <> 'canceled' AND (? = TRUE OR b.status IN ('attended', 'no_show'))))",
-            [$lesson, $onBooking],
-            [$type, ParameterType::BOOLEAN],
-        );
-        if ($bookings === []) {
-            return;
-        }
-
-        // Follow the lesson-to-passes order used by Go. Read redemptions under the pass locks.
-        $this->connection->fetchFirstColumn(
-            'SELECT id FROM passes WHERE person_id IN (SELECT person_id FROM bookings WHERE id IN (?)) ORDER BY id FOR UPDATE',
-            [$bookings],
-            [$listType],
-        );
-        /** @var list<array{pass_id:string,booking_id:string}> $redemptions */
-        $redemptions = $this->connection->fetchAllAssociative(
-            'SELECT pass_id, booking_id FROM pass_redemptions WHERE booking_id IN (?) ORDER BY booking_id',
-            [$bookings],
-            [$listType],
-        );
-        foreach ($redemptions as $redemption) {
-            $removed = $this->connection->executeStatement(
-                'DELETE FROM pass_redemptions WHERE booking_id = ? AND pass_id = ?',
-                [$redemption['booking_id'], $redemption['pass_id']],
-                [$type, $type],
-            );
-            if ($removed === 1) {
-                $this->connection->executeStatement(
-                    "UPDATE passes SET visits_remaining = visits_remaining + 1 WHERE id = ? AND kind = 'visits' AND visits_remaining < visits_total",
-                    [$redemption['pass_id']],
-                    [$type],
-                );
-            }
-        }
     }
 
     private function idType(): ParameterType

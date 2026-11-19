@@ -34,6 +34,7 @@ use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
 use StudioSchedule\Service\LessonAdministration;
 use StudioSchedule\Service\LessonSignup;
+use StudioSchedule\Service\LessonWaitlistOffers;
 use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
@@ -994,7 +995,17 @@ final class ScheduleStoreTest extends TestCase
      */
     private static function post(App $app, string $path, ?SessionPrincipal $principal, int $status, ?array $body = null): array
     {
-        $request = (new ServerRequestFactory())->createServerRequest('POST', '/api/v1' . $path)
+        return self::send($app, 'POST', $path, $principal, $status, $body);
+    }
+
+    /**
+     * @param App<ContainerInterface|null> $app
+     * @param array<array-key,mixed>|null $body
+     * @return array<array-key,mixed>
+     */
+    private static function send(App $app, string $method, string $path, ?SessionPrincipal $principal, int $status, ?array $body = null): array
+    {
+        $request = (new ServerRequestFactory())->createServerRequest($method, '/api/v1' . $path)
             ->withAttribute('sessionPrincipal', $principal);
         if ($body !== null) {
             $request = $request->withHeader('Content-Type', 'application/json')
@@ -1358,6 +1369,169 @@ final class ScheduleStoreTest extends TestCase
 
         $this->database->executeStatement('DELETE FROM settings');
         self::post($app, $session . '/bookings', $member, 404, $memberData);
+    }
+
+    public function testEditingAndRestoringALessonSettlesVisitsAndReoffersPlaces(): void
+    {
+        $this->database->executeStatement("UPDATE settings SET redemption_mode = 'booking', waitlist_invite_expiry = "
+            . ($this->postgres ? "'8 days'" : '691200000000'));
+        $this->database->executeStatement("UPDATE accounts SET confirmed_at = '2026-10-24 09:00:00'");
+        $this->insert('pass_types', [
+            'id' => 301, 'name' => 'Fixture Visits', 'kind' => 'visits', 'visits' => 5, 'validity_days' => 0,
+            'price' => 0, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => '2026-10-20 10:00:00',
+        ]);
+        $this->insert('pass_types', [
+            'id' => 302, 'name' => 'Fixture Period', 'kind' => 'time', 'validity_days' => 14,
+            'price' => 0, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => '2026-10-20 10:00:00',
+        ]);
+        $assignment = ['person_id' => 1, 'status' => 'active', 'origin' => 'assignment', 'price_paid' => 0, 'sold_at' => '2026-10-20 10:00:00'];
+        $this->insert('passes', [
+            'id' => 303, 'pass_type_id' => 301, 'kind' => 'visits', 'visits_total' => 5,
+            'visits_remaining' => 4, 'valid_from' => '2026-10-20', 'valid_until' => '2026-10-30',
+        ] + $assignment);
+        $this->insert('passes', [
+            'id' => 304, 'pass_type_id' => 302, 'kind' => 'time', 'valid_from' => '2026-10-31', 'valid_until' => '2026-11-13',
+        ] + $assignment);
+        $this->insert('passes', [
+            'id' => 305, 'pass_type_id' => 301, 'kind' => 'visits', 'visits_total' => 2, 'visits_remaining' => 2,
+            'valid_from' => '2026-10-31',
+        ] + $assignment);
+        $booked = ['lesson_id' => 102, 'status' => 'booked', 'trial' => false, 'booked_at' => '2026-10-24 10:00:00'];
+        $this->insert('bookings', ['id' => 306, 'person_id' => 1] + $booked);
+        $this->insert('bookings', ['id' => 307, 'person_id' => 4] + $booked);
+        $this->insert('bookings', ['id' => 308, 'guest_name' => 'Fixture Guest', 'guest_email' => 'invalid'] + $booked);
+        $this->insert('pass_redemptions', ['pass_id' => 303, 'booking_id' => 306, 'at' => '2026-10-24 10:00:00']);
+        foreach ([309 => 7, 310 => 2] as $entry => $person) {
+            $this->insert('waitlist_entries', [
+                'id' => $entry, 'lesson_id' => 102, 'person_id' => $person, 'status' => 'waiting',
+                'stay_on_list' => true, 'joined_at' => '2026-10-24 12:00:00',
+            ]);
+        }
+        $pk = $this->postgres ? '\x' . str_repeat('04', 65) : str_repeat("\x04", 65);
+        $secret = $this->postgres ? '\x' . str_repeat('05', 16) : str_repeat("\x05", 16);
+        $this->insert('push_subscriptions', [
+            'id' => 311, 'account_id' => 10, 'endpoint' => 'https://push.example.test/device',
+            'p256dh' => $pk, 'auth' => $secret, 'created_at' => '2026-10-23 10:00:00', 'last_used_at' => '2026-10-23 10:00:00',
+        ]);
+
+        $app = $this->app(self::BEFORE_RELEASE);
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $path = '/lessons/' . self::id(102);
+        $data = [
+            'date' => '2026-11-01', 'startTime' => '08:00', 'durationMinutes' => 60,
+            'roomId' => self::id(21), 'instructorId' => self::id(23), 'capacity' => 4,
+            'visibility' => 'public', 'kind' => 'workshop',
+        ];
+        try {
+            self::send($app, 'PUT', $path, $office, 200, $data);
+            self::fail('Expected an invalid recipient to roll back the edit');
+        } catch (RuntimeException $error) {
+            self::assertSame('A lesson update recipient has an invalid email address', $error->getMessage());
+        }
+        self::assertSame('2026-10-30T10:00:00.5Z', self::get($app, $path, $office)['startsAt']);
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT 1 FROM outbox_mails'));
+        $paidKinds = fn(): array => $this->database->fetchFirstColumn('SELECT p.kind FROM pass_redemptions r JOIN passes p ON p.id = r.pass_id');
+        $visitsRemaining = function (): array {
+            /** @var list<int|numeric-string> $visits */
+            $visits = $this->database->fetchFirstColumn('SELECT visits_remaining FROM passes WHERE visits_remaining IS NOT NULL ORDER BY visits_remaining');
+
+            return array_map(intval(...), $visits);
+        };
+        self::assertSame(['visits'], $paidKinds());
+
+        $this->database->executeStatement("UPDATE bookings SET guest_email = 'lesson-guest@example.test' WHERE guest_name = 'Fixture Guest'");
+        $updated = self::send($app, 'PUT', $path, $office, 200, $data);
+        self::assertSame('2026-11-01T07:00:00Z', $updated['startsAt']);
+        self::assertSame(0, $updated['freePlaces']);
+        self::assertSame(['time'], $paidKinds());
+        self::assertSame([2, 5], $visitsRemaining());
+        $push = $this->database->fetchFirstColumn('SELECT payload FROM push_outbox');
+        self::assertCount(1, $push);
+        self::assertIsString($push[0]);
+        self::assertStringContainsString('/dance/schedule/waitlist/accept?token=', $push[0]);
+        self::assertStringNotContainsString('Ari', $push[0]);
+
+        $attempt = ['capacity' => 3] + $data;
+        $error = self::send($app, 'PUT', $path, $office, 422, $attempt);
+        self::assertStringContainsString('places reserved for the waiting list', json_encode($error, JSON_THROW_ON_ERROR));
+        self::send($app, 'PUT', $path, $office, 200, ['date' => '2026-11-03'] + $data);
+        self::assertSame(['time'], $paidKinds());
+        self::send($app, 'PUT', $path, $office, 200, ['date' => '2026-11-14'] + $data);
+        self::assertSame(['visits'], $paidKinds());
+        self::assertSame([1, 5], $visitsRemaining());
+        self::post($app, $path . '/cancel', $office, 200, ['note' => 'Room repairs']);
+        self::assertSame([], $paidKinds());
+        $restored = self::post($app, $path . '/restore', $office, 200);
+        self::assertSame('scheduled', $restored['status']);
+        self::assertSame(0, $restored['freePlaces']);
+        self::assertIsArray($restored['admin']);
+        self::assertArrayNotHasKey('cancelNote', $restored['admin']);
+        self::assertSame(['visits'], $paidKinds());
+        self::assertCount(2, $this->database->fetchFirstColumn('SELECT payload FROM push_outbox'));
+        self::post($app, $path . '/restore', $office, 200, []);
+        self::assertCount(2, $this->database->fetchFirstColumn("SELECT 1 FROM outbox_mails WHERE template = 'waitlist-invite'"));
+    }
+
+    public function testLessonEditValidationAndRestorationUseExistingScheduleRules(): void
+    {
+        $this->insertLesson(108, '2026-11-05', 'regular', 'public', ['class_id' => 40, 'slot_date' => '2026-11-05']);
+        $this->insertLesson(109, '2026-11-06', 'workshop', 'public', []);
+        $this->insertLesson(110, '2026-11-07', 'workshop', 'public', []);
+        $this->insert('bookings', [
+            'id' => 301, 'lesson_id' => 109, 'person_id' => 4, 'status' => 'booked', 'trial' => false, 'booked_at' => '2026-10-24 16:00:00',
+        ]);
+        $this->insert('event_registrations', [
+            'id' => 224, 'event_id' => 120, 'guest_name' => 'Event Guest', 'guest_email' => 'event-guest@example.test',
+            'status' => 'registered', 'payment' => 'paid', 'price' => 0, 'vat_rate_bp' => 0,
+            'created_at' => '2026-10-22 11:00:00', 'updated_at' => '2026-10-22 11:00:00',
+        ]);
+
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $app = $this->app(self::BEFORE_RELEASE);
+        $path = static fn(int $id): string => '/lessons/' . self::id($id);
+        $edit = static fn(int $id, int $status, array $data): array => self::send($app, 'PUT', $path($id), $office, $status, $data);
+        $fields = [
+            'date' => '2026-11-05', 'startTime' => '07:00', 'durationMinutes' => 60,
+            'roomId' => self::id(21), 'instructorId' => self::id(23), 'accompanistId' => self::id(24),
+            'kind' => 'regular', 'visibility' => 'public', 'capacity' => 4,
+        ];
+        $rental = [
+            'kind' => 'rental', 'capacity' => 0, 'renter' => 'Arts group', 'instructorId' => null,
+            'accompanistId' => null, 'visibility' => 'hidden',
+        ] + $fields;
+
+        $edit(999, 404, $fields);
+        $edit(100, 422, $fields);
+        $edit(108, 422, $rental);
+        $edit(108, 422, ['startTime' => '23:59', 'durationMinutes' => 2] + $fields);
+        $edit(108, 422, ['roomId' => self::id(999)] + $fields);
+        $edit(108, 409, ['date' => '2026-10-24'] + $fields);
+        $changed = $edit(108, 200, $fields);
+        self::assertIsArray($changed['admin']);
+        self::assertTrue($changed['admin']['detached']);
+        self::assertSame(self::id(40), $changed['classId']);
+        $edit(109, 422, $rental);
+        $edit(105, 422, $fields);
+
+        $madeRental = $edit(110, 200, ['date' => '2026-11-09'] + $rental);
+        self::assertSame('Arts group', $madeRental['renter']);
+        self::post($app, $path(110) . '/cancel', $office, 200, []);
+        self::post($app, $path(110) . '/restore', $office, 200);
+
+        $session = ['kind' => 'workshop', 'capacity' => 7, 'date' => '2026-11-08'] + $fields;
+        $edit(106, 422, ['capacity' => 6] + $session);
+        $edit(106, 422, ['visibility' => 'members'] + $session);
+        $edit(106, 422, ['kind' => 'private'] + $session);
+        $edit(106, 200, $session);
+        $edit(106, 200, ['date' => '2026-11-07'] + $session);
+        self::post($app, $path(106) . '/cancel', $office, 200, ['note' => 'Fixture']);
+        self::post($app, $path(106) . '/restore', $office, 200);
+        $late = $this->app('2026-12-01T10:00:00Z');
+        self::post($late, $path(103) . '/restore', $office, 422);
+        self::post($late, $path(106) . '/restore', $office, 200);
+        self::assertCount(1, $this->database->fetchFirstColumn("SELECT 1 FROM outbox_mails WHERE template = 'lesson-restored' AND recipient = 'event-guest@example.test'"));
+        self::post($app, '/admin/events/' . self::id(120) . '/cancel', $office, 200, []);
+        self::assertSame('closed', self::post($app, $path(106) . '/restore', $office, 409)['reason']);
     }
 
     private function eventExpiryJobs(DateTimeImmutable $now): BackgroundJobs
@@ -1795,7 +1969,8 @@ final class ScheduleStoreTest extends TestCase
             $proxies,
             $limits,
         ));
-        $lessons = new OneOffLesson(new TimetableStore($this->database), $clock);
+        $timetable = new TimetableStore($this->database);
+        $lessons = new OneOffLesson($timetable, $clock);
         CatalogAdminRoutes::registerLessonCreation($app, $lessons);
         $app->get('/api/v1/admin/statistics', new StatisticsEndpoint(new StatisticsService(new StatisticsStore($this->database), $scheduleStore, $clock)));
         $eventStore = new EventStore($this->database);
@@ -1803,12 +1978,23 @@ final class ScheduleStoreTest extends TestCase
         $registrations = new EventRegistrationReads($eventStore, $registrationStore, $clock);
         $app->get('/api/v1/event-invites/{token}', new WaitlistInviteEndpoint($registrations->invite(...), $proxies, $limits));
         $recipients = new EventWaitlistStore($this->database);
+        $lessonWrites = new LessonWriteStore($this->database);
+        $lessonOffers = new LessonWaitlistOffers(
+            $scheduleStore,
+            $lessonWrites,
+            $recipients,
+            new Renderer(),
+            static fn(): string => 'https://school.example.test/dance/schedule',
+            static fn(): bool => true,
+        );
         (new LessonAdminRoutes(new LessonAdministration(
             $eventStore,
-            new LessonWriteStore($this->database),
+            $lessonWrites,
             $scheduleStore,
             $registrationStore,
             $recipients,
+            $timetable,
+            $lessonOffers,
             new Renderer(),
             $clock,
             $wakeLessonMail,

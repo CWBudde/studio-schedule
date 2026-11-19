@@ -19,6 +19,14 @@ interface LessonWritePersistence
 
     public function cancelLocked(string $id, string $actor, string $note, DateTimeImmutable $now, bool $onBooking): void;
 
+    public function updateLocked(string $id, OneOffLessonData $data, DateTimeImmutable $start, DateTimeImmutable $end): void;
+
+    public function recheckPayments(string $id, string $day, DateTimeImmutable $now): void;
+
+    public function restoreLocked(string $id, string $day, DateTimeImmutable $now, bool $onBooking): void;
+
+    public function inviteLocked(string $entryId, string $tokenHash, DateTimeImmutable $now, DateTimeImmutable $expires): void;
+
     /** @return list<Party> */
     public function bookedRecipients(string $id): array;
 }

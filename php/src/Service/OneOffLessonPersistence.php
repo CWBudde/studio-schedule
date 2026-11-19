@@ -22,7 +22,7 @@ interface OneOffLessonPersistence
 
     public function lockLessonReferences(OneOffLessonData $data): void;
 
-    public function roomOverlap(string $roomId, DateTimeImmutable $start, DateTimeImmutable $end): ?PublishedLesson;
+    public function roomOverlap(string $roomId, DateTimeImmutable $start, DateTimeImmutable $end, ?string $excluding = null): ?PublishedLesson;
 
     public function createOneOffLesson(OneOffLessonData $data, DateTimeImmutable $start, DateTimeImmutable $end): PublishedLesson;
 }

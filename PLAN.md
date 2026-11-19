@@ -1493,6 +1493,9 @@ backends.
           position and booking closure without taking a place. Rate-limit lookups per client
           and redact tokens from request logs. The shared `waitlist_invite_lookup_limits` case
           runs in PHP CI on all three databases at both mount paths.
+    - [ ] Add lesson invite acceptance and decline for signed-in families and invite links.
+          Lesson edits and restores can offer places again, with mail and configured push
+          delivery. Link acceptance still requires the lesson booking writes.
   - [x] Calendar feeds (ADR 0011). Create, list and revoke booking, teaching and schedule
         feeds. Private iCalendar downloads use the account's current permissions and hide the
         token from lists and logs. The shared `calendar_subscription` case passes on all three
@@ -1626,8 +1629,11 @@ backends.
           recipients. Deletion protects started and generated lessons, existing bookings, and
           open event registrations. The shared `lesson_cancellation_and_deletion` case runs in
           PHP CI at both mount paths on all three databases.
-    - [ ] Let the office edit or restore an individual event session through lesson administration.
-          Keep the event's inherited capacity and the existing rules for sessions of canceled events.
+    - [x] Let the office edit or restore lessons, including individual event sessions. Keep
+          the event's inherited capacity, reject restoration after event cancellation, and
+          notify registered persons and guests after a move or restoration. The shared
+          `lesson_editing_and_restoration` case runs in PHP CI at both mount paths on all
+          three databases.
     - [x] Return `event-session` for member bookings, lesson waitlist joins and staff participant
           additions to an individual event session. Preserve family permissions, draft visibility
           and staff assignment. The shared `event_session_signup_guards` case runs in PHP CI at
