@@ -35,6 +35,12 @@ interface PassReadPersistence
     /** @return list<PassDocument> */
     public function passes(string $person, bool $family): array;
 
+    /** @return PassDocument|null */
+    public function byId(string $id): ?array;
+
+    /** @return list<Redemption> */
+    public function redemptionsForPass(string $id): array;
+
     /** @return list<Redemption> */
     public function redemptions(string $person, bool $family): array;
 

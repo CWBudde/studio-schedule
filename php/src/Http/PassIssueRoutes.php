@@ -12,13 +12,14 @@ use Slim\App;
 use StudioSchedule\Domain\Id;
 use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\PassIssuance;
+use StudioSchedule\Service\PassVoiding;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\SetupInput;
 
 /** @phpstan-import-type Purchase from PassIssuance */
 final readonly class PassIssueRoutes
 {
-    public function __construct(private PassIssuance $passes) {}
+    public function __construct(private PassIssuance $passes, private PassVoiding $voiding) {}
 
     /**
      * @template TContainer of ContainerInterface|null
@@ -28,6 +29,18 @@ final readonly class PassIssueRoutes
     {
         $app->post('/api/v1/admin/persons/{personId}/passes/{action:assign|sell}', $this->issue(...))
             ->add(CatalogAdminRoutes::requireOffice(...));
+        $app->post('/api/v1/admin/passes/{passId}/void', $this->void(...))->add(CatalogAdminRoutes::requireOffice(...));
+    }
+
+    /** @param array{passId:string} $args */
+    private function void(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = $args['passId'];
+        if (!Id::valid($id) || stripos($request->getUri()->getPath(), '%2f') !== false) {
+            throw new CatalogFailure(422, 'invalid ID', 'path.passId');
+        }
+
+        return Responses::json($response, $this->voiding->void(strtolower($id)))->withHeader('Cache-Control', 'no-store');
     }
 
     /** @param array{personId:string,action:'assign'|'sell'} $args */

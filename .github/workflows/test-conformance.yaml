@@ -60,4 +60,5 @@ jobs:
           catalog_administration term_administration class_lists_and_roster class_creation_and_deletion one_off_lesson_creation lesson_cancellation_and_deletion lesson_editing_and_restoration lesson_notices teaching_schedule lesson_attendance
           family_profiles person_detail participant_roster_and_history waitlist_invite_lookup_limits calendar_subscription family_and_privacy
           announcements import_inspection member_import duplicate_detection mail_log statistics settings_and_branding push_subscriptions
-          pass_type_administration pass_lists pass_issuance receipt_pdf_downloads receipt_lists_and_search receipt_settings_and_logo
+          pass_type_administration pass_lists pass_issuance pass_voiding_and_redemption_settings pass_sales_and_receipts
+          receipt_pdf_downloads receipt_lists_and_search receipt_settings_and_logo

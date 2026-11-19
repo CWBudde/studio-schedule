@@ -88,8 +88,13 @@ final readonly class ReceiptReadStore
     /** @return array<string,mixed>|null */
     public function detail(string $id): ?array
     {
-        return Database::inReadSnapshot($this->db, fn(): ?array
-            => $this->items(' WHERE r.id = ' . $this->idParameter(), [$this->idValue($id)])[0] ?? null);
+        return Database::inReadSnapshot($this->db, fn(): ?array => $this->detailInTransaction($id));
+    }
+
+    /** @return array<string,mixed>|null */
+    public function detailInTransaction(string $id): ?array
+    {
+        return $this->items(' WHERE r.id = ' . $this->idParameter(), [$this->idValue($id)])[0] ?? null;
     }
 
     /** @return list<array<string,mixed>> */

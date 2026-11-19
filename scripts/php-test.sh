@@ -149,4 +149,5 @@ if [[ ${#engines[@]} == 3 ]]; then
 		--filter PasswordHashTest --coverage-php "$sodium_report"
 	reports=(--gate "${reports[@]}" "$sodium_report")
 fi
-run_php -v "$coverage_dir:/coverage:ro" "$image" php tools/check-coverage.php "${reports[@]}"
+# The merge loads coverage objects for multiple engines into one PHP process.
+run_php -v "$coverage_dir:/coverage:ro" "$image" php -d memory_limit=512M tools/check-coverage.php "${reports[@]}"

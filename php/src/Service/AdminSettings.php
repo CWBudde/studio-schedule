@@ -114,6 +114,23 @@ final readonly class AdminSettings
         return self::receiptFields($this->persistence->receiptSettings() ?? throw new SettingsNotFound());
     }
 
+    /** @return array{redemptionMode:string} */
+    public function passSettings(): array
+    {
+        return ['redemptionMode' => $this->persistence->redemptionMode() ?? throw new SettingsNotFound()];
+    }
+
+    /** @return array{redemptionMode:string} */
+    public function updatePassSettings(string $mode): array
+    {
+        if (!in_array($mode, ['booking', 'attendance'], true)) {
+            throw new AdminSettingsFieldError('redemptionMode', 'invalid redemption mode');
+        }
+        $this->persistence->writeRedemptionMode($mode);
+
+        return ['redemptionMode' => $mode];
+    }
+
     /**
      * @param array<string,string> $input
      * @return array<string,string|int|bool>

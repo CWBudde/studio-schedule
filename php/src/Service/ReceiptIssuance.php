@@ -24,7 +24,7 @@ use Symfony\Component\Uid\Uuid;
  * @phpstan-type ReceiptDetails array{
  *     kind:'sale'|'cancellation', tax_mode:string, tax_note:?string, currency:string, gross:int,
  *     recipient_name:string, recipient_address:?string, payment_method:'cash'|'transfer'|'card',
- *     payerId:?string, recipientEmail:?string, originalId?:string, originalNumber?:string, originalDate?:string
+ *     payerId:?string, recipientEmail:?string, originalId?:string, originalNumber?:string, originalDate?:string, reason?:string
  * }
  */
 final readonly class ReceiptIssuance
@@ -78,7 +78,7 @@ final readonly class ReceiptIssuance
             'issuer_phone' => $settings['issuer_phone'], 'tax_mode' => $details['tax_mode'], 'tax_note' => $details['tax_note'],
             'footer' => $settings['receipt_footer'], 'recipient_name' => $details['recipient_name'],
             'recipient_address' => $details['recipient_address'], 'payment_method' => $details['payment_method'],
-            'currency' => $details['currency'], 'gross' => $details['gross'], 'reason' => null,
+            'currency' => $details['currency'], 'gross' => $details['gross'], 'reason' => $details['reason'] ?? null,
             'original_number' => $details['originalNumber'] ?? null, 'original_date' => $details['originalDate'] ?? null,
         ];
         $this->store->record(
@@ -119,11 +119,14 @@ final readonly class ReceiptIssuance
      * @param Settings $settings
      * @return ReceiptRef
      */
-    public function refund(array $settings, string $actor, string $originalId, DateTimeImmutable $now): array
+    public function refund(array $settings, string $actor, string $originalId, DateTimeImmutable $now, #[SensitiveParameter] string $reason = ''): array
     {
         $original = $this->store->original($originalId) ?? throw new RuntimeException('The fee receipt is missing');
-        if ($original['kind'] !== 'sale' || $original['hasCancellation']) {
-            throw new CatalogFailure(409, 'conflict');
+        if ($original['kind'] !== 'sale') {
+            throw new CatalogFailure(409, 'a cancellation cannot be canceled', reason: 'cancellation');
+        }
+        if ($original['hasCancellation']) {
+            throw new CatalogFailure(409, 'the receipt is canceled already', reason: 'already-canceled');
         }
         self::requireIssuer($settings);
 
@@ -140,6 +143,7 @@ final readonly class ReceiptIssuance
         }
 
         return $this->issue($settings, $actor, $now, [
+            ...($reason === '' ? [] : ['reason' => $reason]),
             'kind' => 'cancellation', 'tax_mode' => $original['tax_mode'], 'tax_note' => $original['tax_note'],
             'currency' => $original['currency'], 'gross' => -(int) $original['gross'],
             'recipient_name' => $original['recipient_name'], 'recipient_address' => $original['recipient_address'],

@@ -9,7 +9,11 @@ use Psr\Clock\ClockInterface;
 use RuntimeException;
 use StudioSchedule\Domain\PublishedLesson;
 
-/** @phpstan-import-type PassDocument from PassReadPersistence */
+/**
+ * @phpstan-import-type PassDocument from PassReadPersistence
+ * @phpstan-import-type Redemption from PassReadPersistence
+ * @phpstan-type PassHistory array{count:int,uses:list<array{bookingId:string,bookingStatus:string,late:bool,redeemedAt:string,lesson:PublishedLesson}>}
+ */
 final readonly class PassRead
 {
     public function __construct(private PassReadPersistence $store, private ClockInterface $clock) {}
@@ -44,6 +48,15 @@ final readonly class PassRead
         });
     }
 
+    /** @return array<string,mixed> */
+    public function officePass(string $id, string $today): array
+    {
+        $pass = $this->store->byId($id) ?? throw new CatalogFailure(404, 'resource not found');
+        $history = $this->history($this->store->redemptionsForPass($id));
+
+        return self::document($pass, $history[$id] ?? null, $today);
+    }
+
     private function today(string $timezone): string
     {
         return $this->clock->now()->setTimezone(new DateTimeZone($timezone))->format('Y-m-d');
@@ -56,30 +69,36 @@ final readonly class PassRead
         if ($passes === []) {
             return [];
         }
-        $history = $this->history($person, $family);
-        $items = [];
-        foreach ($passes as $pass) {
-            $uses = $history[$pass['id']]['uses'] ?? [];
-            $items[] = $pass + [
-                'usable' => self::covers($pass, $today),
-                'uses' => array_map(static function (array $use) use ($pass): array {
-                    $lesson = ScheduleService::lessonSummary($use['lesson']);
-                    // Go's pass history resolves lesson references without the public event slug.
-                    unset($lesson['eventSlug']);
-
-                    return [
-                        'bookingId' => $use['bookingId'], 'personName' => $pass['owner']['name'],
-                        'bookingStatus' => $use['bookingStatus'], 'late' => $use['late'], 'redeemedAt' => $use['redeemedAt'],
-                        'lesson' => $lesson,
-                    ];
-                }, $uses),
-                'useCount' => $history[$pass['id']]['count'] ?? 0,
-            ];
-        }
+        $history = $this->history($this->store->redemptions($person, $family));
+        $items = array_map(static fn(array $pass): array => self::document($pass, $history[$pass['id']] ?? null, $today), $passes);
         // The store already orders each group by most recent sale and then by ID.
         usort($items, static fn(array $first, array $second): int => $second['usable'] <=> $first['usable']);
 
         return $items;
+    }
+
+    /**
+     * @param PassDocument $pass
+     * @param PassHistory|null $history
+     * @return array<string,mixed>
+     */
+    private static function document(array $pass, ?array $history, string $today): array
+    {
+        return $pass + [
+            'usable' => self::covers($pass, $today),
+            'uses' => array_map(static function (array $use) use ($pass): array {
+                $lesson = ScheduleService::lessonSummary($use['lesson']);
+                // Go's pass history resolves lesson references without the public event slug.
+                unset($lesson['eventSlug']);
+
+                return [
+                    'bookingId' => $use['bookingId'], 'personName' => $pass['owner']['name'],
+                    'bookingStatus' => $use['bookingStatus'], 'late' => $use['late'], 'redeemedAt' => $use['redeemedAt'],
+                    'lesson' => $lesson,
+                ];
+            }, $history['uses'] ?? []),
+            'useCount' => $history['count'] ?? 0,
+        ];
     }
 
     /** @param PassDocument $pass */
@@ -91,15 +110,11 @@ final readonly class PassRead
     }
 
     /**
-     * @return array<string,array{
-     *     count:int,uses:list<array{
-     *         bookingId:string,bookingStatus:string,late:bool,redeemedAt:string,lesson:PublishedLesson
-     *     }>
-     * }>
+     * @param list<Redemption> $redemptions
+     * @return array<string,PassHistory>
      */
-    private function history(string $person, bool $family): array
+    private function history(array $redemptions): array
     {
-        $redemptions = $this->store->redemptions($person, $family);
         $ids = array_values(array_unique(array_column($redemptions, 'lessonId')));
         $lessons = array_column($this->store->lessons($ids), null, 'id');
         $history = [];

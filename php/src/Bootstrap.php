@@ -74,6 +74,7 @@ use StudioSchedule\Service\LessonSignup;
 use StudioSchedule\Service\LessonWaitlistOffers;
 use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\ReceiptIssuance;
+use StudioSchedule\Service\ReceiptCancellation;
 use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
 use StudioSchedule\Service\AccountAdministration;
@@ -103,6 +104,7 @@ use StudioSchedule\Service\ParticipantRead;
 use StudioSchedule\Service\Attendance;
 use StudioSchedule\Service\PassIssuance;
 use StudioSchedule\Service\PassRead;
+use StudioSchedule\Service\PassVoiding;
 use StudioSchedule\Service\PasswordAuthentication;
 use StudioSchedule\Service\PasswordChange;
 use StudioSchedule\Service\PasswordHash;
@@ -138,6 +140,7 @@ use StudioSchedule\Store\MemberImportStore;
 use StudioSchedule\Store\ParticipantReadStore;
 use StudioSchedule\Store\AttendanceStore;
 use StudioSchedule\Store\PassIssueStore;
+use StudioSchedule\Store\PassLedgerStore;
 use StudioSchedule\Store\PassReadStore;
 use StudioSchedule\Store\OutboxStore;
 use StudioSchedule\Store\PasswordResetStore;
@@ -393,7 +396,8 @@ final class Bootstrap
                         $applicationURL(),
                         $pushSender() !== null,
                     );
-                    $eventReceipts = new ReceiptIssuance(new ReceiptWriteStore($connection), $mail);
+                    $receiptWrites = new ReceiptWriteStore($connection);
+                    $eventReceipts = new ReceiptIssuance($receiptWrites, $mail);
                     $eventCancellations = new EventCancellations($eventStore, $registrationStore, $eventReceipts, $clock, $eventWaitlist, $wakeMail);
                     EventRoutes::register($app, $eventStore, $clock, $lessons, $eventWaitlist, $eventCancellations);
                     (new EventRegistrationRoutes(
@@ -428,15 +432,25 @@ final class Bootstrap
                     (new TeachingScheduleRoutes(new TeachingSchedule($schedule, $clock)))->register($app);
                     (new LessonSignupRoutes(new LessonSignup($schedule, $participants, $familyStore, $clock)))->register($app);
                     $passReads = new PassReadStore($connection, $schedule);
-                    (new PassReadRoutes(new PassRead($passReads, $clock)))->register($app);
-                    (new PassIssueRoutes(new PassIssuance(
-                        new PassIssueStore($connection, $familyStore, $passReads, $eventStore),
+                    $passRead = new PassRead($passReads, $clock);
+                    $passLedger = new PassLedgerStore($connection);
+                    (new PassReadRoutes($passRead))->register($app);
+                    (new PassIssueRoutes(
+                        new PassIssuance(new PassIssueStore($connection, $familyStore, $passReads, $eventStore), $eventReceipts, $clock, $wakeMail),
+                        new PassVoiding($eventStore, $passLedger, $passRead, $passReads, $clock),
+                    ))->register($app);
+                    (new ReceiptPdfRoutes(new Attachments(new AttachmentStore($connection))))->register($app);
+                    $receiptReads = new ReceiptReadStore($connection, $clock);
+                    (new ReceiptReadRoutes($receiptReads, new ReceiptCancellation(
+                        $eventStore,
+                        $registrationStore,
+                        $passLedger,
+                        $receiptWrites,
+                        $receiptReads,
                         $eventReceipts,
                         $clock,
                         $wakeMail,
                     )))->register($app);
-                    (new ReceiptPdfRoutes(new Attachments(new AttachmentStore($connection))))->register($app);
-                    (new ReceiptReadRoutes(new ReceiptReadStore($connection, $clock)))->register($app);
                     ScheduleRoutes::register($app, $schedule, $clock);
                     $app->get('/api/v1/waitlist-invites/{token}', new WaitlistInviteEndpoint(
                         (new WaitlistInvites(new WaitlistInviteStore($connection, $schedule), $clock))->view(...),

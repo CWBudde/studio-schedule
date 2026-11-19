@@ -16,6 +16,7 @@ use Symfony\Component\Uid\Uuid;
 /**
  * @phpstan-import-type PassDocument from PassReadPersistence
  * @phpstan-import-type PersonRef from PassReadPersistence
+ * @phpstan-import-type Redemption from PassReadPersistence
  */
 final readonly class PassReadStore implements PassReadPersistence
 {
@@ -46,7 +47,6 @@ final readonly class PassReadStore implements PassReadPersistence
         return $this->selectPasses($this->ownerScope($family), $this->ownerKeys($person, $family), !$family);
     }
 
-    /** @return PassDocument|null */
     public function byId(string $id): ?array
     {
         return $this->selectPasses('p.id = ?', [$this->key($id)], true)[0] ?? null;
@@ -76,7 +76,20 @@ final readonly class PassReadStore implements PassReadPersistence
 
     public function redemptions(string $person, bool $family): array
     {
-        $scope = $this->ownerScope($family);
+        return $this->selectRedemptions($this->ownerScope($family), $this->ownerKeys($person, $family));
+    }
+
+    public function redemptionsForPass(string $id): array
+    {
+        return $this->selectRedemptions('p.id = ?', [$this->key($id)]);
+    }
+
+    /**
+     * @param list<string> $keys
+     * @return list<Redemption>
+     */
+    private function selectRedemptions(string $scope, array $keys): array
+    {
         $rows = $this->connection->fetchAllAssociative(
             'SELECT recent.pass_id, recent.booking_id, recent.at, recent.use_count, b.lesson_id, b.status, b.late FROM ('
             . 'SELECT r.pass_id, r.booking_id, r.at, COUNT(*) OVER (PARTITION BY r.pass_id) AS use_count, '
@@ -84,8 +97,8 @@ final readonly class PassReadStore implements PassReadPersistence
             . "FROM pass_redemptions r JOIN passes p ON p.id = r.pass_id WHERE $scope"
             . ') recent JOIN bookings b ON b.id = recent.booking_id '
             . 'WHERE recent.ranking <= ' . self::MAX_USES_PER_PASS . ' ORDER BY recent.pass_id, recent.at, recent.booking_id',
-            $this->ownerKeys($person, $family),
-            array_fill(0, $family ? 2 : 1, $this->keyType()),
+            $keys,
+            array_fill(0, count($keys), $this->keyType()),
         );
 
         return array_map(fn(array $row): array => [

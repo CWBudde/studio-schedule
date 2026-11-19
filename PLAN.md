@@ -1535,6 +1535,17 @@ backends.
           price. Sales allocate a receipt number, store the original PDF and queue mail in the same
           transaction. The shared `pass_issuance` case runs in PHP CI at both mount paths on all
           three databases.
+    - [x] Let the office void passes while keeping payments for lessons that already started.
+          Give back future visits and use another valid pass when possible. Let admins change the
+          redemption mode without rewriting existing uses. PHP CI runs
+          `pass_voiding_and_redemption_settings` at both mount paths on all three databases.
+    - [x] Let the office cancel eligible receipts. Void an unused pass or refund a closed event
+          registration before its first session. Keep the original, issue the next numbered
+          cancellation PDF and queue its mail in the same transaction. PHP CI runs
+          `pass_sales_and_receipts` at both mount paths on all three databases.
+    - [ ] Apply the redemption ledger to the remaining lesson booking and participant writes.
+          Verify that timely cancellations return visits and late cancellations charge or keep a
+          visit according to the selected mode (ADR 0012).
   - [x] Settings, branding, themes, `init` (ADR 0013, 0018)
     - [x] Initialize school settings and issue the first administrator's one-time setup link
           through `init` or the web installer on PostgreSQL, MySQL and MariaDB.

@@ -17,6 +17,8 @@ interface EventRegistrationPersistence
     /** @phpstan-impure */
     public function find(string $id): ?EventRegistration;
 
+    public function forReceipt(string $receipt): ?EventRegistration;
+
     public function lockGuest(string $id): ?EventRegistration;
 
     public function inFamily(string $guardianId, string $personId, bool $forUpdate = false): bool;

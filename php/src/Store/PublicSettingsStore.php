@@ -156,6 +156,22 @@ final readonly class PublicSettingsStore implements AdminSettingsPersistence
         }, readCommitted: true);
     }
 
+    public function redemptionMode(): ?string
+    {
+        /** @var string|false $mode */
+        $mode = $this->connection->fetchOne('SELECT redemption_mode FROM settings');
+
+        return $mode === false ? null : $mode;
+    }
+
+    public function writeRedemptionMode(string $mode): void
+    {
+        Database::retryWrite($this->connection, function () use ($mode): void {
+            $this->lockSettings();
+            $this->connection->executeStatement('UPDATE settings SET redemption_mode = ?', [$mode]);
+        });
+    }
+
     private function lockSettings(): void
     {
         if ($this->connection->fetchOne('SELECT 1 FROM settings FOR UPDATE') === false) {

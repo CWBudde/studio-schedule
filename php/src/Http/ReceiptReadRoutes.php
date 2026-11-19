@@ -10,13 +10,15 @@ use Psr\Http\Message\ServerRequestInterface;
 use SensitiveParameter;
 use Slim\App;
 use StudioSchedule\Domain\Id;
+use StudioSchedule\Service\CatalogFailure;
+use StudioSchedule\Service\ReceiptCancellation;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\SetupInput;
 use StudioSchedule\Store\ReceiptReadStore;
 
 final readonly class ReceiptReadRoutes
 {
-    public function __construct(private ReceiptReadStore $receipts) {}
+    public function __construct(private ReceiptReadStore $receipts, private ReceiptCancellation $cancellation) {}
 
     /**
      * @template TContainer of ContainerInterface|null
@@ -27,6 +29,7 @@ final readonly class ReceiptReadRoutes
         $app->post('/api/v1/admin/receipts/search', $this->search(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->get('/api/v1/admin/receipts/{receiptId}', $this->detail(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->get('/api/v1/my/receipts', $this->mine(...));
+        $app->post('/api/v1/admin/receipts/{receiptId}/cancel', $this->cancel(...))->add(CatalogAdminRoutes::requireOffice(...));
     }
 
     private function search(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -69,6 +72,25 @@ final readonly class ReceiptReadRoutes
         $receipt = $this->receipts->detail($args['receiptId']);
 
         return $receipt === null ? Responses::problem($request, 404, 'resource not found') : Responses::json($response, $receipt);
+    }
+
+    /** @param array{receiptId:string} $args */
+    private function cancel(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $receipt = $args['receiptId'];
+        if (!Id::valid($receipt) || stripos($request->getUri()->getPath(), '%2f') !== false) {
+            throw new CatalogFailure(422, 'invalid ID', 'path.receiptId');
+        }
+        $body = CatalogAdminRoutes::fields($request, ['reason']);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        $principal = $request->getAttribute('sessionPrincipal');
+        assert($principal instanceof SessionPrincipal);
+        $reason = SetupInput::trim(CatalogAdminRoutes::text($body, 'reason', 200) ?? '');
+
+        return Responses::json($response->withStatus(201), $this->cancellation->cancel($principal, strtolower($receipt), $reason))
+            ->withHeader('Cache-Control', 'no-store');
     }
 
     private function mine(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response): ResponseInterface

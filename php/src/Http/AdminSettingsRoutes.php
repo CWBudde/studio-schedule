@@ -38,6 +38,7 @@ final readonly class AdminSettingsRoutes
             $routes->map(['GET', 'PUT'], '/branding', $this->branding(...));
             $routes->map(['PUT', 'DELETE'], '/branding/background', $this->background(...));
             $routes->map(['GET', 'PUT'], '/regional', $this->regional(...));
+            $routes->map(['GET', 'PUT'], '/passes', $this->passes(...));
             $routes->map(['GET', 'PUT'], '/receipts', $this->receipts(...));
             $routes->map(['GET', 'PUT', 'DELETE'], '/receipts/logo', $this->receiptLogo(...));
             $routes->map(['GET', 'PUT'], '/booking-rules', $this->bookingRules(...));
@@ -122,6 +123,21 @@ final readonly class AdminSettingsRoutes
         $this->service->updateBackground(self::text($fields, 'contentType', required: true), self::text($fields, 'data', required: true));
 
         return $response->withStatus(204);
+    }
+
+    private function passes(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        if ($request->getMethod() !== 'PUT') {
+            return Responses::json($response, $this->service->passSettings());
+        }
+        $body = JsonObject::read($request);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        $fields = self::fields($body, ['redemptionmode']);
+        $mode = self::text($fields, 'redemptionMode', required: true);
+
+        return Responses::json($response, $this->service->updatePassSettings($mode));
     }
 
     private function receipts(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response): ResponseInterface

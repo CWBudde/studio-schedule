@@ -6,12 +6,14 @@ namespace StudioSchedule\Store;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use RuntimeException;
 use SensitiveParameter;
 use StudioSchedule\Domain\BrandingImage;
 use StudioSchedule\Mail\Rendered;
 use StudioSchedule\Receipt\AttachmentStore;
+use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\ReceiptWritePersistence;
 use Symfony\Component\Uid\Uuid;
 
@@ -120,18 +122,25 @@ final readonly class ReceiptWriteStore implements ReceiptWritePersistence
         ?string $cancelsReceiptId = null,
     ): void {
         $key = $this->key($id);
-        $this->connection->insert('receipts', array_diff_key($receipt, ['original_number' => true, 'original_date' => true]) + [
-            'id' => $key,
-            'year' => (int) substr($receipt['issue_date'], 0, 4),
-            'sequence' => $sequence,
-            'cancels_receipt_id' => $cancelsReceiptId === null ? null : $this->key($cancelsReceiptId),
-            'issued_at' => Database::sqlInstant($this->connection, $issuedAt),
-            'created_by' => $this->key($actorId),
-            'payer_person_id' => $payerId === null ? null : $this->key($payerId),
-            'recipient_email' => $recipientEmail,
-            'net' => array_sum(array_column($lines, 'net')),
-            'vat' => array_sum(array_column($lines, 'vat')),
-        ]);
+        try {
+            $this->connection->insert('receipts', array_diff_key($receipt, ['original_number' => true, 'original_date' => true]) + [
+                'id' => $key,
+                'year' => (int) substr($receipt['issue_date'], 0, 4),
+                'sequence' => $sequence,
+                'cancels_receipt_id' => $cancelsReceiptId === null ? null : $this->key($cancelsReceiptId),
+                'issued_at' => Database::sqlInstant($this->connection, $issuedAt),
+                'created_by' => $this->key($actorId),
+                'payer_person_id' => $payerId === null ? null : $this->key($payerId),
+                'recipient_email' => $recipientEmail,
+                'net' => array_sum(array_column($lines, 'net')),
+                'vat' => array_sum(array_column($lines, 'vat')),
+            ]);
+        } catch (UniqueConstraintViolationException $error) {
+            if ($cancelsReceiptId !== null && str_contains($error->getMessage(), 'receipts_cancels_key')) {
+                throw new CatalogFailure(409, 'the receipt is canceled already', reason: 'already-canceled');
+            }
+            throw $error;
+        }
         foreach ($lines as $line) {
             $this->connection->insert('receipt_lines', ['receipt_id' => $key] + $line);
         }

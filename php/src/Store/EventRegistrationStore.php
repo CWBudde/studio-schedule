@@ -39,6 +39,17 @@ final readonly class EventRegistrationStore implements EventRegistrationPersiste
         return $row === false ? null : $this->registration($row);
     }
 
+    public function forReceipt(string $receipt): ?EventRegistration
+    {
+        $row = $this->connection->fetchAssociative(
+            self::REGISTRATIONS . ' WHERE r.receipt_id = ?',
+            [$this->encodeId($receipt)],
+            [$this->idType()],
+        );
+
+        return $row === false ? null : $this->registration($row);
+    }
+
     public function lockGuest(string $id): ?EventRegistration
     {
         $found = $this->connection->fetchOne(

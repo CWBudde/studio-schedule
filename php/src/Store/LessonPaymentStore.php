@@ -10,7 +10,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 
-/** All methods run under the lesson lock and receive database IDs. */
+/** Settles payments under the lesson lock. All IDs use their database representation. */
 final readonly class LessonPaymentStore
 {
     public function __construct(private Connection $db) {}
@@ -83,6 +83,45 @@ final readonly class LessonPaymentStore
         foreach ($invalid as $redemption) {
             $this->refund($redemption['booking_id'], $redemption['pass_id']);
             $this->redeem($redemption['booking_id'], $redemption['person_id'], $passes, $day, $now);
+        }
+    }
+
+    /** @return list<string> IDs of the owner's passes, held until this transaction ends. */
+    public function lockOwnerPasses(string $person): array
+    {
+        /** @var list<string> $passes */
+        $passes = $this->db->fetchFirstColumn(
+            'SELECT id FROM passes WHERE person_id = ? ORDER BY id FOR UPDATE',
+            [$person],
+            [$this->idType()],
+        );
+
+        return $passes;
+    }
+
+    /**
+     * The caller already holds the lesson and the owner's pass locks.
+     * @param list<string> $bookingIds
+     * @param list<string> $lockedPasses
+     */
+    public function replaceVoidedRedemptions(
+        string $pass,
+        string $person,
+        array $bookingIds,
+        array $lockedPasses,
+        string $day,
+        DateTimeImmutable $now,
+    ): void {
+        /** @var list<string> $bookings */
+        $bookings = $this->db->fetchFirstColumn(
+            'SELECT r.booking_id FROM pass_redemptions r JOIN bookings b ON b.id = r.booking_id '
+            . 'WHERE r.pass_id = ? AND b.person_id = ? AND b.id IN (?) ORDER BY b.booked_at, b.id',
+            [$pass, $person, $bookingIds],
+            [$this->idType(), $this->idType(), $this->idListType()],
+        );
+        foreach ($bookings as $booking) {
+            $this->refund($booking, $pass);
+            $this->redeem($booking, $person, $lockedPasses, $day, $now);
         }
     }
 

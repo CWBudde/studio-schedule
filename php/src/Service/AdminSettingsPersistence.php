@@ -34,6 +34,10 @@ interface AdminSettingsPersistence extends PublicSettingsPersistence
     /** @return ReceiptRow|null */
     public function receiptSettings(): ?array;
 
+    public function redemptionMode(): ?string;
+
+    public function writeRedemptionMode(string $mode): void;
+
     /**
      * @param ReceiptValues $values
      * @return ReceiptRow

@@ -34,12 +34,14 @@ use StudioSchedule\Http\LessonAdminRoutes;
 use StudioSchedule\Http\LessonNoticeRoutes;
 use StudioSchedule\Http\LessonSignupRoutes;
 use StudioSchedule\Http\PassIssueRoutes;
+use StudioSchedule\Http\ReceiptReadRoutes;
 use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Http\TeachingScheduleRoutes;
 use StudioSchedule\Http\StatisticsEndpoint;
 use StudioSchedule\Http\TrustedProxies;
 use StudioSchedule\Http\WaitlistInviteEndpoint;
 use StudioSchedule\Service\BackgroundJobs;
+use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\Attendance;
 use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Service\EventCancellations;
@@ -55,8 +57,11 @@ use StudioSchedule\Service\EventWaitlist;
 use StudioSchedule\Service\JobResult;
 use StudioSchedule\Service\OneOffLesson;
 use StudioSchedule\Service\PassIssuance;
+use StudioSchedule\Service\PassVoiding;
+use StudioSchedule\Service\PassRead;
 use StudioSchedule\Service\ScheduleRecipients;
 use StudioSchedule\Service\ReceiptIssuance;
+use StudioSchedule\Service\ReceiptCancellation;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\StatisticsService;
 use StudioSchedule\Service\TeachingSchedule;
@@ -65,6 +70,7 @@ use StudioSchedule\Store\Database;
 use StudioSchedule\Store\AttendanceStore;
 use StudioSchedule\Store\EventRegistrationStore;
 use StudioSchedule\Store\ReceiptWriteStore;
+use StudioSchedule\Store\ReceiptReadStore;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\EventWaitlistStore;
 use StudioSchedule\Store\FamilyStore;
@@ -73,6 +79,7 @@ use StudioSchedule\Store\LessonNoticeStore;
 use StudioSchedule\Store\Migrator;
 use StudioSchedule\Store\ParticipantReadStore;
 use StudioSchedule\Store\PassIssueStore;
+use StudioSchedule\Store\PassLedgerStore;
 use StudioSchedule\Store\PassReadStore;
 use StudioSchedule\Store\PublicSettingsStore;
 use StudioSchedule\Store\RateLimitStore;
@@ -1178,6 +1185,158 @@ final class ScheduleStoreTest extends TestCase
         $this->database->executeStatement('UPDATE pass_types SET active = FALSE');
         self::post($app, $sell, $office, 422, $pay);
         self::assertSame(['R-2027-0001'], $this->database->fetchFirstColumn('SELECT number FROM receipts'));
+    }
+
+    public function testVoidingAPassMovesOnlyFuturePaymentsUsingTheLessonSchoolDate(): void
+    {
+        $this->insert('pass_types', [
+            'id' => 301, 'name' => 'Visits', 'kind' => 'visits', 'visits' => 3, 'validity_days' => 0,
+            'price' => 0, 'vat_rate_bp' => 0, 'active' => true, 'created_at' => '2026-10-01 10:00:00',
+        ]);
+        foreach ([302 => [3, 0, null], 303 => [3, 3, '2026-10-28']] as $id => [$total, $left, $until]) {
+            $this->insert('passes', [
+                'id' => $id, 'pass_type_id' => 301, 'person_id' => 3, 'kind' => 'visits', 'origin' => 'assignment',
+                'visits_total' => $total, 'visits_remaining' => $left, 'status' => 'active', 'valid_from' => '2026-10-01',
+                'valid_until' => $until, 'price_paid' => 0, 'sold_at' => '2026-10-01 10:00:00',
+            ]);
+        }
+        foreach ([304 => 101, 305 => 102] as $id => $lesson) {
+            $this->insert('bookings', [
+                'id' => $id, 'lesson_id' => $lesson, 'person_id' => 3, 'source' => 'self',
+                'booked_at' => '2026-10-22 14:00:00', 'status' => 'booked', 'trial' => false,
+            ]);
+        }
+        foreach ([202, 304, 305] as $booking) {
+            $this->insert('pass_redemptions', ['pass_id' => 302, 'booking_id' => $booking, 'at' => '2026-10-25 18:00:00']);
+        }
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $path = '/admin/passes/' . self::id(302) . '/void';
+        $app = $this->app('2026-10-26T12:00:00Z');
+        $pass = self::post($app, $path, $office, 200);
+        self::assertSame('voided', $pass['status']);
+        self::assertFalse($pass['usable']);
+        self::assertSame(2, $pass['visitsRemaining']);
+        self::assertSame(1, $pass['useCount']);
+        $uses = $pass['uses'] ?? null;
+        self::assertIsArray($uses);
+        self::assertIsArray($uses[0] ?? null);
+        self::assertSame(self::id(202), $uses[0]['bookingId'] ?? null);
+
+        $encoded = fn(int $id): string|false => $this->postgres ? self::id($id) : hex2bin(str_replace('-', '', self::id($id)));
+        self::assertSame([$encoded(302), $encoded(303)], $this->database->fetchFirstColumn('SELECT pass_id FROM pass_redemptions ORDER BY booking_id'));
+        self::assertSame([$encoded(202), $encoded(304)], $this->database->fetchFirstColumn('SELECT booking_id FROM pass_redemptions ORDER BY booking_id'));
+        self::assertSame([2, 2], array_map(
+            static fn(mixed $value): int => is_numeric($value) ? (int) $value : -1,
+            $this->database->fetchFirstColumn('SELECT visits_remaining FROM passes ORDER BY id'),
+        ));
+        self::assertSame('already-voided', self::post($app, $path, $office, 409)['reason']);
+    }
+
+    public function testCancelingPassReceiptRollsBackTheVoidAndCounterOnRenderFailure(): void
+    {
+        $this->database->executeStatement(
+            "UPDATE settings SET issuer_name = 'Fixture Studio', issuer_address = 'Room 1', issuer_tax_id = '123', tax_mode = 'standard'",
+        );
+        $this->insert('pass_types', [
+            'id' => 301, 'name' => 'Visits', 'kind' => 'visits', 'visits' => 3, 'validity_days' => 0,
+            'price' => 1350, 'vat_rate_bp' => 1900, 'active' => true, 'created_at' => '2026-10-01 10:00:00',
+        ]);
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $now = '2026-10-26T12:00:00Z';
+        $app = $this->app($now);
+        $pass = self::post($app, '/admin/persons/' . self::id(1) . '/passes/sell', $office, 201, ['passTypeId' => self::id(301)]);
+        $receipt = $pass['receiptId'] ?? null;
+        self::assertIsString($receipt);
+        $path = '/admin/receipts/' . $receipt . '/cancel';
+        $reason = ['reason' => '  Sold to the wrong person  '];
+        $fails = $this->app($now, renderReceipt: static fn(): never => throw new RuntimeException('Fixture cancellation PDF failure'));
+        try {
+            self::post($fails, $path, $office, 201, $reason);
+            self::fail('Expected the render failure to roll back the cancellation');
+        } catch (RuntimeException $error) {
+            self::assertSame('Fixture cancellation PDF failure', $error->getMessage());
+        }
+        self::assertSame(['active'], $this->database->fetchFirstColumn('SELECT status FROM passes'));
+        self::assertSame(['R-2026-0001'], $this->database->fetchFirstColumn('SELECT number FROM receipts'));
+
+        $credit = self::post($app, $path, $office, 201, $reason);
+        self::assertSame('R-2026-0002', $credit['number']);
+        self::assertSame('Sold to the wrong person', $credit['reason']);
+        self::assertSame(-1350, $credit['gross']);
+        self::assertSame(['voided'], $this->database->fetchFirstColumn('SELECT status FROM passes'));
+        self::assertSame(['member@example.test', 'member@example.test'], $this->database->fetchFirstColumn('SELECT recipient FROM outbox_mails'));
+        self::assertSame('already-canceled', self::post($app, $path, $office, 409, [])['reason']);
+    }
+
+    public function testCancelingAnEventReceiptRequiresAnEndedRegistrationBeforeTheFirstSession(): void
+    {
+        $this->database->executeStatement(
+            "UPDATE settings SET issuer_name = 'Fixture Studio', issuer_address = 'Room 1', issuer_tax_id = '123', tax_mode = 'standard'",
+        );
+        $this->database->executeStatement("UPDATE event_registrations SET price = 1500 WHERE status = 'registered'");
+        $registration = '/admin/event-registrations/' . self::id(221);
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $app = $this->app('2026-10-25T12:00:00Z');
+        $paid = self::post($app, $registration . '/pay', $office, 200, []);
+        self::assertIsArray($paid['receipt']);
+        $receipt = $paid['receipt']['id'] ?? null;
+        self::assertIsString($receipt);
+        $path = '/admin/receipts/' . $receipt . '/cancel';
+        self::assertSame('registration-open', self::post($app, $path, $office, 409, [])['reason']);
+        self::assertSame('paid', self::post($app, $registration . '/cancel', $office, 200, ['refund' => false])['payment']);
+        $afterStart = $this->app('2026-11-03T12:00:00Z');
+        self::assertSame('event-attended', self::post($afterStart, $path, $office, 409, [])['reason']);
+        $this->assertCancellationChecksTimeAfterLockingEvent($office, $receipt);
+        $credit = self::post($app, $path, $office, 201, []);
+        self::assertSame(self::id(120), $credit['eventId']);
+        self::assertSame(-1500, $credit['gross']);
+        self::assertSame(['refunded'], $this->database->fetchFirstColumn("SELECT payment FROM event_registrations WHERE status = 'canceled'"));
+    }
+
+    private function assertCancellationChecksTimeAfterLockingEvent(SessionPrincipal $office, string $receipt): void
+    {
+        $now = new DateTimeImmutable('2026-11-03T10:00:00Z');
+        $clock = self::createStub(ClockInterface::class);
+        $clock->method('now')->willReturnCallback(static function () use (&$now): DateTimeImmutable {
+            return $now;
+        });
+        $advance = static function () use (&$now): void {
+            $now = new DateTimeImmutable('2026-11-03T10:00:00.500000Z');
+        };
+        $logger = new class ($advance) extends AbstractLogger {
+            /** @param Closure():void $advance */
+            public function __construct(private readonly Closure $advance) {}
+
+            /** @param array<string,mixed> $context */
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                $sql = $context['sql'] ?? null;
+                if (is_string($sql) && str_contains($sql, 'SELECT id FROM events WHERE id = ? FOR UPDATE')) {
+                    ($this->advance)();
+                }
+            }
+        };
+        $config = new Configuration();
+        $config->setMiddlewares([new Middleware($logger)]);
+        $writer = DriverManager::getConnection($this->database->getParams(), $config);
+        $receipts = new ReceiptWriteStore($writer);
+        $cancellation = new ReceiptCancellation(
+            new EventStore($writer),
+            new EventRegistrationStore($writer),
+            new PassLedgerStore($writer),
+            $receipts,
+            new ReceiptReadStore($writer, $clock),
+            new ReceiptIssuance($receipts, new Renderer()),
+            $clock,
+        );
+        try {
+            $cancellation->cancel($office, $receipt, '');
+            self::fail('Receipt canceled after its first session started during the event lock');
+        } catch (CatalogFailure $failure) {
+            self::assertSame('event-attended', $failure->reason);
+        } finally {
+            $writer->close();
+        }
     }
 
     public function testOfficeEventRefundKeepsOriginalAmountsAndRollsBackOnPdfFailure(): void
@@ -2476,14 +2635,21 @@ final class ScheduleStoreTest extends TestCase
             false,
         );
         $eventWaitlist = static fn(): EventWaitlist => $waitlist;
-        $eventReceipts = new ReceiptIssuance(new ReceiptWriteStore($this->database), new Renderer(), $renderReceipt);
-        (new PassIssueRoutes(new PassIssuance(
-            new PassIssueStore(
-                $this->database,
-                new FamilyStore($this->database),
-                new PassReadStore($this->database, $scheduleStore),
-                $eventStore,
-            ),
+        $receiptWrites = new ReceiptWriteStore($this->database);
+        $eventReceipts = new ReceiptIssuance($receiptWrites, new Renderer(), $renderReceipt);
+        $passReads = new PassReadStore($this->database, $scheduleStore);
+        $passLedger = new PassLedgerStore($this->database);
+        (new PassIssueRoutes(
+            new PassIssuance(new PassIssueStore($this->database, new FamilyStore($this->database), $passReads, $eventStore), $eventReceipts, $clock),
+            new PassVoiding($eventStore, $passLedger, new PassRead($passReads, $clock), $passReads, $clock),
+        ))->register($app);
+        $receiptReads = new ReceiptReadStore($this->database, $clock);
+        (new ReceiptReadRoutes($receiptReads, new ReceiptCancellation(
+            $eventStore,
+            $registrationStore,
+            $passLedger,
+            $receiptWrites,
+            $receiptReads,
             $eventReceipts,
             $clock,
         )))->register($app);

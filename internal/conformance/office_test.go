@@ -377,10 +377,10 @@ func sellAndCancelReceipt(t *testing.T, b *backend, office *http.Client, person,
 	}
 
 	type receipt struct {
-		ID, Number, PaymentMethod, Currency string
-		Cancels, CanceledBy                 struct{ ID string }
-		Net, VAT, Gross                     int64
-		Cancelable                          bool
+		ID, Number, PaymentMethod, Currency, Reason string
+		Cancels, CanceledBy                         struct{ ID string }
+		Net, VAT, Gross                             int64
+		Cancelable                                  bool
 	}
 	getReceipt := request{
 		method: http.MethodGet, path: "/api/v1/admin/receipts/{receiptId}",
@@ -405,10 +405,23 @@ func sellAndCancelReceipt(t *testing.T, b *backend, office *http.Client, person,
 	cancel.method, cancel.path, cancel.body = http.MethodPost, getReceipt.path+"/cancel", `{"reason":"Fixture correction"}`
 	storno := read[receipt](t, b.call(t, office, cancel, http.StatusCreated))
 	if storno.Cancels.ID != original.ID || storno.Gross != -original.Gross ||
-		storno.Net != -original.Net || storno.VAT != -original.VAT || storno.Number == original.Number {
+		storno.Net != -original.Net || storno.VAT != -original.VAT || storno.Number == original.Number ||
+		storno.Reason != "Fixture correction" || storno.Cancelable {
 		t.Fatalf("storno does not reverse the original receipt: %+v", storno)
 	}
-	b.call(t, office, cancel, http.StatusConflict)
+	if repeat := read[struct{ Reason string }](t, b.call(t, office, cancel, http.StatusConflict)); repeat.Reason != "already-canceled" {
+		t.Fatalf("unexpected repeat cancellation: %+v", repeat)
+	}
+	stornoPDF := pdf
+	stornoPDF.params = map[string]string{"receiptId": storno.ID}
+	if doc := b.call(t, office, stornoPDF, http.StatusOK); !bytes.HasPrefix(doc.body, []byte("%PDF-")) {
+		t.Fatal("expected the stored cancellation PDF")
+	}
+	cancelStorno := cancel
+	cancelStorno.params = stornoPDF.params
+	if invalid := read[struct{ Reason string }](t, b.call(t, office, cancelStorno, http.StatusConflict)); invalid.Reason != "cancellation" {
+		t.Fatalf("unexpected cancellation of a cancellation: %+v", invalid)
+	}
 
 	stored := read[receipt](t, b.call(t, office, getReceipt, http.StatusOK))
 	if stored.CanceledBy.ID != storno.ID || stored.Cancelable ||
