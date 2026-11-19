@@ -1590,7 +1590,8 @@ backends.
           Waiting-list invite queueing and after-response delivery are open.
     - [x] Render lesson and event invite push text in English and German using the Go fixtures.
           The notification names the lesson or event without naming the participant.
-  - [ ] Events and workshops (Phase 10)
+  - [ ] Events and workshops (Phase 10). Event registration handling in person merge and office
+        anonymization remains open under ADRs 0015 and 0016.
     - [x] Serve public event details and images, including past and canceled events. Drafts
           stay private and image requests support conditional responses. The shared
           `public_event_details` case passes on all three PHP databases at both mount paths.
@@ -1638,8 +1639,11 @@ backends.
           additions to an individual event session. Preserve family permissions, draft visibility
           and staff assignment. The shared `event_session_signup_guards` case runs in PHP CI at
           both mount paths on all three databases.
-    - [ ] Send staff lesson notices to the event's registered persons and guests as specified by
-          ADR 0019.
+    - [x] Send staff lesson notices to active bookings and to the event's registered persons and
+          guests. Deduplicate recipients and use the real sender's reply address, including
+          during impersonation. Enforce the sender's hourly and lesson's school-day limits.
+          The shared `lesson_notices` case runs in PHP CI at both mount paths on all three
+          databases.
     - [x] Let members and the office cancel individual registrations. Enforce the member deadline
           and let the office retain the payment or refund it after the deadline. Issue an immutable
           cancellation receipt for a refund and offer freed places to the waitlist. The shared

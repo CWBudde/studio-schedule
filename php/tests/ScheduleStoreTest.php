@@ -23,6 +23,7 @@ use StudioSchedule\Http\CatalogAdminRoutes;
 use StudioSchedule\Http\EventRegistrationRoutes;
 use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\LessonAdminRoutes;
+use StudioSchedule\Http\LessonNoticeRoutes;
 use StudioSchedule\Http\LessonSignupRoutes;
 use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Http\StatisticsEndpoint;
@@ -33,6 +34,8 @@ use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
 use StudioSchedule\Service\LessonAdministration;
+use StudioSchedule\Service\LessonRecipients;
+use StudioSchedule\Service\LessonNotices;
 use StudioSchedule\Service\LessonSignup;
 use StudioSchedule\Service\LessonWaitlistOffers;
 use StudioSchedule\Service\EventRegistrationReads;
@@ -40,6 +43,7 @@ use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
 use StudioSchedule\Service\JobResult;
 use StudioSchedule\Service\OneOffLesson;
+use StudioSchedule\Service\ScheduleRecipients;
 use StudioSchedule\Service\ReceiptIssuance;
 use StudioSchedule\Service\SessionPrincipal;
 use StudioSchedule\Service\StatisticsService;
@@ -51,6 +55,7 @@ use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\EventWaitlistStore;
 use StudioSchedule\Store\FamilyStore;
 use StudioSchedule\Store\LessonWriteStore;
+use StudioSchedule\Store\LessonNoticeStore;
 use StudioSchedule\Store\Migrator;
 use StudioSchedule\Store\ParticipantReadStore;
 use StudioSchedule\Store\PublicSettingsStore;
@@ -1534,6 +1539,123 @@ final class ScheduleStoreTest extends TestCase
         self::assertSame('closed', self::post($app, $path(106) . '/restore', $office, 409)['reason']);
     }
 
+    public function testLessonNoticesUseTheActualSenderAndRollBackAllRecipients(): void
+    {
+        $this->database->executeStatement("UPDATE accounts SET confirmed_at = '2026-10-24 09:00:00'");
+        $this->database->executeStatement("UPDATE staff SET person_id = (SELECT person_id FROM accounts WHERE role = 'office') WHERE kind = 'instructor'");
+        $this->insert('accounts', [
+            'id' => 12, 'person_id' => 7, 'email' => 'admin@example.test', 'role' => 'admin',
+            'confirmed_at' => '2026-10-24 09:00:00',
+        ]);
+        foreach ([
+            224 => ['Shared Address', 'MEMBER@EXAMPLE.TEST', 'registered'],
+            225 => ['Event Guest', 'invalid', 'registered'],
+            226 => ['Canceled Guest', 'canceled@example.test', 'canceled'],
+        ] as $id => [$name, $email, $status]) {
+            $this->insert('event_registrations', [
+                'id' => $id, 'event_id' => 120, 'guest_name' => $name, 'guest_email' => $email,
+                'status' => $status, 'payment' => 'paid', 'price' => 0, 'vat_rate_bp' => 0,
+                'created_at' => '2026-10-22 12:00:00', 'updated_at' => '2026-10-22 12:00:00',
+                'canceled_at' => $status === 'canceled' ? '2026-10-23 14:00:00' : null,
+            ]);
+        }
+        $wakes = 0;
+        $wake = static function () use (&$wakes): void {
+            ++$wakes;
+        };
+        $app = $this->app(self::BEFORE_RELEASE, wakeLessonMail: $wake);
+        $path = static fn(int $id): string => '/lessons/' . self::id($id) . '/notify';
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $instructor = new SessionPrincipal(self::id(11), self::id(5), 'instructor', impersonatorId: self::id(12));
+        $unassigned = new SessionPrincipal(self::id(12), self::id(7), 'instructor');
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member');
+        $missing = new SessionPrincipal(self::id(998), self::id(998), 'office');
+        $data = ['message' => "  Door\r\nopens\u{2029}early.  "];
+
+        self::post($app, $path(106), null, 401, $data);
+        self::post($app, $path(106), $member, 403, $data);
+        self::post($app, $path(106), $unassigned, 404, $data);
+        self::post($app, $path(106), $missing, 404, $data);
+        self::post($app, $path(999), $office, 404, $data);
+        self::post($app, '/lessons/not-an-id/notify', $office, 422, $data);
+        self::post($app, $path(106), $office, 400);
+        self::post($app, $path(106), $office, 422, ['message' => '    ']);
+        self::post($app, $path(106), $office, 422, ['message' => str_repeat('ä', 1001)]);
+        self::post($app, $path(106), $office, 422, ['message' => "hidden\u{202e}"]);
+        self::assertSame(['recipients' => 0], self::post($app, $path(107), $office, 200, $data));
+        try {
+            self::post($app, $path(106), $instructor, 200, $data);
+            self::fail('Expected invalid recipient to roll back the notice');
+        } catch (RuntimeException $error) {
+            self::assertSame('A lesson notice has an invalid mail address', $error->getMessage());
+        }
+        self::assertSame(0, $wakes);
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT 1 FROM lesson_notices'));
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT 1 FROM outbox_mails'));
+
+        $this->database->executeStatement("UPDATE event_registrations SET guest_email = 'event-guest@example.test' WHERE guest_name = 'Event Guest'");
+        self::assertSame(['recipients' => 2], self::post($app, $path(106), $instructor, 200, $data));
+        self::assertSame(1, $wakes);
+        self::assertSame(['admin@example.test'], $this->database->fetchFirstColumn(
+            'SELECT a.email FROM lesson_notices n JOIN accounts a ON a.id = n.sender_id WHERE n.recipients = 2',
+        ));
+        $mails = $this->database->fetchAllAssociative("SELECT recipient, reply_to, body_text FROM outbox_mails WHERE template = 'lesson-notice' ORDER BY recipient");
+        self::assertSame(['event-guest@example.test', 'member@example.test'], array_column($mails, 'recipient'));
+        self::assertSame(['admin@example.test', 'admin@example.test'], array_column($mails, 'reply_to'));
+        foreach ($mails as $mail) {
+            self::assertIsString($mail['body_text']);
+            self::assertStringContainsString('Third Person', $mail['body_text']);
+            self::assertStringContainsString("Door\nopens\nearly.", $mail['body_text']);
+        }
+        self::assertStringContainsString('Shared Address', $mails[1]['body_text']);
+
+        $this->database->executeStatement("UPDATE staff SET person_id = (SELECT person_id FROM accounts WHERE role = 'office') WHERE kind = 'accompanist'");
+        $this->database->executeStatement("UPDATE staff SET active = FALSE WHERE kind = 'instructor'");
+        $accompanist = new SessionPrincipal(self::id(11), self::id(5), 'instructor');
+        self::assertSame(['recipients' => 1], self::post($app, $path(100), $accompanist, 200, ['message' => 'Past lesson notice']));
+        $body = $this->database->fetchOne("SELECT body_text FROM outbox_mails WHERE reply_to = 'office@example.test'");
+        self::assertIsString($body);
+        self::assertStringContainsString('Studio Pianist', $body);
+
+        $this->database->executeStatement('DELETE FROM settings');
+        self::post($app, $path(106), $office, 404, $data);
+    }
+
+    public function testLessonNoticeLimitsUseSchoolMidnightAndTheRollingHour(): void
+    {
+        foreach ([301 => 106, 302 => 106, 303 => 106, 304 => 101, 305 => null] as $id => $lesson) {
+            $this->insert('lesson_notices', [
+                'id' => $id, 'lesson_id' => $lesson, 'sender_id' => 11, 'recipients' => 1,
+                'sent_at' => $id === 301 ? '2026-10-24 23:30:00.500000' : '2026-10-25 00:15:00',
+            ]);
+        }
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $send = static function (App $app, int $lesson) use ($office): ResponseInterface {
+            $path = '/api/v1/lessons/' . self::id($lesson) . '/notify';
+            $request = (new ServerRequestFactory())->createServerRequest('POST', $path)
+                ->withAttribute('sessionPrincipal', $office)->withHeader('Content-Type', 'application/json')
+                ->withBody((new StreamFactory())->createStream('{"message":"Quota fixture"}'));
+
+            return $app->handle($request);
+        };
+
+        $app = $this->app('2026-10-25T00:30:00.250000Z');
+        $daily = $send($app, 106);
+        self::assertSame(429, $daily->getStatusCode());
+        self::assertSame('81000', $daily->getHeaderLine('Retry-After'));
+        $hourly = $send($app, 102);
+        self::assertSame(429, $hourly->getStatusCode());
+        self::assertSame('1', $hourly->getHeaderLine('Retry-After'));
+        $exact = $send($this->app('2026-10-25T00:30:00.500000Z'), 102);
+        self::assertSame(429, $exact->getStatusCode());
+        self::assertSame('1', $exact->getHeaderLine('Retry-After'));
+        $after = $send($this->app('2026-10-25T00:30:00.501000Z'), 102);
+        self::assertSame(200, $after->getStatusCode());
+        self::assertSame('{"recipients":0}', (string) $after->getBody());
+        self::assertCount(5, $this->database->fetchFirstColumn('SELECT 1 FROM lesson_notices'));
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT 1 FROM outbox_mails'));
+    }
+
     private function eventExpiryJobs(DateTimeImmutable $now): BackgroundJobs
     {
         $dsn = getenv('STUDIO_PHP_TEST_DATABASE_URL');
@@ -1979,6 +2101,15 @@ final class ScheduleStoreTest extends TestCase
         $app->get('/api/v1/event-invites/{token}', new WaitlistInviteEndpoint($registrations->invite(...), $proxies, $limits));
         $recipients = new EventWaitlistStore($this->database);
         $lessonWrites = new LessonWriteStore($this->database);
+        $lessonParticipants = new LessonRecipients($lessonWrites, $registrationStore, new ScheduleRecipients($recipients));
+        (new LessonNoticeRoutes(new LessonNotices(
+            new LessonNoticeStore($this->database, $eventStore, $lessonWrites, $scheduleStore),
+            $recipients,
+            $lessonParticipants,
+            new Renderer(),
+            $clock,
+            $wakeLessonMail,
+        )))->register($app);
         $lessonOffers = new LessonWaitlistOffers(
             $scheduleStore,
             $lessonWrites,
@@ -1991,7 +2122,7 @@ final class ScheduleStoreTest extends TestCase
             $eventStore,
             $lessonWrites,
             $scheduleStore,
-            $registrationStore,
+            $lessonParticipants,
             $recipients,
             $timetable,
             $lessonOffers,

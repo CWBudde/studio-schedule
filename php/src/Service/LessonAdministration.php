@@ -21,7 +21,7 @@ final readonly class LessonAdministration
         private EventPersistence $events,
         private LessonWritePersistence $writes,
         private SchedulePersistence $schedule,
-        private EventRegistrationPersistence $registrations,
+        private LessonRecipients $participants,
         private EventWaitlistPersistence $recipients,
         private OneOffLessonPersistence $timetable,
         private LessonWaitlistOffers $offers,
@@ -215,15 +215,7 @@ final readonly class LessonAdministration
         if ($lesson->startsAt <= $now) {
             return false;
         }
-        $parties = $this->writes->bookedRecipients($lesson->id);
-        if ($lesson->eventId !== null) {
-            foreach ($this->registrations->forEvent($lesson->eventId) as $registration) {
-                if ($registration->status === 'registered') {
-                    $parties[] = ['personId' => $registration->person['id'] ?? null, 'guest' => $registration->guest];
-                }
-            }
-        }
-        $messages = (new ScheduleRecipients($this->recipients))->group($parties);
+        $messages = $this->participants->forLesson($lesson);
         $zone = $settings['timezone'];
         $priorPlace = $previous === null ? [] : [
             'PreviousStartsAt' => $previous->startsAt->setTimezone($zone), 'PreviousEndsAt' => $previous->endsAt->setTimezone($zone),

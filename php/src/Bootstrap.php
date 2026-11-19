@@ -33,6 +33,7 @@ use StudioSchedule\Http\CredentialRoutes;
 use StudioSchedule\Http\EventRegistrationRoutes;
 use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\LessonAdminRoutes;
+use StudioSchedule\Http\LessonNoticeRoutes;
 use StudioSchedule\Http\LessonSignupRoutes;
 use StudioSchedule\Http\FamilyRoutes;
 use StudioSchedule\Http\Installer;
@@ -64,6 +65,8 @@ use StudioSchedule\Receipt\Attachments;
 use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
 use StudioSchedule\Service\LessonAdministration;
+use StudioSchedule\Service\LessonRecipients;
+use StudioSchedule\Service\LessonNotices;
 use StudioSchedule\Service\LessonSignup;
 use StudioSchedule\Service\LessonWaitlistOffers;
 use StudioSchedule\Service\EventRegistrationReads;
@@ -90,6 +93,7 @@ use StudioSchedule\Service\JobResult;
 use StudioSchedule\Service\LessonGenerator;
 use StudioSchedule\Service\MailLog;
 use StudioSchedule\Service\OneOffLesson;
+use StudioSchedule\Service\ScheduleRecipients;
 use StudioSchedule\Service\MemberImports;
 use StudioSchedule\Service\ParticipantRead;
 use StudioSchedule\Service\PassRead;
@@ -121,6 +125,7 @@ use StudioSchedule\Store\EventRegistrationStore;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\EventWaitlistStore;
 use StudioSchedule\Store\LessonWriteStore;
+use StudioSchedule\Store\LessonNoticeStore;
 use StudioSchedule\Store\FamilyStore;
 use StudioSchedule\Store\MailLogStore;
 use StudioSchedule\Store\MemberImportStore;
@@ -343,6 +348,15 @@ final class Bootstrap
                     $eventRegistrations = new EventRegistrationReads($eventStore, $registrationStore, $clock);
                     $lessonRecipients = new EventWaitlistStore($connection);
                     $lessonWrites = new LessonWriteStore($connection);
+                    $lessonParticipants = new LessonRecipients($lessonWrites, $registrationStore, new ScheduleRecipients($lessonRecipients));
+                    (new LessonNoticeRoutes(new LessonNotices(
+                        new LessonNoticeStore($connection, $eventStore, $lessonWrites, $schedule),
+                        $lessonRecipients,
+                        $lessonParticipants,
+                        $mail,
+                        $clock,
+                        $wakeMail,
+                    )))->register($app);
                     $lessonOffers = new LessonWaitlistOffers(
                         $schedule,
                         $lessonWrites,
@@ -355,7 +369,7 @@ final class Bootstrap
                         $eventStore,
                         $lessonWrites,
                         $schedule,
-                        $registrationStore,
+                        $lessonParticipants,
                         $lessonRecipients,
                         $timetableStore,
                         $lessonOffers,

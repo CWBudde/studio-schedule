@@ -246,6 +246,7 @@ func TestBackendConformance(t *testing.T) {
 		{"one off lesson creation", oneOffLessonCreation},
 		{"lesson cancellation and deletion", lessonCancellationAndDeletion},
 		{"lesson editing and restoration", lessonEditingAndRestoration},
+		{"lesson notices", lessonNotices},
 		{"public event details", publicEventDetails},
 		{"office event reads", officeEventReads},
 		{"office event lifecycle", officeEventLifecycle},
