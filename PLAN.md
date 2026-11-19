@@ -1471,7 +1471,12 @@ backends.
           eligible event participant or guardian. Store the first PDF for older receipts without
           one. The shared `receipt_pdf_downloads` case passes at both mount paths on all three
           PHP databases with the authentication draft.
-    - [ ] Enable `receipt_pdf_downloads` in PHP CI after PHP sign-in lands.
+    - [x] List the signed-in payer's receipts, including those of a merged profile. Let the office
+          search and page receipts and read their lines, refunds and current cancellation
+          eligibility. The shared `receipt_lists_and_search` case passes at both mount paths on
+          all three PHP databases with the authentication draft.
+    - [ ] Enable `receipt_pdf_downloads` and `receipt_lists_and_search` in PHP CI after PHP sign-in
+          lands.
   - [ ] Settings, branding, themes, `init` (ADR 0013, 0018)
     - [x] Initialize school settings and issue the first administrator's one-time setup link
           through `init` or the web installer on PostgreSQL, MySQL and MariaDB.

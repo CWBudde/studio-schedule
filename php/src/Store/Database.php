@@ -126,6 +126,23 @@ final class Database
         return in_array($connection->fetchOne($lock), [true, 't', 1, '1'], true);
     }
 
+    /** Match an ASCII-folded literal bound to the placeholder against a trusted column expression. */
+    public static function asciiContains(string $column, bool $postgres): string
+    {
+        if ($postgres) {
+            return "strpos(lower($column COLLATE \"C\"), ?) > 0";
+        }
+
+        // Fold ASCII bytes only. LOWER on a Unicode collation would fold non-ASCII letters too.
+        $folded = "CAST($column AS BINARY)";
+        foreach (range('A', 'Z') as $letter) {
+            $lower = strtolower($letter);
+            $folded = "REPLACE($folded, '$letter', '$lower')";
+        }
+
+        return "LOCATE(CAST(? AS BINARY), $folded) > 0";
+    }
+
     /**
      * @template T
      * @param Closure():T $read

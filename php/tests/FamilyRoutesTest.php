@@ -364,6 +364,98 @@ final class FamilyRoutesTest extends TestCase
         self::assertSame(['filename' => 'R-2026-72.pdf', 'pdf' => '%PDF-original'], $store->find($receipt));
     }
 
+    public function testReceiptReadsKeepOfficeSearchAndMemberOwnershipSeparate(): void
+    {
+        $this->account(6, 'office');
+        $this->session(6, 'office', 36);
+        $this->seedExportHistory();
+        $this->insert('receipt_counters', ['year' => 2025, 'last' => 1]);
+        $this->insert('receipt_counters', ['year' => 2026, 'last' => 73]);
+        $this->insert('receipts', [
+            'id' => 73, 'number' => 'R-2026-73', 'year' => 2026, 'sequence' => 73, 'kind' => 'sale',
+            'issued_at' => '2026-11-18 23:30:00.123456', 'issue_date' => '2026-11-19', 'locale' => 'en',
+            'issuer_name' => 'Studio', 'issuer_address' => 'Road', 'issuer_tax_id' => '123',
+            'tax_mode' => 'exempt', 'recipient_name' => 'DÉMO %_payer', 'recipient_email' => 'guest@example.test',
+            'payment_method' => 'card', 'currency' => 'EUR', 'net' => 400, 'vat' => 0, 'gross' => 400,
+        ]);
+        $this->insert('receipt_lines', [
+            'receipt_id' => 72, 'position' => 1, 'description' => 'Workshop fee refund',
+            'quantity' => 1, 'unit_price' => -2500, 'vat_rate_bp' => 0, 'net' => -2500, 'vat' => 0, 'gross' => -2500,
+        ]);
+
+        $search = '/admin/receipts/search';
+        $this->request('POST', $search, [], user: null, status: 401, mount: '');
+        $this->request('POST', $search, [], status: 403, mount: '');
+        $this->request('GET', '/my/receipts', user: null, status: 401, mount: '');
+        self::assertSame(['items' => []], $this->request('GET', '/my/receipts', user: 'outsider', mount: ''));
+        $mine = $this->request('GET', '/my/receipts', user: 'acting-parent', mount: '');
+        self::assertIsArray($mine['items']);
+        self::assertSame(['R-2026-72', 'R-2026-71'], array_column($mine['items'], 'number'));
+        [$cancellation, $sale] = $mine['items'];
+        self::assertIsArray($cancellation);
+        self::assertIsArray($sale);
+        self::assertSame(['id' => self::id(11), 'name' => 'Old Profile Example'], $sale['payer']);
+        self::assertSame(['id' => self::id(72), 'number' => 'R-2026-72', 'issueDate' => '2026-11-19'], $sale['canceledBy']);
+        self::assertSame(['id' => self::id(71), 'number' => 'R-2026-71', 'issueDate' => '2026-11-19'], $cancellation['cancels']);
+        self::assertSame(self::id(62), $sale['eventId']);
+        self::assertSame('Fixture workshop', $cancellation['eventTitle']);
+        self::assertFalse($sale['cancelable']);
+        self::assertFalse($cancellation['cancelable']);
+        self::assertEquals([[
+            'position' => 1, 'description' => 'Workshop fee refund', 'quantity' => 1, 'unitPrice' => -2500,
+            'vatRate' => 0, 'net' => -2500, 'vat' => 0, 'gross' => -2500,
+        ]], $cancellation['lines']);
+        self::assertSame($sale, $this->request('GET', '/admin/receipts/' . self::id(71), user: 'office', mount: ''));
+        $this->request('GET', '/admin/receipts/' . self::id(74), user: 'office', status: 404, mount: '');
+        $this->request('GET', '/admin/receipts/invalid', user: 'office', status: 422, mount: '');
+
+        $result = $this->request('POST', $search, ['query' => ' r-2026 ', 'offset' => 1, 'limit' => 1], user: 'office', mount: '');
+        self::assertSame(['items' => [$cancellation], 'total' => 3, 'years' => [2026, 2025]], $result);
+        $result = $this->request('POST', $search, ['year' => 2026, 'query' => 'dÉmo %_'], user: 'office', mount: '');
+        self::assertSame(1, $result['total']);
+        self::assertIsArray($result['items']);
+        [$guest] = $result['items'];
+        self::assertIsArray($guest);
+        self::assertSame('2026-11-18T23:30:00.123456Z', $guest['issuedAt']);
+        self::assertSame('guest@example.test', $guest['recipientEmail']);
+        self::assertTrue($guest['cancelable']);
+        self::assertSame([], $guest['lines']);
+        self::assertArrayNotHasKey('payer', $guest);
+        foreach ([['year' => 2025], ['query' => 'démo'], ['query' => 'R%2026']] as $filter) {
+            self::assertSame(['items' => [], 'total' => 0, 'years' => [2026, 2025]], $this->request('POST', $search, $filter, user: 'office', mount: ''));
+        }
+        foreach ([['limit' => 101], ['offset' => -1], ['year' => 10000], ['query' => str_repeat('ä', 101)]] as $invalid) {
+            $this->request('POST', $search, $invalid, user: 'office', status: 422, mount: '');
+        }
+
+        $stamp = '2026-11-18 23:30:00';
+        $detail = '/admin/receipts/' . self::id(73);
+        $this->insert('event_registrations', [
+            'id' => 74, 'event_id' => 62, 'guest_name' => 'Fixture guest', 'status' => 'registered', 'payment' => 'paid',
+            'price' => 400, 'vat_rate_bp' => 0, 'receipt_id' => 73, 'created_at' => $stamp, 'updated_at' => $stamp,
+        ]);
+        self::assertFalse($this->request('GET', $detail, user: 'office', mount: '')['cancelable']);
+
+        $this->db->executeStatement("UPDATE event_registrations SET status = 'canceled', canceled_at = ? WHERE id = ?", [$stamp, $this->uuid(74)]);
+        self::assertTrue($this->request('GET', $detail, user: 'office', mount: '')['cancelable']);
+        $this->insert('lessons', [
+            'id' => 75, 'event_id' => 62, 'course_type_id' => 52, 'room_id' => 51, 'instructor_id' => 21,
+            'starts_at' => $stamp, 'ends_at' => '2026-11-19 00:30:00', 'kind' => 'workshop', 'visibility' => 'public',
+            'status' => 'scheduled', 'capacity' => 7,
+        ]);
+        self::assertFalse($this->request('GET', $detail, user: 'office', mount: '')['cancelable']);
+        $this->db->executeStatement("UPDATE lessons SET status = 'canceled' WHERE id = ?", [$this->uuid(75)]);
+        self::assertTrue($this->request('GET', $detail, user: 'office', mount: '')['cancelable']);
+
+        $this->db->executeStatement('DELETE FROM event_registrations WHERE id = ?', [$this->uuid(74)]);
+        $this->db->executeStatement("UPDATE passes SET origin = 'sale', receipt_id = ?, price_paid = 400 WHERE id = ?", [$this->uuid(73), $this->uuid(60)]);
+        $used = $this->request('GET', $detail, user: 'office', mount: '');
+        self::assertSame(self::id(60), $used['passId']);
+        self::assertFalse($used['cancelable']);
+        $this->db->executeStatement('DELETE FROM pass_redemptions WHERE pass_id = ?', [$this->uuid(60)]);
+        self::assertTrue($this->request('GET', $detail, user: 'office', mount: '')['cancelable']);
+    }
+
     private function seedExportHistory(): void
     {
         $stamp = '2026-11-18 23:30:00';
@@ -497,6 +589,7 @@ final class FamilyRoutesTest extends TestCase
     /**
      * @param array<string,mixed>|string|null $input
      * @return array<array-key,mixed>
+     * @phpstan-impure
      */
     private function request(string $method, string $path, array|string|null $input = null, ?string $user = 'parent', int $status = 200, string $mount = '/family'): array
     {

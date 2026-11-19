@@ -10,6 +10,21 @@ use StudioSchedule\Bootstrap;
 
 final class BootstrapTest extends TestCase
 {
+    public function testLivenessDoesNotRequireADatabaseConnection(): void
+    {
+        $factory = new ServerRequestFactory();
+        $env = ['BASE_URL' => 'http://example.test/studio', 'DATABASE_URL' => 'mysql://fixture:fixture@127.0.0.1:1/studio'];
+        $response = Bootstrap::handle(
+            static fn() => $factory->createServerRequest('GET', 'http://example.test/studio/healthz'),
+            '/missing/studio-app',
+            '/missing/studio-web',
+            '/missing/studio-migrations',
+            static fn(string $key): ?string => $env[$key] ?? null,
+        );
+
+        self::assertSame(200, $response->getStatusCode());
+    }
+
     public function testBootstrapBuildsTheMountedApplicationFromItsEnvironment(): void
     {
         $factory = new ServerRequestFactory();

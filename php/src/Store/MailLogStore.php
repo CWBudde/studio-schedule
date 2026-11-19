@@ -46,7 +46,7 @@ final readonly class MailLogStore
             $parameters[] = $template;
         }
         if ($recipient !== '') {
-            $filters[] = $this->recipientContains();
+            $filters[] = Database::asciiContains('o.recipient', $this->isPostgres());
             $parameters[] = strtolower($recipient);
         }
         if ($after !== null) {
@@ -127,22 +127,6 @@ final readonly class MailLogStore
         );
 
         return $row === false ? null : $this->withTextId($row);
-    }
-
-    private function recipientContains(): string
-    {
-        if ($this->isPostgres()) {
-            return 'strpos(lower(o.recipient COLLATE "C"), ?) > 0';
-        }
-
-        // Fold ASCII bytes only, as the schema's generated keys do for names.
-        $recipient = 'CAST(o.recipient AS BINARY)';
-        foreach (range('A', 'Z') as $letter) {
-            $lower = strtolower($letter);
-            $recipient = "REPLACE($recipient, '$letter', '$lower')";
-        }
-
-        return "LOCATE(CAST(? AS BINARY), $recipient) > 0";
     }
 
     /**
