@@ -463,13 +463,13 @@ final readonly class CatalogAdminRoutes
      * @param array<array-key,mixed> $body
      * @return ($required is true ? string : ?string)
      */
-    public static function text(array $body, string $field, int $max, bool $required = false): ?string
+    public static function text(array $body, string $field, int $max, bool $required = false, bool $allowNul = false): ?string
     {
         $value = self::value($body, $field, $required);
         if ($value === null && !$required) {
             return null;
         }
-        if (!is_string($value) || str_contains($value, "\0") || ($required && $value === '') || mb_strlen($value, 'UTF-8') > $max) {
+        if (!is_string($value) || (!$allowNul && str_contains($value, "\0")) || ($required && $value === '') || mb_strlen($value, 'UTF-8') > $max) {
             throw CatalogFailure::field($field, "expected text of at most $max characters");
         }
 

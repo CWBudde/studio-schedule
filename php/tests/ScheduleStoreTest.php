@@ -23,6 +23,7 @@ use StudioSchedule\Http\CatalogAdminRoutes;
 use StudioSchedule\Http\EventRegistrationRoutes;
 use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\LessonAdminRoutes;
+use StudioSchedule\Http\LessonSignupRoutes;
 use StudioSchedule\Http\ScheduleRoutes;
 use StudioSchedule\Http\StatisticsEndpoint;
 use StudioSchedule\Http\TrustedProxies;
@@ -32,6 +33,7 @@ use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
 use StudioSchedule\Service\LessonAdministration;
+use StudioSchedule\Service\LessonSignup;
 use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
@@ -46,8 +48,10 @@ use StudioSchedule\Store\EventRegistrationStore;
 use StudioSchedule\Store\ReceiptWriteStore;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\EventWaitlistStore;
+use StudioSchedule\Store\FamilyStore;
 use StudioSchedule\Store\LessonWriteStore;
 use StudioSchedule\Store\Migrator;
+use StudioSchedule\Store\ParticipantReadStore;
 use StudioSchedule\Store\PublicSettingsStore;
 use StudioSchedule\Store\RateLimitStore;
 use StudioSchedule\Store\ScheduleStore;
@@ -1305,6 +1309,57 @@ final class ScheduleStoreTest extends TestCase
         ));
     }
 
+    public function testEventSessionSignupPreservesAccessAndLeavesRegistrationsUnchanged(): void
+    {
+        $app = $this->app(self::BEFORE_RELEASE);
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member');
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $instructor = new SessionPrincipal(self::id(11), self::id(5), 'instructor');
+        $session = '/lessons/' . self::id(106);
+        $draft = '/lessons/' . self::id(107);
+        $ordinary = '/lessons/' . self::id(102);
+        $memberData = ['personId' => self::id(1)];
+        $childData = ['personId' => self::id(2), 'stayOnList' => true];
+        $strangerData = ['personId' => self::id(4)];
+        $guest = ['guest' => ['name' => 'Walk-in', 'email' => 'guest@example.test'], 'confirmOverCapacity' => true];
+        $counts = fn(): array => array_map($this->database->fetchOne(...), [
+            'SELECT COUNT(*) FROM bookings',
+            'SELECT COUNT(*) FROM waitlist_entries',
+            'SELECT COUNT(*) FROM event_registrations',
+            'SELECT COUNT(*) FROM outbox_mails',
+        ]);
+        $before = $counts();
+
+        self::post($app, $session . '/bookings', null, 401, $memberData);
+        self::post($app, $session . '/participants', $member, 403, $guest);
+        self::post($app, '/lessons/invalid/bookings', $member, 422, $memberData);
+        self::post($app, $session . '/bookings', $member, 400);
+        self::post($app, '/lessons/' . self::id(999) . '/bookings', $member, 404, $memberData);
+        self::post($app, $session . '/bookings', $member, 404, $strangerData);
+        self::post($app, $draft . '/waitlist', $member, 404, $childData);
+        self::post($app, $draft . '/participants', $instructor, 404, $guest);
+        foreach ([
+            self::post($app, $session . '/bookings', $member, 409, $memberData),
+            self::post($app, $session . '/waitlist', $member, 409, $childData),
+            self::post($app, $draft . '/participants', $office, 409, $guest),
+            self::post($app, $session . '/participants', $office, 409, [
+                'guest' => ['name' => "Walk\0in"], 'trialNote' => "Fixture\0note",
+            ]),
+            self::post($app, $session . '/participants', $office, 409, $strangerData + ['trial' => true, 'trialNote' => 'First visit']),
+        ] as $failure) {
+            self::assertSame('event-session', $failure['reason']);
+            self::assertArrayNotHasKey('why', $failure);
+        }
+        self::post($app, $session . '/participants', $office, 422, []);
+        self::post($app, $session . '/participants', $office, 422, ['personId' => self::id(999)]);
+        self::post($app, $ordinary . '/bookings', $member, 404, $memberData);
+        self::post($app, $ordinary . '/participants', $office, 405, $guest);
+        self::assertSame($before, $counts());
+
+        $this->database->executeStatement('DELETE FROM settings');
+        self::post($app, $session . '/bookings', $member, 404, $memberData);
+    }
+
     private function eventExpiryJobs(DateTimeImmutable $now): BackgroundJobs
     {
         $dsn = getenv('STUDIO_PHP_TEST_DATABASE_URL');
@@ -1727,6 +1782,12 @@ final class ScheduleStoreTest extends TestCase
         };
         $scheduleStore = new ScheduleStore($this->database);
         ScheduleRoutes::register($app, $scheduleStore, $clock);
+        (new LessonSignupRoutes(new LessonSignup(
+            $scheduleStore,
+            new ParticipantReadStore($this->database),
+            new FamilyStore($this->database),
+            $clock,
+        )))->register($app);
         $limits = new RateLimitStore($this->database, $clock);
         $proxies = TrustedProxies::parse('');
         $app->get('/api/v1/waitlist-invites/{token}', new WaitlistInviteEndpoint(

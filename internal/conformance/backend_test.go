@@ -248,6 +248,7 @@ func TestBackendConformance(t *testing.T) {
 		{"public event details", publicEventDetails},
 		{"office event reads", officeEventReads},
 		{"office event lifecycle", officeEventLifecycle},
+		{"event session signup guards", eventSessionSignupGuards},
 		{"event registration reads", eventRegistrationReads},
 		{"event signup", eventSignup},
 		{"schedule release and visibility", publicSchedule},

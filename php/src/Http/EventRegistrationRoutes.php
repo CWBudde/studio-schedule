@@ -11,7 +11,6 @@ use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use SensitiveParameter;
 use Slim\App;
-use stdClass;
 use StudioSchedule\Domain\Id;
 use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\EventCancellations;
@@ -75,7 +74,7 @@ final readonly class EventRegistrationRoutes
 
         $principal = $request->getAttribute('sessionPrincipal');
         assert($principal instanceof SessionPrincipal);
-        $registration = ($this->writes)()->desk($principal, $id, $person, $guest === null ? null : self::guest($guest), $confirm);
+        $registration = ($this->writes)()->desk($principal, $id, $person, $guest === null ? null : GuestInput::read($guest), $confirm);
 
         return Responses::json($response->withStatus(201), $registration);
     }
@@ -126,31 +125,6 @@ final readonly class EventRegistrationRoutes
         assert($principal instanceof SessionPrincipal);
 
         return Responses::json($response, $this->cancellations->member($principal, $id));
-    }
-
-    /** @return array{name:string,email:string} */
-    private static function guest(#[SensitiveParameter] mixed $input): array
-    {
-        if (!$input instanceof stdClass) {
-            throw CatalogFailure::field('guest', 'expected object');
-        }
-        $fields = [];
-        foreach (get_object_vars($input) as $key => $value) {
-            $field = strtolower((string) $key);
-            if (!in_array($field, ['name', 'email'], true)) {
-                throw CatalogFailure::field("guest.$key", 'unexpected property');
-            }
-            $fields[$field] = $value;
-        }
-        try {
-            return [
-                'name' => SetupInput::trim(CatalogAdminRoutes::text($fields, 'name', 200, true)),
-                'email' => SetupInput::trim(CatalogAdminRoutes::text($fields, 'email', 254) ?? ''),
-            ];
-        } catch (CatalogFailure $failure) {
-            $field = $failure->location === 'body' ? 'guest' : 'guest.' . substr($failure->location, strlen('body.'));
-            throw CatalogFailure::field($field, $failure->getMessage());
-        }
     }
 
     /** @param array{slug:string,action:'registrations'|'waitlist'} $args */

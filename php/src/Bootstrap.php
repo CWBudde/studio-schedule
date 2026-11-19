@@ -33,6 +33,7 @@ use StudioSchedule\Http\CredentialRoutes;
 use StudioSchedule\Http\EventRegistrationRoutes;
 use StudioSchedule\Http\EventRoutes;
 use StudioSchedule\Http\LessonAdminRoutes;
+use StudioSchedule\Http\LessonSignupRoutes;
 use StudioSchedule\Http\FamilyRoutes;
 use StudioSchedule\Http\Installer;
 use StudioSchedule\Http\MetricsEndpoint;
@@ -63,6 +64,7 @@ use StudioSchedule\Receipt\Attachments;
 use StudioSchedule\Service\EventCancellations;
 use StudioSchedule\Service\EventPayments;
 use StudioSchedule\Service\LessonAdministration;
+use StudioSchedule\Service\LessonSignup;
 use StudioSchedule\Service\EventRegistrationReads;
 use StudioSchedule\Service\ReceiptIssuance;
 use StudioSchedule\Service\EventRegistrationWrites;
@@ -383,7 +385,9 @@ final class Bootstrap
                         $wakeAnnouncements,
                     )))->register($app);
                     (new MailLogRoutes(new MailLog(new MailLogStore($connection), $clock)))->register($app);
-                    (new ParticipantReadRoutes(new ParticipantRead(new ParticipantReadStore($connection), $clock)))->register($app);
+                    $participants = new ParticipantReadStore($connection);
+                    (new ParticipantReadRoutes(new ParticipantRead($participants, $clock)))->register($app);
+                    (new LessonSignupRoutes(new LessonSignup($schedule, $participants, $familyStore, $clock)))->register($app);
                     (new PassReadRoutes(new PassRead(new PassReadStore($connection, $schedule), $clock)))->register($app);
                     (new ReceiptPdfRoutes(new Attachments(new AttachmentStore($connection))))->register($app);
                     (new ReceiptReadRoutes(new ReceiptReadStore($connection, $clock)))->register($app);

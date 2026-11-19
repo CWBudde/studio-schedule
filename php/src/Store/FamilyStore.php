@@ -92,14 +92,20 @@ final readonly class FamilyStore
     public function lockLivePersons(string ...$ids): bool
     {
         sort($ids, SORT_STRING);
-        $sql = 'SELECT id FROM persons WHERE id = ' . $this->idParameter() . ' AND merged_into IS NULL AND anonymized_at IS NULL FOR UPDATE';
         foreach ($ids as $id) {
-            if ($this->db->fetchOne($sql, [$this->idValue($id)]) === false) {
+            if (!$this->hasLivePerson($id, lock: true)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    public function hasLivePerson(string $id, bool $lock = false): bool
+    {
+        $sql = 'SELECT id FROM persons WHERE id = ' . $this->idParameter() . ' AND merged_into IS NULL AND anonymized_at IS NULL';
+
+        return $this->db->fetchOne($sql . ($lock ? ' FOR UPDATE' : ''), [$this->idValue($id)]) !== false;
     }
 
     public function isGuardian(string $guardian, string $dependent, bool $forUpdate = false): bool

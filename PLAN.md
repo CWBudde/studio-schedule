@@ -1628,8 +1628,12 @@ backends.
           PHP CI at both mount paths on all three databases.
     - [ ] Let the office edit or restore an individual event session through lesson administration.
           Keep the event's inherited capacity and the existing rules for sessions of canceled events.
-    - [ ] Return `event-session` when someone tries to book or join the lesson waitlist for one
-          session of an event through the lesson routes.
+    - [x] Return `event-session` for member bookings, lesson waitlist joins and staff participant
+          additions to an individual event session. Preserve family permissions, draft visibility
+          and staff assignment. The shared `event_session_signup_guards` case runs in PHP CI at
+          both mount paths on all three databases.
+    - [ ] Send staff lesson notices to the event's registered persons and guests as specified by
+          ADR 0019.
     - [x] Let members and the office cancel individual registrations. Enforce the member deadline
           and let the office retain the payment or refund it after the deadline. Issue an immutable
           cancellation receipt for a refund and offer freed places to the waitlist. The shared
