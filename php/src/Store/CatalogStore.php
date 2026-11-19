@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace StudioSchedule\Store;
 
 use Closure;
+use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
@@ -12,6 +13,7 @@ use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use RuntimeException;
 use StudioSchedule\Domain\CatalogResource;
+use StudioSchedule\Domain\Instant;
 use StudioSchedule\Domain\TimeOfDay;
 use StudioSchedule\Service\CatalogAdminPersistence;
 use StudioSchedule\Service\CatalogFailure;
@@ -21,6 +23,7 @@ use Symfony\Component\Uid\Uuid;
 /**
  * @phpstan-import-type CatalogData from CatalogAdminPersistence
  * @phpstan-import-type CatalogDocument from CatalogAdminPersistence
+ * @phpstan-import-type PassTypeDocument from CatalogAdminPersistence
  * @phpstan-import-type PersonMatch from CatalogPersistence
  */
 final readonly class CatalogStore implements CatalogPersistence, CatalogAdminPersistence
@@ -316,15 +319,115 @@ final readonly class CatalogStore implements CatalogPersistence, CatalogAdminPer
 
     public function delete(CatalogResource $resource, string $id): void
     {
+        $this->deleteRecord(self::table($resource), $id);
+    }
+
+    private function deleteRecord(string $table, string $id): void
+    {
         try {
-            Database::retryWrite($this->connection, function () use ($resource, $id): void {
-                if ($this->connection->delete(self::table($resource), ['id' => $this->encodeId($id)]) === 0) {
+            Database::retryWrite($this->connection, function () use ($table, $id): void {
+                if ($this->connection->delete($table, ['id' => $this->encodeId($id)]) === 0) {
                     throw new CatalogFailure(404, 'resource not found');
                 }
             });
         } catch (ForeignKeyConstraintViolationException) {
             throw new CatalogFailure(409, 'the record is still in use', reason: 'in-use');
         }
+    }
+
+    public function passTypes(): array
+    {
+        return Database::inReadSnapshot($this->connection, function (): array {
+            $name = $this->isPostgres() ? 'name' : 'CAST(name AS BINARY)';
+            $rows = $this->connection->fetchAllAssociative(
+                "SELECT id, name, kind, visits, validity_days, price, vat_rate_bp, active, created_at FROM pass_types ORDER BY $name, id",
+            );
+
+            return array_map($this->passType(...), $rows);
+        });
+    }
+
+    public function savePassType(?string $id, Closure $data, DateTimeImmutable $now): array
+    {
+        try {
+            return $this->writePassType(function () use ($id, $data, $now): array {
+                $stored = $this->encodeId($id ?? Uuid::v7()->toRfc4122());
+                if ($id !== null) {
+                    $this->row('pass_types', $stored);
+                }
+                $pass = $data();
+                $fields = [
+                    'name' => $pass['name'], 'kind' => $pass['kind'], 'visits' => $pass['visits'] ?: null,
+                    'validity_days' => $pass['validityDays'], 'price' => $pass['price'], 'vat_rate_bp' => $pass['vatRate'],
+                    'active' => $pass['active'],
+                ];
+                $types = ['active' => ParameterType::BOOLEAN, 'visits' => $fields['visits'] === null ? ParameterType::NULL : ParameterType::INTEGER];
+                if ($id === null) {
+                    $fields['created_at'] = Database::sqlInstant($this->connection, $now);
+                    $this->connection->insert('pass_types', ['id' => $stored] + $fields, $types);
+                } else {
+                    $this->connection->update('pass_types', $fields, ['id' => $stored], $types);
+                }
+
+                return $this->passType($this->row('pass_types', $stored, lock: false));
+            });
+        } catch (UniqueConstraintViolationException) {
+            throw new CatalogFailure(409, 'a record with these values exists already', reason: 'duplicate');
+        }
+    }
+
+    public function retirePassType(string $id): array
+    {
+        return $this->writePassType(function () use ($id): array {
+            $stored = $this->encodeId($id);
+            $type = $this->passType($this->row('pass_types', $stored));
+            if ($type['active']) {
+                $this->connection->update('pass_types', ['active' => false], ['id' => $stored], ['active' => ParameterType::BOOLEAN]);
+                $type['active'] = false;
+            }
+
+            return $type;
+        });
+    }
+
+    /**
+     * @param Closure():PassTypeDocument $write
+     * @return PassTypeDocument
+     */
+    private function writePassType(Closure $write): array
+    {
+        return Database::retryWrite($this->connection, function () use ($write): array {
+            if ($this->isPostgres()) {
+                // Read the persisted creation time in the same format as a read snapshot.
+                $this->connection->executeStatement("SET LOCAL DateStyle TO 'ISO, YMD'");
+            }
+
+            return $write();
+        });
+    }
+
+    public function deletePassType(string $id): void
+    {
+        $this->deleteRecord('pass_types', $id);
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     * @return PassTypeDocument
+     */
+    private function passType(array $row): array
+    {
+        $type = [
+            'id' => $this->id($row['id']), 'name' => self::text($row['name']), 'kind' => self::text($row['kind']),
+            'validityDays' => self::number($row['validity_days']), 'price' => self::number($row['price']),
+            'vatRate' => self::number($row['vat_rate_bp']), 'active' => in_array($row['active'], [true, 't', 1, '1'], true),
+            'createdAt' => Instant::format(Database::instant(self::text($row['created_at']))),
+        ];
+        if ($row['visits'] !== null) {
+            $type['visits'] = self::number($row['visits']);
+        }
+
+        return $type;
     }
 
     public function orderRooms(string $location, array $ids): void

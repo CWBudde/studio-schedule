@@ -42,6 +42,14 @@ final readonly class CatalogAdminRoutes
                 $routes->map(['PUT', 'DELETE'], $path . '/{id}', fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
                     => $this->write($request, $response, $resource, self::id($args['id'] ?? null, 'path.' . $resource->idField())));
             }
+            $routes->get('/admin/pass-types', fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+                => Responses::json($response, ['items' => $this->service->passTypes()]));
+            $routes->post('/admin/pass-types', fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+                => $this->writePassType($request, $response, null));
+            $routes->map(['PUT', 'DELETE'], '/admin/pass-types/{id}', fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+                => $this->writePassType($request, $response, self::id($args['id'] ?? null, 'path.passTypeId')));
+            $routes->post('/admin/pass-types/{id}/retire', fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+                => Responses::json($response, $this->service->retirePassType(self::id($args['id'] ?? null, 'path.passTypeId'))));
             $routes->put('/locations/{id}/room-order', $this->roomOrder(...));
             $routes->put('/level-order', $this->levelOrder(...));
             $routes->get('/admin/staff', fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -149,6 +157,38 @@ final readonly class CatalogAdminRoutes
         }
 
         return $value;
+    }
+
+    private function writePassType(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, ?string $id): ResponseInterface
+    {
+        if ($request->getMethod() === 'DELETE' && $id !== null) {
+            $this->service->deletePassType($id);
+
+            return $response->withStatus(204);
+        }
+        $body = self::fields($request, ['name', 'kind', 'visits', 'validitydays', 'price', 'vatrate', 'active']);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        $kind = self::value($body, 'kind', true);
+        if ($kind !== 'visits' && $kind !== 'time') {
+            throw CatalogFailure::field('kind', 'invalid pass kind');
+        }
+        $active = self::value($body, 'active', true);
+        if (!is_bool($active)) {
+            throw CatalogFailure::field('active', 'expected boolean');
+        }
+        $pass = $this->service->savePassType($id, [
+            'name' => self::text($body, 'name', 100, true),
+            'kind' => $kind,
+            'visits' => self::number($body, 'visits', 0, 1000) ?? 0,
+            'validityDays' => self::number($body, 'validityDays', 0, 3660, true),
+            'price' => self::number($body, 'price', 0, 100000000, true),
+            'vatRate' => self::number($body, 'vatRate', 0, 10000, true),
+            'active' => $active,
+        ]);
+
+        return Responses::json($response->withStatus($id === null ? 201 : 200), $pass);
     }
 
     private static function writeTerm(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, TermAdmin $service, ?string $id): ResponseInterface

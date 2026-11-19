@@ -18,6 +18,7 @@ use Slim\Psr7\Factory\StreamFactory;
 use StudioSchedule\Bootstrap;
 use StudioSchedule\Receipt\AttachmentStore;
 use StudioSchedule\Receipt\Attachments;
+use StudioSchedule\Store\CatalogStore;
 use StudioSchedule\Store\Database;
 use StudioSchedule\Store\FamilyStore;
 use StudioSchedule\Store\Migrator;
@@ -454,6 +455,84 @@ final class FamilyRoutesTest extends TestCase
         self::assertFalse($used['cancelable']);
         $this->db->executeStatement('DELETE FROM pass_redemptions WHERE pass_id = ?', [$this->uuid(60)]);
         self::assertTrue($this->request('GET', $detail, user: 'office', mount: '')['cancelable']);
+    }
+
+    public function testOfficeCanManagePassTypesWithoutChangingExistingPasses(): void
+    {
+        $this->account(6, 'office');
+        $this->session(6, 'office', 36);
+        $this->seedExportHistory();
+        $catalog = '/admin/pass-types';
+        $used = $catalog . '/' . self::id(59);
+        $input = ['name' => ' Annual YÉAR ', 'kind' => 'time', 'validityDays' => 365, 'price' => 3000, 'vatRate' => 1900, 'active' => true];
+
+        $this->request('GET', $catalog, user: null, status: 401, mount: '');
+        $this->request('POST', $catalog, $input, status: 403, mount: '');
+        $first = $this->request('POST', $catalog, $input, user: 'office', status: 201, mount: '');
+        self::assertSame('Annual YÉAR', $first['name']);
+        self::assertSame(self::NOW, $first['createdAt']);
+        self::assertArrayNotHasKey('visits', $first);
+        self::assertIsString($first['id']);
+        $href = $catalog . '/' . $first['id'];
+
+        $duplicate = $this->request('POST', $catalog, ['name' => 'annual yÉar'] + $input, user: 'office', status: 409, mount: '');
+        self::assertSame('duplicate', $duplicate['reason']);
+        $second = $this->request('POST', $catalog, ['name' => 'Annual YéAR'] + $input, user: 'office', status: 201, mount: '');
+        self::assertSame('Annual YéAR', $second['name']);
+        self::assertIsString($second['id']);
+        foreach ([
+            ['validityDays' => 0], ['visits' => 1], ['name' => '   '], ['kind' => 'visits'], ['price' => -1],
+        ] as $invalid) {
+            $this->request('POST', $catalog, $invalid + $input, user: 'office', status: 422, mount: '');
+        }
+        $missingActive = $input;
+        unset($missingActive['active']);
+        $this->request('POST', $catalog, $missingActive, user: 'office', status: 422, mount: '');
+
+        $changed = $this->request('PUT', $used, [
+            'name' => '  Twelve visits ', 'kind' => 'visits', 'visits' => 12, 'validityDays' => 90, 'price' => 5600, 'vatRate' => 0, 'active' => true,
+        ], user: 'office', mount: '');
+        self::assertSame('Twelve visits', $changed['name']);
+        self::assertSame('2026-11-17T12:00:00Z', $changed['createdAt']);
+        self::assertSame(12, $changed['visits']);
+        $pass = $this->db->fetchAssociative('SELECT visits_total, visits_remaining, valid_until, price_paid FROM passes');
+        self::assertEquals(['visits_total' => 2, 'visits_remaining' => 1, 'valid_until' => null, 'price_paid' => 0], $pass);
+        $inUse = $this->request('DELETE', $used, user: 'office', status: 409, mount: '');
+        self::assertSame('in-use', $inUse['reason']);
+        $types = $this->request('GET', $catalog, user: 'office', mount: '');
+        self::assertIsArray($types['items']);
+        self::assertSame(['Annual YÉAR', 'Annual YéAR', 'Twelve visits'], array_column($types['items'], 'name'));
+        self::assertSame([true, true, true], array_column($types['items'], 'active'));
+
+        $retired = $this->request('POST', $used . '/retire', user: 'office', mount: '');
+        self::assertSame(array_replace($changed, ['active' => false]), $retired);
+        self::assertSame($retired, $this->request('POST', $used . '/retire', user: 'office', mount: ''));
+        self::assertSame(204, $this->response('DELETE', $href, null, 'office', '')->getStatusCode());
+        $this->request('POST', $href . '/retire', user: 'office', status: 404, mount: '');
+        $this->request('DELETE', $href, user: 'office', status: 404, mount: '');
+        $this->request('PUT', $href, $input, user: 'office', status: 404, mount: '');
+        $this->request('DELETE', $catalog . '/invalid', user: 'office', status: 422, mount: '');
+        $types = $this->request('GET', $catalog, user: 'office', mount: '');
+        self::assertIsArray($types['items']);
+        self::assertSame(['Annual YéAR', 'Twelve visits'], array_column($types['items'], 'name'));
+        self::assertSame([true, false], array_column($types['items'], 'active'));
+
+        if ($this->postgres) {
+            // PDO returns timestamps as text even when a PostgreSQL role uses a non-ISO DateStyle.
+            $this->db->executeStatement("SET DateStyle TO 'SQL, DMY'");
+            try {
+                $store = new CatalogStore($this->db);
+                self::assertSame('2026-11-17T12:00:00Z', $store->passTypes()[1]['createdAt']);
+                self::assertSame($retired, $store->retirePassType(self::id(59)));
+                $saved = $store->savePassType(self::id(59), static fn(): array => [
+                    'name' => 'Twelve visits', 'kind' => 'visits', 'visits' => 12,
+                    'validityDays' => 90, 'price' => 5600, 'vatRate' => 0, 'active' => false,
+                ], new DateTimeImmutable(self::NOW));
+                self::assertSame($retired, $saved);
+            } finally {
+                $this->db->executeStatement('RESET DateStyle');
+            }
+        }
     }
 
     private function seedExportHistory(): void

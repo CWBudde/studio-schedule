@@ -34,7 +34,7 @@ final readonly class CatalogRoutes
         $app->get('/api/v1/admin/terms/{termId}/classes', static fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
             => $routes->classes($request, $response, $args['termId'] ?? '', true))->add(CatalogAdminRoutes::requireOffice(...));
         $app->get('/api/v1/admin/classes/{classId}/members', $routes->classMembers(...))->add(CatalogAdminRoutes::requireOffice(...));
-        (new CatalogAdminRoutes(new CatalogAdmin($store)))->register($app);
+        (new CatalogAdminRoutes(new CatalogAdmin($store, $clock)))->register($app);
     }
 
     /**

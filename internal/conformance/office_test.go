@@ -231,3 +231,87 @@ func createLesson(t *testing.T, b *backend, office *http.Client, kind string, ca
 	t.Fatal("the fixture has no class with a complete catalog and room assignment")
 	return ""
 }
+
+func passTypeAdministration(t *testing.T, b *backend) {
+	t.Helper()
+
+	const catalog = "/api/v1/admin/pass-types"
+	type passType struct {
+		ID, Name, Kind, CreatedAt            string
+		Visits, ValidityDays, Price, VATRate int
+		Active                               bool
+	}
+	admin, member := browser(t), browser(t)
+	login(t, b, admin, "olga.ledgerby@example.net", demoPassword)
+	list := request{method: http.MethodGet, path: catalog}
+	b.call(t, member, list, http.StatusUnauthorized)
+	login(t, b, member, demoMember, demoPassword)
+	b.call(t, member, list, http.StatusForbidden)
+
+	types := func() []passType {
+		t.Helper()
+
+		return read[struct{ Items []passType }](t, b.call(t, admin, list, http.StatusOK)).Items
+	}
+	var used passType
+	for _, item := range types() {
+		if item.Name == "30-day pass" {
+			used = item
+			break
+		}
+	}
+	if used.ID == "" || !used.Active {
+		t.Fatal("expected an active, previously sold 30-day pass type")
+	}
+
+	create := request{
+		method: http.MethodPost, path: catalog,
+		body: `{"name":" Fixture yearly pass ","kind":"time","validityDays":365,"price":8000,"vatRate":1900,"active":true}`,
+	}
+	b.call(t, member, create, http.StatusForbidden)
+	created := read[passType](t, b.call(t, admin, create, http.StatusCreated))
+	if created.ID == "" || created.Name != "Fixture yearly pass" || created.Kind != "time" ||
+		created.CreatedAt != demoNow || created.Visits != 0 || created.Price != 8000 || !created.Active {
+		t.Fatalf("created pass type: %+v", created)
+	}
+	duplicate := create
+	duplicate.body = strings.Replace(duplicate.body, "Fixture", "fixture", 1)
+	expectConflict(t, b, admin, duplicate, "duplicate")
+
+	update := request{
+		method: http.MethodPut, path: catalog + "/{passTypeId}",
+		params: map[string]string{"passTypeId": created.ID},
+		body:   `{"name":"Fixture 12 visits","kind":"visits","visits":12,"validityDays":90,"price":6000,"vatRate":0,"active":true}`,
+	}
+	replaced := read[passType](t, b.call(t, admin, update, http.StatusOK))
+	if replaced.ID != created.ID || replaced.CreatedAt != created.CreatedAt || replaced.Name != "Fixture 12 visits" ||
+		replaced.Kind != "visits" || replaced.Visits != 12 || replaced.ValidityDays != 90 || replaced.Price != 6000 || !replaced.Active {
+		t.Fatalf("updated pass type: %+v", replaced)
+	}
+
+	remove := request{method: http.MethodDelete, path: update.path, params: map[string]string{"passTypeId": used.ID}}
+	expectConflict(t, b, admin, remove, "in-use")
+	seenUsed := false
+	for _, item := range types() {
+		if item.ID == used.ID {
+			seenUsed = true
+			if item != used {
+				t.Fatalf("in-use deletion changed the existing pass type: %+v", item)
+			}
+		}
+	}
+	if !seenUsed {
+		t.Fatal("the previously sold pass type disappeared after the in-use conflict")
+	}
+
+	retire := request{method: http.MethodPost, path: update.path + "/retire", params: update.params}
+	replaced.Active = false
+	for range 2 {
+		if got := read[passType](t, b.call(t, admin, retire, http.StatusOK)); got != replaced {
+			t.Fatalf("retiring the pass type changed unexpected fields: got %+v, want %+v", got, replaced)
+		}
+	}
+	remove.params = update.params
+	b.call(t, admin, remove, http.StatusNoContent)
+	b.call(t, admin, retire, http.StatusNotFound)
+}

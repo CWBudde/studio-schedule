@@ -265,6 +265,7 @@ func TestBackendConformance(t *testing.T) {
 		{"member import", importMembers},
 		{"duplicate persons", mergeDuplicates},
 		{"events and registrations", eventRegistration},
+		{"pass type administration", passTypeAdministration},
 		{"pass sales and receipts", passReceipt},
 		{"receipt pdf downloads", receiptPDFDownloads},
 		{"receipt lists and search", receiptListsAndSearch},
